@@ -47,10 +47,15 @@ echo "   This may take up to 10 minutes..."
 # real cert into cluster-gateway-ca, which claims field ownership. The next helm
 # upgrade then conflicts. Fix by removing the client-side-apply field manager
 # before upgrading, so Helm can take ownership cleanly.
+# On re-runs, fix two issues:
+# 1. The CA extractor job uses kubectl apply (client-side) to write the real cert,
+#    which claims field ownership. Remove the field manager so helm upgrade won't conflict.
+# 2. helm upgrade resets the CA ConfigMap to a placeholder, but the extractor job
+#    won't re-run because Helm doesn't recreate completed jobs. Delete it so Helm
+#    recreates it and it extracts the real cert again.
 if kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane &>/dev/null; then
     kubectl annotate configmap cluster-gateway-ca -n openchoreo-control-plane \
         kubectl.kubernetes.io/last-applied-configuration- --overwrite 2>/dev/null || true
-    # Remove the kubectl-client-side-apply managed field entry
     FIELD_INDEX=$(kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane \
         --show-managed-fields -o json | jq '.metadata.managedFields | to_entries[] | select(.value.manager == "kubectl-client-side-apply") | .key' 2>/dev/null)
     if [ -n "$FIELD_INDEX" ]; then
@@ -58,6 +63,7 @@ if kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane &>/dev/n
             --type=json -p="[{\"op\":\"remove\",\"path\":\"/metadata/managedFields/${FIELD_INDEX}\"}]" 2>/dev/null || true
     fi
 fi
+kubectl delete job cluster-gateway-ca-extractor -n openchoreo-control-plane 2>/dev/null || true
 
 helm upgrade --install openchoreo-control-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-control-plane \
 --version ${OPENCHOREO_PATCH_VERSION} \
@@ -117,6 +123,8 @@ echo ""
 # Step 2: Install OpenChoreo Data Plane
 echo "2️⃣  Installing/Upgrading OpenChoreo Data Plane..."
 echo "   This may take up to 10 minutes..."
+# Delete completed copy-ca job so helm recreates it on upgrade
+kubectl delete job -n openchoreo-data-plane -l app=cluster-agent 2>/dev/null || true
 helm upgrade --install openchoreo-data-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-data-plane \
 --version ${OPENCHOREO_VERSION} \
 --namespace openchoreo-data-plane \
@@ -203,6 +211,8 @@ echo "⏳ Waiting for Docker Registry to be ready..."
 kubectl wait --for=condition=available deployment/registry-docker-registry -n openchoreo-build-plane --timeout=120s
 
 echo "4️⃣  Installing/Upgrading OpenChoreo Build Plane..."
+# Delete completed copy-ca job so helm recreates it on upgrade
+kubectl delete job -n openchoreo-build-plane -l app=cluster-agent 2>/dev/null || true
 helm upgrade --install openchoreo-build-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-build-plane \
 --version ${OPENCHOREO_VERSION} \
 --namespace openchoreo-build-plane \
@@ -299,6 +309,8 @@ else
 
     kubectl apply --server-side --force-conflicts -f $1/deployments/values/oc-collector-configmap.yaml -n openchoreo-observability-plane
 
+    # Delete completed copy-ca job so helm recreates it on upgrade
+    kubectl delete job -n openchoreo-observability-plane -l app=cluster-agent 2>/dev/null || true
     helm install openchoreo-observability-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-observability-plane \
         --version ${OPENCHOREO_VERSION} \
         --namespace openchoreo-observability-plane \
