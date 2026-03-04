@@ -54,6 +54,26 @@ kubectl wait -n openchoreo-control-plane --for=condition=available --timeout=300
 if kubectl get jobs -n openchoreo-control-plane --no-headers 2>/dev/null | grep -q .; then
     kubectl wait -n openchoreo-control-plane --for=condition=complete --timeout=300s job --all
 fi
+
+# Verify the CA extractor has replaced the placeholder with a real certificate.
+# The Helm chart deploys a placeholder ConfigMap and a Job that extracts the real
+# CA from a TLS secret. On re-runs, helm upgrade resets the ConfigMap to the
+# placeholder, so we must wait for the extractor to overwrite it again.
+echo "⏳ Waiting for cluster-gateway-ca to contain a real certificate..."
+for i in $(seq 1 30); do
+    CA_CONTENT=$(kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane -o jsonpath='{.data.ca\.crt}' 2>/dev/null)
+    if echo "$CA_CONTENT" | grep -q "BEGIN CERTIFICATE"; then
+        echo "✅ cluster-gateway-ca has a valid certificate"
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "⚠️  Timeout waiting for real CA certificate. The extractor job may need to be re-run:"
+        echo "   kubectl delete job cluster-gateway-ca-extractor -n openchoreo-control-plane"
+        echo "   Then re-run: make setup-openchoreo"
+    fi
+    sleep 5
+done
+
 echo "✅ OpenChoreo Control Plane ready"
 echo ""
 
@@ -164,12 +184,6 @@ helm upgrade --install registry docker-registry \
 
 echo "⏳ Waiting for Docker Registry to be ready..."
 kubectl wait --for=condition=available deployment/registry-docker-registry -n openchoreo-build-plane --timeout=120s
-
-echo "📜 Copying cluster-gateway-ca to build plane namespace..."
-kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane -o json | \
-    jq '.metadata.namespace = "openchoreo-build-plane" | del(.metadata.resourceVersion, .metadata.uid, .metadata.creationTimestamp, .metadata.managedFields, .metadata.annotations)' | \
-    kubectl apply --server-side --force-conflicts -f -
-echo "✅ cluster-gateway-ca copied to openchoreo-build-plane"
 
 echo "4️⃣  Installing/Upgrading OpenChoreo Build Plane..."
 helm upgrade --install openchoreo-build-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-build-plane \
