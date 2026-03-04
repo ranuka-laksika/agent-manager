@@ -1,5 +1,5 @@
 .PHONY: help setup setup-colima setup-k3d setup-openchoreo setup-platform setup-console-local setup-console-local-force dev-up dev-down dev-restart dev-rebuild dev-logs dev-migrate openchoreo-up openchoreo-down openchoreo-status teardown db-connect db-logs service-logs service-shell console-logs port-forward setup-kubeconfig-docker
-.PHONY: helm-build helm-build-api helm-build-console helm-import helm-install helm-upgrade helm-sync helm-sync-api helm-sync-console helm-restart helm-status helm-logs helm-api-logs helm-console-logs helm-db-connect status api-logs
+.PHONY: helm-build helm-build-api helm-build-console helm-import helm-install helm-upgrade helm-sync helm-sync-api helm-sync-console helm-restart helm-status helm-logs helm-api-logs helm-console-logs helm-db-connect status api-logs dev-pause dev-resume
 
 # Development mode: "compose" (default) or "helm"
 DEV_MODE ?= compose
@@ -66,6 +66,10 @@ help:
 	@echo "  make service-logs       - View service logs"
 	@echo "  make service-shell      - Shell into service container"
 	@echo "  make console-logs       - View console logs"
+	@echo ""
+	@echo "Pause / Resume (saves laptop resources):"
+	@echo "  make dev-pause          - Stop k3d cluster and Colima VM"
+	@echo "  make dev-resume         - Start Colima VM and k3d cluster"
 	@echo ""
 	@echo "Cleanup:"
 	@echo "  make teardown           - Remove everything (cluster + platform)"
@@ -385,6 +389,30 @@ service-shell:
 
 console-logs:
 	@docker logs -f agent-manager-console
+
+# ============================================================================
+# Pause / Resume (saves laptop resources)
+# ============================================================================
+
+CLUSTER_NAME := openchoreo-local-v0.14.0
+
+dev-pause:
+	@echo "Stopping k3d cluster..."
+	@k3d cluster stop $(CLUSTER_NAME) 2>/dev/null || echo "Cluster not running"
+	@echo "Stopping Colima..."
+	@colima stop 2>/dev/null || echo "Colima not running"
+	@echo "All stopped. CPU and memory freed."
+
+dev-resume:
+	@echo "Starting Colima..."
+	@colima start
+	@echo "Starting k3d cluster..."
+	@k3d cluster start $(CLUSTER_NAME)
+	@echo "Waiting for cluster to be ready..."
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+		kubectl cluster-info --context $(CLUSTER_CONTEXT) &>/dev/null && break || sleep 3; \
+	done
+	@echo "Cluster is ready."
 
 # ============================================================================
 # Cleanup
