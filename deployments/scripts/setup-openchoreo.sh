@@ -217,11 +217,20 @@ else
 fi
 echo ""
 
+# Wait for build plane copy-ca job and agent
+echo "⏳ Waiting for build plane CA copy job..."
+if kubectl get jobs -n openchoreo-build-plane --no-headers 2>/dev/null | grep -q copy-ca; then
+    kubectl wait -n openchoreo-build-plane --for=condition=complete --timeout=120s job -l app=cluster-agent 2>/dev/null || true
+fi
+echo "⏳ Waiting for build plane agent..."
+kubectl wait --for=condition=Ready pod -l app=cluster-agent -n openchoreo-build-plane --timeout=120s 2>/dev/null || \
+    echo "⚠️  Build plane agent pods may still be starting"
+
 # Verify BuildPlane
 echo ""
 echo "🔍 Verifying BuildPlane ..."
 kubectl get buildplane -n default
-kubectl logs -n openchoreo-build-plane -l app=cluster-agent --tail=10
+kubectl logs -n openchoreo-build-plane -l app=cluster-agent --tail=10 2>/dev/null || true
 echo "✅ OpenChoreo Build Plane ready"
 echo ""
 
@@ -340,11 +349,20 @@ else
 fi
 echo ""
 
+# Wait for observability plane copy-ca job and agent
+echo "⏳ Waiting for observability plane CA copy job..."
+if kubectl get jobs -n openchoreo-observability-plane --no-headers 2>/dev/null | grep -q copy-ca; then
+    kubectl wait -n openchoreo-observability-plane --for=condition=complete --timeout=120s job -l app=cluster-agent 2>/dev/null || true
+fi
+echo "⏳ Waiting for observability plane agent..."
+kubectl wait --for=condition=Ready pod -l app=cluster-agent -n openchoreo-observability-plane --timeout=120s 2>/dev/null || \
+    echo "⚠️  Observability plane agent pods may still be starting"
+
 # Verify ObservabilityPlane
 echo ""
 echo "🔍 Verifying ObservabilityPlane ..."
 kubectl get observabilityplane -n default
-kubectl logs -n openchoreo-observability-plane -l app=cluster-agent --tail=10
+kubectl logs -n openchoreo-observability-plane -l app=cluster-agent --tail=10 2>/dev/null || true
 echo "✅ OpenChoreo Observability Plane ready"
 echo ""
 
