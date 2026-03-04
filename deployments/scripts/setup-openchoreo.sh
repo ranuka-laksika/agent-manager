@@ -42,6 +42,23 @@ echo ""
 # Step 1: Install OpenChoreo Control Plane
 echo "1️⃣  Installing/Upgrading OpenChoreo Control Plane..."
 echo "   This may take up to 10 minutes..."
+
+# On re-runs, the CA extractor job uses kubectl apply (client-side) to write the
+# real cert into cluster-gateway-ca, which claims field ownership. The next helm
+# upgrade then conflicts. Fix by removing the client-side-apply field manager
+# before upgrading, so Helm can take ownership cleanly.
+if kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane &>/dev/null; then
+    kubectl annotate configmap cluster-gateway-ca -n openchoreo-control-plane \
+        kubectl.kubernetes.io/last-applied-configuration- --overwrite 2>/dev/null || true
+    # Remove the kubectl-client-side-apply managed field entry
+    FIELD_INDEX=$(kubectl get configmap cluster-gateway-ca -n openchoreo-control-plane \
+        --show-managed-fields -o json | jq '.metadata.managedFields | to_entries[] | select(.value.manager == "kubectl-client-side-apply") | .key' 2>/dev/null)
+    if [ -n "$FIELD_INDEX" ]; then
+        kubectl patch configmap cluster-gateway-ca -n openchoreo-control-plane \
+            --type=json -p="[{\"op\":\"remove\",\"path\":\"/metadata/managedFields/${FIELD_INDEX}\"}]" 2>/dev/null || true
+    fi
+fi
+
 helm upgrade --install openchoreo-control-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-control-plane \
 --version ${OPENCHOREO_PATCH_VERSION} \
 --namespace openchoreo-control-plane \
