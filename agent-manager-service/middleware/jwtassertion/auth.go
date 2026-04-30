@@ -85,22 +85,33 @@ var (
 	// validKidPattern allows alphanumeric, hyphens, underscores, dots, colons,
 	// equals (base64 padding), plus, forward slash, and tilde — covering base64
 	// standard and URL-safe encodings commonly used in kid values.
-	validKidPattern = regexp.MustCompile(`^[a-zA-Z0-9._:=+/~-]{1,256}$`)
+	validKidPattern          = regexp.MustCompile(`^[a-zA-Z0-9._:=+/~-]{1,256}$`)
+	validPublisherAudPattern = regexp.MustCompile(`^amp-publisher-[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
 )
 
-// PublisherClientAuthMiddleware enforces that the JWT subject matches the publisher client identity.
+// PublisherClientAuthMiddleware enforces that at least one JWT audience matches a valid publisher client identity.
 // Must be applied after JWTAuthMiddleware so that claims are already in context.
 func PublisherClientAuthMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := GetTokenClaims(r.Context())
-			if claims == nil || claims.Sub != "amp-publisher-client" {
+			if claims == nil || !hasValidPublisherAudience(claims.Audience) {
 				utils.WriteErrorResponse(w, http.StatusForbidden, "insufficient permissions")
 				return
 			}
+
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func hasValidPublisherAudience(audiences jwt.ClaimStrings) bool {
+	for _, aud := range audiences {
+		if validPublisherAudPattern.MatchString(aud) {
+			return true
+		}
+	}
+	return false
 }
 
 func JWTAuthMiddleware(header string) func(http.Handler) http.Handler {
