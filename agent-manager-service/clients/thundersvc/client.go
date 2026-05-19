@@ -65,6 +65,8 @@ type thunderClient struct {
 	tokenSfg    singleflight.Group // deduplicates concurrent token fetches
 }
 
+const httpClientTimeout = 30 * time.Second
+
 // NewThunderClient creates a new Thunder API client.
 // clientID/clientSecret are the OAuth2 credentials for the system app
 // that has the Administrator role assigned (created at bootstrap).
@@ -73,7 +75,7 @@ func NewThunderClient(baseURL, clientID, clientSecret string) ThunderClient {
 		baseURL:      baseURL,
 		clientID:     clientID,
 		clientSecret: clientSecret,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		httpClient:   &http.Client{Timeout: httpClientTimeout},
 	}
 }
 

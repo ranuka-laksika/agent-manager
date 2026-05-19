@@ -99,6 +99,11 @@ type Config struct {
 	// Thunder admin API configuration for provisioning OAuth apps
 	Thunder ThunderConfig
 
+	// RBACEnabled enables scope-based authorization on every API route.
+	// When false (default), all authenticated requests are allowed regardless of token scopes.
+	// Flip to true after roles are assigned to users in Thunder.
+	RBACEnabled bool
+
 	// TLS Configurations
 	TLSConfig TLSConfig
 }

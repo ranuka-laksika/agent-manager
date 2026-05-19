@@ -1,0 +1,330 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  listUsers, getUser, createUser, inviteUser, updateUser, deleteUser, getUserGroups,
+  listGroups, getGroup, createGroup, updateGroup, deleteGroup,
+  addGroupMembers, removeGroupMembers, getGroupMembers,
+  listRoles, getRole, createRole, updateRole, deleteRole,
+  getRoleAssignments, addRolePermissions, removeRolePermissions,
+  addRoleAssignees, removeRoleAssignees,
+  listAMPPermissions,
+} from "../apis";
+import type {
+  ThunderUserListResponse, ThunderUser, CreateUserRequest, InviteUserRequest, InviteUserResponse, UpdateUserRequest,
+  ThunderGroupListResponse, ThunderGroup, CreateGroupRequest, UpdateGroupRequest,
+  ThunderRoleListResponse, ThunderRole, ThunderRoleAssignments,
+  CreateRoleRequest, UpdateRoleRequest, RolePermissionRequest, RoleUserGroupRequest,
+  AMPPermissionsResponse,
+  IdentityOrgPathParams, UserPathParams, GroupPathParams, RolePathParams,
+} from "@agent-management-platform/types";
+import { useAuthHooks } from "@agent-management-platform/auth";
+import { useApiMutation, useApiQuery } from "./react-query-notifications";
+
+// --- Users ---
+
+export function useListUsers(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderUserListResponse>({
+    queryKey: ['identity-users', params, query],
+    queryFn: () => listUsers(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useGetUser(params: UserPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderUser>({
+    queryKey: ['identity-user', params],
+    queryFn: () => getUser(params, getToken),
+    enabled: !!params.orgName && !!params.userId,
+  });
+}
+
+export function useCreateUser() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderUser, unknown, { params: IdentityOrgPathParams; body: CreateUserRequest }>({
+    action: { verb: 'create', target: 'user' },
+    mutationFn: ({ params, body }) => createUser(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-users', params] });
+    },
+  });
+}
+
+export function useInviteUser() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<InviteUserResponse, unknown, { params: IdentityOrgPathParams; body: InviteUserRequest }>({
+    action: { verb: 'create', target: 'user invite' },
+    mutationFn: ({ params, body }) => inviteUser(params, body, getToken),
+  });
+}
+
+export function useUpdateUser() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderUser, unknown, { params: UserPathParams; body: UpdateUserRequest }>({
+    action: { verb: 'update', target: 'user' },
+    mutationFn: ({ params, body }) => updateUser(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-users'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-user', params] });
+    },
+  });
+}
+
+export function useDeleteUser() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, UserPathParams>({
+    action: { verb: 'delete', target: 'user' },
+    mutationFn: (params) => deleteUser(params, getToken),
+    onSuccess: (_data, params) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-users'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-user', params] });
+    },
+  });
+}
+
+export function useGetUserGroups(params: UserPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ groups: ThunderGroup[] }>({
+    queryKey: ['identity-user-groups', params],
+    queryFn: () => getUserGroups(params, getToken),
+    enabled: !!params.orgName && !!params.userId,
+  });
+}
+
+// --- Groups ---
+
+export function useListGroups(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderGroupListResponse>({
+    queryKey: ['identity-groups', params, query],
+    queryFn: () => listGroups(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useGetGroup(params: GroupPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderGroup>({
+    queryKey: ['identity-group', params],
+    queryFn: () => getGroup(params, getToken),
+    enabled: !!params.orgName && !!params.groupId,
+  });
+}
+
+export function useCreateGroup() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderGroup, unknown, { params: IdentityOrgPathParams; body: CreateGroupRequest }>({
+    action: { verb: 'create', target: 'group' },
+    mutationFn: ({ params, body }) => createGroup(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-groups', params] });
+    },
+  });
+}
+
+export function useUpdateGroup() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderGroup, unknown, { params: GroupPathParams; body: UpdateGroupRequest }>({
+    action: { verb: 'update', target: 'group' },
+    mutationFn: ({ params, body }) => updateGroup(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-group', params] });
+    },
+  });
+}
+
+export function useDeleteGroup() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, GroupPathParams>({
+    action: { verb: 'delete', target: 'group' },
+    mutationFn: (params) => deleteGroup(params, getToken),
+    onSuccess: (_data, params) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-group', params] });
+    },
+  });
+}
+
+export function useAddGroupMembers() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: GroupPathParams; body: { userIds: string[] } }>({
+    action: { verb: 'update', target: 'group members' },
+    mutationFn: ({ params, body }) => addGroupMembers(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+    },
+  });
+}
+
+export function useRemoveGroupMembers() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: GroupPathParams; body: { userIds: string[] } }>({
+    action: { verb: 'update', target: 'group members' },
+    mutationFn: ({ params, body }) => removeGroupMembers(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+    },
+  });
+}
+
+export function useGetGroupMembers(params: GroupPathParams, query?: { offset?: number; limit?: number }) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderUserListResponse>({
+    queryKey: ['identity-group-members', params, query],
+    queryFn: () => getGroupMembers(params, query, getToken),
+    enabled: !!params.orgName && !!params.groupId,
+  });
+}
+
+// --- Roles ---
+
+export function useListRoles(params: IdentityOrgPathParams, query?: { offset?: number; limit?: number }) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderRoleListResponse>({
+    queryKey: ['identity-roles', params, query],
+    queryFn: () => listRoles(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useGetRole(params: RolePathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderRole>({
+    queryKey: ['identity-role', params],
+    queryFn: () => getRole(params, getToken),
+    enabled: !!params.orgName && !!params.roleId,
+  });
+}
+
+export function useCreateRole() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderRole, unknown, { params: IdentityOrgPathParams; body: CreateRoleRequest }>({
+    action: { verb: 'create', target: 'role' },
+    mutationFn: ({ params, body }) => createRole(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-roles', params] });
+    },
+  });
+}
+
+export function useUpdateRole() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<ThunderRole, unknown, { params: RolePathParams; body: UpdateRoleRequest }>({
+    action: { verb: 'update', target: 'role' },
+    mutationFn: ({ params, body }) => updateRole(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-roles'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-role', params] });
+    },
+  });
+}
+
+export function useDeleteRole() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, RolePathParams>({
+    action: { verb: 'delete', target: 'role' },
+    mutationFn: (params) => deleteRole(params, getToken),
+    onSuccess: (_data, params) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-roles'] });
+      queryClient.invalidateQueries({ queryKey: ['identity-role', params] });
+    },
+  });
+}
+
+export function useGetRoleAssignments(params: RolePathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderRoleAssignments>({
+    queryKey: ['identity-role-assignments', params],
+    queryFn: () => getRoleAssignments(params, getToken),
+    enabled: !!params.orgName && !!params.roleId,
+  });
+}
+
+export function useAddRolePermissions() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: RolePathParams; body: RolePermissionRequest }>({
+    action: { verb: 'update', target: 'role permissions' },
+    mutationFn: ({ params, body }) => addRolePermissions(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    },
+  });
+}
+
+export function useRemoveRolePermissions() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: RolePathParams; body: RolePermissionRequest }>({
+    action: { verb: 'update', target: 'role permissions' },
+    mutationFn: ({ params, body }) => removeRolePermissions(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    },
+  });
+}
+
+export function useAddRoleAssignees() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: RolePathParams; body: RoleUserGroupRequest }>({
+    action: { verb: 'update', target: 'role assignments' },
+    mutationFn: ({ params, body }) => addRoleAssignees(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    },
+  });
+}
+
+export function useRemoveRoleAssignees() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, { params: RolePathParams; body: RoleUserGroupRequest }>({
+    action: { verb: 'update', target: 'role assignments' },
+    mutationFn: ({ params, body }) => removeRoleAssignees(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['identity-role-assignments', params] });
+    },
+  });
+}
+
+// --- Permissions catalog ---
+
+export function useListAMPPermissions(params: IdentityOrgPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AMPPermissionsResponse>({
+    queryKey: ['amp-permissions', params],
+    queryFn: () => listAMPPermissions(params, getToken),
+    enabled: !!params.orgName,
+  });
+}

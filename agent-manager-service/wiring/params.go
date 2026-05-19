@@ -63,6 +63,7 @@ type AppParams struct {
 	CatalogController                controllers.CatalogController
 	AgentConfigurationController     controllers.AgentConfigurationController
 	GitSecretController              controllers.GitSecretController
+	IdentityController               controllers.IdentityController
 	MonitorScheduler                 services.MonitorSchedulerService
 
 	// Services

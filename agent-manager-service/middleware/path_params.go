@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
@@ -55,6 +56,29 @@ func HandleFuncWithValidation(mux *http.ServeMux, pattern string, handler http.H
 		handler = WithPathParamValidation(handler, params...)
 	}
 
+	mux.HandleFunc(pattern, handler)
+}
+
+// HandleFuncWithValidationAndAuthz registers a route with automatic path parameter
+// validation and a static permission check. The permission is checked after JWT
+// validation and before the handler is called.
+func HandleFuncWithValidationAndAuthz(mux *http.ServeMux, pattern string, perm rbac.Permission, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequirePermission(perm)(handler)
+	mux.HandleFunc(pattern, handler)
+}
+
+// HandleFuncWithValidationAndDynamicAuthz registers a route with automatic path
+// parameter validation and a dynamic permission check resolved at request time.
+func HandleFuncWithValidationAndDynamicAuthz(mux *http.ServeMux, pattern string, resolver PermissionResolver, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequireDynamicPermission(resolver)(handler)
 	mux.HandleFunc(pattern, handler)
 }
 

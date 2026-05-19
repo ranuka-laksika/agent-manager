@@ -54,6 +54,45 @@ export const generatedRouteMap =  {
             }
           }
         },
+        "identities": {
+          "path": "/org/:orgId/identities",
+          "wildPath": "/org/:orgId/identities/*",
+          "children": {
+            "users": {
+              "path": "/org/:orgId/identities/users",
+              "wildPath": "/org/:orgId/identities/users/*",
+              "children": {
+                "detail": {
+                  "path": "/org/:orgId/identities/users/:userId",
+                  "wildPath": "/org/:orgId/identities/users/:userId/*",
+                  "children": {}
+                }
+              }
+            },
+            "roles": {
+              "path": "/org/:orgId/identities/roles",
+              "wildPath": "/org/:orgId/identities/roles/*",
+              "children": {
+                "detail": {
+                  "path": "/org/:orgId/identities/roles/:roleId",
+                  "wildPath": "/org/:orgId/identities/roles/:roleId/*",
+                  "children": {}
+                }
+              }
+            },
+            "groups": {
+              "path": "/org/:orgId/identities/groups",
+              "wildPath": "/org/:orgId/identities/groups/*",
+              "children": {
+                "detail": {
+                  "path": "/org/:orgId/identities/groups/:groupId",
+                  "wildPath": "/org/:orgId/identities/groups/:groupId/*",
+                  "children": {}
+                }
+              }
+            }
+          }
+        },
         "newProject": {
           "path": "/org/:orgId/newProject",
           "wildPath": "/org/:orgId/newProject/*",

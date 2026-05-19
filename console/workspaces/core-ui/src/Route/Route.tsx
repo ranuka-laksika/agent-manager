@@ -31,6 +31,7 @@ import {
   LazyAddLLMProvidersComponent,
   LazyLLMProvidersComponent, LazyViewLLMProviderComponent, LazyAddLLMProvidersOrg,
   LazyGatewaysOrg,
+  LazyIdentitiesOrg,
   LazyAddNewAgent,
   LazyAddNewProject,
   LazyBuildComponent,
@@ -110,6 +111,12 @@ export function RootRouter() {
                 relativeRouteMap.children.org.children.gateways.path + "/*"
               }
               element={<LazyGatewaysOrg />}
+            />
+            <Route
+              path={
+                relativeRouteMap.children.org.children.identities.path + "/*"
+              }
+              element={<LazyIdentitiesOrg />}
             />
             <Route
               path={

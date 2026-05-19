@@ -221,6 +221,8 @@ func loadEnvs() {
 		EnableTLS: r.readOptionalBool("TLS_ENABLED", false),
 	}
 
+	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
+
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key)
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key).
 	// Validated at runtime in wiring.ProvideEncryptionKey() so that

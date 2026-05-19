@@ -21,11 +21,12 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterLLMProxyAPIKeyRoutes registers API key routes for LLM proxies
 func RegisterLLMProxyAPIKeyRoutes(mux *http.ServeMux, ctrl controllers.LLMProxyAPIKeyController) {
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys", ctrl.CreateAPIKey)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", ctrl.RevokeAPIKey)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", ctrl.RotateAPIKey)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys", rbac.LLMProxyAPIKeyManage, ctrl.CreateAPIKey)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", rbac.LLMProxyAPIKeyManage, ctrl.RevokeAPIKey)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", rbac.LLMProxyAPIKeyManage, ctrl.RotateAPIKey)
 }

@@ -21,6 +21,9 @@ import {
   Binoculars as ObservabilityOutline,
   Settings2 as EvaluationOutline,
   Settings,
+  Users,
+  Shield,
+  Folder,
 } from "@wso2/oxygen-ui-icons-react";
 
 import {
@@ -44,6 +47,7 @@ import { metaData as deploymentMetadata } from "@agent-management-platform/deplo
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { gatewaysMetadata } from "@agent-management-platform/gateways";
+import { identitiesMetadata } from "@agent-management-platform/identities";
 import type { NavigationItem, NavigationSection } from "./LeftNavigation";
 import { metaData as configureAgentMetadata } from "@agent-management-platform/configure-agent"
 import { useExternalNavItems } from "@agent-management-platform/views";
@@ -87,6 +91,12 @@ export function useNavigationItems(): Array<
       { path: string; wildPath: string }
     >
   ).gateways;
+  const identitiesOrgRoute = (
+    absoluteRouteMap.children.org.children as unknown as Record<
+      string,
+      { path: string; wildPath: string; children: Record<string, { path: string; wildPath: string }> }
+    >
+  ).identities;
 
   if (isLoadingAgent || (isLoadingEnvironments && agentId)) {
     return [];
@@ -465,6 +475,34 @@ export function useNavigationItems(): Array<
             icon: <gatewaysMetadata.icon size={20} />,
             href: generatePath(gatewaysOrgRoute.path, { orgId }),
             isActive: !!matchPath(gatewaysOrgRoute.wildPath, pathname),
+          },
+        ],
+      },
+      {
+        title: identitiesMetadata.title,
+        type: "section",
+        icon: <identitiesMetadata.icon size={20} />,
+        items: [
+          {
+            label: "Users",
+            type: "item",
+            icon: <Users size={20} />,
+            href: generatePath(identitiesOrgRoute.children.users.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.users.wildPath, pathname),
+          },
+          {
+            label: "Roles",
+            type: "item",
+            icon: <Shield size={20} />,
+            href: generatePath(identitiesOrgRoute.children.roles.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.roles.wildPath, pathname),
+          },
+          {
+            label: "Groups",
+            type: "item",
+            icon: <Folder size={20} />,
+            href: generatePath(identitiesOrgRoute.children.groups.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.groups.wildPath, pathname),
           },
         ],
       },

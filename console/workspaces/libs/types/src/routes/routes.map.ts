@@ -73,6 +73,45 @@ export const rootRouteMap: AppRoute = {
                         }
                     },
                 },
+                identities: {
+                    path: 'identities',
+                    index: true,
+                    children: {
+                        users: {
+                            path: 'users',
+                            index: true,
+                            children: {
+                                detail: {
+                                    path: ':userId',
+                                    index: true,
+                                    children: {},
+                                },
+                            },
+                        },
+                        roles: {
+                            path: 'roles',
+                            index: true,
+                            children: {
+                                detail: {
+                                    path: ':roleId',
+                                    index: true,
+                                    children: {},
+                                },
+                            },
+                        },
+                        groups: {
+                            path: 'groups',
+                            index: true,
+                            children: {
+                                detail: {
+                                    path: ':groupId',
+                                    index: true,
+                                    children: {},
+                                },
+                            },
+                        },
+                    },
+                },
                 newProject: {
                     path: 'newProject',
                     index: true,

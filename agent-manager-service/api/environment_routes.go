@@ -21,13 +21,14 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func registerEnvironmentRoutes(mux *http.ServeMux, ctrl controllers.EnvironmentController) {
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/environments", ctrl.CreateEnvironment)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/environments", ctrl.ListEnvironments)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/environments/{envID}", ctrl.GetEnvironment)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/environments/{envID}", ctrl.UpdateEnvironment)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/environments/{envID}", ctrl.DeleteEnvironment)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/environments/{envID}/gateways", ctrl.GetEnvironmentGateways)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/environments", rbac.EnvironmentCreate, ctrl.CreateEnvironment)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments", rbac.EnvironmentRead, ctrl.ListEnvironments)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments/{envID}", rbac.EnvironmentRead, ctrl.GetEnvironment)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/environments/{envID}", rbac.EnvironmentUpdate, ctrl.UpdateEnvironment)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/environments/{envID}", rbac.EnvironmentDelete, ctrl.DeleteEnvironment)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments/{envID}/gateways", rbac.EnvironmentRead, ctrl.GetEnvironmentGateways)
 }

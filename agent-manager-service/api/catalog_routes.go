@@ -21,8 +21,9 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func registerCatalogRoutes(mux *http.ServeMux, ctrl controllers.CatalogController) {
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/catalog", ctrl.ListCatalog)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/catalog", rbac.CatalogRead, ctrl.ListCatalog)
 }

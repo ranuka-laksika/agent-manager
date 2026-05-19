@@ -21,12 +21,12 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // registerAgentTokenRoutes registers the agent token API routes
 func registerAgentTokenRoutes(mux *http.ServeMux, ctrl controllers.AgentTokenController) {
-	// Token generation endpoint
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/token", ctrl.GenerateToken)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/token", rbac.AgentTokenManage, ctrl.GenerateToken)
 }
 
 // registerJWKSRoute registers the JWKS endpoint on the provided mux

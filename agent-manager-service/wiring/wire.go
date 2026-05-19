@@ -29,6 +29,7 @@ import (
 	observabilitysvc "github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	traceobserversvc "github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
@@ -50,6 +51,7 @@ var clientProviderSet = wire.NewSet(
 	ProvideOCClient,
 	ProvideSecretManagementClient,
 	ProvidePublisherProvisioner,
+	ProvideIdentityClient,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -102,6 +104,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewCatalogController,
 	controllers.NewAgentConfigurationController,
 	controllers.NewGitSecretController,
+	controllers.NewIdentityController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -306,6 +309,11 @@ func ProvideOrgPublisherCredentialRepository(db *gorm.DB) repositories.OrgPublis
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {
 	return cfg.Thunder
+}
+
+// ProvideIdentityClient creates a Thunder identity client using the Thunder system app credentials.
+func ProvideIdentityClient(cfg config.ThunderConfig) thundersvc.IdentityClient {
+	return thundersvc.NewIdentityClient(cfg.BaseURL, cfg.ClientID, cfg.ClientSecret)
 }
 
 // InitializeAppParams wires up all application dependencies

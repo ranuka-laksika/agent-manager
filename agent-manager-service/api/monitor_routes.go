@@ -21,6 +21,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 func route(method, path string) string {
@@ -33,57 +34,57 @@ func registerMonitorScoreRoutes(mux *http.ServeMux, controller controllers.Monit
 
 	// GET .../monitors/{monitorName}/scores - Get scores for a monitor (time-range based)
 	// Query params: startTime, endTime, evaluator (optional), level (optional), span_type (optional)
-	middleware.HandleFuncWithValidation(mux, route("GET", monitorBase+"/scores"), controller.GetMonitorScores)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", monitorBase+"/scores"), rbac.MonitorScoreRead, controller.GetMonitorScores)
 
 	// GET .../monitors/{monitorName}/runs/{runId}/scores - Get per-run aggregated scores
-	middleware.HandleFuncWithValidation(mux, route("GET", monitorBase+"/runs/{runId}/scores"), controller.GetMonitorRunScores)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", monitorBase+"/runs/{runId}/scores"), rbac.MonitorScoreRead, controller.GetMonitorRunScores)
 
 	// GET .../monitors/{monitorName}/scores/breakdown - Get scores grouped by span label (agent/LLM breakdown)
 	// Query params: startTime, endTime, level (required: "agent" or "llm")
-	middleware.HandleFuncWithValidation(mux, route("GET", monitorBase+"/scores/breakdown"), controller.GetGroupedScores)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", monitorBase+"/scores/breakdown"), rbac.MonitorScoreRead, controller.GetGroupedScores)
 
 	// GET .../monitors/{monitorName}/scores/timeseries - Get time-series data for an evaluator
 	// Query params: startTime, endTime, evaluator (required), granularity (optional: hour/day/week)
-	middleware.HandleFuncWithValidation(mux, route("GET", monitorBase+"/scores/timeseries"), controller.GetScoresTimeSeries)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", monitorBase+"/scores/timeseries"), rbac.MonitorScoreRead, controller.GetScoresTimeSeries)
 
 	// GET .../agents/{agentName}/scores - Aggregated scores per trace for an agent
 	// Query params: startTime, endTime
-	middleware.HandleFuncWithValidation(mux, route("GET", agentBase+"/scores"), controller.GetAgentTraceScores)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", agentBase+"/scores"), rbac.MonitorScoreRead, controller.GetAgentTraceScores)
 
 	// GET .../agents/{agentName}/traces/{traceId}/scores - Get all evaluation scores for a trace across all monitors
-	middleware.HandleFuncWithValidation(mux, route("GET", agentBase+"/traces/{traceId}/scores"), controller.GetTraceScores)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", agentBase+"/traces/{traceId}/scores"), rbac.MonitorScoreRead, controller.GetTraceScores)
 }
 
 func registerMonitorRoutes(mux *http.ServeMux, controller controllers.MonitorController) {
 	base := "/orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors"
 
 	// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors - List all monitors
-	middleware.HandleFuncWithValidation(mux, route("GET", base), controller.ListMonitors)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", base), rbac.MonitorRead, controller.ListMonitors)
 
 	// POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors - Create a new evaluation monitor
-	middleware.HandleFuncWithValidation(mux, route("POST", base), controller.CreateMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("POST", base), rbac.MonitorCreate, controller.CreateMonitor)
 
 	// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName} - Get a specific monitor
-	middleware.HandleFuncWithValidation(mux, route("GET", base+"/{monitorName}"), controller.GetMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", base+"/{monitorName}"), rbac.MonitorRead, controller.GetMonitor)
 
 	// DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName} - Delete a monitor
-	middleware.HandleFuncWithValidation(mux, route("DELETE", base+"/{monitorName}"), controller.DeleteMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("DELETE", base+"/{monitorName}"), rbac.MonitorDelete, controller.DeleteMonitor)
 
 	// PATCH /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName} - Update a monitor
-	middleware.HandleFuncWithValidation(mux, route("PATCH", base+"/{monitorName}"), controller.UpdateMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("PATCH", base+"/{monitorName}"), rbac.MonitorUpdate, controller.UpdateMonitor)
 
 	// POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/stop - Stop a monitor
-	middleware.HandleFuncWithValidation(mux, route("POST", base+"/{monitorName}/stop"), controller.StopMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("POST", base+"/{monitorName}/stop"), rbac.MonitorExecute, controller.StopMonitor)
 
 	// POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/start - Start a monitor
-	middleware.HandleFuncWithValidation(mux, route("POST", base+"/{monitorName}/start"), controller.StartMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("POST", base+"/{monitorName}/start"), rbac.MonitorExecute, controller.StartMonitor)
 
 	// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs - List monitor runs
-	middleware.HandleFuncWithValidation(mux, route("GET", base+"/{monitorName}/runs"), controller.ListMonitorRuns)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", base+"/{monitorName}/runs"), rbac.MonitorRead, controller.ListMonitorRuns)
 
 	// POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/rerun - Create a new run with same time parameters
-	middleware.HandleFuncWithValidation(mux, route("POST", base+"/{monitorName}/runs/{runId}/rerun"), controller.RerunMonitor)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("POST", base+"/{monitorName}/runs/{runId}/rerun"), rbac.MonitorExecute, controller.RerunMonitor)
 
 	// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/logs - Get monitor run logs
-	middleware.HandleFuncWithValidation(mux, route("GET", base+"/{monitorName}/runs/{runId}/logs"), controller.GetMonitorRunLogs)
+	middleware.HandleFuncWithValidationAndAuthz(mux, route("GET", base+"/{monitorName}/runs/{runId}/logs"), rbac.MonitorRead, controller.GetMonitorRunLogs)
 }

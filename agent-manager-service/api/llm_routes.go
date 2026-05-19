@@ -21,30 +21,31 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterLLMRoutes registers all LLM-related routes
 func RegisterLLMRoutes(mux *http.ServeMux, ctrl controllers.LLMController) {
 	// LLM Provider Templates
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/llm-provider-templates", ctrl.CreateLLMProviderTemplate)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/llm-provider-templates", ctrl.ListLLMProviderTemplates)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/llm-provider-templates/{templateId}", ctrl.GetLLMProviderTemplate)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/llm-provider-templates/{templateId}", ctrl.UpdateLLMProviderTemplate)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/llm-provider-templates/{templateId}", ctrl.DeleteLLMProviderTemplate)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/llm-provider-templates", rbac.LLMProviderTemplateCreate, ctrl.CreateLLMProviderTemplate)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/llm-provider-templates", rbac.LLMProviderTemplateRead, ctrl.ListLLMProviderTemplates)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateRead, ctrl.GetLLMProviderTemplate)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateUpdate, ctrl.UpdateLLMProviderTemplate)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/llm-provider-templates/{templateId}", rbac.LLMProviderTemplateDelete, ctrl.DeleteLLMProviderTemplate)
 
 	// LLM Providers
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/llm-providers", ctrl.CreateLLMProvider)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/llm-providers", ctrl.ListLLMProviders)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/llm-providers/{providerId}", ctrl.GetLLMProvider)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/llm-providers/{providerId}/llm-proxies", ctrl.ListLLMProxiesByProvider)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/llm-providers/{providerId}", ctrl.UpdateLLMProvider)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/llm-providers/{providerId}/catalog", ctrl.UpdateLLMProviderCatalogStatus)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/llm-providers/{providerId}", ctrl.DeleteLLMProvider)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/llm-providers", rbac.LLMProviderCreate, ctrl.CreateLLMProvider)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/llm-providers", rbac.LLMProviderRead, ctrl.ListLLMProviders)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderRead, ctrl.GetLLMProvider)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/llm-providers/{providerId}/llm-proxies", rbac.LLMProxyRead, ctrl.ListLLMProxiesByProvider)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderUpdate, ctrl.UpdateLLMProvider)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/llm-providers/{providerId}/catalog", rbac.LLMProviderUpdate, ctrl.UpdateLLMProviderCatalogStatus)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderDelete, ctrl.DeleteLLMProvider)
 
 	// LLM Proxies
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies", ctrl.CreateLLMProxy)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies", ctrl.ListLLMProxies)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", ctrl.GetLLMProxy)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", ctrl.UpdateLLMProxy)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", ctrl.DeleteLLMProxy)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies", rbac.LLMProxyCreate, ctrl.CreateLLMProxy)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies", rbac.LLMProxyRead, ctrl.ListLLMProxies)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", rbac.LLMProxyRead, ctrl.GetLLMProxy)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", rbac.LLMProxyUpdate, ctrl.UpdateLLMProxy)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{proxyId}", rbac.LLMProxyDelete, ctrl.DeleteLLMProxy)
 }

@@ -1,0 +1,184 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import React, { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Form,
+  FormControl,
+  FormLabel,
+  Stack,
+  TextField,
+} from "@wso2/oxygen-ui";
+import { useNavigate, useParams } from "react-router-dom";
+import { useCreateUser } from "@agent-management-platform/api-client";
+import { PageLayout } from "@agent-management-platform/views";
+import { absoluteRouteMap } from "@agent-management-platform/types";
+import { generatePath } from "react-router-dom";
+
+export const UserCreatePage: React.FC = () => {
+  const { orgId } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [givenName, setGivenName] = useState("");
+  const [familyName, setFamilyName] = useState("");
+  const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
+
+  const { mutateAsync: createUser, isPending: isCreating, error: createError } = useCreateUser();
+
+  const usersPath = orgId
+    ? generatePath(
+        (absoluteRouteMap.children.org.children as unknown as {
+          identities: { children: { users: { path: string } } };
+        }).identities.children.users.path,
+        { orgId },
+      )
+    : "#";
+
+  const validate = (): boolean => {
+    const next: typeof errors = {};
+    if (!username.trim()) next.username = "Username is required";
+    if (!password.trim()) next.password = "Password is required";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    const optionalClaims = [
+      { type: "given_name", value: givenName.trim() },
+      { type: "family_name", value: familyName.trim() },
+    ].filter((c) => c.value);
+
+    await createUser({
+      params: { orgName: orgId },
+      body: {
+        username: username.trim(),
+        type: "engineer",
+        claims: optionalClaims,
+        credential: { password },
+      },
+    });
+
+    navigate(usersPath);
+  };
+
+  return (
+    <PageLayout
+      title="Add User"
+      backHref={usersPath}
+      backLabel="Back to Users"
+      disableIcon
+    >
+      <Stack spacing={3} sx={{ maxWidth: 700 }}>
+        {createError != null && (
+          <Alert severity="error">
+            {(createError as Error)?.message ?? "Failed to create user"}
+          </Alert>
+        )}
+
+        {/* Account credentials */}
+        <Form.Section>
+          <Form.Header>Account Credentials</Form.Header>
+          <Form.Stack spacing={2}>
+            <FormControl fullWidth error={Boolean(errors.username)}>
+              <FormLabel required>Username</FormLabel>
+              <TextField
+                fullWidth
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  if (errors.username) setErrors((p) => ({ ...p, username: undefined }));
+                }}
+                placeholder="john.doe"
+                autoComplete="off"
+                error={Boolean(errors.username)}
+                helperText={errors.username}
+              />
+            </FormControl>
+
+            <FormControl fullWidth error={Boolean(errors.password)}>
+              <FormLabel required>Password</FormLabel>
+              <TextField
+                fullWidth
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                }}
+                autoComplete="new-password"
+                error={Boolean(errors.password)}
+                helperText={errors.password}
+              />
+            </FormControl>
+          </Form.Stack>
+        </Form.Section>
+
+        {/* Profile */}
+        <Form.Section>
+          <Form.Header>Profile</Form.Header>
+          <Form.Stack spacing={2}>
+            <Box
+              sx={{
+                display: "grid",
+                gap: 2,
+                gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
+              }}
+            >
+              <FormControl fullWidth>
+                <FormLabel>First Name</FormLabel>
+                <TextField
+                  fullWidth
+                  value={givenName}
+                  onChange={(e) => setGivenName(e.target.value)}
+                  placeholder="John"
+                />
+              </FormControl>
+
+              <FormControl fullWidth>
+                <FormLabel>Last Name</FormLabel>
+                <TextField
+                  fullWidth
+                  value={familyName}
+                  onChange={(e) => setFamilyName(e.target.value)}
+                  placeholder="Doe"
+                />
+              </FormControl>
+            </Box>
+
+          </Form.Stack>
+        </Form.Section>
+
+        {/* Actions */}
+        <Stack direction="row" spacing={1} justifyContent="flex-end">
+          <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isCreating}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSubmit} disabled={isCreating}>
+            {isCreating ? "Creating..." : "Create User"}
+          </Button>
+        </Stack>
+      </Stack>
+    </PageLayout>
+  );
+};

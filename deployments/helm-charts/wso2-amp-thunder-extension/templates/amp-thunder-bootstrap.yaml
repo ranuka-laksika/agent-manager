@@ -154,7 +154,25 @@ data:
     fi
 
     if echo "$BODY" | grep -q '"name":"{{ .Values.thunder.bootstrap.userSchema.name }}"'; then
-      log_info "User schema '{{ .Values.thunder.bootstrap.userSchema.name }}' already exists, skipping creation"
+      log_info "User schema '{{ .Values.thunder.bootstrap.userSchema.name }}' already exists, checking for email attribute..."
+      SCHEMA_ID=$(echo "$BODY" | python3 -c "import sys,json; schemas=json.load(sys.stdin); schemas=schemas if isinstance(schemas,list) else schemas.get('schemas',[]); [print(s['id']) for s in schemas if s.get('name')=='{{ .Values.thunder.bootstrap.userSchema.name }}']" 2>/dev/null | head -1)
+      if [[ -n "$SCHEMA_ID" ]] && ! echo "$BODY" | grep -q '"email"'; then
+        log_info "Adding email attribute to existing schema (ID: $SCHEMA_ID)..."
+        PATCH_RESPONSE=$(thunder_api_call PATCH "/user-schemas/$SCHEMA_ID" "{
+          \"schema\": {
+            \"email\": {
+              \"type\": \"string\",
+              \"displayName\": \"Email\"
+            }
+          }
+        }")
+        PATCH_CODE="${PATCH_RESPONSE: -3}"
+        if [[ "$PATCH_CODE" == "200" ]] || [[ "$PATCH_CODE" == "204" ]]; then
+          log_info "Email attribute added successfully"
+        else
+          log_info "Could not patch schema (HTTP $PATCH_CODE), may need manual update: ${PATCH_RESPONSE%???}"
+        fi
+      fi
     else
       log_info "User schema does not exist, creating user schema '{{ .Values.thunder.bootstrap.userSchema.name }}'..."
       RESPONSE=$(thunder_api_call POST "/user-schemas" "{
@@ -181,6 +199,10 @@ data:
           \"family_name\": {
             \"type\": \"string\",
             \"displayName\": \"Last Name\"
+          },
+          \"email\": {
+            \"type\": \"string\",
+            \"displayName\": \"Email\"
           },
           \"groups\": {
             \"type\": \"array\",
@@ -1016,3 +1038,318 @@ data:
         exit 1
       fi
     fi
+
+  59-amp-resource-server.sh: |
+    #!/bin/bash
+    set -e
+
+    SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
+    source "${SCRIPT_DIR}/common.sh"
+
+    log_info "Registering Agent Manager (amp) as a Thunder resource server..."
+
+    # ---------------------------------------------------------------------------
+    # Helper: create or retrieve a resource server; echoes the server ID
+    # ---------------------------------------------------------------------------
+    create_or_get_rs() {
+      local name="$1" handle="$2" identifier="$3" description="$4" ou_id="$5"
+      local payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"identifier\":\"${identifier}\",\"description\":\"${description}\",\"ouId\":\"${ou_id}\"}"
+      local response http_code body id
+
+      response=$(thunder_api_call POST "/resource-servers" "$payload")
+      http_code="${response: -3}"
+      body="${response%???}"
+
+      if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]]; then
+        id=$(echo "$body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        echo "$id"
+        return 0
+      fi
+
+      if [[ "$http_code" == "409" ]]; then
+        log_warning "Resource server '${identifier}' already exists, retrieving ID..."
+        response=$(thunder_api_call GET "/resource-servers")
+        http_code="${response: -3}"
+        body="${response%???}"
+        if [[ "$http_code" != "200" ]]; then
+          log_error "Failed to list resource servers (HTTP $http_code)"
+          exit 1
+        fi
+        id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"identifier\":\"${identifier}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -z "$id" ]]; then
+          log_error "Resource server '${identifier}' reported 409 but not found in list"
+          exit 1
+        fi
+        log_success "Found existing resource server '${identifier}' (id: $id)"
+        echo "$id"
+        return 0
+      fi
+
+      log_error "Failed to create resource server '${identifier}' (HTTP $http_code): $body"
+      exit 1
+    }
+
+    # ---------------------------------------------------------------------------
+    # Helper: create or retrieve a resource node; echoes the resource ID
+    # Usage: create_or_get_resource <rs_id> <name> <handle> <description> [parent_id]
+    # Uses ?parentId= query param on 409 to avoid handle collisions across parents
+    # ---------------------------------------------------------------------------
+    create_or_get_resource() {
+      local rs_id="$1" name="$2" handle="$3" description="$4" parent_id="${5:-}"
+      local payload body response http_code id list_url
+
+      if [[ -n "$parent_id" ]]; then
+        payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"description\":\"${description}\",\"parent\":\"${parent_id}\"}"
+        list_url="/resource-servers/${rs_id}/resources?parentId=${parent_id}"
+      else
+        payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"description\":\"${description}\"}"
+        list_url="/resource-servers/${rs_id}/resources"
+      fi
+
+      response=$(thunder_api_call POST "/resource-servers/${rs_id}/resources" "$payload")
+      http_code="${response: -3}"
+      body="${response%???}"
+
+      if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]]; then
+        id=$(echo "$body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        echo "$id"
+        return 0
+      fi
+
+      if [[ "$http_code" == "409" ]]; then
+        log_warning "Resource '${handle}' already exists, retrieving ID..."
+        response=$(thunder_api_call GET "${list_url}")
+        http_code="${response: -3}"
+        body="${response%???}"
+        if [[ "$http_code" != "200" ]]; then
+          log_error "Failed to list resources (HTTP $http_code)"
+          exit 1
+        fi
+        id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"handle\":\"${handle}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -z "$id" ]]; then
+          log_error "Resource '${handle}' reported 409 but not found in list"
+          exit 1
+        fi
+        log_success "Found existing resource '${handle}' (id: $id)"
+        echo "$id"
+        return 0
+      fi
+
+      log_error "Failed to create resource '${handle}' (HTTP $http_code): $body"
+      exit 1
+    }
+
+    # ---------------------------------------------------------------------------
+    # Helper: create an action leaf (idempotent via 409 ignore)
+    # Usage: create_action <rs_id> <res_id> <name> <handle> <description>
+    # ---------------------------------------------------------------------------
+    create_action() {
+      local rs_id="$1" res_id="$2" name="$3" handle="$4" description="$5"
+      local payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"description\":\"${description}\"}"
+      local response http_code body
+
+      response=$(thunder_api_call POST "/resource-servers/${rs_id}/resources/${res_id}/actions" "$payload")
+      http_code="${response: -3}"
+      body="${response%???}"
+
+      if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]] || [[ "$http_code" == "409" ]]; then
+        return 0
+      fi
+
+      log_error "Failed to create action '${handle}' on resource ${res_id} (HTTP $http_code): $body"
+      exit 1
+    }
+
+    # ===========================================================================
+    # 0. Fetch default OU ID (required by Thunder for resource server creation)
+    # ===========================================================================
+    log_info "Fetching default organization unit ID..."
+    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    HTTP_CODE="${RESPONSE: -3}"
+    BODY="${RESPONSE%???}"
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      log_error "Failed to fetch default OU (HTTP $HTTP_CODE): $BODY"
+      exit 1
+    fi
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$DEFAULT_OU_ID" ]]; then
+      log_error "Could not extract default OU ID from response"
+      exit 1
+    fi
+    log_success "Default OU ID: $DEFAULT_OU_ID"
+
+    # ===========================================================================
+    # 1. Create the resource server
+    # ===========================================================================
+    RS_ID=$(create_or_get_rs "Agent Manager API" "amp" "amp" "Agent Manager platform permissions" "$DEFAULT_OU_ID")
+    log_info "Resource server 'amp' ready (id: $RS_ID)"
+
+    # ===========================================================================
+    # 2. Create level-1 resources
+    # ===========================================================================
+    log_info "Creating level-1 resources..."
+
+    R_ORG=$(create_or_get_resource        "$RS_ID" "Organization"            "org"                    "Organizational unit management")
+    R_PROJECT=$(create_or_get_resource    "$RS_ID" "Project"                  "project"                "Project management")
+    R_ENV=$(create_or_get_resource        "$RS_ID" "Environment"              "environment"            "Environment management")
+    R_GW=$(create_or_get_resource         "$RS_ID" "Gateway"                  "gateway"                "Gateway management")
+    R_DP=$(create_or_get_resource         "$RS_ID" "Data Plane"               "data-plane"             "Data plane visibility")
+    R_PIPE=$(create_or_get_resource       "$RS_ID" "Deployment Pipeline"      "deployment-pipeline"    "Deployment pipeline visibility")
+    R_GIT=$(create_or_get_resource        "$RS_ID" "Git Secret"               "git-secret"             "Git credential management")
+    R_LLMT=$(create_or_get_resource       "$RS_ID" "LLM Provider Template"    "llm-provider-template"  "LLM provider template management")
+    R_LLM=$(create_or_get_resource        "$RS_ID" "LLM Provider"             "llm-provider"           "LLM provider management")
+    R_MCP=$(create_or_get_resource        "$RS_ID" "MCP Server"               "mcp-server"             "MCP server management")
+    R_PROXY=$(create_or_get_resource      "$RS_ID" "LLM Proxy"                "llm-proxy"              "LLM proxy management")
+    R_EVAL=$(create_or_get_resource       "$RS_ID" "Evaluator"                "evaluator"              "Evaluator management")
+    R_AGENT=$(create_or_get_resource      "$RS_ID" "Agent"                    "agent"                  "Agent management")
+    R_MON=$(create_or_get_resource        "$RS_ID" "Monitor"                  "monitor"                "Monitor management")
+    R_OBS=$(create_or_get_resource        "$RS_ID" "Observability"            "observability"          "Observability dashboards and metrics")
+    R_ROLE=$(create_or_get_resource       "$RS_ID" "Role"                     "role"                   "Role management")
+    R_CAT=$(create_or_get_resource        "$RS_ID" "Catalog"                  "catalog"                "Resource catalog")
+    R_REPO=$(create_or_get_resource       "$RS_ID" "Repository"               "repository"             "Source repository browsing")
+
+    log_info "Level-1 resources created."
+
+    # ===========================================================================
+    # 3. Create level-2 sub-resources (handle collisions: token, api-key, etc.)
+    # ===========================================================================
+    log_info "Creating level-2 sub-resources..."
+
+    R_GW_TOKEN=$(create_or_get_resource   "$RS_ID" "Gateway Token"            "token"     "Gateway token management"           "$R_GW")
+    R_LLM_KEY=$(create_or_get_resource    "$RS_ID" "LLM Provider API Key"     "api-key"   "LLM provider API key management"    "$R_LLM")
+    R_PROXY_KEY=$(create_or_get_resource  "$RS_ID" "LLM Proxy API Key"        "api-key"   "LLM proxy API key management"       "$R_PROXY")
+    R_AGENT_DEPLOY=$(create_or_get_resource "$RS_ID" "Agent Deployment"       "deploy"    "Agent deployment operations"        "$R_AGENT")
+    R_AGENT_TOKEN=$(create_or_get_resource  "$RS_ID" "Agent Token"            "token"     "Agent token management"             "$R_AGENT")
+    R_MON_SCORE=$(create_or_get_resource  "$RS_ID" "Monitor Score"            "score"     "Monitor score management"           "$R_MON")
+
+    log_info "Level-2 sub-resources created."
+
+    # ===========================================================================
+    # 4. Create actions
+    # ===========================================================================
+    log_info "Creating actions..."
+
+    # org actions  → amp:org:<action>
+    create_action "$RS_ID" "$R_ORG"          "View"                   "view"                   "View organizational details"
+    create_action "$RS_ID" "$R_ORG"          "Modify Settings"        "modify-settings"        "Modify organizational settings"
+    create_action "$RS_ID" "$R_ORG"          "Invite Member"          "invite-member"          "Invite members to the organization"
+    create_action "$RS_ID" "$R_ORG"          "Remove Member"          "remove-member"          "Remove members from the organization"
+    create_action "$RS_ID" "$R_ORG"          "Assign Role"            "assign-role"            "Assign or revoke roles"
+    create_action "$RS_ID" "$R_ORG"          "Manage IDP"             "manage-idp"             "Configure Identity Provider"
+    create_action "$RS_ID" "$R_ORG"          "Manage Service Account" "manage-service-account" "Manage service accounts"
+
+    # project actions  → amp:project:<action>
+    create_action "$RS_ID" "$R_PROJECT"      "Create"                 "create"                 "Create a project"
+    create_action "$RS_ID" "$R_PROJECT"      "Read"                   "read"                   "View project details"
+    create_action "$RS_ID" "$R_PROJECT"      "Update"                 "update"                 "Update project settings"
+    create_action "$RS_ID" "$R_PROJECT"      "Delete"                 "delete"                 "Delete a project"
+
+    # environment actions  → amp:environment:<action>
+    create_action "$RS_ID" "$R_ENV"          "Create"                 "create"                 "Create an environment"
+    create_action "$RS_ID" "$R_ENV"          "Read"                   "read"                   "View environment details"
+    create_action "$RS_ID" "$R_ENV"          "Update"                 "update"                 "Update an environment"
+    create_action "$RS_ID" "$R_ENV"          "Delete"                 "delete"                 "Delete an environment"
+
+    # gateway actions  → amp:gateway:<action>
+    create_action "$RS_ID" "$R_GW"           "Create"                 "create"                 "Register a gateway"
+    create_action "$RS_ID" "$R_GW"           "Read"                   "read"                   "View gateway details and status"
+    create_action "$RS_ID" "$R_GW"           "Update"                 "update"                 "Update gateway configuration"
+    create_action "$RS_ID" "$R_GW"           "Delete"                 "delete"                 "Delete a gateway"
+    # gateway/token actions  → amp:gateway:token:<action>
+    create_action "$RS_ID" "$R_GW_TOKEN"     "Manage"                 "manage"                 "Create, list, and delete gateway tokens"
+
+    # data-plane actions  → amp:data-plane:<action>
+    create_action "$RS_ID" "$R_DP"           "Read"                   "read"                   "View data planes"
+
+    # deployment-pipeline actions  → amp:deployment-pipeline:<action>
+    create_action "$RS_ID" "$R_PIPE"         "Read"                   "read"                   "View deployment pipelines"
+
+    # git-secret actions  → amp:git-secret:<action>
+    create_action "$RS_ID" "$R_GIT"          "Create"                 "create"                 "Create a git secret"
+    create_action "$RS_ID" "$R_GIT"          "Read"                   "read"                   "List git secrets"
+    create_action "$RS_ID" "$R_GIT"          "Delete"                 "delete"                 "Delete a git secret"
+
+    # llm-provider-template actions  → amp:llm-provider-template:<action>
+    create_action "$RS_ID" "$R_LLMT"         "Create"                 "create"                 "Create a provider template"
+    create_action "$RS_ID" "$R_LLMT"         "Read"                   "read"                   "View provider templates"
+    create_action "$RS_ID" "$R_LLMT"         "Update"                 "update"                 "Update a provider template"
+    create_action "$RS_ID" "$R_LLMT"         "Delete"                 "delete"                 "Delete a provider template"
+
+    # llm-provider actions  → amp:llm-provider:<action>
+    create_action "$RS_ID" "$R_LLM"          "Create"                 "create"                 "Create an LLM provider"
+    create_action "$RS_ID" "$R_LLM"          "Read"                   "read"                   "View LLM providers and deployments"
+    create_action "$RS_ID" "$R_LLM"          "Update"                 "update"                 "Update an LLM provider"
+    create_action "$RS_ID" "$R_LLM"          "Delete"                 "delete"                 "Delete an LLM provider"
+    create_action "$RS_ID" "$R_LLM"          "Configure Guardrail"    "configure-guardrail"    "Configure guardrails, rate limits, and budgets"
+    create_action "$RS_ID" "$R_LLM"          "Connect"                "connect"                "Connect an agent to an LLM provider"
+    create_action "$RS_ID" "$R_LLM"          "Deploy"                 "deploy"                 "Deploy, undeploy, and restore an LLM provider"
+    # llm-provider/api-key actions  → amp:llm-provider:api-key:<action>
+    create_action "$RS_ID" "$R_LLM_KEY"      "Manage"                 "manage"                 "Create, update, and delete LLM provider API keys"
+
+    # mcp-server actions  → amp:mcp-server:<action>
+    create_action "$RS_ID" "$R_MCP"          "Create"                 "create"                 "Create an MCP server"
+    create_action "$RS_ID" "$R_MCP"          "Read"                   "read"                   "View MCP servers"
+    create_action "$RS_ID" "$R_MCP"          "Update"                 "update"                 "Update an MCP server"
+    create_action "$RS_ID" "$R_MCP"          "Delete"                 "delete"                 "Delete an MCP server"
+    create_action "$RS_ID" "$R_MCP"          "Configure Guardrail"    "configure-guardrail"    "Configure guardrails on an MCP server"
+    create_action "$RS_ID" "$R_MCP"          "Connect"                "connect"                "Connect an agent to an MCP server"
+
+    # llm-proxy actions  → amp:llm-proxy:<action>
+    create_action "$RS_ID" "$R_PROXY"        "Create"                 "create"                 "Create an LLM proxy"
+    create_action "$RS_ID" "$R_PROXY"        "Read"                   "read"                   "View LLM proxies and deployments"
+    create_action "$RS_ID" "$R_PROXY"        "Update"                 "update"                 "Update an LLM proxy"
+    create_action "$RS_ID" "$R_PROXY"        "Delete"                 "delete"                 "Delete an LLM proxy"
+    create_action "$RS_ID" "$R_PROXY"        "Deploy"                 "deploy"                 "Deploy, undeploy, and restore an LLM proxy"
+    # llm-proxy/api-key actions  → amp:llm-proxy:api-key:<action>
+    create_action "$RS_ID" "$R_PROXY_KEY"    "Manage"                 "manage"                 "Create, update, and delete LLM proxy API keys"
+
+    # evaluator actions  → amp:evaluator:<action>
+    create_action "$RS_ID" "$R_EVAL"         "Create"                 "create"                 "Create a custom evaluator"
+    create_action "$RS_ID" "$R_EVAL"         "Read"                   "read"                   "View evaluators"
+    create_action "$RS_ID" "$R_EVAL"         "Update"                 "update"                 "Update a custom evaluator"
+    create_action "$RS_ID" "$R_EVAL"         "Delete"                 "delete"                 "Delete a custom evaluator"
+
+    # agent actions  → amp:agent:<action>
+    create_action "$RS_ID" "$R_AGENT"        "Create"                 "create"                 "Create an agent"
+    create_action "$RS_ID" "$R_AGENT"        "Read"                   "read"                   "View agent details, builds, deployments, and configs"
+    create_action "$RS_ID" "$R_AGENT"        "Update"                 "update"                 "Update agent configuration and resource configs"
+    create_action "$RS_ID" "$R_AGENT"        "Delete"                 "delete"                 "Delete an agent"
+    create_action "$RS_ID" "$R_AGENT"        "Build"                  "build"                  "Trigger an agent build"
+    create_action "$RS_ID" "$R_AGENT"        "Promote"                "promote"                "Promote an agent deployment across environments"
+    create_action "$RS_ID" "$R_AGENT"        "Rollback"               "rollback"               "Rollback an agent deployment"
+    create_action "$RS_ID" "$R_AGENT"        "Suspend"                "suspend"                "Suspend or stop an agent deployment"
+    # agent/deploy actions  → amp:agent:deploy:<action>
+    create_action "$RS_ID" "$R_AGENT_DEPLOY" "Non-Production"         "non-production"         "Deploy an agent to a non-production environment"
+    create_action "$RS_ID" "$R_AGENT_DEPLOY" "Production"             "production"             "Deploy an agent to a production environment"
+    # agent/token actions  → amp:agent:token:<action>
+    create_action "$RS_ID" "$R_AGENT_TOKEN"  "Manage"                 "manage"                 "Generate agent tokens"
+
+    # monitor actions  → amp:monitor:<action>
+    create_action "$RS_ID" "$R_MON"          "Create"                 "create"                 "Create a monitor"
+    create_action "$RS_ID" "$R_MON"          "Read"                   "read"                   "View monitors, runs, and run logs"
+    create_action "$RS_ID" "$R_MON"          "Update"                 "update"                 "Update a monitor"
+    create_action "$RS_ID" "$R_MON"          "Delete"                 "delete"                 "Delete a monitor"
+    create_action "$RS_ID" "$R_MON"          "Execute"                "execute"                "Start, stop, and rerun monitors"
+    # monitor/score actions  → amp:monitor:score:<action>
+    create_action "$RS_ID" "$R_MON_SCORE"    "Read"                   "read"                   "View scores, breakdowns, and timeseries"
+    create_action "$RS_ID" "$R_MON_SCORE"    "Publish"                "publish"                "Publish monitor scores (internal/system use)"
+
+    # observability actions  → amp:observability:<action>
+    create_action "$RS_ID" "$R_OBS"          "Org Dashboard"          "org-dashboard"          "Access the organization-level observability dashboard"
+    create_action "$RS_ID" "$R_OBS"          "Project Dashboard"      "project-dashboard"      "Access the project-level observability dashboard"
+    create_action "$RS_ID" "$R_OBS"          "Guardrail Metric"       "guardrail-metric"       "View guardrail metrics"
+    create_action "$RS_ID" "$R_OBS"          "Infra Metric"           "infra-metric"           "View CPU, memory, and infrastructure metrics"
+
+    # role actions  → amp:role:<action>
+    create_action "$RS_ID" "$R_ROLE"         "Create"                 "create"                 "Create a custom role"
+    create_action "$RS_ID" "$R_ROLE"         "Read"                   "read"                   "View roles and their permissions"
+    create_action "$RS_ID" "$R_ROLE"         "Update"                 "update"                 "Update a custom role"
+    create_action "$RS_ID" "$R_ROLE"         "Delete"                 "delete"                 "Delete a custom role"
+
+    # catalog actions  → amp:catalog:<action>
+    create_action "$RS_ID" "$R_CAT"          "Read"                   "read"                   "View the resource catalog"
+
+    # repository actions  → amp:repository:<action>
+    create_action "$RS_ID" "$R_REPO"         "Read"                   "read"                   "Browse repository branches and commits"
+
+    log_info "Agent Manager resource server registration complete (81 permissions registered)."
