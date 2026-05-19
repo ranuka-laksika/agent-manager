@@ -9,10 +9,10 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'react-router-dom'],
     alias: [
       // More specific aliases MUST come before general ones (prefix matching order matters)
-      { find: '@agent-management-platform/core-ui/dist/index.css', replacement: path.resolve(__dirname, '../../workspaces/core-ui/dist/index.css') },
+      { find: '@agent-management-platform/am-core-ui/dist/index.css', replacement: path.resolve(__dirname, '../../workspaces/core-ui/dist/index.css') },
 
       // Resolve core-ui and all its sub-packages to source for hot-reload
-      { find: '@agent-management-platform/core-ui', replacement: path.resolve(__dirname, '../../workspaces/core-ui/src') },
+      { find: '@agent-management-platform/am-core-ui', replacement: path.resolve(__dirname, '../../workspaces/core-ui/src') },
 
       // Workspace libraries
       { find: '@agent-management-platform/auth', replacement: path.resolve(__dirname, '../../workspaces/libs/auth/src') },
@@ -35,6 +35,8 @@ export default defineConfig({
       { find: '@agent-management-platform/eval', replacement: path.resolve(__dirname, '../../workspaces/pages/eval/src') },
       { find: '@agent-management-platform/llm-providers', replacement: path.resolve(__dirname, '../../workspaces/pages/llm-providers/src') },
       { find: '@agent-management-platform/gateways', replacement: path.resolve(__dirname, '../../workspaces/pages/gateways/src') },
+      { find: '@agent-management-platform/agent-security', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-security/src') },
+      { find: '@agent-management-platform/agent-kind', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-kind/src') },
     ],
   },
   server: {

@@ -23,7 +23,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// API Response DTO
 type AgentResponse struct {
 	UUID           string          `json:"uuid"`
 	Name           string          `json:"name"`
@@ -37,11 +36,15 @@ type AgentResponse struct {
 	Build          *Build          `json:"build,omitempty"`
 	InputInterface *InputInterface `json:"inputInterface,omitempty"`
 	Configurations *Configurations `json:"configurations,omitempty"`
+	KindName       string          `json:"kindName,omitempty"`
 }
 
 // Configurations contains runtime configurations for an agent
 type Configurations struct {
-	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
+	EnableAutoInstrumentation *bool     `json:"enableAutoInstrumentation,omitempty"`
+	InstrumentationVersion    *string   `json:"instrumentationVersion,omitempty"`
+	Env                       []EnvVars `json:"env,omitempty"`
+	EnableApiKeySecurity      *bool     `json:"enableApiKeySecurity,omitempty"`
 }
 
 type AgentType struct {
@@ -49,6 +52,8 @@ type AgentType struct {
 	Type string `json:"type"`
 	// Sub-type of the agent
 	SubType string `json:"subType,omitempty"`
+	// Language of the agent (e.g. "python", "docker")
+	Language string `json:"language,omitempty"`
 }
 
 type Provisioning struct {

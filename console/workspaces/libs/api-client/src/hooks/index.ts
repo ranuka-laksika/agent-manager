@@ -17,6 +17,7 @@
  */
 
 export * from './agent-model-configs';
+export * from './agent-api-keys';
 export * from './catalog';
 export * from './agents';
 export * from './builds';
@@ -35,3 +36,4 @@ export * from './gateways';
 export * from './guardrails';
 export * from './git-secrets';
 export * from './identities';
+export * from './agent-kinds';

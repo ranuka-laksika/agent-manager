@@ -108,6 +108,12 @@ func convertToInternalAgentResponse(component *models.AgentResponse) spec.AgentR
 		InputInterface: convertToInputInterface(component.InputInterface),
 		Build:          convertToBuild(component.Build),
 		Configurations: convertToConfigurations(component.Configurations),
+		KindName: func() *string {
+			if component.KindName == "" {
+				return nil
+			}
+			return &component.KindName
+		}(),
 	}
 	return response
 }
@@ -118,6 +124,7 @@ func convertToConfigurations(configs *models.Configurations) *spec.Configuration
 	}
 	return &spec.Configurations{
 		EnableAutoInstrumentation: configs.EnableAutoInstrumentation,
+		EnableApiKeySecurity:      configs.EnableApiKeySecurity,
 	}
 }
 

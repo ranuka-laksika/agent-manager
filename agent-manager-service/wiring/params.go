@@ -44,6 +44,7 @@ type AppParams struct {
 
 	// Controllers
 	AgentController                  controllers.AgentController
+	AgentKindController              controllers.AgentKindController
 	InfraResourceController          controllers.InfraResourceController
 	AgentTokenController             controllers.AgentTokenController
 	RepositoryController             controllers.RepositoryController
@@ -53,6 +54,7 @@ type AppParams struct {
 	LLMDeploymentController          controllers.LLMDeploymentController
 	LLMProviderAPIKeyController      controllers.LLMProviderAPIKeyController
 	LLMProxyAPIKeyController         controllers.LLMProxyAPIKeyController
+	AgentAPIKeyController            controllers.AgentAPIKeyController
 	LLMProxyDeploymentController     controllers.LLMProxyDeploymentController
 	WebSocketController              controllers.WebSocketController
 	GatewayInternalController        controllers.GatewayInternalController

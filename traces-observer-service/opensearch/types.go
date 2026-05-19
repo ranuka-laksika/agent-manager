@@ -90,8 +90,9 @@ type EmbeddingData struct {
 
 // RetrieverData contains vector database retrieval span information
 type RetrieverData struct {
-	VectorDB string `json:"vectorDB,omitempty"` // Vector database system (e.g., Chroma, Pinecone)
-	TopK     int    `json:"topK,omitempty"`     // Number of top results requested
+	VectorDB   string `json:"vectorDB,omitempty"`   // Vector database system (e.g., chroma, pinecone) — db.system.name or legacy db.system
+	Collection string `json:"collection,omitempty"` // Collection / index name (db.collection.name)
+	TopK       int    `json:"topK,omitempty"`       // Number of top results requested (db.vector.query.top_k)
 }
 
 // AgentData contains agent execution span information
@@ -201,11 +202,15 @@ const (
 	SpanTypeUnknown    SpanType = "unknown"    // Unknown/unclassified spans
 )
 
-// TokenUsage represents aggregated token usage from GenAI spans
+// TokenUsage represents aggregated token usage from GenAI spans.
+// Partial is true when the aggregation was truncated (e.g. trace had more
+// LLM leaf spans than the trace-list view fetches), so consumers know to
+// render the count with a "+" / "approximate" indicator.
 type TokenUsage struct {
-	InputTokens  int `json:"inputTokens"`
-	OutputTokens int `json:"outputTokens"`
-	TotalTokens  int `json:"totalTokens"`
+	InputTokens  int  `json:"inputTokens"`
+	OutputTokens int  `json:"outputTokens"`
+	TotalTokens  int  `json:"totalTokens"`
+	Partial      bool `json:"partial,omitempty"`
 }
 
 // TraceOverviewResponse represents the response for trace overview queries

@@ -18,7 +18,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { format } from "date-fns";
 import type { LogLevel, LogEntry } from "@agent-management-platform/types";
 import {
-    Alert,
     Box,
     CircularProgress,
     IconButton,
@@ -28,12 +27,12 @@ import {
     Skeleton,
     Stack,
     Tooltip,
-    alpha,
     useTheme,
 } from "@wso2/oxygen-ui";
 import {
     FileText,
     TextWrap,
+    AlertCircle,
 } from "@wso2/oxygen-ui-icons-react";
 
 export interface LogsPanelProps {
@@ -147,19 +146,22 @@ const LogsPanelRows = (
                     const timestamp = format(new Date(entry.timestamp), "dd/MM/yyyy HH:mm:ss");
                     const rowKey = `${entry.timestamp}-${index}`;
                     const isError = level === "error";
-                    const bgBase = theme.palette.background.default;
+                    const p = (theme.vars || theme).palette;
+                    const bgBase = p.background.default;
+                    const errorMain = p.error.main;
                     const rowBg = isError
-                        ? alpha(theme.palette.error.main, 0.08) : bgBase;
+                        ? `color-mix(in srgb, ${errorMain} 15%, ${bgBase})` : bgBase;
                     // Sticky cells must be fully opaque to avoid bleed-through
                     // when scrolling horizontally over the log column.
                     const stickyBg = isError
-                        ? `color-mix(in srgb, ${theme.palette.error.main} 8%, ${bgBase})`
+                        ? `color-mix(in srgb, ${errorMain} 15%, ${bgBase})`
                         : bgBase;
+                    const nonErrorHoverBg = `color-mix(in srgb, ${p.action.active} ${Math.round(theme.palette.action.hoverOpacity * 100)}%, ${bgBase})`;
                     const hoverBg = isError
-                        ? alpha(theme.palette.error.main, 0.15) : theme.palette.action.hover;
+                        ? `color-mix(in srgb, ${errorMain} 22%, ${bgBase})` : nonErrorHoverBg;
                     const stickyHoverBg = isError
-                        ? `color-mix(in srgb, ${theme.palette.error.main} 15%, ${bgBase})`
-                        : `color-mix(in srgb, ${theme.palette.mode === 'light' ? 'rgb(0 0 0)' : 'rgb(255 255 255)'} ${Math.round(theme.palette.action.hoverOpacity * 100)}%, ${bgBase})`;
+                        ? `color-mix(in srgb, ${errorMain} 22%, ${bgBase})`
+                        : nonErrorHoverBg;
                     const cellBase = {
                         display: "flex",
                         alignItems: "flex-start",
@@ -280,9 +282,13 @@ export function LogsPanel({
 
     if (error) {
         return (
-            <Alert severity="error">
-                {error instanceof Error ? error.message : "Failed to load logs"}
-            </Alert>
+            <Paper variant="outlined" sx={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", p: 4 }}>
+                <ListingTable.EmptyState
+                    illustration={<AlertCircle size={64} />}
+                    title="Something went wrong"
+                    description="Failed to retrieve logs. Please try again later."
+                />
+            </Paper>
         );
     }
 

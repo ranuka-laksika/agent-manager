@@ -33,6 +33,8 @@ type AgentResponse struct {
 	Configurations *Configurations `json:"configurations,omitempty"`
 	InputInterface *InputInterface `json:"inputInterface,omitempty"`
 	Build          *Build          `json:"build,omitempty"`
+	// Name of the Agent Kind this agent was instantiated from (absent for source-built agents)
+	KindName *string `json:"kindName,omitempty"`
 }
 
 // NewAgentResponse instantiates a new AgentResponse object
@@ -380,6 +382,38 @@ func (o *AgentResponse) SetBuild(v Build) {
 	o.Build = &v
 }
 
+// GetKindName returns the KindName field value if set, zero value otherwise.
+func (o *AgentResponse) GetKindName() string {
+	if o == nil || IsNil(o.KindName) {
+		var ret string
+		return ret
+	}
+	return *o.KindName
+}
+
+// GetKindNameOk returns a tuple with the KindName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *AgentResponse) GetKindNameOk() (*string, bool) {
+	if o == nil || IsNil(o.KindName) {
+		return nil, false
+	}
+	return o.KindName, true
+}
+
+// HasKindName returns a boolean if a field has been set.
+func (o *AgentResponse) HasKindName() bool {
+	if o != nil && !IsNil(o.KindName) {
+		return true
+	}
+
+	return false
+}
+
+// SetKindName gets a reference to the given string and assigns it to the KindName field.
+func (o *AgentResponse) SetKindName(v string) {
+	o.KindName = &v
+}
+
 func (o AgentResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -409,6 +443,9 @@ func (o AgentResponse) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Build) {
 		toSerialize["build"] = o.Build
+	}
+	if !IsNil(o.KindName) {
+		toSerialize["kindName"] = o.KindName
 	}
 	return toSerialize, nil
 }

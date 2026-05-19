@@ -59,10 +59,12 @@ type OpenChoreoClient interface {
 	UpdateEnvResourceConfigs(ctx context.Context, namespaceName, projectName, componentName, environment string, req UpdateComponentResourceConfigsRequest) error
 	DeleteComponent(ctx context.Context, namespaceName, projectName, componentName string) error
 	ListComponents(ctx context.Context, namespaceName, projectName string) ([]*models.AgentResponse, error)
+	ListComponentsByKind(ctx context.Context, namespaceName, projectName, kindName string) ([]*models.AgentResponse, error)
 	ComponentExists(ctx context.Context, namespaceName, projectName, componentName string, verifyProject bool) (bool, error)
 	AttachTraits(ctx context.Context, namespaceName, projectName, componentName string, traitRequests []TraitRequest) error
 	DetachTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) error
 	HasTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) (bool, error)
+	UpdateComponentDeploymentConfig(ctx context.Context, namespaceName, projectName, componentName string, req ComponentDeploymentConfigRequest) error
 	UpdateComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error
 	ReplaceComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error
 	UpdateReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, envVars []EnvVar) error
@@ -81,6 +83,7 @@ type OpenChoreoClient interface {
 
 	// Deployment Operations
 	Deploy(ctx context.Context, namespaceName, projectName, componentName string, req DeployRequest) error
+	CreateInternalAgentFromKindWorkload(ctx context.Context, namespaceName, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error
 	GetDeployments(ctx context.Context, namespaceName, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error)
 	UpdateDeploymentState(ctx context.Context, namespaceName, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error
 	IsDeploymentInProgress(ctx context.Context, namespaceName, componentName, environment string) (bool, error)

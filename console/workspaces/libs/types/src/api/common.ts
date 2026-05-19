@@ -81,6 +81,8 @@ export type Build = BuildpackBuild | DockerBuild;
 export interface Configurations {
   env?: EnvironmentVariable[];
   enableAutoInstrumentation?: boolean;
+  instrumentationVersion?: string;
+  enableApiKeySecurity?: boolean;
 }
 
 export interface EndpointSchema {

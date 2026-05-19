@@ -18,12 +18,12 @@
 
 window.__RUNTIME_CONFIG__ = {
   authConfig: {
-    baseUrl: 'null',
-    clientId: 'null',
-    signInUrl: 'null/gate',
-    afterSignInUrl: 'null',
-    afterSignOutUrl: 'null',
-    scopes: (''.trim() || 'openid profile email').split(/\s+/).filter(Boolean),
+    baseUrl: 'http://thunder.amp.localhost:8080',
+    clientId: 'amp-console-client',
+    signInUrl: 'http://thunder.amp.localhost:8080/gate',
+    afterSignInUrl: 'http://localhost:3000/login',
+    afterSignOutUrl: 'http://localhost:3000/login',
+    scopes: ['openid', 'profile', 'email'],
     platform: 'AsgardeoV2',
     tokenValidation: {
       idToken: {
@@ -33,13 +33,20 @@ window.__RUNTIME_CONFIG__ = {
     },
     storage: 'localStorage',
   },
-  disableAuth: 'true' === 'true',
+  disableAuth: false,
   apiBaseUrl: 'http://localhost:9000',
   obsApiBaseUrl: 'http://localhost:9098',
-  gatewayControlPlaneUrl: '',
-  gatewayVersion: '',
-  instrumentationUrl: '',
-  guardrailsCatalogUrl: 'https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies?categories=Guardrails',
+  gatewayControlPlaneUrl: 'http://localhost:9243',
+  gatewayVersion: 'v0.11.0',
+  instrumentationUrl: 'http://localhost:22893/otel',
+  guardrailsCatalogUrl: 'https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies?categories=Guardrails,AI&limit=100',
   guardrailsDefinitionBaseUrl: 'https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies',
+  guardrailCapabilities: {
+    awsBedrock: false,
+    azureContentSafety: false,
+    graniteGuardian: false,
+    nemoGuard: false,
+    semanticGuardrails: false,
+  },
 };
 

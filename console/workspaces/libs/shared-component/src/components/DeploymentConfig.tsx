@@ -26,18 +26,21 @@ import { Rocket } from "@wso2/oxygen-ui-icons-react";
 import {
   Box,
   Button,
+  Collapse,
   Form,
   FormControlLabel,
   Skeleton,
   Switch,
+  TextField,
   Typography,
 } from "@wso2/oxygen-ui";
 import { EnvironmentVariable } from "./EnvironmentVariable";
 import type {
+  AgentKindConfigSchemaItem,
   Environment,
   EnvironmentVariable as EnvVar,
 } from "@agent-management-platform/types";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   TextInput,
   DrawerHeader,
@@ -52,6 +55,8 @@ interface DeploymentConfigProps {
   projName: string;
   agentName: string;
   imageId: string;
+  /** When provided (kind agents), seeds env vars from schema and locks those keys */
+  configSchema?: AgentKindConfigSchemaItem[];
 }
 
 export function DeploymentConfig({
@@ -62,6 +67,7 @@ export function DeploymentConfig({
   projName,
   agentName,
   imageId,
+  configSchema,
 }: DeploymentConfigProps) {
   const [envVariables, setEnvVariables] = useState<
     Array<{
@@ -73,6 +79,8 @@ export function DeploymentConfig({
     }>
   >([]);
   const [enableAutoInstrumentation, setEnableAutoInstrumentation] =
+    useState<boolean>(true);
+  const [enableApiKeySecurity, setEnableApiKeySecurity] =
     useState<boolean>(true);
 
   const { mutate: deployAgent, isPending } = useDeployAgent();
@@ -99,10 +107,35 @@ export function DeploymentConfig({
 
   useEffect(() => {
     const configs = configurations?.configurations;
-    setEnvVariables(
-      configs ? [...configs].sort((a, b) => a.key.localeCompare(b.key)) : [],
-    );
-  }, [configurations]);
+    if (configSchema && configSchema.length > 0) {
+      // Build a lookup of existing deployed config values keyed by var name
+      const existingByKey = new Map(
+        (configs ?? []).map((c) => [c.key, c]),
+      );
+      // Schema-defined vars come first (locked), merged with existing values
+      const schemaVars = configSchema.map((item) => {
+        const existing = existingByKey.get(item.name);
+        if (existing) {
+          return existing;
+        }
+        return {
+          key: item.name,
+          value: item.defaultValue ?? "",
+          isSensitive: item.isSecret,
+        };
+      });
+      // Append any extra deployed vars that aren't part of the schema
+      const schemaKeys = new Set(configSchema.map((i) => i.name));
+      const extraVars = (configs ?? [])
+        .filter((c) => !schemaKeys.has(c.key))
+        .sort((a, b) => a.key.localeCompare(b.key));
+      setEnvVariables([...schemaVars, ...extraVars]);
+    } else {
+      setEnvVariables(
+        configs ? [...configs].sort((a, b) => a.key.localeCompare(b.key)) : [],
+      );
+    }
+  }, [configurations, configSchema]);
 
   useEffect(() => {
     if (agent?.configurations?.enableAutoInstrumentation !== undefined) {
@@ -112,10 +145,23 @@ export function DeploymentConfig({
     }
   }, [agent?.configurations?.enableAutoInstrumentation]);
 
+  useEffect(() => {
+    if (agent?.configurations?.enableApiKeySecurity !== undefined) {
+      setEnableApiKeySecurity(agent.configurations.enableApiKeySecurity);
+    }
+  }, [agent?.configurations?.enableApiKeySecurity]);
+
   const isPythonBuildpack =
     agent?.build?.type === "buildpack" &&
     "buildpack" in agent.build &&
     agent.build.buildpack.language === "python";
+
+  const isApiAgent = agent?.agentType?.type === "agent-api";
+
+  const lockedKeys = useMemo(
+    () => new Set((configSchema ?? []).map((i) => i.name)),
+    [configSchema],
+  );
 
   const handleDeploy = async () => {
     try {
@@ -183,6 +229,7 @@ export function DeploymentConfig({
             imageId: imageId,
             env: filteredEnvVars.length > 0 ? filteredEnvVars : undefined,
             ...(isPythonBuildpack && { enableAutoInstrumentation }),
+            ...(isApiAgent && { enableApiKeySecurity }),
           },
         },
         {
@@ -248,6 +295,7 @@ export function DeploymentConfig({
                 envVariables={envVariables}
                 setEnvVariables={setEnvVariables}
                 isExistingData={true}
+                lockedKeys={lockedKeys}
               />
             )}
           </Form.Section>
@@ -272,6 +320,52 @@ export function DeploymentConfig({
                   Automatically adds OTEL tracing instrumentation to your agent
                   for observability.
                 </Typography>
+                {enableAutoInstrumentation &&
+                  agent?.configurations?.instrumentationVersion && (
+                    <Typography variant="body2" color="text.secondary">
+                      AMP instrumentation version:{" "}
+                      <Typography component="code"
+                        sx={{ bgcolor: "action.hover", px: 0.5, borderRadius: 0.5 }}
+                      >
+                        {agent.configurations.instrumentationVersion}
+                      </Typography>{" "}
+                      (set at agent creation time)
+                    </Typography>
+                  )}
+              </Form.Stack>
+            </Form.Section>
+          )}
+
+          {isApiAgent && (
+            <Form.Section>
+              <Form.Header>Endpoint Authentication</Form.Header>
+              <Form.Stack spacing={1}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={enableApiKeySecurity}
+                      onChange={(_, checked) =>
+                        setEnableApiKeySecurity(checked)
+                      }
+                      disabled={isPending}
+                    />
+                  }
+                  label="Enable API key security"
+                />
+                <Typography variant="body2" color="text.secondary">
+                  Secure your agent endpoint with API key authentication.
+                </Typography>
+                <Collapse in={enableApiKeySecurity}>
+                  <TextField
+                    label="Header"
+                    value="X-API-Key"
+                    size="small"
+                    fullWidth
+                    disabled
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    sx={{ mt: 1 }}
+                  />
+                </Collapse>
               </Form.Stack>
             </Form.Section>
           )}

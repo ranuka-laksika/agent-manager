@@ -31,6 +31,131 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
+// InternalAgentFromKindWorkloadRequest holds the parameters needed to create a Workload CR for a kind-sourced agent.
+type InternalAgentFromKindWorkloadRequest struct {
+	ImageID   string
+	Endpoints []InputInterfaceEndpoint
+	Env       []EnvVar
+}
+
+// InputInterfaceEndpoint describes a single exposed endpoint on a kind-sourced agent workload.
+type InputInterfaceEndpoint struct {
+	Name       string
+	Port       int
+	Type       string // e.g. "HTTP"
+	BasePath   string
+	Visibility []string // e.g. ["external"]
+	Schema     *EndpointSchema
+}
+
+// EndpointSchema holds OpenAPI spec content for an endpoint.
+type EndpointSchema struct {
+	Content string
+	Type    string // e.g. "OPENAPI"
+}
+
+// CreateInternalAgentFromKindWorkload creates a Workload CR directly for a kind-sourced agent,
+// bypassing the workflow/build system entirely.
+func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Context, orgName, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error {
+	workloadName := componentName + "-workload"
+
+	// Build endpoint map
+	endpointMap := make(map[string]gen.WorkloadEndpoint)
+	for i, ep := range req.Endpoints {
+		name := ep.Name
+		if name == "" {
+			name = fmt.Sprintf("%s-endpoint-%d", componentName, i)
+		}
+
+		epType := gen.WorkloadEndpointTypeHTTP
+		if ep.Type != "" {
+			epType = gen.WorkloadEndpointType(ep.Type)
+		}
+
+		workloadEp := gen.WorkloadEndpoint{
+			Port: ep.Port,
+			Type: epType,
+		}
+
+		if ep.BasePath != "" {
+			workloadEp.BasePath = &ep.BasePath
+		}
+
+		if len(ep.Visibility) > 0 {
+			vis := make([]gen.WorkloadEndpointVisibility, 0, len(ep.Visibility))
+			for _, v := range ep.Visibility {
+				vis = append(vis, gen.WorkloadEndpointVisibility(v))
+			}
+			workloadEp.Visibility = &vis
+		}
+
+		if ep.Schema != nil && ep.Schema.Content != "" {
+			schemaType := ep.Schema.Type
+			workloadEp.Schema = &struct {
+				Content *string `json:"content,omitempty"`
+				Type    *string `json:"type,omitempty"`
+			}{
+				Content: &ep.Schema.Content,
+				Type:    &schemaType,
+			}
+		}
+
+		endpointMap[name] = workloadEp
+	}
+
+	// Build env vars
+	var envVars []gen.EnvVar
+	for _, env := range req.Env {
+		genEnv := gen.EnvVar{Key: env.Key}
+		if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
+			secretName := env.ValueFrom.SecretKeyRef.Name
+			secretKey := env.ValueFrom.SecretKeyRef.Key
+			genEnv.ValueFrom = &gen.EnvVarValueFrom{
+				SecretKeyRef: &struct {
+					Key  *string `json:"key,omitempty"`
+					Name *string `json:"name,omitempty"`
+				}{Name: &secretName, Key: &secretKey},
+			}
+		} else {
+			v := env.Value
+			genEnv.Value = &v
+		}
+		envVars = append(envVars, genEnv)
+	}
+
+	workload := gen.CreateWorkloadJSONRequestBody{
+		Metadata: gen.ObjectMeta{
+			Name:      workloadName,
+			Namespace: &orgName,
+		},
+		Spec: &gen.WorkloadSpec{
+			Container: &gen.WorkloadContainer{
+				Image: req.ImageID,
+				Env:   &envVars,
+			},
+			Owner: &struct {
+				ComponentName string `json:"componentName"`
+				ProjectName   string `json:"projectName"`
+			}{ComponentName: componentName, ProjectName: projectName},
+			Endpoints: &endpointMap,
+		},
+	}
+
+	resp, err := c.ocClient.CreateWorkloadWithResponse(ctx, orgName, workload)
+	if err != nil {
+		return fmt.Errorf("failed to create kind-sourced agent workload: %w", err)
+	}
+	if resp.StatusCode() != http.StatusCreated {
+		return handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON400: resp.JSON400,
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON500: resp.JSON500,
+		})
+	}
+	return nil
+}
+
 func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, componentName string, req DeployRequest) error {
 	// List workloads to find the one for this component
 	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, orgName, &gen.ListWorkloadsParams{
@@ -126,7 +251,11 @@ func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, com
 }
 
 // setRestartedAt updates restartedAt on the ReleaseBinding for the given environment to trigger a pod rollout.
+// It uses a List/Get/Update cycle with retry: List finds the binding name, then a Get/Update loop
+// retries on conflict (resource version mismatch from concurrent controller reconciliation).
 func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, componentName, envName string) error {
+	const maxRetries = 3
+
 	listResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
@@ -146,40 +275,68 @@ func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, co
 		return nil
 	}
 
-	var found bool
-	for i := range listResp.JSON200.Items {
-		binding := &listResp.JSON200.Items[i]
-		if binding.Spec == nil || binding.Spec.Environment != envName {
-			continue
+	// Find the binding name for the target environment from the list.
+	var bindingName string
+	for _, b := range listResp.JSON200.Items {
+		if b.Spec != nil && b.Spec.Environment == envName {
+			bindingName = b.Metadata.Name
+			break
 		}
-		found = true
+	}
+	if bindingName == "" {
+		slog.Warn("no release binding found for environment during deploy, pod rollout may not be triggered",
+			"component", componentName, "environment", envName)
+		return nil
+	}
+
+	// Retry Get/Update cycle to handle resource version conflicts from concurrent controller reconciliation.
+	var lastErr error
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		getResp, err := c.ocClient.GetReleaseBindingWithResponse(ctx, namespaceName, bindingName)
+		if err != nil {
+			return fmt.Errorf("failed to get release binding %q: %w", bindingName, err)
+		}
+		if getResp.StatusCode() != http.StatusOK {
+			return handleErrorResponse(getResp.StatusCode(), ErrorResponses{
+				JSON401: getResp.JSON401,
+				JSON403: getResp.JSON403,
+				JSON404: getResp.JSON404,
+				JSON500: getResp.JSON500,
+			})
+		}
+		if getResp.JSON200 == nil || getResp.JSON200.Spec == nil {
+			return fmt.Errorf("empty response from get release binding %q", bindingName)
+		}
+
+		binding := getResp.JSON200
 		if binding.Spec.ComponentTypeEnvironmentConfigs == nil {
 			overrides := make(map[string]interface{})
 			binding.Spec.ComponentTypeEnvironmentConfigs = &overrides
 		}
 		(*binding.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 
-		updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, binding.Metadata.Name, *binding)
+		updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *binding)
 		if err != nil {
-			return fmt.Errorf("failed to update release binding %s: %w", binding.Metadata.Name, err)
+			return fmt.Errorf("failed to update release binding %s: %w", bindingName, err)
 		}
-		if updateResp.StatusCode() != http.StatusOK {
-			return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
-				JSON401: updateResp.JSON401,
-				JSON403: updateResp.JSON403,
-				JSON404: updateResp.JSON404,
-				JSON500: updateResp.JSON500,
-			})
+		if updateResp.StatusCode() == http.StatusOK {
+			return nil
 		}
-		break
+		if updateResp.StatusCode() == http.StatusInternalServerError && attempt < maxRetries {
+			slog.Warn("release binding update conflict, retrying with fresh version",
+				"binding", bindingName, "attempt", attempt, "maxRetries", maxRetries)
+			lastErr = fmt.Errorf("conflict on attempt %d", attempt)
+			continue
+		}
+		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
+			JSON401: updateResp.JSON401,
+			JSON403: updateResp.JSON403,
+			JSON404: updateResp.JSON404,
+			JSON500: updateResp.JSON500,
+		})
 	}
 
-	if !found {
-		slog.Warn("no release binding found for environment during deploy, pod rollout may not be triggered",
-			"component", componentName, "environment", envName)
-	}
-
-	return nil
+	return fmt.Errorf("failed to update release binding %s after %d retries: %w", bindingName, maxRetries, lastErr)
 }
 
 func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error) {
@@ -297,6 +454,21 @@ func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipeline
 				Status:                     DeploymentStatusNotDeployed,
 				Endpoints:                  []models.Endpoint{},
 			})
+		}
+	}
+
+	// For kind-sourced agents (no release bindings — they use the workload model directly),
+	// synthesize a deployment entry from the live workload.
+	if len(releaseBindingMap) == 0 && liveWorkloadContainerImage != "" {
+		if len(deploymentDetails) > 0 {
+			deploymentDetails[0].Status = DeploymentStatusActive
+			deploymentDetails[0].ImageId = liveWorkloadContainerImage
+		} else {
+			deploymentDetails = []*models.DeploymentResponse{{
+				Status:    DeploymentStatusActive,
+				ImageId:   liveWorkloadContainerImage,
+				Endpoints: []models.Endpoint{},
+			}}
 		}
 	}
 

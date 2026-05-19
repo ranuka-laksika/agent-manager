@@ -68,9 +68,7 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 			StopTrying(fmt.Sprintf("runtime logs returned %d", resp.StatusCode)).Now()
 		}
-		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "runtime logs returned %d", resp.StatusCode)
-
-		logs := framework.DecodeBody[framework.LogsResponse](g, resp)
+		logs := framework.ExpectStatusAndDecode[framework.LogsResponse](g, resp, http.StatusOK)
 		found := false
 		for _, entry := range logs.Logs {
 			if strings.Contains(entry.Log, params.SearchText) {
@@ -81,7 +79,7 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 			}
 		}
 		g.Expect(found).To(BeTrue(), "log line %q not found yet", params.SearchText)
-	}).WithTimeout(timeout).WithPolling(5 * time.Second).Should(Succeed())
+	}).WithTimeout(timeout).WithPolling(15 * time.Second).Should(Succeed())
 
 	return result
 }

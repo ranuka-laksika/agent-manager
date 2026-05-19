@@ -20,6 +20,12 @@ export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+  /**
+   * True when the trace had more LLM leaf spans than the trace-list view
+   * aggregates, so the totals are a sum of only the first N leaves. The UI
+   * should render with a "+" / "approximate" marker.
+   */
+  partial?: boolean;
 }
 
 export interface TraceStatus {
@@ -106,6 +112,7 @@ export interface EmbeddingData {
 
 export interface RetrieverData {
   vectorDB?: string;
+  collection?: string;
   topK?: number;
 }
 

@@ -56,6 +56,7 @@ var clientProviderSet = wire.NewSet(
 
 var serviceProviderSet = wire.NewSet(
 	services.NewAgentManagerService,
+	services.NewAgentKindService,
 	services.NewInfraResourceManager,
 	services.NewAgentTokenManagerService,
 	ProvideGitCredentialsService,
@@ -73,6 +74,7 @@ var serviceProviderSet = wire.NewSet(
 	services.NewLLMProviderDeploymentService,
 	services.NewLLMProviderAPIKeyService,
 	services.NewLLMProxyAPIKeyService,
+	services.NewAgentAPIKeyService,
 	services.NewLLMProxyDeploymentService,
 	services.NewGatewayInternalAPIService,
 	services.NewMonitorScoresService,
@@ -85,6 +87,7 @@ var serviceProviderSet = wire.NewSet(
 
 var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentController,
+	controllers.NewAgentKindController,
 	controllers.NewInfraResourceController,
 	controllers.NewAgentTokenController,
 	controllers.NewRepositoryController,
@@ -94,6 +97,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewLLMDeploymentController,
 	controllers.NewLLMProviderAPIKeyController,
 	controllers.NewLLMProxyAPIKeyController,
+	controllers.NewAgentAPIKeyController,
 	controllers.NewLLMProxyDeploymentController,
 	ProvideWebSocketController,
 	controllers.NewGatewayInternalController,
@@ -188,6 +192,7 @@ var loggerProviderSet = wire.NewSet(
 
 var repositoryProviderSet = wire.NewSet(
 	ProvideGatewayRepository,
+	ProvideAgentKindRepository,
 	ProvideLLMProviderTemplateRepository,
 	ProvideLLMProviderRepository,
 	ProvideLLMProxyRepository,
@@ -305,6 +310,10 @@ func ProvideCustomEvaluatorRepository(db *gorm.DB) repositories.CustomEvaluatorR
 
 func ProvideOrgPublisherCredentialRepository(db *gorm.DB) repositories.OrgPublisherCredentialRepository {
 	return repositories.NewOrgPublisherCredentialRepo(db)
+}
+
+func ProvideAgentKindRepository(db *gorm.DB) repositories.AgentKindRepository {
+	return repositories.NewAgentKindRepo(db)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

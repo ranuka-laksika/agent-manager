@@ -42,6 +42,9 @@ func MakeHTTPHandler(params *wiring.AppParams, extraAPIRoutes func(*http.ServeMu
 	// Register OAuth 2.0 Protected Resource Metadata (RFC 9728) at root level (no authentication required)
 	registerWellKnownRoutes(mux)
 
+	// Register service-configuration discovery endpoint at root level (no authentication required)
+	registerConfigRoutes(mux)
+
 	// Register MCP at root level
 	mcp.RegisterRoute(mux, mcp.Dependencies{
 		InfraResourceManager:     params.InfraResourceManager,
@@ -53,6 +56,7 @@ func MakeHTTPHandler(params *wiring.AppParams, extraAPIRoutes func(*http.ServeMu
 	// Create a sub-mux for API v1 routes (JWT-authenticated)
 	apiMux := http.NewServeMux()
 	registerAgentRoutes(apiMux, params.AgentController)
+	registerAgentKindRoutes(apiMux, params.AgentKindController)
 	registerAgentTokenRoutes(apiMux, params.AgentTokenController)
 	registerInfraRoutes(apiMux, params.InfraResourceController)
 	registerRepositoryRoutes(apiMux, params.RepositoryController)
@@ -66,6 +70,7 @@ func MakeHTTPHandler(params *wiring.AppParams, extraAPIRoutes func(*http.ServeMu
 	RegisterLLMDeploymentRoutes(apiMux, params.LLMDeploymentController)
 	RegisterLLMProviderAPIKeyRoutes(apiMux, params.LLMProviderAPIKeyController)
 	RegisterLLMProxyAPIKeyRoutes(apiMux, params.LLMProxyAPIKeyController)
+	RegisterAgentAPIKeyRoutes(apiMux, params.AgentAPIKeyController)
 	RegisterLLMProxyDeploymentRoutes(apiMux, params.LLMProxyDeploymentController)
 	RegisterAgentConfigRoutes(apiMux, params.AgentConfigurationController)
 	RegisterMonitorPublisherRoutes(apiMux, params.MonitorScoresPublisherController)

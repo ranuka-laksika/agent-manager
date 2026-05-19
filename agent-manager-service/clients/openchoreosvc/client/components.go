@@ -61,7 +61,70 @@ func buildCreateComponentRequestBody(namespaceName, projectName string, req Crea
 	if req.ProvisioningType == ProvisioningExternal {
 		return buildExternalAgentComponentRequestBody(namespaceName, projectName, req)
 	}
-	return buildInternalAgentComponentRequestBody(namespaceName, projectName, req)
+	if req.AgentKind != nil {
+		return buildInternalAgentFromKindComponentRequestBody(namespaceName, projectName, req)
+	}
+	return buildInternalAgentFromSourceComponentRequestBody(namespaceName, projectName, req)
+}
+
+// buildInternalAgentFromKindComponentRequestBody creates a component for an internal agent
+// sourced from a published Agent Kind version. Uses a pre-built image — no source build step.
+func buildInternalAgentFromKindComponentRequestBody(namespaceName, projectName string, req CreateComponentRequest) (gen.CreateComponentJSONRequestBody, error) {
+	annotations := map[string]string{
+		string(AnnotationKeyDisplayName): req.DisplayName,
+		string(AnnotationKeyDescription): req.Description,
+	}
+	labels := map[string]string{
+		string(LabelKeyProvisioningType): string(ProvisioningInternal),
+		string(LabelKeyAgentSubType):     req.AgentType.SubType,
+		string(LabelKeyBuildSource):      BuildSourceKind,
+		string(LabelKeyAgentKindName):    req.AgentKind.Name,
+	}
+
+	// Mirror the same language label logic as buildInternalAgentFromSourceComponentRequestBody
+	if req.Build != nil && req.Build.Buildpack != nil {
+		labels[string(LabelKeyAgentLanguage)] = req.Build.Buildpack.Language
+		if req.Build.Buildpack.LanguageVersion != "" {
+			labels[string(LabelKeyAgentLanguageVersion)] = req.Build.Buildpack.LanguageVersion
+		}
+	}
+	if req.Build != nil && req.Build.Docker != nil {
+		labels[string(LabelKeyAgentLanguage)] = "docker"
+	}
+
+	componentTypeKind := gen.ComponentSpecComponentTypeKindComponentType
+	defaultParams := ComponentParameters{Exposed: true}
+	parameters, err := structToMap(defaultParams)
+	if err != nil {
+		return gen.CreateComponentJSONRequestBody{}, fmt.Errorf("failed to convert parameters to map: %w", err)
+	}
+
+	autoDeploy := true
+	return gen.CreateComponentJSONRequestBody{
+		Metadata: gen.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   &namespaceName,
+			Annotations: &annotations,
+			Labels:      &labels,
+		},
+		Spec: &gen.ComponentSpec{
+			ComponentType: struct {
+				Kind *gen.ComponentSpecComponentTypeKind `json:"kind,omitempty"`
+				Name string                              `json:"name"`
+			}{
+				Kind: &componentTypeKind,
+				Name: string(ComponentTypeInternalAgentAPI),
+			},
+			Owner: struct {
+				ProjectName string `json:"projectName"`
+			}{
+				ProjectName: projectName,
+			},
+			AutoDeploy: &autoDeploy,
+			Parameters: &parameters,
+			// No Workflow: kind-sourced agents use a directly created Workload CR instead of a build workflow.
+		},
+	}, nil
 }
 
 func buildExternalAgentComponentRequestBody(namespaceName, projectName string, req CreateComponentRequest) (gen.CreateComponentJSONRequestBody, error) {
@@ -102,14 +165,19 @@ func buildExternalAgentComponentRequestBody(namespaceName, projectName string, r
 	}, nil
 }
 
-func buildInternalAgentComponentRequestBody(namespaceName, projectName string, req CreateComponentRequest) (gen.CreateComponentJSONRequestBody, error) {
+func buildInternalAgentFromSourceComponentRequestBody(namespaceName, projectName string, req CreateComponentRequest) (gen.CreateComponentJSONRequestBody, error) {
 	annotations := map[string]string{
 		string(AnnotationKeyDisplayName): req.DisplayName,
 		string(AnnotationKeyDescription): req.Description,
 	}
+	buildSource := BuildSourceBuildpack
+	if req.Build != nil && req.Build.Docker != nil {
+		buildSource = BuildSourceDocker
+	}
 	labels := map[string]string{
 		string(LabelKeyProvisioningType): string(req.ProvisioningType),
 		string(LabelKeyAgentSubType):     req.AgentType.SubType,
+		string(LabelKeyBuildSource):      buildSource,
 	}
 
 	// Add buildpack language labels if applicable
@@ -431,6 +499,7 @@ func (c *openChoreoClient) UpdateComponentBasicInfo(ctx context.Context, namespa
 	(*component.Metadata.Annotations)[string(AnnotationKeyDisplayName)] = req.DisplayName
 	(*component.Metadata.Annotations)[string(AnnotationKeyDescription)] = req.Description
 
+	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
 	if err != nil {
 		return fmt.Errorf("failed to update component: %w", err)
@@ -958,6 +1027,40 @@ func (c *openChoreoClient) ListComponents(ctx context.Context, namespaceName, pr
 	return components, nil
 }
 
+func (c *openChoreoClient) ListComponentsByKind(ctx context.Context, namespaceName, projectName, kindName string) ([]*models.AgentResponse, error) {
+	labelSelector := string(LabelKeyAgentKindName) + "=" + kindName
+	resp, err := c.ocClient.ListComponentsWithResponse(ctx, namespaceName, &gen.ListComponentsParams{
+		Project:       &projectName,
+		Limit:         &defaultListLimit,
+		LabelSelector: &labelSelector,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list components by kind: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON404: resp.JSON404,
+			JSON500: resp.JSON500,
+		})
+	}
+	if resp.JSON200 == nil || len(resp.JSON200.Items) == 0 {
+		return []*models.AgentResponse{}, nil
+	}
+
+	components := make([]*models.AgentResponse, 0, len(resp.JSON200.Items))
+	for i := range resp.JSON200.Items {
+		comp, err := convertComponentFromTyped(&resp.JSON200.Items[i])
+		if err != nil {
+			slog.Error("failed to convert component", "component", resp.JSON200.Items[i].Metadata.Name, "error", err)
+			continue
+		}
+		components = append(components, comp)
+	}
+	return components, nil
+}
+
 func (c *openChoreoClient) ComponentExists(ctx context.Context, namespaceName, projectName, componentName string, verifyProject bool) (bool, error) {
 	_, err := c.GetComponent(ctx, namespaceName, projectName, componentName)
 	if err != nil {
@@ -1024,31 +1127,29 @@ func (c *openChoreoClient) AttachTraits(ctx context.Context, namespaceName, proj
 		traits = *component.Spec.Traits
 	}
 
-	existingTraits := make(map[string]bool, len(traits))
-	for _, trait := range traits {
-		existingTraits[trait.Name] = true
+	// Build an index of existing traits so we can update them in-place rather than
+	// skipping them. This ensures re-deploys always apply the latest parameters
+	// (artifactId, policies, port, basePath) even when the trait already exists.
+	existingTraitIdx := make(map[string]int, len(traits))
+	for i, trait := range traits {
+		existingTraitIdx[trait.Name] = i
 	}
 
-	added := false
 	for _, req := range traitRequests {
-		if existingTraits[string(req.TraitType)] {
-			continue
-		}
 		newTrait, err := c.buildTrait(ctx, namespaceName, projectName, componentName, req)
 		if err != nil {
 			return fmt.Errorf("failed to build trait %s: %w", req.TraitType, err)
 		}
-		traits = append(traits, newTrait)
-		existingTraits[string(req.TraitType)] = true
-		added = true
-	}
-
-	if !added {
-		return nil
+		if idx, exists := existingTraitIdx[string(req.TraitType)]; exists {
+			traits[idx] = newTrait
+		} else {
+			traits = append(traits, newTrait)
+		}
 	}
 
 	component.Spec.Traits = &traits
 
+	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
 	if err != nil {
 		return fmt.Errorf("failed to update component: %w", err)
@@ -1108,6 +1209,7 @@ func (c *openChoreoClient) DetachTrait(ctx context.Context, namespaceName, proje
 	component.Spec.Traits = &updatedTraits
 
 	// Update component
+	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
 	if err != nil {
 		return fmt.Errorf("failed to update component: %w", err)
@@ -1138,6 +1240,84 @@ func (c *openChoreoClient) HasTrait(ctx context.Context, namespaceName, projectN
 	}
 
 	return false, nil
+}
+
+// UpdateComponentDeploymentConfig applies deploy-time Component CR changes in one GET-UPDATE cycle.
+func (c *openChoreoClient) UpdateComponentDeploymentConfig(ctx context.Context, namespaceName, projectName, componentName string, req ComponentDeploymentConfigRequest) error {
+	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
+	if err != nil {
+		return fmt.Errorf("failed to get component: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON404: resp.JSON404,
+			JSON500: resp.JSON500,
+		})
+	}
+	if resp.JSON200 == nil || resp.JSON200.Spec == nil {
+		return fmt.Errorf("invalid component response")
+	}
+
+	component := resp.JSON200
+
+	if len(req.TraitsToDetach) > 0 || len(req.TraitsToAttach) > 0 {
+		detachSet := make(map[string]bool, len(req.TraitsToDetach))
+		for _, traitType := range req.TraitsToDetach {
+			detachSet[string(traitType)] = true
+		}
+
+		traits := make([]gen.ComponentTrait, 0)
+		if component.Spec.Traits != nil {
+			for _, trait := range *component.Spec.Traits {
+				if !detachSet[trait.Name] {
+					traits = append(traits, trait)
+				}
+			}
+		}
+
+		existingTraitIdx := make(map[string]int, len(traits))
+		for i, trait := range traits {
+			existingTraitIdx[trait.Name] = i
+		}
+
+		for _, traitReq := range req.TraitsToAttach {
+			newTrait, err := c.buildTrait(ctx, namespaceName, projectName, componentName, traitReq)
+			if err != nil {
+				return fmt.Errorf("failed to build trait %s: %w", traitReq.TraitType, err)
+			}
+			if idx, exists := existingTraitIdx[string(traitReq.TraitType)]; exists {
+				traits[idx] = newTrait
+			} else {
+				existingTraitIdx[string(traitReq.TraitType)] = len(traits)
+				traits = append(traits, newTrait)
+			}
+		}
+
+		component.Spec.Traits = &traits
+	}
+
+	if req.Env != nil {
+		replaceComponentWorkflowEnvVars(component, req.Env)
+	}
+
+	component.Status = nil
+	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
+	if err != nil {
+		return fmt.Errorf("failed to update component deployment config: %w", err)
+	}
+	if updateResp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
+			JSON400: updateResp.JSON400,
+			JSON401: updateResp.JSON401,
+			JSON403: updateResp.JSON403,
+			JSON404: updateResp.JSON404,
+			JSON500: updateResp.JSON500,
+		})
+	}
+
+	return nil
 }
 
 // mergeComponentEnvVars merges the provided env vars into the component's workflow parameters
@@ -1220,6 +1400,7 @@ func (c *openChoreoClient) mergeComponentEnvVars(ctx context.Context, namespaceN
 	workflowParams["environmentVariables"] = mergedEnvVars
 
 	// Update the component
+	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
 	if err != nil {
 		return fmt.Errorf("failed to update component environment variables: %w", err)
@@ -1262,19 +1443,36 @@ func (c *openChoreoClient) ReplaceComponentEnvVars(ctx context.Context, namespac
 
 	component := resp.JSON200
 
-	// Ensure workflow exists
-	if component.Spec.Workflow == nil {
-		component.Spec.Workflow = &gen.ComponentWorkflowConfig{}
+	replaceComponentWorkflowEnvVars(component, envVars)
+
+	component.Status = nil
+	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
+	if err != nil {
+		return fmt.Errorf("failed to replace component environment variables: %w", err)
+	}
+	if updateResp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
+			JSON401: updateResp.JSON401,
+			JSON403: updateResp.JSON403,
+			JSON404: updateResp.JSON404,
+			JSON500: updateResp.JSON500,
+		})
 	}
 
-	// Get or create workflow parameters
+	return nil
+}
+
+func replaceComponentWorkflowEnvVars(component *gen.Component, envVars []EnvVar) {
+	if component.Spec.Workflow == nil {
+		// No workflow exists (e.g. kind-sourced agents) — skip setting workflow env vars.
+		// Env vars for these agents are applied directly to the Workload CR during deploy.
+		return
+	}
 	if component.Spec.Workflow.Parameters == nil {
 		params := make(map[string]interface{})
 		component.Spec.Workflow.Parameters = &params
 	}
-	workflowParams := *component.Spec.Workflow.Parameters
 
-	// Build new environment variables slice (replacing all existing)
 	newEnvVars := make([]map[string]any, 0, len(envVars))
 	for _, newEnv := range envVars {
 		envVar := map[string]any{
@@ -1293,22 +1491,7 @@ func (c *openChoreoClient) ReplaceComponentEnvVars(ctx context.Context, namespac
 		newEnvVars = append(newEnvVars, envVar)
 	}
 
-	workflowParams["environmentVariables"] = newEnvVars
-
-	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
-	if err != nil {
-		return fmt.Errorf("failed to replace component environment variables: %w", err)
-	}
-	if updateResp.StatusCode() != http.StatusOK {
-		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
-			JSON401: updateResp.JSON401,
-			JSON403: updateResp.JSON403,
-			JSON404: updateResp.JSON404,
-			JSON500: updateResp.JSON500,
-		})
-	}
-
-	return nil
+	(*component.Spec.Workflow.Parameters)["environmentVariables"] = newEnvVars
 }
 
 // UpdateReleaseBindingEnvVars merges env vars into the ReleaseBinding for the specified environment,
@@ -1489,6 +1672,7 @@ func (c *openChoreoClient) RemoveComponentEnvironmentVariables(ctx context.Conte
 
 	workflowParams["environmentVariables"] = filtered
 
+	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
 	if err != nil {
 		return fmt.Errorf("failed to update component environment variables: %w", err)
@@ -1829,6 +2013,52 @@ func WithAgentApiKey(apiKey string) TraitOption {
 	}
 }
 
+// WithLanguageVersion sets the language version for the OTEL instrumentation trait,
+// so it does not need to re-fetch the component to determine the instrumentation image.
+func WithLanguageVersion(lv string) TraitOption {
+	return func(params map[string]interface{}) {
+		params["languageVersion"] = lv
+	}
+}
+
+// WithPolicies sets the policies array for the api-configuration trait.
+func WithPolicies(policies []map[string]interface{}) TraitOption {
+	return func(params map[string]interface{}) {
+		params["policies"] = policies
+	}
+}
+
+// WithArtifactID sets the artifact UUID annotation for the api-configuration trait.
+func WithArtifactID(artifactID string) TraitOption {
+	return func(params map[string]interface{}) {
+		params["artifactId"] = artifactID
+	}
+}
+
+// APIKeyAuthPolicy returns the policy map for API key authentication.
+func APIKeyAuthPolicy() map[string]interface{} {
+	return map[string]interface{}{
+		"name":    "api-key-auth",
+		"version": "v1",
+		"params": map[string]interface{}{
+			"key": "X-API-Key",
+			"in":  "header",
+		},
+	}
+}
+
+// WithInstrumentationVersion pins the AMP instrumentation version for the OTEL
+// instrumentation trait — the init-container image resolves to
+// `amp-python-instrumentation-provider:<instrumentation_version>-python<X.Y>`.
+// Nil falls back to the platform default (cfg.OTEL.DefaultInstrumentationVersion).
+func WithInstrumentationVersion(version *string) TraitOption {
+	return func(params map[string]interface{}) {
+		if version != nil && *version != "" {
+			params["instrumentationVersion"] = *version
+		}
+	}
+}
+
 func (c *openChoreoClient) buildTrait(ctx context.Context, namespaceName, projectName, componentName string, req TraitRequest) (gen.ComponentTrait, error) {
 	if req.TraitKind == "" {
 		return gen.ComponentTrait{}, fmt.Errorf("trait kind is required")
@@ -1887,17 +2117,21 @@ func (c *openChoreoClient) buildOTELTraitParameters(ctx context.Context, namespa
 	if agentApiKey == "" {
 		return nil, fmt.Errorf("agent API key is required for OTEL instrumentation trait")
 	}
-	// Get the component to retrieve UUID and language version
-	component, err := c.GetComponent(ctx, namespaceName, projectName, componentName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get component for trait attachment: %w", err)
-	}
-	languageVersion := ""
-	if component.Build != nil && component.Build.Buildpack != nil {
-		languageVersion = component.Build.Buildpack.LanguageVersion
+
+	// Use the language version passed via WithLanguageVersion if available;
+	// otherwise fall back to fetching the component (legacy path for direct callers).
+	languageVersion, _ := params["languageVersion"].(string)
+	if languageVersion == "" {
+		component, err := c.GetComponent(ctx, namespaceName, projectName, componentName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get component for trait attachment: %w", err)
+		}
+		if component.Build != nil && component.Build.Buildpack != nil {
+			languageVersion = component.Build.Buildpack.LanguageVersion
+		}
 	}
 
-	// Get the project to find the deployment pipeline
+	// Get the project to validate it has a deployment pipeline configured.
 	project, err := c.GetProject(ctx, namespaceName, projectName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project for trait attachment: %w", err)
@@ -1907,7 +2141,14 @@ func (c *openChoreoClient) buildOTELTraitParameters(ctx context.Context, namespa
 	}
 
 	cfg := config.GetConfig()
-	instrumentationImage, err := getInstrumentationImage(languageVersion, cfg.PackageVersion)
+
+	// Per-agent instrumentation version (from WithInstrumentationVersion) overrides
+	// the platform default; an empty/unset value falls back to the default.
+	instrumentationVersion, _ := params["instrumentationVersion"].(string)
+	if instrumentationVersion == "" {
+		instrumentationVersion = cfg.OTEL.DefaultInstrumentationVersion
+	}
+	instrumentationImage, err := getInstrumentationImage(languageVersion, instrumentationVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build instrumentation image: %w", err)
 	}
@@ -1941,13 +2182,16 @@ func (c *openChoreoClient) buildEnvInjectionTraitParameters(opts ...TraitOption)
 	}, nil
 }
 
-func getInstrumentationImage(languageVersion, packageVersion string) (string, error) {
+// getInstrumentationImage builds the pre-built init-container image reference for
+// the given AMP instrumentation version and the agent's Python runtime version,
+// e.g. ghcr.io/wso2/amp-python-instrumentation-provider:0.2.0-python3.11.
+func getInstrumentationImage(languageVersion, instrumentationVersion string) (string, error) {
 	parts := strings.Split(languageVersion, ".")
 	if len(parts) < 2 {
 		return "", fmt.Errorf("invalid languageVersion format: expected 'major.minor' but got '%s'", languageVersion)
 	}
 	pythonMajorMinor := parts[0] + "." + parts[1]
-	return fmt.Sprintf("%s/%s:%s-python%s", InstrumentationImageRegistry, InstrumentationImageName, packageVersion, pythonMajorMinor), nil
+	return fmt.Sprintf("%s/%s:%s-python%s", InstrumentationImageRegistry, InstrumentationImageName, instrumentationVersion, pythonMajorMinor), nil
 }
 
 func (c *openChoreoClient) GetComponentEndpoints(ctx context.Context, namespaceName, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error) {
@@ -2172,7 +2416,8 @@ func convertComponentFromTyped(comp *gen.Component) (*models.AgentResponse, erro
 		componentTypeName = parts[len(parts)-1]
 	}
 	agentType := models.AgentType{
-		Type: componentTypeName,
+		Type:     componentTypeName,
+		Language: getLabel(comp.Metadata.Labels, string(LabelKeyAgentLanguage)),
 	}
 	if provisioningType == string(utils.InternalAgent) {
 		agentType.SubType = getLabel(comp.Metadata.Labels, string(LabelKeyAgentSubType))
@@ -2216,6 +2461,25 @@ func convertComponentFromTyped(comp *gen.Component) (*models.AgentResponse, erro
 					agent.InputInterface.BasePath = inputInterface.BasePath
 					agent.InputInterface.Visibility = inputInterface.Visibility
 				}
+			}
+		}
+	}
+
+	if getLabel(comp.Metadata.Labels, string(LabelKeyBuildSource)) == BuildSourceKind {
+		agent.KindName = getLabel(comp.Metadata.Labels, string(LabelKeyAgentKindName))
+		// Enrich agent.Build from labels — kind agents have no workflow, so extractBuildParams
+		// is never called above, but the build source info is stored in labels at creation time.
+		language := getLabel(comp.Metadata.Labels, string(LabelKeyAgentLanguage))
+		languageVersion := getLabel(comp.Metadata.Labels, string(LabelKeyAgentLanguageVersion))
+		if language == "docker" {
+			agent.Build = &models.Build{Type: BuildTypeDocker, Docker: &models.DockerConfig{}}
+		} else if language != "" {
+			agent.Build = &models.Build{
+				Type: BuildTypeBuildpack,
+				Buildpack: &models.BuildpackConfig{
+					Language:        language,
+					LanguageVersion: languageVersion,
+				},
 			}
 		}
 	}
