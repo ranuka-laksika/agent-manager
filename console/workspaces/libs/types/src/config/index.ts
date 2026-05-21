@@ -37,6 +37,20 @@ export interface AppConfig {
    * OOTB policies are always shown regardless of these flags.
    */
   guardrailCapabilities?: GuardrailCapabilities;
+  /** URL for the product documentation. Shown as a "Docs" link in the footer. */
+  docsUrl?: string;
+  /** URLs rendered in the footer. */
+  footerLinks?: {
+    privacyPolicyUrl?: string;
+    termsOfUseUrl?: string;
+  };
+  /** Documentation deep-link paths for AMP instrumentation, appended to docsUrl. */
+  instrumentationDocLinks?: {
+    /** Path to the manual instrumentation contract section. */
+    manualInstrumentation?: string;
+    /** Path to the AMP instrumentation version mapping section. */
+    versionMapping?: string;
+  };
 }
 
 export type GuardrailCapabilities = {

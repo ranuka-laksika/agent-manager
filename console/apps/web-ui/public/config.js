@@ -31,6 +31,11 @@ window.__RUNTIME_CONFIG__ = {
         clockTolerance: Number('') || 300,
       },
     },
+    tokenLifecycle: {
+      refreshToken: {
+        autoRefresh: true,
+      },
+    },
     storage: 'localStorage',
   },
   disableAuth: false,
@@ -47,6 +52,15 @@ window.__RUNTIME_CONFIG__ = {
     graniteGuardian: false,
     nemoGuard: false,
     semanticGuardrails: false,
+  },
+  docsUrl: 'https://wso2.github.io/agent-manager/docs/next',
+  footerLinks: {
+    privacyPolicyUrl: 'https://wso2.com/agent-platform/agent-manager/',
+    termsOfUseUrl: 'https://wso2.com/agent-platform/agent-manager/',
+  },
+  instrumentationDocLinks: {
+    manualInstrumentation: '/components/amp-instrumentation/#manual-instrumentation',
+    versionMapping: '/components/amp-instrumentation/#amp-instrumentation-version-mapping',
   },
 };
 
