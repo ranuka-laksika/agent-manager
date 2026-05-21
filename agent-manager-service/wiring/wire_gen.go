@@ -337,6 +337,7 @@ var testClientProviderSet = wire.NewSet(
 	ProvideTestTraceObserverClient,
 	ProvideTestSecretManagementClient,
 	ProvidePublisherProvisioner,
+	ProvideIdentityClient,
 )
 
 // ProvideLogger provides the configured slog.Logger instance

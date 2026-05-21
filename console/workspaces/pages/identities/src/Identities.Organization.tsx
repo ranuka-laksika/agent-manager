@@ -25,6 +25,7 @@ import { RolesPage } from "./RolesPage";
 import { RoleCreatePage } from "./RoleCreatePage";
 import { GroupsPage } from "./GroupsPage";
 import { GroupCreatePage } from "./GroupCreatePage";
+import { GroupEditPage } from "./GroupEditPage";
 
 export const IdentitiesOrganization: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -49,6 +50,7 @@ export const IdentitiesOrganization: React.FC = () => {
       <Route path="roles/create" element={<RoleCreatePage />} />
       <Route path="roles/*" element={<RolesPage />} />
       <Route path="groups/create" element={<GroupCreatePage />} />
+      <Route path="groups/:groupId/edit" element={<GroupEditPage />} />
       <Route path="groups/*" element={<GroupsPage />} />
       <Route
         path="*"

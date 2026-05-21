@@ -167,6 +167,12 @@ type thunderUserList struct {
 	TotalResults int           `json:"totalResults"`
 }
 
+// thunderGroupMemberList decodes the GET /groups/{id}/members response.
+type thunderGroupMemberList struct {
+	TotalResults int           `json:"totalResults"`
+	Members      []GroupMember `json:"members"`
+}
+
 // thunderGroupList is used to decode paginated group list responses.
 type thunderGroupList struct {
 	Groups       []ThunderGroup `json:"groups"`

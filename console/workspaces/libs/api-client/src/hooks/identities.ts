@@ -20,7 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   listUsers, getUser, createUser, inviteUser, updateUser, deleteUser, getUserGroups,
   listGroups, getGroup, createGroup, updateGroup, deleteGroup,
-  addGroupMembers, removeGroupMembers, getGroupMembers,
+  addGroupMembers, removeGroupMembers, getGroupMembers, getGroupRoles,
   listRoles, getRole, createRole, updateRole, deleteRole,
   getRoleAssignments, addRolePermissions, removeRolePermissions,
   addRoleAssignees, removeRoleAssignees,
@@ -176,8 +176,8 @@ export function useAddGroupMembers() {
   return useApiMutation<void, unknown, { params: GroupPathParams; body: { userIds: string[] } }>({
     action: { verb: 'update', target: 'group members' },
     mutationFn: ({ params, body }) => addGroupMembers(params, body, getToken),
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['identity-group-members'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
   });
@@ -189,10 +189,19 @@ export function useRemoveGroupMembers() {
   return useApiMutation<void, unknown, { params: GroupPathParams; body: { userIds: string[] } }>({
     action: { verb: 'update', target: 'group members' },
     mutationFn: ({ params, body }) => removeGroupMembers(params, body, getToken),
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['identity-group-members', params] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['identity-group-members'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user-groups'] });
     },
+  });
+}
+
+export function useGetGroupRoles(params: GroupPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ roles: ThunderRole[] }>({
+    queryKey: ['identity-group-roles', params],
+    queryFn: () => getGroupRoles(params, getToken),
+    enabled: !!params.orgName && !!params.groupId,
   });
 }
 
@@ -202,6 +211,7 @@ export function useGetGroupMembers(params: GroupPathParams, query?: { offset?: n
     queryKey: ['identity-group-members', params, query],
     queryFn: () => getGroupMembers(params, query, getToken),
     enabled: !!params.orgName && !!params.groupId,
+    refetchOnMount: 'always',
   });
 }
 

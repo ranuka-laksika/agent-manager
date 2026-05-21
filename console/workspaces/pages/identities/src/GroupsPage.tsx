@@ -27,7 +27,7 @@ import {
   TablePagination,
   Tooltip,
 } from "@wso2/oxygen-ui";
-import { Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
+import { Edit, Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteGroup,
@@ -55,14 +55,18 @@ export const GroupsPage: React.FC = () => {
   const groups = useMemo(() => data?.groups ?? [], [data]);
   const total = data?.total ?? 0;
 
+  const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
+    identities: { children: { groups: { path: string } } };
+  }).identities;
+
   const createPath = orgId
-    ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { groups: { path: string } } };
-        }).identities.children.groups.path + "/create",
-        { orgId },
-      )
+    ? generatePath(identitiesRoute.children.groups.path + "/create", { orgId })
     : "#";
+
+  const editGroupPath = (groupId: string) =>
+    orgId
+      ? generatePath(identitiesRoute.children.groups.path + "/:groupId/edit", { orgId, groupId })
+      : "#";
 
   const handleDelete = (group: ThunderGroup) => {
     addConfirmation({
@@ -125,11 +129,18 @@ export const GroupsPage: React.FC = () => {
                   <ListingTable.Cell>{group.name}</ListingTable.Cell>
                   <ListingTable.Cell>{group.description ?? "-"}</ListingTable.Cell>
                   <ListingTable.Cell align="right">
-                    <Tooltip title="Delete group">
-                      <IconButton size="small" onClick={() => handleDelete(group)}>
-                        <Trash size={16} />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                      <Tooltip title="Edit group">
+                        <IconButton size="small" onClick={() => navigate(editGroupPath(group.id))}>
+                          <Edit size={16} />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Delete group">
+                        <IconButton size="small" onClick={() => handleDelete(group)}>
+                          <Trash size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
                   </ListingTable.Cell>
                 </ListingTable.Row>
               ))}

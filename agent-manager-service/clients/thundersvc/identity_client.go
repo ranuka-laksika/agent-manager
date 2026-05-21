@@ -48,6 +48,7 @@ type IdentityClient interface {
 	AddGroupMembers(ctx context.Context, groupID string, userIDs []string) error
 	RemoveGroupMembers(ctx context.Context, groupID string, userIDs []string) error
 	GetGroupMembers(ctx context.Context, groupID string, offset, limit int) ([]ThunderUser, int, error)
+	GetGroupRoles(ctx context.Context, groupID string) ([]ThunderRole, error)
 
 	// Roles
 	ListRoles(ctx context.Context, offset, limit int) ([]ThunderRole, int, error)
@@ -300,15 +301,54 @@ func (c *thunderClient) GetGroupMembers(ctx context.Context, groupID string, off
 	if err != nil {
 		return nil, 0, fmt.Errorf("thunder get group members: %w", err)
 	}
-	var users []ThunderUser
-	if err := json.Unmarshal(body, &users); err == nil {
-		return users, len(users), nil
-	}
-	var wrapped thunderUserList
-	if err := json.Unmarshal(body, &wrapped); err != nil {
+	var resp thunderGroupMemberList
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, 0, fmt.Errorf("thunder get group members decode: %w", err)
 	}
-	return wrapped.Users, wrapped.TotalResults, nil
+	var users []ThunderUser
+	for _, m := range resp.Members {
+		if m.Type != "user" {
+			continue
+		}
+		user, err := c.GetUser(ctx, m.ID)
+		if err != nil {
+			continue
+		}
+		users = append(users, *user)
+	}
+	return users, resp.TotalResults, nil
+}
+
+func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]ThunderRole, error) {
+	const pageSize = 50
+	var allRoles []ThunderRole
+	offset := 0
+	for {
+		page, total, err := c.ListRoles(ctx, offset, pageSize)
+		if err != nil {
+			return nil, fmt.Errorf("thunder get group roles (list): %w", err)
+		}
+		allRoles = append(allRoles, page...)
+		offset += len(page)
+		if offset >= total || len(page) == 0 {
+			break
+		}
+	}
+
+	var groupRoles []ThunderRole
+	for _, role := range allRoles {
+		assignments, err := c.GetRoleAssignments(ctx, role.ID)
+		if err != nil {
+			continue
+		}
+		for _, g := range assignments.Groups {
+			if g.ID == groupID {
+				groupRoles = append(groupRoles, role)
+				break
+			}
+		}
+	}
+	return groupRoles, nil
 }
 
 // --- Roles ---

@@ -46,6 +46,7 @@ type IdentityController interface {
 	AddGroupMembers(w http.ResponseWriter, r *http.Request)
 	RemoveGroupMembers(w http.ResponseWriter, r *http.Request)
 	GetGroupMembers(w http.ResponseWriter, r *http.Request)
+	GetGroupRoles(w http.ResponseWriter, r *http.Request)
 
 	// Roles
 	ListRoles(w http.ResponseWriter, r *http.Request)
@@ -453,6 +454,24 @@ func (c *identityController) GetGroupMembers(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"users": members, "total": total, "offset": offset, "limit": limit})
+}
+
+func (c *identityController) GetGroupRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	groupID := r.PathValue(utils.PathParamGroupID)
+
+	roles, err := c.client.GetGroupRoles(ctx, groupID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Group not found")
+			return
+		}
+		log.Error("GetGroupRoles failed", "groupID", groupID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get group roles")
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles})
 }
 
 // --- Roles ---

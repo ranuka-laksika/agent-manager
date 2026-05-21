@@ -210,6 +210,17 @@ export async function removeGroupMembers(
   if (!res.ok) throw await res.json();
 }
 
+export async function getGroupRoles(
+  params: GroupPathParams,
+  getToken?: () => Promise<string>,
+): Promise<{ roles: ThunderRole[] }> {
+  const { orgName = "default", groupId } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(`${orgBase(orgName)}/groups/${encodeURIComponent(groupId)}/roles`, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
 export async function getGroupMembers(
   params: GroupPathParams,
   query?: { offset?: number; limit?: number },
