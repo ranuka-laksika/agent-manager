@@ -71,6 +71,17 @@ func HandleFuncWithValidationAndAuthz(mux *http.ServeMux, pattern string, perm r
 	mux.HandleFunc(pattern, handler)
 }
 
+// HandleFuncWithValidationAndAnyAuthz registers a route that is accessible when the
+// caller holds any one of the given permissions (OR semantics).
+func HandleFuncWithValidationAndAnyAuthz(mux *http.ServeMux, pattern string, handler http.HandlerFunc, perms ...rbac.Permission) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequireAnyPermission(perms...)(handler)
+	mux.HandleFunc(pattern, handler)
+}
+
 // HandleFuncWithValidationAndDynamicAuthz registers a route with automatic path
 // parameter validation and a dynamic permission check resolved at request time.
 func HandleFuncWithValidationAndDynamicAuthz(mux *http.ServeMux, pattern string, resolver PermissionResolver, handler http.HandlerFunc) {

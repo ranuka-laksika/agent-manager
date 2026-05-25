@@ -16,6 +16,7 @@
  * under the License.
  */
 
+import { useMemo } from "react";
 import {
   BarChart3 as AutoGraphOutlined,
   Binoculars as ObservabilityOutline,
@@ -32,7 +33,8 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
-import { absoluteRouteMap } from "@agent-management-platform/types";
+import { absoluteRouteMap, globalConfig } from "@agent-management-platform/types";
+import { useAuthHooks } from "@agent-management-platform/auth";
 import {
   useGetAgent,
   useListEnvironments,
@@ -73,6 +75,24 @@ export function useNavigationItems(): Array<
     });
 
   const externalNavItems = useExternalNavItems();
+  const { userInfo } = useAuthHooks();
+
+  const navVisibility = useMemo(() => {
+    if (globalConfig.disableAuth) {
+      return { resources: true, evaluation: true, infrastructure: true, identities: true };
+    }
+    const scopeStr = userInfo?.scope;
+    if (!scopeStr) {
+      return { resources: false, evaluation: false, infrastructure: false, identities: false };
+    }
+    const s = new Set(scopeStr.split(" ").filter(Boolean));
+    return {
+      resources:      s.has("llm-provider:read") || s.has("llm-provider-template:read"),
+      evaluation:     s.has("evaluator:read"),
+      infrastructure: s.has("gateway:read"),
+      identities:     s.has("org:view") || s.has("org:invite-member") || s.has("org:assign-role") || s.has("role:read"),
+    };
+  }, [userInfo?.scope]);
 
   const defaultEnv =
     envId ??
@@ -613,76 +633,92 @@ export function useNavigationItems(): Array<
         href: generatePath(absoluteRouteMap.children.org.children.catalog.path, { orgId }),
         isActive: !!matchPath(absoluteRouteMap.children.org.children.catalog.wildPath, pathname),
       },
-      {
-        type: "section",
-        title: "Resources",
-        icon: <Settings size={20} />,
-        items: [
-          {
-            label: llmProvidersMetadata.title,
-            type: "item",
-            icon: <llmProvidersMetadata.icon size={20} />,
-            href: generatePath(llmProvidersOrgRoute.path, { orgId }),
-            isActive: !!matchPath(llmProvidersOrgRoute.wildPath, pathname),
-          },
-        ]
-      },
-      {
-        title: "Evaluation",
-        type: "section",
-        icon: <EvaluationOutline />,
-        items: [
-          {
-            label: evalMetadata.pages.component.evalEvaluators.title,
-            type: "item",
-            icon: <evalMetadata.pages.component.evalEvaluators.icon size={20} />,
-            isActive: !!matchPath(evaluatorsOrgRoute.wildPath, pathname),
-            href: generatePath(evaluatorsOrgRoute.path, { orgId }),
-          },
-        ],
-      },
-      {
-        title: "Infrastructure",
-        type: "section",
-        icon: <gatewaysMetadata.icon />,
-        items: [
-          {
-            label: gatewaysMetadata.title,
-            type: "item",
-            icon: <gatewaysMetadata.icon size={20} />,
-            href: generatePath(gatewaysOrgRoute.path, { orgId }),
-            isActive: !!matchPath(gatewaysOrgRoute.wildPath, pathname),
-          },
-        ],
-      },
-      {
-        title: identitiesMetadata.title,
-        type: "section",
-        icon: <identitiesMetadata.icon size={20} />,
-        items: [
-          {
-            label: "Users",
-            type: "item",
-            icon: <Users size={20} />,
-            href: generatePath(identitiesOrgRoute.children.users.path, { orgId }),
-            isActive: !!matchPath(identitiesOrgRoute.children.users.wildPath, pathname),
-          },
-          {
-            label: "Roles",
-            type: "item",
-            icon: <Shield size={20} />,
-            href: generatePath(identitiesOrgRoute.children.roles.path, { orgId }),
-            isActive: !!matchPath(identitiesOrgRoute.children.roles.wildPath, pathname),
-          },
-          {
-            label: "Groups",
-            type: "item",
-            icon: <Folder size={20} />,
-            href: generatePath(identitiesOrgRoute.children.groups.path, { orgId }),
-            isActive: !!matchPath(identitiesOrgRoute.children.groups.wildPath, pathname),
-          },
-        ],
-      },
+      ...(navVisibility.resources
+        ? [
+            {
+              type: "section" as const,
+              title: "Resources",
+              icon: <Settings size={20} />,
+              items: [
+                {
+                  label: llmProvidersMetadata.title,
+                  type: "item" as const,
+                  icon: <llmProvidersMetadata.icon size={20} />,
+                  href: generatePath(llmProvidersOrgRoute.path, { orgId }),
+                  isActive: !!matchPath(llmProvidersOrgRoute.wildPath, pathname),
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(navVisibility.evaluation
+        ? [
+            {
+              title: "Evaluation",
+              type: "section" as const,
+              icon: <EvaluationOutline />,
+              items: [
+                {
+                  label: evalMetadata.pages.component.evalEvaluators.title,
+                  type: "item" as const,
+                  icon: <evalMetadata.pages.component.evalEvaluators.icon size={20} />,
+                  isActive: !!matchPath(evaluatorsOrgRoute.wildPath, pathname),
+                  href: generatePath(evaluatorsOrgRoute.path, { orgId }),
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(navVisibility.infrastructure
+        ? [
+            {
+              title: "Infrastructure",
+              type: "section" as const,
+              icon: <gatewaysMetadata.icon />,
+              items: [
+                {
+                  label: gatewaysMetadata.title,
+                  type: "item" as const,
+                  icon: <gatewaysMetadata.icon size={20} />,
+                  href: generatePath(gatewaysOrgRoute.path, { orgId }),
+                  isActive: !!matchPath(gatewaysOrgRoute.wildPath, pathname),
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(navVisibility.identities
+        ? [
+            {
+              title: identitiesMetadata.title,
+              type: "section" as const,
+              icon: <identitiesMetadata.icon size={20} />,
+              items: [
+                {
+                  label: "Users",
+                  type: "item" as const,
+                  icon: <Users size={20} />,
+                  href: generatePath(identitiesOrgRoute.children.users.path, { orgId }),
+                  isActive: !!matchPath(identitiesOrgRoute.children.users.wildPath, pathname),
+                },
+                {
+                  label: "Roles",
+                  type: "item" as const,
+                  icon: <Shield size={20} />,
+                  href: generatePath(identitiesOrgRoute.children.roles.path, { orgId }),
+                  isActive: !!matchPath(identitiesOrgRoute.children.roles.wildPath, pathname),
+                },
+                {
+                  label: "Groups",
+                  type: "item" as const,
+                  icon: <Folder size={20} />,
+                  href: generatePath(identitiesOrgRoute.children.groups.path, { orgId }),
+                  isActive: !!matchPath(identitiesOrgRoute.children.groups.wildPath, pathname),
+                },
+              ],
+            },
+          ]
+        : []),
       ...externalNavItems.filter(item => item.level === "org").map(item => ({
         label: item.title,
         type: "item" as const,

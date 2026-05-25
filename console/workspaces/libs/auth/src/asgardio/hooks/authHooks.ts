@@ -66,7 +66,7 @@ export const useAuthHooks = (): AuthHooks => {
 
   const { flattenedProfile } = useUser();
   const { data: tokenInfo } = useQuery({
-    queryKey: ["tokenInfo", getAccessToken],
+    queryKey: ["tokenInfo"],
     queryFn: async (): Promise<string> => {
       const token = await getAccessToken?.();
       if (!token) {
@@ -75,6 +75,8 @@ export const useAuthHooks = (): AuthHooks => {
       return token;
     },
     select: (data) => decodeJWT(data as string),
+    enabled: !!isSignedIn && !!getAccessToken,
+    staleTime: 5 * 60 * 1000,
   });
 
   const userInfo = useMemo(() => {

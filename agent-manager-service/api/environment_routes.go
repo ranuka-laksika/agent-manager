@@ -26,9 +26,12 @@ import (
 
 func registerEnvironmentRoutes(mux *http.ServeMux, ctrl controllers.EnvironmentController) {
 	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/environments", rbac.EnvironmentCreate, ctrl.CreateEnvironment)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments", rbac.EnvironmentRead, ctrl.ListEnvironments)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments/{envID}", rbac.EnvironmentRead, ctrl.GetEnvironment)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/environments", ctrl.ListEnvironments,
+		rbac.EnvironmentRead, rbac.LLMProviderRead, rbac.LLMProxyRead, rbac.GatewayRead)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/environments/{envID}", ctrl.GetEnvironment,
+		rbac.EnvironmentRead, rbac.LLMProviderRead, rbac.LLMProxyRead, rbac.GatewayRead)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/environments/{envID}", rbac.EnvironmentUpdate, ctrl.UpdateEnvironment)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/environments/{envID}", rbac.EnvironmentDelete, ctrl.DeleteEnvironment)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/environments/{envID}/gateways", rbac.EnvironmentRead, ctrl.GetEnvironmentGateways)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/environments/{envID}/gateways", ctrl.GetEnvironmentGateways,
+		rbac.EnvironmentRead, rbac.GatewayRead)
 }

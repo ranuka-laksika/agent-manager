@@ -44,6 +44,28 @@ func RequirePermission(perm rbac.Permission) func(http.HandlerFunc) http.Handler
 	}
 }
 
+// RequireAnyPermission returns a middleware that passes if the token carries at least
+// one of the given permissions (OR semantics). Use this for endpoints that are
+// legitimately reachable via multiple roles (e.g. environments read needed by both
+// the environment manager and the LLM-provider viewer).
+func RequireAnyPermission(perms ...rbac.Permission) func(http.HandlerFunc) http.HandlerFunc {
+	return func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if !config.GetConfig().RBACEnabled {
+				next(w, r)
+				return
+			}
+			for _, perm := range perms {
+				if jwtassertion.HasAllScopes(r.Context(), []string{perm.Scope()}) {
+					next(w, r)
+					return
+				}
+			}
+			utils.WriteErrorResponse(w, http.StatusForbidden, "insufficient permissions")
+		}
+	}
+}
+
 // PermissionResolver resolves the required permission at request time.
 // Returning an error causes the request to be rejected with 403.
 type PermissionResolver func(r *http.Request) (rbac.Permission, error)
