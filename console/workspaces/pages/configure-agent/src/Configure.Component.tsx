@@ -21,7 +21,7 @@ import { AgentLLMProvidersSection } from "./Configure/subComponents/AgentLLMProv
 
 export const ConfigureComponent: React.FC = () => {
   return (
-    <PageLayout title="Configure Agent" disableIcon>
+    <PageLayout title="Configure Agent" description="Manage the service connections and configurations for this agent." disableIcon>
       <AgentLLMProvidersSection />
     </PageLayout>
   );

@@ -17,29 +17,22 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  DrawerContent,
-  DrawerHeader,
-  DrawerWrapper,
   PageLayout,
+  TextInput,
 } from "@agent-management-platform/views";
 import {
   Alert,
   Avatar,
   Box,
   Button,
-  CardContent,
   Chip,
   Divider,
   Form,
-  FormControl,
-  FormLabel,
   ListingTable,
   Skeleton,
-  SearchBar,
   Stack,
   Tab,
   Tabs,
-  TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -47,9 +40,8 @@ import {
   AlertTriangle,
   Check,
   Circle,
-  DoorClosedLocked,
   Link,
-  Search,
+  ServerCog,
 } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -60,7 +52,9 @@ import {
 } from "@agent-management-platform/types";
 import {
   useCreateAgentModelConfig,
+  useGetAgent,
   useGetAgentModelConfig,
+  useListAgentModelConfigs,
   useListCatalogLLMProviders,
   useListEnvironments,
   useListLLMProviderTemplates,
@@ -70,8 +64,36 @@ import {
   GuardrailsSection,
   type GuardrailSelection,
 } from "@agent-management-platform/llm-providers";
+import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
 
 type DeploymentSummary = { gatewayName?: string; deployedAt?: string };
+
+const ENV_VAR_KEYS = ["url", "apikey"] as const;
+type EnvVarKey = (typeof ENV_VAR_KEYS)[number];
+
+const ENV_VAR_DESCRIPTIONS: Record<EnvVarKey, string> = {
+  url: "Base URL of the LLM provider",
+  apikey: "API key for authenticating with the LLM provider",
+};
+
+function generateEnvVarNames(prefix: string): Record<EnvVarKey, string> {
+  let sanitized = prefix.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase();
+  if (sanitized.length > 0 && sanitized[0] >= "0" && sanitized[0] <= "9") {
+    sanitized = "_" + sanitized;
+  }
+  return {
+    url: sanitized ? `${sanitized}_URL` : "URL",
+    apikey: sanitized ? `${sanitized}_API_KEY` : "API_KEY",
+  };
+}
+
+function generateConfigName(templateId: string, existingNames: string[]): string {
+  const base = templateId.replace(/[^A-Za-z0-9-]/g, "-").toLowerCase();
+  if (!existingNames.includes(base)) return base;
+  let i = 2;
+  while (existingNames.includes(`${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
 
 function getLatestDeployment(
   deployments: DeploymentSummary[] | undefined,
@@ -103,8 +125,8 @@ export const ProviderDisplay: React.FC<{
   const latest = getLatestDeployment(provider?.deployments);
   return (
     <Stack direction="row" spacing={2} flexGrow={1} alignItems="center">
-      {
-        !hideCheckbox && <Avatar
+      {!hideCheckbox && (
+        <Avatar
           sx={{
             height: 32,
             width: 32,
@@ -114,7 +136,15 @@ export const ProviderDisplay: React.FC<{
         >
           {isSelected ? <Check size={16} /> : <Circle size={16} />}
         </Avatar>
-      }
+      )}
+      {hideCheckbox && (
+        <Avatar
+          src={templateInfo?.logoUrl}
+          sx={{ height: 40, width: 40, backgroundColor: "action.selected" }}
+        >
+          <ServerCog size={20} />
+        </Avatar>
+      )}
 
       <Stack spacing={0.25} flexGrow={1}>
         <Stack spacing={0.25}>
@@ -213,13 +243,16 @@ export const AddLLMProviderComponent: React.FC = () => {
   const navigate = useNavigate();
   const isEditMode = !!configId;
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [selectedEnvIndex, setSelectedEnvIndex] = useState(0);
   const [providerByEnv, setProviderByEnv] = useState<
     Record<string, string | null>
   >({});
-  const [guardrails, setGuardrails] = useState<GuardrailSelection[]>([]);
+  const [guardrailsByEnv, setGuardrailsByEnv] = useState<Record<string, GuardrailSelection[]>>({});
+  const [envVarNames, setEnvVarNames] = useState<Record<string, string>>(
+    () => generateEnvVarNames(""),
+  );
+  // Track whether the user has manually edited env var names
+  const envVarNamesEditedRef = useRef(false);
   const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
   const [providerSearchQuery, setProviderSearchQuery] = useState("");
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -234,8 +267,20 @@ export const AddLLMProviderComponent: React.FC = () => {
       )
       : "#";
 
+  const { data: agent } = useGetAgent({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
+  });
+  const isExternal = agent?.provisioning?.type === "external";
+
   const { data: environments = [], isLoading: isLoadingEnvironments } = useListEnvironments({
     orgName: orgId,
+  });
+  const { data: existingConfigsList } = useListAgentModelConfigs({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
   });
   const { data: catalogData } = useListCatalogLLMProviders(
     { orgName: orgId },
@@ -281,8 +326,6 @@ export const AddLLMProviderComponent: React.FC = () => {
 
   useEffect(() => {
     if (!existingConfig || !isEditMode) return;
-    setName(existingConfig.name);
-    setDescription(existingConfig.description ?? "");
     const nextProviderByEnv: Record<string, string | null> = {};
     for (const [envName, mapping] of Object.entries(
       existingConfig.envMappings ?? {},
@@ -295,81 +338,87 @@ export const AddLLMProviderComponent: React.FC = () => {
       }
     }
     setProviderByEnv(nextProviderByEnv);
-    const policies = Object.values(existingConfig.envMappings ?? {}).flatMap(
-      (m) => m.configuration?.policies ?? [],
-    );
-    const seen = new Set<string>();
-    const nextGuardrails: GuardrailSelection[] = [];
-    for (const p of policies) {
-      const key = `${p.name}@${p.version}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      const params = p.paths?.[0]?.params;
-      nextGuardrails.push({
-        name: p.name,
-        version: p.version,
-        settings: (params ?? {}) as Record<string, unknown>,
-      });
+    const nextGuardrailsByEnv: Record<string, GuardrailSelection[]> = {};
+    for (const [envName, mapping] of Object.entries(existingConfig.envMappings ?? {})) {
+      const envPolicies = mapping.configuration?.policies ?? [];
+      const seen = new Set<string>();
+      const envGuardrails: GuardrailSelection[] = [];
+      for (const p of envPolicies) {
+        const key = `${p.name}@${p.version}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const params = p.paths?.[0]?.params;
+        envGuardrails.push({
+          name: p.name,
+          version: p.version,
+          settings: (params ?? {}) as Record<string, unknown>,
+        });
+      }
+      nextGuardrailsByEnv[envName] = envGuardrails;
     }
-    setGuardrails(nextGuardrails);
+    setGuardrailsByEnv(nextGuardrailsByEnv);
+
+    // Populate env var names from the existing config
+    if (existingConfig.environmentVariables?.length) {
+      const names: Record<string, string> = {};
+      for (const ev of existingConfig.environmentVariables) {
+        names[ev.key] = ev.name;
+      }
+      setEnvVarNames(names);
+      envVarNamesEditedRef.current = true;
+    }
   }, [existingConfig, isEditMode]);
+
+  // Auto-generate env var names from the selected provider's template in create mode
+  const primaryTemplate = useMemo(() => {
+    const firstEnvName = environments[0]?.name;
+    const uuid = firstEnvName ? providerByEnv[firstEnvName] : undefined;
+    if (!uuid) return "";
+    const provider = providers.find((p) => p.uuid === uuid);
+    return provider?.template ?? provider?.id ?? "";
+  }, [providerByEnv, providers, environments]);
+
+  useEffect(() => {
+    if (isEditMode || envVarNamesEditedRef.current) return;
+    setEnvVarNames(generateEnvVarNames(primaryTemplate));
+  }, [primaryTemplate, isEditMode]);
+
+  const selectedEnvName = useMemo(
+    () => environments[selectedEnvIndex]?.name ?? "",
+    [environments, selectedEnvIndex],
+  );
 
   const createConfig = useCreateAgentModelConfig();
   const updateConfig = useUpdateAgentModelConfig();
 
-  const policies = useMemo(
-    () =>
-      guardrails.map((g) => ({
-        name: g.name,
-        version: g.version,
-        paths: [
-          {
-            path: "/*",
-            methods: ["*"],
-            params: g.settings ?? {},
-          },
-        ],
-      })),
-    [guardrails],
+  const guardrails = useMemo(
+    () => guardrailsByEnv[selectedEnvName] ?? [],
+    [guardrailsByEnv, selectedEnvName],
   );
 
   const handleAddGuardrail = useCallback((guardrail: GuardrailSelection) => {
-    setGuardrails((prev) => {
-      if (
-        prev.some(
-          (g) => g.name === guardrail.name && g.version === guardrail.version,
-        )
-      )
-        return prev;
-      return [...prev, guardrail];
+    setGuardrailsByEnv((prev) => {
+      const list = prev[selectedEnvName] ?? [];
+      if (list.some((g) => g.name === guardrail.name && g.version === guardrail.version)) return prev;
+      return { ...prev, [selectedEnvName]: [...list, guardrail] };
     });
-  }, []);
+  }, [selectedEnvName]);
 
   const handleEditGuardrail = useCallback((guardrail: GuardrailSelection) => {
-    setGuardrails((prev) =>
-      prev.map((g) =>
-        g.name === guardrail.name && g.version === guardrail.version
-          ? guardrail
-          : g,
-      ),
-    );
-  }, []);
+    setGuardrailsByEnv((prev) => {
+      const list = prev[selectedEnvName] ?? [];
+      return { ...prev, [selectedEnvName]: list.map((g) => g.name === guardrail.name && g.version === guardrail.version ? guardrail : g) };
+    });
+  }, [selectedEnvName]);
 
-  const handleRemoveGuardrail = useCallback(
-    (gName: string, gVersion: string) => {
-      setGuardrails((prev) =>
-        prev.filter((g) => !(g.name === gName && g.version === gVersion)),
-      );
-    },
-    [],
-  );
+  const handleRemoveGuardrail = useCallback((gName: string, gVersion: string) => {
+    setGuardrailsByEnv((prev) => {
+      const list = prev[selectedEnvName] ?? [];
+      return { ...prev, [selectedEnvName]: list.filter((g) => !(g.name === gName && g.version === gVersion)) };
+    });
+  }, [selectedEnvName]);
 
   const handleSave = useCallback(() => {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      return;
-    }
-
     const envMappings: Record<
       string,
       {
@@ -378,6 +427,7 @@ export const AddLLMProviderComponent: React.FC = () => {
       }
     > = {};
     let hasAtLeastOneProvider = false;
+    let resolvedTemplate = "";
 
     for (const env of environments) {
       const providerUuid = providerByEnv[env.name] ?? null;
@@ -385,24 +435,36 @@ export const AddLLMProviderComponent: React.FC = () => {
         const provider = providers.find((p) => p.uuid === providerUuid);
         if (provider) {
           hasAtLeastOneProvider = true;
+          if (!resolvedTemplate) resolvedTemplate = provider.template ?? provider.id ?? "";
+          const envGuardrails = guardrailsByEnv[env.name] ?? [];
+          const envPolicies = envGuardrails.map((g) => ({
+            name: g.name,
+            version: g.version,
+            paths: [{ path: "/*", methods: ["*"], params: g.settings ?? {} }],
+          }));
           envMappings[env.name] = {
             providerName: provider.id,
             configuration: {
-              policies: policies.length > 0 ? policies : undefined,
+              policies: envPolicies.length > 0 ? envPolicies : undefined,
             },
           };
         } else if (isEditMode && existingConfig) {
           // Provider not in current catalog page — preserve existing mapping
           // to avoid dropping providers beyond the catalog page limit.
           const existingMapping = existingConfig.envMappings?.[env.name];
-          const existingProviderName =
-            existingMapping?.configuration?.providerName;
+          const existingProviderName = existingMapping?.configuration?.providerName;
           if (existingProviderName) {
             hasAtLeastOneProvider = true;
+            const envGuardrails = guardrailsByEnv[env.name] ?? [];
+            const envPolicies = envGuardrails.map((g) => ({
+              name: g.name,
+              version: g.version,
+              paths: [{ path: "/*", methods: ["*"], params: g.settings ?? {} }],
+            }));
             envMappings[env.name] = {
               providerName: existingProviderName,
               configuration: {
-                policies: policies.length > 0 ? policies : undefined,
+                policies: envPolicies.length > 0 ? envPolicies : undefined,
               },
             };
           }
@@ -418,10 +480,23 @@ export const AddLLMProviderComponent: React.FC = () => {
       return;
     }
 
+    const environmentVariables = !isExternal
+      ? ENV_VAR_KEYS.map((key) => ({
+        key,
+        name: (envVarNames[key] ?? "").trim(),
+      })).filter((ev) => ev.name.length > 0)
+      : [];
+
+    // In create mode, auto-generate a name from the provider template
+    const existingNames = (existingConfigsList?.configs ?? []).map((c) => c.name);
+    const autoName = isEditMode
+      ? (existingConfig?.name ?? resolvedTemplate)
+      : generateConfigName(resolvedTemplate || "llm", existingNames);
+
     const body = {
-      name: trimmedName,
-      description: description.trim() || undefined,
+      name: autoName,
       envMappings,
+      environmentVariables: environmentVariables.length > 0 ? environmentVariables : undefined,
     };
 
     if (isEditMode && configId) {
@@ -476,37 +551,46 @@ export const AddLLMProviderComponent: React.FC = () => {
       );
     }
   }, [
-    name,
-    description,
     providerByEnv,
     environments,
     providers,
-    policies,
+    guardrailsByEnv,
+    envVarNames,
+    isExternal,
     orgId,
     projectId,
     agentId,
     configId,
     isEditMode,
     existingConfig,
+    existingConfigsList,
     createConfig,
     updateConfig,
     navigate,
     backHref,
   ]);
 
-  const isFormValid =
-    name.trim().length > 0 &&
-    environments.some((env) => {
-      const uuid = providerByEnv[env.name];
-      if (!uuid) return false;
-      if (providers.some((p) => p.uuid === uuid)) return true;
-      // In edit mode, accept providers from the existing config even if not in catalog page
-      if (isEditMode && existingConfig) {
-        const existing = existingConfig.envMappings?.[env.name];
-        return !!existing?.configuration?.providerName;
-      }
-      return false;
-    });
+  const hasAnyProvider = environments.some((env) => {
+    const uuid = providerByEnv[env.name];
+    if (!uuid) return false;
+    if (providers.some((p) => p.uuid === uuid)) return true;
+    if (isEditMode && existingConfig) {
+      const existing = existingConfig.envMappings?.[env.name];
+      return !!existing?.configuration?.providerName;
+    }
+    return false;
+  });
+
+  const allEnvsHaveProvider = environments.length > 0 && environments.every((env) => {
+    const uuid = providerByEnv[env.name];
+    if (uuid && providers.some((p) => p.uuid === uuid)) return true;
+    if (isEditMode && existingConfig) {
+      const existing = existingConfig.envMappings?.[env.name];
+      return !!existing?.configuration?.providerName;
+    }
+    return false;
+  });
+  const isFormValid = allEnvsHaveProvider;
 
   const mutationError = createConfig.isError
     ? createConfig.error
@@ -517,15 +601,10 @@ export const AddLLMProviderComponent: React.FC = () => {
     updateConfig.reset();
   }, [createConfig, updateConfig]);
 
-  const selectedEnvName = useMemo(
-    () => environments[selectedEnvIndex]?.name ?? "",
-    [environments, selectedEnvIndex],
-  );
-
   if (isEditMode && isLoadingConfig) {
     return (
       <PageLayout
-        title="Edit LLM Provider"
+        title="Edit LLM Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -542,7 +621,7 @@ export const AddLLMProviderComponent: React.FC = () => {
   if (isEditMode && !isLoadingConfig && (isConfigError || !existingConfig)) {
     return (
       <PageLayout
-        title="Edit LLM Provider"
+        title="Edit LLM Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -556,7 +635,7 @@ export const AddLLMProviderComponent: React.FC = () => {
 
   return (
     <PageLayout
-      title={isEditMode ? "Edit LLM Provider" : "Add LLM Provider"}
+      title={isEditMode ? "Edit LLM Configuration" : "Add LLM Configuration"}
       backHref={backHref}
       disableIcon
       backLabel="Back to Configure"
@@ -578,233 +657,205 @@ export const AddLLMProviderComponent: React.FC = () => {
           </Alert>
         ) : null}
         <Form.Section>
-          <Form.Header>Basic Details</Form.Header>
-          <Form.Stack spacing={2}>
-            <FormControl fullWidth>
-              <FormLabel>Name</FormLabel>
-              <TextField
-                fullWidth
-                size="small"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. OpenAI GPT5"
-              />
-            </FormControl>
-            <FormControl fullWidth>
-              <FormLabel>Description</FormLabel>
-              <TextField
-                fullWidth
-                size="small"
-                multiline
-                minRows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the LLM provider"
-              />
-            </FormControl>
-          </Form.Stack>
-        </Form.Section>
-
-        <Form.Section>
-          <Form.Header>LLM Service Provider</Form.Header>
-          {
-            (environments.length < 1 && !isLoadingEnvironments) && (
+          <Form.Header>Service Provider</Form.Header>
+          {environments.length > 1 && !isLoadingEnvironments && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Select which catalog provider to use in each environment.
+              </Typography>
               <Tabs
                 value={selectedEnvIndex}
                 onChange={(_, v: number) => setSelectedEnvIndex(v)}
                 sx={{ mb: 2 }}
               >
-                {environments.map((env, idx) => (
-                  <Tab
-                    key={env.name}
-                    label={env.displayName ?? env.name}
-                    value={idx}
-                  />
-                ))}
-              </Tabs>
-            )
-          }
-
-          <Form.Section>
-            <Form.Subheader>Service Provider</Form.Subheader>
-            {providerByEnv[selectedEnvName] ? (
-              <Form.CardButton
-                onClick={() => setProviderDrawerOpen(true)}
-                selected
-                aria-label={`Selected: ${providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.name ?? "Unknown"}. Click to change.`}
-              >
-                <Form.CardContent>
-                  <ProviderDisplay
-                    provider={
-                      providers.find(
-                        (p) => p.uuid === providerByEnv[selectedEnvName],
-                      ) ?? null
-                    }
-                    isSelected
-                    templateInfo={templateMap.get(
-                      providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.template ?? "",
-                    )}
-                  />
-                </Form.CardContent>
-              </Form.CardButton>
-            ) : (
-              <Box>
-                {catalogData && providers.length === 0 ? (
-                  <ListingTable.Container>
-                    <ListingTable.EmptyState
-                      illustration={<Search size={64} />}
-                      title="No service providers available"
-                      description="No LLM service providers found in the catalog. Add LLM service providers from the organization LLM Service Providers page first."
-                      action={
-                        orgId ? (
-                          <Button
-                            variant="contained"
-                            size="small"
-                            startIcon={<Link size={16} />}
-                            onClick={() =>
-                              navigate(
-                                generatePath(
-                                  absoluteRouteMap.children.org.children.
-                                    llmProviders.children.add.path,
-                                  { orgId },
-                                ),
-                              )
-                            }
-                          >
-                            Add LLM Service Provider
-                          </Button>
-                        ) : undefined
+                {environments.map((env, idx) => {
+                  const hasProvider = !!providerByEnv[env.name] || (
+                    isEditMode && !!existingConfig?.envMappings?.[env.name]?.configuration?.providerName
+                  );
+                  return (
+                    <Tab
+                      key={env.name}
+                      label={
+                        <Stack direction="row" spacing={0.5} alignItems="center">
+                          <span>{env.displayName ?? env.name}</span>
+                          {!hasProvider && (
+                            <Tooltip title="No provider selected" placement="top" arrow>
+                              <Box component="span" sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "warning.main", display: "inline-block" }} />
+                            </Tooltip>
+                          )}
+                        </Stack>
                       }
+                      value={idx}
                     />
-                  </ListingTable.Container>
-                ) : (
+                  );
+                })}
+              </Tabs>
+            </>
+          )}
 
-                  <CardContent>
-                    <Button
-                      variant="outlined"
-                      onClick={() => setProviderDrawerOpen(true)}
-                      disabled={providers.length === 0}
-                      startIcon={<Link size={16} />}
-                    >
-                      Select a Service Provider
-                    </Button>
-                  </CardContent>
+          {providerByEnv[selectedEnvName] ? (
+            <Form.CardButton
+              onClick={() => setProviderDrawerOpen(true)}
+              selected
+              aria-label={`Selected: ${providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.name ?? "Unknown"}. Click to change.`}
+            >
+              <Form.CardContent>
+                <ProviderDisplay
+                  provider={
+                    providers.find(
+                      (p) => p.uuid === providerByEnv[selectedEnvName],
+                    ) ?? null
+                  }
+                  isSelected
+                  templateInfo={templateMap.get(
+                    providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.template ?? "",
+                  )}
+                />
+              </Form.CardContent>
+            </Form.CardButton>
+          ) : (
+            <Box>
+              {catalogData && providers.length === 0 ? (
+                <ListingTable.Container>
+                  <ListingTable.EmptyState
+                    illustration={<Search size={64} />}
+                    title="No service providers available"
+                    description="No LLM service providers found in the catalog. Add LLM service providers from the organization LLM Service Providers page first."
+                    action={
+                      orgId ? (
+                        <Button
+                          variant="contained"
+                          size="small"
+                          startIcon={<Link size={16} />}
+                          onClick={() =>
+                            navigate(
+                              generatePath(
+                                absoluteRouteMap.children.org.children.
+                                  llmProviders.children.add.path,
+                                { orgId },
+                              ),
+                            )
+                          }
+                        >
+                          Add LLM Service Provider
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                </ListingTable.Container>
+              ) : (
+                <Box sx={{ pt: 1 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setProviderDrawerOpen(true)}
+                    disabled={providers.length === 0}
+                    startIcon={<Link size={16} />}
+                  >
+                    Select a Service Provider
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
+                    Selecting a provider will auto-generate environment variable names below.
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+          )}
 
-                )}
-              </Box>
-
-            )}
-
-          </Form.Section>
-          <DrawerWrapper
+          <ProviderSelectDrawer
             open={providerDrawerOpen}
             onClose={() => setProviderDrawerOpen(false)}
-            minWidth={740}
-            maxWidth={740}
-          >
-            <DrawerHeader
-              icon={<DoorClosedLocked size={24} />}
-              title="Select Service Provider"
-              onClose={() => setProviderDrawerOpen(false)}
-            />
-            <DrawerContent>
-              <Stack>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  Choose a service provider for this environment.
-                </Typography>
-                <SearchBar
-                  placeholder="Search providers"
-                  size="small"
-                  fullWidth
-                  value={providerSearchQuery}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setProviderSearchQuery(val);
-                    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-                    searchTimerRef.current = setTimeout(() => setDebouncedSearch(val), 250);
-                  }}
-                  sx={{ mb: 1 }}
-                />
-                <Stack spacing={1} sx={{ flex: 1, overflowY: "auto" }} >
-                  {(() => {
-                    const filtered = providers.filter((p) => {
-                      if (!debouncedSearch.trim()) return true;
-                      const q = debouncedSearch.toLowerCase();
-                      return (
-                        p.name.toLowerCase().includes(q) ||
-                        (p.template ?? "").toLowerCase().includes(q) ||
-                        (templateMap.get(p.template ?? "")?.displayName ?? "").toLowerCase().includes(q)
-                      );
-                    });
-                    if (filtered.length === 0) {
-                      return (
-                        <ListingTable.Container>
-                          <ListingTable.EmptyState
-                            illustration={<Search size={64} />}
-                            title={
-                              debouncedSearch.trim()
-                                ? "No service providers match your search"
-                                : "No service providers available"
-                            }
-                            description={
-                              debouncedSearch.trim()
-                                ? "Try a different keyword or clear the search filter."
-                                : "No service providers are available in the catalog."
-                            }
-                          />
-                        </ListingTable.Container>
-                      );
-                    }
-                    return filtered.map((p) => {
-                      const isSelected = providerByEnv[selectedEnvName] === p.uuid;
-                      return (
-                        <Form.CardButton
-                          key={p.uuid}
-                          onClick={() => {
-                            setProviderByEnv((prev) => ({
-                              ...prev,
-                              [selectedEnvName]: p.uuid,
-                            }));
-                            setProviderDrawerOpen(false);
-                          }}
-                          selected={isSelected}
-                          aria-label={`${p.name}. ${isSelected ? "Selected" : "Click to select"}`}
-                        >
-                          <Form.CardContent>
-                            <ProviderDisplay
-                              provider={p}
-                              isSelected={isSelected}
-                              templateInfo={templateMap.get(p.template ?? "")}
-                            />
-                          </Form.CardContent>
-                        </Form.CardButton>
-                      );
-                    });
-                  })()}
-                </Stack>
-              </Stack>
-            </DrawerContent>
-          </DrawerWrapper>
-          <GuardrailsSection
-            guardrails={guardrails}
-            onAddGuardrail={handleAddGuardrail}
-            onEditGuardrail={handleEditGuardrail}
-            onRemoveGuardrail={handleRemoveGuardrail}
+            providers={providers}
+            templateMap={templateMap}
+            selectedUuid={providerByEnv[selectedEnvName]}
+            subtitle={
+              environments.length > 1
+                ? `Choose the catalog provider for the ${environments[selectedEnvIndex]?.displayName ?? environments[selectedEnvIndex]?.name ?? ""} environment.`
+                : "Choose the catalog provider for this agent."
+            }
+            onSelect={(uuid) =>
+              setProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }))
+            }
           />
+          {providerByEnv[selectedEnvName] && (
+            <GuardrailsSection
+              guardrails={guardrails}
+              onAddGuardrail={handleAddGuardrail}
+              onEditGuardrail={handleEditGuardrail}
+              onRemoveGuardrail={handleRemoveGuardrail}
+            />
+          )}
         </Form.Section>
+
+        {hasAnyProvider && !isExternal && (
+          <Form.Section>
+            <Form.Header>Environment Variable Names</Form.Header>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              These names are shared across all environments. The platform injects the actual URL and API key values at runtime per environment. Edit only if your code uses different names.
+            </Typography>
+            <ListingTable.Container>
+              <ListingTable density="compact">
+                <ListingTable.Head>
+                  <ListingTable.Row>
+                    <ListingTable.Cell>Variable Name <Typography component="span" variant="caption" color="text.secondary">(editable)</Typography></ListingTable.Cell>
+                    <ListingTable.Cell>Description</ListingTable.Cell>
+                  </ListingTable.Row>
+                </ListingTable.Head>
+                <ListingTable.Body>
+                  {ENV_VAR_KEYS.map((key) => (
+                    <ListingTable.Row key={key}>
+                      <ListingTable.Cell>
+                        <TextInput
+                          value={envVarNames[key] ?? ""}
+                          onChange={(e) => {
+                            envVarNamesEditedRef.current = true;
+                            setEnvVarNames((prev) => ({
+                              ...prev,
+                              [key]: e.target.value,
+                            }));
+                          }}
+                          copyable
+                          copyTooltipText={`Copy ${envVarNames[key] ?? key}`}
+                          size="small"
+                        />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Typography variant="body2" color="text.secondary">
+                          {ENV_VAR_DESCRIPTIONS[key]}
+                        </Typography>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))}
+                </ListingTable.Body>
+              </ListingTable>
+            </ListingTable.Container>
+          </Form.Section>
+        )}
+
+        {hasAnyProvider && !allEnvsHaveProvider && (
+          <Alert severity="warning" icon={<AlertTriangle size={18} />}>
+            Select a service provider for all environments before saving.
+          </Alert>
+        )}
 
         {/* Actions */}
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button variant="outlined" onClick={() => navigate(backHref)}>
             Cancel
           </Button>
-          <Button
-            variant="contained"
-            onClick={handleSave}
-            disabled={!isFormValid || isPending}
+          <Tooltip
+            title={!isFormValid && !isPending ? "Select a service provider for all environments to enable save" : ""}
+            placement="top"
           >
-            {isPending ? "Saving…" : "Save"}
-          </Button>
+            <span>
+              <Button
+                variant="contained"
+                onClick={handleSave}
+                disabled={!isFormValid || isPending}
+              >
+                {isPending ? "Saving…" : "Save"}
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Stack>
     </PageLayout>

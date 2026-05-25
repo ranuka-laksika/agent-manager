@@ -16,13 +16,22 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { PageLayout, TextInput } from "@agent-management-platform/views";
+import {
+  DrawerContent,
+  DrawerHeader,
+  DrawerWrapper,
+  PageLayout,
+  TextInput,
+} from "@agent-management-platform/views";
+import { CodeBlock } from "@agent-management-platform/shared-component";
 import {
   Alert,
   Button,
   Card,
   CardContent,
+  Divider,
   Form,
+  IconButton,
   ListingTable,
   Skeleton,
   Stack,
@@ -30,9 +39,10 @@ import {
   Tabs,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, BookOpen, Pencil } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
@@ -48,13 +58,14 @@ import {
   type GuardrailSelection,
 } from "@agent-management-platform/llm-providers";
 import { ProviderDisplay } from "./AddLLMProvider.Component";
+import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
 
 function generateDisplayName(key: string): string {
   switch (key) {
     case "apikey":
       return "API Key for authenticating with the LLM provider";
     case "url":
-      return "Base URL of the LLM Provider API endpoint";
+      return "Base URL of the LLM provider";
     default:
       return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()); // Add space before capital letters and capitalize the first letter
 
@@ -158,14 +169,17 @@ export const ViewLLMProviderComponent: React.FC = () => {
     }
   )?.authInfoByEnv;
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
   const [selectedEnvIndex, setSelectedEnvIndex] = useState(0);
   const [guardrailsByEnv, setGuardrailsByEnv] = useState<
     Record<string, GuardrailSelection[]>
   >({});
   const [envVarNames, setEnvVarNames] = useState<Record<string, string>>({});
   const [snippetTab, setSnippetTab] = useState(0);
+  // Open panel automatically on first visit after creation
+  const [panelOpen, setPanelOpen] = useState(!!authInfoByEnv);
+  const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
+  // pending provider uuid per env — set when user picks in the drawer, applied on save
+  const [pendingProviderByEnv, setPendingProviderByEnv] = useState<Record<string, string>>({});
 
   const backHref =
     orgId && projectId && agentId
@@ -210,10 +224,33 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const updateConfig = useUpdateAgentModelConfig();
 
+  const templateMap = useMemo(() => {
+    const map = new Map<string, { displayName: string; logoUrl?: string }>();
+    for (const t of templatesData?.templates ?? []) {
+      map.set(t.name, { displayName: t.name, logoUrl: t.metadata?.logoUrl });
+      map.set(t.id, { displayName: t.name, logoUrl: t.metadata?.logoUrl });
+    }
+    return map;
+  }, [templatesData]);
+
+  const providers = useMemo(
+    () =>
+      (catalogData?.entries ?? []).map((e) => ({
+        uuid: e.uuid,
+        id: e.handle,
+        name: e.name,
+        template: e.template,
+        version: e.version,
+        deployments: e.deployments,
+        security: e.security,
+        rateLimiting: e.rateLimiting,
+        policies: e.policies,
+      })),
+    [catalogData],
+  );
+
   useEffect(() => {
     if (!config) return;
-    setName(config.name);
-    setDescription(config.description ?? "");
 
     const nextNames: Record<string, string> = {};
     for (const ev of config.environmentVariables ?? []) {
@@ -287,8 +324,9 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const isDirty = useMemo(() => {
     if (!config) return false;
-    if (name !== config.name) return true;
-    if ((description || "") !== (config.description ?? "")) return true;
+
+    // Check pending provider changes
+    if (Object.keys(pendingProviderByEnv).length > 0) return true;
 
     // Check env var names
     for (const ev of config.environmentVariables ?? []) {
@@ -311,7 +349,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
     }
 
     return false;
-  }, [config, name, description, envVarNames, guardrailsByEnv]);
+  }, [config, envVarNames, guardrailsByEnv]);
 
   const handleAddGuardrail = useCallback(
     (guardrail: GuardrailSelection) => {
@@ -388,6 +426,12 @@ export const ViewLLMProviderComponent: React.FC = () => {
     )) {
       const pConfig = mapping.configuration;
       if (pConfig) {
+        // Resolve provider name: use pending selection if changed, else keep original
+        const pendingUuid = pendingProviderByEnv[envName];
+        const resolvedProviderName = pendingUuid
+          ? (providers.find((p) => p.uuid === pendingUuid)?.id ?? pConfig.providerName)
+          : pConfig.providerName;
+
         const envGuardrails = guardrailsByEnv[envName];
         if (envGuardrails !== undefined) {
           // Environment was edited — build policies from edited guardrails
@@ -406,13 +450,13 @@ export const ViewLLMProviderComponent: React.FC = () => {
               }))
               : undefined;
           envMappings[envName] = {
-            providerName: pConfig.providerName,
+            providerName: resolvedProviderName,
             configuration: { policies: envPolicies },
           };
         } else {
           // Environment not loaded — preserve original policies intact
           envMappings[envName] = {
-            providerName: pConfig.providerName,
+            providerName: resolvedProviderName,
             configuration: {
               policies: pConfig.policies?.map((p) => ({
                 name: p.name,
@@ -438,8 +482,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
           configId,
         },
         body: {
-          name: name.trim(),
-          description: description.trim() || undefined,
+          name: config.name,
           envMappings,
           environmentVariables: Object.keys(envVarNames).length > 0
             ? Object.entries(envVarNames).map(([key, n]) => ({
@@ -449,7 +492,11 @@ export const ViewLLMProviderComponent: React.FC = () => {
             : undefined,
         },
       },
-      { onSuccess: () => navigate(backHref) },
+      {
+        onSuccess: () => {
+          setPendingProviderByEnv({});
+        },
+      },
     );
   }, [
     orgId,
@@ -457,10 +504,10 @@ export const ViewLLMProviderComponent: React.FC = () => {
     agentId,
     configId,
     config,
-    name,
-    description,
     guardrailsByEnv,
     envVarNames,
+    pendingProviderByEnv,
+    providers,
     updateConfig,
     navigate,
     backHref,
@@ -469,7 +516,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
   if (isLoading) {
     return (
       <PageLayout
-        title="LLM Provider Configuration"
+        title="LLM Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -486,10 +533,10 @@ export const ViewLLMProviderComponent: React.FC = () => {
   if (isError || !config) {
     return (
       <PageLayout
-        title="LLM Provider Configuration"
+        title="LLM Configuration"
         backHref={backHref}
         disableIcon
-        backLabel="Back to Configuration Listing"
+        backLabel="Back to Configure"
       >
         <Alert severity="error" icon={<AlertTriangle size={18} />}>
           Configuration not found or failed to load.
@@ -500,19 +547,186 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const apiKeyValue = providerConfig?.authInfo?.value;
 
+  const pageTitle = catalogProvider?.name
+    ?? providerConfig?.providerName
+    ?? config.name;
+
+  const showPanel = !isExternal && (config.environmentVariables?.length ?? 0) > 0;
+
+  const envVarsPanel = showPanel && (
+    <DrawerWrapper
+      open={panelOpen}
+      onClose={() => setPanelOpen(false)}
+      minWidth={640}
+      maxWidth={640}
+    >
+      <DrawerHeader
+        icon={<BookOpen size={24} />}
+        title="Environment Variables & Integration Guide"
+        onClose={() => setPanelOpen(false)}
+      />
+      <DrawerContent>
+        <Stack spacing={3}>
+        {isDirty && !updateConfig.isError && (
+          <Alert
+            severity="warning"
+            action={
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Button size="small" variant="outlined" onClick={() => { setPanelOpen(false); navigate(backHref); }}>
+                  Cancel
+                </Button>
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={handleSave}
+                  disabled={updateConfig.isPending}
+                >
+                  {updateConfig.isPending ? "Saving…" : "Save changes"}
+                </Button>
+              </Stack>
+            }
+          >
+            You have unsaved changes.
+          </Alert>
+        )}
+
+          <Stack spacing={1}>
+            <Typography variant="subtitle1" fontWeight={600}>Environment Variable Names</Typography>
+            <Typography variant="body2" color="text.secondary">
+              These variable names are injected into the agent at runtime with environment-specific values. Rename them here if your code already uses different names — then save.
+            </Typography>
+            <ListingTable.Container>
+              <ListingTable density="compact">
+                <ListingTable.Head>
+                  <ListingTable.Row>
+                    <ListingTable.Cell>Variable Name <Typography component="span" variant="caption" color="text.secondary">(editable)</Typography></ListingTable.Cell>
+                    <ListingTable.Cell>Description</ListingTable.Cell>
+                  </ListingTable.Row>
+                </ListingTable.Head>
+                <ListingTable.Body>
+                  {config.environmentVariables.map((envVar) => (
+                    <ListingTable.Row key={envVar.key}>
+                      <ListingTable.Cell>
+                        <TextInput
+                          value={envVarNames[envVar.key] ?? envVar.name}
+                          onChange={(e) =>
+                            setEnvVarNames((prev) => ({
+                              ...prev,
+                              [envVar.key]: e.target.value,
+                            }))
+                          }
+                          copyable
+                          copyTooltipText={`Copy ${envVarNames[envVar.key] ?? envVar.name}`}
+                          size="small"
+                        />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Typography variant="body2" color="text.secondary">
+                          {generateDisplayName(envVar.key)}
+                        </Typography>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))}
+                </ListingTable.Body>
+              </ListingTable>
+            </ListingTable.Container>
+          </Stack>
+
+          <Divider />
+
+          <Stack spacing={2}>
+            <Stack spacing={0.5}>
+              <Typography variant="subtitle1" fontWeight={600}>Integration Guide</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Copy the snippet below into your agent code. The environment variables will be injected automatically at runtime — do not hardcode their values.
+              </Typography>
+            </Stack>
+            <ToggleButtonGroup
+              size="small"
+              value={snippetTab}
+              exclusive
+              color="primary"
+              onChange={(_, v: number | null) => { if (v !== null) setSnippetTab(v); }}
+            >
+              <ToggleButton value={0} sx={{ textTransform: "none" }}>Python</ToggleButton>
+              <ToggleButton value={1} sx={{ textTransform: "none" }}>Copilot Prompt</ToggleButton>
+            </ToggleButtonGroup>
+
+            {snippetTab === 0 && (
+              <CodeBlock
+                language="python"
+                code={(() => {
+                  const clientSetup = getClientSetupSnippet(
+                    catalogProvider?.template,
+                    config.environmentVariables.map((ev) => ev.key),
+                  );
+                  const imports = ["import os"];
+                  if (clientSetup) imports.push(clientSetup.importLine);
+                  const envVars = config.environmentVariables.map(
+                    (envVar) =>
+                      `${envVar.key} = os.environ.get('${envVarNames[envVar.key] ?? envVar.name}')`,
+                  );
+                  const parts = [imports.join("\n"), "", ...envVars];
+                  if (clientSetup) parts.push("", clientSetup.setup);
+                  return parts.join("\n");
+                })()}
+              />
+            )}
+
+            {snippetTab === 1 && (
+              <CodeBlock
+                language="markdown"
+                code={(() => {
+                  const providerName = templateDisplayName
+                    ?? catalogProvider?.name
+                    ?? providerConfig?.providerName
+                    ?? "the LLM provider";
+                  const envVarList = config.environmentVariables
+                    .map(
+                      (ev) =>
+                        `- ${generateDisplayName(ev.key)}: \`${envVarNames[ev.key] ?? ev.name}\``,
+                    )
+                    .join("\n");
+                  return [
+                    `Update my code to use ${providerName}.`,
+                    "",
+                    "Environment variables that will be injected at runtime:",
+                    envVarList,
+                    "",
+                    "Requirements:",
+                    `- Read the environment variables listed above to configure the client for ${providerName}.`,
+                    `- Initialize the ${providerName} client with the URL and API key from those variables.`,
+                    "- Do not hardcode any secrets or endpoint URLs.",
+                    "- Keep the rest of my code unchanged.",
+                  ].join("\n");
+                })()}
+              />
+            )}
+          </Stack>
+        </Stack>
+      </DrawerContent>
+    </DrawerWrapper>
+  );
+
   return (
     <PageLayout
-      title={config.name}
+      title={pageTitle}
       backHref={backHref}
       disableIcon
-      backLabel="Back to Configuration Listing"
+      backLabel="Back to Configure"
+      actions={
+        showPanel ? (
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<BookOpen size={16} />}
+            onClick={() => setPanelOpen(true)}
+          >
+            Environment Variables & Integration Guide
+          </Button>
+        ) : undefined
+      }
     >
-      {config.description && (
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          {config.description}
-        </Typography>
-      )}
-
       <Stack spacing={3}>
         {updateConfig.isError && (
           <Alert
@@ -526,149 +740,15 @@ export const ViewLLMProviderComponent: React.FC = () => {
           </Alert>
         )}
 
-        {!isExternal && config.environmentVariables?.length > 0 && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-              Environment Variables References
-            </Typography>
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              The following environment variables will be injected into
-              the agent deployment with environment-specific values.
-              If your code already uses different variable names,
-              you can update them below to ensure compatibility.
-            </Typography>
-
-            <Stack spacing={1}>
-              <ListingTable.Container>
-                <ListingTable density="compact">
-                  <ListingTable.Head>
-                    <ListingTable.Row>
-                      <ListingTable.Cell>Variable Name</ListingTable.Cell>
-                      <ListingTable.Cell>Description</ListingTable.Cell>
-                    </ListingTable.Row>
-                  </ListingTable.Head>
-                  <ListingTable.Body>
-                    {config.environmentVariables.map((envVar) => (
-                      <ListingTable.Row key={envVar.key}>
-                        <ListingTable.Cell>
-                          <TextInput
-                            value={envVarNames[envVar.key] ?? envVar.name}
-                            onChange={(e) =>
-                              setEnvVarNames((prev) => ({
-                                ...prev,
-                                [envVar.key]: e.target.value,
-                              }))
-                            }
-                            copyable
-                            copyTooltipText={`Copy ${envVarNames[envVar.key] ?? envVar.name}`}
-                            size="small"
-                          />
-                        </ListingTable.Cell>
-                        <ListingTable.Cell>
-                          <Typography variant="body2" color="text.secondary">
-                            {generateDisplayName(envVar.key)}
-                          </Typography>
-                        </ListingTable.Cell>
-                      </ListingTable.Row>
-                    ))}
-                  </ListingTable.Body>
-                </ListingTable>
-              </ListingTable.Container>
-              <ToggleButtonGroup
-                size="small"
-                value={snippetTab}
-                exclusive
-                color="primary"
-                onChange={(_, v: number | null) => { if (v !== null) setSnippetTab(v); }}
-                sx={{ mb: 2 }}
-              >
-                <ToggleButton value={0} sx={{ textTransform: "none" }}>Python</ToggleButton>
-                <ToggleButton value={1} sx={{ textTransform: "none" }}>AI Prompt</ToggleButton>
-              </ToggleButtonGroup>
-
-              {snippetTab === 0 && (
-                <TextInput
-                  label="Python Code Snippet"
-                  value={(() => {
-                    const clientSetup = getClientSetupSnippet(
-                      catalogProvider?.template,
-                      config.environmentVariables.map((ev) => ev.key),
-                    );
-                    const imports = ["import os"];
-                    if (clientSetup) imports.push(clientSetup.importLine);
-                    const envVars = config.environmentVariables.map(
-                      (envVar) =>
-                        `${envVar.key} = os.environ.get('${envVarNames[envVar.key] ?? envVar.name}')`,
-                    );
-                    const parts = [imports.join("\n"), "", ...envVars];
-                    if (clientSetup) parts.push("", clientSetup.setup);
-                    return parts.join("\n");
-                  })()}
-                  copyable
-                  copyTooltipText="Copy Code Snippet"
-                  slotProps={{
-                    input: {
-                      sx: { fontFamily: "Source Code Pro, monospace" },
-                      readOnly: true,
-                      multiline: true,
-                      rows: Math.min(
-                        config.environmentVariables.length + 8,
-                        15,
-                      ),
-                    },
-                  }}
-                  size="small"
-                />
-              )}
-
-              {snippetTab === 1 && (
-                <TextInput
-                  label="AI Prompt — Update Your Code"
-                  value={(() => {
-                    const providerName = templateDisplayName
-                      ?? catalogProvider?.name
-                      ?? providerConfig?.providerName
-                      ?? "the LLM provider";
-                    const envVarList = config.environmentVariables
-                      .map(
-                        (ev) =>
-                          `- ${generateDisplayName(ev.key)}: \`${envVarNames[ev.key] ?? ev.name}\``,
-                      )
-                      .join("\n");
-                    return [
-                      `Update my code to use ${providerName}.`,
-                      "",
-                      "Environment variables that will be injected at runtime:",
-                      envVarList,
-                      "",
-                      "Requirements:",
-                      `- Read the environment variables listed above to configure the client for ${providerName}.`,
-                      `- Initialize the ${providerName} client with the URL and API key from those variables.`,
-                      "- Do not hardcode any secrets or endpoint URLs.",
-                      "- Keep the rest of my code unchanged.",
-                    ].join("\n");
-                  })()}
-                  copyable
-                  copyTooltipText="Copy Prompt"
-                  slotProps={{
-                    input: {
-                      readOnly: true,
-                      multiline: true,
-                      rows: 10,
-                    },
-                  }}
-                  size="small"
-                />
-              )}
-            </Stack>
-          </Alert>
-        )}
-
         <Form.Section>
+          <Form.Header>Service Provider</Form.Header>
           <Stack spacing={3}>
 
-            {
-              environments.length > 1 && (
+            {environments.length > 1 && (
+              <>
+                <Typography variant="body2" color="text.secondary">
+                  Each environment uses a separate catalog provider. The same variable names are injected in all environments with environment-specific values.
+                </Typography>
                 <Tabs
                   value={selectedEnvIndex}
                   onChange={(_, v: number) => setSelectedEnvIndex(v)}
@@ -682,165 +762,167 @@ export const ViewLLMProviderComponent: React.FC = () => {
                     />
                   ))}
                 </Tabs>
-              )
-            }
+              </>
+            )}
 
             {providerConfig && isExternal && (
-              <Form.Section>
-                <Form.Header>Connect to your LLM Provider</Form.Header>
-                <>
-                  {
-                    !authInfoByEnv?.[selectedEnvName] && (
-                      <>
-                        <Alert severity="info" sx={{ mb: 1 }}>
-                          <Typography variant="body2">
-                            The credentials for this provider were issued during initial
-                            setup. To route your agent&apos;s traffic through the
-                            governance layer, configure your client with the provided
-                            endpoint and API key.
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            sx={{ mt: 1, fontWeight: 600 }}
-                          >
-                            Security Reminder: Credentials are only displayed once at
-                            creation time.
-                          </Typography>
-                        </Alert>
-                      </>
-                    )
-                  }
+              <Stack spacing={2}>
+                <Typography variant="subtitle2">Connect to your LLM Provider</Typography>
+                {!authInfoByEnv?.[selectedEnvName] && (
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      The credentials for this provider were issued during initial
+                      setup. To route your agent&apos;s traffic through the
+                      governance layer, configure your client with the provided
+                      endpoint and API key.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                      Security Reminder: Credentials are only displayed once at creation time.
+                    </Typography>
+                  </Alert>
+                )}
+                {authInfoByEnv?.[selectedEnvName] && (
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      To route your agent&apos;s LLM traffic through the governance layer,
+                      configure your client with the credentials below.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                      Make sure to copy your API key now — you will not be able to see it again.
+                    </Typography>
+                  </Alert>
+                )}
+                {Boolean(providerConfig.url) && (
+                  <TextInput
+                    label="Endpoint URL"
+                    value={providerConfig.url ?? ""}
+                    copyable
+                    copyTooltipText="Copy Endpoint URL"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {authInfoByEnv?.[selectedEnvName] && (
+                  <TextInput
+                    label="Header Name"
+                    value={authInfoByEnv[selectedEnvName].name}
+                    copyable
+                    copyTooltipText="Copy Header Name"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {authInfoByEnv?.[selectedEnvName]?.value && (
+                  <TextInput
+                    label="API Key"
+                    type="password"
+                    value={authInfoByEnv[selectedEnvName].value}
+                    copyable
+                    copyTooltipText="Copy API Key"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {apiKeyValue && (
+                  <TextInput
+                    label="API Key"
+                    type="password"
+                    value={apiKeyValue}
+                    copyable
+                    copyTooltipText="Copy API Key"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {authInfoByEnv && (
+                  <TextInput
+                    label="Example cURL"
+                    value={[
+                      `curl -X POST ${providerConfig.url || "http://<endpoint-url>"}`,
+                      `  --header "${authInfoByEnv[selectedEnvName].name}: ${authInfoByEnv[selectedEnvName].value || "<api-key>"}"`,
+                      `  -d '{"your": "data"}'`,
+                    ].join(" \\\n")}
+                    copyable
+                    copyTooltipText="Copy cURL command"
+                    multiline
+                    minRows={3}
+                    slotProps={{
+                      input: {
+                        readOnly: true,
+                        sx: { fontFamily: "monospace", fontSize: "0.85rem" },
+                      },
+                    }}
+                    size="small"
+                  />
+                )}
+              </Stack>
+            )}
 
-                  {authInfoByEnv?.[selectedEnvName] && (
-                    <>
-                      <Alert severity="info" sx={{ mb: 1 }}>
-                        <Typography variant="body2">
-                          To route your agent&apos;s llm traffic through the governance layer,
-                          configure your client with the credentials below.
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ mt: 1, fontWeight: 600 }}
-                        >
-                          Make sure to copy your API key now as
-                          you will not be able to see it again.
-                        </Typography>
-                      </Alert>
-                    </>
-                  )}
-                  {Boolean(providerConfig.url) && (
-                    <TextInput
-                      label="Endpoint URL"
-                      value={providerConfig.url ?? ""}
-                      copyable
-                      copyTooltipText="Copy Endpoint URL"
-                      slotProps={{ input: { readOnly: true } }}
-                      size="small"
-                    />
-                  )}
+            <ProviderSelectDrawer
+              open={providerDrawerOpen}
+              onClose={() => setProviderDrawerOpen(false)}
+              providers={providers}
+              templateMap={templateMap}
+              selectedUuid={
+                pendingProviderByEnv[selectedEnvName] ??
+                (catalogProvider ? catalogData?.entries?.find(
+                  (e) => e.handle === providerConfig?.providerName,
+                )?.uuid : undefined)
+              }
+              subtitle="Choose the catalog provider for this agent."
+              onSelect={(uuid) =>
+                setPendingProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }))
+              }
+            />
 
+            {providerConfig && (() => {
+              const pendingUuid = pendingProviderByEnv[selectedEnvName];
+              const displayProvider = pendingUuid
+                ? providers.find((p) => p.uuid === pendingUuid)
+                : null;
+              const displayCatalog = displayProvider
+                ? catalogData?.entries?.find((e) => e.uuid === pendingUuid)
+                : catalogProvider;
+              const displayTemplate = displayCatalog?.template
+                ? templateMap.get(displayCatalog.template)
+                : (catalogProvider?.template ? { displayName: templateDisplayName ?? catalogProvider.template, logoUrl: templateLogo } : null);
 
-                  {authInfoByEnv?.[selectedEnvName] && (
-                    <TextInput
-                      label="Header Name"
-                      value={authInfoByEnv[selectedEnvName].name}
-                      copyable
-                      copyTooltipText="Copy Header Name"
-                      slotProps={{ input: { readOnly: true } }}
-                      size="small"
-                    />
-                  )}
-                  {authInfoByEnv?.[selectedEnvName].value && (
-                    <TextInput
-                      label="API Key"
-                      type="password"
-                      value={authInfoByEnv[selectedEnvName].value}
-                      copyable
-                      copyTooltipText="Copy API Key"
-                      slotProps={{ input: { readOnly: true } }}
-                      size="small"
-                    />
-                  )}
-
-                  {apiKeyValue && (
-                    <TextInput
-                      label="API Key"
-                      type="password"
-                      value={apiKeyValue}
-                      copyable
-                      copyTooltipText="Copy API Key"
-                      slotProps={{ input: { readOnly: true } }}
-                      size="small"
-                    />
-                  )}
-                  {
-                    authInfoByEnv && (
-                      <TextInput
-                        label="Example cURL"
-                        value={[
-                          `curl -X POST ${providerConfig.url || "http://<endpoint-url>"}`,
-                          `  --header "${authInfoByEnv[selectedEnvName].name}: ${authInfoByEnv[selectedEnvName].value || "<api-key>"}"`,
-                          `  -d '{"your": "data"}'`,
-                        ].join(" \\\n")}
-                        copyable
-                        copyTooltipText="Copy cURL command"
-                        multiline
-                        minRows={3}
-                        slotProps={{
-                          input: {
-                            readOnly: true,
-                            sx: { fontFamily: "monospace", fontSize: "0.85rem" },
-                          },
-                        }}
+              return (
+                <Card>
+                  <CardContent sx={{ position: "relative" }}>
+                    <Tooltip title="Change provider" placement="top" arrow>
+                      <IconButton
                         size="small"
-                      />
-                    )
-                  }
-                </>
-              </Form.Section>
-            )}
-
-            {providerConfig && (
-              <Form.Section>
-                <Form.Header>
-                  LLM Service Provider
-                </Form.Header>
-                <Stack spacing={2.5}>
-                  <Card>
-                    <CardContent>
-                      <ProviderDisplay
-                        provider={
-                          catalogProvider
-                            ? {
-                              name: catalogProvider.name ?? providerConfig.providerName ?? "",
-                              template: catalogProvider.template,
-                              version: catalogProvider.version,
-                              deployments: catalogProvider.deployments,
-                              security: catalogProvider.security,
-                              rateLimiting: catalogProvider.rateLimiting,
-                              policies: catalogProvider.policies,
-                            }
-                            : {
-                              name: providerConfig.providerName ?? "",
-                            }
-                        }
-                        isSelected={false}
-                        hideCheckbox
-                        templateInfo={
-                          catalogProvider?.template
-                            ? {
-                              displayName: templateDisplayName ??
-                                catalogProvider.template, logoUrl: templateLogo
-                            }
-                            : null
-                        }
-                      />
-                    </CardContent>
-                  </Card>
-                </Stack>
-              </Form.Section>
-            )}
-
+                        color="primary"
+                        sx={{ position: "absolute", top: 8, right: 8 }}
+                        onClick={() => setProviderDrawerOpen(true)}
+                        aria-label="Change provider"
+                      >
+                        <Pencil size={16} />
+                      </IconButton>
+                    </Tooltip>
+                    <ProviderDisplay
+                      provider={
+                        displayCatalog
+                          ? {
+                            name: displayCatalog.name ?? providerConfig.providerName ?? "",
+                            template: displayCatalog.template,
+                            version: displayCatalog.version,
+                            deployments: displayCatalog.deployments,
+                            security: displayCatalog.security,
+                            rateLimiting: displayCatalog.rateLimiting,
+                            policies: displayCatalog.policies,
+                          }
+                          : { name: providerConfig.providerName ?? "" }
+                      }
+                      isSelected={false}
+                      hideCheckbox
+                      templateInfo={displayTemplate ?? null}
+                    />
+                  </CardContent>
+                </Card>
+              );
+            })()}
 
             <GuardrailsSection
               guardrails={guardrails}
@@ -849,28 +931,35 @@ export const ViewLLMProviderComponent: React.FC = () => {
               onRemoveGuardrail={handleRemoveGuardrail}
             />
 
-
+            {isDirty && (
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setPendingProviderByEnv({});
+                    navigate(backHref);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleSave}
+                  disabled={updateConfig.isPending}
+                >
+                  {updateConfig.isPending ? "Saving…" : "Save"}
+                </Button>
+              </Stack>
+            )}
 
           </Stack>
         </Form.Section>
-        {
-          isDirty && (
-            <Stack direction="row" spacing={2}>
-              <Button variant="outlined" onClick={() => navigate(backHref)}>
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                onClick={handleSave}
-                disabled={!name.trim() || updateConfig.isPending}
-              >
-                {updateConfig.isPending ? "Saving…" : "Save"}
-              </Button>
-            </Stack>
-          )
-        }
+
       </Stack>
 
+      {envVarsPanel}
     </PageLayout>
   );
 };

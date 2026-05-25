@@ -81,7 +81,6 @@ export function AgentLLMProvidersSection() {
     return configs.filter(
       (c) =>
         c.name.toLowerCase().includes(lower) ||
-        (c.description ?? "").toLowerCase().includes(lower) ||
         c.type.toLowerCase().includes(lower),
     );
   }, [configs, searchValue]);
@@ -107,9 +106,9 @@ export function AgentLLMProvidersSection() {
   }
   const handleDelete = (config: AgentModelConfigListItem) => {
     addConfirmation({
-      title: "Remove Model Config",
+      title: "Remove LLM Configuration",
       description:
-        "Are you sure you want to remove this LLM provider configuration from the agent?",
+        "This will remove the LLM configuration and its environment variable mappings from the agent. The catalog service itself will not be affected.",
       confirmButtonText: "Remove",
       confirmButtonColor: "error",
       confirmButtonIcon: <Trash size={16} />,
@@ -128,7 +127,7 @@ export function AgentLLMProvidersSection() {
       showSearch
       searchValue={searchValue}
       onSearchChange={setSearchValue}
-      searchPlaceholder="Search by name, description, or type..."
+      searchPlaceholder="Search LLM configurations..."
       actions={
         <Button
           component={Link}
@@ -139,7 +138,7 @@ export function AgentLLMProvidersSection() {
           startIcon={<Plus size={16} />}
           disabled={!orgId || !projectId || !agentId}
         >
-          Add LLM Provider
+          Add LLM Configuration
         </Button>
       }
     />
@@ -149,7 +148,6 @@ export function AgentLLMProvidersSection() {
     <ListingTable.Head>
       <ListingTable.Row>
         <ListingTable.Cell>Name</ListingTable.Cell>
-        <ListingTable.Cell>Description</ListingTable.Cell>
         <ListingTable.Cell>Created</ListingTable.Cell>
         <ListingTable.Cell align="right">Actions</ListingTable.Cell>
       </ListingTable.Row>
@@ -163,7 +161,7 @@ export function AgentLLMProvidersSection() {
     action?: ReactNode,
   ) => (
     <ListingTable.Row>
-      <ListingTable.Cell colSpan={4}>
+      <ListingTable.Cell colSpan={3}>
         <Box sx={{ textAlign: "center", py: 4 }}>
           <Box sx={{ mb: 2 }}>{illustration}</Box>
           <Typography variant="body2" fontWeight={500} gutterBottom>
@@ -184,17 +182,17 @@ export function AgentLLMProvidersSection() {
         <Box component="span" sx={{ color: "error.main" }}>
           <AlertTriangle size={64} />
         </Box>,
-        "Failed to load model configs",
+        "Failed to load LLM configurations",
         error instanceof Error
           ? error.message
-          : "Failed to load model configs. Please try again.",
+          : "Failed to load LLM configurations. Please try again.",
       );
     }
     if (configs.length === 0) {
       return renderEmptyState(
         <ServerCog size={64} />,
-        "No LLM Service providers configured",
-        "Add an LLM service provider at the organization level, then attach it to this agent using Add Service Provider above.",
+        "No LLM configurations added yet",
+        "Click Add LLM Configuration to connect a service provider.",
         <Button
           component={Link}
           to={addProviderPath}
@@ -203,14 +201,14 @@ export function AgentLLMProvidersSection() {
           disabled={!orgId}
           startIcon={<Plus size={16} />}
         >
-          Add LLM Provider
+          Add LLM Configuration
         </Button>,
       );
     }
     if (filteredConfigs.length === 0) {
       return renderEmptyState(
         <ServerCog size={64} />,
-        "No model configs match your search criteria",
+        "No LLM configurations match your search",
         "Try adjusting your search keywords.",
       );
     }
@@ -219,9 +217,9 @@ export function AgentLLMProvidersSection() {
 
   return (
     <Stack spacing={2}>
-      <Typography variant="h6">LLM Providers</Typography>
-      <ListingTable.Container >
-        {filteredConfigs.length > 0 && toolbar}
+      <Typography variant="h6">LLM Configurations</Typography>
+      <ListingTable.Container>
+        {configs.length > 0 && toolbar}
         {isLoading ? (
           <Stack spacing={1} sx={{ m: 2 }}>
             {Array.from({ length: 3 }).map((_, i) => (
@@ -241,13 +239,8 @@ export function AgentLLMProvidersSection() {
                     onClick={() => navigate(getViewProviderPath(config.uuid))}
                   >
                     <ListingTable.Cell>
-                      <Typography variant="body2">
-                        {config.name}
-                      </Typography>
-                    </ListingTable.Cell>
-                    <ListingTable.Cell>
-                      <Typography variant="body2" color="text.secondary">
-                        {config.description ?? "—"}
+                      <Typography variant="body2" fontWeight={500} sx={{ textTransform: "capitalize" }}>
+                        {config.name.replace(/-\d+$/, "").replace(/-/g, " ")}
                       </Typography>
                     </ListingTable.Cell>
                     <ListingTable.Cell>
