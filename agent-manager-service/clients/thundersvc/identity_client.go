@@ -460,29 +460,95 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 			result.Groups = append(result.Groups, *group)
 		}
 	}
+
+	role, err := c.GetRole(ctx, roleID)
+	if err != nil {
+		return nil, fmt.Errorf("thunder get role for permissions %s: %w", roleID, err)
+	}
+	for _, rp := range role.Permissions {
+		result.Permissions = append(result.Permissions, rp.Permissions...)
+	}
+
 	return result, nil
 }
 
+// AddRolePermissions merges new permissions into the role via PUT /roles/{id}.
 func (c *thunderClient) AddRolePermissions(ctx context.Context, roleID string, req RolePermissionRequest) error {
-	token, err := c.getSystemToken(ctx)
+	role, err := c.GetRole(ctx, roleID)
 	if err != nil {
-		return err
+		return fmt.Errorf("thunder add role permissions (get role): %w", err)
 	}
-	_, err = c.doRequest(ctx, http.MethodPost, c.baseURL+"/roles/"+roleID+"/assignments/add", token, req)
-	if err != nil {
-		return fmt.Errorf("thunder add role permissions: %w", err)
+
+	perms := role.Permissions
+	found := false
+	for i, p := range perms {
+		if p.ResourceServerID == req.ResourceServerID {
+			existing := make(map[string]bool, len(p.Permissions))
+			for _, perm := range p.Permissions {
+				existing[perm] = true
+			}
+			for _, newPerm := range req.Permissions {
+				if !existing[newPerm] {
+					perms[i].Permissions = append(perms[i].Permissions, newPerm)
+				}
+			}
+			found = true
+			break
+		}
 	}
-	return nil
+	if !found {
+		perms = append(perms, req)
+	}
+
+	return c.putRolePermissions(ctx, role, perms)
 }
 
+// RemoveRolePermissions removes permissions from the role via PUT /roles/{id}.
 func (c *thunderClient) RemoveRolePermissions(ctx context.Context, roleID string, req RolePermissionRequest) error {
+	role, err := c.GetRole(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("thunder remove role permissions (get role): %w", err)
+	}
+
+	toRemove := make(map[string]bool, len(req.Permissions))
+	for _, p := range req.Permissions {
+		toRemove[p] = true
+	}
+
+	var perms []RolePermissionRequest
+	for _, p := range role.Permissions {
+		if p.ResourceServerID == req.ResourceServerID {
+			var remaining []string
+			for _, perm := range p.Permissions {
+				if !toRemove[perm] {
+					remaining = append(remaining, perm)
+				}
+			}
+			if len(remaining) > 0 {
+				perms = append(perms, RolePermissionRequest{ResourceServerID: p.ResourceServerID, Permissions: remaining})
+			}
+		} else {
+			perms = append(perms, p)
+		}
+	}
+
+	return c.putRolePermissions(ctx, role, perms)
+}
+
+func (c *thunderClient) putRolePermissions(ctx context.Context, role *ThunderRole, perms []RolePermissionRequest) error {
 	token, err := c.getSystemToken(ctx)
 	if err != nil {
 		return err
 	}
-	_, err = c.doRequest(ctx, http.MethodPost, c.baseURL+"/roles/"+roleID+"/assignments/remove", token, req)
+	body := thunderRolePermissionsUpdateBody{
+		OuID:        role.OuID,
+		Name:        role.Name,
+		Description: role.Description,
+		Permissions: perms,
+	}
+	_, err = c.doRequest(ctx, http.MethodPut, c.baseURL+"/roles/"+role.ID, token, body)
 	if err != nil {
-		return fmt.Errorf("thunder remove role permissions: %w", err)
+		return fmt.Errorf("thunder put role permissions: %w", err)
 	}
 	return nil
 }
@@ -522,7 +588,7 @@ func (c *thunderClient) ListAMPPermissions(ctx context.Context) ([]ThunderPermis
 	}
 
 	// Fetch resource servers and find the "amp" one
-	rsBody, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/resource-servers?offset=0&limit=100", token, nil)
+	rsBody, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/resource-servers?offset=0&limit=20", token, nil)
 	if err != nil {
 		return nil, "", fmt.Errorf("thunder list resource servers: %w", err)
 	}
@@ -548,30 +614,50 @@ func (c *thunderClient) ListAMPPermissions(ctx context.Context) ([]ThunderPermis
 		return nil, "", fmt.Errorf("amp resource server not found in Thunder (has it been registered?)")
 	}
 
-	// Fetch resources for the amp resource server
-	resBody, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/resource-servers/"+ampRSID+"/resources?offset=0&limit=500", token, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("thunder list amp resources: %w", err)
-	}
-
+	// Fetch all resources for the amp resource server using pagination.
+	const resPageSize = 20
 	var resources []ThunderResource
-	if err := json.Unmarshal(resBody, &resources); err != nil {
-		var wrapped struct {
-			Resources []ThunderResource `json:"resources"`
+	resOffset := 0
+	for {
+		resURL := fmt.Sprintf("%s/resource-servers/%s/resources?offset=%d&limit=%d", c.baseURL, ampRSID, resOffset, resPageSize)
+		resBody, err := c.doRequest(ctx, http.MethodGet, resURL, token, nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("thunder list amp resources: %w", err)
 		}
-		if err2 := json.Unmarshal(resBody, &wrapped); err2 != nil {
+		var page thunderResourceList
+		if err := json.Unmarshal(resBody, &page); err != nil {
 			return nil, "", fmt.Errorf("thunder list amp resources decode: %w", err)
 		}
-		resources = wrapped.Resources
+		resources = append(resources, page.Resources...)
+		resOffset += len(page.Resources)
+		if resOffset >= page.TotalResults || len(page.Resources) == 0 {
+			break
+		}
 	}
 
-	// Derive permission strings: amp:{resource}:{action}
+	// For each resource fetch its actions via the dedicated endpoint.
+	// Actions are not embedded in the resource list response.
 	var perms []ThunderPermission
 	for _, res := range resources {
-		for _, action := range res.Actions {
+		actURL := fmt.Sprintf("%s/resource-servers/%s/resources/%s/actions", c.baseURL, ampRSID, res.ID)
+		actBody, err := c.doRequest(ctx, http.MethodGet, actURL, token, nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("thunder list actions for resource %s: %w", res.ID, err)
+		}
+		var actPage thunderActionList
+		if err := json.Unmarshal(actBody, &actPage); err != nil {
+			return nil, "", fmt.Errorf("thunder list actions decode for resource %s: %w", res.ID, err)
+		}
+		for _, action := range actPage.Actions {
+			name := action.Permission
+			if name == "" {
+				name = res.Handle + ":" + action.Handle
+			}
 			perms = append(perms, ThunderPermission{
-				Name:             "amp:" + res.Name + ":" + action.Name,
+				Name:             name,
 				ResourceServerID: ampRSID,
+				ResourceName:     res.Name,
+				ActionName:       action.Name,
 			})
 		}
 	}

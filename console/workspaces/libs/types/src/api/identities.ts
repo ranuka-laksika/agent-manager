@@ -127,6 +127,8 @@ export interface RoleUserGroupRequest {
 export interface ThunderPermission {
   name: string;
   resourceServerId: string;
+  actionName: string;
+  resourceName: string;
 }
 
 export interface AMPPermissionsResponse {

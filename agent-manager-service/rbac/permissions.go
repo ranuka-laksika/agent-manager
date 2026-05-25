@@ -20,12 +20,12 @@ package rbac
 type Permission string
 
 // ResourceServer is the OAuth2 resource server identifier for Agent Manager.
-// All scopes registered on Thunder use the "amp:" prefix.
 const ResourceServer = "amp"
 
-// Scope returns the full OAuth2 scope string for this permission (e.g. "amp:agent:read").
+// Scope returns the OAuth2 scope string for this permission as Thunder issues it (e.g. "org:view").
+// Thunder stores and returns permissions without the resource server prefix in the token scope claim.
 func (p Permission) Scope() string {
-	return ResourceServer + ":" + string(p)
+	return string(p)
 }
 
 // Org permissions

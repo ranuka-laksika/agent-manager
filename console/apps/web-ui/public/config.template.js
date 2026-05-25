@@ -20,6 +20,7 @@ window.__RUNTIME_CONFIG__ = {
   authConfig: {
     baseUrl: '$AUTH_BASE_URL',
     clientId: '$AUTH_CLIENT_ID',
+    organizationHandle: ('$AUTH_ORG_HANDLE'.trim() || 'default'),
     signInUrl: '$AUTH_BASE_URL/gate',
     afterSignInUrl: '$SIGN_IN_REDIRECT_URL',
     afterSignOutUrl: '$SIGN_OUT_REDIRECT_URL',

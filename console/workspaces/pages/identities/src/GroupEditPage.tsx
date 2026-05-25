@@ -42,7 +42,11 @@ import {
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap, type ThunderUser, type ThunderRole } from "@agent-management-platform/types";
+import {
+  absoluteRouteMap,
+  type ThunderUser,
+  type ThunderRole,
+} from "@agent-management-platform/types";
 
 export const GroupEditPage: React.FC = () => {
   const { orgId, groupId } = useParams<{ orgId: string; groupId: string }>();

@@ -90,11 +90,13 @@ type GroupMembersRequest struct {
 
 // ThunderRole represents a role in Thunder.
 type ThunderRole struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	CreatedAt   string `json:"createdAt,omitempty"`
-	UpdatedAt   string `json:"updatedAt,omitempty"`
+	ID          string                  `json:"id"`
+	OuID        string                  `json:"ouId,omitempty"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Permissions []RolePermissionRequest `json:"permissions,omitempty"`
+	CreatedAt   string                  `json:"createdAt,omitempty"`
+	UpdatedAt   string                  `json:"updatedAt,omitempty"`
 }
 
 // CreateRoleRequest is the payload for POST /roles.
@@ -104,10 +106,18 @@ type CreateRoleRequest struct {
 	Description string `json:"description,omitempty"`
 }
 
-// UpdateRoleRequest is the payload for PUT /roles/{id}.
+// UpdateRoleRequest is the payload for PUT /roles/{id} (metadata only).
 type UpdateRoleRequest struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+}
+
+// thunderRolePermissionsUpdateBody is used when patching only the permissions via PUT /roles/{id}.
+type thunderRolePermissionsUpdateBody struct {
+	OuID        string                  `json:"ouId,omitempty"`
+	Name        string                  `json:"name"`
+	Description string                  `json:"description,omitempty"`
+	Permissions []RolePermissionRequest `json:"permissions,omitempty"`
 }
 
 // RoleAssignments represents the current assignments on a role.
@@ -117,7 +127,7 @@ type RoleAssignments struct {
 	Groups      []ThunderGroup `json:"groups,omitempty"`
 }
 
-// RolePermissionRequest is the payload for adding/removing permissions on a role.
+// RolePermissionRequest is a single resource-server permissions entry.
 type RolePermissionRequest struct {
 	ResourceServerID string   `json:"resourceServerId"`
 	Permissions      []string `json:"permissions"`
@@ -144,21 +154,27 @@ type ThunderResourceServer struct {
 
 // ThunderResource represents a resource within a resource server.
 type ThunderResource struct {
-	ID      string          `json:"id"`
-	Name    string          `json:"name"`
-	Actions []ThunderAction `json:"actions,omitempty"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Handle     string          `json:"handle"`
+	Permission string          `json:"permission"`
+	Actions    []ThunderAction `json:"actions,omitempty"`
 }
 
 // ThunderAction represents an action on a resource.
 type ThunderAction struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Handle     string `json:"handle"`
+	Permission string `json:"permission"`
 }
 
-// ThunderPermission is a derived permission string (e.g. "amp:agents:create").
+// ThunderPermission represents one action on a resource server resource.
 type ThunderPermission struct {
-	Name             string `json:"name"`
+	Name             string `json:"name"` // permission handle, e.g. "project:create"
 	ResourceServerID string `json:"resourceServerId"`
+	ActionName       string `json:"actionName"`   // display name of action, e.g. "Create"
+	ResourceName     string `json:"resourceName"` // display name of resource, e.g. "Project"
 }
 
 // thunderUserList is used to decode paginated user list responses.
@@ -194,4 +210,16 @@ type thunderRoleList struct {
 type thunderResourceServerList struct {
 	ResourceServers []ThunderResourceServer `json:"resourceServers"`
 	Total           int                     `json:"total"`
+}
+
+// thunderResourceList is used to decode paginated resource list responses.
+type thunderResourceList struct {
+	Resources    []ThunderResource `json:"resources"`
+	TotalResults int               `json:"totalResults"`
+}
+
+// thunderActionList is used to decode the GET /resource-servers/{id}/resources/{id}/actions response.
+type thunderActionList struct {
+	Actions      []ThunderAction `json:"actions"`
+	TotalResults int             `json:"totalResults"`
 }

@@ -26,6 +26,8 @@ export type { AuthProviderProps };
 
 export type UserInfo = {
     allowedScopes?: string;
+    /** Space-separated OAuth2 scopes from the decoded access token. */
+    scope?: string;
     displayName?: string;
     familyName?: string;
     email?: string;

@@ -82,7 +82,9 @@ export const UsersPage: React.FC = () => {
   const handleDelete = (user: ThunderUser) => {
     addConfirmation({
       title: "Delete User",
-      description: `Are you sure you want to delete "${getAttr(user, "username")}"? This action cannot be undone.`,
+      description:
+        `Are you sure you want to delete "${getAttr(user, "username")}"?` +
+        " This action cannot be undone.",
       confirmButtonText: "Delete",
       confirmButtonColor: "error",
       confirmButtonIcon: <Trash size={16} />,
