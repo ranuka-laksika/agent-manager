@@ -35,6 +35,7 @@ window.__RUNTIME_CONFIG__ = {
     storage: 'localStorage',
   },
   disableAuth: '$DISABLE_AUTH' === 'true',
+  rbacEnabled: '$RBAC_ENABLED' === 'true',
   apiBaseUrl: '$API_BASE_URL',
   obsApiBaseUrl: '$OBS_API_BASE_URL',
   gatewayControlPlaneUrl: '$GATEWAY_CONTROL_PLANE_URL',

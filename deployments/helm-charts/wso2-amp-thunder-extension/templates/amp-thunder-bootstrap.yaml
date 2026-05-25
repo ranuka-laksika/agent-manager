@@ -1205,6 +1205,7 @@ data:
     R_MON=$(create_or_get_resource        "$RS_ID" "Monitor"                  "monitor"                "Monitor management")
     R_OBS=$(create_or_get_resource        "$RS_ID" "Observability"            "observability"          "Observability dashboards and metrics")
     R_ROLE=$(create_or_get_resource       "$RS_ID" "Role"                     "role"                   "Role management")
+    R_GROUP=$(create_or_get_resource      "$RS_ID" "Group"                    "group"                  "Group management")
     R_CAT=$(create_or_get_resource        "$RS_ID" "Catalog"                  "catalog"                "Resource catalog")
     R_REPO=$(create_or_get_resource       "$RS_ID" "Repository"               "repository"             "Source repository browsing")
 
@@ -1346,10 +1347,144 @@ data:
     create_action "$RS_ID" "$R_ROLE"         "Update"                 "update"                 "Update a custom role"
     create_action "$RS_ID" "$R_ROLE"         "Delete"                 "delete"                 "Delete a custom role"
 
+    # group actions  → amp:group:<action>
+    create_action "$RS_ID" "$R_GROUP"        "Create"                 "create"                 "Create a group"
+    create_action "$RS_ID" "$R_GROUP"        "Read"                   "read"                   "View groups and their members"
+    create_action "$RS_ID" "$R_GROUP"        "Update"                 "update"                 "Update a group"
+    create_action "$RS_ID" "$R_GROUP"        "Delete"                 "delete"                 "Delete a group"
+
     # catalog actions  → amp:catalog:<action>
     create_action "$RS_ID" "$R_CAT"          "Read"                   "read"                   "View the resource catalog"
 
     # repository actions  → amp:repository:<action>
     create_action "$RS_ID" "$R_REPO"         "Read"                   "read"                   "Browse repository branches and commits"
 
-    log_info "Agent Manager resource server registration complete (81 permissions registered)."
+    log_info "Agent Manager resource server registration complete (85 permissions registered)."
+
+  60-amp-default-roles.sh: |
+    #!/bin/bash
+    set -e
+
+    SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
+    source "${SCRIPT_DIR}/common.sh"
+
+    log_info "Creating AMP default roles with permissions..."
+
+    # ---------------------------------------------------------------------------
+    # Fetch default OU ID
+    # ---------------------------------------------------------------------------
+    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    HTTP_CODE="${RESPONSE: -3}"
+    BODY="${RESPONSE%???}"
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      log_error "Failed to fetch default OU (HTTP $HTTP_CODE)"
+      exit 1
+    fi
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$DEFAULT_OU_ID" ]]; then
+      log_error "Could not extract default OU ID"
+      exit 1
+    fi
+    log_info "Using OU ID: $DEFAULT_OU_ID"
+
+    # ---------------------------------------------------------------------------
+    # Fetch AMP resource server ID
+    # ---------------------------------------------------------------------------
+    RESPONSE=$(thunder_api_call GET "/resource-servers")
+    HTTP_CODE="${RESPONSE: -3}"
+    BODY="${RESPONSE%???}"
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      log_error "Failed to fetch resource servers (HTTP $HTTP_CODE)"
+      exit 1
+    fi
+    AMP_RS_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"identifier":"amp"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$AMP_RS_ID" ]]; then
+      log_error "Could not find AMP resource server — run 59-amp-resource-server.sh first"
+      exit 1
+    fi
+    log_info "AMP resource server ID: $AMP_RS_ID"
+
+    # ---------------------------------------------------------------------------
+    # Helper: create or get role by name; echoes the role ID
+    # ---------------------------------------------------------------------------
+    create_or_get_role() {
+      local name="$1" description="$2"
+      local payload="{\"name\":\"${name}\",\"ouId\":\"${DEFAULT_OU_ID}\",\"description\":\"${description}\"}"
+      local response http_code body id
+
+      response=$(thunder_api_call POST "/roles" "$payload")
+      http_code="${response: -3}"
+      body="${response%???}"
+
+      if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]]; then
+        id=$(echo "$body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        log_success "Created role '${name}' (id: $id)" >&2
+        echo "$id"
+        return 0
+      fi
+
+      if [[ "$http_code" == "409" ]]; then
+        log_warning "Role '${name}' already exists, retrieving ID..." >&2
+        response=$(thunder_api_call GET "/roles")
+        body="${response%???}"
+        id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"name\":\"${name}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [[ -z "$id" ]]; then
+          log_error "Role '${name}' reported 409 but not found in list" >&2
+          exit 1
+        fi
+        log_success "Found existing role '${name}' (id: $id)" >&2
+        echo "$id"
+        return 0
+      fi
+
+      log_error "Failed to create role '${name}' (HTTP $http_code): $body" >&2
+      exit 1
+    }
+
+    # ---------------------------------------------------------------------------
+    # Helper: assign permissions to a role via PUT /roles/{id}
+    # ---------------------------------------------------------------------------
+    set_role_permissions() {
+      local role_id="$1" role_name="$2" role_desc="$3" permissions_json="$4"
+      local payload="{\"ouId\":\"${DEFAULT_OU_ID}\",\"name\":\"${role_name}\",\"description\":\"${role_desc}\",\"permissions\":[{\"resourceServerId\":\"${AMP_RS_ID}\",\"permissions\":${permissions_json}}]}"
+      local response http_code
+
+      response=$(thunder_api_call PUT "/roles/${role_id}" "$payload")
+      http_code="${response: -3}"
+      if [[ "$http_code" == "200" ]] || [[ "$http_code" == "204" ]]; then
+        log_success "Permissions set for role '${role_name}'"
+      else
+        log_error "Failed to set permissions for role '${role_name}' (HTTP $http_code): ${response%???}"
+        exit 1
+      fi
+    }
+
+    # ===========================================================================
+    # admin — full access to all resources
+    # ===========================================================================
+    ADMIN_ID=$(create_or_get_role "admin" "Full administrative access to all AMP resources")
+    set_role_permissions "$ADMIN_ID" "admin" "Full administrative access to all AMP resources" \
+      '["org:view","org:modify-settings","org:invite-member","org:remove-member","org:assign-role","org:manage-idp","org:manage-service-account","project:create","project:read","project:update","project:delete","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token:manage","data-plane:read","deployment-pipeline:read","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key:manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key:manage","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy:non-production","agent:deploy:production","agent:promote","agent:rollback","agent:suspend","agent:token:manage","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score:read","monitor:score:publish","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","observability:infra-metric","role:create","role:read","role:update","role:delete","group:create","group:read","group:update","group:delete","catalog:read","repository:read"]'
+
+    # ===========================================================================
+    # developer — project-scoped development and deployment
+    # ===========================================================================
+    DEV_ID=$(create_or_get_role "developer" "Development access: build, deploy, and observe agents within projects")
+    set_role_permissions "$DEV_ID" "developer" "Development access: build, deploy, and observe agents within projects" \
+      '["org:view","project:create","project:read","project:update","project:delete","environment:read","data-plane:read","deployment-pipeline:read","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:read","llm-provider:read","llm-provider:configure-guardrail","llm-provider:connect","mcp-server:read","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key:manage","evaluator:read","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy:non-production","agent:token:manage","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score:read","observability:project-dashboard","observability:infra-metric","catalog:read","repository:read"]'
+
+    # ===========================================================================
+    # ai-lead — AI/ML resources and provider management
+    # ===========================================================================
+    AILEAD_ID=$(create_or_get_role "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators")
+    set_role_permissions "$AILEAD_ID" "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators" \
+      '["org:view","project:read","environment:read","data-plane:read","deployment-pipeline:read","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key:manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent:read","agent:build","agent:deploy:non-production","monitor:read","monitor:score:read","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","catalog:read"]'
+
+    # ===========================================================================
+    # platform-engineer — infrastructure and deployment pipeline management
+    # ===========================================================================
+    PE_ID=$(create_or_get_role "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments")
+    set_role_permissions "$PE_ID" "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments" \
+      '["org:view","project:read","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token:manage","data-plane:read","deployment-pipeline:read","llm-provider:read","llm-provider:configure-guardrail","mcp-server:read","mcp-server:configure-guardrail","agent:read","agent:build","agent:deploy:non-production","agent:deploy:production","agent:promote","agent:rollback","agent:suspend","monitor:read","monitor:score:read","observability:org-dashboard","observability:project-dashboard","observability:infra-metric","catalog:read"]'
+
+    log_info "Default role provisioning complete (4 roles created/updated)."

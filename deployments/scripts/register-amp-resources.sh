@@ -175,6 +175,7 @@ R_AGENT=$(create_or_get_resource   "$RS_ID" "Agent"                 "agent"     
 R_MON=$(create_or_get_resource     "$RS_ID" "Monitor"               "monitor"               "Monitor management")
 R_OBS=$(create_or_get_resource     "$RS_ID" "Observability"         "observability"         "Observability dashboards and metrics")
 R_ROLE=$(create_or_get_resource    "$RS_ID" "Role"                  "role"                  "Role management")
+R_GROUP=$(create_or_get_resource   "$RS_ID" "Group"                 "group"                 "Group management")
 R_CAT=$(create_or_get_resource     "$RS_ID" "Catalog"               "catalog"               "Resource catalog")
 R_REPO=$(create_or_get_resource    "$RS_ID" "Repository"            "repository"            "Source repository browsing")
 log_info "Level-1 resources created."
@@ -289,6 +290,10 @@ create_action "$RS_ID" "$R_ROLE"         "Create"  "create"  "Create a custom ro
 create_action "$RS_ID" "$R_ROLE"         "Read"    "read"    "View roles and their permissions"
 create_action "$RS_ID" "$R_ROLE"         "Update"  "update"  "Update a custom role"
 create_action "$RS_ID" "$R_ROLE"         "Delete"  "delete"  "Delete a custom role"
+create_action "$RS_ID" "$R_GROUP"        "Create"  "create"  "Create a group"
+create_action "$RS_ID" "$R_GROUP"        "Read"    "read"    "View groups and their members"
+create_action "$RS_ID" "$R_GROUP"        "Update"  "update"  "Update a group"
+create_action "$RS_ID" "$R_GROUP"        "Delete"  "delete"  "Delete a group"
 
 create_action "$RS_ID" "$R_CAT"          "Read"    "read"    "View the resource catalog"
 create_action "$RS_ID" "$R_REPO"         "Read"    "read"    "Browse repository branches and commits"

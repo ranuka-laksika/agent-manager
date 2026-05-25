@@ -167,6 +167,14 @@ const (
 	RoleDelete Permission = "role:delete"
 )
 
+// Group management permissions
+const (
+	GroupCreate Permission = "group:create"
+	GroupRead   Permission = "group:read"
+	GroupUpdate Permission = "group:update"
+	GroupDelete Permission = "group:delete"
+)
+
 // Catalog and repository permissions
 const (
 	CatalogRead    Permission = "catalog:read"

@@ -29,6 +29,8 @@ export interface AppConfig {
   /** Gateway version used in setup commands (default: v0.9.0). */
   gatewayVersion?: string;
   disableAuth: boolean;
+  /** Mirror of the backend RBAC_ENABLED flag. When false, nav items are shown regardless of token scopes. */
+  rbacEnabled: boolean;
   instrumentationUrl: string;
   guardrailsCatalogUrl: string;
   guardrailsDefinitionBaseUrl: string;

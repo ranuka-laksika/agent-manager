@@ -49,6 +49,7 @@ var PredefinedRolePermissions = map[string][]Permission{
 		ObservabilityOrgDashboard, ObservabilityProjectDashboard,
 		ObservabilityGuardrailMetric, ObservabilityInfraMetric,
 		RoleCreate, RoleRead, RoleUpdate, RoleDelete,
+		GroupCreate, GroupRead, GroupUpdate, GroupDelete,
 		CatalogRead, RepositoryRead,
 	},
 

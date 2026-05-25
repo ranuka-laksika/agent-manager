@@ -168,6 +168,7 @@ thunder:
         - 57-amctl-client.sh
         - 58-am-mcp-client.sh
         - 59-amp-resource-server.sh
+        - 60-amp-default-roles.sh
     # Observer Resource Reader Client configuration (for observability plane to read resources)
     observerResourceReaderClient:
       clientId: "openchoreo-observer-resource-reader-client" # clusterauthzrolebinding is already created with this clientId by openchoreo, so it should not be changed unless the corresponding ClusterAuthzRoleBinding is also updated

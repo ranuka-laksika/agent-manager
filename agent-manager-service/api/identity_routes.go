@@ -26,24 +26,24 @@ import (
 
 func registerIdentityRoutes(mux *http.ServeMux, ctrl controllers.IdentityController) {
 	// Users
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/users", rbac.OrgView, ctrl.ListUsers)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/identities/users", ctrl.ListUsers, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/users/invite", rbac.OrgInviteMember, ctrl.InviteUser)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/users", rbac.OrgInviteMember, ctrl.CreateUser)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}", rbac.OrgView, ctrl.GetUser)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}", ctrl.GetUser, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/identities/users/{userID}", rbac.OrgInviteMember, ctrl.UpdateUser)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/identities/users/{userID}", rbac.OrgRemoveMember, ctrl.DeleteUser)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}/groups", rbac.OrgView, ctrl.GetUserGroups)
+	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}/groups", ctrl.GetUserGroups, rbac.OrgInviteMember, rbac.OrgRemoveMember)
 
 	// Groups
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups", rbac.OrgView, ctrl.ListGroups)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups", rbac.OrgAssignRole, ctrl.CreateGroup)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}", rbac.OrgView, ctrl.GetGroup)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/identities/groups/{groupID}", rbac.OrgAssignRole, ctrl.UpdateGroup)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/identities/groups/{groupID}", rbac.OrgAssignRole, ctrl.DeleteGroup)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}/members", rbac.OrgView, ctrl.GetGroupMembers)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups/{groupID}/members/add", rbac.OrgAssignRole, ctrl.AddGroupMembers)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups/{groupID}/members/remove", rbac.OrgAssignRole, ctrl.RemoveGroupMembers)
-	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}/roles", rbac.RoleRead, ctrl.GetGroupRoles)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups", rbac.GroupRead, ctrl.ListGroups)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups", rbac.GroupCreate, ctrl.CreateGroup)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupRead, ctrl.GetGroup)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupUpdate, ctrl.UpdateGroup)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/identities/groups/{groupID}", rbac.GroupDelete, ctrl.DeleteGroup)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}/members", rbac.GroupRead, ctrl.GetGroupMembers)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups/{groupID}/members/add", rbac.GroupUpdate, ctrl.AddGroupMembers)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "POST /orgs/{orgName}/identities/groups/{groupID}/members/remove", rbac.GroupUpdate, ctrl.RemoveGroupMembers)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups/{groupID}/roles", rbac.GroupRead, ctrl.GetGroupRoles)
 
 	// Roles
 	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/roles", rbac.RoleRead, ctrl.ListRoles)

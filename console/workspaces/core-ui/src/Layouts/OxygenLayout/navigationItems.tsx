@@ -78,19 +78,23 @@ export function useNavigationItems(): Array<
   const { userInfo } = useAuthHooks();
 
   const navVisibility = useMemo(() => {
-    if (globalConfig.disableAuth) {
-      return { resources: true, evaluation: true, infrastructure: true, identities: true };
-    }
+    const showAll = {
+      resources: true, evaluation: true, infrastructure: true,
+      identityUsers: true, identityRoles: true, identityGroups: true,
+    };
+    if (globalConfig.disableAuth || !globalConfig.rbacEnabled) return showAll;
     const scopeStr = userInfo?.scope;
     if (!scopeStr) {
-      return { resources: false, evaluation: false, infrastructure: false, identities: false };
+      return { resources: false, evaluation: false, infrastructure: false, identityUsers: false, identityRoles: false, identityGroups: false };
     }
     const s = new Set(scopeStr.split(" ").filter(Boolean));
     return {
       resources:      s.has("llm-provider:read") || s.has("llm-provider-template:read"),
       evaluation:     s.has("evaluator:read"),
       infrastructure: s.has("gateway:read"),
-      identities:     s.has("org:view") || s.has("org:invite-member") || s.has("org:assign-role") || s.has("role:read"),
+      identityUsers:  s.has("org:invite-member") || s.has("org:remove-member"),
+      identityRoles:  s.has("role:read") || s.has("role:create") || s.has("role:update") || s.has("role:delete"),
+      identityGroups: s.has("group:read") || s.has("group:create") || s.has("group:update") || s.has("group:delete"),
     };
   }, [userInfo?.scope]);
 
@@ -687,38 +691,34 @@ export function useNavigationItems(): Array<
             },
           ]
         : []),
-      ...(navVisibility.identities
-        ? [
-            {
-              title: identitiesMetadata.title,
-              type: "section" as const,
-              icon: <identitiesMetadata.icon size={20} />,
-              items: [
-                {
-                  label: "Users",
-                  type: "item" as const,
-                  icon: <Users size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.users.path, { orgId }),
-                  isActive: !!matchPath(identitiesOrgRoute.children.users.wildPath, pathname),
-                },
-                {
-                  label: "Roles",
-                  type: "item" as const,
-                  icon: <Shield size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.roles.path, { orgId }),
-                  isActive: !!matchPath(identitiesOrgRoute.children.roles.wildPath, pathname),
-                },
-                {
-                  label: "Groups",
-                  type: "item" as const,
-                  icon: <Folder size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.groups.path, { orgId }),
-                  isActive: !!matchPath(identitiesOrgRoute.children.groups.wildPath, pathname),
-                },
-              ],
-            },
-          ]
-        : []),
+      ...(() => {
+        const identityItems = [
+          ...(navVisibility.identityUsers ? [{
+            label: "Users",
+            type: "item" as const,
+            icon: <Users size={20} />,
+            href: generatePath(identitiesOrgRoute.children.users.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.users.wildPath, pathname),
+          }] : []),
+          ...(navVisibility.identityRoles ? [{
+            label: "Roles",
+            type: "item" as const,
+            icon: <Shield size={20} />,
+            href: generatePath(identitiesOrgRoute.children.roles.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.roles.wildPath, pathname),
+          }] : []),
+          ...(navVisibility.identityGroups ? [{
+            label: "Groups",
+            type: "item" as const,
+            icon: <Folder size={20} />,
+            href: generatePath(identitiesOrgRoute.children.groups.path, { orgId }),
+            isActive: !!matchPath(identitiesOrgRoute.children.groups.wildPath, pathname),
+          }] : []),
+        ];
+        return identityItems.length > 0
+          ? [{ title: identitiesMetadata.title, type: "section" as const, icon: <identitiesMetadata.icon size={20} />, items: identityItems }]
+          : [];
+      })(),
       ...externalNavItems.filter(item => item.level === "org").map(item => ({
         label: item.title,
         type: "item" as const,
