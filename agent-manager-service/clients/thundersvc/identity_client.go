@@ -305,7 +305,7 @@ func (c *thunderClient) GetGroupMembers(ctx context.Context, groupID string, off
 	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, 0, fmt.Errorf("thunder get group members decode: %w", err)
 	}
-	var users []ThunderUser
+	users := make([]ThunderUser, 0, len(resp.Members))
 	for _, m := range resp.Members {
 		if m.Type != "user" {
 			continue
