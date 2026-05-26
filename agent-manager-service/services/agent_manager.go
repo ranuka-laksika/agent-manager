@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/google/uuid"
@@ -31,6 +30,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -365,6 +365,7 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 				strings.Split(corsConfig.AllowOrigin, ","),
 				strings.Split(corsConfig.AllowMethods, ","),
 				strings.Split(corsConfig.AllowHeaders, ","),
+				false, // allowCredentials defaults to false at agent creation
 			),
 			client.APIKeyAuthPolicy(),
 		}
@@ -423,6 +424,35 @@ func (s *agentManagerService) attachOTELInstrumentationTrait(ctx context.Context
 // errors (DB read failures, deployment pipeline lookup failures) so a transient
 // failure can't silently swap a customer's pinned version for the default.
 var ErrInstrumentationVersionNotPinned = errors.New("agent has no pinned instrumentation version")
+
+// lookupAgentAutoInstrumentation returns the agent's persisted
+// EnableAutoInstrumentation setting from agent_configs. Defaults to
+// true when there is no row yet (matching the configurations default).
+// Errors only on genuine DB failures; missing config is not an error.
+func (s *agentManagerService) lookupAgentAutoInstrumentation(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
+	if err != nil {
+		return true, fmt.Errorf("failed to get deployment pipeline: %w", err)
+	}
+	if len(pipeline.PromotionPaths) == 0 {
+		return true, nil
+	}
+	lowestEnv := findLowestEnvironment(pipeline.PromotionPaths)
+	if lowestEnv == "" {
+		return true, nil
+	}
+	cfg, err := s.agentConfigRepo.Get(orgName, projectName, agentName, lowestEnv)
+	if errors.Is(err, repositories.ErrAgentConfigNotFound) {
+		return true, nil
+	}
+	if err != nil {
+		return true, fmt.Errorf("failed to read agent config: %w", err)
+	}
+	if cfg == nil {
+		return true, nil
+	}
+	return cfg.EnableAutoInstrumentation, nil
+}
 
 // lookupAgentInstrumentationVersion returns the agent's pinned AMP instrumentation
 // version (from agent_configs.instrumentation_version). It returns
@@ -494,13 +524,94 @@ func (s *agentManagerService) detachEnvInjectionTrait(ctx context.Context, orgNa
 }
 
 // validateInstrumentationVersion checks the AMP instrumentation version against
-// the deployment's supported set. Empty / unsupported values return ErrInvalidInput.
+// the deployment's effective catalog. Unsupported values return ErrInvalidInput.
 func (s *agentManagerService) validateInstrumentationVersion(version string) error {
-	supported := config.GetConfig().OTEL.SupportedInstrumentationVersions
-	if slices.Contains(supported, version) {
+	cat := instrumentation.GetCatalog()
+	if cat.Has(version) {
 		return nil
 	}
+	supported := make([]string, 0, len(cat.All()))
+	for _, v := range cat.All() {
+		supported = append(supported, v.Version)
+	}
 	return fmt.Errorf("%w: instrumentationVersion %q is not supported by this deployment; supported: %v", utils.ErrInvalidInput, version, supported)
+}
+
+// buildpackPythonVersion returns the buildpack-configured Python version
+// normalised to bare-minor ("3.11"), matching the shape stored in the
+// instrumentation catalog. Returns "" when the build is not a python
+// buildpack build, when LanguageVersion is unset, or when the value
+// normalises to empty.
+//
+// Normalisation:
+//   - Language comparison is exact (matches the case-sensitive ==
+//     comparison used elsewhere in this file, e.g. isPythonBuildpack at
+//     line ~320, so a request with "Python" doesn't take a different
+//     branch here than in the trait-attach logic).
+//   - LanguageVersion is trimmed, then truncated to the first two
+//     dot-separated components so "3.11", "3.11.4", and "3.11.x" all
+//     collapse to "3.11" (the form the catalog uses).
+func buildpackPythonVersion(b *spec.Build) string {
+	if b == nil || b.BuildpackBuild == nil {
+		return ""
+	}
+	bp := b.BuildpackBuild.Buildpack
+	if bp.Language != string(utils.LanguagePython) {
+		return ""
+	}
+	if bp.LanguageVersion == nil {
+		return ""
+	}
+	raw := strings.TrimSpace(*bp.LanguageVersion)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.SplitN(raw, ".", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	major, minor := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	if major == "" || minor == "" {
+		return ""
+	}
+	return major + "." + minor
+}
+
+// validateEffectivePythonInstrumentationPair resolves the instrumentation
+// version that will actually apply to the agent (the request's explicit
+// pin if non-nil, otherwise the platform default from the catalog) and
+// pair-checks it against pythonVersion. An empty pythonVersion means the
+// agent isn't a python-buildpack build and the check is a no-op.
+func (s *agentManagerService) validateEffectivePythonInstrumentationPair(pythonVersion string, requestedVersion *string) error {
+	if pythonVersion == "" {
+		return nil
+	}
+	effective := instrumentation.GetCatalog().Default()
+	if requestedVersion != nil {
+		effective = *requestedVersion
+	}
+	return s.validatePythonInstrumentationPair(pythonVersion, effective)
+}
+
+// validatePythonInstrumentationPair rejects an agent whose instrumentation
+// version doesn't cover the chosen Python version. Both values are assumed
+// to have passed their individual validations already; this exists because
+// each catalog entry's pythonVersions field constrains which Python a
+// version supports (the image tag is python-ABI-locked).
+func (s *agentManagerService) validatePythonInstrumentationPair(pythonVersion, instrumentationVersion string) error {
+	entry, ok := instrumentation.GetCatalog().Get(instrumentationVersion)
+	if !ok {
+		// Should have been caught by validateInstrumentationVersion;
+		// defensive only.
+		return fmt.Errorf("%w: instrumentationVersion %q not in catalog", utils.ErrInvalidInput, instrumentationVersion)
+	}
+	for _, p := range entry.PythonVersions {
+		if p == pythonVersion {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: instrumentation %q does not support python %q (supports: %v)",
+		utils.ErrInvalidInput, instrumentationVersion, pythonVersion, entry.PythonVersions)
 }
 
 // persistInstrumentationConfig saves the instrumentation config to the database.
@@ -526,6 +637,7 @@ func (s *agentManagerService) persistInstrumentationConfig(ctx context.Context, 
 		return
 	}
 
+	defaultCORS := config.GetAgentWorkloadConfig().CORS
 	agentConfig := &models.AgentConfig{
 		OrgName:                   orgName,
 		ProjectName:               projectName,
@@ -534,6 +646,11 @@ func (s *agentManagerService) persistInstrumentationConfig(ctx context.Context, 
 		EnableAutoInstrumentation: enableAutoInstrumentation,
 		InstrumentationVersion:    instrumentationVersion,
 		EnableApiKeySecurity:      true,
+		CORSEnabled:               true,
+		CORSAllowOrigins:          strings.Split(defaultCORS.AllowOrigin, ","),
+		CORSAllowMethods:          strings.Split(defaultCORS.AllowMethods, ","),
+		CORSAllowHeaders:          strings.Split(defaultCORS.AllowHeaders, ","),
+		CORSAllowCredentials:      defaultCORS.AllowCredentials,
 	}
 
 	if err := s.agentConfigRepo.Upsert(agentConfig); err != nil {
@@ -675,11 +792,20 @@ func (s *agentManagerService) GetAgent(ctx context.Context, orgName string, proj
 		if lowestEnv != "" {
 			agentConfig, configErr := s.agentConfigRepo.Get(orgName, projectName, agentName, lowestEnv)
 			if errors.Is(configErr, repositories.ErrAgentConfigNotFound) {
-				// No config in DB - default both to true for display purposes
+				// No config in DB - use defaults for display purposes
 				defaultEnabled := true
+				defaultCORSEnabled := true
+				defCORS := config.GetAgentWorkloadConfig().CORS
 				agent.Configurations = &models.Configurations{
 					EnableAutoInstrumentation: &defaultEnabled,
 					EnableApiKeySecurity:      &defaultEnabled,
+					CorsConfig: &models.CorsConfig{
+						Enabled:          &defaultCORSEnabled,
+						AllowOrigin:      strings.Split(defCORS.AllowOrigin, ","),
+						AllowMethods:     strings.Split(defCORS.AllowMethods, ","),
+						AllowHeaders:     strings.Split(defCORS.AllowHeaders, ","),
+						AllowCredentials: &defCORS.AllowCredentials,
+					},
 				}
 			} else if configErr != nil {
 				s.logger.Warn("Failed to read agent config from database", "agentName", agentName, "environment", lowestEnv, "error", configErr)
@@ -688,6 +814,13 @@ func (s *agentManagerService) GetAgent(ctx context.Context, orgName string, proj
 					EnableAutoInstrumentation: &agentConfig.EnableAutoInstrumentation,
 					InstrumentationVersion:    agentConfig.InstrumentationVersion,
 					EnableApiKeySecurity:      &agentConfig.EnableApiKeySecurity,
+					CorsConfig: &models.CorsConfig{
+						Enabled:          &agentConfig.CORSEnabled,
+						AllowOrigin:      agentConfig.CORSAllowOrigins,
+						AllowMethods:     agentConfig.CORSAllowMethods,
+						AllowHeaders:     agentConfig.CORSAllowHeaders,
+						AllowCredentials: &agentConfig.CORSAllowCredentials,
+					},
 				}
 			}
 
@@ -750,9 +883,15 @@ func (s *agentManagerService) ListAgents(ctx context.Context, orgName string, pr
 }
 
 func (s *agentManagerService) CreateAgent(ctx context.Context, orgName string, projectName string, req *spec.CreateAgentRequest) error {
+	var requestedVersion *string
+	autoInstr := true
 	if req.Configurations != nil {
-		if v := req.Configurations.InstrumentationVersion.Get(); v != nil {
-			if err := s.validateInstrumentationVersion(*v); err != nil {
+		requestedVersion = req.Configurations.InstrumentationVersion.Get()
+		if req.Configurations.EnableAutoInstrumentation != nil {
+			autoInstr = *req.Configurations.EnableAutoInstrumentation
+		}
+		if requestedVersion != nil {
+			if err := s.validateInstrumentationVersion(*requestedVersion); err != nil {
 				return err
 			}
 		}
@@ -798,6 +937,20 @@ func (s *agentManagerService) CreateAgent(ctx context.Context, orgName string, p
 			}
 		}
 		imageID = kindVersion.ImageId
+	}
+
+	// Pair-check the python/instrumentation combo after any kind-based
+	// build replacement above, so we validate against the build that
+	// will actually be deployed (not the one in the original request,
+	// which is empty for kind-based agents). The check runs whenever
+	// the deploy will use this version: either the user pinned one
+	// (intent must stay consistent), or auto-instrumentation is on and
+	// the default will be injected (otherwise the init-container image
+	// won't exist).
+	if requestedVersion != nil || autoInstr {
+		if err := s.validateEffectivePythonInstrumentationPair(buildpackPythonVersion(req.Build), requestedVersion); err != nil {
+			return err
+		}
 	}
 	return s.createComponentAgent(ctx, orgName, projectName, req, imageID)
 }
@@ -1264,6 +1417,56 @@ func (s *agentManagerService) UpdateAgentBuildParameters(ctx context.Context, or
 	if req.Provisioning.Type != existingAgent.Provisioning.Type {
 		s.logger.Error("Cannot change provisioning type", "existingType", existingAgent.Provisioning.Type, "requestedType", req.Provisioning.Type)
 		return nil, fmt.Errorf("%w: provisioning type cannot be changed", utils.ErrImmutableFieldChange)
+	}
+
+	// Re-validate the python/instrumentation pair. The build params
+	// payload can flip the agent's Python version, and optionally
+	// override its pinned instrumentation, either of which would
+	// otherwise leave the deploy pointing at an init-container image
+	// tag that doesn't exist. The check is skipped when neither path
+	// will inject an init-container: no explicit pin in the request
+	// AND auto-instrumentation is off on the agent's effective config.
+	// Mirrors the gate in CreateAgent.
+	if py := buildpackPythonVersion(&req.Build); py != "" {
+		var requestedVersion *string
+		if req.Configurations != nil {
+			requestedVersion = req.Configurations.InstrumentationVersion.Get()
+			if requestedVersion != nil {
+				if err := s.validateInstrumentationVersion(*requestedVersion); err != nil {
+					return nil, err
+				}
+			}
+		}
+		// Resolve effective auto-instrumentation: request override if
+		// provided, otherwise the persisted value on the agent.
+		var autoInstr bool
+		if req.Configurations != nil && req.Configurations.EnableAutoInstrumentation != nil {
+			autoInstr = *req.Configurations.EnableAutoInstrumentation
+		} else {
+			persisted, lookupErr := s.lookupAgentAutoInstrumentation(ctx, orgName, projectName, agentName)
+			if lookupErr != nil {
+				return nil, lookupErr
+			}
+			autoInstr = persisted
+		}
+		if requestedVersion != nil || autoInstr {
+			// No new pin: validate against the agent's currently-pinned
+			// version (or the platform default if none).
+			if requestedVersion == nil {
+				pinned, lookupErr := s.lookupAgentInstrumentationVersion(ctx, orgName, projectName, agentName)
+				switch {
+				case errors.Is(lookupErr, ErrInstrumentationVersionNotPinned):
+					// Leave nil; helper resolves to catalog default.
+				case lookupErr != nil:
+					return nil, lookupErr
+				default:
+					requestedVersion = pinned
+				}
+			}
+			if err := s.validateEffectivePythonInstrumentationPair(py, requestedVersion); err != nil {
+				return nil, err
+			}
+		}
 	}
 
 	// Update agent build parameters in OpenChoreo
@@ -1975,6 +2178,52 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		enableApiKeySecurity = existingConfig.EnableApiKeySecurity
 	}
 
+	// Resolve CORS config: request > DB > env-var defaults.
+	defaultCORS := config.GetAgentWorkloadConfig().CORS
+	corsEnabled := true
+	corsAllowOrigins := strings.Split(defaultCORS.AllowOrigin, ",")
+	corsAllowMethods := strings.Split(defaultCORS.AllowMethods, ",")
+	corsAllowHeaders := strings.Split(defaultCORS.AllowHeaders, ",")
+	corsAllowCredentials := defaultCORS.AllowCredentials
+	if existingConfig != nil {
+		corsEnabled = existingConfig.CORSEnabled
+		if len(existingConfig.CORSAllowOrigins) > 0 {
+			corsAllowOrigins = existingConfig.CORSAllowOrigins
+		}
+		if len(existingConfig.CORSAllowMethods) > 0 {
+			corsAllowMethods = existingConfig.CORSAllowMethods
+		}
+		if len(existingConfig.CORSAllowHeaders) > 0 {
+			corsAllowHeaders = existingConfig.CORSAllowHeaders
+		}
+		corsAllowCredentials = existingConfig.CORSAllowCredentials
+	}
+	if req.HasCorsConfig() {
+		cc := req.GetCorsConfig()
+		if cc.Enabled != nil {
+			corsEnabled = *cc.Enabled
+		}
+		if len(cc.AllowOrigin) > 0 {
+			corsAllowOrigins = cc.AllowOrigin
+		}
+		if len(cc.AllowMethods) > 0 {
+			corsAllowMethods = cc.AllowMethods
+		}
+		if len(cc.AllowHeaders) > 0 {
+			corsAllowHeaders = cc.AllowHeaders
+		}
+		if cc.AllowCredentials != nil {
+			corsAllowCredentials = *cc.AllowCredentials
+		}
+	}
+	if corsAllowCredentials {
+		for _, origin := range corsAllowOrigins {
+			if origin == "*" {
+				return "", fmt.Errorf("corsConfig.allowCredentials cannot be true when allowOrigin contains \"*\"")
+			}
+		}
+	}
+
 	var existingInstrumentationVersion *string
 	if existingConfig != nil {
 		existingInstrumentationVersion = existingConfig.InstrumentationVersion
@@ -2097,13 +2346,11 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		} else {
 			traitOpts = append(traitOpts, client.WithUpstreamBasePath(config.GetConfig().DefaultChatAPI.DefaultBasePath))
 		}
-		corsConfig := config.GetAgentWorkloadConfig().CORS
-		policies := []map[string]interface{}{
-			client.CORSPolicy(
-				strings.Split(corsConfig.AllowOrigin, ","),
-				strings.Split(corsConfig.AllowMethods, ","),
-				strings.Split(corsConfig.AllowHeaders, ","),
-			),
+		// CORS must be first so preflight OPTIONS requests are handled before
+		// any auth policy runs. api-key-auth is always appended after.
+		var policies []map[string]interface{}
+		if corsEnabled {
+			policies = append(policies, client.CORSPolicy(corsAllowOrigins, corsAllowMethods, corsAllowHeaders, corsAllowCredentials))
 		}
 		if enableApiKeySecurity {
 			policies = append(policies, client.APIKeyAuthPolicy())
@@ -2151,6 +2398,11 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 			EnableAutoInstrumentation: enableAutoInstrumentation,
 			InstrumentationVersion:    existingInstrumentationVersion,
 			EnableApiKeySecurity:      enableApiKeySecurity,
+			CORSEnabled:               corsEnabled,
+			CORSAllowOrigins:          corsAllowOrigins,
+			CORSAllowMethods:          corsAllowMethods,
+			CORSAllowHeaders:          corsAllowHeaders,
+			CORSAllowCredentials:      corsAllowCredentials,
 		}
 		if configErr := s.agentConfigRepo.Upsert(agentConfig); configErr != nil {
 			s.logger.Error("Failed to persist instrumentation config to database", "agentName", agentName, "environment", lowestEnv, "error", configErr)

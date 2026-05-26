@@ -31,6 +31,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
+	"github.com/wso2/agent-manager/agent-manager-service/eventhub"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
@@ -63,6 +64,7 @@ type AppParams struct {
 	MonitorScoresPublisherController controllers.MonitorScoresPublisherController
 	EvaluatorController              controllers.EvaluatorController
 	CatalogController                controllers.CatalogController
+	AgentBuildOptionsController      controllers.AgentBuildOptionsController
 	AgentConfigurationController     controllers.AgentConfigurationController
 	GitSecretController              controllers.GitSecretController
 	IdentityController               controllers.IdentityController
@@ -80,6 +82,9 @@ type AppParams struct {
 
 	// WebSocket
 	WebSocketManager *websocket.Manager
+
+	// EventHub for cross-instance gateway event delivery
+	EventHub eventhub.EventHub
 
 	// Database
 	DB *gorm.DB

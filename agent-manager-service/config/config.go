@@ -168,9 +168,10 @@ type AgentWorkload struct {
 }
 
 type CORSConfig struct {
-	AllowOrigin  string
-	AllowMethods string
-	AllowHeaders string
+	AllowOrigin      string
+	AllowMethods     string
+	AllowHeaders     string
+	AllowCredentials bool
 }
 
 // OTELConfig holds all OpenTelemetry related configuration
@@ -182,12 +183,14 @@ type OTELConfig struct {
 	// DefaultInstrumentationVersion is the AMP instrumentation version used for an
 	// agent that has not selected one; it resolves to the pre-built
 	// amp-python-instrumentation-provider:<version>-python<X.Y> init-container image.
+	// Validated at app startup against the assembled instrumentation catalog.
 	DefaultInstrumentationVersion string
 
-	// SupportedInstrumentationVersions is the set of AMP instrumentation versions an
-	// agent may pin to. The default must be in this set. Requests setting a value
-	// outside the set are rejected.
-	SupportedInstrumentationVersions []string
+	// InstrumentationExtensionPath is the on-disk YAML file holding
+	// operator-supplied catalog extension entries; consumed by
+	// instrumentation.Load. An empty value or missing file is treated as
+	// no extension (baseline-only catalog).
+	InstrumentationExtensionPath string
 
 	// Tracing configuration
 	IsTraceContentEnabled bool
