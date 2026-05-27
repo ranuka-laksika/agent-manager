@@ -97,3 +97,49 @@ def emission(session, cell):
             "ANTHROPIC_API_KEY": anthropic_key,
         },
     )
+
+
+@nox.session(python=False)
+def report(session):
+    """Aggregate per-cell reports into a summary + triage page set."""
+    from harness.aggregator import build_summary
+    from harness.manifest import load_manifest
+    from harness.triage import build_diff_markdown
+
+    reports = HERE / "reports"
+    cells_dir = reports / "cells"
+    diffs_dir = reports / "diffs"
+    diffs_dir.mkdir(parents=True, exist_ok=True)
+
+    if not cells_dir.exists():
+        session.error(
+            f"no per-cell reports under {cells_dir}; run `nox -s emission` first"
+        )
+
+    m = load_manifest(HERE / "matrix.yaml")
+    default_id = (
+        f"{m.default_cell.provider}-{m.default_cell.provider_version}-"
+        f"{m.default_cell.framework}-{m.default_cell.framework_version}-"
+        f"py{m.default_cell.python}"
+    )
+
+    summary = build_summary(cells_dir, default_cell_id=default_id)
+    (reports / "summary.md").write_text(summary)
+
+    for f in cells_dir.glob("*.json"):
+        r = json.loads(f.read_text())
+        if r["result"] != "fail":
+            continue
+        # Generic required-set covers the high-signal LLM keys most cells
+        # carry; richer per-kind diffs are a follow-up.
+        diff = build_diff_markdown(
+            r,
+            schema_required=[
+                "gen_ai.system",
+                "gen_ai.request.model",
+                "traceloop.span.kind",
+            ],
+        )
+        (diffs_dir / f"{r['cellId']}.diff.md").write_text(diff)
+
+    session.log(f"summary written to {reports / 'summary.md'}")
