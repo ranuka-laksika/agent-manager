@@ -18,6 +18,8 @@ log_success() { echo -e "${GREEN}[SUCCESS]${NC} ✓ $1" >&2; }
 log_warning() { echo -e "${YELLOW}[WARNING]${NC} ⚠ $1" >&2; }
 log_error()   { echo -e "${RED}[ERROR]${NC} ✗ $1" >&2; }
 
+command -v jq >/dev/null 2>&1 || { log_error "jq is required but not installed"; exit 1; }
+
 # ---------------------------------------------------------------------------
 # Get a system-scoped token
 # ---------------------------------------------------------------------------
@@ -27,7 +29,7 @@ TOKEN_RESPONSE=$(curl -s -X POST "$THUNDER_URL/oauth2/token" \
   -u "$CLIENT_ID:$CLIENT_SECRET" \
   -d "grant_type=client_credentials&scope=system")
 
-TOKEN=$(echo "$TOKEN_RESPONSE" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
 if [[ -z "$TOKEN" ]]; then
   log_error "Failed to obtain system token. Response: $TOKEN_RESPONSE"
   exit 1
@@ -60,7 +62,7 @@ create_or_get_rs() {
   http_code="${response: -3}"; body="${response%???}"
 
   if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]]; then
-    id=$(echo "$body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    id=$(echo "$body" | jq -r '.id')
     log_success "Resource server '${identifier}' created (id: $id)"
     echo "$id"; return 0
   fi
@@ -70,7 +72,7 @@ create_or_get_rs() {
     response=$(api_call GET "/resource-servers")
     http_code="${response: -3}"; body="${response%???}"
     [[ "$http_code" != "200" ]] && { log_error "Failed to list resource servers (HTTP $http_code)"; exit 1; }
-    id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"identifier\":\"${identifier}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    id=$(echo "$body" | jq -r --arg ident "$identifier" '.resourceServers[] | select(.identifier == $ident) | .id')
     [[ -z "$id" ]] && { log_error "Resource server '${identifier}' not found after 409"; exit 1; }
     log_success "Found existing resource server '${identifier}' (id: $id)"
     echo "$id"; return 0
@@ -96,7 +98,7 @@ create_or_get_resource() {
   http_code="${response: -3}"; body="${response%???}"
 
   if [[ "$http_code" == "201" ]] || [[ "$http_code" == "200" ]]; then
-    id=$(echo "$body" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    id=$(echo "$body" | jq -r '.id')
     echo "$id"; return 0
   fi
 
@@ -105,7 +107,7 @@ create_or_get_resource() {
     response=$(api_call GET "${list_url}")
     http_code="${response: -3}"; body="${response%???}"
     [[ "$http_code" != "200" ]] && { log_error "Failed to list resources (HTTP $http_code)"; exit 1; }
-    id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"handle\":\"${handle}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    id=$(echo "$body" | jq -r --arg h "$handle" '.resources[] | select(.handle == $h) | .id')
     [[ -z "$id" ]] && { log_error "Resource '${handle}' not found after 409"; exit 1; }
     log_success "Found existing resource '${handle}' (id: $id)"
     echo "$id"; return 0
@@ -141,7 +143,7 @@ if [[ "$OU_HTTP" != "200" ]]; then
   log_error "Failed to fetch default OU (HTTP $OU_HTTP): $OU_BODY"
   exit 1
 fi
-DEFAULT_OU_ID=$(echo "$OU_BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+DEFAULT_OU_ID=$(echo "$OU_BODY" | jq -r '.id')
 if [[ -z "$DEFAULT_OU_ID" ]]; then
   log_error "Could not extract default OU ID from response"
   exit 1

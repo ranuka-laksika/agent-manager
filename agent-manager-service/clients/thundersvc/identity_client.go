@@ -19,13 +19,13 @@ package thundersvc
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // IdentityClient provides user, group, and role management operations via the Thunder API.
@@ -37,6 +37,7 @@ type IdentityClient interface {
 	UpdateUser(ctx context.Context, userID string, req UpdateUserRequest) (*ThunderUser, error)
 	DeleteUser(ctx context.Context, userID string) error
 	GetUserGroups(ctx context.Context, userID string) ([]ThunderGroup, error)
+	GetUserRoles(ctx context.Context, userID string) ([]ThunderRole, error)
 	InviteUser(ctx context.Context, email string) (string, error)
 
 	// Groups
@@ -66,7 +67,7 @@ type IdentityClient interface {
 	ListAMPPermissions(ctx context.Context) ([]ThunderPermission, string, error)
 
 	// Organization units
-	GetRootOUID(ctx context.Context) (string, error)
+	GetOUIDByHandle(ctx context.Context, handle string) (string, error)
 }
 
 // NewIdentityClient creates a Thunder client for identity management operations.
@@ -169,8 +170,15 @@ func (c *thunderClient) GetUserGroups(ctx context.Context, userID string) ([]Thu
 	if err != nil {
 		return nil, fmt.Errorf("thunder get user groups: %w", err)
 	}
-	var groups []ThunderGroup
-	if err := json.Unmarshal(body, &groups); err == nil {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("thunder get user groups: empty response")
+	}
+	if trimmed[0] == '[' {
+		var groups []ThunderGroup
+		if err := json.Unmarshal(body, &groups); err != nil {
+			return nil, fmt.Errorf("thunder get user groups decode: %w", err)
+		}
 		return groups, nil
 	}
 	var wrapped thunderGroupList
@@ -319,6 +327,26 @@ func (c *thunderClient) GetGroupMembers(ctx context.Context, groupID string, off
 	return users, resp.TotalResults, nil
 }
 
+// listRoleAssignmentEntries fetches only the raw {type, id} assignment entries for a role
+// without expanding each entry into a full user or group object. Use this when you only
+// need to check membership rather than display full objects — it is O(1) per role instead
+// of O(assignments) like GetRoleAssignments.
+func (c *thunderClient) listRoleAssignmentEntries(ctx context.Context, roleID string) ([]AssignmentEntry, error) {
+	token, err := c.getSystemToken(ctx)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/roles/"+roleID+"/assignments", token, nil)
+	if err != nil {
+		return nil, fmt.Errorf("thunder list role assignment entries: %w", err)
+	}
+	var resp thunderRoleAssignmentList
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("thunder list role assignment entries decode: %w", err)
+	}
+	return resp.Assignments, nil
+}
+
 func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]ThunderRole, error) {
 	const pageSize = 50
 	var allRoles []ThunderRole
@@ -337,18 +365,50 @@ func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]Th
 
 	var groupRoles []ThunderRole
 	for _, role := range allRoles {
-		assignments, err := c.GetRoleAssignments(ctx, role.ID)
+		entries, err := c.listRoleAssignmentEntries(ctx, role.ID)
 		if err != nil {
 			return nil, fmt.Errorf("thunder get group roles (assignments for role %s): %w", role.ID, err)
 		}
-		for _, g := range assignments.Groups {
-			if g.ID == groupID {
+		for _, e := range entries {
+			if e.Type == "group" && e.ID == groupID {
 				groupRoles = append(groupRoles, role)
 				break
 			}
 		}
 	}
 	return groupRoles, nil
+}
+
+func (c *thunderClient) GetUserRoles(ctx context.Context, userID string) ([]ThunderRole, error) {
+	const pageSize = 50
+	var allRoles []ThunderRole
+	offset := 0
+	for {
+		page, total, err := c.ListRoles(ctx, offset, pageSize)
+		if err != nil {
+			return nil, fmt.Errorf("thunder get user roles (list): %w", err)
+		}
+		allRoles = append(allRoles, page...)
+		offset += len(page)
+		if offset >= total || len(page) == 0 {
+			break
+		}
+	}
+
+	var userRoles []ThunderRole
+	for _, role := range allRoles {
+		entries, err := c.listRoleAssignmentEntries(ctx, role.ID)
+		if err != nil {
+			return nil, fmt.Errorf("thunder get user roles (assignments for role %s): %w", role.ID, err)
+		}
+		for _, e := range entries {
+			if e.Type == "user" && e.ID == userID {
+				userRoles = append(userRoles, role)
+				break
+			}
+		}
+	}
+	return userRoles, nil
 }
 
 // --- Roles ---
@@ -459,14 +519,6 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 			}
 			result.Groups = append(result.Groups, *group)
 		}
-	}
-
-	role, err := c.GetRole(ctx, roleID)
-	if err != nil {
-		return nil, fmt.Errorf("thunder get role for permissions %s: %w", roleID, err)
-	}
-	for _, rp := range role.Permissions {
-		result.Permissions = append(result.Permissions, rp.Permissions...)
 	}
 
 	return result, nil
@@ -587,26 +639,31 @@ func (c *thunderClient) ListAMPPermissions(ctx context.Context) ([]ThunderPermis
 		return nil, "", err
 	}
 
-	// Fetch resource servers and find the "amp" one
-	rsBody, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/resource-servers?offset=0&limit=20", token, nil)
-	if err != nil {
-		return nil, "", fmt.Errorf("thunder list resource servers: %w", err)
-	}
-
-	var rsList thunderResourceServerList
-	if err := json.Unmarshal(rsBody, &rsList); err != nil {
-		// Try direct array
-		var rsArr []ThunderResourceServer
-		if err2 := json.Unmarshal(rsBody, &rsArr); err2 != nil {
+	// Paginate through resource servers to find the "amp" one.
+	const rsPageSize = 20
+	var ampRSID string
+	rsOffset := 0
+	for {
+		rsURL := fmt.Sprintf("%s/resource-servers?offset=%d&limit=%d", c.baseURL, rsOffset, rsPageSize)
+		rsBody, err := c.doRequest(ctx, http.MethodGet, rsURL, token, nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("thunder list resource servers: %w", err)
+		}
+		var page thunderResourceServerList
+		if err := json.Unmarshal(rsBody, &page); err != nil {
 			return nil, "", fmt.Errorf("thunder list resource servers decode: %w", err)
 		}
-		rsList.ResourceServers = rsArr
-	}
-
-	var ampRSID string
-	for _, rs := range rsList.ResourceServers {
-		if rs.Identifier == "amp" {
-			ampRSID = rs.ID
+		for _, rs := range page.ResourceServers {
+			if rs.Identifier == rbac.ResourceServer {
+				ampRSID = rs.ID
+				break
+			}
+		}
+		if ampRSID != "" {
+			break
+		}
+		rsOffset += len(page.ResourceServers)
+		if rsOffset >= page.Total || len(page.ResourceServers) == 0 {
 			break
 		}
 	}
@@ -830,30 +887,25 @@ func IsNotFound(err error) bool {
 	return errors.As(err, &nfe)
 }
 
-// GetRootOUID extracts the ouId claim from the system token JWT.
-// The system app is registered in a specific Thunder OU; that OU is the correct
-// target for all identity provisioning operations.
-func (c *thunderClient) GetRootOUID(ctx context.Context) (string, error) {
+// GetOUIDByHandle returns the Thunder OU ID for the given org handle by calling
+// GET /organization-units/tree/{handle}. The result should be cached by callers.
+func (c *thunderClient) GetOUIDByHandle(ctx context.Context, handle string) (string, error) {
 	token, err := c.getSystemToken(ctx)
 	if err != nil {
 		return "", err
 	}
-	parts := strings.Split(token, ".")
-	if len(parts) != 3 {
-		return "", fmt.Errorf("thunder system token is not a valid JWT")
-	}
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	body, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/organization-units/tree/"+handle, token, nil)
 	if err != nil {
-		return "", fmt.Errorf("thunder system token payload decode: %w", err)
+		return "", fmt.Errorf("thunder get ou by handle %q: %w", handle, err)
 	}
-	var claims struct {
-		OuID string `json:"ouId"`
+	var ou struct {
+		ID string `json:"id"`
 	}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return "", fmt.Errorf("thunder system token claims decode: %w", err)
+	if err := json.Unmarshal(body, &ou); err != nil {
+		return "", fmt.Errorf("thunder get ou by handle %q decode: %w", handle, err)
 	}
-	if claims.OuID == "" {
-		return "", fmt.Errorf("thunder system token missing ouId claim")
+	if ou.ID == "" {
+		return "", fmt.Errorf("thunder ou with handle %q returned no id", handle)
 	}
-	return claims.OuID, nil
+	return ou.ID, nil
 }

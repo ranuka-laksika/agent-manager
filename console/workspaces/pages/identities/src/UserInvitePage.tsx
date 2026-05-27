@@ -167,7 +167,10 @@ export const UserInvitePage: React.FC = () => {
               </Box>
 
               <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button variant="outlined" onClick={() => { setInviteLink(undefined); setEmail(""); }}>
+                <Button
+                  variant="outlined"
+                  onClick={() => { setInviteLink(undefined); setEmail(""); }}
+                >
                   Invite Another
                 </Button>
                 <Button variant="contained" onClick={() => navigate(usersPath)}>

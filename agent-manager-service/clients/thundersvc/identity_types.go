@@ -16,6 +16,8 @@
 
 package thundersvc
 
+import "encoding/json"
+
 // ThunderUser represents a user in Thunder.
 type ThunderUser struct {
 	ID         string            `json:"id"`
@@ -44,10 +46,29 @@ type ThunderGroupRef struct {
 }
 
 // CreateUserRequest is the payload for POST /users.
+// Password is kept out of Attributes in memory to avoid accidental logging;
+// MarshalJSON injects it into the attributes map only when serializing for Thunder.
 type CreateUserRequest struct {
 	OuID       string            `json:"ouId,omitempty"`
 	Type       string            `json:"type"`
 	Attributes map[string]string `json:"attributes"`
+	Password   string            `json:"-"`
+}
+
+func (r CreateUserRequest) MarshalJSON() ([]byte, error) {
+	attrs := make(map[string]string, len(r.Attributes)+1)
+	for k, v := range r.Attributes {
+		attrs[k] = v
+	}
+	if r.Password != "" {
+		attrs["password"] = r.Password
+	}
+	type wire struct {
+		OuID       string            `json:"ouId,omitempty"`
+		Type       string            `json:"type"`
+		Attributes map[string]string `json:"attributes"`
+	}
+	return json.Marshal(wire{OuID: r.OuID, Type: r.Type, Attributes: attrs})
 }
 
 // UpdateUserRequest is the payload for PUT /users/{id}.
@@ -122,9 +143,8 @@ type thunderRolePermissionsUpdateBody struct {
 
 // RoleAssignments represents the current assignments on a role.
 type RoleAssignments struct {
-	Permissions []string       `json:"permissions,omitempty"`
-	Users       []ThunderUser  `json:"users,omitempty"`
-	Groups      []ThunderGroup `json:"groups,omitempty"`
+	Users  []ThunderUser  `json:"users,omitempty"`
+	Groups []ThunderGroup `json:"groups,omitempty"`
 }
 
 // RolePermissionRequest is a single resource-server permissions entry.

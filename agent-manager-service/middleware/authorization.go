@@ -17,6 +17,7 @@
 package middleware
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
@@ -24,6 +25,27 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
+
+// ResolverError is returned by a PermissionResolver to signal an expected failure
+// with a specific HTTP status code and message. Use NewResolverInputError for bad
+// request data (400) and NewResolverForbiddenError for explicit deny (403).
+// Any other error type from a resolver is treated as an internal failure (500).
+type ResolverError struct {
+	StatusCode int
+	Message    string
+}
+
+func (e *ResolverError) Error() string { return e.Message }
+
+// NewResolverInputError returns a ResolverError that maps to 400 Bad Request.
+func NewResolverInputError(msg string) *ResolverError {
+	return &ResolverError{StatusCode: http.StatusBadRequest, Message: msg}
+}
+
+// NewResolverForbiddenError returns a ResolverError that maps to 403 Forbidden.
+func NewResolverForbiddenError(msg string) *ResolverError {
+	return &ResolverError{StatusCode: http.StatusForbidden, Message: msg}
+}
 
 // RequirePermission returns a middleware that checks the request token carries the
 // required amp: scope. When RBAC_ENABLED=false the check is skipped entirely,
@@ -67,7 +89,9 @@ func RequireAnyPermission(perms ...rbac.Permission) func(http.HandlerFunc) http.
 }
 
 // PermissionResolver resolves the required permission at request time.
-// Returning an error causes the request to be rejected with 403.
+// Return *ResolverError to signal expected failures with a specific status code
+// (use NewResolverInputError for 400, NewResolverForbiddenError for 403).
+// Any other error is treated as an internal failure and results in a 500 response.
 type PermissionResolver func(r *http.Request) (rbac.Permission, error)
 
 // RequireDynamicPermission returns a middleware that resolves the required permission
@@ -82,7 +106,12 @@ func RequireDynamicPermission(resolver PermissionResolver) func(http.HandlerFunc
 			}
 			perm, err := resolver(r)
 			if err != nil {
-				utils.WriteErrorResponse(w, http.StatusForbidden, "insufficient permissions")
+				var re *ResolverError
+				if errors.As(err, &re) {
+					utils.WriteErrorResponse(w, re.StatusCode, re.Message)
+				} else {
+					utils.WriteErrorResponse(w, http.StatusInternalServerError, "internal error resolving permission")
+				}
 				return
 			}
 			if !jwtassertion.HasAllScopes(r.Context(), []string{perm.Scope()}) {

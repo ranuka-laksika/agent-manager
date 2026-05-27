@@ -33,6 +33,7 @@ func registerIdentityRoutes(mux *http.ServeMux, ctrl controllers.IdentityControl
 	middleware.HandleFuncWithValidationAndAuthz(mux, "PUT /orgs/{orgName}/identities/users/{userID}", rbac.OrgInviteMember, ctrl.UpdateUser)
 	middleware.HandleFuncWithValidationAndAuthz(mux, "DELETE /orgs/{orgName}/identities/users/{userID}", rbac.OrgRemoveMember, ctrl.DeleteUser)
 	middleware.HandleFuncWithValidationAndAnyAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}/groups", ctrl.GetUserGroups, rbac.OrgInviteMember, rbac.OrgRemoveMember)
+	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/users/{userID}/roles", rbac.RoleRead, ctrl.GetUserRoles)
 
 	// Groups
 	middleware.HandleFuncWithValidationAndAuthz(mux, "GET /orgs/{orgName}/identities/groups", rbac.GroupRead, ctrl.ListGroups)

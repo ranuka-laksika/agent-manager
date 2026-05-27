@@ -136,6 +136,19 @@ export async function getUserGroups(
   return res.json();
 }
 
+export async function getUserRoles(
+  params: UserPathParams,
+  getToken?: () => Promise<string>,
+): Promise<{ roles: ThunderRole[] }> {
+  const { orgName = "default", userId } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(
+    `${orgBase(orgName)}/users/${encodeURIComponent(userId)}/roles`, { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
 // --- Groups ---
 
 export async function listGroups(

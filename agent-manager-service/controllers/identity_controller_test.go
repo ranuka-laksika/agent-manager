@@ -27,7 +27,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 )
 
-// ouIDStub is a minimal IdentityClient stub that only overrides GetRootOUID.
+// ouIDStub is a minimal IdentityClient stub that only overrides GetOUIDByHandle.
 // All other interface methods are provided by the embedded nil interface and
 // must not be called during these tests.
 type ouIDStub struct {
@@ -40,13 +40,13 @@ type ouIDStub struct {
 	callCount int
 }
 
-func (s *ouIDStub) GetRootOUID(_ context.Context) (string, error) {
+func (s *ouIDStub) GetOUIDByHandle(_ context.Context, _ string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	i := s.callCount
 	s.callCount++
 	if i >= len(s.results) {
-		return "", errors.New("unexpected GetRootOUID call")
+		return "", errors.New("unexpected GetOUIDByHandle call")
 	}
 	r := s.results[i]
 	return r.id, r.err
@@ -70,24 +70,24 @@ func TestResolveOuID_FailureThenSuccess(t *testing.T) {
 	ctrl := &identityController{client: stub}
 
 	// First call: Thunder fails — error returned, nothing cached.
-	_, err := ctrl.resolveOuID(newRequest())
+	_, err := ctrl.resolveOuID(newRequest(), "default")
 	if err == nil {
 		t.Fatal("expected error on first call, got nil")
 	}
-	if ctrl.rootOUID != "" {
-		t.Fatalf("rootOUID should not be cached after failure, got %q", ctrl.rootOUID)
+	if ctrl.ouIDByOrg["default"] != "" {
+		t.Fatalf("ouIDByOrg should not be cached after failure, got %q", ctrl.ouIDByOrg["default"])
 	}
 
 	// Second call: Thunder succeeds — ID cached, no error.
-	id, err := ctrl.resolveOuID(newRequest())
+	id, err := ctrl.resolveOuID(newRequest(), "default")
 	if err != nil {
 		t.Fatalf("expected no error on second call, got %v", err)
 	}
 	if id != "root-ou-123" {
 		t.Fatalf("expected %q, got %q", "root-ou-123", id)
 	}
-	if ctrl.rootOUID != "root-ou-123" {
-		t.Fatalf("rootOUID should be cached after success, got %q", ctrl.rootOUID)
+	if ctrl.ouIDByOrg["default"] != "root-ou-123" {
+		t.Fatalf("ouIDByOrg should be cached after success, got %q", ctrl.ouIDByOrg["default"])
 	}
 	if stub.callCount != 2 {
 		t.Fatalf("expected 2 Thunder calls, got %d", stub.callCount)
@@ -106,7 +106,7 @@ func TestResolveOuID_CachesSuccessAfterFirstCall(t *testing.T) {
 	ctrl := &identityController{client: stub}
 
 	for i := range 5 {
-		id, err := ctrl.resolveOuID(newRequest())
+		id, err := ctrl.resolveOuID(newRequest(), "default")
 		if err != nil {
 			t.Fatalf("call %d: unexpected error: %v", i, err)
 		}
@@ -151,7 +151,7 @@ func TestResolveOuID_ConcurrentFailureThenSuccess(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			id, err := ctrl.resolveOuID(newRequest())
+			id, err := ctrl.resolveOuID(newRequest(), "default")
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -166,20 +166,20 @@ func TestResolveOuID_ConcurrentFailureThenSuccess(t *testing.T) {
 	// After failures, explicitly call until success (bounded to avoid CI hangs).
 	const maxRetries = 30
 	for i := range maxRetries {
-		if ctrl.rootOUID != "" {
+		if ctrl.ouIDByOrg["default"] != "" {
 			break
 		}
-		if _, err := ctrl.resolveOuID(newRequest()); err != nil && i == maxRetries-1 {
-			t.Fatalf("rootOUID not set after %d retries; last error: %v", maxRetries, err)
+		if _, err := ctrl.resolveOuID(newRequest(), "default"); err != nil && i == maxRetries-1 {
+			t.Fatalf("ouIDByOrg not set after %d retries; last error: %v", maxRetries, err)
 		}
 	}
-	if ctrl.rootOUID == "" {
-		t.Fatalf("rootOUID not set after %d retries", maxRetries)
+	if ctrl.ouIDByOrg["default"] == "" {
+		t.Fatalf("ouIDByOrg not set after %d retries", maxRetries)
 	}
 
 	// After a success is cached, all further calls return the cached value.
 	for i := range 5 {
-		id, err := ctrl.resolveOuID(newRequest())
+		id, err := ctrl.resolveOuID(newRequest(), "default")
 		if err != nil {
 			t.Fatalf("post-cache call %d: unexpected error: %v", i, err)
 		}

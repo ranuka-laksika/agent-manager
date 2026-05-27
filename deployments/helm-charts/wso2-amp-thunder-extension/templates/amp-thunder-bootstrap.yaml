@@ -19,6 +19,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -30,7 +31,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -125,6 +126,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     # Get the default OU ID
     RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
@@ -134,7 +136,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -277,6 +279,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampConsoleClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -288,7 +291,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -341,6 +344,7 @@ data:
             "tokenEndpointAuthMethod": "{{ .Values.thunder.bootstrap.ampConsoleClient.tokenEndpointAuthMethod }}",
             "pkceRequired": {{ .Values.thunder.bootstrap.ampConsoleClient.pkceRequired }},
             "publicClient": {{ .Values.thunder.bootstrap.ampConsoleClient.publicClient }},
+            "scopes": {{ .Values.thunder.bootstrap.ampScopes | toJson }},
             "token": {
               "accessToken": {
                 "validityPeriod": {{ .Values.thunder.bootstrap.ampConsoleClient.accessTokenValidityPeriod }},
@@ -390,6 +394,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -401,7 +406,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -477,6 +482,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -488,7 +494,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -564,6 +570,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -575,7 +582,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -669,6 +676,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -680,7 +688,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -820,6 +828,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.amCliClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -831,7 +840,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -884,6 +893,7 @@ data:
             "tokenEndpointAuthMethod": "{{ .Values.thunder.bootstrap.amCliClient.tokenEndpointAuthMethod }}",
             "pkceRequired": {{ .Values.thunder.bootstrap.amCliClient.pkceRequired }},
             "publicClient": {{ .Values.thunder.bootstrap.amCliClient.publicClient }},
+            "scopes": {{ .Values.thunder.bootstrap.ampScopes | toJson }},
             "token": {
               "accessToken": {
                 "validityPeriod": {{ .Values.thunder.bootstrap.amCliClient.accessTokenValidityPeriod }},
@@ -933,6 +943,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -944,7 +955,7 @@ data:
       echo "Response: $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default organization unit ID from response"
@@ -997,6 +1008,7 @@ data:
             "tokenEndpointAuthMethod": "{{  .Values.thunder.bootstrap.amMcpClient.tokenEndpointAuthMethod }}",
             "pkceRequired": {{  .Values.thunder.bootstrap.amMcpClient.pkceRequired }},
             "publicClient": {{  .Values.thunder.bootstrap.amMcpClient.publicClient }},
+            "scopes": {{ .Values.thunder.bootstrap.ampScopes | toJson }},
             "token": {
               "accessToken": {
                 "validityPeriod": {{  .Values.thunder.bootstrap.amMcpClient.accessTokenValidityPeriod }},
@@ -1045,6 +1057,7 @@ data:
 
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
+
 
     log_info "Registering Agent Manager (amp) as a Thunder resource server..."
 
@@ -1171,7 +1184,7 @@ data:
       log_error "Failed to fetch default OU (HTTP $HTTP_CODE): $BODY"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default OU ID from response"
       exit 1
@@ -1368,6 +1381,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Creating AMP default roles with permissions..."
 
     # ---------------------------------------------------------------------------
@@ -1380,7 +1394,7 @@ data:
       log_error "Failed to fetch default OU (HTTP $HTTP_CODE)"
       exit 1
     fi
-    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"handle":"default"[^}]*"id":"[^"]*"\|"id":"[^"]*"[^}]*"handle":"default"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    DEFAULT_OU_ID=$(echo "$BODY" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$DEFAULT_OU_ID" ]]; then
       log_error "Could not extract default OU ID"
       exit 1

@@ -25,6 +25,8 @@ import {
   CircularProgress,
   Divider,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -32,6 +34,7 @@ import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useGetUser,
   useGetUserGroups,
+  useGetUserRoles,
   useAllGroups,
   useAddGroupMembers,
   useRemoveGroupMembers,
@@ -39,9 +42,12 @@ import {
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
 
+type TabId = "groups" | "roles";
+
 export const UserEditPage: React.FC = () => {
   const { orgId, userId } = useParams<{ orgId: string; userId: string }>();
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<TabId>("groups");
 
   const { data: user, isLoading: isLoadingUser } = useGetUser({
     orgName: orgId,
@@ -49,6 +55,11 @@ export const UserEditPage: React.FC = () => {
   });
 
   const { data: userGroupsData, isLoading: isLoadingUserGroups } = useGetUserGroups({
+    orgName: orgId,
+    userId: userId ?? "",
+  });
+
+  const { data: userRolesData, isLoading: isLoadingUserRoles } = useGetUserRoles({
     orgName: orgId,
     userId: userId ?? "",
   });
@@ -121,7 +132,8 @@ export const UserEditPage: React.FC = () => {
     }
   };
 
-  const isLoading = isLoadingUser || isLoadingUserGroups || isLoadingAllGroups;
+  const isLoading =
+    isLoadingUser || isLoadingUserGroups || isLoadingAllGroups || isLoadingUserRoles;
 
   if (isLoading) {
     return (
@@ -132,6 +144,8 @@ export const UserEditPage: React.FC = () => {
       </PageLayout>
     );
   }
+
+  const userRoles = userRolesData?.roles ?? [];
 
   return (
     <PageLayout
@@ -144,63 +158,98 @@ export const UserEditPage: React.FC = () => {
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && <Alert severity="success">User updated successfully.</Alert>}
 
-        <Box>
-          <Typography variant="subtitle1" fontWeight={600} mb={1}>
-            Group Memberships
-          </Typography>
-          <Typography variant="body2" color="text.secondary" mb={2}>
-            Search and select groups to assign this user to.
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
+        <Tabs
+          value={activeTab}
+          onChange={(_e, newValue) => setActiveTab(newValue as TabId)}
+          sx={{ borderBottom: 1, borderColor: "divider" }}
+        >
+          <Tab label="Groups" value="groups" />
+          <Tab label="Roles" value="roles" />
+        </Tabs>
 
-          <Autocomplete
-            multiple
-            options={allGroups}
-            value={selectedGroups}
-            onChange={(_e, newValue) => {
-              hasEdited.current = true;
-              setSelectedGroups(newValue as ThunderGroup[]);
-            }}
-            getOptionLabel={(option) => (option as ThunderGroup).name}
-            isOptionEqualToValue={(option, value) =>
-              (option as ThunderGroup).id === (value as ThunderGroup).id
-            }
-            renderTags={() => null}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                placeholder="Search groups..."
-                label="Groups"
-              />
-            )}
-            noOptionsText="No groups found"
-          />
+        {activeTab === "groups" && (
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>
+              Group Memberships
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Search and select groups to assign this user to.
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
 
-          {selectedGroups.length > 0 && (
-            <Stack direction="row" flexWrap="wrap" gap={1} mt={1.5}>
-              {selectedGroups.map((group) => (
-                <Chip
-                  key={group.id}
-                  label={group.name}
-                  size="small"
-                  onDelete={() => {
-                    hasEdited.current = true;
-                    setSelectedGroups((prev) => prev.filter((g) => g.id !== group.id));
-                  }}
+            <Autocomplete
+              multiple
+              options={allGroups}
+              value={selectedGroups}
+              onChange={(_e, newValue) => {
+                hasEdited.current = true;
+                setSelectedGroups(newValue as ThunderGroup[]);
+              }}
+              getOptionLabel={(option) => (option as ThunderGroup).name}
+              isOptionEqualToValue={(option, value) =>
+                (option as ThunderGroup).id === (value as ThunderGroup).id
+              }
+              renderTags={() => null}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Search groups..."
+                  label="Groups"
                 />
-              ))}
-            </Stack>
-          )}
-        </Box>
+              )}
+              noOptionsText="No groups found"
+            />
 
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button variant="contained" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Changes"}
-          </Button>
-        </Stack>
+            {selectedGroups.length > 0 && (
+              <Stack direction="row" flexWrap="wrap" gap={1} mt={1.5}>
+                {selectedGroups.map((group) => (
+                  <Chip
+                    key={group.id}
+                    label={group.name}
+                    size="small"
+                    onDelete={() => {
+                      hasEdited.current = true;
+                      setSelectedGroups((prev) => prev.filter((g) => g.id !== group.id));
+                    }}
+                  />
+                ))}
+              </Stack>
+            )}
+
+            <Stack direction="row" spacing={1} justifyContent="flex-end" mt={3}>
+              <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button variant="contained" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? "Saving..." : "Save Changes"}
+              </Button>
+            </Stack>
+          </Box>
+        )}
+
+        {activeTab === "roles" && (
+          <Box>
+            <Typography variant="subtitle1" fontWeight={600} mb={1}>
+              Assigned Roles
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={2}>
+              Roles directly assigned to this user. To modify role assignments, use the Roles page.
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+
+            {userRoles.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                No roles assigned to this user.
+              </Typography>
+            ) : (
+              <Stack direction="row" flexWrap="wrap" gap={1}>
+                {userRoles.map((role) => (
+                  <Chip key={role.id} label={role.name} size="small" />
+                ))}
+              </Stack>
+            )}
+          </Box>
+        )}
       </Stack>
     </PageLayout>
   );

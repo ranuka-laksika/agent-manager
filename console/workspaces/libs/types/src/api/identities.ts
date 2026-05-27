@@ -88,6 +88,7 @@ export interface ThunderRole {
   id: string;
   name: string;
   description?: string;
+  permissions?: RolePermissionRequest[];
   createdAt?: string;
   updatedAt?: string;
 }

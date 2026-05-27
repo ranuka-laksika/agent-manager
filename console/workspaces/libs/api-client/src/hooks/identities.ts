@@ -18,7 +18,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  listUsers, getUser, createUser, inviteUser, updateUser, deleteUser, getUserGroups,
+  listUsers, getUser, createUser, inviteUser, updateUser, deleteUser, getUserGroups, getUserRoles,
   listGroups, getGroup, createGroup, updateGroup, deleteGroup,
   addGroupMembers, removeGroupMembers, getGroupMembers, getGroupRoles,
   listRoles, getRole, createRole, updateRole, deleteRole,
@@ -139,6 +139,15 @@ export function useGetUserGroups(params: UserPathParams) {
   return useApiQuery<{ groups: ThunderGroup[] }>({
     queryKey: ['identity-user-groups', params],
     queryFn: () => getUserGroups(params, getToken),
+    enabled: !!params.orgName && !!params.userId,
+  });
+}
+
+export function useGetUserRoles(params: UserPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<{ roles: ThunderRole[] }>({
+    queryKey: ['identity-user-roles', params],
+    queryFn: () => getUserRoles(params, getToken),
     enabled: !!params.orgName && !!params.userId,
   });
 }

@@ -113,8 +113,8 @@ export const RoleEditPage: React.FC = () => {
     [assignmentsData],
   );
   const initialPermissions: string[] = useMemo(
-    () => assignmentsData?.permissions ?? [],
-    [assignmentsData],
+    () => roleData?.permissions?.flatMap((rp) => rp.permissions) ?? [],
+    [roleData],
   );
 
   const allUsers: ThunderUser[] = useMemo(() => allUsersData?.users ?? [], [allUsersData]);
