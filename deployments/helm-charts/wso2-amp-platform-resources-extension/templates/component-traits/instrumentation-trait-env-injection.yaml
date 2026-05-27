@@ -16,13 +16,34 @@ spec:
         agentApiKey:
           type: string
           description: "API key for authenticating with the agent service"
+        envInjectionEnabled:
+          type: boolean
+          default: true
+          description: "Enable or disable env injection instrumentation"
       required:
         - otelEndpoint
         - agentApiKey
 
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        envInjectionEnabled:
+          type: boolean
+          default: true
+          description: "Enable or disable env injection instrumentation for this environment"
+        otelEndpoint:
+          type: string
+          description: "Environment-specific OpenTelemetry collector endpoint URL"
+        agentApiKey:
+          type: string
+          description: "Environment-specific API key for authenticating with the agent service"
+
   # Create Secret for the agent API key
   creates:
-    - template:
+    - includeWhen: |
+        ${has(environmentConfigs.envInjectionEnabled) ? environmentConfigs.envInjectionEnabled : parameters.envInjectionEnabled}
+      template:
         apiVersion: v1
         kind: Secret
         metadata:
@@ -30,11 +51,14 @@ spec:
           namespace: ${metadata.namespace}
         type: Opaque
         stringData:
-          api-key: ${parameters.agentApiKey}
+          api-key: |
+             ${has(environmentConfigs.agentApiKey) ? environmentConfigs.agentApiKey : parameters.agentApiKey}
 
   # Patches to modify the Deployment resource
   patches:
-    - target:
+    - includeWhen: |
+        ${has(environmentConfigs.envInjectionEnabled) ? environmentConfigs.envInjectionEnabled : parameters.envInjectionEnabled}
+      target:
         kind: Deployment
         group: apps
         version: v1
@@ -43,7 +67,7 @@ spec:
           path: /spec/template/spec/containers/0/env/-
           value:
             name: AMP_OTEL_ENDPOINT
-            value: "${parameters.otelEndpoint}"
+            value: "${has(environmentConfigs.otelEndpoint) ? environmentConfigs.otelEndpoint : parameters.otelEndpoint}"
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:

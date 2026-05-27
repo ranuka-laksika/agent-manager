@@ -181,8 +181,9 @@ func (c *environmentController) UpdateEnvironment(w http.ResponseWriter, r *http
 	}
 
 	internalReq := &models.UpdateEnvironmentRequest{
-		DisplayName: req.DisplayName,
-		Description: description,
+		DisplayName:  req.DisplayName,
+		Description:  description,
+		IsProduction: req.IsProduction,
 	}
 
 	env, err := c.environmentService.UpdateEnvironment(ctx, orgName, envID, internalReq)
@@ -258,13 +259,10 @@ func convertToSpecEnvironmentResponse(env *models.GatewayEnvironmentResponse) sp
 		DisplayName:      env.DisplayName,
 		DataplaneRef:     env.DataplaneRef,
 		DnsPrefix:        env.DNSPrefix,
+		Description:      &env.Description,
 		IsProduction:     env.IsProduction,
 		CreatedAt:        env.CreatedAt,
 		UpdatedAt:        env.UpdatedAt,
-	}
-
-	if env.Description != "" {
-		response.Description = &env.Description
 	}
 
 	return response

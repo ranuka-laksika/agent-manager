@@ -391,6 +391,372 @@ func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, co
 	return fmt.Errorf("failed to update release binding %s after %d retries: %w", bindingName, maxRetries, lastErr)
 }
 
+// UpdateReleaseBindingTraitConfigs updates the traitEnvironmentConfigs on a release binding
+// for the given component and environment.
+func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, namespaceName, componentName, environment string, traitConfigs map[string]interface{}) error {
+	// Find the release binding for the component and environment
+	listResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
+		Component: &componentName,
+		Limit:     &defaultListLimit,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list release bindings: %w", err)
+	}
+	if listResp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(listResp.StatusCode(), ErrorResponses{
+			JSON401: listResp.JSON401,
+			JSON403: listResp.JSON403,
+			JSON500: listResp.JSON500,
+		})
+	}
+	if listResp.JSON200 == nil || len(listResp.JSON200.Items) == 0 {
+		return nil
+	}
+
+	var bindingName string
+	for _, b := range listResp.JSON200.Items {
+		if b.Spec != nil && b.Spec.Environment == environment {
+			bindingName = b.Metadata.Name
+			break
+		}
+	}
+	if bindingName == "" {
+		return nil // No binding for this environment yet
+	}
+
+	// Get the binding to preserve resource version
+	getResp, err := c.ocClient.GetReleaseBindingWithResponse(ctx, namespaceName, bindingName)
+	if err != nil {
+		return fmt.Errorf("failed to get release binding: %w", err)
+	}
+	if getResp.StatusCode() != http.StatusOK || getResp.JSON200 == nil || getResp.JSON200.Spec == nil {
+		return fmt.Errorf("failed to get release binding %s", bindingName)
+	}
+
+	binding := getResp.JSON200
+	binding.Spec.TraitEnvironmentConfigs = &traitConfigs
+
+	updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, bindingName, *binding)
+	if err != nil {
+		return fmt.Errorf("failed to update release binding trait configs: %w", err)
+	}
+	if updateResp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
+			JSON401: updateResp.JSON401,
+			JSON403: updateResp.JSON403,
+			JSON404: updateResp.JSON404,
+			JSON500: updateResp.JSON500,
+		})
+	}
+
+	return nil
+}
+
+// PromoteComponent promotes a component from sourceEnvironment to targetEnvironment.
+// It finds the release name deployed in the source environment, then creates or updates
+// a release binding in the target environment using the naming convention {componentName}-{targetEnv}.
+func (c *openChoreoClient) PromoteComponent(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error {
+	// Step 1: List release bindings for the component to find the source release name
+	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
+		Component: &componentName,
+		Limit:     &defaultListLimit,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list release bindings: %w", err)
+	}
+	if bindingsResp.StatusCode() != http.StatusOK {
+		return handleErrorResponse(bindingsResp.StatusCode(), ErrorResponses{
+			JSON401: bindingsResp.JSON401,
+			JSON403: bindingsResp.JSON403,
+			JSON500: bindingsResp.JSON500,
+		})
+	}
+
+	// Step 2: Find the release name deployed in the source environment
+	var sourceReleaseName string
+	if bindingsResp.JSON200 != nil {
+		for _, b := range bindingsResp.JSON200.Items {
+			if b.Spec == nil {
+				continue
+			}
+			if b.Spec.Environment == sourceEnvironment {
+				if b.Spec.ReleaseName == nil || *b.Spec.ReleaseName == "" {
+					return fmt.Errorf("no release found in source environment %s", sourceEnvironment)
+				}
+				sourceReleaseName = *b.Spec.ReleaseName
+				break
+			}
+		}
+	}
+
+	if sourceReleaseName == "" {
+		return fmt.Errorf("no release binding found for component %s in source environment %s", componentName, sourceEnvironment)
+	}
+
+	// Step 3: Check if a release binding already exists in the target environment
+	// Release binding names follow the convention: {componentName}-{targetEnvironment}
+	targetBindingName := fmt.Sprintf("%s-%s", componentName, targetEnvironment)
+	getResp, err := c.ocClient.GetReleaseBindingWithResponse(ctx, namespaceName, targetBindingName)
+	if err != nil {
+		return fmt.Errorf("failed to check target release binding: %w", err)
+	}
+
+	// Build workload overrides if env/file overrides are provided
+	var workloadOverrides *gen.WorkloadOverrides
+	if len(envOverrides) > 0 || len(fileOverrides) > 0 {
+		container := &gen.ContainerOverride{}
+		if len(envOverrides) > 0 {
+			envVars := toGenEnvVars(envOverrides)
+			container.Env = &envVars
+		}
+		if len(fileOverrides) > 0 {
+			fileVars := toGenFileVars(fileOverrides)
+			container.Files = &fileVars
+		}
+		workloadOverrides = &gen.WorkloadOverrides{Container: container}
+	}
+
+	// Build trait environment configs if provided
+	var traitConfigs *map[string]interface{}
+	if len(traitEnvConfigs) > 0 {
+		traitConfigs = &traitEnvConfigs
+	}
+
+	// Step 4: Create or update the release binding in the target environment
+	if getResp.StatusCode() == http.StatusOK && getResp.JSON200 != nil && getResp.JSON200.Spec != nil {
+		// Update existing release binding with the new release name
+		binding := getResp.JSON200
+		binding.Spec.ReleaseName = &sourceReleaseName
+		activeState := gen.ReleaseBindingSpecStateActive
+		binding.Spec.State = &activeState
+		if workloadOverrides != nil {
+			binding.Spec.WorkloadOverrides = workloadOverrides
+		}
+		if traitConfigs != nil {
+			binding.Spec.TraitEnvironmentConfigs = traitConfigs
+		}
+
+		updateResp, err := c.ocClient.UpdateReleaseBindingWithResponse(ctx, namespaceName, targetBindingName, *binding)
+		if err != nil {
+			return fmt.Errorf("failed to update release binding in target environment: %w", err)
+		}
+		if updateResp.StatusCode() != http.StatusOK {
+			return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
+				JSON401: updateResp.JSON401,
+				JSON403: updateResp.JSON403,
+				JSON404: updateResp.JSON404,
+				JSON500: updateResp.JSON500,
+			})
+		}
+	} else {
+		// Create new release binding in target environment
+		activeState := gen.ReleaseBindingSpecStateActive
+		createBody := gen.CreateReleaseBindingJSONRequestBody{
+			Metadata: gen.ObjectMeta{
+				Name:      targetBindingName,
+				Namespace: &namespaceName,
+			},
+			Spec: &gen.ReleaseBindingSpec{
+				Environment:             targetEnvironment,
+				ReleaseName:             &sourceReleaseName,
+				State:                   &activeState,
+				WorkloadOverrides:       workloadOverrides,
+				TraitEnvironmentConfigs: traitConfigs,
+				Owner: struct {
+					ComponentName string `json:"componentName"`
+					ProjectName   string `json:"projectName"`
+				}{
+					ComponentName: componentName,
+					ProjectName:   projectName,
+				},
+			},
+		}
+
+		createResp, err := c.ocClient.CreateReleaseBindingWithResponse(ctx, namespaceName, createBody)
+		if err != nil {
+			return fmt.Errorf("failed to create release binding in target environment: %w", err)
+		}
+		if createResp.StatusCode() != http.StatusCreated {
+			return handleErrorResponse(createResp.StatusCode(), ErrorResponses{
+				JSON400: createResp.JSON400,
+				JSON401: createResp.JSON401,
+				JSON403: createResp.JSON403,
+				JSON500: createResp.JSON500,
+			})
+		}
+	}
+
+	return nil
+}
+
+// GetSourceEnvWorkloadOverrides returns the effective env vars and file mounts for the source
+// environment by merging the Workload CR (base) with the source release binding's WorkloadOverrides
+// (per-env overrides). When the same key exists in both, the binding override takes precedence.
+func (c *openChoreoClient) GetSourceEnvWorkloadOverrides(ctx context.Context, namespaceName, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error) {
+	// Build maps to hold the merged result; overrides win on key conflict.
+	envMap := make(map[string]EnvVar)
+	fileMap := make(map[string]FileVar)
+
+	// Step 1: Seed with base env vars from the Workload CR (apply to all environments).
+	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, namespaceName, &gen.ListWorkloadsParams{
+		Component: &componentName,
+		Limit:     &defaultListLimit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list workloads: %w", err)
+	}
+	if workloadResp.StatusCode() != http.StatusOK {
+		return nil, nil, handleErrorResponse(workloadResp.StatusCode(), ErrorResponses{
+			JSON401: workloadResp.JSON401,
+			JSON403: workloadResp.JSON403,
+			JSON500: workloadResp.JSON500,
+		})
+	}
+	if workloadResp.JSON200 != nil && len(workloadResp.JSON200.Items) > 0 {
+		wl := workloadResp.JSON200.Items[0]
+		if wl.Spec != nil && wl.Spec.Container != nil {
+			if wl.Spec.Container.Env != nil {
+				for _, e := range *wl.Spec.Container.Env {
+					envMap[e.Key] = genEnvVarToClient(e)
+				}
+			}
+			if wl.Spec.Container.Files != nil {
+				for _, f := range *wl.Spec.Container.Files {
+					fileMap[f.Key] = genFileVarToClient(f)
+				}
+			}
+		}
+	}
+
+	// Step 2: Apply per-env overrides from the source release binding (override wins).
+	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
+		Component: &componentName,
+		Limit:     &defaultListLimit,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list release bindings: %w", err)
+	}
+	if bindingsResp.StatusCode() != http.StatusOK {
+		return nil, nil, handleErrorResponse(bindingsResp.StatusCode(), ErrorResponses{
+			JSON401: bindingsResp.JSON401,
+			JSON403: bindingsResp.JSON403,
+			JSON500: bindingsResp.JSON500,
+		})
+	}
+	if bindingsResp.JSON200 != nil {
+		for _, b := range bindingsResp.JSON200.Items {
+			if b.Spec == nil || b.Spec.Environment != sourceEnvironment {
+				continue
+			}
+			if b.Spec.WorkloadOverrides != nil && b.Spec.WorkloadOverrides.Container != nil {
+				container := b.Spec.WorkloadOverrides.Container
+				if container.Env != nil {
+					for _, e := range *container.Env {
+						envMap[e.Key] = genEnvVarToClient(e)
+					}
+				}
+				if container.Files != nil {
+					for _, f := range *container.Files {
+						fileMap[f.Key] = genFileVarToClient(f)
+					}
+				}
+			}
+			break
+		}
+	}
+
+	// Convert maps to slices.
+	envVars := make([]EnvVar, 0, len(envMap))
+	for _, ev := range envMap {
+		envVars = append(envVars, ev)
+	}
+	fileVars := make([]FileVar, 0, len(fileMap))
+	for _, fv := range fileMap {
+		fileVars = append(fileVars, fv)
+	}
+	return envVars, fileVars, nil
+}
+
+// genEnvVarToClient converts a gen.EnvVar to the client EnvVar type.
+func genEnvVarToClient(e gen.EnvVar) EnvVar {
+	ev := EnvVar{Key: e.Key}
+	if e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil &&
+		e.ValueFrom.SecretKeyRef.Name != nil && e.ValueFrom.SecretKeyRef.Key != nil {
+		ev.ValueFrom = &EnvVarValueFrom{
+			SecretKeyRef: &SecretKeyRef{
+				Name: *e.ValueFrom.SecretKeyRef.Name,
+				Key:  *e.ValueFrom.SecretKeyRef.Key,
+			},
+		}
+	} else if e.Value != nil {
+		ev.Value = *e.Value
+	}
+	return ev
+}
+
+// genFileVarToClient converts a gen.FileVar to the client FileVar type.
+func genFileVarToClient(f gen.FileVar) FileVar {
+	fv := FileVar{Key: f.Key, MountPath: f.MountPath}
+	if f.ValueFrom != nil && f.ValueFrom.SecretKeyRef != nil &&
+		f.ValueFrom.SecretKeyRef.Name != nil && f.ValueFrom.SecretKeyRef.Key != nil {
+		fv.ValueFrom = &EnvVarValueFrom{
+			SecretKeyRef: &SecretKeyRef{
+				Name: *f.ValueFrom.SecretKeyRef.Name,
+				Key:  *f.ValueFrom.SecretKeyRef.Key,
+			},
+		}
+	} else if f.Value != nil {
+		fv.Value = *f.Value
+	}
+	return fv
+}
+
+// toGenEnvVars converts client EnvVar slice to gen EnvVar slice
+func toGenEnvVars(envVars []EnvVar) []gen.EnvVar {
+	result := make([]gen.EnvVar, len(envVars))
+	for i, env := range envVars {
+		genEnv := gen.EnvVar{Key: env.Key}
+		if env.ValueFrom != nil && env.ValueFrom.SecretKeyRef != nil {
+			secretName := env.ValueFrom.SecretKeyRef.Name
+			secretKey := env.ValueFrom.SecretKeyRef.Key
+			genEnv.ValueFrom = &gen.EnvVarValueFrom{
+				SecretKeyRef: &struct {
+					Key  *string `json:"key,omitempty"`
+					Name *string `json:"name,omitempty"`
+				}{Name: &secretName, Key: &secretKey},
+			}
+		} else {
+			v := env.Value
+			genEnv.Value = &v
+		}
+		result[i] = genEnv
+	}
+	return result
+}
+
+// toGenFileVars converts client FileVar slice to gen FileVar slice
+func toGenFileVars(fileVars []FileVar) []gen.FileVar {
+	result := make([]gen.FileVar, len(fileVars))
+	for i, f := range fileVars {
+		genFile := gen.FileVar{Key: f.Key, MountPath: f.MountPath}
+		if f.ValueFrom != nil && f.ValueFrom.SecretKeyRef != nil {
+			secretName := f.ValueFrom.SecretKeyRef.Name
+			secretKey := f.ValueFrom.SecretKeyRef.Key
+			genFile.ValueFrom = &gen.EnvVarValueFrom{
+				SecretKeyRef: &struct {
+					Key  *string `json:"key,omitempty"`
+					Name *string `json:"name,omitempty"`
+				}{Name: &secretName, Key: &secretKey},
+			}
+		} else {
+			v := f.Value
+			genFile.Value = &v
+		}
+		result[i] = genFile
+	}
+	return result
+}
+
 func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error) {
 	// Get the deployment pipeline for environment ordering
 	pipeline, err := c.GetProjectDeploymentPipeline(ctx, orgName, projectName)

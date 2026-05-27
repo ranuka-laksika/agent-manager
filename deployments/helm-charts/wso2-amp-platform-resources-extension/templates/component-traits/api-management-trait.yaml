@@ -63,6 +63,18 @@ spec:
       required:
         - apiName
 
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        policies:
+          type: array
+          description: "Environment-specific policies (CORS, API key auth, etc.)"
+          default: []
+          items:
+            type: object
+            x-kubernetes-preserve-unknown-fields: true
+
   creates:
     # --- Backend: kgateway static backend pointing to WSO2 API Platform router ---
     # This Backend resource tells kgateway to forward traffic to the WSO2 API Platform
@@ -97,7 +109,8 @@ spec:
           upstream:
             main:
               url: http://${metadata.componentName}.${metadata.namespace}:${parameters.upstreamPort}${parameters.upstreamBasePath}
-          policies: ${parameters.policies}
+          policies: |
+            ${has(environmentConfigs.policies) ? dyn(environmentConfigs.policies) : dyn(parameters.policies)}
           operations: ${parameters.operations}
 
   patches:

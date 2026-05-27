@@ -2083,6 +2083,20 @@ func (c *openChoreoClient) RemoveWorkloadEnvVars(ctx context.Context, namespaceN
 // TraitOption allows passing optional parameters when building traits.
 type TraitOption func(map[string]interface{})
 
+// WithInstrumentationEnabled sets the instrumentationEnabled flag for the OTEL instrumentation trait.
+func WithInstrumentationEnabled(enabled bool) TraitOption {
+	return func(params map[string]interface{}) {
+		params["instrumentationEnabled"] = enabled
+	}
+}
+
+// WithEnvInjectionEnabled sets the envInjectionEnabled flag for the env-injection trait.
+func WithEnvInjectionEnabled(enabled bool) TraitOption {
+	return func(params map[string]interface{}) {
+		params["envInjectionEnabled"] = enabled
+	}
+}
+
 // WithUpstreamPort sets the upstream port for the api-configuration trait.
 func WithUpstreamPort(port int32) TraitOption {
 	return func(params map[string]interface{}) {

@@ -56,8 +56,33 @@ func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.Gateway
 }
 
 func (s *environmentService) CreateEnvironment(ctx context.Context, orgName string, req *models.CreateEnvironmentRequest) (*models.GatewayEnvironmentResponse, error) {
-	s.logger.Warn("CreateEnvironment: Environments are managed by OpenChoreo and cannot be created via Agent Manager")
-	return nil, fmt.Errorf("environments are managed by OpenChoreo platform and cannot be created directly")
+	s.logger.Info("Creating environment in OpenChoreo", "name", req.Name, "orgName", orgName)
+
+	ocReq := occlient.CreateEnvironmentRequest{
+		Name:         req.Name,
+		DisplayName:  req.DisplayName,
+		Description:  req.Description,
+		DataplaneRef: req.DataplaneRef,
+		IsProduction: req.IsProduction,
+	}
+
+	env, err := s.ocClient.CreateEnvironment(ctx, orgName, ocReq)
+	if err != nil {
+		s.logger.Error("Failed to create environment in OpenChoreo", "orgName", orgName, "name", req.Name, "error", err)
+		return nil, fmt.Errorf("failed to create environment: %w", err)
+	}
+
+	return &models.GatewayEnvironmentResponse{
+		UUID:             env.UUID,
+		OrganizationName: orgName,
+		Name:             env.Name,
+		DisplayName:      env.DisplayName,
+		Description:      req.Description,
+		DataplaneRef:     env.DataplaneRef,
+		IsProduction:     env.IsProduction,
+		CreatedAt:        env.CreatedAt,
+		UpdatedAt:        env.CreatedAt,
+	}, nil
 }
 
 func (s *environmentService) GetEnvironment(ctx context.Context, orgName string, envID string) (*models.GatewayEnvironmentResponse, error) {
@@ -81,7 +106,7 @@ func (s *environmentService) GetEnvironment(ctx context.Context, orgName string,
 		OrganizationName: orgName,
 		Name:             env.Name,
 		DisplayName:      env.DisplayName,
-		Description:      "", // OpenChoreo EnvironmentResponse doesn't have description
+		Description:      env.Description,
 		DataplaneRef:     env.DataplaneRef,
 		DNSPrefix:        env.DNSPrefix,
 		IsProduction:     env.IsProduction,
@@ -130,7 +155,7 @@ func (s *environmentService) ListEnvironments(ctx context.Context, orgName strin
 			OrganizationName: orgName,
 			Name:             env.Name,
 			DisplayName:      env.DisplayName,
-			Description:      "", // OpenChoreo EnvironmentResponse doesn't have description
+			Description:      env.Description,
 			DataplaneRef:     env.DataplaneRef,
 			DNSPrefix:        env.DNSPrefix,
 			IsProduction:     env.IsProduction,
@@ -148,8 +173,39 @@ func (s *environmentService) ListEnvironments(ctx context.Context, orgName strin
 }
 
 func (s *environmentService) UpdateEnvironment(ctx context.Context, orgName string, envID string, req *models.UpdateEnvironmentRequest) (*models.GatewayEnvironmentResponse, error) {
-	s.logger.Warn("UpdateEnvironment: Environments are managed by OpenChoreo and cannot be updated via Agent Manager")
-	return nil, fmt.Errorf("environments are managed by OpenChoreo platform and cannot be updated directly")
+	s.logger.Info("Updating environment in OpenChoreo", "envID", envID, "orgName", orgName)
+
+	ocReq := occlient.UpdateEnvironmentRequest{
+		DisplayName:  req.DisplayName,
+		Description:  req.Description,
+		IsProduction: req.IsProduction,
+	}
+
+	env, err := s.ocClient.UpdateEnvironment(ctx, orgName, envID, ocReq)
+	if err != nil {
+		s.logger.Error("Failed to update environment in OpenChoreo", "orgName", orgName, "envID", envID, "error", err)
+		if errors.Is(err, utils.ErrNotFound) || errors.Is(err, utils.ErrEnvironmentNotFound) {
+			return nil, utils.ErrEnvironmentNotFound
+		}
+		return nil, fmt.Errorf("failed to update environment: %w", err)
+	}
+
+	description := ""
+	if req.Description != nil {
+		description = *req.Description
+	}
+
+	return &models.GatewayEnvironmentResponse{
+		UUID:             env.UUID,
+		OrganizationName: orgName,
+		Name:             env.Name,
+		DisplayName:      env.DisplayName,
+		Description:      description,
+		DataplaneRef:     env.DataplaneRef,
+		IsProduction:     env.IsProduction,
+		CreatedAt:        env.CreatedAt,
+		UpdatedAt:        env.CreatedAt,
+	}, nil
 }
 
 func (s *environmentService) DeleteEnvironment(ctx context.Context, orgName string, envID string) error {

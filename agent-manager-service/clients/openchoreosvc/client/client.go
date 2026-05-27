@@ -91,11 +91,23 @@ type OpenChoreoClient interface {
 	IsDeploymentInProgress(ctx context.Context, namespaceName, componentName, environment string) (bool, error)
 
 	// Environment Operations
+	CreateEnvironment(ctx context.Context, namespaceName string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error)
 	GetEnvironment(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error)
+	UpdateEnvironment(ctx context.Context, namespaceName, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error)
 	ListEnvironments(ctx context.Context, namespaceName string) ([]*models.EnvironmentResponse, error)
+
+	// Release Binding Operations
+	UpdateReleaseBindingTraitConfigs(ctx context.Context, namespaceName, componentName, environment string, traitConfigs map[string]interface{}) error
+
+	// Promotion Operations
+	PromoteComponent(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error
+	// GetSourceEnvWorkloadOverrides fetches the workload overrides (env vars and file mounts)
+	// from the source environment's release binding, converted to client types.
+	GetSourceEnvWorkloadOverrides(ctx context.Context, namespaceName, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error)
 
 	// Infrastructure Operations
 	GetProjectDeploymentPipeline(ctx context.Context, namespaceName, projectName string) (*models.DeploymentPipelineResponse, error)
+	UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error)
 	ListDataPlanes(ctx context.Context, namespaceName string) ([]*models.DataPlaneResponse, error)
 

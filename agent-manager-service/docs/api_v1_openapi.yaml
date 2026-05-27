@@ -1263,6 +1263,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/promote:
+    post:
+      summary: Promote an agent between environments
+      description: |
+        Promotes an agent from a source environment to a target environment by
+        moving the release binding. The promotion path must be valid according
+        to the project's deployment pipeline.
+      operationId: promoteAgent
+      parameters:
+        - name: agentName
+          in: path
+          description: Unique name of the agent
+          required: true
+          schema:
+            type: string
+        - name: orgName
+          in: path
+          description: Organization name
+          required: true
+          schema:
+            type: string
+        - name: projName
+          in: path
+          description: Project name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PromoteAgentRequest"
+      responses:
+        "202":
+          description: Agent promotion accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PromoteAgentResponse"
+        "400":
+          description: Invalid request or invalid promotion path
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Deployment already in progress in target environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/endpoints:
     get:
       summary: Get agent endpoints for a specific environment
@@ -2565,6 +2630,54 @@ paths:
                 $ref: "#/components/schemas/DeploymentPipelineResponse"
         "404":
           description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update deployment pipeline for a project
+      description: Updates the promotion paths of the deployment pipeline for the specified project
+      operationId: updateDeploymentPipeline
+      parameters:
+        - name: orgName
+          in: path
+          description: Organization name
+          required: true
+          schema:
+            type: string
+        - name: projName
+          in: path
+          description: Project name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateDeploymentPipelineRequest"
+      responses:
+        "200":
+          description: Deployment pipeline updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentPipelineResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Project or pipeline not found
           content:
             application/json:
               schema:
@@ -7948,6 +8061,24 @@ components:
         - createdAt
         - promotionPaths
 
+    UpdateDeploymentPipelineRequest:
+      type: object
+      required:
+        - promotionPaths
+      properties:
+        displayName:
+          type: string
+          description: Updated display name
+        description:
+          type: string
+          description: Updated description
+        promotionPaths:
+          type: array
+          description: Updated list of promotion paths
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PromotionPath"
+
     DeploymentPipelineListResponse:
       type: object
       properties:
@@ -9782,6 +9913,61 @@ components:
           description: Updated description
           nullable: true
           example: Production environment for US East region
+        isProduction:
+          type: boolean
+          description: Whether this is a production environment
+
+    PromoteAgentRequest:
+      type: object
+      required:
+        - sourceEnvironment
+        - targetEnvironment
+      properties:
+        sourceEnvironment:
+          type: string
+          description: Source environment to promote from
+          example: dev
+        targetEnvironment:
+          type: string
+          description: Target environment to promote to
+          example: staging
+        useConfigFromSourceEnv:
+          type: boolean
+          description: When true, inherits env vars and file mounts from the source environment. Mutually exclusive with env/files.
+        env:
+          type: array
+          description: Environment-specific environment variables for the target environment.
+          items:
+            $ref: "#/components/schemas/EnvironmentVariable"
+        files:
+          type: array
+          description: Environment-specific file mounts for the target environment.
+          items:
+            $ref: "#/components/schemas/FileMount"
+        enableAutoInstrumentation:
+          type: boolean
+          description: Enable auto instrumentation for observability in the target environment
+        enableApiKeySecurity:
+          type: boolean
+          description: Enable API key security for the agent endpoint in the target environment
+        corsConfig:
+          $ref: "#/components/schemas/CORSConfig"
+
+    PromoteAgentResponse:
+      type: object
+      properties:
+        agentName:
+          type: string
+          description: Name of the promoted agent
+        projectName:
+          type: string
+          description: Project containing the agent
+        sourceEnvironment:
+          type: string
+          description: Source environment promoted from
+        targetEnvironment:
+          type: string
+          description: Target environment promoted to
 
     # ============================================
     # AI GATEWAY MANAGEMENT SCHEMAS

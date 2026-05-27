@@ -43,6 +43,7 @@ type InfraResourceController interface {
 	UpdateProject(w http.ResponseWriter, r *http.Request)
 	DeleteProject(w http.ResponseWriter, r *http.Request)
 	ListOrgDeploymentPipelines(w http.ResponseWriter, r *http.Request)
+	UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	GetDataplanes(w http.ResponseWriter, r *http.Request)
 }
 
@@ -402,6 +403,49 @@ func (c *infraResourceController) GetProjectDeploymentPipeline(w http.ResponseWr
 
 	deploymentPipelineResponse := utils.ConvertToDeploymentPipelineResponse(deploymentPipeline)
 	utils.WriteSuccessResponse(w, http.StatusOK, deploymentPipelineResponse)
+}
+
+func (c *infraResourceController) UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+
+	var payload spec.UpdateDeploymentPipelineRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("UpdateProjectDeploymentPipeline: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(payload.PromotionPaths) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "promotionPaths is required and cannot be empty")
+		return
+	}
+
+	// Convert spec promotion paths to model
+	modelPaths := make([]models.PromotionPath, len(payload.PromotionPaths))
+	for i, p := range payload.PromotionPaths {
+		targets := make([]models.TargetEnvironmentRef, len(p.TargetEnvironmentRefs))
+		for j, t := range p.TargetEnvironmentRefs {
+			targets[j] = models.TargetEnvironmentRef{Name: t.Name}
+		}
+		modelPaths[i] = models.PromotionPath{
+			SourceEnvironmentRef:  p.SourceEnvironmentRef,
+			TargetEnvironmentRefs: targets,
+		}
+	}
+
+	updated, err := c.infraResourceManager.UpdateProjectDeploymentPipeline(ctx, orgName, projectName, payload.DisplayName, payload.Description, modelPaths)
+	if err != nil {
+		log.Error("UpdateProjectDeploymentPipeline: failed to update deployment pipeline", "error", err)
+		handleCommonErrors(w, err, "Failed to update deployment pipeline")
+		return
+	}
+
+	response := utils.ConvertToDeploymentPipelineResponse(updated)
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 func (c *infraResourceController) GetDataplanes(w http.ResponseWriter, r *http.Request) {

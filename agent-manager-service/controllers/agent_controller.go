@@ -53,6 +53,7 @@ type AgentController interface {
 	GetAgentResourceConfigs(w http.ResponseWriter, r *http.Request)
 	UpdateAgentResourceConfigs(w http.ResponseWriter, r *http.Request)
 	PublishKind(w http.ResponseWriter, r *http.Request)
+	PromoteAgent(w http.ResponseWriter, r *http.Request)
 }
 
 type agentController struct {
@@ -577,6 +578,41 @@ func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
 		ProjectName: projName,
 		ImageId:     payload.ImageId,
 		Environment: deployedEnv,
+	}
+	utils.WriteSuccessResponse(w, http.StatusAccepted, response)
+}
+
+func (c *agentController) PromoteAgent(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+
+	var payload spec.PromoteAgentRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("PromoteAgent: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if payload.SourceEnvironment == "" || payload.TargetEnvironment == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "sourceEnvironment and targetEnvironment are required")
+		return
+	}
+
+	if err := c.agentService.PromoteAgent(ctx, orgName, projName, agentName, &payload); err != nil {
+		log.Error("PromoteAgent: failed to promote agent", "error", err)
+		handleCommonErrors(w, err, "Failed to promote agent")
+		return
+	}
+
+	response := &spec.PromoteAgentResponse{
+		AgentName:         &agentName,
+		ProjectName:       &projName,
+		SourceEnvironment: &payload.SourceEnvironment,
+		TargetEnvironment: &payload.TargetEnvironment,
 	}
 	utils.WriteSuccessResponse(w, http.StatusAccepted, response)
 }

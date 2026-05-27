@@ -61,6 +61,7 @@ type AgentManagerService interface {
 	GetAgentRuntimeLogs(ctx context.Context, orgName string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error)
 	GetAgentResourceConfigs(ctx context.Context, orgName string, projectName string, agentName string, environment string) (*spec.AgentResourceConfigsResponse, error)
 	UpdateAgentResourceConfigs(ctx context.Context, orgName string, projectName string, agentName string, environment string, req *spec.UpdateAgentResourceConfigsRequest) (*spec.AgentResourceConfigsResponse, error)
+	PromoteAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.PromoteAgentRequest) error
 }
 
 type agentManagerService struct {
@@ -314,41 +315,65 @@ func mapInputInterface(specInterface *spec.InputInterface) *client.InputInterfac
 // buildCreateTraitRequests collects all traits needed during agent creation into a single
 // list so they can be attached in one GET-UPDATE cycle, avoiding resource version conflicts.
 // artifactID is the UUID of the agent's artifact record (used for api-configuration trait).
-func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgName, projectName, artifactID string, req *spec.CreateAgentRequest) ([]client.TraitRequest, error) {
+func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgName, projectName, artifactID, envName string, req *spec.CreateAgentRequest) ([]client.TraitRequest, error) {
 	var traits []client.TraitRequest
 
-	// Determine instrumentation trait
+	// Determine instrumentation settings
 	autoInstrumentation := req.Configurations == nil || req.Configurations.EnableAutoInstrumentation == nil || *req.Configurations.EnableAutoInstrumentation
 	isAPIAgent := req.AgentType != nil && req.AgentType.Type == string(utils.AgentTypeAPI)
 	isPythonBuildpack := req.Build != nil && req.Build.BuildpackBuild != nil && req.Build.BuildpackBuild.Buildpack.Language == string(utils.LanguagePython)
 	isDocker := req.Build != nil && req.Build.DockerBuild != nil
 
-	// Only generate API key when an instrumentation trait is needed
-	needsOTEL := isAPIAgent && autoInstrumentation && isPythonBuildpack
-	needsEnvInjection := isAPIAgent && (isDocker || (!autoInstrumentation && isPythonBuildpack))
-
-	if needsOTEL || needsEnvInjection {
-		apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, req.Name)
+	// Attach instrumentation traits at creation. For Python buildpack agents, both OTEL and
+	// env-injection traits are attached with instrumentationEnabled/envInjectionEnabled controlling
+	// which is active. For Docker agents, only env-injection is attached.
+	// Per-environment overrides are set via traitEnvironmentConfigs on the release binding during deploy/promote.
+	if isAPIAgent && isPythonBuildpack {
+		// Python buildpack: attach both traits, one of them is always active so API key is always needed
+		apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, req.Name, envName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate agent API key: %w", err)
 		}
 
-		if needsOTEL {
-			lv := req.Build.BuildpackBuild.Buildpack.GetLanguageVersion()
-			otelOpts := []client.TraitOption{client.WithAgentApiKey(apiKey), client.WithLanguageVersion(lv)}
-			if req.Configurations != nil {
-				if v := req.Configurations.InstrumentationVersion.Get(); v != nil {
-					otelOpts = append(otelOpts, client.WithInstrumentationVersion(v))
-				}
-			}
-			traits = append(traits, client.TraitRequest{
-				TraitKind: client.TraitKindTrait,
-				TraitType: client.TraitOTELInstrumentation,
-				Opts:      otelOpts,
-			})
-		} else {
-			traits = append(traits, client.TraitRequest{TraitKind: client.TraitKindTrait, TraitType: client.TraitEnvInjection, Opts: []client.TraitOption{client.WithAgentApiKey(apiKey)}})
+		otelOpts := []client.TraitOption{
+			client.WithAgentApiKey(apiKey),
+			client.WithInstrumentationEnabled(autoInstrumentation),
 		}
+		lv := req.Build.BuildpackBuild.Buildpack.GetLanguageVersion()
+		otelOpts = append(otelOpts, client.WithLanguageVersion(lv))
+		if req.Configurations != nil {
+			if v := req.Configurations.InstrumentationVersion.Get(); v != nil {
+				otelOpts = append(otelOpts, client.WithInstrumentationVersion(v))
+			}
+		}
+		traits = append(traits, client.TraitRequest{
+			TraitKind: client.TraitKindTrait,
+			TraitType: client.TraitOTELInstrumentation,
+			Opts:      otelOpts,
+		})
+
+		traits = append(traits, client.TraitRequest{
+			TraitKind: client.TraitKindTrait,
+			TraitType: client.TraitEnvInjection,
+			Opts: []client.TraitOption{
+				client.WithAgentApiKey(apiKey),
+				client.WithEnvInjectionEnabled(!autoInstrumentation),
+			},
+		})
+	} else if isAPIAgent && isDocker {
+		// Docker: attach only env-injection trait
+		apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, req.Name, envName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate agent API key: %w", err)
+		}
+		traits = append(traits, client.TraitRequest{
+			TraitKind: client.TraitKindTrait,
+			TraitType: client.TraitEnvInjection,
+			Opts: []client.TraitOption{
+				client.WithAgentApiKey(apiKey),
+				client.WithEnvInjectionEnabled(true),
+			},
+		})
 	}
 
 	// Attach api-configuration trait at create time so the RestApi CRD is provisioned immediately.
@@ -391,7 +416,7 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 // The trait handles injection of OTEL configuration including the agent API key
 func (s *agentManagerService) attachOTELInstrumentationTrait(ctx context.Context, orgName, projectName, agentName string) error {
 	// Generate agent API key for the trait parameters
-	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName)
+	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate agent API key: %w", err)
 	}
@@ -501,7 +526,7 @@ func (s *agentManagerService) detachOTELInstrumentationTrait(ctx context.Context
 // builds when auto-instrumentation is disabled.
 func (s *agentManagerService) attachEnvInjectionTrait(ctx context.Context, orgName, projectName, agentName string) error {
 	// Generate agent API key for the trait parameters
-	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName)
+	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate agent API key: %w", err)
 	}
@@ -665,15 +690,7 @@ func (s *agentManagerService) persistInstrumentationConfig(ctx context.Context, 
 
 // generateAgentAPIKey generates an agent API key (JWT token) for the agent
 // This is a common utility used by both buildpack and docker agent instrumentation
-func (s *agentManagerService) generateAgentAPIKey(ctx context.Context, orgName, projectName, agentName string) (string, error) {
-	// Get the deployment pipeline to find the first environment
-	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
-	if err != nil {
-		s.logger.Error("Failed to get deployment pipeline for token generation", "projectName", projectName, "error", err)
-		return "", translatePipelineError(err)
-	}
-	firstEnvName := findLowestEnvironment(pipeline.PromotionPaths)
-
+func (s *agentManagerService) generateAgentAPIKey(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
 	// Extract OrgId from the caller's JWT claims
 	callerClaims := jwtassertion.GetTokenClaims(ctx)
 	if callerClaims == nil || callerClaims.OuId == "" {
@@ -685,7 +702,7 @@ func (s *agentManagerService) generateAgentAPIKey(ctx context.Context, orgName, 
 		OrgName:     orgName,
 		ProjectName: projectName,
 		AgentName:   agentName,
-		Environment: firstEnvName,
+		Environment: envName,
 		ExpiresIn:   "8760h", // 1 year (365 days * 24 hours)
 		OrgId:       callerClaims.OuId,
 	}
@@ -705,7 +722,7 @@ func (s *agentManagerService) generateTracingEnvVars(ctx context.Context, orgNam
 	s.logger.Debug("Generating tracing environment variables", "agentName", agentName)
 
 	// Generate agent API key
-	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName)
+	apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, "")
 	if err != nil {
 		return nil, err
 	}
@@ -1114,7 +1131,13 @@ func (s *agentManagerService) createComponentAgent(ctx context.Context, orgName,
 		if agentAPIArtifact != nil {
 			artifactID = agentAPIArtifact.UUID.String()
 		}
-		traitRequests, err := s.buildCreateTraitRequests(ctx, orgName, projectName, artifactID, req)
+		// Resolve the lowest environment for API key generation
+		createPipeline, pipeErr := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
+		var lowestEnvName string
+		if pipeErr == nil {
+			lowestEnvName = findLowestEnvironment(createPipeline.PromotionPaths)
+		}
+		traitRequests, err := s.buildCreateTraitRequests(ctx, orgName, projectName, artifactID, lowestEnvName, req)
 		if err != nil {
 			s.logger.Error("Failed to build trait requests", "agentName", req.Name, "error", err)
 			rollbackAgentCreate("trait build failure")
@@ -2203,63 +2226,13 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		}
 	}
 
-	// Resolve config values: request value > DB value > default true.
-	enableAutoInstrumentation := true
-	if req.EnableAutoInstrumentation != nil {
-		enableAutoInstrumentation = *req.EnableAutoInstrumentation
-		s.logger.Info("Using enableAutoInstrumentation from request", "agentName", agentName, "value", enableAutoInstrumentation)
-	} else if existingConfig != nil {
-		enableAutoInstrumentation = existingConfig.EnableAutoInstrumentation
-	}
-
-	enableApiKeySecurity := true
-	if req.EnableApiKeySecurity != nil {
-		enableApiKeySecurity = *req.EnableApiKeySecurity
-		s.logger.Info("Using enableApiKeySecurity from request", "agentName", agentName, "value", enableApiKeySecurity)
-	} else if existingConfig != nil {
-		enableApiKeySecurity = existingConfig.EnableApiKeySecurity
-	}
-
-	// Resolve CORS config: request > DB > env-var defaults.
-	defaultCORS := config.GetAgentWorkloadConfig().CORS
-	corsEnabled := true
-	corsAllowOrigins := strings.Split(defaultCORS.AllowOrigin, ",")
-	corsAllowMethods := strings.Split(defaultCORS.AllowMethods, ",")
-	corsAllowHeaders := strings.Split(defaultCORS.AllowHeaders, ",")
-	corsAllowCredentials := defaultCORS.AllowCredentials
-	if existingConfig != nil {
-		corsEnabled = existingConfig.CORSEnabled
-		if len(existingConfig.CORSAllowOrigins) > 0 {
-			corsAllowOrigins = existingConfig.CORSAllowOrigins
-		}
-		if len(existingConfig.CORSAllowMethods) > 0 {
-			corsAllowMethods = existingConfig.CORSAllowMethods
-		}
-		if len(existingConfig.CORSAllowHeaders) > 0 {
-			corsAllowHeaders = existingConfig.CORSAllowHeaders
-		}
-		corsAllowCredentials = existingConfig.CORSAllowCredentials
-	}
-	if req.HasCorsConfig() {
-		cc := req.GetCorsConfig()
-		if cc.Enabled != nil {
-			corsEnabled = *cc.Enabled
-		}
-		if len(cc.AllowOrigin) > 0 {
-			corsAllowOrigins = cc.AllowOrigin
-		}
-		if len(cc.AllowMethods) > 0 {
-			corsAllowMethods = cc.AllowMethods
-		}
-		if len(cc.AllowHeaders) > 0 {
-			corsAllowHeaders = cc.AllowHeaders
-		}
-		if cc.AllowCredentials != nil {
-			corsAllowCredentials = *cc.AllowCredentials
-		}
-	}
-	if corsAllowCredentials {
-		for _, origin := range corsAllowOrigins {
+	// Resolve config values: request > DB > defaults
+	tracingCfg := resolveTracingConfig(existingConfig, req.EnableAutoInstrumentation, true)
+	apiCfg := resolveAPIConfig(existingConfig, req.EnableApiKeySecurity, req.CorsConfig, true)
+	enableAutoInstrumentation := tracingCfg.EnableAutoInstrumentation
+	enableApiKeySecurity := apiCfg.EnableApiKeySecurity
+	if apiCfg.CORSAllowCredentials {
+		for _, origin := range apiCfg.CORSAllowOrigins {
 			if origin == "*" {
 				return "", fmt.Errorf("corsConfig.allowCredentials cannot be true when allowOrigin contains \"*\"")
 			}
@@ -2291,63 +2264,9 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	requiresComponentConfig := false
 	isAPIAgent := agent.Type.Type == string(utils.AgentTypeAPI)
 
-	// Configure instrumentation traits before deploy for Python buildpack API agents.
-	// The actual Component CR update is applied once below together with API config and env vars.
-	if isAPIAgent && agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython) {
-		hasOTELTrait, otelTraitErr := s.ocClient.HasTrait(ctx, orgName, projectName, agentName, client.TraitOTELInstrumentation)
-		hasEnvTrait, envTraitErr := s.ocClient.HasTrait(ctx, orgName, projectName, agentName, client.TraitEnvInjection)
-
-		if otelTraitErr != nil {
-			s.logger.Warn("Failed to check OTEL instrumentation trait status", "agentName", agentName, "error", otelTraitErr)
-		}
-		if envTraitErr != nil {
-			s.logger.Warn("Failed to check env injection trait status", "agentName", agentName, "error", envTraitErr)
-		}
-
-		if enableAutoInstrumentation {
-			// Enable auto-instrumentation: attach OTEL trait, detach env injection trait
-			if !hasOTELTrait && otelTraitErr == nil {
-				s.logger.Info("Enabling instrumentation (attaching OTEL trait) before deploy", "agentName", agentName)
-				apiKey, keyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName)
-				if keyErr != nil {
-					s.logger.Warn("Failed to generate API key for OTEL instrumentation trait before deploy", "agentName", agentName, "error", keyErr)
-				} else {
-					componentDeployConfig.TraitsToAttach = append(componentDeployConfig.TraitsToAttach, client.TraitRequest{
-						TraitKind: client.TraitKindTrait,
-						TraitType: client.TraitOTELInstrumentation,
-						Opts:      []client.TraitOption{client.WithAgentApiKey(apiKey)},
-					})
-					requiresComponentConfig = true
-				}
-			}
-			if hasEnvTrait && envTraitErr == nil {
-				s.logger.Info("Detaching env injection trait (OTEL trait will handle env vars)", "agentName", agentName)
-				componentDeployConfig.TraitsToDetach = append(componentDeployConfig.TraitsToDetach, client.TraitEnvInjection)
-				requiresComponentConfig = true
-			}
-		} else {
-			// Disable auto-instrumentation: detach OTEL trait, attach env injection trait
-			if hasOTELTrait && otelTraitErr == nil {
-				s.logger.Info("Disabling instrumentation (detaching OTEL trait) before deploy", "agentName", agentName)
-				componentDeployConfig.TraitsToDetach = append(componentDeployConfig.TraitsToDetach, client.TraitOTELInstrumentation)
-				requiresComponentConfig = true
-			}
-			if !hasEnvTrait && envTraitErr == nil {
-				s.logger.Info("Attaching env injection trait (for env vars without full instrumentation)", "agentName", agentName)
-				apiKey, keyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName)
-				if keyErr != nil {
-					s.logger.Warn("Failed to generate API key for env injection trait before deploy", "agentName", agentName, "error", keyErr)
-				} else {
-					componentDeployConfig.TraitsToAttach = append(componentDeployConfig.TraitsToAttach, client.TraitRequest{
-						TraitKind: client.TraitKindTrait,
-						TraitType: client.TraitEnvInjection,
-						Opts:      []client.TraitOption{client.WithAgentApiKey(apiKey)},
-					})
-					requiresComponentConfig = true
-				}
-			}
-		}
-	}
+	// Build trait environment configs for the release binding.
+	policies := buildPolicies(apiCfg)
+	deployTraitEnvConfigs := buildTraitEnvConfigs(tracingCfg, policies)
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2388,15 +2307,6 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		} else {
 			traitOpts = append(traitOpts, client.WithUpstreamBasePath(config.GetConfig().DefaultChatAPI.DefaultBasePath))
 		}
-		// CORS must be first so preflight OPTIONS requests are handled before
-		// any auth policy runs. api-key-auth is always appended after.
-		var policies []map[string]interface{}
-		if corsEnabled {
-			policies = append(policies, client.CORSPolicy(corsAllowOrigins, corsAllowMethods, corsAllowHeaders, corsAllowCredentials))
-		}
-		if enableApiKeySecurity {
-			policies = append(policies, client.APIKeyAuthPolicy())
-		}
 		traitOpts = append(traitOpts, client.WithPolicies(policies))
 
 		componentDeployConfig.TraitsToAttach = append(componentDeployConfig.TraitsToAttach, client.TraitRequest{
@@ -2427,6 +2337,13 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		return "", err
 	}
 
+	// Update trait environment configs on the release binding after deploy
+	if len(deployTraitEnvConfigs) > 0 {
+		if err := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, orgName, agentName, lowestEnv, deployTraitEnvConfigs); err != nil {
+			s.logger.Warn("Failed to update trait environment configs on release binding", "agentName", agentName, "environment", lowestEnv, "error", err)
+		}
+	}
+
 	// Persist instrumentation config to database. Passing the pinned
 	// instrumentation_version (captured above) preserves it across the
 	// Upsert — the repo's DoUpdates map includes that column, so omitting
@@ -2437,14 +2354,14 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 			ProjectName:               projectName,
 			AgentName:                 agentName,
 			EnvironmentName:           targetEnv.Name,
-			EnableAutoInstrumentation: enableAutoInstrumentation,
+			EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
 			InstrumentationVersion:    existingInstrumentationVersion,
-			EnableApiKeySecurity:      enableApiKeySecurity,
-			CORSEnabled:               corsEnabled,
-			CORSAllowOrigins:          corsAllowOrigins,
-			CORSAllowMethods:          corsAllowMethods,
-			CORSAllowHeaders:          corsAllowHeaders,
-			CORSAllowCredentials:      corsAllowCredentials,
+			EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
+			CORSEnabled:               apiCfg.CORSEnabled,
+			CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
+			CORSAllowMethods:          apiCfg.CORSAllowMethods,
+			CORSAllowHeaders:          apiCfg.CORSAllowHeaders,
+			CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
 		}
 		if configErr := s.agentConfigRepo.Upsert(agentConfig); configErr != nil {
 			s.logger.Error("Failed to persist instrumentation config to database", "agentName", agentName, "environment", lowestEnv, "error", configErr)
@@ -2455,6 +2372,117 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 
 	s.logger.Info("Agent deployed successfully to "+lowestEnv, "agentName", agentName, "orgName", org.Name, "projectName", projectName, "environment", lowestEnv)
 	return lowestEnv, nil
+}
+
+// resolvedTracingConfig holds resolved instrumentation config values.
+type resolvedTracingConfig struct {
+	EnableAutoInstrumentation bool
+}
+
+// resolvedCORSConfig holds resolved CORS and API key security config values.
+type resolvedCORSConfig struct {
+	EnableApiKeySecurity bool
+	CORSEnabled          bool
+	CORSAllowOrigins     []string
+	CORSAllowMethods     []string
+	CORSAllowHeaders     []string
+	CORSAllowCredentials bool
+}
+
+// resolveTracingConfig resolves instrumentation config: request > DB > default (true if withDefaults, else false).
+func resolveTracingConfig(existingConfig *models.AgentConfig, enableAutoInstrumentation *bool, withDefaults bool) resolvedTracingConfig {
+	resolved := resolvedTracingConfig{EnableAutoInstrumentation: withDefaults}
+	if existingConfig != nil {
+		resolved.EnableAutoInstrumentation = existingConfig.EnableAutoInstrumentation
+	}
+	if enableAutoInstrumentation != nil {
+		resolved.EnableAutoInstrumentation = *enableAutoInstrumentation
+	}
+	return resolved
+}
+
+// resolveAPIConfig resolves CORS and API key security config: request > DB > env-var defaults (only if withDefaults).
+func resolveAPIConfig(existingConfig *models.AgentConfig, enableApiKeySecurity *bool, corsConfig *spec.CORSConfig, withDefaults bool) resolvedCORSConfig {
+	var resolved resolvedCORSConfig
+	if withDefaults {
+		defaultCORS := config.GetAgentWorkloadConfig().CORS
+		resolved = resolvedCORSConfig{
+			EnableApiKeySecurity: true,
+			CORSEnabled:          true,
+			CORSAllowOrigins:     strings.Split(defaultCORS.AllowOrigin, ","),
+			CORSAllowMethods:     strings.Split(defaultCORS.AllowMethods, ","),
+			CORSAllowHeaders:     strings.Split(defaultCORS.AllowHeaders, ","),
+			CORSAllowCredentials: defaultCORS.AllowCredentials,
+		}
+	}
+
+	if existingConfig != nil {
+		resolved.EnableApiKeySecurity = existingConfig.EnableApiKeySecurity
+		resolved.CORSEnabled = existingConfig.CORSEnabled
+		if len(existingConfig.CORSAllowOrigins) > 0 {
+			resolved.CORSAllowOrigins = existingConfig.CORSAllowOrigins
+		}
+		if len(existingConfig.CORSAllowMethods) > 0 {
+			resolved.CORSAllowMethods = existingConfig.CORSAllowMethods
+		}
+		if len(existingConfig.CORSAllowHeaders) > 0 {
+			resolved.CORSAllowHeaders = existingConfig.CORSAllowHeaders
+		}
+		resolved.CORSAllowCredentials = existingConfig.CORSAllowCredentials
+	}
+
+	if enableApiKeySecurity != nil {
+		resolved.EnableApiKeySecurity = *enableApiKeySecurity
+	}
+	if corsConfig != nil {
+		if corsConfig.Enabled != nil {
+			resolved.CORSEnabled = *corsConfig.Enabled
+		}
+		if len(corsConfig.AllowOrigin) > 0 {
+			resolved.CORSAllowOrigins = corsConfig.AllowOrigin
+		}
+		if len(corsConfig.AllowMethods) > 0 {
+			resolved.CORSAllowMethods = corsConfig.AllowMethods
+		}
+		if len(corsConfig.AllowHeaders) > 0 {
+			resolved.CORSAllowHeaders = corsConfig.AllowHeaders
+		}
+		if corsConfig.AllowCredentials != nil {
+			resolved.CORSAllowCredentials = *corsConfig.AllowCredentials
+		}
+	}
+
+	return resolved
+}
+
+// buildPolicies builds the api-configuration trait policies from resolved CORS config.
+func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
+	var policies []map[string]interface{}
+	// CORS must be first so preflight OPTIONS requests are handled before
+	// any auth policy runs. api-key-auth is always appended after.
+	if cfg.CORSEnabled {
+		policies = append(policies, client.CORSPolicy(cfg.CORSAllowOrigins, cfg.CORSAllowMethods, cfg.CORSAllowHeaders, cfg.CORSAllowCredentials))
+	}
+	if cfg.EnableApiKeySecurity {
+		policies = append(policies, client.APIKeyAuthPolicy())
+	}
+	return policies
+}
+
+// buildTraitEnvConfigs builds the traitEnvironmentConfigs map for a release binding.
+func buildTraitEnvConfigs(tracing resolvedTracingConfig, policies []map[string]interface{}) map[string]interface{} {
+	traitEnvConfigs := map[string]interface{}{
+		string(client.TraitAPIManagement): map[string]interface{}{
+			"policies": policies,
+		},
+		string(client.TraitOTELInstrumentation): map[string]interface{}{
+			"instrumentationEnabled": tracing.EnableAutoInstrumentation,
+		},
+		string(client.TraitEnvInjection): map[string]interface{}{
+			"envInjectionEnabled": !tracing.EnableAutoInstrumentation,
+		},
+	}
+	return traitEnvConfigs
 }
 
 func findLowestEnvironment(promotionPaths []models.PromotionPath) string {
@@ -2477,6 +2505,266 @@ func findLowestEnvironment(promotionPaths []models.PromotionPath) string {
 		}
 	}
 	return ""
+}
+
+// validatePromoteRequest validates the promote request body for consistency.
+// When useConfigFromSourceEnv is true, no other config fields may be set.
+// When useConfigFromSourceEnv is false or absent, all explicit config fields must be provided.
+func validatePromoteRequest(req *spec.PromoteAgentRequest) error {
+	if req.SourceEnvironment == req.TargetEnvironment {
+		return fmt.Errorf("source and target environments must be different")
+	}
+
+	useSource := req.UseConfigFromSourceEnv != nil && *req.UseConfigFromSourceEnv
+	if useSource {
+		if len(req.Env) > 0 || len(req.Files) > 0 ||
+			req.EnableAutoInstrumentation != nil || req.EnableApiKeySecurity != nil || req.CorsConfig != nil {
+			return fmt.Errorf("useConfigFromSourceEnv cannot be combined with env, files, enableAutoInstrumentation, enableApiKeySecurity, or corsConfig")
+		}
+		return nil
+	}
+
+	// useConfigFromSourceEnv is false or not set — all explicit fields must be provided
+	var missing []string
+	if req.Env == nil {
+		missing = append(missing, "env")
+	}
+	if req.Files == nil {
+		missing = append(missing, "files")
+	}
+	if req.EnableAutoInstrumentation == nil {
+		missing = append(missing, "enableAutoInstrumentation")
+	}
+	if req.EnableApiKeySecurity == nil {
+		missing = append(missing, "enableApiKeySecurity")
+	}
+	if req.CorsConfig == nil {
+		missing = append(missing, "corsConfig")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("when useConfigFromSourceEnv is not set, the following fields are required: %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+// PromoteAgent promotes an agent from one environment to another.
+func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.PromoteAgentRequest) error {
+	s.logger.Info("Promoting agent", "agentName", agentName, "orgName", orgName, "projectName", projectName,
+		"sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)
+
+	if err := validatePromoteRequest(req); err != nil {
+		return err
+	}
+
+	// Validate organization exists
+	org, err := s.ocClient.GetOrganization(ctx, orgName)
+	if err != nil {
+		s.logger.Error("Failed to find organization", "orgName", orgName, "error", err)
+		return translateOrgError(err)
+	}
+
+	// Validate agent exists and is an internal agent
+	agent, err := s.ocClient.GetComponent(ctx, org.Name, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to fetch agent from OpenChoreo", "agentName", agentName, "error", err)
+		return translateAgentError(err)
+	}
+	if agent.Provisioning.Type != string(utils.InternalAgent) {
+		return fmt.Errorf("promote operation is not supported for agent type: '%s'", agent.Provisioning.Type)
+	}
+
+	// Validate promotion path exists: get deployment pipeline and verify source → target is valid
+	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
+	if err != nil {
+		s.logger.Error("Failed to fetch deployment pipeline", "orgName", orgName, "projectName", projectName, "error", err)
+		return translatePipelineError(err)
+	}
+
+	if !isValidPromotionPath(pipeline.PromotionPaths, req.SourceEnvironment, req.TargetEnvironment) {
+		return fmt.Errorf("invalid promotion path: %s → %s is not allowed by the deployment pipeline", req.SourceEnvironment, req.TargetEnvironment)
+	}
+
+	// Check if a deployment is already in progress in target environment
+	inProgress, err := s.ocClient.IsDeploymentInProgress(ctx, orgName, agentName, req.TargetEnvironment)
+	if err != nil {
+		s.logger.Warn("Failed to check deployment status in target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
+	} else if inProgress {
+		return fmt.Errorf("%w for agent %s in environment %s", utils.ErrDeploymentInProgress, agentName, req.TargetEnvironment)
+	}
+
+	// Process environment-specific overrides
+	var envOverrides []client.EnvVar
+	var fileOverrides []client.FileVar
+
+	if req.UseConfigFromSourceEnv != nil && *req.UseConfigFromSourceEnv {
+		// Explicit flag: inherit from source environment's workload overrides,
+		// but strip source system-managed env vars (LLM config keys) and replace them
+		// with the target environment's own system-managed values (different per env).
+		srcSystemKeys, srcKeysErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.SourceEnvironment)
+		if srcKeysErr != nil {
+			s.logger.Warn("Failed to fetch system-managed env var keys for promotion", "agentName", agentName, "error", srcKeysErr)
+			srcSystemKeys = nil
+		}
+
+		srcEnvVars, srcFileVars, srcErr := s.ocClient.GetSourceEnvWorkloadOverrides(ctx, orgName, agentName, req.SourceEnvironment)
+		if srcErr != nil {
+			s.logger.Warn("Failed to fetch source env workload overrides for promotion", "agentName", agentName, "error", srcErr)
+		} else {
+			for _, ev := range srcEnvVars {
+				if !srcSystemKeys[ev.Key] {
+					envOverrides = append(envOverrides, ev)
+				}
+			}
+			fileOverrides = srcFileVars
+		}
+
+		// Inject target environment's own system-managed vars (e.g. different LLM proxy URL/key per env).
+		// These override any system vars that may leak from the workload CR base.
+		// If the source env has LLM config but the target does not, return an error — otherwise
+		// staging would silently inherit the source env's LLM credentials via the workload CR base.
+		tgtSystemKeys, tgtKeysErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.TargetEnvironment)
+		if tgtKeysErr != nil {
+			s.logger.Warn("Failed to fetch target env system-managed keys for promotion", "agentName", agentName, "error", tgtKeysErr)
+		} else if len(srcSystemKeys) > 0 && len(tgtSystemKeys) == 0 {
+			return fmt.Errorf("agent %q has LLM configuration in environment %q but none in target environment %q: configure LLM for the target environment before promoting",
+				agentName, req.SourceEnvironment, req.TargetEnvironment)
+		} else if len(tgtSystemKeys) > 0 {
+			tgtEnvVars, _, tgtErr := s.ocClient.GetSourceEnvWorkloadOverrides(ctx, orgName, agentName, req.TargetEnvironment)
+			if tgtErr != nil {
+				s.logger.Warn("Failed to fetch target env workload overrides for promotion", "agentName", agentName, "error", tgtErr)
+			} else {
+				for _, ev := range tgtEnvVars {
+					if tgtSystemKeys[ev.Key] {
+						envOverrides = append(envOverrides, ev)
+					}
+				}
+			}
+		}
+	} else if len(req.Env) > 0 || len(req.Files) > 0 {
+		// User explicitly provided env vars — mirror the deploy flow:
+		// fetch system-managed vars from the target env, filter them from req.Env before
+		// processEnvVars (to avoid mangling their SecretKeyRef.Key), then re-append them.
+		systemManagedEnvVars, systemManagedKeys, sysEnvErr := s.getSystemManagedEnvVars(ctx, orgName, projectName, req.TargetEnvironment, agentName)
+		if sysEnvErr != nil {
+			s.logger.Warn("Failed to fetch system-managed env vars for promotion", "agentName", agentName, "error", sysEnvErr)
+			systemManagedEnvVars = nil
+			systemManagedKeys = nil
+		}
+
+		if len(req.Env) > 0 {
+			userEnv := req.Env
+			if len(systemManagedKeys) > 0 {
+				userEnv = make([]spec.EnvironmentVariable, 0, len(req.Env))
+				for _, env := range req.Env {
+					if !systemManagedKeys[env.Key] {
+						userEnv = append(userEnv, env)
+					} else {
+						s.logger.Debug("Filtering system-managed env var from promote request", "key", env.Key)
+					}
+				}
+			}
+
+			processed, err := s.processEnvVars(ctx, orgName, projectName, req.TargetEnvironment, agentName, userEnv, req.Files)
+			if err != nil {
+				s.logger.Error("Failed to process environment variables for promotion", "agentName", agentName, "error", err)
+				return fmt.Errorf("failed to process environment variables: %w", err)
+			}
+			// Combine user-processed env vars with preserved system-managed env vars
+			envOverrides = append(processed, systemManagedEnvVars...)
+		}
+
+		// Process file mounts
+		if len(req.Files) > 0 {
+			processed, err := s.processFileVars(ctx, orgName, projectName, req.TargetEnvironment, agentName, req.Files)
+			if err != nil {
+				s.logger.Error("Failed to process file mounts for promotion", "agentName", agentName, "error", err)
+				return fmt.Errorf("failed to process file mounts: %w", err)
+			}
+			fileOverrides = processed
+		}
+	}
+
+	// Build trait environment configs for per-environment trait overrides
+	var traitEnvConfigs map[string]interface{}
+	isAPIAgent := agent.Type.Type == string(utils.AgentTypeAPI)
+	if isAPIAgent {
+		// Resolve config values: request > source env DB > defaults
+		var existingConfig *models.AgentConfig
+		cfg, configErr := s.agentConfigRepo.Get(orgName, projectName, agentName, req.SourceEnvironment)
+		if configErr == nil {
+			existingConfig = cfg
+		}
+
+		tracingCfg := resolveTracingConfig(existingConfig, req.EnableAutoInstrumentation, false)
+		apiCfg := resolveAPIConfig(existingConfig, req.EnableApiKeySecurity, req.CorsConfig, false)
+		policies := buildPolicies(apiCfg)
+		traitEnvConfigs = buildTraitEnvConfigs(tracingCfg, policies)
+
+		// Only generate API key and set otelEndpoint on first promotion to this environment.
+		// On subsequent promotions, these are already set on the release binding's traitEnvironmentConfigs.
+		_, targetConfigErr := s.agentConfigRepo.Get(orgName, projectName, agentName, req.TargetEnvironment)
+		isFirstPromotion := targetConfigErr != nil
+		if isFirstPromotion {
+			apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
+			if apiKeyErr != nil {
+				s.logger.Warn("Failed to generate agent API key for promotion", "agentName", agentName, "error", apiKeyErr)
+			} else {
+				otelCfg := traitEnvConfigs[string(client.TraitOTELInstrumentation)].(map[string]interface{})
+				envInjCfg := traitEnvConfigs[string(client.TraitEnvInjection)].(map[string]interface{})
+				otelCfg["agentApiKey"] = apiKey
+				envInjCfg["agentApiKey"] = apiKey
+			}
+
+			otelEndpoint := config.GetConfig().OTEL.ExporterEndpoint
+			if otelEndpoint != "" {
+				otelCfg := traitEnvConfigs[string(client.TraitOTELInstrumentation)].(map[string]interface{})
+				envInjCfg := traitEnvConfigs[string(client.TraitEnvInjection)].(map[string]interface{})
+				otelCfg["otelEndpoint"] = otelEndpoint
+				envInjCfg["otelEndpoint"] = otelEndpoint
+			}
+		}
+
+		// Persist config for the target environment
+		agentConfig := &models.AgentConfig{
+			OrgName:                   orgName,
+			ProjectName:               projectName,
+			AgentName:                 agentName,
+			EnvironmentName:           req.TargetEnvironment,
+			EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+			EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
+			CORSEnabled:               apiCfg.CORSEnabled,
+			CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
+			CORSAllowMethods:          apiCfg.CORSAllowMethods,
+			CORSAllowHeaders:          apiCfg.CORSAllowHeaders,
+			CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
+		}
+		if upsertErr := s.agentConfigRepo.Upsert(agentConfig); upsertErr != nil {
+			s.logger.Error("Failed to persist agent config for target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", upsertErr)
+		}
+	}
+
+	// Promote via OC client
+	if err := s.ocClient.PromoteComponent(ctx, orgName, projectName, agentName, req.SourceEnvironment, req.TargetEnvironment, envOverrides, fileOverrides, traitEnvConfigs); err != nil {
+		s.logger.Error("Failed to promote agent", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment, "error", err)
+		return fmt.Errorf("failed to promote agent: %w", err)
+	}
+
+	s.logger.Info("Agent promoted successfully", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)
+	return nil
+}
+
+// isValidPromotionPath checks if the given source → target promotion is allowed by the pipeline
+func isValidPromotionPath(promotionPaths []models.PromotionPath, source, target string) bool {
+	for _, path := range promotionPaths {
+		if path.SourceEnvironmentRef == source {
+			for _, t := range path.TargetEnvironmentRefs {
+				if t.Name == target {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // getSystemManagedEnvVars fetches existing env vars from the Component CR / ReleaseBinding and

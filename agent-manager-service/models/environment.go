@@ -50,8 +50,9 @@ type CreateEnvironmentRequest struct {
 
 // UpdateEnvironmentRequest is the API request for updating an environment
 type UpdateEnvironmentRequest struct {
-	DisplayName *string `json:"displayName,omitempty"`
-	Description *string `json:"description,omitempty"`
+	DisplayName  *string `json:"displayName,omitempty"`
+	Description  *string `json:"description,omitempty"`
+	IsProduction *bool   `json:"isProduction,omitempty"`
 }
 
 // Environment is the database model

@@ -196,6 +196,22 @@ type ComponentResourceConfigsResponse struct {
 	AutoScaling *AutoScalingConfig // Current autoscaling configuration (if applicable)
 }
 
+// CreateEnvironmentRequest contains data for creating an environment
+type CreateEnvironmentRequest struct {
+	Name         string
+	DisplayName  string
+	Description  string
+	DataplaneRef string
+	IsProduction bool
+}
+
+// UpdateEnvironmentRequest contains data for updating an environment
+type UpdateEnvironmentRequest struct {
+	DisplayName  *string
+	Description  *string
+	IsProduction *bool
+}
+
 // DeployRequest contains data for deploying a component
 type DeployRequest struct {
 	ImageID     string

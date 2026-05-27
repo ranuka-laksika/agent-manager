@@ -25,6 +25,7 @@ type EnvironmentResponse struct {
 	DisplayName  string    `json:"displayName,omitempty"`
 	IsProduction bool      `json:"isProduction"`
 	DNSPrefix    string    `json:"dnsPrefix,omitempty"`
+	Description  string    `json:"description,omitempty"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
 

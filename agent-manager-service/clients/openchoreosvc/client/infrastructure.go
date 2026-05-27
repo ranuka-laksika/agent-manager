@@ -111,6 +111,119 @@ func (c *openChoreoClient) ListOrganizations(ctx context.Context) ([]*models.Org
 // Environment Operations
 // -----------------------------------------------------------------------------
 
+func (c *openChoreoClient) CreateEnvironment(ctx context.Context, namespaceName string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+	annotations := map[string]string{
+		AnnotationKeyDisplayName: req.DisplayName,
+	}
+	if req.Description != "" {
+		annotations[AnnotationKeyDescription] = req.Description
+	}
+
+	isProduction := req.IsProduction
+	dataplaneRefKind := ocapi.EnvironmentSpecDataPlaneRefKindClusterDataPlane
+	body := ocapi.CreateEnvironmentJSONRequestBody{
+		Metadata: ocapi.ObjectMeta{
+			Name:        req.Name,
+			Namespace:   &namespaceName,
+			Annotations: &annotations,
+		},
+		Spec: &ocapi.EnvironmentSpec{
+			DataPlaneRef: &struct {
+				Kind ocapi.EnvironmentSpecDataPlaneRefKind `json:"kind"`
+				Name string                                `json:"name"`
+			}{
+				Kind: dataplaneRefKind,
+				Name: req.DataplaneRef,
+			},
+			IsProduction: &isProduction,
+		},
+	}
+
+	resp, err := c.ocClient.CreateEnvironmentWithResponse(ctx, namespaceName, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create environment: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON400: resp.JSON400,
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON409: resp.JSON409,
+			JSON500: resp.JSON500,
+		})
+	}
+
+	if resp.JSON201 == nil {
+		return nil, fmt.Errorf("empty response from create environment")
+	}
+
+	return convertEnvironmentToResponse(resp.JSON201), nil
+}
+
+func (c *openChoreoClient) UpdateEnvironment(ctx context.Context, namespaceName, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+	// First get the existing environment to preserve fields
+	getResp, err := c.ocClient.GetEnvironmentWithResponse(ctx, namespaceName, environmentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get environment for update: %w", err)
+	}
+	if getResp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(getResp.StatusCode(), ErrorResponses{
+			JSON401: getResp.JSON401,
+			JSON403: getResp.JSON403,
+			JSON404: getResp.JSON404,
+			JSON500: getResp.JSON500,
+		})
+	}
+	if getResp.JSON200 == nil {
+		return nil, fmt.Errorf("empty response from get environment")
+	}
+
+	env := getResp.JSON200
+
+	// Update annotations
+	if env.Metadata.Annotations == nil {
+		annotations := make(map[string]string)
+		env.Metadata.Annotations = &annotations
+	}
+	if req.DisplayName != nil {
+		(*env.Metadata.Annotations)[AnnotationKeyDisplayName] = *req.DisplayName
+	}
+	if req.Description != nil {
+		(*env.Metadata.Annotations)[AnnotationKeyDescription] = *req.Description
+	}
+
+	// Update spec fields
+	if req.IsProduction != nil {
+		if env.Spec == nil {
+			env.Spec = &ocapi.EnvironmentSpec{}
+		}
+		env.Spec.IsProduction = req.IsProduction
+	}
+
+	resp, err := c.ocClient.UpdateEnvironmentWithResponse(ctx, namespaceName, environmentName, *env)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update environment: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON400: resp.JSON400,
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON404: resp.JSON404,
+			JSON409: resp.JSON409,
+			JSON500: resp.JSON500,
+		})
+	}
+
+	if resp.JSON200 == nil {
+		return nil, fmt.Errorf("empty response from update environment")
+	}
+
+	return convertEnvironmentToResponse(resp.JSON200), nil
+}
+
 func (c *openChoreoClient) GetEnvironment(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
 	resp, err := c.ocClient.GetEnvironmentWithResponse(ctx, namespaceName, environmentName)
 	if err != nil {
@@ -244,6 +357,87 @@ func convertDeploymentPipeline(p *ocapi.DeploymentPipeline, orgName string) *mod
 	}
 }
 
+func (c *openChoreoClient) UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	// Get existing pipeline to preserve metadata
+	getResp, err := c.ocClient.GetDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment pipeline for update: %w", err)
+	}
+	if getResp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(getResp.StatusCode(), ErrorResponses{
+			JSON401: getResp.JSON401,
+			JSON403: getResp.JSON403,
+			JSON404: getResp.JSON404,
+			JSON500: getResp.JSON500,
+		})
+	}
+	if getResp.JSON200 == nil {
+		return nil, fmt.Errorf("empty response from get deployment pipeline")
+	}
+
+	pipeline := getResp.JSON200
+
+	// Update annotations for display name and description
+	if displayName != nil || description != nil {
+		if pipeline.Metadata.Annotations == nil {
+			annotations := make(map[string]string)
+			pipeline.Metadata.Annotations = &annotations
+		}
+		if displayName != nil {
+			(*pipeline.Metadata.Annotations)[AnnotationKeyDisplayName] = *displayName
+		}
+		if description != nil {
+			(*pipeline.Metadata.Annotations)[AnnotationKeyDescription] = *description
+		}
+	}
+
+	// Convert model promotion paths to OC API format
+	ocPaths := make([]ocapi.PromotionPath, len(promotionPaths))
+	for i, p := range promotionPaths {
+		targets := make([]ocapi.TargetEnvironmentRef, len(p.TargetEnvironmentRefs))
+		for j, t := range p.TargetEnvironmentRefs {
+			targets[j] = ocapi.TargetEnvironmentRef{
+				Name: t.Name,
+			}
+		}
+		ocPaths[i] = ocapi.PromotionPath{
+			SourceEnvironmentRef: struct {
+				Kind *ocapi.PromotionPathSourceEnvironmentRefKind `json:"kind,omitempty"`
+				Name string                                       `json:"name"`
+			}{
+				Name: p.SourceEnvironmentRef,
+			},
+			TargetEnvironmentRefs: targets,
+		}
+	}
+
+	if pipeline.Spec == nil {
+		pipeline.Spec = &ocapi.DeploymentPipelineSpec{}
+	}
+	pipeline.Spec.PromotionPaths = &ocPaths
+
+	resp, err := c.ocClient.UpdateDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName, *pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update deployment pipeline: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON400: resp.JSON400,
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON404: resp.JSON404,
+			JSON500: resp.JSON500,
+		})
+	}
+
+	if resp.JSON200 == nil {
+		return nil, fmt.Errorf("empty response from update deployment pipeline")
+	}
+
+	return convertDeploymentPipeline(resp.JSON200, namespaceName), nil
+}
+
 func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error) {
 	// API does not support listing deployment pipelines directly
 	return nil, fmt.Errorf("not implemented: API does not support listing deployment pipelines")
@@ -298,6 +492,7 @@ func convertEnvironmentToResponse(env *ocapi.Environment) *models.EnvironmentRes
 	}
 
 	displayName := getAnnotation(env.Metadata.Annotations, AnnotationKeyDisplayName)
+	description := getAnnotation(env.Metadata.Annotations, AnnotationKeyDescription)
 
 	var createdAt time.Time
 	if env.Metadata.CreationTimestamp != nil {
@@ -321,6 +516,7 @@ func convertEnvironmentToResponse(env *ocapi.Environment) *models.EnvironmentRes
 		DisplayName:  displayName,
 		DataplaneRef: dataplaneRef,
 		IsProduction: isProduction,
+		Description:  description,
 		CreatedAt:    createdAt,
 	}
 }

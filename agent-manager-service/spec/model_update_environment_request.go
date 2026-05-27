@@ -23,6 +23,8 @@ type UpdateEnvironmentRequest struct {
 	DisplayName *string `json:"displayName,omitempty"`
 	// Updated description
 	Description NullableString `json:"description,omitempty"`
+	// Whether this is a production environment
+	IsProduction *bool `json:"isProduction,omitempty"`
 }
 
 // NewUpdateEnvironmentRequest instantiates a new UpdateEnvironmentRequest object
@@ -117,6 +119,38 @@ func (o *UpdateEnvironmentRequest) UnsetDescription() {
 	o.Description.Unset()
 }
 
+// GetIsProduction returns the IsProduction field value if set, zero value otherwise.
+func (o *UpdateEnvironmentRequest) GetIsProduction() bool {
+	if o == nil || IsNil(o.IsProduction) {
+		var ret bool
+		return ret
+	}
+	return *o.IsProduction
+}
+
+// GetIsProductionOk returns a tuple with the IsProduction field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *UpdateEnvironmentRequest) GetIsProductionOk() (*bool, bool) {
+	if o == nil || IsNil(o.IsProduction) {
+		return nil, false
+	}
+	return o.IsProduction, true
+}
+
+// HasIsProduction returns a boolean if a field has been set.
+func (o *UpdateEnvironmentRequest) HasIsProduction() bool {
+	if o != nil && !IsNil(o.IsProduction) {
+		return true
+	}
+
+	return false
+}
+
+// SetIsProduction gets a reference to the given bool and assigns it to the IsProduction field.
+func (o *UpdateEnvironmentRequest) SetIsProduction(v bool) {
+	o.IsProduction = &v
+}
+
 func (o UpdateEnvironmentRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -132,6 +166,9 @@ func (o UpdateEnvironmentRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if o.Description.IsSet() {
 		toSerialize["description"] = o.Description.Get()
+	}
+	if !IsNil(o.IsProduction) {
+		toSerialize["isProduction"] = o.IsProduction
 	}
 	return toSerialize, nil
 }

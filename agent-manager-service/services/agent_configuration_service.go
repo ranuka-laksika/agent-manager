@@ -58,6 +58,10 @@ type AgentConfigurationService interface {
 	// DB for all LLM configurations of this agent in the given environment. Used during deploy to
 	// identify which component env var secretRefs are system-managed (LLM config) vs user-provided.
 	ListAgentLLMConfigSecretReferences(ctx context.Context, agentID, orgName, environmentName string) (map[string]struct{}, error)
+	// ListSystemManagedEnvVarKeys returns the set of env var keys that are system-managed
+	// (i.e. injected by LLM configurations) for the given agent and environment.
+	// Used during promote to strip these keys from inherited workload overrides.
+	ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error)
 }
 
 type EnvConfigTemplate struct {
@@ -2755,4 +2759,32 @@ func (s *agentConfigurationService) ListAgentLLMConfigSecretReferences(ctx conte
 		result[ref] = struct{}{}
 	}
 	return result, nil
+}
+
+func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error) {
+	env, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get environment %q: %w", environmentName, err)
+	}
+	envUUID, err := uuid.Parse(env.UUID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid environment UUID %q: %w", env.UUID, err)
+	}
+
+	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
+	if err != nil {
+		// No LLM configuration exists for this agent — no system-managed keys
+		return nil, nil
+	}
+
+	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list env config variables: %w", err)
+	}
+
+	keys := make(map[string]bool, len(vars))
+	for _, v := range vars {
+		keys[v.VariableName] = true
+	}
+	return keys, nil
 }

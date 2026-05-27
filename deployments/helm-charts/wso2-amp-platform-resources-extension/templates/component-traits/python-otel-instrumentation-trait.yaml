@@ -32,13 +32,38 @@ spec:
           type: string
           default: ""
           description: "API key for authenticating with the agent service"
+        instrumentationEnabled:
+          type: boolean
+          default: true
+          description: "Enable or disable OTEL instrumentation"
       required:
         - instrumentationImage
         - otelEndpoint
 
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        instrumentationEnabled:
+          type: boolean
+          default: true
+          description: "Enable or disable OTEL instrumentation for this environment"
+        otelEndpoint:
+          type: string
+          description: "Environment-specific OpenTelemetry collector endpoint URL"
+        agentApiKey:
+          type: string
+          description: "Environment-specific API key for authenticating with the agent service"
+        isTraceContentEnabled:
+          type: string
+          default: "true"
+          description: "Flag to enable or disable tracing of content for this environment"
+
   # Create Secret for the agent API key
   creates:
-    - template:
+    - includeWhen: |
+        ${has(environmentConfigs.instrumentationEnabled) ? environmentConfigs.instrumentationEnabled : parameters.instrumentationEnabled}
+      template:
         apiVersion: v1
         kind: Secret
         metadata:
@@ -46,11 +71,14 @@ spec:
           namespace: ${metadata.namespace}
         type: Opaque
         stringData:
-          api-key: ${parameters.agentApiKey}
+          api-key: |
+            ${has(environmentConfigs.agentApiKey) ? environmentConfigs.agentApiKey : parameters.agentApiKey}
 
   # Patches to modify the Deployment resource
   patches:
-    - target:
+    - includeWhen: |
+        ${has(environmentConfigs.instrumentationEnabled) ? environmentConfigs.instrumentationEnabled : parameters.instrumentationEnabled}
+      target:
         kind: Deployment
         group: apps
         version: v1
@@ -86,12 +114,12 @@ spec:
           path: /spec/template/spec/containers/0/env/-
           value:
             name: AMP_OTEL_ENDPOINT
-            value: "${parameters.otelEndpoint}"
+            value: "${has(environmentConfigs.otelEndpoint) ? environmentConfigs.otelEndpoint : parameters.otelEndpoint}"
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:
             name: AMP_TRACE_CONTENT
-            value: "${parameters.isTraceContentEnabled}"
+            value: "${has(environmentConfigs.isTraceContentEnabled) ? environmentConfigs.isTraceContentEnabled : parameters.isTraceContentEnabled}"
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:

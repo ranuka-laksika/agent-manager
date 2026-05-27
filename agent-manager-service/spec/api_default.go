@@ -7043,6 +7043,174 @@ func (a *DefaultAPIService) ListRepositoryCommitsExecute(r ApiListRepositoryComm
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiPromoteAgentRequest struct {
+	ctx                 context.Context
+	ApiService          *DefaultAPIService
+	agentName           string
+	orgName             string
+	projName            string
+	promoteAgentRequest *PromoteAgentRequest
+}
+
+func (r ApiPromoteAgentRequest) PromoteAgentRequest(promoteAgentRequest PromoteAgentRequest) ApiPromoteAgentRequest {
+	r.promoteAgentRequest = &promoteAgentRequest
+	return r
+}
+
+func (r ApiPromoteAgentRequest) Execute() (*PromoteAgentResponse, *http.Response, error) {
+	return r.ApiService.PromoteAgentExecute(r)
+}
+
+/*
+PromoteAgent Promote an agent between environments
+
+Promotes an agent from a source environment to a target environment by
+moving the release binding. The promotion path must be valid according
+to the project's deployment pipeline.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param agentName Unique name of the agent
+	@param orgName Organization name
+	@param projName Project name
+	@return ApiPromoteAgentRequest
+*/
+func (a *DefaultAPIService) PromoteAgent(ctx context.Context, agentName string, orgName string, projName string) ApiPromoteAgentRequest {
+	return ApiPromoteAgentRequest{
+		ApiService: a,
+		ctx:        ctx,
+		agentName:  agentName,
+		orgName:    orgName,
+		projName:   projName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return PromoteAgentResponse
+func (a *DefaultAPIService) PromoteAgentExecute(r ApiPromoteAgentRequest) (*PromoteAgentResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *PromoteAgentResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.PromoteAgent")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/promote"
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.promoteAgentRequest == nil {
+		return localVarReturnValue, nil, reportError("promoteAgentRequest is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.promoteAgentRequest
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 409 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiRerunMonitorRequest struct {
 	ctx         context.Context
 	ApiService  *DefaultAPIService
@@ -8227,6 +8395,157 @@ func (a *DefaultAPIService) UpdateAgentResourceConfigsExecute(r ApiUpdateAgentRe
 	}
 	// body params
 	localVarPostBody = r.updateAgentResourceConfigsRequest
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiUpdateDeploymentPipelineRequest struct {
+	ctx                             context.Context
+	ApiService                      *DefaultAPIService
+	orgName                         string
+	projName                        string
+	updateDeploymentPipelineRequest *UpdateDeploymentPipelineRequest
+}
+
+func (r ApiUpdateDeploymentPipelineRequest) UpdateDeploymentPipelineRequest(updateDeploymentPipelineRequest UpdateDeploymentPipelineRequest) ApiUpdateDeploymentPipelineRequest {
+	r.updateDeploymentPipelineRequest = &updateDeploymentPipelineRequest
+	return r
+}
+
+func (r ApiUpdateDeploymentPipelineRequest) Execute() (*DeploymentPipelineResponse, *http.Response, error) {
+	return r.ApiService.UpdateDeploymentPipelineExecute(r)
+}
+
+/*
+UpdateDeploymentPipeline Update deployment pipeline for a project
+
+Updates the promotion paths of the deployment pipeline for the specified project
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name
+	@param projName Project name
+	@return ApiUpdateDeploymentPipelineRequest
+*/
+func (a *DefaultAPIService) UpdateDeploymentPipeline(ctx context.Context, orgName string, projName string) ApiUpdateDeploymentPipelineRequest {
+	return ApiUpdateDeploymentPipelineRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		projName:   projName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return DeploymentPipelineResponse
+func (a *DefaultAPIService) UpdateDeploymentPipelineExecute(r ApiUpdateDeploymentPipelineRequest) (*DeploymentPipelineResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodPut
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *DeploymentPipelineResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.UpdateDeploymentPipeline")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/deployment-pipeline"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.updateDeploymentPipelineRequest == nil {
+		return localVarReturnValue, nil, reportError("updateDeploymentPipelineRequest is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.updateDeploymentPipelineRequest
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
