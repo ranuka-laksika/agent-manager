@@ -250,6 +250,7 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateResourceLimitsConfig(config, r)
+	validateAgentWorkloadCORSConfig(agentWorkloadConfig, r)
 
 	r.logAndExitIfErrorsFound()
 
@@ -340,6 +341,12 @@ func validateInternalServerConfigs(cfg *Config, r *configReader) {
 	}
 	if cfg.InternalServer.CertDir == "" {
 		r.errors = append(r.errors, fmt.Errorf("INTERNAL_SERVER_CERT_DIR must be non-empty"))
+	}
+}
+
+func validateAgentWorkloadCORSConfig(cfg *AgentWorkload, r *configReader) {
+	if cfg.CORS.AllowOrigin == "*" && cfg.CORS.AllowCredentials {
+		r.errors = append(r.errors, fmt.Errorf("AGENT_WORKLOAD_CORS_ALLOW_CREDENTIALS cannot be true when AGENT_WORKLOAD_CORS_ALLOWED_ORIGIN is \"*\""))
 	}
 }
 
