@@ -14,6 +14,8 @@ spec:
     - name: jwt-auth
       version: v1
       params:
+        headerName: x-amp-api-key
+        authHeaderPrefix: ""
         issuers:
           - agent-manager-service
         claimMappings:
