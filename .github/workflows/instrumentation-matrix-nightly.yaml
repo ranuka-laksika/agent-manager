@@ -195,7 +195,10 @@ jobs:
   publish-matrix-summary:
     runs-on: ubuntu-latest
     needs: [full-emission-matrix, heavy-tier, revalidate-known-broken]
-    if: always()
+    # Run on success AND on failures (so the summary + metrics still compute
+    # when cells go red), but not during cancellation — `!cancelled()` avoids
+    # the lingering-queued-job behavior a bare `always()` causes on supersede.
+    if: ${{ !cancelled() }}
     outputs:
       counts_json: ${{ steps.metrics.outputs.counts_json }}
       has_failures: ${{ steps.metrics.outputs.has_failures }}
@@ -294,10 +297,12 @@ jobs:
     needs: [publish-matrix-summary, open-issue-on-failure]
     # Quiet on success. Run on any failure signal: per-cell failures the
     # report counted, OR a catastrophic emission/heavy crash before reports
-    # were written. `always()` lets this fire even when open-issue-on-failure
-    # itself errored (intermittent gh-cli 5xx) — ISSUE_URL just stays empty.
+    # were written. `!cancelled()` lets this fire even when
+    # open-issue-on-failure itself errored (intermittent gh-cli 5xx) —
+    # ISSUE_URL just stays empty — while still dying cleanly on cancellation
+    # rather than lingering queued like a bare `always()` would.
     if: |
-      always() && (
+      !cancelled() && (
         needs.publish-matrix-summary.outputs.has_failures == 'true' ||
         needs.full-emission-matrix.result == 'failure' ||
         needs.heavy-tier.result == 'failure'

@@ -115,7 +115,11 @@ jobs:
   publish-matrix-summary:
     runs-on: ubuntu-latest
     needs: [full-emission-matrix, default-cell-required]
-    if: always()
+    # Run on success AND on advisory cell failures (so the summary still
+    # posts when cells go red), but NOT during cancellation — a bare
+    # `always()` here lingers queued when a run is superseded and has to be
+    # force-cancelled. `!cancelled()` dies cleanly instead.
+    if: ${{ !cancelled() }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
