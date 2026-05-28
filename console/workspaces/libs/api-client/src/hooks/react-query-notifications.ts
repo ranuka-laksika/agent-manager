@@ -18,6 +18,7 @@ type MutationAction =
   | "delete"
   | "deploy"
   | "generate"
+  | "promote"
   | "publish"
   | "remove"
   | "restore"
@@ -55,6 +56,7 @@ const SUCCESS_VERB_MAP: Record<MutationAction, string> = {
   delete: "deleted",
   deploy: "deployed",
   generate: "generated",
+  promote: "promoted",
   publish: "published",
   remove: "removed",
   restore: "restored",

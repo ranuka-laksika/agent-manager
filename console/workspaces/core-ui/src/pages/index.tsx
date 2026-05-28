@@ -18,6 +18,10 @@
 
 import { lazy, type ComponentType, type FC } from "react";
 import { metaData as buildMetadata } from "@agent-management-platform/build";
+import {
+  metaData as deploymentPipelinesMetadata,
+  environmentsMetaData,
+} from "@agent-management-platform/deployment-pipelines";
 import { metaData as agentSecurityMetadata } from "@agent-management-platform/agent-security";
 import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMProviderComponent } from "@agent-management-platform/configure-agent";
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
@@ -90,6 +94,13 @@ export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 
 // Identities
 export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
+
+// Deployment Pipelines
+export const LazyDeploymentPipelinesOrg = deploymentPipelinesMetadata.levels!.organization as FC;
+
+// Environments
+export const LazyEnvironmentsOrg = environmentsMetaData.levels!.organization as FC;
+
 // Agent Kind
 export const LazyCatalogOrg = agentKindMetadata.levels!.organization as FC;
 export const LazyPublishComponent = agentKindMetadata.levels!.component as FC;

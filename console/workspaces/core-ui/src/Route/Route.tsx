@@ -32,6 +32,8 @@ import {
   LazyLLMProvidersComponent, LazyViewLLMProviderComponent, LazyAddLLMProvidersOrg,
   LazyGatewaysOrg,
   LazyIdentitiesOrg,
+  LazyDeploymentPipelinesOrg,
+  LazyEnvironmentsOrg,
   LazyCatalogOrg,
   LazyAddNewAgent,
   LazyAddNewProject,
@@ -128,6 +130,18 @@ export function RootRouter() {
                 relativeRouteMap.children.org.children.identities.path + "/*"
               }
               element={<LazyIdentitiesOrg />}
+            />
+            <Route
+              path={
+                relativeRouteMap.children.org.children.deploymentPipelines.path + "/*"
+              }
+              element={<LazyDeploymentPipelinesOrg />}
+            />
+            <Route
+              path={
+                relativeRouteMap.children.org.children.environments.path + "/*"
+              }
+              element={<LazyEnvironmentsOrg />}
             />
             <Route
               path={

@@ -425,6 +425,10 @@
       "projectFolder": "workspaces/pages/identities"
     },
     {
+      "packageName": "@agent-management-platform/deployment-pipelines",
+      "projectFolder": "workspaces/pages/deployment-pipelines"
+    },
+    {
       "packageName": "@agent-management-platform/agent-security",
       "projectFolder": "workspaces/pages/agent-security"
     },

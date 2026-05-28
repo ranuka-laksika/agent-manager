@@ -114,6 +114,16 @@ export const generatedRouteMap =  {
             }
           }
         },
+        "deploymentPipelines": {
+          "path": "/org/:orgId/deployment-pipelines",
+          "wildPath": "/org/:orgId/deployment-pipelines/*",
+          "children": {}
+        },
+        "environments": {
+          "path": "/org/:orgId/environments",
+          "wildPath": "/org/:orgId/environments/*",
+          "children": {}
+        },
         "catalog": {
           "path": "/org/:orgId/catalog",
           "wildPath": "/org/:orgId/catalog/*",
