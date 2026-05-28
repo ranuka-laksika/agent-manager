@@ -323,8 +323,8 @@ suite startup.
   The `wrapt<2` pin is the constraint already baked into
   `python-instrumentation-provider/requirements.txt`; re-exporting it from the
   provider keeps it travelling with the version.
-- `bootstrap_module()` → path to a `_test_sitecustomize.py` mirroring
-  `python-instrumentation-provider/sitecustomize.py` but calling
+- `bootstrap_module()` → path to `providers/bootstrap/traceloop/sitecustomize.py`
+  mirroring `python-instrumentation-provider/sitecustomize.py` but calling
   `Traceloop.init(exporter=InMemorySpanExporter())` instead of OTLP HTTP.
   This is a deliberate fork — a contract test asserts the two files configure
   Traceloop with the same content/metrics flags so they cannot drift apart.
@@ -1115,7 +1115,9 @@ test/instrumentation-matrix/
 │   ├── __init__.py                        # PROVIDERS registry
 │   ├── traceloop.py
 │   ├── manual.py
-│   └── _test_sitecustomize_traceloop.py   # forked sitecustomize for InMem capture
+│   └── bootstrap/                         # forked sitecustomize per provider (InMem capture)
+│       ├── traceloop/sitecustomize.py
+│       └── manual/sitecustomize.py
 ├── cells/
 │   ├── langchain_sample.py
 │   ├── langgraph_sample.py

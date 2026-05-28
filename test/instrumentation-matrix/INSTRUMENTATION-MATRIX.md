@@ -80,9 +80,11 @@ A red emission cell is diagnosed from the run, no local repro needed:
    step summary, not a PR comment — fork PRs can't comment). One row per
    cell with result + a one-line detail (`category: missing <kinds>` or a
    `path` + message for a schema violation).
-2. **Per-cell artifact** — each cell uploads a `cell-report-<id>` artifact
-   (PR workflow) / lands in `reports/cells/` (local). The JSON has the
-   coverage map, the violations, and the gzipped captured spans.
+2. **Per-cell JSON** — `reports/cells/<id>.json`, with the coverage map,
+   violations, and gzipped captured spans. In CI the full matrix bundles
+   these into the `matrix-reports` artifact (the gating default cell also
+   uploads `default-cell-report`); locally they're written under
+   `reports/cells/`.
 3. **Triage diff** — `reports/diffs/<cell-id>.diff.md` lists the schema's
    required keys vs what the cell actually captured. `nox -s report`
    generates these for failing cells.
@@ -109,7 +111,7 @@ OpenLit / vanilla-OTel later without rewriting cells. To add one:
    - `package_specs(version)` → pip specs the cell venv installs
    - `bootstrap_module()` → a sitecustomize-style module that initialises the
      SDK against an `InMemorySpanExporter` (mirror
-     `providers/_test_sitecustomize_traceloop.py`)
+     `providers/bootstrap/traceloop/sitecustomize.py`)
    - `contract_schema_id()` → which schema bundle validates its spans
    - `normalize_span(raw)` → optional namespace folding (default identity)
 2. Register it in `providers/__init__.py`'s `PROVIDERS` dict.
@@ -119,10 +121,13 @@ OpenLit / vanilla-OTel later without rewriting cells. To add one:
    cross-products with, or pinned to specific frameworks via a `provider:`
    restriction (as `manual-rag` does for the `manual` provider).
 
-`ManualProvider` is the simplest worked example: it installs
-`amp-instrumentation`, bootstraps `init_otel()` against the in-memory
-exporter, and validates against the *same* `traceloop/v1` schema as the auto
-path — because the observer reads one shape regardless of source.
+`ManualProvider` is the simplest worked example: it installs only stdlib
+OpenTelemetry (`opentelemetry-sdk`/`-api`), and its sitecustomize wires a
+`TracerProvider` + `InMemorySpanExporter` directly — deliberately *not*
+calling `amp_instrumentation.init_otel()`, since that ships spans over OTLP
+and the in-memory harness replaces that path. It validates against the
+*same* `traceloop/v1` schema as the auto path — the observer reads one shape
+regardless of source.
 
 ## 6. The `known-broken` workflow
 
@@ -136,7 +141,8 @@ When a cell exposes a regression you can't fix immediately:
    `skipped-known-broken`, so it doesn't block the PR.
 3. Nightly, the `revalidate-known-broken` job re-runs every known-broken cell
    unconditionally. If a previously-broken cell now **passes**, it opens an
-   `instrumentation-matrix-revalidate` issue suggesting you drop the exemption.
+   issue (titled "known-broken cells now passing — drop exemptions", labeled
+   `instrumentation-matrix-revalidate`) suggesting you drop the exemption.
 4. Past `until:`, the cell un-skips automatically — forcing a deliberate
    re-extend or fix rather than letting an exemption rot silently.
 
