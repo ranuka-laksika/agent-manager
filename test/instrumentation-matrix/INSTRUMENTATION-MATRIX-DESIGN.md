@@ -932,14 +932,16 @@ on:
 
 Jobs:
 
-1. `emission-matrix-full` — same as tier 1 but ungated by file paths.
-2. `heavy-tier` — needs `emission-matrix-full`; restores k3d snapshot,
+1. `full-emission-matrix` — same as tier 1 but ungated by file paths.
+2. `heavy-tier` — needs `full-emission-matrix`; restores k3d snapshot,
    iterates heavy cells, posts heavy-tier report.
 3. `revalidate-known-broken` — re-runs every `known-broken` cell; opens an
    issue if any previously-broken cell now passes ("drop the exemption").
-4. `open-issue-on-failure` — if anything red, opens (or updates) an
+4. `publish-matrix-summary` — aggregates emission + heavy reports, renders
+   the summary, and exposes counts / likely-cause as job outputs.
+5. `open-issue-on-failure` — if anything red, opens (or updates) an
    `instrumentation-matrix-failure` GitHub issue with the matrix report.
-5. `notify-google-chat` — posts to the team Google Chat space via the same
+6. `notify-google-chat` — posts to the team Google Chat space via the same
    webhook used by `traceloop-release-watch.yaml`. One message per nightly,
    listing failed cells with a link to the issue. Quiet on success.
 
