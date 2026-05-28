@@ -21,9 +21,11 @@
           "type": "string"
         },
         "db.system": {
+          "minLength": 1,
           "type": "string"
         },
         "db.system.name": {
+          "minLength": 1,
           "type": "string"
         },
         "db.vector.query.top_k": {

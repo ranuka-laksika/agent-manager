@@ -66,6 +66,7 @@ def test_validator_passes_embedding_span():
 
 
 def test_validator_rejects_embedding_missing_model():
+    # Neither request.model nor response.model → the model anyOf fails.
     v = ContractValidator.load("traceloop/v1")
     span = {
         "name": "OpenAIEmbeddings.embed",
@@ -77,7 +78,22 @@ def test_validator_rejects_embedding_missing_model():
     }
     result = v.validate(span, kind="embedding")
     assert not result.ok
-    assert "gen_ai.request.model" in result.message
+
+
+def test_validator_accepts_embedding_with_only_response_model():
+    # The observer accepts response.model OR request.model, so an embedding
+    # span emitting only the response model must validate (F-70 / CodeRabbit).
+    v = ContractValidator.load("traceloop/v1")
+    span = {
+        "name": "OpenAIEmbeddings.embed",
+        "kind": "CLIENT",
+        "attributes": {
+            "gen_ai.provider.name": "openai",
+            "gen_ai.operation.name": "embeddings",
+            "gen_ai.response.model": "text-embedding-3-small",
+        },
+    }
+    assert v.validate(span, kind="embedding").ok
 
 
 # ---------- Tool ----------

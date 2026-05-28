@@ -65,8 +65,10 @@ var Contract = []KindSpec{
 			{Key: "gen_ai.operation.name", Type: "string", Required: true, MinLen: 1},
 			{Key: "gen_ai.system", Type: "string"},
 			{Key: "gen_ai.provider.name", Type: "string"},
-			{Key: "gen_ai.request.model", Type: "string", Required: true, MinLen: 1},
-			{Key: "gen_ai.response.model", Type: "string"},
+			// request/response model: one-of enforced via EmbeddingModelAnyOf
+			// (the observer accepts either). Each is non-empty when present.
+			{Key: "gen_ai.request.model", Type: "string", MinLen: 1},
+			{Key: "gen_ai.response.model", Type: "string", MinLen: 1},
 			{Key: "gen_ai.usage.input_tokens", Type: "integer", Min: ptr(0)},
 		},
 	},
@@ -77,9 +79,9 @@ var Contract = []KindSpec{
 		// `anyOf` group on the attributes object below.
 		Kind: "tool",
 		Attributes: []AttributeSpec{
-			{Key: "traceloop.entity.name", Type: "string"},
-			{Key: "function.name", Type: "string"},
-			{Key: "gen_ai.tool.name", Type: "string"},
+			{Key: "traceloop.entity.name", Type: "string", MinLen: 1},
+			{Key: "function.name", Type: "string", MinLen: 1},
+			{Key: "gen_ai.tool.name", Type: "string", MinLen: 1},
 			{Key: "traceloop.entity.input", Type: "string"},
 			{Key: "traceloop.entity.output", Type: "string"},
 			{Key: "gen_ai.tool.status", Type: "string"},
@@ -89,8 +91,11 @@ var Contract = []KindSpec{
 	{
 		Kind: "retriever",
 		Attributes: []AttributeSpec{
-			{Key: "db.system", Type: "string"},
-			{Key: "db.system.name", Type: "string"},
+			// db.system is the legacy key; db.system.name is the current OTel
+			// semconv alias. One-of enforced via RetrieverVectorDBAnyOf;
+			// non-empty when present.
+			{Key: "db.system", Type: "string", MinLen: 1},
+			{Key: "db.system.name", Type: "string", MinLen: 1},
 			{Key: "db.collection.name", Type: "string"},
 			{Key: "db.vector.query.top_k", Type: "integer", Min: ptr(1)},
 		},
@@ -162,6 +167,16 @@ var ToolNameAnyOf = []string{
 var RetrieverVectorDBAnyOf = []string{
 	"db.system",
 	"db.system.name",
+}
+
+// EmbeddingModelAnyOf lists the model keys `populateEmbeddingAttributes`
+// accepts: it reads gen_ai.response.model OR falls back to
+// gen_ai.request.model (opensearch/process.go). Requiring only
+// request.model would false-fail a valid embedding span that emits just the
+// response model, so the contract requires one-of instead.
+var EmbeddingModelAnyOf = []string{
+	"gen_ai.request.model",
+	"gen_ai.response.model",
 }
 
 // VendorAnyOf lists the vendor keys the observer's extractVendor helper

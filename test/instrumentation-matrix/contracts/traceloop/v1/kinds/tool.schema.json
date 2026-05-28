@@ -23,9 +23,11 @@
       ],
       "properties": {
         "function.name": {
+          "minLength": 1,
           "type": "string"
         },
         "gen_ai.tool.name": {
+          "minLength": 1,
           "type": "string"
         },
         "gen_ai.tool.status": {
@@ -35,6 +37,7 @@
           "type": "string"
         },
         "traceloop.entity.name": {
+          "minLength": 1,
           "type": "string"
         },
         "traceloop.entity.output": {

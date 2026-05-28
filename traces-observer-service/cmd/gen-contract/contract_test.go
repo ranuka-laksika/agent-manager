@@ -89,19 +89,25 @@ func TestRenderLLMEmitsVendorAnyOf(t *testing.T) {
 }
 
 func TestRenderEmbeddingOmitsVendorAnyOf(t *testing.T) {
-	// Embedding intentionally omits VendorAnyOf because Traceloop's LlamaIndex
-	// OpenAIEmbedding instrumentation does not emit a vendor attribute.
+	// Embedding enforces a model anyOf (request/response) but intentionally
+	// does NOT require a vendor: Traceloop's LlamaIndex OpenAIEmbedding
+	// instrumentation emits the model but not a vendor attribute.
 	k := KindSpec{
 		Kind: "embedding",
 		Attributes: []AttributeSpec{
 			{Key: "gen_ai.system", Type: "string"},
 			{Key: "gen_ai.provider.name", Type: "string"},
+			{Key: "gen_ai.request.model", Type: "string", MinLen: 1},
+			{Key: "gen_ai.response.model", Type: "string", MinLen: 1},
 		},
 	}
 	b, _ := json.Marshal(renderKindSchema(k))
 	s := string(b)
-	if strings.Contains(s, `"anyOf"`) {
-		t.Fatalf("embedding schema unexpectedly has anyOf clause: %s", s)
+	// The model anyOf is expected; the vendor keys must NOT be required.
+	for _, v := range VendorAnyOf {
+		if strings.Contains(s, `"required":["`+v+`"]`) {
+			t.Fatalf("embedding schema unexpectedly requires vendor %q: %s", v, s)
+		}
 	}
 }
 
