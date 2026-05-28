@@ -8,14 +8,18 @@ us undo the concession.
 The schema rules in `contracts/traceloop/v1/` and `cmd/gen-contract/contract.go`
 should never relax silently — every relaxation has an `F-NNN` entry justifying
 it. When upstream fixes a finding, drop the concession, regenerate the schemas
-via `make gen-instrumentation-contract`, and mark the finding `resolved` here.
+via `make gen-instrumentation-contract`, and **remove the entry** — a fully
+resolved finding's rationale lives on in its commit message + the code
+comments, so this log stays focused on what's still active. (IDs are never
+reused, so removed numbers just leave a gap.)
 
 ## Conventions
 
-- **ID**: `F-NNN`, monotonically increasing. Reference from commit messages,
-  contract.go, and code comments.
-- **Status**: `open` / `mitigated` / `resolved`. A finding can be `mitigated`
-  by a workaround on our side without the upstream being fixed.
+- **ID**: `F-NNN`, monotonically increasing, never reused. Reference from
+  commit messages, contract.go, and code comments.
+- **Status**: `open` (no fix yet) or `mitigated` (a workaround/concession on
+  our side is in force without the upstream being fixed). A genuinely
+  resolved finding is removed rather than kept.
 - **Combo**: `(provider × version) × (framework × version)` whose emission
   exhibits the gap. If the gap is provider-only, omit the framework half.
 - **Symptom**: what the matrix observes — a missing kind, a wrong type,
@@ -117,30 +121,6 @@ via `make gen-instrumentation-contract`, and mark the finding `resolved` here.
 - **Re-tighten when**: Traceloop ships a 0.61+ release with looser
   `opentelemetry-api` requirements; or CrewAI relaxes its `opentelemetry-api`
   pin. At that point we can bump the matrix pin and re-record.
-
-## F-005 — Traceloop 0.60 vendor key is `gen_ai.provider.name`, observer only read `gen_ai.system`
-
-- **Status**: resolved (commit `42f4067d`)
-- **Combo**: `traceloop-sdk 0.60.0` × any framework
-- **Discovered**: 2026-05-26 (LangChain Phase 1 default cell)
-- **Symptom**: every Traceloop 0.60+ span produced empty
-  `LLMData.Vendor` / `EmbeddingData.Vendor` / `AgentData.Framework`.
-- **Cause**: OTel GenAI semconv renamed `gen_ai.system` to `gen_ai.provider.name`
-  mid-2025; Traceloop 0.60 emits the new key, observer code only read the old.
-- **Fix**: added `extractVendor` helper in `opensearch/process.go` that prefers
-  the legacy key and falls back to the current one. Schema's `VendorAnyOf`
-  accepts either.
-
-## F-007 — Traceloop emits `workflow` / `task` for generic wrapper spans
-
-- **Status**: resolved (commit `62e0a698`)
-- **Combo**: `traceloop-sdk 0.60.0` × any framework (LlamaIndex, CrewAI most prominently)
-- **Discovered**: 2026-05-26
-- **Symptom**: many wrapper spans carry `traceloop.span.kind=workflow` or `task`;
-  AMP's observer has only a `chain` kind for "generic workflows".
-- **Fix**: classifier (`harness/classify.py`) maps `workflow` and `task` to
-  `chain`, but only after the `gen_ai.operation.name` discriminator runs so a
-  real embedding span wrapped in a Traceloop `task` still classifies as embedding.
 
 ## F-006 — Traceloop's LlamaIndex `OpenAIEmbedding` instrumentation omits vendor
 
