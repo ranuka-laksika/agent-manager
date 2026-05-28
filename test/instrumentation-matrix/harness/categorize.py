@@ -9,8 +9,8 @@ Branches are matched in order; the first hit wins. Keep the substring matches
 narrow and case-insensitive; broaden only when a real failure surfaces a
 phrasing the classifier missed.
 
-TODO(phase-6): wire this into ``harness/test_cell.py`` so install and scenario
-errors get categorized at the source. Today the per-cell pytest body assigns
+TODO: wire this into ``harness/test_cell.py`` so install and scenario errors
+get categorized at the source. Today the per-cell pytest body assigns
 category strings directly from validator outcomes; pip / sample-import paths
 don't flow through this classifier yet.
 """

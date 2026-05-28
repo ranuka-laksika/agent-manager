@@ -63,8 +63,8 @@ to onboard" should be **a single CI run**, not a triage epic.
 - Console UI / visual rendering validation. Out of scope.
 - Evaluator end-to-end validation. The suite stops at validating
   `AmpAttributes` shape; evaluators consuming that shape are their own concern.
-- "Every library Traceloop claims to support." v1 covers a deliberate curated
-  set; expansion is a manifest change once the harness is proven.
+- "Every library Traceloop claims to support." The suite covers a deliberate
+  curated set; expansion is a manifest change once the harness is proven.
 - Replacing the existing `test/e2e/` Go/Ginkgo suite. That suite tests the
   platform happy path; this one tests the SDK → observer contract. They
   coexist.
@@ -98,8 +98,8 @@ A Python-based, manifest-driven, two-tier compatibility harness at
 ### 3.3 Four moving parts of the suite
 
 1. **Matrix manifest** (`matrix.yaml`) — source of truth for which cells exist.
-2. **Provider interface** — pluggable abstraction (`TraceloopProvider`,
-   `ManualProvider` in v1; OpenInference / OpenLit / vanilla-OTel later).
+2. **Provider interface** — pluggable abstraction (`TraceloopProvider` +
+   `ManualProvider` today; OpenInference / OpenLit / vanilla-OTel later).
 3. **Span contract validator** — versioned JSON-schema bundles per provider.
    Used by both auto and manual cells.
 4. **Cell harness** — given a manifest row, builds a venv, runs the agent
@@ -269,8 +269,8 @@ baseline. That is the moment the new version goes from "shadow-tested" to
 ## 5. Provider interface
 
 A *provider* is the abstraction that lets the suite swap Traceloop for
-OpenInference / OpenLit / vanilla-OTel later without rewriting cells. v1 ships
-only `TraceloopProvider` and `ManualProvider`.
+OpenInference / OpenLit / vanilla-OTel later without rewriting cells. Today it
+ships only `TraceloopProvider` and `ManualProvider`.
 
 ### 5.1 The contract
 
@@ -308,16 +308,17 @@ class InstrumentationProvider(Protocol):
 PROVIDERS: dict[str, InstrumentationProvider] = {
     "traceloop": TraceloopProvider(),
     "manual":    ManualProvider(),
-    # "openinference": OpenInferenceProvider(),    # v2
-    # "openlit":       OpenLitProvider(),          # v2
-    # "otel-genai":    VanillaGenAIProvider(),     # v2
+    # planned follow-up providers:
+    # "openinference": OpenInferenceProvider(),
+    # "openlit":       OpenLitProvider(),
+    # "otel-genai":    VanillaGenAIProvider(),
 }
 ```
 
 Adding a manifest entry whose `provider:` is not registered fails fast at
 suite startup.
 
-### 5.3 What `TraceloopProvider` does in v1
+### 5.3 What `TraceloopProvider` does
 
 - `package_specs("0.60.0")` → `["traceloop-sdk==0.60.0", "wrapt<2.0.0", "opentelemetry-sdk", ...]`.
   The `wrapt<2` pin is the constraint already baked into
@@ -330,7 +331,7 @@ suite startup.
   Traceloop with the same content/metrics flags so they cannot drift apart.
 - `contract_schema_id()` → `"traceloop/v1"`.
 
-### 5.4 What `ManualProvider` does in v1
+### 5.4 What `ManualProvider` does
 
 - `package_specs(version)` → `[f"amp-instrumentation=={version}", "opentelemetry-api", "opentelemetry-sdk"]`.
 - `bootstrap_module()` → a tiny test bootstrap that calls
@@ -719,9 +720,9 @@ nox -s emission
 
 ### 9.2 Cell subset
 
-Declared in `matrix.yaml.heavyTier`. For v1: ~3 Traceloop versions × 1 default
-framework + 6 frameworks × 1 default combo ≈ **8–10 cells**. Wall time on
-parallel runners: ~1 h.
+Declared in `matrix.yaml.heavyTier`. Currently ~3 Traceloop versions × 1
+default framework + 6 frameworks × 1 default combo ≈ **8–10 cells**. Wall
+time on parallel runners: ~1 h.
 
 ### 9.3 Infra
 
@@ -811,8 +812,8 @@ machinery the earlier design needed.
 ### 9.7 Self-hosted runner escape hatch
 
 A `runs-on` matrix input lets the heavy tier swap to a self-hosted runner with
-a persistent k3d cluster. Not v1, but the workflow is shaped so adding the
-swap later is a one-line change.
+a persistent k3d cluster. Not done yet, but the workflow is shaped so adding
+the swap later is a one-line change.
 
 ### 9.8 Out of scope for heavy tier
 
@@ -1156,15 +1157,16 @@ scripts/
 
 ## 14. Open questions / future work
 
-These are deliberately deferred to v2+:
+These are deliberately deferred to a later milestone:
 
-1. **OpenInference / OpenLit providers.** v1 ships the abstraction, not the
-   implementations. Wiring them up is a contained follow-up: one provider
-   class, one contract schema bundle.
+1. **OpenInference / OpenLit providers.** The suite ships the abstraction,
+   not these implementations. Wiring them up is a contained follow-up: one
+   provider class, one contract schema bundle.
 2. **Vector-DB and reranker cells.** Chroma, Pinecone, Cohere rerank, etc.
-   Deferred until v1 is solid; manifest already accommodates them.
-3. **A self-hosted runner for the heavy tier.** GHA-hosted is fine for v1
-   volumes; the workflow is shaped to swap in a persistent runner later.
+   Deferred until the core suite is solid; manifest already accommodates them.
+3. **A self-hosted runner for the heavy tier.** GHA-hosted is fine for
+   current volumes; the workflow is shaped to swap in a persistent runner
+   later.
 4. **Console rendering tests.** Out of scope for this design.
 5. **Migrating off Traceloop entirely.** Out of scope; the provider
    abstraction is what makes that conversation tractable when it arrives.

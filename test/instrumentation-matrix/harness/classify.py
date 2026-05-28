@@ -2,8 +2,8 @@
 
 The matrix harness and the observer must classify the same span the same way;
 this module is the shared canonical implementation on the Python side. If the
-observer's classifier is updated, regenerate-contract (Phase 3) will surface
-the divergence in CI.
+observer's classifier is updated, the contract-drift check (`make
+check-contract-drift`) will surface the divergence in CI.
 
 Recognises both the legacy attribute namespace (gen_ai.system,
 traceloop.span.kind) and the current OTel GenAI semconv (gen_ai.provider.name,

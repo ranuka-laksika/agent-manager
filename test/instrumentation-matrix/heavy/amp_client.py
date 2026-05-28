@@ -234,7 +234,7 @@ class AmpClient:
         base = f"/api/v1/orgs/{org}/projects/{name}/agents/{name}/builds"
         deadline = time.monotonic() + _BUILD_TIMEOUT_S
         build_name = None
-        # Phase 1: wait for a build to appear.
+        # Step 1: wait for a build to appear.
         while time.monotonic() < deadline:
             builds = self._request("GET", base, expect=(200,)).json().get("builds", [])
             if builds:
@@ -243,7 +243,7 @@ class AmpClient:
             time.sleep(_BUILD_POLL_S)
         if not build_name:
             raise TimeoutError(f"no build appeared for {name} within {_BUILD_TIMEOUT_S}s")
-        # Phase 2: poll the build until Completed.
+        # Step 2: poll the build until Completed.
         while time.monotonic() < deadline:
             detail = self._request("GET", f"{base}/{build_name}", expect=(200,)).json()
             status = detail.get("status")

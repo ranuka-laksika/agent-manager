@@ -1,8 +1,8 @@
 """Google Chat alert message builder.
 
 Mirrors the shape `traceloop-release-watch.yaml` already uses: a Chat webhook
-accepts a plain `{"text": "..."}` payload. CI (Phase 8) posts this to a
-secret-held webhook URL — failure-only, quiet on success.
+accepts a plain `{"text": "..."}` payload. The nightly workflow posts this to
+a secret-held webhook URL — failure-only, quiet on success.
 """
 from __future__ import annotations
 

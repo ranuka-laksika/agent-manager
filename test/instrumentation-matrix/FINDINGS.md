@@ -102,9 +102,9 @@ reused, so removed numbers just leave a gap.)
   Re-evaluate once F-009 is fixed.
 - **Re-tighten when**: F-009 is resolved AND a re-run still shows no tool-kind
   signal (then this remains a real upstream gap), OR Traceloop ships a release
-  that wraps CrewAI tool execution as separate spans, OR we add OpenInference
-  as a second instrumentation provider in v2 of the matrix and the
-  OpenInference CrewAI cell asserts `tool` kind.
+  that wraps CrewAI tool execution as separate spans, OR OpenInference is
+  added as a second instrumentation provider and its CrewAI cell asserts
+  `tool` kind.
 
 ## F-004 — `crewai 1.14.x` × `traceloop-sdk 0.60` is unresolvable
 
@@ -151,8 +151,8 @@ reused, so removed numbers just leave a gap.)
 - **Mitigation (temporary)**: `matrix.yaml.frameworks[langgraph].spanKinds = [llm]`.
 - **Re-tighten when**: F-009 is resolved AND a re-run still shows no tool-kind
   signal (then this is a real upstream gap), OR Traceloop adds tool-call
-  wrapping for LangChain/LangGraph tools, OR we add OpenInference as a second
-  provider in v2 of the matrix.
+  wrapping for LangChain/LangGraph tools, OR OpenInference is added as a
+  second provider.
 
 ## F-009 — Harness doesn't capture span events
 

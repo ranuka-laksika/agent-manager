@@ -52,8 +52,7 @@ OPENAI_API_KEY=sk-... ANTHROPIC_API_KEY=sk-ant-... \
 
 Use **Actions → Instrumentation matrix — manual** (Tier 3) with inputs for
 target versions / frameworks. See
-[`.github/workflows/instrumentation-matrix-manual.yaml`](../../.github/workflows/instrumentation-matrix-manual.yaml)
-(landing in Phase 8).
+[`.github/workflows/instrumentation-matrix-manual.yaml`](../../.github/workflows/instrumentation-matrix-manual.yaml).
 
 ## Findings log
 
