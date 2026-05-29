@@ -28,6 +28,7 @@ from pathlib import Path
 
 import requests
 
+from harness.deployable_samples import DEPLOYABLE_SAMPLES
 from harness.heavy_subset import select_heavy_subset
 from harness.manifest import Cell, expand_matrix, load_manifest
 from harness.reports import CellResult, write_cell_report
@@ -61,14 +62,17 @@ _DEFAULTS = {
 # vars at create time; absent keys are simply not forwarded.
 _AGENT_SECRET_ENV_KEYS = ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "TAVILY_API_KEY")
 
-# Heavy deploys ONE representative agent (samples/customer-support-agent, a
-# LangChain/LangGraph app) for every cell, so it asserts the kinds THAT agent
-# emits — not each cell's framework kinds (which would need a deployable agent
-# per framework; see RUNBOOK §7). We require the llm span (every chat turn
-# makes a model call); the richer kinds it also emits (agent/chain/embedding)
-# are shape-validated when present via validate_all and surfaced in the
-# coverage "actual" list. Per-framework span shape is the emission tier's job.
-_DEPLOYED_AGENT_SPAN_KINDS = ["llm"]
+def _expected_kinds(cell: Cell) -> list[str]:
+    """Span kinds to assert for this cell, taken from the *deployed sample*.
+
+    Heavy deploys the sample matching the cell's framework (see
+    harness.deployable_samples), so the asserted kinds are that sample's:
+    `llm` for the LangGraph customer-support-agent the langchain cell deploys,
+    `llm`+`agent`+`crewaitask` for the crewai agent. Any richer kinds a sample
+    also emits are still shape-validated via validate_all and surfaced in the
+    coverage "actual" list. Per-framework span shape is the emission tier's job.
+    """
+    return list(DEPLOYABLE_SAMPLES[cell.framework_name].expected_kinds)
 
 
 def _env(name: str) -> str:
@@ -137,7 +141,11 @@ def main() -> int:
                 category="pipeline-error",
                 skip_reason=None,
                 durations={},
-                coverage={"expected": _DEPLOYED_AGENT_SPAN_KINDS, "actual": [], "missing": _DEPLOYED_AGENT_SPAN_KINDS},
+                coverage={
+                    "expected": _expected_kinds(cell),
+                    "actual": [],
+                    "missing": _expected_kinds(cell),
+                },
                 violations=[{"spanName": "", "kind": "", "rule": "driver",
                              "path": "", "message": f"{type(e).__name__}: {e}"}],
                 captured_spans=[],
@@ -157,6 +165,7 @@ def main() -> int:
 def _run_cell(
     cell: Cell, client: AmpClient, observer_base_url: str, agent_env: dict[str, str]
 ) -> CellResult:
+    expected = _expected_kinds(cell)
     if cell.instrumentation_version is None:
         # Heavy tier only covers init-container-shipping providers today.
         # Manual cells are emission-only.
@@ -166,7 +175,7 @@ def _run_cell(
             category=None,
             skip_reason="no instrumentation_version (manual provider)",
             durations={},
-            coverage={"expected": _DEPLOYED_AGENT_SPAN_KINDS, "actual": [], "missing": []},
+            coverage={"expected": expected, "actual": [], "missing": []},
             violations=[],
             captured_spans=[],
         )
@@ -176,6 +185,7 @@ def _run_cell(
     deployed = client.deploy_agent(
         cell_id=cell.id,
         instrumentation_version=cell.instrumentation_version,
+        framework_name=cell.framework_name,
         framework_package=cell.framework_package,
         framework_version=cell.framework_version,
         python_version=cell.python,
@@ -198,9 +208,9 @@ def _run_cell(
             skip_reason=None,
             durations={},
             coverage={
-                "expected": _DEPLOYED_AGENT_SPAN_KINDS,
+                "expected": expected,
                 "actual": [],
-                "missing": _DEPLOYED_AGENT_SPAN_KINDS,
+                "missing": expected,
             },
             violations=[],
             captured_spans=[],
@@ -208,7 +218,7 @@ def _run_cell(
 
     provider = PROVIDERS[cell.provider_name]
     validator = ContractValidator.load(provider.contract_schema_id())
-    coverage = validator.assert_coverage(spans, expected_kinds=_DEPLOYED_AGENT_SPAN_KINDS)
+    coverage = validator.assert_coverage(spans, expected_kinds=expected)
     shape_results = validator.validate_all(spans)
     violations = [
         {
@@ -223,7 +233,7 @@ def _run_cell(
     ]
 
     base_coverage = {
-        "expected": _DEPLOYED_AGENT_SPAN_KINDS,
+        "expected": expected,
         "actual": sorted(coverage.actual),
         "missing": sorted(coverage.missing),
     }
