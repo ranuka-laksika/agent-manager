@@ -74,6 +74,10 @@ spec:
           items:
             type: object
             x-kubernetes-preserve-unknown-fields: true
+        artifactId:
+          type: string
+          description: "Per-environment artifact UUID override. When set, takes precedence over parameters.artifactId."
+          default: ""
 
   creates:
     # --- Backend: kgateway static backend pointing to WSO2 API Platform router ---
@@ -101,9 +105,9 @@ spec:
           name: ${metadata.name}
           namespace: ${metadata.namespace}
           annotations:
-            gateway.api-platform.wso2.com/artifact-id: ${parameters.artifactId}
+            gateway.api-platform.wso2.com/artifact-id: "${has(environmentConfigs.artifactId) && environmentConfigs.artifactId != '' ? environmentConfigs.artifactId : parameters.artifactId}"
         spec:
-          displayName: ${parameters.apiName}
+          displayName: ${parameters.apiName}-${metadata.environmentName}
           version: ${parameters.apiVersion}
           context: /${metadata.environmentName}-${metadata.componentNamespace}-${metadata.componentName}
           upstream:

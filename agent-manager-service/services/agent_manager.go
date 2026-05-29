@@ -2265,8 +2265,10 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	isAPIAgent := agent.Type.Type == string(utils.AgentTypeAPI)
 
 	// Build trait environment configs for the release binding.
+	// Deploy sets the artifactId on the Component CR trait parameters (via AttachTraits),
+	// so no per-env override is needed here.
 	policies := buildPolicies(apiCfg)
-	deployTraitEnvConfigs := buildTraitEnvConfigs(tracingCfg, policies)
+	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, tracingCfg, policies, "")
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2470,15 +2472,26 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 }
 
 // buildTraitEnvConfigs builds the traitEnvironmentConfigs map for a release binding.
-func buildTraitEnvConfigs(tracing resolvedTracingConfig, policies []map[string]interface{}) map[string]interface{} {
+// Keys must be trait instance names (format: "{componentName}-{traitName}") because
+// OpenChoreo's rendering engine looks up traitEnvironmentConfigs by instance name.
+// artifactID, when non-empty, is injected as a per-environment override for the api-configuration
+// trait so that each environment gets a unique artifact UUID in its RestApi resource.
+func buildTraitEnvConfigs(agentName string, tracing resolvedTracingConfig, policies []map[string]interface{}, artifactID string) map[string]interface{} {
+	instanceName := func(traitType client.TraitType) string {
+		return agentName + "-" + string(traitType)
+	}
+	apiTraitCfg := map[string]interface{}{
+		"policies": policies,
+	}
+	if artifactID != "" {
+		apiTraitCfg["artifactId"] = artifactID
+	}
 	traitEnvConfigs := map[string]interface{}{
-		string(client.TraitAPIManagement): map[string]interface{}{
-			"policies": policies,
-		},
-		string(client.TraitOTELInstrumentation): map[string]interface{}{
+		instanceName(client.TraitAPIManagement): apiTraitCfg,
+		instanceName(client.TraitOTELInstrumentation): map[string]interface{}{
 			"instrumentationEnabled": tracing.EnableAutoInstrumentation,
 		},
-		string(client.TraitEnvInjection): map[string]interface{}{
+		instanceName(client.TraitEnvInjection): map[string]interface{}{
 			"envInjectionEnabled": !tracing.EnableAutoInstrumentation,
 		},
 	}
@@ -2698,27 +2711,43 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		tracingCfg := resolveTracingConfig(existingConfig, req.EnableAutoInstrumentation, false)
 		apiCfg := resolveAPIConfig(existingConfig, req.EnableApiKeySecurity, req.CorsConfig, false)
 		policies := buildPolicies(apiCfg)
-		traitEnvConfigs = buildTraitEnvConfigs(tracingCfg, policies)
+
+		// Each environment must have its own unique artifact UUID so the gateway controller
+		// does not confuse two environments' RestApi resources (same UUID = one overwrites the other).
+		targetArtifactID := ""
+		targetEnv, targetEnvErr := s.ocClient.GetEnvironment(ctx, orgName, req.TargetEnvironment)
+		if targetEnvErr != nil {
+			return fmt.Errorf("failed to fetch target environment details: %w", targetEnvErr)
+		}
+
+		artifact, artifactErr := ensureAgentEnvAPIArtifact(s.db, s.artifactRepo, orgName, projectName, agentName, targetEnv.UUID)
+		if artifactErr != nil {
+			return fmt.Errorf("failed to ensure target env API artifact: %w", artifactErr)
+		}
+		targetArtifactID = artifact.UUID.String()
+		traitEnvConfigs = buildTraitEnvConfigs(agentName, tracingCfg, policies, targetArtifactID)
 
 		// Only generate API key and set otelEndpoint on first promotion to this environment.
 		// On subsequent promotions, these are already set on the release binding's traitEnvironmentConfigs.
 		_, targetConfigErr := s.agentConfigRepo.Get(orgName, projectName, agentName, req.TargetEnvironment)
 		isFirstPromotion := targetConfigErr != nil
 		if isFirstPromotion {
+			otelKey := agentName + "-" + string(client.TraitOTELInstrumentation)
+			envInjKey := agentName + "-" + string(client.TraitEnvInjection)
 			apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
 			if apiKeyErr != nil {
 				s.logger.Warn("Failed to generate agent API key for promotion", "agentName", agentName, "error", apiKeyErr)
 			} else {
-				otelCfg := traitEnvConfigs[string(client.TraitOTELInstrumentation)].(map[string]interface{})
-				envInjCfg := traitEnvConfigs[string(client.TraitEnvInjection)].(map[string]interface{})
+				otelCfg := traitEnvConfigs[otelKey].(map[string]interface{})
+				envInjCfg := traitEnvConfigs[envInjKey].(map[string]interface{})
 				otelCfg["agentApiKey"] = apiKey
 				envInjCfg["agentApiKey"] = apiKey
 			}
 
 			otelEndpoint := config.GetConfig().OTEL.ExporterEndpoint
 			if otelEndpoint != "" {
-				otelCfg := traitEnvConfigs[string(client.TraitOTELInstrumentation)].(map[string]interface{})
-				envInjCfg := traitEnvConfigs[string(client.TraitEnvInjection)].(map[string]interface{})
+				otelCfg := traitEnvConfigs[otelKey].(map[string]interface{})
+				envInjCfg := traitEnvConfigs[envInjKey].(map[string]interface{})
 				otelCfg["otelEndpoint"] = otelEndpoint
 				envInjCfg["otelEndpoint"] = otelEndpoint
 			}
