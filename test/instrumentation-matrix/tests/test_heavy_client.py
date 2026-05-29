@@ -124,6 +124,11 @@ def test_deploy_agent_uses_framework_specific_sample_path():
     # Source ref defaults to wso2/agent-manager@main.
     assert repo["url"] == "https://github.com/wso2/agent-manager"
     assert repo["branch"] == "main"
+    # The crewai sample's writable-HOME/storage env is set on the workload
+    # (non-sensitive) so the instrumentor + app survive the read-only HOME.
+    env = {e["key"]: e for e in body["configurations"]["env"]}
+    assert env["HOME"]["value"] == "/tmp" and env["HOME"]["isSensitive"] is False
+    assert env["CREWAI_STORAGE_DIR"]["value"] == "/tmp/crewai"
 
 
 @responses.activate

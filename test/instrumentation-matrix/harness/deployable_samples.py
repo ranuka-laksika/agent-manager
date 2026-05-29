@@ -27,6 +27,14 @@ class DeployableSample:
     app_path: str  # repo-relative path the buildpack builds (leading slash)
     run_command: str  # buildpack run command, e.g. "python main.py"
     expected_kinds: tuple[str, ...]  # span kinds the driver asserts coverage of
+    # Non-sensitive env vars set on the deployed workload. Needed when a sample
+    # (or the instrumentation provider's sitecustomize, which imports the
+    # framework at interpreter startup — before the app runs) requires
+    # environment that must exist before the process starts. CrewAI writes
+    # under $HOME at import; the buildpack container's HOME=/nonexistent is
+    # read-only, so both the CrewAI instrumentor and the app crash without
+    # these. Tuple of pairs (not a dict) to keep the dataclass frozen-friendly.
+    env: tuple[tuple[str, str], ...] = ()
 
 
 DEPLOYABLE_SAMPLES: dict[str, DeployableSample] = {
@@ -39,5 +47,6 @@ DEPLOYABLE_SAMPLES: dict[str, DeployableSample] = {
         app_path="/samples/crewai-agent",
         run_command="python main.py",
         expected_kinds=("llm", "agent", "crewaitask"),
+        env=(("HOME", "/tmp"), ("CREWAI_STORAGE_DIR", "/tmp/crewai")),
     ),
 }

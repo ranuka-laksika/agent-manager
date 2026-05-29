@@ -8,11 +8,13 @@ import os
 os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
 os.environ.setdefault("CREWAI_DISABLE_TRACING_PROMPT", "true")
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
-# CrewAI writes under $HOME at import time (a chromadb storage dir) and again
-# at Crew() construction (a credentials dir). The deployed buildpack container
-# runs with HOME=/nonexistent on a read-only filesystem, so both writes crash
-# the pod (CrashLoopBackOff). Redirect storage explicitly and, when HOME isn't
-# writable, repoint it at /tmp — both before importing crewai.
+# CrewAI writes under $HOME at import (a chromadb storage dir) and at Crew()
+# construction (a credentials dir). Under AMP the deployed workload already
+# sets HOME + CREWAI_STORAGE_DIR to writable paths (see
+# harness/deployable_samples.py) — required because the instrumentation
+# provider imports crewai at interpreter startup, before this app runs. This
+# block is a fallback so the sample also runs standalone under a read-only
+# HOME; it no-ops when HOME is already writable or the env is preset.
 os.environ.setdefault("CREWAI_STORAGE_DIR", "/tmp/crewai")
 if not os.access(os.path.expanduser("~"), os.W_OK):
     os.environ["HOME"] = "/tmp"

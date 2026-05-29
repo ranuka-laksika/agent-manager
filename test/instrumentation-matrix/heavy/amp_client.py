@@ -219,6 +219,13 @@ class AmpClient:
             "value": f"{framework_package}=={framework_version}",
             "isSensitive": False,
         })
+        # Sample-declared env (non-sensitive). Set on the workload so it exists
+        # before the interpreter starts — the instrumentation provider's
+        # sitecustomize imports the framework at startup, so env the framework
+        # needs at import (e.g. CrewAI's writable HOME/CREWAI_STORAGE_DIR) must
+        # be present before the app's own code runs.
+        for k, v in sample.env:
+            env.append({"key": k, "value": v, "isSensitive": False})
 
         # (2) project
         self._request(
