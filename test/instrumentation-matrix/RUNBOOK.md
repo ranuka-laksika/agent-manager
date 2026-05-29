@@ -199,11 +199,11 @@ When a cell exposes a regression you can't fix immediately:
          providerVersion: "0.61.0"
          framework: crewai
          frameworkVersion: "1.1.0"
-       reason: "F-011: traceloop 0.61 drops crewai tool spans"
+       reason: "F-012: traceloop 0.61 drops crewai tool spans"
        until: "2026-09-01"
      # …or widen by omitting keys — this gates ALL crewai cells on 0.61:
      - cell: { provider: traceloop, providerVersion: "0.61.0", framework: crewai }
-       reason: "F-011"
+       reason: "F-012"
        until: "2026-09-01"
    ```
 
@@ -222,29 +222,32 @@ Pair every `known-broken` entry with an `F-NNN` entry in `FINDINGS.md` so the
 ## 7. Heavy tier (deploy contract + ops)
 
 The heavy tier (`nox -s heavy`, `heavy/driver.py`) is a **pipeline test**: it
-deploys one representative agent (`samples/customer-support-agent`, a
-LangChain/LangGraph app) against a real AMP stack on k3d, invokes it, polls
+deploys a real agent against a real AMP stack on k3d, invokes it, polls
 `traces-observer-service`, and checks that the spans survive the full path
 (auto-instrumentation → gateway → collector → OpenSearch → observer) and
 validate against the `traceloop/v1` contract.
 
-Because that path is framework-agnostic, one agent proves it — so the subset
-(`harness/heavy_subset.py`) is **one cell per (Traceloop/instrumentation
-version × python)** on the default framework. Those are the two axes that
-change the deployed agent: the init-container image, and the buildpack python
-the agent is built and instrumented on. There is deliberately **no
-per-framework axis**:
-deploying the same LangGraph agent under a `crewai`/`llama-index` label proves
-nothing about those frameworks, and asserting their span kinds (e.g.
-`crewaitask`) against it can never pass. The driver therefore validates the
-kinds the *deployed agent* emits (`heavy/driver.py:_DEPLOYED_AGENT_SPAN_KINDS`
-— the `llm` span, plus shape-validation of every captured span), **not** each
-cell's framework kinds. Per-framework span *shape* is the emission tier's job.
+It has a **per-framework axis for frameworks that ship a deployable sample**.
+`harness/deployable_samples.py` maps each such framework to its sample app
+path, run command, and the span kinds the driver asserts:
 
-True per-framework heavy coverage would need a deployable agent app per
-framework (the `cells/*_sample.py` are in-process scripts, not deployable
-buildpack apps). That's tracked as future work — e.g. adding a deployable
-`crewai` sample and deploying it for crewai cells (see FINDINGS).
+- `langchain` → `samples/customer-support-agent` (LangChain/LangGraph), asserts `llm`
+- `crewai` → `samples/crewai-agent`, asserts `llm` + `agent` + `crewaitask`
+
+The driver deploys the sample matching each cell's framework and asserts that
+framework's kinds (plus shape-validation of every captured span). The other two
+axes that change the deployed agent are the **instrumentation/Traceloop
+version** (the init-container image) and the **python version** (the buildpack
+interpreter). So the subset (`harness/heavy_subset.py`) is one cell per
+(Traceloop version × python) for each deployable framework, pinned to that
+framework's representative version. With one Traceloop version, four pythons,
+and two deployable frameworks that's eight cells.
+
+Frameworks without a deployable sample (`langgraph`, `llama-index`,
+`openai-direct`, `anthropic-direct`) stay emission-only — per-framework span
+*shape* for them is the emission tier's job. Adding a deployable sample under
+`samples/` plus a `DEPLOYABLE_SAMPLES` entry is what brings a framework into the
+heavy axis.
 
 ### Bring-up: build-from-source
 
