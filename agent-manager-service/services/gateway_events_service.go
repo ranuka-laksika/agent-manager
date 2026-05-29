@@ -151,3 +151,7 @@ func (s *GatewayEventsService) BroadcastAPIKeyRevokedEvent(gatewayID string, eve
 func (s *GatewayEventsService) BroadcastAPIKeyUpdatedEvent(gatewayID string, event *models.APIKeyUpdatedEvent) error {
 	return s.broadcastEvent(gatewayID, "apikey.updated", "UPDATE", uuid.New().String(), event)
 }
+
+func (s *GatewayEventsService) BroadcastApplicationUpdatedEvent(gatewayID string, event *models.ApplicationUpdatedEvent) error {
+	return s.broadcastEvent(gatewayID, "application.updated", "UPDATE", event.ApplicationUUID, event)
+}

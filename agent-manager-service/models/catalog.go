@@ -97,13 +97,20 @@ type RateLimitingSummary struct {
 	ConsumerLevel *RateLimitingScope `json:"consumerLevel,omitempty"`
 }
 
+// RateLimitEntry holds a single dimension's limit value and its reset window
+type RateLimitEntry struct {
+	Limit         interface{} `json:"limit"` // int32 for request/token, float64 for cost
+	ResetDuration int32       `json:"resetDuration"`
+	ResetUnit     string      `json:"resetUnit"`
+}
+
 // RateLimitingScope summarizes scope-level limits
 type RateLimitingScope struct {
-	GlobalEnabled       bool     `json:"globalEnabled"`
-	ResourceWiseEnabled bool     `json:"resourceWiseEnabled"`
-	RequestLimitCount   *int32   `json:"requestLimitCount,omitempty"`
-	TokenLimitCount     *int32   `json:"tokenLimitCount,omitempty"`
-	CostLimitAmount     *float64 `json:"costLimitAmount,omitempty"`
+	GlobalEnabled       bool            `json:"globalEnabled"`
+	ResourceWiseEnabled bool            `json:"resourceWiseEnabled"`
+	Request             *RateLimitEntry `json:"request,omitempty"`
+	Token               *RateLimitEntry `json:"token,omitempty"`
+	Cost                *RateLimitEntry `json:"cost,omitempty"`
 }
 
 // DeploymentSummary provides deployment status per environment

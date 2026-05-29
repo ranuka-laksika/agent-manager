@@ -279,12 +279,29 @@ func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitin
 		ResourceWiseEnabled: &scope.ResourceWiseEnabled,
 	}
 
-	// Model already has int32, no conversion needed
-	result.RequestLimitCount = scope.RequestLimitCount
-	result.TokenLimitCount = scope.TokenLimitCount
-
-	if scope.CostLimitAmount != nil {
-		result.CostLimitAmount = scope.CostLimitAmount
+	if scope.Request != nil {
+		entry := spec.RateLimitEntry{
+			Limit:         scope.Request.Limit,
+			ResetDuration: scope.Request.ResetDuration,
+			ResetUnit:     scope.Request.ResetUnit,
+		}
+		result.Request = &entry
+	}
+	if scope.Token != nil {
+		entry := spec.RateLimitEntry{
+			Limit:         scope.Token.Limit,
+			ResetDuration: scope.Token.ResetDuration,
+			ResetUnit:     scope.Token.ResetUnit,
+		}
+		result.Token = &entry
+	}
+	if scope.Cost != nil {
+		entry := spec.RateLimitEntry{
+			Limit:         scope.Cost.Limit,
+			ResetDuration: scope.Cost.ResetDuration,
+			ResetUnit:     scope.Cost.ResetUnit,
+		}
+		result.Cost = &entry
 	}
 
 	return result

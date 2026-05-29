@@ -89,3 +89,19 @@ type LLMProxyUndeploymentEvent struct {
 	GatewayID      string `json:"gatewayId"`
 	OrganizationID string `json:"organizationId"`
 }
+
+// ApplicationAPIKeyMapping represents a single API key bound to an application.
+type ApplicationAPIKeyMapping struct {
+	APIKeyUUID string `json:"apiKeyUuid"`
+}
+
+// ApplicationUpdatedEvent matches the gateway-controller's ApplicationUpdatedEvent structure.
+// Broadcasting this event causes the gateway to bind the listed API keys to the application,
+// enabling per-consumer (per-application) rate limiting in the policy engine.
+type ApplicationUpdatedEvent struct {
+	ApplicationID   string                     `json:"applicationId"`
+	ApplicationUUID string                     `json:"applicationUuid"`
+	ApplicationName string                     `json:"applicationName"`
+	ApplicationType string                     `json:"applicationType"`
+	Mappings        []ApplicationAPIKeyMapping `json:"mappings"`
+}
