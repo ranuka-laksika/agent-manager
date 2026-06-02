@@ -10,36 +10,48 @@ from __future__ import annotations
 
 import subprocess
 
+_NS = "openchoreo-observability-plane"
+_warned = False
+
+
+def _find_opensearch_pod() -> str | None:
+    """Return the OpenSearch pod name, or None. OpenSearch is not a Deployment
+    named 'opensearch' (the old `deploy/opensearch` handle always 404'd), so
+    discover the pod by name and skip the dashboards pod."""
+    proc = subprocess.run(
+        ["kubectl", "-n", _NS, "get", "pods", "--no-headers",
+         "-o", "custom-columns=NAME:.metadata.name"],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        return None
+    for name in proc.stdout.split():
+        if "opensearch" in name and "dashboard" not in name:
+            return name
+    return None
+
 
 def reset_opensearch_indices() -> None:
     """Delete the spans-* indices so each cell starts from a clean slate.
 
-    OpenSearch is installed by the openchoreo bring-up into the
-    openchoreo-observability-plane namespace. Best-effort: a failure here
-    means the index reset didn't land, which the driver detects later when
-    polling traces returns stale results.
+    Best-effort: discovers the OpenSearch pod by name and warns at most once if
+    it can't be found or the delete fails, so a missing handle is visible
+    without spamming an identical per-cell warning.
     """
+    global _warned
+    pod = _find_opensearch_pod()
+    if pod is None:
+        if not _warned:
+            print(f"::warning::OpenSearch pod not found in {_NS}; per-cell index "
+                  "reset skipped (cells may see stale spans)")
+            _warned = True
+        return
     proc = subprocess.run(
-        [
-            "kubectl",
-            "-n",
-            "openchoreo-observability-plane",
-            "exec",
-            "deploy/opensearch",
-            "--",
-            "curl",
-            "-s",
-            "-X",
-            "DELETE",
-            "http://localhost:9200/spans-*",
-        ],
-        capture_output=True,
-        text=True,
+        ["kubectl", "-n", _NS, "exec", pod, "--",
+         "curl", "-s", "-X", "DELETE", "http://localhost:9200/spans-*"],
+        capture_output=True, text=True,
     )
-    if proc.returncode != 0:
-        # Best-effort, but don't swallow silently — a failed reset means the
-        # next cell may see stale spans, which is worth a visible warning.
-        print(
-            f"::warning::OpenSearch index reset failed (rc={proc.returncode}): "
-            f"{(proc.stderr or proc.stdout).strip()[:300]}"
-        )
+    if proc.returncode != 0 and not _warned:
+        print(f"::warning::OpenSearch index reset failed (rc={proc.returncode}): "
+              f"{(proc.stderr or proc.stdout).strip()[:200]}")
+        _warned = True
