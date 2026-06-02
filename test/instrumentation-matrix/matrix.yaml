@@ -2,7 +2,7 @@ schemaVersion: 1
 
 providers:
   traceloop:
-    versions: ["0.60.0"]
+    versions: ["0.60.0", "0.61.0"]
     # Maps traceloop_version → init-container instrumentation_version. The
     # heavy tier resolves the image tag
     # `amp-python-instrumentation-provider:<instr>-python<X.Y>` from this map.
@@ -12,6 +12,7 @@ providers:
     # release-config.json currently lists.
     instrumentationVersions:
       "0.60.0": "0.2.1"
+      "0.61.0": "0.3.0"
     contractSchema: "v1"
 
   manual:
