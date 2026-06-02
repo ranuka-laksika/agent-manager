@@ -10,7 +10,7 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 
-from harness.classify import classify_span
+from harness.classify import classify_span, span_has_tool_event
 
 _HERE = Path(__file__).resolve().parent.parent
 _CONTRACTS = _HERE / "contracts"
@@ -93,6 +93,10 @@ class ContractValidator:
         self, spans: list[dict[str, Any]], expected_kinds: list[str]
     ) -> CoverageResult:
         actual = {classify_span(s) for s in spans}
+        # F-009: a tool call may be an event on an LLM span rather than its own
+        # span. Count that as tool-kind coverage.
+        if any(span_has_tool_event(s) for s in spans):
+            actual.add("tool")
         missing = set(expected_kinds) - actual
         return CoverageResult(
             ok=not missing, expected=expected_kinds, actual=actual, missing=missing

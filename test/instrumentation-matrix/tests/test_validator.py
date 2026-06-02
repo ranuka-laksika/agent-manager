@@ -252,3 +252,19 @@ def test_validator_rejects_resource_missing_service_name():
 def test_validator_passes_resource_with_service_name():
     v = ContractValidator.load("traceloop/v1")
     assert v.validate_resource({"service.name": "my-agent"}).ok
+
+
+# ---------- Coverage via span events (F-009) ----------
+
+
+def test_assert_coverage_counts_tool_event_as_tool_kind():
+    v = ContractValidator.load("traceloop/v1")
+    llm_span_with_tool_event = {
+        "name": "ChatOpenAI.chat",
+        "kind": "CLIENT",
+        "attributes": {"gen_ai.operation.name": "chat", "gen_ai.provider.name": "openai"},
+        "events": [{"name": "gen_ai.tool.call", "attributes": {"gen_ai.tool.name": "search"}}],
+    }
+    cov = v.assert_coverage([llm_span_with_tool_event], expected_kinds=["llm", "tool"])
+    assert cov.ok is True
+    assert "tool" in cov.actual
