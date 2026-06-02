@@ -189,6 +189,14 @@ def _to_dict(s) -> dict:
         "name": s.name,
         "kind": s.kind.name if hasattr(s.kind, "name") else str(s.kind),
         "attributes": dict(s.attributes or {}),
+        "events": [
+            {
+                "name": e.name,
+                "attributes": dict(e.attributes or {}),
+                "timestamp": e.timestamp,
+            }
+            for e in (s.events or [])
+        ],
         "traceId": format(ctx.trace_id, "032x"),
         "spanId": format(ctx.span_id, "016x"),
         "parentSpanId": format(s.parent.span_id, "016x") if s.parent else None,
