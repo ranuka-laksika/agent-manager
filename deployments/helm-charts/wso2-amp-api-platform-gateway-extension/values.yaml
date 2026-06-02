@@ -136,6 +136,7 @@ apiGateway:
               remote:
                 uri: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
                 skipTlsVerify: true
+        authheaderscheme: ""
         onfailurestatuscode: 401
         errormessageformat: json
         errormessage: "Authentication failed"
