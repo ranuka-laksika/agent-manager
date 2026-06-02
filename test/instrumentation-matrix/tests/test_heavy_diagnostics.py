@@ -1,5 +1,12 @@
 from harness.categorize import FailureCategory
+from heavy import diagnostics
+from heavy.amp_client import DeployedAgent
 from heavy.diagnostics import Evidence, classify_no_spans
+
+
+def _agent(name="traceloop-0-61-0-l-1476e2"):
+    return DeployedAgent(org="default", project_name="p", agent_name=name,
+                         environment="dev", endpoint_url="http://x", api_key="k")
 
 
 def test_boundary_categories_exist():
@@ -40,3 +47,39 @@ def test_classify_collector_not_received_when_agent_ok_but_collector_empty():
 
 def test_classify_falls_back_to_no_spans_when_inconclusive():
     assert classify_no_spans(Evidence()) is FailureCategory.NO_SPANS_CAPTURED
+
+
+def test_collect_evidence_parses_401_from_agent_log(monkeypatch):
+    def fake_kubectl(args):
+        if args[:3] == ["get", "pods", "-A"]:
+            return 0, "amp-dp traceloop-0-61-0-l-1476e2-abc123\n"
+        if args[0] == "logs" and "traceloop-0-61-0-l-1476e2-abc123" in args:
+            return 0, ("Automatic Tracing initialized successfully.\n"
+                       "Failed to export batch code: 401, reason: Unauthorized\n")
+        if args[0] == "get" and "deploy" in args:
+            return 0, "observability opentelemetry-collector\n"
+        if args[0] == "logs" and "deploy/opentelemetry-collector" in args:
+            return 0, "no spans here\n"
+        return 1, ""
+    monkeypatch.setattr(diagnostics, "_kubectl", fake_kubectl)
+    ev = diagnostics.collect_failure_evidence(_agent())
+    assert ev.agent_init == "ok"
+    assert ev.agent_export_status == 401
+
+
+def test_collect_evidence_detects_init_failure(monkeypatch):
+    def fake_kubectl(args):
+        if args[:3] == ["get", "pods", "-A"]:
+            return 0, "amp-dp traceloop-0-61-0-l-1476e2-abc123\n"
+        if args[0] == "logs":
+            return 0, "Failed to initialize Automatic Tracing: boom\n"
+        return 1, ""
+    monkeypatch.setattr(diagnostics, "_kubectl", fake_kubectl)
+    ev = diagnostics.collect_failure_evidence(_agent())
+    assert ev.agent_init == "failed"
+
+
+def test_collect_evidence_never_raises_when_kubectl_unavailable(monkeypatch):
+    monkeypatch.setattr(diagnostics, "_kubectl", lambda args: (127, ""))
+    ev = diagnostics.collect_failure_evidence(_agent())
+    assert ev.agent_init is None and ev.agent_export_status is None
