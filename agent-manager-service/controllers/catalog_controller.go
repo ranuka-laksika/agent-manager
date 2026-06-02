@@ -273,6 +273,24 @@ func convertRateLimitingSummary(rateLimiting *models.RateLimitingSummary) *spec.
 	return result
 }
 
+// interfaceToFloat32 converts an interface{} holding a numeric value to float32.
+// JSON numbers unmarshal as float64; int32 values are also handled.
+func interfaceToFloat32(v interface{}) float32 {
+	switch val := v.(type) {
+	case float64:
+		return float32(val)
+	case float32:
+		return val
+	case int:
+		return float32(val)
+	case int32:
+		return float32(val)
+	case int64:
+		return float32(val)
+	}
+	return 0
+}
+
 func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitingScope {
 	result := &spec.RateLimitingScope{
 		GlobalEnabled:       &scope.GlobalEnabled,
@@ -281,7 +299,7 @@ func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitin
 
 	if scope.Request != nil {
 		entry := spec.RateLimitEntry{
-			Limit:         scope.Request.Limit,
+			Limit:         interfaceToFloat32(scope.Request.Limit),
 			ResetDuration: scope.Request.ResetDuration,
 			ResetUnit:     scope.Request.ResetUnit,
 		}
@@ -289,7 +307,7 @@ func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitin
 	}
 	if scope.Token != nil {
 		entry := spec.RateLimitEntry{
-			Limit:         scope.Token.Limit,
+			Limit:         interfaceToFloat32(scope.Token.Limit),
 			ResetDuration: scope.Token.ResetDuration,
 			ResetUnit:     scope.Token.ResetUnit,
 		}
@@ -297,7 +315,7 @@ func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitin
 	}
 	if scope.Cost != nil {
 		entry := spec.RateLimitEntry{
-			Limit:         scope.Cost.Limit,
+			Limit:         interfaceToFloat32(scope.Cost.Limit),
 			ResetDuration: scope.Cost.ResetDuration,
 			ResetUnit:     scope.Cost.ResetUnit,
 		}
