@@ -58,6 +58,15 @@ if ! kubectl get configmap coredns-custom -n kube-system --context "${CLUSTER_CO
     exit 1
 fi
 
+# Add host.k3d.internal / host.docker.internal to the coredns NodeHosts file.
+# This must run BEFORE the rollout restart below: the coredns Deployment mounts
+# NodeHosts as a non-optional configmap key, and on a freshly (re)started k3s
+# server that key may not exist yet, leaving the restarted pod stuck in
+# ContainerCreating until the rollout times out.
+if ! ensure_coredns_host_aliases; then
+    exit 1
+fi
+
 # CoreDNS's reload plugin can miss the override files if the configmap is mounted
 # after the pod's initial parse. Restart CoreDNS so the rewrite rules take effect
 # before any client (e.g. observer) caches a wrong resolution.

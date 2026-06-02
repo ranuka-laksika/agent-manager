@@ -153,6 +153,62 @@ generate_machine_ids() {
     echo "✅ Machine ID generation complete"
 }
 
+# Util: Make host.k3d.internal / host.docker.internal resolve inside pods
+#
+# k3d injects these aliases only into the nodes' /etc/hosts, not into pod DNS,
+# so in-cluster clients (gateway controller, observability, helm bootstrap
+# Jobs) cannot reach the host through them. We add both to the CoreDNS
+# NodeHosts file, which the k3s node controller preserves across restarts.
+#
+# This also closes a setup race: NodeHosts is NOT shipped in the coredns Addon
+# manifest — k3s populates it asynchronously after a server (re)start. The
+# coredns Deployment mounts NodeHosts as a *non-optional* configmap key, so
+# until k3s writes it a freshly restarted CoreDNS pod cannot mount and the
+# rollout times out. Writing the key here guarantees it exists before the
+# subsequent `kubectl rollout restart deployment/coredns`.
+ensure_coredns_host_aliases() {
+    echo "🔧 Ensuring host.k3d.internal / host.docker.internal resolve in-cluster..."
+
+    local host_ip
+    host_ip=$(docker network inspect "k3d-${CLUSTER_NAME}" \
+        --format '{{ (index .IPAM.Config 0).Gateway }}' 2>/dev/null)
+    if [[ -z "$host_ip" ]]; then
+        echo "❌ Could not determine k3d host gateway IP for network k3d-${CLUSTER_NAME}"
+        return 1
+    fi
+
+    # Node entries already written by k3s's node controller. Empty during the
+    # post-restart race window — that is fine: k3s re-adds them later and keeps
+    # the alias lines we append.
+    local existing
+    existing=$(kubectl get configmap coredns -n kube-system \
+        --context "${CLUSTER_CONTEXT}" -o jsonpath='{.data.NodeHosts}' 2>/dev/null)
+
+    # Drop any alias lines from a previous run so re-runs stay idempotent.
+    local node_lines
+    node_lines=$(printf '%s\n' "$existing" \
+        | grep -vE '[[:space:]](host\.k3d\.internal|host\.docker\.internal)$' \
+        | sed '/^[[:space:]]*$/d' || true)
+
+    local desired
+    desired=$(printf '%s\n%s host.k3d.internal\n%s host.docker.internal\n' \
+        "$node_lines" "$host_ip" "$host_ip" \
+        | sed '/^[[:space:]]*$/d')
+
+    # Escape each line into a literal \n for the JSON merge patch (awk keeps
+    # this portable across BSD/macOS and GNU sed). out ends with a trailing \n
+    # to match the file format coredns writes.
+    local patch_value
+    patch_value=$(printf '%s\n' "$desired" | awk '{ out = out $0 "\\n" } END { printf "%s", out }')
+
+    if ! kubectl patch configmap coredns -n kube-system --context "${CLUSTER_CONTEXT}" \
+        --type merge -p "{\"data\":{\"NodeHosts\":\"${patch_value}\"}}"; then
+        echo "❌ Failed to patch CoreDNS NodeHosts"
+        return 1
+    fi
+    echo "✅ CoreDNS NodeHosts updated (host.k3d.internal, host.docker.internal -> ${host_ip})"
+}
+
 # Util: Refresh kubeconfig for k3d cluster
 refresh_kubeconfig() {
     echo "🔄 Refreshing kubeconfig..."
