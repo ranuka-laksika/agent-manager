@@ -813,24 +813,45 @@ func (e ProvisioningType) Valid() bool {
 	}
 }
 
+// Defines values for RateLimitEntryResetUnit.
+const (
+	RateLimitEntryResetUnitDay    RateLimitEntryResetUnit = "day"
+	RateLimitEntryResetUnitHour   RateLimitEntryResetUnit = "hour"
+	RateLimitEntryResetUnitMinute RateLimitEntryResetUnit = "minute"
+)
+
+// Valid indicates whether the value is a known member of the RateLimitEntryResetUnit enum.
+func (e RateLimitEntryResetUnit) Valid() bool {
+	switch e {
+	case RateLimitEntryResetUnitDay:
+		return true
+	case RateLimitEntryResetUnitHour:
+		return true
+	case RateLimitEntryResetUnitMinute:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for RateLimitResetWindowUnit.
 const (
-	Day    RateLimitResetWindowUnit = "day"
-	Hour   RateLimitResetWindowUnit = "hour"
-	Minute RateLimitResetWindowUnit = "minute"
-	Second RateLimitResetWindowUnit = "second"
+	RateLimitResetWindowUnitDay    RateLimitResetWindowUnit = "day"
+	RateLimitResetWindowUnitHour   RateLimitResetWindowUnit = "hour"
+	RateLimitResetWindowUnitMinute RateLimitResetWindowUnit = "minute"
+	RateLimitResetWindowUnitSecond RateLimitResetWindowUnit = "second"
 )
 
 // Valid indicates whether the value is a known member of the RateLimitResetWindowUnit enum.
 func (e RateLimitResetWindowUnit) Valid() bool {
 	switch e {
-	case Day:
+	case RateLimitResetWindowUnitDay:
 		return true
-	case Hour:
+	case RateLimitResetWindowUnitHour:
 		return true
-	case Minute:
+	case RateLimitResetWindowUnitMinute:
 		return true
-	case Second:
+	case RateLimitResetWindowUnitSecond:
 		return true
 	default:
 		return false
@@ -3537,6 +3558,21 @@ type PublishAgentKindRequest struct {
 	Version string `json:"version"`
 }
 
+// RateLimitEntry defines model for RateLimitEntry.
+type RateLimitEntry struct {
+	// Limit Limit value (count for request/token, amount for cost)
+	Limit float32 `json:"limit"`
+
+	// ResetDuration Reset window duration
+	ResetDuration int `json:"resetDuration"`
+
+	// ResetUnit Reset window time unit
+	ResetUnit RateLimitEntryResetUnit `json:"resetUnit"`
+}
+
+// RateLimitEntryResetUnit Reset window time unit
+type RateLimitEntryResetUnit string
+
 // RateLimitResetWindow defines model for RateLimitResetWindow.
 type RateLimitResetWindow struct {
 	// Duration Reset window duration
@@ -3566,20 +3602,15 @@ type RateLimitingResourceLimit struct {
 
 // RateLimitingScope Scope-level rate limiting summary
 type RateLimitingScope struct {
-	// CostLimitAmount Cost amount limit (if enabled)
-	CostLimitAmount *float64 `json:"costLimitAmount,omitempty"`
+	Cost *RateLimitEntry `json:"cost,omitempty"`
 
 	// GlobalEnabled Whether global rate limiting is enabled
-	GlobalEnabled *bool `json:"globalEnabled,omitempty"`
-
-	// RequestLimitCount Request count limit (if enabled)
-	RequestLimitCount *int `json:"requestLimitCount,omitempty"`
+	GlobalEnabled *bool           `json:"globalEnabled,omitempty"`
+	Request       *RateLimitEntry `json:"request,omitempty"`
 
 	// ResourceWiseEnabled Whether resource-wise rate limiting is enabled
-	ResourceWiseEnabled *bool `json:"resourceWiseEnabled,omitempty"`
-
-	// TokenLimitCount Token count limit (if enabled)
-	TokenLimitCount *int `json:"tokenLimitCount,omitempty"`
+	ResourceWiseEnabled *bool           `json:"resourceWiseEnabled,omitempty"`
+	Token               *RateLimitEntry `json:"token,omitempty"`
 }
 
 // RateLimitingScopeConfig defines model for RateLimitingScopeConfig.

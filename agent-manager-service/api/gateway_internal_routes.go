@@ -33,6 +33,9 @@ func RegisterGatewayInternalRoutes(mux *http.ServeMux, ctrl controllers.GatewayI
 	// Subscription plans endpoint
 	mux.HandleFunc("GET /subscription-plans", ctrl.GetSubscriptionPlans)
 
+	// AI applications endpoint (bulk-sync for per-consumer rate limiting)
+	mux.HandleFunc("GET /applications", ctrl.GetApplications)
+
 	// Gateway manifest endpoint
 	mux.HandleFunc("POST /gateways/{gatewayId}/manifest", ctrl.PushGatewayManifest)
 

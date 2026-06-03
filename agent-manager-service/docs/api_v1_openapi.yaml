@@ -12110,6 +12110,30 @@ components:
         consumerLevel:
           $ref: "#/components/schemas/RateLimitingScope"
 
+    RateLimitEntry:
+      type: object
+      required:
+        - limit
+        - resetDuration
+        - resetUnit
+      properties:
+        limit:
+          type: number
+          description: Limit value (count for request/token, amount for cost)
+          example: 1000
+        resetDuration:
+          type: integer
+          description: Reset window duration
+          example: 1
+        resetUnit:
+          type: string
+          description: Reset window time unit
+          enum:
+            - minute
+            - hour
+            - day
+          example: minute
+
     RateLimitingScope:
       type: object
       description: Scope-level rate limiting summary
@@ -12122,19 +12146,12 @@ components:
           type: boolean
           description: Whether resource-wise rate limiting is enabled
           example: false
-        requestLimitCount:
-          type: integer
-          description: Request count limit (if enabled)
-          example: 1000
-        tokenLimitCount:
-          type: integer
-          description: Token count limit (if enabled)
-          example: 50000
-        costLimitAmount:
-          type: number
-          format: double
-          description: Cost amount limit (if enabled)
-          example: 100.50
+        request:
+          $ref: '#/components/schemas/RateLimitEntry'
+        token:
+          $ref: '#/components/schemas/RateLimitEntry'
+        cost:
+          $ref: '#/components/schemas/RateLimitEntry'
 
     DeploymentSummary:
       type: object

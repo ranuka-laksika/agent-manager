@@ -668,100 +668,16 @@ func (s *LLMProviderDeploymentService) generateLLMProviderDeploymentYAML(provide
 					costPaths = append(costPaths, costPath)
 				}
 			} else if providerLevel.ResourceWise != nil {
-				// Step 2.1.2: Handle resource-wise rate limiting
+				// Step 2.1.2: Handle resource-wise rate limiting.
+				// Resource-specific paths must appear before the catch-all "/*" so that the
+				// gateway evaluates specific rules first and falls back to the default last.
 				defaultLimit := &providerLevel.ResourceWise.Default
 
-				// Step 2.1.2.1: Default resource-wise rate limit
-				if defaultLimit.Token != nil && defaultLimit.Token.Enabled {
-					tokenLimit := defaultLimit.Token
-					duration, err := formatRateLimitDuration(tokenLimit.Reset.Duration, tokenLimit.Reset.Unit)
-					if err != nil {
-						return "", fmt.Errorf("invalid token reset window: %w", err)
-					}
-					policies = append(policies, models.LLMPolicy{
-						Name:    tokenBasedRateLimitPolicyName,
-						Version: rateLimitPolicyVersion,
-						Paths: []models.LLMPolicyPath{
-							{
-								Path:    "/*",
-								Methods: []string{"*"},
-								Params: map[string]interface{}{
-									"totalTokenLimits": []map[string]interface{}{
-										{
-											"count":    tokenLimit.Count,
-											"duration": duration,
-										},
-									},
-								},
-							},
-						},
-					})
-				}
-
-				if defaultLimit.Request != nil && defaultLimit.Request.Enabled {
-					requestLimit := defaultLimit.Request
-					duration, err := formatRateLimitDuration(requestLimit.Reset.Duration, requestLimit.Reset.Unit)
-					if err != nil {
-						return "", fmt.Errorf("invalid request reset window: %w", err)
-					}
-					policies = append(policies, models.LLMPolicy{
-						Name:    advancedRateLimitPolicyName,
-						Version: rateLimitPolicyVersion,
-						Paths: []models.LLMPolicyPath{
-							{
-								Path:    "/*",
-								Methods: []string{"*"},
-								Params: map[string]interface{}{
-									"quotas": []map[string]interface{}{
-										{
-											"name": "request-limit",
-											"limits": []map[string]interface{}{
-												{
-													"limit":    requestLimit.Count,
-													"duration": duration,
-												},
-											},
-										},
-									},
-								},
-							},
-						},
-					})
-				}
-
-				if defaultLimit.Cost != nil && defaultLimit.Cost.Enabled {
-					costLimit := defaultLimit.Cost
-					duration, err := formatRateLimitDuration(costLimit.Reset.Duration, costLimit.Reset.Unit)
-					if err != nil {
-						return "", fmt.Errorf("invalid cost reset window: %w", err)
-					}
-					costPath := models.LLMPolicyPath{
-						Path:    "/*",
-						Methods: []string{"*"},
-					}
-					policies = append(policies, models.LLMPolicy{
-						Name:    costBasedRateLimitPolicyName,
-						Version: rateLimitPolicyVersion,
-						Paths: []models.LLMPolicyPath{
-							{
-								Path:    costPath.Path,
-								Methods: costPath.Methods,
-								Params: map[string]interface{}{
-									"budgetLimits": []map[string]interface{}{
-										{
-											"amount":   costLimit.Amount,
-											"duration": duration,
-										},
-									},
-								},
-							},
-						},
-					})
-					costPaths = append(costPaths, costPath)
-				}
-
-				// Step 2.1.2.2: Resource-specific rate limits
+				// Step 2.1.2.1: Resource-specific rate limits (specific paths first)
 				for _, r := range providerLevel.ResourceWise.Resources {
+					resMethod, resPath := parseResourceKey(r.Resource)
+					resMethods := []string{resMethod}
+
 					if r.Limit.Token != nil && r.Limit.Token.Enabled {
 						tokenLimit := r.Limit.Token
 						duration, err := formatRateLimitDuration(tokenLimit.Reset.Duration, tokenLimit.Reset.Unit)
@@ -769,8 +685,8 @@ func (s *LLMProviderDeploymentService) generateLLMProviderDeploymentYAML(provide
 							return "", fmt.Errorf("invalid token reset window for resource %s: %w", r.Resource, err)
 						}
 						addOrAppendPolicyPath(&policies, tokenBasedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
-							Path:    r.Resource,
-							Methods: []string{"*"},
+							Path:    resPath,
+							Methods: resMethods,
 							Params: map[string]interface{}{
 								"totalTokenLimits": []map[string]interface{}{
 									{
@@ -789,8 +705,8 @@ func (s *LLMProviderDeploymentService) generateLLMProviderDeploymentYAML(provide
 							return "", fmt.Errorf("invalid request reset window for resource %s: %w", r.Resource, err)
 						}
 						addOrAppendPolicyPath(&policies, advancedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
-							Path:    r.Resource,
-							Methods: []string{"*"},
+							Path:    resPath,
+							Methods: resMethods,
 							Params: map[string]interface{}{
 								"quotas": []map[string]interface{}{
 									{
@@ -813,11 +729,10 @@ func (s *LLMProviderDeploymentService) generateLLMProviderDeploymentYAML(provide
 						if err != nil {
 							return "", fmt.Errorf("invalid cost reset window for resource %s: %w", r.Resource, err)
 						}
-						method, path := parseResourceKey(r.Resource)
-						costPath := models.LLMPolicyPath{Path: path, Methods: []string{method}}
+						costPath := models.LLMPolicyPath{Path: resPath, Methods: resMethods}
 						addOrAppendPolicyPath(&policies, costBasedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
-							Path:    path,
-							Methods: []string{method},
+							Path:    resPath,
+							Methods: resMethods,
 							Params: map[string]interface{}{
 								"budgetLimits": []map[string]interface{}{
 									{
@@ -830,12 +745,172 @@ func (s *LLMProviderDeploymentService) generateLLMProviderDeploymentYAML(provide
 						costPaths = append(costPaths, costPath)
 					}
 				}
+
+				// Step 2.1.2.2: Default catch-all "/*" appended last so specific paths
+				// are evaluated before the fallback.
+				if defaultLimit.Token != nil && defaultLimit.Token.Enabled {
+					tokenLimit := defaultLimit.Token
+					duration, err := formatRateLimitDuration(tokenLimit.Reset.Duration, tokenLimit.Reset.Unit)
+					if err != nil {
+						return "", fmt.Errorf("invalid token reset window: %w", err)
+					}
+					addOrAppendPolicyPath(&policies, tokenBasedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
+						Path:    "/*",
+						Methods: []string{"*"},
+						Params: map[string]interface{}{
+							"totalTokenLimits": []map[string]interface{}{
+								{
+									"count":    tokenLimit.Count,
+									"duration": duration,
+								},
+							},
+						},
+					})
+				}
+
+				if defaultLimit.Request != nil && defaultLimit.Request.Enabled {
+					requestLimit := defaultLimit.Request
+					duration, err := formatRateLimitDuration(requestLimit.Reset.Duration, requestLimit.Reset.Unit)
+					if err != nil {
+						return "", fmt.Errorf("invalid request reset window: %w", err)
+					}
+					addOrAppendPolicyPath(&policies, advancedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
+						Path:    "/*",
+						Methods: []string{"*"},
+						Params: map[string]interface{}{
+							"quotas": []map[string]interface{}{
+								{
+									"name": "request-limit",
+									"limits": []map[string]interface{}{
+										{
+											"limit":    requestLimit.Count,
+											"duration": duration,
+										},
+									},
+								},
+							},
+						},
+					})
+				}
+
+				if defaultLimit.Cost != nil && defaultLimit.Cost.Enabled {
+					costLimit := defaultLimit.Cost
+					duration, err := formatRateLimitDuration(costLimit.Reset.Duration, costLimit.Reset.Unit)
+					if err != nil {
+						return "", fmt.Errorf("invalid cost reset window: %w", err)
+					}
+					costPath := models.LLMPolicyPath{Path: "/*", Methods: []string{"*"}}
+					addOrAppendPolicyPath(&policies, costBasedRateLimitPolicyName, rateLimitPolicyVersion, models.LLMPolicyPath{
+						Path:    "/*",
+						Methods: []string{"*"},
+						Params: map[string]interface{}{
+							"budgetLimits": []map[string]interface{}{
+								{
+									"amount":   costLimit.Amount,
+									"duration": duration,
+								},
+							},
+						},
+					})
+					costPaths = append(costPaths, costPath)
+				}
 			}
 		}
 
-		// Step 2.2: Consumer level rate limit (placeholder for future implementation)
-		// TODO: implement consumer-level rate limiting for Global/ResourceWise
-		// Consumer-level rate limiting is not yet supported by the gateway
+		// Step 2.2: Consumer level rate limit (per-application, keyed by x-wso2-application-id)
+		consumerLevel := rateLimit.ConsumerLevel
+		if consumerLevel != nil && consumerLevel.Global != nil {
+			if consumerLevel.Global.Token != nil && consumerLevel.Global.Token.Enabled {
+				tokenLimit := consumerLevel.Global.Token
+				duration, err := formatRateLimitDuration(tokenLimit.Reset.Duration, tokenLimit.Reset.Unit)
+				if err != nil {
+					return "", fmt.Errorf("invalid consumer token reset window: %w", err)
+				}
+				policies = append(policies, models.LLMPolicy{
+					Name:    tokenBasedRateLimitPolicyName,
+					Version: rateLimitPolicyVersion,
+					Paths: []models.LLMPolicyPath{
+						{
+							Path:    "/*",
+							Methods: []string{"*"},
+							Params: map[string]interface{}{
+								"consumerBased": true,
+								"totalTokenLimits": []map[string]interface{}{
+									{
+										"count":    tokenLimit.Count,
+										"duration": duration,
+									},
+								},
+							},
+						},
+					},
+				})
+			}
+
+			if consumerLevel.Global.Request != nil && consumerLevel.Global.Request.Enabled {
+				requestLimit := consumerLevel.Global.Request
+				duration, err := formatRateLimitDuration(requestLimit.Reset.Duration, requestLimit.Reset.Unit)
+				if err != nil {
+					return "", fmt.Errorf("invalid consumer request reset window: %w", err)
+				}
+				policies = append(policies, models.LLMPolicy{
+					Name:    advancedRateLimitPolicyName,
+					Version: rateLimitPolicyVersion,
+					Paths: []models.LLMPolicyPath{
+						{
+							Path:    "/*",
+							Methods: []string{"*"},
+							Params: map[string]interface{}{
+								"consumerBased": true,
+								"quotas": []map[string]interface{}{
+									{
+										"name": "consumer-request-limit",
+										"limits": []map[string]interface{}{
+											{
+												"limit":    requestLimit.Count,
+												"duration": duration,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				})
+			}
+
+			if consumerLevel.Global.Cost != nil && consumerLevel.Global.Cost.Enabled {
+				costLimit := consumerLevel.Global.Cost
+				duration, err := formatRateLimitDuration(costLimit.Reset.Duration, costLimit.Reset.Unit)
+				if err != nil {
+					return "", fmt.Errorf("invalid consumer cost reset window: %w", err)
+				}
+				costPath := models.LLMPolicyPath{
+					Path:    "/*",
+					Methods: []string{"*"},
+				}
+				policies = append(policies, models.LLMPolicy{
+					Name:    costBasedRateLimitPolicyName,
+					Version: rateLimitPolicyVersion,
+					Paths: []models.LLMPolicyPath{
+						{
+							Path:    costPath.Path,
+							Methods: costPath.Methods,
+							Params: map[string]interface{}{
+								"consumerBased": true,
+								"budgetLimits": []map[string]interface{}{
+									{
+										"amount":   costLimit.Amount,
+										"duration": duration,
+									},
+								},
+							},
+						},
+					},
+				})
+				costPaths = append(costPaths, costPath)
+			}
+		}
 	}
 
 	// llm-cost must run before llm-cost-based-ratelimit in the response phase.

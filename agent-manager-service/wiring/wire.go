@@ -85,6 +85,7 @@ var serviceProviderSet = wire.NewSet(
 	services.NewAgentConfigurationService,
 	services.NewLLMTemplateStore,
 	services.NewGitSecretService,
+	services.NewAIApplicationService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -313,6 +314,7 @@ var repositoryProviderSet = wire.NewSet(
 	repositories.NewAgentEnvConfigVariableRepository,
 	repositories.NewMonitorLLMMappingRepository,
 	ProvideOrgPublisherCredentialRepository,
+	ProvideAIApplicationRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -434,6 +436,10 @@ func ProvideOrgPublisherCredentialRepository(db *gorm.DB) repositories.OrgPublis
 
 func ProvideAgentKindRepository(db *gorm.DB) repositories.AgentKindRepository {
 	return repositories.NewAgentKindRepo(db)
+}
+
+func ProvideAIApplicationRepository(db *gorm.DB) repositories.AIApplicationRepository {
+	return repositories.NewAIApplicationRepository(db)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

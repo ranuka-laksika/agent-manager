@@ -40,9 +40,13 @@ import {
   AlertTriangle,
   Check,
   Circle,
+  Coins,
+  Hash,
+  Info,
   Link,
   Search,
   ServerCog,
+  Zap,
 } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -108,6 +112,104 @@ function getLatestDeployment(
   );
   return sorted[0] ?? null;
 }
+
+function formatCost(amount: number): string {
+  if (amount < 0.01) return `$${amount.toFixed(6)}`;
+  return `$${amount.toFixed(2)}`;
+}
+
+function formatResetWindow(duration?: number, unit?: string): string {
+  if (!unit) return "";
+  const abbrev: Record<string, string> = { minute: "min", hour: "hr", day: "day" };
+  const u = abbrev[unit.toLowerCase()] ?? unit;
+  return duration && duration !== 1 ? `${duration} ${u}` : u;
+}
+
+const RateLimitDisplay: React.FC<{
+  rateLimiting?: CatalogRateLimitingSummary;
+}> = ({ rateLimiting }) => {
+  if (!rateLimiting) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Rate Limiting: <Typography component="span" variant="body2" color="text.disabled">Not configured</Typography>
+      </Typography>
+    );
+  }
+
+  const cl = rateLimiting.consumerLevel;
+  const pl = rateLimiting.providerLevel;
+
+  // Whether the consumer level is actively enabled (rate limiting applies to this consumer)
+  const consumerEnabled = cl?.globalEnabled ?? false;
+  // Whether the consumer level has its own per-consumer numeric limits configured
+  const consumerHasLimits =
+    consumerEnabled && (cl?.request != null || cl?.token != null || cl?.cost != null);
+
+  if (!consumerEnabled && !pl?.globalEnabled) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        Rate Limiting: <Typography component="span" variant="body2" color="text.disabled">Configured (disabled)</Typography>
+      </Typography>
+    );
+  }
+
+  // Use consumer-specific limits when set; otherwise fall back to provider limits for display
+  const limitScope = consumerHasLimits ? cl : pl;
+  // Org-wide whenever we fall back to provider-level limits (no per-consumer numeric overrides)
+  const isOrgWide = !consumerHasLimits;
+
+  const limits: { icon: React.ReactNode; label: string; value: string }[] = [];
+  if (limitScope?.request) {
+    const w = formatResetWindow(limitScope.request.resetDuration, limitScope.request.resetUnit);
+    limits.push({ icon: <Zap size={12} />, label: "Requests", value: `${limitScope.request.limit.toLocaleString()}${w ? `/${w}` : ""}` });
+  }
+  if (limitScope?.token) {
+    const w = formatResetWindow(limitScope.token.resetDuration, limitScope.token.resetUnit);
+    limits.push({ icon: <Hash size={12} />, label: "Tokens", value: `${limitScope.token.limit.toLocaleString()}${w ? `/${w}` : ""}` });
+  }
+  if (limitScope?.cost) {
+    const w = formatResetWindow(limitScope.cost.resetDuration, limitScope.cost.resetUnit);
+    limits.push({ icon: <Coins size={12} />, label: "Budget", value: `${formatCost(limitScope.cost.limit)}${w ? `/${w}` : ""}` });
+  }
+
+  return (
+    <Stack spacing={0.5}>
+      <Stack direction="row" spacing={0.5} alignItems="center">
+        <Typography variant="caption" color="text.secondary">
+          {isOrgWide ? "Your Quota (org-wide limit):" : "Your Quota:"}
+        </Typography>
+        {isOrgWide && (
+          <Tooltip
+            title="No per-consumer limit is configured. The org-wide provider limit applies to all consumers."
+            placement="top"
+            arrow
+          >
+            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", color: "text.secondary", cursor: "default" }}>
+              <Info size={12} />
+            </Box>
+          </Tooltip>
+        )}
+      </Stack>
+      {limits.length > 0 ? (
+        <Stack direction="row" spacing={0.75} flexWrap="wrap">
+          {limits.map(({ icon, label, value }) => (
+            <Chip
+              key={label}
+              icon={<Box component="span" sx={{ display: "inline-flex", alignItems: "center", pl: 0.5 }}>{icon}</Box>}
+              label={`${label}: ${value}`}
+              size="small"
+              variant="outlined"
+              color={isOrgWide ? "default" : "primary"}
+              sx={{ fontVariantNumeric: "tabular-nums" }}
+            />
+          ))}
+        </Stack>
+      ) : (
+        <Typography variant="body2" color="text.secondary">Enabled (no numeric limits set)</Typography>
+      )}
+    </Stack>
+  );
+};
 
 export const ProviderDisplay: React.FC<{
   provider: {
@@ -185,25 +287,8 @@ export const ProviderDisplay: React.FC<{
         </Stack>
         <Divider orientation="vertical" />
 
-        <Stack direction="column" spacing={0.25}>
-          <Stack>
-            <Typography variant="caption" color="text.secondary">
-              Rate Limiting:{" "}
-              <Typography component="span" variant="body2" color={provider?.rateLimiting ? "text.primary" : "text.disabled"}>
-                {provider?.rateLimiting
-                  ? (() => {
-                    const limits: string[] = [];
-                    const pl = provider.rateLimiting.providerLevel;
-                    const cl = provider.rateLimiting.consumerLevel;
-                    if (pl?.requestLimitCount) limits.push(`${pl.requestLimitCount} req/min`);
-                    if (pl?.tokenLimitCount) limits.push(`${pl.tokenLimitCount} tokens/min`);
-                    if (cl?.requestLimitCount) limits.push(`Consumer: ${cl.requestLimitCount} req/min`);
-                    return limits.length > 0 ? limits.join(", ") : "Configured";
-                  })()
-                  : "Not configured"}
-              </Typography>
-            </Typography>
-          </Stack>
+        <Stack direction="column" spacing={0.5}>
+          <RateLimitDisplay rateLimiting={provider?.rateLimiting} />
           <Stack>
             <Typography variant="caption" color="text.secondary">
               Guardrails:{" "}

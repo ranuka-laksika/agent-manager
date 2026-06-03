@@ -22,13 +22,10 @@ type RateLimitingScope struct {
 	// Whether global rate limiting is enabled
 	GlobalEnabled *bool `json:"globalEnabled,omitempty"`
 	// Whether resource-wise rate limiting is enabled
-	ResourceWiseEnabled *bool `json:"resourceWiseEnabled,omitempty"`
-	// Request count limit (if enabled)
-	RequestLimitCount *int32 `json:"requestLimitCount,omitempty"`
-	// Token count limit (if enabled)
-	TokenLimitCount *int32 `json:"tokenLimitCount,omitempty"`
-	// Cost amount limit (if enabled)
-	CostLimitAmount *float64 `json:"costLimitAmount,omitempty"`
+	ResourceWiseEnabled *bool           `json:"resourceWiseEnabled,omitempty"`
+	Request             *RateLimitEntry `json:"request,omitempty"`
+	Token               *RateLimitEntry `json:"token,omitempty"`
+	Cost                *RateLimitEntry `json:"cost,omitempty"`
 }
 
 // NewRateLimitingScope instantiates a new RateLimitingScope object
@@ -112,100 +109,100 @@ func (o *RateLimitingScope) SetResourceWiseEnabled(v bool) {
 	o.ResourceWiseEnabled = &v
 }
 
-// GetRequestLimitCount returns the RequestLimitCount field value if set, zero value otherwise.
-func (o *RateLimitingScope) GetRequestLimitCount() int32 {
-	if o == nil || IsNil(o.RequestLimitCount) {
-		var ret int32
+// GetRequest returns the Request field value if set, zero value otherwise.
+func (o *RateLimitingScope) GetRequest() RateLimitEntry {
+	if o == nil || IsNil(o.Request) {
+		var ret RateLimitEntry
 		return ret
 	}
-	return *o.RequestLimitCount
+	return *o.Request
 }
 
-// GetRequestLimitCountOk returns a tuple with the RequestLimitCount field value if set, nil otherwise
+// GetRequestOk returns a tuple with the Request field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RateLimitingScope) GetRequestLimitCountOk() (*int32, bool) {
-	if o == nil || IsNil(o.RequestLimitCount) {
+func (o *RateLimitingScope) GetRequestOk() (*RateLimitEntry, bool) {
+	if o == nil || IsNil(o.Request) {
 		return nil, false
 	}
-	return o.RequestLimitCount, true
+	return o.Request, true
 }
 
-// HasRequestLimitCount returns a boolean if a field has been set.
-func (o *RateLimitingScope) HasRequestLimitCount() bool {
-	if o != nil && !IsNil(o.RequestLimitCount) {
+// HasRequest returns a boolean if a field has been set.
+func (o *RateLimitingScope) HasRequest() bool {
+	if o != nil && !IsNil(o.Request) {
 		return true
 	}
 
 	return false
 }
 
-// SetRequestLimitCount gets a reference to the given int32 and assigns it to the RequestLimitCount field.
-func (o *RateLimitingScope) SetRequestLimitCount(v int32) {
-	o.RequestLimitCount = &v
+// SetRequest gets a reference to the given RateLimitEntry and assigns it to the Request field.
+func (o *RateLimitingScope) SetRequest(v RateLimitEntry) {
+	o.Request = &v
 }
 
-// GetTokenLimitCount returns the TokenLimitCount field value if set, zero value otherwise.
-func (o *RateLimitingScope) GetTokenLimitCount() int32 {
-	if o == nil || IsNil(o.TokenLimitCount) {
-		var ret int32
+// GetToken returns the Token field value if set, zero value otherwise.
+func (o *RateLimitingScope) GetToken() RateLimitEntry {
+	if o == nil || IsNil(o.Token) {
+		var ret RateLimitEntry
 		return ret
 	}
-	return *o.TokenLimitCount
+	return *o.Token
 }
 
-// GetTokenLimitCountOk returns a tuple with the TokenLimitCount field value if set, nil otherwise
+// GetTokenOk returns a tuple with the Token field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RateLimitingScope) GetTokenLimitCountOk() (*int32, bool) {
-	if o == nil || IsNil(o.TokenLimitCount) {
+func (o *RateLimitingScope) GetTokenOk() (*RateLimitEntry, bool) {
+	if o == nil || IsNil(o.Token) {
 		return nil, false
 	}
-	return o.TokenLimitCount, true
+	return o.Token, true
 }
 
-// HasTokenLimitCount returns a boolean if a field has been set.
-func (o *RateLimitingScope) HasTokenLimitCount() bool {
-	if o != nil && !IsNil(o.TokenLimitCount) {
+// HasToken returns a boolean if a field has been set.
+func (o *RateLimitingScope) HasToken() bool {
+	if o != nil && !IsNil(o.Token) {
 		return true
 	}
 
 	return false
 }
 
-// SetTokenLimitCount gets a reference to the given int32 and assigns it to the TokenLimitCount field.
-func (o *RateLimitingScope) SetTokenLimitCount(v int32) {
-	o.TokenLimitCount = &v
+// SetToken gets a reference to the given RateLimitEntry and assigns it to the Token field.
+func (o *RateLimitingScope) SetToken(v RateLimitEntry) {
+	o.Token = &v
 }
 
-// GetCostLimitAmount returns the CostLimitAmount field value if set, zero value otherwise.
-func (o *RateLimitingScope) GetCostLimitAmount() float64 {
-	if o == nil || IsNil(o.CostLimitAmount) {
-		var ret float64
+// GetCost returns the Cost field value if set, zero value otherwise.
+func (o *RateLimitingScope) GetCost() RateLimitEntry {
+	if o == nil || IsNil(o.Cost) {
+		var ret RateLimitEntry
 		return ret
 	}
-	return *o.CostLimitAmount
+	return *o.Cost
 }
 
-// GetCostLimitAmountOk returns a tuple with the CostLimitAmount field value if set, nil otherwise
+// GetCostOk returns a tuple with the Cost field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *RateLimitingScope) GetCostLimitAmountOk() (*float64, bool) {
-	if o == nil || IsNil(o.CostLimitAmount) {
+func (o *RateLimitingScope) GetCostOk() (*RateLimitEntry, bool) {
+	if o == nil || IsNil(o.Cost) {
 		return nil, false
 	}
-	return o.CostLimitAmount, true
+	return o.Cost, true
 }
 
-// HasCostLimitAmount returns a boolean if a field has been set.
-func (o *RateLimitingScope) HasCostLimitAmount() bool {
-	if o != nil && !IsNil(o.CostLimitAmount) {
+// HasCost returns a boolean if a field has been set.
+func (o *RateLimitingScope) HasCost() bool {
+	if o != nil && !IsNil(o.Cost) {
 		return true
 	}
 
 	return false
 }
 
-// SetCostLimitAmount gets a reference to the given float64 and assigns it to the CostLimitAmount field.
-func (o *RateLimitingScope) SetCostLimitAmount(v float64) {
-	o.CostLimitAmount = &v
+// SetCost gets a reference to the given RateLimitEntry and assigns it to the Cost field.
+func (o *RateLimitingScope) SetCost(v RateLimitEntry) {
+	o.Cost = &v
 }
 
 func (o RateLimitingScope) MarshalJSON() ([]byte, error) {
@@ -224,14 +221,14 @@ func (o RateLimitingScope) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.ResourceWiseEnabled) {
 		toSerialize["resourceWiseEnabled"] = o.ResourceWiseEnabled
 	}
-	if !IsNil(o.RequestLimitCount) {
-		toSerialize["requestLimitCount"] = o.RequestLimitCount
+	if !IsNil(o.Request) {
+		toSerialize["request"] = o.Request
 	}
-	if !IsNil(o.TokenLimitCount) {
-		toSerialize["tokenLimitCount"] = o.TokenLimitCount
+	if !IsNil(o.Token) {
+		toSerialize["token"] = o.Token
 	}
-	if !IsNil(o.CostLimitAmount) {
-		toSerialize["costLimitAmount"] = o.CostLimitAmount
+	if !IsNil(o.Cost) {
+		toSerialize["cost"] = o.Cost
 	}
 	return toSerialize, nil
 }

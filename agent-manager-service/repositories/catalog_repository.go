@@ -444,18 +444,28 @@ func extractRateLimitingScopeFromConfig(scopeConfig *models.RateLimitingScopeCon
 		ResourceWiseEnabled: scopeConfig.ResourceWise != nil,
 	}
 
-	// Extract global limits if present
+	// Extract global limits if present, preserving each limit's own reset window
 	if scopeConfig.Global != nil {
 		if scopeConfig.Global.Request != nil && scopeConfig.Global.Request.Enabled {
-			count32 := int32(scopeConfig.Global.Request.Count)
-			scope.RequestLimitCount = &count32
+			scope.Request = &models.RateLimitEntry{
+				Limit:         int32(scopeConfig.Global.Request.Count),
+				ResetDuration: int32(scopeConfig.Global.Request.Reset.Duration),
+				ResetUnit:     scopeConfig.Global.Request.Reset.Unit,
+			}
 		}
 		if scopeConfig.Global.Token != nil && scopeConfig.Global.Token.Enabled {
-			count32 := int32(scopeConfig.Global.Token.Count)
-			scope.TokenLimitCount = &count32
+			scope.Token = &models.RateLimitEntry{
+				Limit:         int32(scopeConfig.Global.Token.Count),
+				ResetDuration: int32(scopeConfig.Global.Token.Reset.Duration),
+				ResetUnit:     scopeConfig.Global.Token.Reset.Unit,
+			}
 		}
 		if scopeConfig.Global.Cost != nil && scopeConfig.Global.Cost.Enabled {
-			scope.CostLimitAmount = &scopeConfig.Global.Cost.Amount
+			scope.Cost = &models.RateLimitEntry{
+				Limit:         scopeConfig.Global.Cost.Amount,
+				ResetDuration: int32(scopeConfig.Global.Cost.Reset.Duration),
+				ResetUnit:     scopeConfig.Global.Cost.Reset.Unit,
+			}
 		}
 	}
 

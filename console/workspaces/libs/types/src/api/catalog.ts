@@ -30,12 +30,18 @@ export interface CatalogSecuritySummary {
   apiKeyIn?: string;
 }
 
+export interface RateLimitEntry {
+  limit: number;
+  resetDuration: number;
+  resetUnit: string;
+}
+
 export interface CatalogRateLimitingScope {
   globalEnabled: boolean;
   resourceWiseEnabled: boolean;
-  requestLimitCount?: number;
-  tokenLimitCount?: number;
-  costLimitAmount?: number;
+  request?: RateLimitEntry;
+  token?: RateLimitEntry;
+  cost?: RateLimitEntry;
 }
 
 export interface CatalogRateLimitingSummary {
