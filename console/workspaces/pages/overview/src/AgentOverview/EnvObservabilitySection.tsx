@@ -16,34 +16,34 @@
  * under the License.
  */
 
-import React from "react";
+import React, { useMemo } from "react";
 import {
     Box,
     Button,
     Card,
     CardContent,
     Divider,
-    ListingTable,
+    Grid,
     Skeleton,
     Stack,
-    Tooltip,
     Typography,
     useTheme,
 } from "@wso2/oxygen-ui";
 import { AreaChart } from "@wso2/oxygen-ui-charts-react";
-import { CheckCircle, ChevronRight, PauseCircle, XCircle } from "@wso2/oxygen-ui-icons-react";
+import { ChevronRight, PauseCircle } from "@wso2/oxygen-ui-icons-react";
 import {
     useGetAgentMetrics,
     useListAgentDeployments,
     useTraceList,
 } from "@agent-management-platform/api-client";
-import { NoDataFound, scoreColor } from "@agent-management-platform/views";
+import { NoDataFound } from "@agent-management-platform/views";
 import {
     absoluteRouteMap,
     TraceListTimeRange,
 } from "@agent-management-platform/types";
 import { format } from "date-fns";
-import { generatePath, Link, useNavigate } from "react-router-dom";
+import { generatePath, Link } from "react-router-dom";
+import { DonutIcon, DonutColor } from "./DonutIcon";
 
 interface EnvObservabilitySectionProps {
     orgId: string;
@@ -65,6 +65,9 @@ const formatMemory = (bytes: number): string => {
     return `${Math.round(bytes / 1024)} KB`;
 };
 
+const formatTokens = (n: number): string =>
+    n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`;
+
 const formatDuration = (nanos: number): string => {
     const ms = nanos / 1_000_000;
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -80,7 +83,7 @@ interface MetricCardProps {
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({ label, value, points, color = "currentColor", isLoading }) => (
-    <Card variant="outlined" sx={{ flex: 1, minWidth: 0 }}>
+    <Card variant="outlined" sx={{ width: "100%" }}>
         <CardContent sx={{ py: 1, px: 1.5, "&:last-child": { pb: 1 }, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
             <Box>
                 {isLoading
@@ -121,11 +124,36 @@ const MetricCard: React.FC<MetricCardProps> = ({ label, value, points, color = "
     </Card>
 );
 
+interface DonutMetricCardProps {
+    label: string;
+    value: string;
+    percent: number;
+    color: DonutColor;
+    isLoading?: boolean;
+}
+
+const DonutMetricCard: React.FC<DonutMetricCardProps> = ({ label, value, percent, color, isLoading }) => (
+    <Card variant="outlined" sx={{ width: "100%" }}>
+        <CardContent sx={{ py: 1, px: 1.5, "&:last-child": { pb: 1 }, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 1 }}>
+            <Box>
+                {isLoading
+                    ? <Skeleton variant="text" width={48} height={28} />
+                    : <Typography variant="h6" lineHeight={1.2}>{value}</Typography>
+                }
+                <Typography variant="caption" color="text.secondary">{label}</Typography>
+            </Box>
+            {isLoading
+                ? <Skeleton variant="circular" width={48} height={48} />
+                : <DonutIcon percent={percent} color={color} size={48} />
+            }
+        </CardContent>
+    </Card>
+);
+
 export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = ({
     orgId, projectId, agentId, envId, hideMetrics = false, external = false,
 }) => {
     const theme = useTheme();
-    const navigate = useNavigate();
     const { data: deployments } = useListAgentDeployments(
         { orgName: orgId, projName: projectId, agentName: agentId },
         { enabled: !external },
@@ -143,7 +171,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
     );
 
     const { traceList, isLoading: isTracesLoading } = useTraceList(
-        orgId, projectId, agentId, envId, TraceListTimeRange.ONE_HOUR, 5, "desc",
+        orgId, projectId, agentId, envId, TraceListTimeRange.ONE_HOUR, 30, "desc",
         undefined, undefined, { enableAutoRefresh: true },
     );
 
@@ -154,6 +182,60 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
     const latestMemory = memPts.length ? memPts[memPts.length - 1].value : null;
 
     const traces = traceList?.traces ?? [];
+
+    const latencyPoints = useMemo(() =>
+        [...traces].reverse().map((t) => ({
+            time: format(new Date(t.startTime), "HH:mm"),
+            value: Math.round(t.durationInNanos / 1_000_000),
+        })),
+        [traces],
+    );
+
+    const avgLatencyNanos = traces.length
+        ? traces.reduce((sum, t) => sum + t.durationInNanos, 0) / traces.length
+        : null;
+
+    const tokenPoints = useMemo(() =>
+        [...traces].reverse()
+            .filter((t) => t.tokenUsage?.totalTokens != null)
+            .map((t) => ({
+                time: format(new Date(t.startTime), "HH:mm"),
+                value: t.tokenUsage!.totalTokens!,
+            })),
+        [traces],
+    );
+
+    const avgTokens = (() => {
+        const withTokens = traces.filter((t) => t.tokenUsage?.totalTokens != null);
+        return withTokens.length
+            ? Math.round(withTokens.reduce((sum, t) => sum + (t.tokenUsage?.totalTokens ?? 0), 0) / withTokens.length)
+            : null;
+    })();
+
+    const scorePoints = useMemo(() =>
+        [...traces].reverse()
+            .filter((t) => t.score?.score != null)
+            .map((t) => ({
+                time: format(new Date(t.startTime), "HH:mm"),
+                value: Math.round(t.score!.score! * 100),
+            })),
+        [traces],
+    );
+
+    const avgScore = (() => {
+        const withScore = traces.filter((t) => t.score?.score != null);
+        return withScore.length
+            ? withScore.reduce((sum, t) => sum + (t.score?.score ?? 0), 0) / withScore.length
+            : null;
+    })();
+
+    const successRate = traces.length
+        ? (traces.filter((t) => (t.status?.errorCount ?? 0) === 0).length / traces.length) * 100
+        : null;
+    const successRateColor: DonutColor = successRate === null ? "primary"
+        : successRate >= 70 ? "success"
+        : successRate >= 40 ? "warning"
+        : "error";
 
     const tracesHref = generatePath(
         absoluteRouteMap.children.org.children.projects.children.agents
@@ -230,121 +312,44 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
                     View all
                 </Button>
             </Box>
-            {isTracesLoading ? (
-                <Stack spacing={0.75}>
-                    {[1, 2, 3].map((i) => <Skeleton key={i} variant="rounded" height={36} />)}
-                </Stack>
-            ) : traces.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                    No traces in the last hour.
-                </Typography>
-            ) : (
-                <ListingTable.Container>
-                    <ListingTable>
-                        <ListingTable.Head>
-                            <ListingTable.Row>
-                                <ListingTable.Cell align="center" width="4%">Status</ListingTable.Cell>
-                                <ListingTable.Cell align="left" width="14%">Name</ListingTable.Cell>
-                                <ListingTable.Cell align="left" width="24%">Input</ListingTable.Cell>
-                                <ListingTable.Cell align="center" width="14%">Start Time</ListingTable.Cell>
-                                <ListingTable.Cell align="right" width="9%">Duration</ListingTable.Cell>
-                                <ListingTable.Cell align="right" width="11%">Tokens</ListingTable.Cell>
-                                <ListingTable.Cell align="right" width="11%">Spans</ListingTable.Cell>
-                                <ListingTable.Cell align="right" width="13%">Score</ListingTable.Cell>
-                            </ListingTable.Row>
-                        </ListingTable.Head>
-                        <ListingTable.Body>
-                            {traces.map((trace) => {
-                                const errorCount = trace.status?.errorCount ?? 0;
-                                const isError = errorCount > 0;
-                                const tu = trace.tokenUsage;
-                                const hasTokens = tu?.totalTokens != null;
-                                return (
-                                    <ListingTable.Row
-                                        key={trace.traceId}
-                                        hover
-                                        clickable
-                                        onClick={() => navigate(`${tracesHref}?selectedTrace=${trace.traceId}`)}
-                                    >
-                                        <ListingTable.Cell
-                                            align="center"
-                                            sx={{
-                                                color: (t) => isError
-                                                    ? t.vars?.palette?.error?.main
-                                                    : t.vars?.palette?.success?.main,
-                                            }}
-                                        >
-                                            <Tooltip
-                                                title={isError ? `${errorCount} error${errorCount > 1 ? "s" : ""}` : "OK"}
-                                                disableHoverListener={!isError}
-                                            >
-                                                {isError
-                                                    ? <XCircle size={16} />
-                                                    : <CheckCircle size={16} />}
-                                            </Tooltip>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="left">
-                                            <Typography variant="caption" component="span" noWrap display="block" sx={{ maxWidth: 160 }}>
-                                                {trace.rootSpanName}
-                                            </Typography>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="left" sx={{ maxWidth: 240 }}>
-                                            <Tooltip title="Preview only. Open the trace for the full input." disableHoverListener={!trace.input}>
-                                                <Typography variant="caption" component="span" noWrap display="block" sx={{ maxWidth: "100%" }}>
-                                                    {trace.input ?? "—"}
-                                                </Typography>
-                                            </Tooltip>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="center">
-                                            <Typography variant="caption" component="span">
-                                                {format(new Date(trace.startTime), "yyyy-MM-dd HH:mm:ss")}
-                                            </Typography>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="right">
-                                            <Typography variant="caption" component="span">
-                                                {formatDuration(trace.durationInNanos)}
-                                            </Typography>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="right">
-                                            <Tooltip
-                                                disableHoverListener={!hasTokens}
-                                                title={hasTokens ? (tu?.partial ? "Approximate total" : `${tu?.inputTokens} in / ${tu?.outputTokens} out`) : ""}
-                                            >
-                                                <Typography variant="caption" component="span">
-                                                    {hasTokens ? <>{tu!.totalTokens}{tu?.partial ? "+" : null}</> : "—"}
-                                                </Typography>
-                                            </Tooltip>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="right">
-                                            <Typography variant="caption" component="span">
-                                                {trace.spanCount}
-                                            </Typography>
-                                        </ListingTable.Cell>
-                                        <ListingTable.Cell align="right">
-                                            {trace.score?.score != null ? (
-                                                <Tooltip title={`${trace.score.totalCount} evaluations, ${trace.score.skippedCount} skipped`}>
-                                                    <Typography
-                                                        variant="caption"
-                                                        component="span"
-                                                        sx={{
-                                                            color: scoreColor(trace.score.score),
-                                                            fontWeight: 600,
-                                                        }}
-                                                    >
-                                                        {(trace.score.score * 100).toFixed(1)}%
-                                                    </Typography>
-                                                </Tooltip>
-                                            ) : (
-                                                <Typography variant="caption" component="span">—</Typography>
-                                            )}
-                                        </ListingTable.Cell>
-                                    </ListingTable.Row>
-                                );
-                            })}
-                        </ListingTable.Body>
-                    </ListingTable>
-                </ListingTable.Container>
-            )}
+            <Grid container spacing={1.5}>
+                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                    <MetricCard
+                        label="Avg Latency"
+                        value={avgLatencyNanos !== null ? formatDuration(avgLatencyNanos) : "—"}
+                        points={latencyPoints}
+                        color={theme.vars?.palette?.info?.main}
+                        isLoading={isTracesLoading}
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                    <MetricCard
+                        label="Avg Tokens"
+                        value={avgTokens !== null ? formatTokens(avgTokens) : "—"}
+                        points={tokenPoints}
+                        color={theme.vars?.palette?.warning?.main}
+                        isLoading={isTracesLoading}
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                    <MetricCard
+                        label="Avg Score"
+                        value={avgScore !== null ? `${(avgScore * 100).toFixed(1)}%` : "—"}
+                        points={scorePoints}
+                        color={theme.vars?.palette?.success?.main}
+                        isLoading={isTracesLoading}
+                    />
+                </Grid>
+                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                    <DonutMetricCard
+                        label="Success Rate"
+                        value={successRate !== null ? `${successRate.toFixed(1)}%` : "—"}
+                        percent={successRate ?? 0}
+                        color={successRateColor}
+                        isLoading={isTracesLoading}
+                    />
+                </Grid>
+            </Grid>
         </>
     );
 };

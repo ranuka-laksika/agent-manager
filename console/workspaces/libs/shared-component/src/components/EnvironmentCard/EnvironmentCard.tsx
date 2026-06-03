@@ -18,6 +18,7 @@
 
 import {
   useGetAgent,
+  useGetAgentBuilds,
   useListAgentDeployments,
   useListAgentKindVersions,
 } from "@agent-management-platform/api-client";
@@ -48,6 +49,7 @@ import {
   Link as LinkOutlined,
   PauseCircle,
   Tag,
+  Wrench,
 } from "@wso2/oxygen-ui-icons-react";
 import { NoDataFound, TextInput } from "@agent-management-platform/views";
 import { formatDistanceToNow } from "date-fns";
@@ -170,6 +172,16 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
 
   const currentDiployment = deployments?.[environment?.name ?? "default"];
   const theme = useTheme();
+
+  const { data: buildsData } = useGetAgentBuilds({
+    orgName: !external ? orgId : "",
+    projName: !external ? projectId : "",
+    agentName: !external ? agentId : "",
+  });
+
+  const hasSuccessfulBuild = buildsData?.builds?.some(
+    (b) => b.status === "Succeeded" || b.status === "Completed"
+  ) ?? false;
 
   const deployedVersion = (() => {
     if (!currentDiployment?.imageId || !kindName) return null;
@@ -341,6 +353,42 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               disableBackground
               message="Not Deployed"
               icon={<RocketLaunchOutlined size={32} />}
+              subtitle={
+                hasSuccessfulBuild
+                  ? "A successful build is available. Deploy it to get started."
+                  : "No successful build found. Build the agent before deploying."
+              }
+              action={
+                hasSuccessfulBuild ? (
+                  <Button
+                    startIcon={<RocketLaunchOutlined size={16} />}
+                    variant="outlined"
+                    component={Link}
+                    to={generatePath(
+                      absoluteRouteMap.children.org.children.projects.children
+                        .agents.children.deployment.path,
+                      { orgId, projectId, agentId }
+                    )}
+                    size="small"
+                  >
+                    Go to Deployment
+                  </Button>
+                ) : (
+                  <Button
+                    startIcon={<Wrench size={16} />}
+                    variant="outlined"
+                    component={Link}
+                    to={generatePath(
+                      absoluteRouteMap.children.org.children.projects.children
+                        .agents.children.build.path,
+                      { orgId, projectId, agentId }
+                    )}
+                    size="small"
+                  >
+                    Go to Build
+                  </Button>
+                )
+              }
             />
           )}
           {currentDiployment.status === DeploymentStatus.DEPLOYING && (
