@@ -1,20 +1,16 @@
 import os
 
-# Keep CrewAI non-interactive and offline-friendly inside the deployed pod, and
-# set these BEFORE importing crewai (litellm reads them at import): no hosted-
-# trace upload, no interactive trace prompt, and use litellm's bundled model
-# cost map instead of fetching it from GitHub on cold start. Mirrors the
-# emission-tier cells/crewai_sample.py.
+# Keep CrewAI non-interactive and offline-friendly, and set these BEFORE
+# importing crewai (they are read at import time): no hosted-trace upload, no
+# interactive trace prompt, and use the bundled model pricing data instead of
+# fetching it over the network on startup.
 os.environ.setdefault("CREWAI_TRACING_ENABLED", "false")
 os.environ.setdefault("CREWAI_DISABLE_TRACING_PROMPT", "true")
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
-# CrewAI writes under $HOME at import (a chromadb storage dir) and at Crew()
-# construction (a credentials dir). Under AMP the deployed workload already
-# sets HOME + CREWAI_STORAGE_DIR to writable paths (see
-# harness/deployable_samples.py) — required because the instrumentation
-# provider imports crewai at interpreter startup, before this app runs. This
-# block is a fallback so the sample also runs standalone under a read-only
-# HOME; it no-ops when HOME is already writable or the env is preset.
+# CrewAI writes under $HOME at import (a storage dir) and at Crew() construction
+# (a credentials dir). When deployed, the platform sets HOME + CREWAI_STORAGE_DIR
+# to writable paths. This block is a fallback so the sample also runs standalone
+# under a read-only HOME; it no-ops when HOME is already writable or preset.
 os.environ.setdefault("CREWAI_STORAGE_DIR", "/tmp/crewai")
 if not os.access(os.path.expanduser("~"), os.W_OK):
     os.environ["HOME"] = "/tmp"

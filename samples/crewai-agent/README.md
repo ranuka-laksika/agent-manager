@@ -1,21 +1,85 @@
-# CrewAI Agent Sample
+# CrewAI Agent - Deployment Guide
 
-A buildpack-deployable chat agent built on [CrewAI](https://github.com/crewAIInc/crewAI),
-exposing `POST /chat` via FastAPI. A researcher agent (with a capital-lookup
-tool) and an editor agent run two sequential tasks, so each request emits
-`llm`, `agent`, and `crewaitask` spans.
+## Overview
 
-This sample exists so the instrumentation-matrix **heavy tier** can deploy a
-real CrewAI app and validate CrewAI auto-instrumentation through the full
-pipeline (auto-instrumentation → gateway → collector → OpenSearch → observer).
-See `test/instrumentation-matrix/RUNBOOK.md` §7.
+A multi-agent sample built with [CrewAI](https://github.com/crewAIInc/crewAI) and FastAPI. Two agents work together to answer each question: the first answers it using a capital-city lookup tool, and the second rewrites that answer into a single short sentence. The service exposes `POST /chat`.
 
-## Run locally
+Because the request flows through two agents and the underlying model, a single call produces a small but complete trace — useful for seeing how a multi-agent CrewAI app appears in the Agent Manager console.
+
+## Prerequisites
+
+### Required API Keys
+
+- **OpenAI API Key**: for model inference (the agents use `gpt-4o-mini`)
+
+## Deployment Instructions
+
+### Step 1: Access Agent Manager
+
+1. Navigate to the **Default** project
+2. Click **"Add Agent"**
+3. Select **Platform-Hosted Agent** Card
+
+### Step 2: Configure Agent Details
+
+Fill in the agent creation form with these values:
+
+| Field                 | Value                                     |
+| --------------------- | ----------------------------------------- |
+| **Display Name**      | `CrewAI Agent`                            |
+| **Description**       | `Multi-agent CrewAI sample`               |
+| **GitHub Repository** | `https://github.com/wso2/agent-manager`   |
+| **Branch**            | `main`                                    |
+| **App Path**          | `samples/crewai-agent`                    |
+| **Language**          | `Python`                                  |
+| **Language Version**  | `3.11`                                    |
+| **Start Command**     | `python main.py`                          |
+| **Port**              | `8000`                                    |
+
+### Step 3: Select Agent Interface
+
+- Choose **"Chat Agent"** as the agent interface type
+
+### Step 4: Configure Environment Variables
+
+Add the following environment variable in the create form:
+
+```env
+OPENAI_API_KEY=<your-openai-api-key>
+```
+
+### Step 5: Deploy the Agent
+
+1. Review all configuration details
+2. Click **"Deploy"**
+3. Wait for the build to complete
+
+## Testing Your Agent
+
+### Step 1: Navigate to Chat Interface
+
+Click on the **"Try It"** section on the left navigation.
+
+### Step 2: Test Sample Interactions
+
+Try this question in the chat interface:
+
+```text
+What is the capital of France?
+```
+
+### Step 3: Observe Traces
+
+1. Click on the **"Observability"** tab on the left navigation and select **Traces**
+2. Open a trace to see the two agents and the model call for each interaction
+
+## Run Locally
 
 ```bash
+cd samples/crewai-agent
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-export OPENAI_API_KEY=sk-...
+export OPENAI_API_KEY=<your-openai-api-key>
 python main.py    # serves on http://localhost:8000
 ```
 
@@ -27,8 +91,5 @@ curl -s localhost:8000/chat \
 
 ## Notes
 
-- Pinned to `crewai==1.1.0` (1.14 is unresolvable against the matrix's
-  `traceloop-sdk 0.60`; see `test/instrumentation-matrix/FINDINGS.md` F-004).
-- The app sets `CREWAI_TRACING_ENABLED=false`,
-  `CREWAI_DISABLE_TRACING_PROMPT=true`, and `LITELLM_LOCAL_MODEL_COST_MAP=True`
-  so it runs non-interactively and avoids cold-start network fetches.
+- Pinned to `crewai==1.1.0` for dependency compatibility.
+- The app disables CrewAI's hosted tracing and its interactive trace prompt so it runs non-interactively, and it uses the bundled model pricing data to avoid a network fetch on startup.

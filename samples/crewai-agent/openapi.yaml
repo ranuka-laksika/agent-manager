@@ -3,8 +3,7 @@ info:
   title: CrewAI Agent Service
   description: |
     A FastAPI service exposing a multi-agent CrewAI crew (a researcher with a
-    lookup tool plus an editor). Used by the instrumentation-matrix heavy tier
-    to validate CrewAI auto-instrumentation through the full deployed pipeline.
+    lookup tool plus an editor) behind a single POST /chat endpoint.
   version: 1.0.0
   contact:
     name: API Support

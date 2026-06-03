@@ -1,11 +1,10 @@
-"""Two-agent CrewAI crew for the deployable matrix sample.
+"""A two-agent CrewAI crew.
 
-A researcher (with one tool) and an editor run two sequential tasks. Each
-/chat invocation drives LLM calls plus tasks, so the deployed agent emits
-llm + agent + crewaitask spans for the heavy tier to assert. Mirrors the
-emission-tier test/instrumentation-matrix/cells/crewai_sample.py so both tiers
-exercise the same shape. Pinned to crewai 1.1.0 (see that suite's FINDINGS
-F-004: 1.14 is unresolvable against traceloop-sdk 0.60).
+A researcher (with one tool) and an editor run two sequential tasks. The
+researcher answers the question using the lookup tool, and the editor shortens
+the answer. Each /chat call runs both agents and the model behind them, so a
+single request produces a small multi-agent trace. Pinned to crewai 1.1.0 for
+dependency compatibility.
 """
 from __future__ import annotations
 
