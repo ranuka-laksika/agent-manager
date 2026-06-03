@@ -191,6 +191,30 @@ jobs:
           # validate a new/changed sample before it merges to main.
           AMP_AGENT_REPO_BRANCH: ${{ github.ref_name }}
         run: nox -s heavy
+      - name: Heavy summary
+        if: always()
+        working-directory: test/instrumentation-matrix
+        shell: bash
+        run: |
+          [ -d reports/heavy ] || exit 0
+          {
+            echo "### Heavy-tier results"
+            echo "| cell | result | category | evidence |"
+            echo "| --- | --- | --- | --- |"
+            for f in reports/heavy/*.json; do
+              [ -e "$f" ] || continue
+              python - "$f" <<'PY'
+          import json, sys
+          try:
+              d = json.load(open(sys.argv[1]))
+              ev = d.get("evidence") or {}
+              summ = ev.get("summary") or (("agent: " + ev["agent"][:80]) if ev.get("agent") else "")
+              print(f"| {d['cellId']} | {d['result']} | {d.get('category') or ''} | {summ.replace('|', '/')} |")
+          except Exception as e:  # a malformed report must not blank the whole table
+              print(f"| {sys.argv[1]} | ERROR | | {str(e)[:80].replace('|', '/')} |")
+          PY
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Dump cluster diagnostics on failure
         if: failure()
         shell: bash

@@ -35,6 +35,11 @@ class FailureCategory(str, Enum):
     # SCHEMA_VIOLATION, to preserve that distinction in triage.
     PIPELINE_ERROR = "pipeline-error"
     INFRA_ERROR = "infra-error"
+    # Heavy-tier span-delivery boundaries (set by heavy/diagnostics.py's
+    # classify_no_spans when a cell captures 0 spans).
+    INGEST_REJECTED = "ingest-rejected"            # gateway returned 401/403 to the agent's OTLP export
+    EXPORT_FAILED = "export-failed"                # agent never exported (init failed / 5xx / no-status error)
+    COLLECTOR_NOT_RECEIVED = "collector-not-received"  # agent exported OK but the collector saw nothing
     UNKNOWN = "unknown"
 
 

@@ -35,8 +35,17 @@ from harness.reports import CellResult, write_cell_report
 from harness.validator import ContractValidator
 from heavy import k3d
 from heavy.amp_client import AmpClient, DeployedAgent, IdpCredentials
+from heavy.diagnostics import classify_no_spans, collect_failure_evidence
 from heavy.observer import poll_traces
 from providers import PROVIDERS
+
+# Categories that indicate a pipeline-wide (not cell-specific) breakage: once
+# one cell hits these, the rest will fail identically, so abort and report.
+_SYSTEMIC = {"ingest-rejected", "collector-not-received"}
+
+
+def _is_systemic(category: str | None) -> bool:
+    return category in _SYSTEMIC
 
 HERE = Path(__file__).resolve().parent.parent
 
@@ -164,6 +173,20 @@ def main() -> int:
             skipped += 1
         else:
             passed += 1
+        if result.result == "fail" and _is_systemic(result.category):
+            reason = f"aborted: pipeline failure ({result.category}) in {cell.id}"
+            _log(f"      ⏭  {reason} — skipping remaining cells")
+            for rest in cells[idx:]:
+                skipped += 1
+                write_cell_report(
+                    CellResult(
+                        cell_id=rest.id, result="skipped", category=None,
+                        skip_reason=reason,
+                        coverage={"expected": _expected_kinds(rest), "actual": [], "missing": []},
+                    ),
+                    reports_dir=reports_dir,
+                )
+            break
     _log(f"heavy summary: {passed} passed, {failed} failed, {skipped} skipped")
     return 1 if failed else 0
 
@@ -204,15 +227,19 @@ def _run_cell(
         _invoke_agent(deployed)
         _log("      invoked; polling observer for spans…")
         spans = poll_traces(client, deployed, observer_base_url)
+        # Gather boundary evidence while the agent pod still exists (teardown
+        # in the finally below removes it), so a 0-span failure can be localized.
+        evidence = collect_failure_evidence(deployed) if not spans else None
     finally:
         client.teardown_agent(deployed)
     _log(f"      captured {len(spans)} span(s)")
 
     if not spans:
+        category = classify_no_spans(evidence).value
         return CellResult(
             cell_id=cell.id,
             result="fail",
-            category="no-spans-captured",
+            category=category,
             skip_reason=None,
             durations={},
             coverage={
@@ -222,6 +249,12 @@ def _run_cell(
             },
             violations=[],
             captured_spans=[],
+            evidence={
+                "summary": f"agent_init={evidence.agent_init} "
+                           f"export_status={evidence.agent_export_status} "
+                           f"collector_received={evidence.collector_received}",
+                **(evidence.raw or {}),
+            },
         )
 
     provider = PROVIDERS[cell.provider_name]
