@@ -17,14 +17,18 @@
 
 import { useState } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
+import { Button } from "@wso2/oxygen-ui";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { PageLayout } from "@agent-management-platform/views";
 import type { Environment } from "@agent-management-platform/types";
 import { EnvironmentTable } from "./subComponents/EnvironmentTable";
 import { EditEnvironmentDrawer } from "./subComponents/EditEnvironmentDrawer";
+import { CreateEnvironmentDrawer } from "./subComponents/CreateEnvironmentDrawer";
 
 export function EnvironmentsOrganization() {
   const { orgId } = useParams<{ orgId: string }>();
   const [envToEdit, setEnvToEdit] = useState<Environment | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <>
@@ -32,13 +36,33 @@ export function EnvironmentsOrganization() {
         <Route
           index
           element={
-            <PageLayout title="Environments" disableIcon>
+            <PageLayout
+              title="Environments"
+              disableIcon
+              actions={
+                <Button
+                  variant="contained"
+                  startIcon={<Plus size={16} />}
+                  onClick={() => setCreateOpen(true)}
+                >
+                  Create Environment
+                </Button>
+              }
+            >
               <EnvironmentTable onEditEnvironment={setEnvToEdit} />
             </PageLayout>
           }
         />
         <Route path="*" element={<Navigate to={`/org/${orgId}/environments`} replace />} />
       </Routes>
+
+      {orgId && (
+        <CreateEnvironmentDrawer
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          orgId={orgId}
+        />
+      )}
 
       {envToEdit && orgId && (
         <EditEnvironmentDrawer

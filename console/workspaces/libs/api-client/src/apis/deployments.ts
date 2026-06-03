@@ -48,6 +48,8 @@ import type {
   UpdateEnvironmentPathParams,
   UpdateEnvironmentRequest,
   Environment,
+  CreateEnvironmentRequest,
+  CreateEnvironmentPathParams,
 } from '@agent-management-platform/types';
 
 
@@ -243,15 +245,31 @@ export async function updateDeploymentPipeline(params: UpdateDeploymentPipelineP
 // eslint-disable-next-line max-len
 export async function updateEnvironment(params: UpdateEnvironmentPathParams, body: UpdateEnvironmentRequest, getToken?: () => Promise<string>)
 : Promise<Environment> {
-    const { orgName = "default", envID } = params;
+    const { orgName = "default", envName } = params;
 
-    if (!envID) {
-        throw new Error("envID is required");
+    if (!envName) {
+        throw new Error("envName is required");
     }
 
     const token = getToken ? await getToken() : undefined;
     const res = await httpPUT(
-        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/environments/${encodeURIComponent(envID)}`,
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/environments/${encodeURIComponent(envName)}`,
+        body,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    return res.json();
+}
+
+export async function createEnvironment(
+    params: CreateEnvironmentPathParams,
+    body: CreateEnvironmentRequest,
+    getToken?: () => Promise<string>,
+): Promise<Environment> {
+    const { orgName = "default" } = params;
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpPOST(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/environments`,
         body,
         { token },
     );

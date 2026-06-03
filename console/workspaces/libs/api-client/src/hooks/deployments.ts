@@ -25,10 +25,12 @@ import {
   listEnvironments,
   getDeploymentPipeline,
   listDeploymentPipelines,
+  listDataPlanes,
   updateDeploymentState,
   promoteAgent,
   updateDeploymentPipeline,
   updateEnvironment,
+  createEnvironment,
 } from '../apis';
 import { useAuthHooks } from '@agent-management-platform/auth';
 import type {
@@ -49,6 +51,8 @@ import type {
   DeploymentPipelineListResponse,
   ListDeploymentPipelinesPathParams,
   ListDeploymentPipelinesQuery,
+  ListDataPlanesPathParams,
+  DataPlaneListResponse,
   DeploymentDetailsResponse,
   UpdateDeploymentStatePathParams,
   UpdateDeploymentStateRequest,
@@ -61,6 +65,8 @@ import type {
   UpdateEnvironmentPathParams,
   UpdateEnvironmentRequest,
   Environment,
+  CreateEnvironmentRequest,
+  CreateEnvironmentPathParams,
 } from '@agent-management-platform/types';
 import { POLL_INTERVAL } from '../utils';
 import { useApiMutation, useApiQuery } from './react-query-notifications';
@@ -153,6 +159,18 @@ export function useListDeploymentPipelines(
   });
 }
 
+export function useListDataPlanes(
+  params: ListDataPlanesPathParams,
+  options?: { enabled?: boolean },
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<DataPlaneListResponse>({
+    queryKey: ['data-planes', params.orgName],
+    queryFn: () => listDataPlanes(params, getToken),
+    enabled: options?.enabled ?? !!params.orgName,
+  });
+}
+
 export function useUpdateDeploymentState() {
   const queryClient = useQueryClient();
   const { getToken } = useAuthHooks();
@@ -200,6 +218,19 @@ export function useUpdateEnvironment() {
   { params: UpdateEnvironmentPathParams; body: UpdateEnvironmentRequest }>({
     action: { verb: 'update', target: 'environment' },
     mutationFn: ({ params, body }) => updateEnvironment(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments'] });
+    },
+  });
+}
+
+export function useCreateEnvironment() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<Environment, unknown,
+  { params: CreateEnvironmentPathParams; body: CreateEnvironmentRequest }>({
+    action: { verb: 'create', target: 'environment' },
+    mutationFn: ({ params, body }) => createEnvironment(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },

@@ -17,7 +17,6 @@
 
 import { type ChangeEvent, useMemo, useState } from "react";
 import {
-  Box,
   Chip,
   IconButton,
   ListingTable,
@@ -28,7 +27,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit } from "@wso2/oxygen-ui-icons-react";
+import { Edit, Search, Server } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
@@ -88,19 +87,28 @@ export function EnvironmentTable({ onEditEnvironment }: EnvironmentTableProps) {
         />
 
         {filtered.length === 0 ? (
-          <Box display="flex" justifyContent="center" py={4}>
-            <Typography variant="body2" color="text.secondary">
-              {search ? "No environments match your search." : "No environments found."}
-            </Typography>
-          </Box>
+          <ListingTable.Container>
+            {search ? (
+              <ListingTable.EmptyState
+                illustration={<Search size={64} />}
+                title="No environments match your search"
+                description="Try a different keyword or clear the search filter."
+              />
+            ) : (
+              <ListingTable.EmptyState
+                illustration={<Server size={64} />}
+                title="No environments yet"
+                description="Environments are created and managed through your infrastructure configuration."
+              />
+            )}
+          </ListingTable.Container>
         ) : (
           <>
             <ListingTable.Container>
               <ListingTable>
                 <ListingTable.Head>
                   <ListingTable.Row>
-                    <ListingTable.Cell>Name</ListingTable.Cell>
-                    <ListingTable.Cell>Display Name</ListingTable.Cell>
+                    <ListingTable.Cell>Environment</ListingTable.Cell>
                     <ListingTable.Cell>Data Plane</ListingTable.Cell>
                     <ListingTable.Cell>Type</ListingTable.Cell>
                     <ListingTable.Cell>Created</ListingTable.Cell>
@@ -112,11 +120,8 @@ export function EnvironmentTable({ onEditEnvironment }: EnvironmentTableProps) {
                     <ListingTable.Row key={env.name}>
                       <ListingTable.Cell>
                         <Typography variant="body2" fontWeight="medium">
-                          {env.name}
+                          {env.displayName ?? env.name}
                         </Typography>
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Typography variant="body2">{env.displayName ?? "—"}</Typography>
                       </ListingTable.Cell>
                       <ListingTable.Cell>
                         <Typography variant="body2" color="text.secondary">

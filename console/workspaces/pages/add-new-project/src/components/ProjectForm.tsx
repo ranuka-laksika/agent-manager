@@ -17,7 +17,6 @@
  */
 
 import {
-  Box,
   CircularProgress,
   Form,
   Select,
@@ -29,7 +28,7 @@ import {
 import { useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { debounce } from "lodash";
-import { useGenerateResourceName } from "@agent-management-platform/api-client";
+import { useGenerateResourceName, useListDeploymentPipelines } from "@agent-management-platform/api-client";
 import { AddProjectFormValues } from "../form/schema";
 
 interface ProjectFormProps {
@@ -73,6 +72,23 @@ export const ProjectForm = ({
     useGenerateResourceName({
       orgName: orgId,
     });
+
+  const { data: pipelinesData, isLoading: isPipelinesLoading } =
+    useListDeploymentPipelines({ orgName: orgId });
+
+  const pipelines = pipelinesData?.deploymentPipelines ?? [];
+
+  // Auto-select the first pipeline once data loads if nothing is selected yet.
+  useEffect(() => {
+    if (!formData.deploymentPipeline && pipelines.length > 0) {
+      const first = pipelines[0].name;
+      setFormData((prev) => {
+        const next = { ...prev, deploymentPipeline: first };
+        checkDirty(next);
+        return next;
+      });
+    }
+  }, [pipelines, formData.deploymentPipeline, setFormData, checkDirty]);
 
   // Create debounced function for name generation
   const debouncedGenerateName = useMemo(
@@ -167,24 +183,41 @@ export const ProjectForm = ({
             />
           </Form.ElementWrapper>
 
-          <Box display="none">
-            <Form.ElementWrapper
-              label="Deployment Pipeline"
-              name="deploymentPipeline"
+          <Form.ElementWrapper
+            label="Deployment Pipeline"
+            name="deploymentPipeline"
+          >
+            <Select
+              id="deploymentPipeline"
+              value={formData.deploymentPipeline}
+              onChange={(e) =>
+                handleFieldChange("deploymentPipeline", e.target.value)
+              }
+              error={!!errors.deploymentPipeline}
+              disabled={isPipelinesLoading}
+              displayEmpty
+              fullWidth
             >
-              <Select
-                id="deploymentPipeline"
-                value={formData.deploymentPipeline}
-                onChange={(e) =>
-                  handleFieldChange("deploymentPipeline", e.target.value)
-                }
-                error={!!errors.deploymentPipeline}
-                fullWidth
-              >
-                <MenuItem value="default">default</MenuItem>
-              </Select>
-            </Form.ElementWrapper>
-          </Box>
+              {isPipelinesLoading && (
+                <MenuItem value="" disabled>
+                  <Stack direction="row" alignItems="center" gap={1}>
+                    <CircularProgress size={12} />
+                    <Typography variant="caption">Loading pipelines...</Typography>
+                  </Stack>
+                </MenuItem>
+              )}
+              {!isPipelinesLoading && pipelines.length === 0 && (
+                <MenuItem value="" disabled>
+                  No deployment pipelines available
+                </MenuItem>
+              )}
+              {pipelines.map((p) => (
+                <MenuItem key={p.name} value={p.name}>
+                  {p.displayName}
+                </MenuItem>
+              ))}
+            </Select>
+          </Form.ElementWrapper>
         </Form.Stack>
       </Form.Section>
     </Form.Stack>

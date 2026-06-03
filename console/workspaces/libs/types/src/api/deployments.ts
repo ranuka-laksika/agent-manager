@@ -210,5 +210,17 @@ export interface UpdateEnvironmentRequest {
 
 export interface UpdateEnvironmentPathParams {
   orgName: string | undefined;
-  envID: string | undefined;
+  envName: string | undefined;
 }
+
+// Create Environment
+export interface CreateEnvironmentRequest {
+  name: string;
+  displayName: string;
+  description?: string;
+  dataplaneRef: string;
+  dnsPrefix: string;
+  isProduction?: boolean;
+}
+
+export type CreateEnvironmentPathParams = { orgName: string | undefined };

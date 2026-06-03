@@ -20,7 +20,6 @@ import {
   Alert,
   Box,
   Button,
-  Collapse,
   Form,
   FormControl,
   FormLabel,
@@ -32,7 +31,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
+import { ArrowRight, Edit, Plus, X } from "@wso2/oxygen-ui-icons-react";
 import {
   DrawerContent,
   DrawerHeader,
@@ -43,11 +42,9 @@ import {
   useUpdateDeploymentPipeline,
   useListEnvironments,
 } from "@agent-management-platform/api-client";
-import type {
-  DeploymentPipelineResponse,
-  PromotionPath,
-} from "@agent-management-platform/types";
+import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
 import { editPipelineSchema, type EditPipelineFormValues } from "../form/schema";
+import { validatePromotionChain } from "../utils/validatePromotionChain";
 
 interface EditDeploymentPipelineDrawerProps {
   open: boolean;
@@ -56,15 +53,23 @@ interface EditDeploymentPipelineDrawerProps {
   orgId: string;
 }
 
-function buildFormValues(pipeline: DeploymentPipelineResponse): EditPipelineFormValues {
-  return {
-    displayName: pipeline.displayName,
-    description: pipeline.description ?? "",
-    promotionPaths: pipeline.promotionPaths.map((p) => ({
-      sourceEnvironmentRef: p.sourceEnvironmentRef,
-      targetEnvironmentRefs: p.targetEnvironmentRefs.map((t) => ({ name: t.name })),
-    })),
-  };
+function pipelineToChain(pipeline: DeploymentPipelineResponse): string[] {
+  if (pipeline.promotionPaths.length === 0) return ["", ""];
+  const validation = validatePromotionChain(pipeline.promotionPaths);
+  if (validation.valid && validation.chain && validation.chain.length >= 2) {
+    return validation.chain;
+  }
+  // Fallback for invalid existing paths: collect sources + last target
+  const sources = pipeline.promotionPaths.map((p) => p.sourceEnvironmentRef);
+  const lastTarget = pipeline.promotionPaths[pipeline.promotionPaths.length - 1]?.targetEnvironmentRefs[0]?.name ?? "";
+  return [...sources, lastTarget];
+}
+
+function chainToPromotionPaths(chain: string[]) {
+  return chain.slice(0, -1).map((env, i) => ({
+    sourceEnvironmentRef: env,
+    targetEnvironmentRefs: [{ name: chain[i + 1] }],
+  }));
 }
 
 export function EditDeploymentPipelineDrawer({
@@ -73,15 +78,16 @@ export function EditDeploymentPipelineDrawer({
   pipeline,
   orgId,
 }: EditDeploymentPipelineDrawerProps) {
-  const [formData, setFormData] = useState<EditPipelineFormValues>(() =>
-    buildFormValues(pipeline),
-  );
+  const [formData, setFormData] = useState<EditPipelineFormValues>(() => ({
+    displayName: pipeline.displayName,
+    description: pipeline.description ?? "",
+    chain: pipelineToChain(pipeline),
+  }));
+
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<EditPipelineFormValues>(editPipelineSchema);
-
-  const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
-    useState<Partial<Record<string, string>>>({});
 
   const {
     mutateAsync: updatePipeline,
@@ -91,11 +97,16 @@ export function EditDeploymentPipelineDrawer({
   } = useUpdateDeploymentPipeline();
 
   const { data: environments } = useListEnvironments({ orgName: orgId });
+  const envOptions = useMemo(() => environments ?? [], [environments]);
 
   useEffect(() => {
     if (open) {
-      setFormData(buildFormValues(pipeline));
-      setLastSubmittedValidationErrors({});
+      setFormData({
+        displayName: pipeline.displayName,
+        description: pipeline.description ?? "",
+        chain: pipelineToChain(pipeline),
+      });
+      setSubmitError(null);
       resetMutation();
     }
   }, [open, pipeline, resetMutation]);
@@ -112,64 +123,35 @@ export function EditDeploymentPipelineDrawer({
     [setFieldError, validateField],
   );
 
-  const handleAddPath = useCallback(() => {
-    setFormData((prev) => ({
-      ...prev,
-      promotionPaths: [
-        ...prev.promotionPaths,
-        { sourceEnvironmentRef: "", targetEnvironmentRefs: [] },
-      ],
-    }));
-  }, []);
-
-  const handleRemovePath = useCallback((index: number) => {
-    setFormData((prev) => ({
-      ...prev,
-      promotionPaths: prev.promotionPaths.filter((_, i) => i !== index),
-    }));
-  }, []);
-
-  const handlePathSourceChange = useCallback((index: number, value: string) => {
+  const handleChainChange = useCallback((index: number, value: string) => {
     setFormData((prev) => {
-      const paths = [...prev.promotionPaths];
-      paths[index] = { ...paths[index], sourceEnvironmentRef: value };
-      return { ...prev, promotionPaths: paths };
+      const chain = [...prev.chain];
+      chain[index] = value;
+      return { ...prev, chain };
     });
   }, []);
 
-  const handlePathTargetsChange = useCallback((index: number, values: string[]) => {
-    setFormData((prev) => {
-      const paths = [...prev.promotionPaths];
-      paths[index] = {
-        ...paths[index],
-        targetEnvironmentRefs: values.map((name) => ({ name })),
-      };
-      return { ...prev, promotionPaths: paths };
-    });
+  const handleAddEnv = useCallback(() => {
+    setFormData((prev) => ({ ...prev, chain: [...prev.chain, ""] }));
+  }, []);
+
+  const handleRemoveEnv = useCallback((index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      chain: prev.chain.filter((_, i) => i !== index),
+    }));
   }, []);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
+      setSubmitError(null);
+
       const result = editPipelineSchema.safeParse(formData);
       if (!result.success) {
-        const fieldErrors: Partial<Record<string, string>> = {};
-        result.error.issues.forEach((issue) => {
-          const key = issue.path.join(".");
-          if (!fieldErrors[key]) {
-            fieldErrors[key] = issue.message;
-          }
-        });
-        setLastSubmittedValidationErrors(fieldErrors);
         validateForm(formData);
         return;
       }
-      setLastSubmittedValidationErrors({});
-
-      const promotionPaths: PromotionPath[] = result.data.promotionPaths.map((p) => ({
-        sourceEnvironmentRef: p.sourceEnvironmentRef,
-        targetEnvironmentRefs: p.targetEnvironmentRefs,
-      }));
 
       try {
         await updatePipeline({
@@ -177,7 +159,7 @@ export function EditDeploymentPipelineDrawer({
           body: {
             displayName: result.data.displayName.trim(),
             description: result.data.description?.trim(),
-            promotionPaths,
+            promotionPaths: chainToPromotionPaths(result.data.chain),
           },
         });
         onClose();
@@ -189,15 +171,22 @@ export function EditDeploymentPipelineDrawer({
   );
 
   const errorMessage = useMemo(() => {
-    if (updateError) {
-      return (updateError as Error)?.message ?? "Failed to update pipeline";
-    }
+    if (submitError) return submitError;
+    if (updateError) return (updateError as Error)?.message ?? "Failed to update pipeline";
     return null;
-  }, [updateError]);
+  }, [submitError, updateError]);
 
-  const validationErrorsList = Object.values(lastSubmittedValidationErrors).filter(Boolean);
+  // Each selector only shows envs not already chosen elsewhere in the chain.
+  const optionsFor = useCallback(
+    (index: number) =>
+      envOptions.filter(
+        (e) => !formData.chain.some((v, i) => i !== index && v === e.name),
+      ),
+    [formData.chain, envOptions],
+  );
 
-  const envOptions = environments ?? [];
+  const canRemove = formData.chain.length > 2;
+  const allFilled = formData.chain.every((v) => v !== "");
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
@@ -210,14 +199,6 @@ export function EditDeploymentPipelineDrawer({
                 <Typography variant="body2">{errorMessage}</Typography>
               </Alert>
             )}
-
-            <Collapse in={validationErrorsList.length > 0} timeout="auto" unmountOnExit>
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {validationErrorsList.map((error, index) => (
-                  <Box key={index}>{error}</Box>
-                ))}
-              </Alert>
-            </Collapse>
 
             <Form.Section>
               <Form.Header>Pipeline Details</Form.Header>
@@ -252,96 +233,96 @@ export function EditDeploymentPipelineDrawer({
             </Form.Section>
 
             <Form.Section>
-              <Stack direction="row" justifyContent="space-between" alignItems="center">
-                <Form.Header>Promotion Paths</Form.Header>
-                <Tooltip title="Add promotion path">
-                  <IconButton size="small" onClick={handleAddPath} disabled={isUpdating}>
-                    <Plus size={16} />
-                  </IconButton>
-                </Tooltip>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1.5}>
+                <Form.Header>Promotion Chain</Form.Header>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<Plus size={14} />}
+                  onClick={handleAddEnv}
+                  disabled={isUpdating || formData.chain.length >= envOptions.length}
+                >
+                  Add
+                </Button>
               </Stack>
-              <Form.Stack spacing={2}>
-                {formData.promotionPaths.map((path, index) => (
-                  <Box
-                    key={index}
-                    sx={{ border: "1px solid", borderColor: "divider", borderRadius: 1, p: 2 }}
-                  >
-                    <Stack spacing={1.5}>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center">
-                        <Typography variant="body2" fontWeight="medium">
-                          Path {index + 1}
-                        </Typography>
-                        <Tooltip title="Remove path">
-                          <IconButton
-                            size="small"
-                            onClick={() => handleRemovePath(index)}
-                            disabled={isUpdating || formData.promotionPaths.length <= 1}
-                          >
-                            <Trash size={14} />
-                          </IconButton>
-                        </Tooltip>
+
+              {/* Scrollable chain row */}
+              <Box sx={{ overflowX: "auto", pb: 1 }}>
+                <Stack direction="row" alignItems="center" sx={{ minWidth: "max-content" }}>
+                  {formData.chain.map((envName, index) => (
+                    <Stack key={index} direction="row" alignItems="center">
+                      {/* Env selector + remove */}
+                      <Stack alignItems="center" spacing={0.5}>
+                        <Stack direction="row" alignItems="center" spacing={0.5}>
+                          <FormControl size="small" sx={{ minWidth: 120 }}>
+                            <Select
+                              size="small"
+                              value={envName}
+                              onChange={(e) => handleChainChange(index, e.target.value as string)}
+                              disabled={isUpdating}
+                              displayEmpty
+                              renderValue={(v) => {
+                                const label = v
+                                  ? (envOptions.find((e) => e.name === v)?.displayName ?? v)
+                                  : null;
+                                return label ? (
+                                  <Typography variant="body2">{label}</Typography>
+                                ) : (
+                                  <Typography variant="body2" color="text.disabled">
+                                    Select
+                                  </Typography>
+                                );
+                              }}
+                            >
+                              {optionsFor(index).map((env) => (
+                                <MenuItem key={env.name} value={env.name}>
+                                  {env.displayName ?? env.name}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                          {canRemove && (
+                            <Tooltip title="Remove">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveEnv(index)}
+                                disabled={isUpdating}
+                              >
+                                <X size={12} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Stack>
                       </Stack>
-                      <FormControl fullWidth size="small">
-                        <FormLabel required>Source Environment</FormLabel>
-                        <Select
-                          size="small"
-                          value={path.sourceEnvironmentRef}
-                          onChange={(e) => handlePathSourceChange(index, e.target.value as string)}
-                          disabled={isUpdating}
-                          displayEmpty
-                        >
-                          <MenuItem value="" disabled>
-                            <em>Select source environment</em>
-                          </MenuItem>
-                          {envOptions.map((env) => (
-                            <MenuItem key={env.name} value={env.name}>
-                              {env.displayName ?? env.name}
-                            </MenuItem>
-                          ))}
-                        </Select>
-                      </FormControl>
-                      <FormControl fullWidth size="small">
-                        <FormLabel required>Target Environments</FormLabel>
-                        <Select
-                          size="small"
-                          multiple
-                          value={path.targetEnvironmentRefs.map((t) => t.name)}
-                          onChange={(e) =>
-                            handlePathTargetsChange(index, e.target.value as string[])
-                          }
-                          disabled={isUpdating}
-                          displayEmpty
-                          renderValue={(selected) => {
-                            const arr = selected as string[];
-                            if (arr.length === 0) return <em>Select target environments</em>;
-                            return arr
-                              .map(
-                                (name) =>
-                                  envOptions.find((e) => e.name === name)?.displayName ?? name,
-                              )
-                              .join(", ");
-                          }}
-                        >
-                          {envOptions
-                            .filter((env) => env.name !== path.sourceEnvironmentRef)
-                            .map((env) => (
-                              <MenuItem key={env.name} value={env.name}>
-                                {env.displayName ?? env.name}
-                              </MenuItem>
-                            ))}
-                        </Select>
-                      </FormControl>
+
+                      {/* Arrow between items */}
+                      {index < formData.chain.length - 1 && (
+                        <Box px={1} display="flex" alignItems="center">
+                          <ArrowRight size={16} />
+                        </Box>
+                      )}
                     </Stack>
-                  </Box>
-                ))}
-              </Form.Stack>
+                  ))}
+                </Stack>
+              </Box>
+
+              {!allFilled && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  <Typography variant="body2">Select an environment for each step.</Typography>
+                </Alert>
+              )}
             </Form.Section>
 
             <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
               <Button variant="outlined" color="inherit" onClick={onClose} disabled={isUpdating}>
                 Cancel
               </Button>
-              <Button type="submit" variant="contained" color="primary" disabled={isUpdating}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={isUpdating || !allFilled}
+              >
                 {isUpdating ? "Saving..." : "Save"}
               </Button>
             </Box>

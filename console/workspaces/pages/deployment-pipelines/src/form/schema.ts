@@ -20,16 +20,14 @@ import { z } from "zod";
 export const editPipelineSchema = z.object({
   displayName: z.string().min(1, "Display name is required").max(128, "Display name must be 128 characters or less"),
   description: z.string().optional(),
-  promotionPaths: z
-    .array(
-      z.object({
-        sourceEnvironmentRef: z.string().min(1, "Source environment is required"),
-        targetEnvironmentRefs: z
-          .array(z.object({ name: z.string().min(1) }))
-          .min(1, "At least one target environment is required"),
-      }),
-    )
-    .min(1, "At least one promotion path is required"),
+  /**
+   * Ordered list of environment names forming the promotion chain.
+   * Adjacent pairs become promotion paths: chain[i] → chain[i+1].
+   * Minimum 2 to define at least one step.
+   */
+  chain: z
+    .array(z.string().min(1, "Select an environment"))
+    .min(2, "At least 2 environments are needed to define a promotion step"),
 });
 
 export type EditPipelineFormValues = z.infer<typeof editPipelineSchema>;

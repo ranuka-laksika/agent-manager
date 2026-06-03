@@ -47,6 +47,7 @@ import {
   usePromoteAgent,
   useGetAgentConfigurations,
   useGetDeploymentPipeline,
+  useListEnvironments,
 } from "@agent-management-platform/api-client";
 import type {
   Environment,
@@ -103,6 +104,14 @@ export function PromoteAgentDrawer({
   const [formState, setFormState] = useState<PromoteFormState>(DEFAULT_STATE);
 
   const { data: pipeline } = useGetDeploymentPipeline({ orgName: orgId, projName: projectId });
+  const { data: environments } = useListEnvironments({ orgName: orgId });
+
+  const envDisplayName = useCallback(
+    (name: string) =>
+      environments?.find((e) => e.name === name)?.displayName ?? name,
+    [environments],
+  );
+
   const { data: sourceConfigs } = useGetAgentConfigurations(
     { orgName: orgId, projName: projectId, agentName: agentId },
     { environment: sourceEnvironment.name },
@@ -274,7 +283,7 @@ export function PromoteAgentDrawer({
                     </MenuItem>
                     {targetEnvOptions.map((t) => (
                       <MenuItem key={t.name} value={t.name}>
-                        {t.name}
+                        {envDisplayName(t.name)}
                       </MenuItem>
                     ))}
                   </Select>

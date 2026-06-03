@@ -116,7 +116,7 @@ export function EditEnvironmentDrawer({
 
       try {
         await updateEnvironment({
-          params: { orgName: orgId, envID: environment.id ?? environment.name },
+          params: { orgName: orgId, envName: environment.name },
           body: {
             displayName: result.data.displayName.trim(),
             description: result.data.description ?? undefined,

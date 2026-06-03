@@ -24,3 +24,18 @@ export const editEnvironmentSchema = z.object({
 });
 
 export type EditEnvironmentFormValues = z.infer<typeof editEnvironmentSchema>;
+
+export const createEnvironmentSchema = z.object({
+  name: z
+    .string()
+    .min(1, "Name is required")
+    .max(64, "Name must be 64 characters or less")
+    .regex(/^[a-z0-9-]+$/, "Name must be lowercase alphanumeric with hyphens only"),
+  displayName: z.string().min(1, "Display name is required").max(128, "Display name must be 128 characters or less"),
+  description: z.string().optional(),
+  dataplaneRef: z.string().min(1, "Data plane is required"),
+  dnsPrefix: z.string().min(1, "DNS prefix is required").max(100),
+  isProduction: z.boolean().optional(),
+});
+
+export type CreateEnvironmentFormValues = z.infer<typeof createEnvironmentSchema>;
