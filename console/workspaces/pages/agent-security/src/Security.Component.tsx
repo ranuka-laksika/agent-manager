@@ -31,6 +31,7 @@ import {
   Form,
   IconButton,
   Skeleton,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -49,6 +50,7 @@ import {
   useListAgentAPIKeys,
   useRevokeAgentAPIKey,
 } from "@agent-management-platform/api-client";
+import { EnvironmentSelector } from "@agent-management-platform/shared-component";
 import { NoDataFound, PageLayout } from "@agent-management-platform/views";
 import type { AgentAPIKeyListItem } from "@agent-management-platform/types";
 
@@ -325,15 +327,18 @@ export const SecurityComponent: React.FC = () => {
       title="API Keys"
       disableIcon
       actions={
-        securityEnabled && (keys?.length ?? 0) > 0 ? (
-          <Button
-            variant="contained"
-            startIcon={<Plus size={16} />}
-            onClick={() => setCreateOpen(true)}
-          >
-            Create
-          </Button>
-        ) : undefined
+        <Stack direction="row" spacing={2} alignItems="center">
+          <EnvironmentSelector />
+          {securityEnabled && (keys?.length ?? 0) > 0 && (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} />}
+              onClick={() => setCreateOpen(true)}
+            >
+              Create
+            </Button>
+          )}
+        </Stack>
       }
     >
       <Box>

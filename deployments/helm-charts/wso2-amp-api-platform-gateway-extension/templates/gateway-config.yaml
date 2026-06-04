@@ -138,4 +138,4 @@ data:
             https: 22894
             envoyAdmin: 9901
             policyEngineAdmin: 9002
-            policyEngineMetrics: {{ .Values.apiGateway.config.router.metricsPort | default 9003 }}
+            policyEngineMetrics: 9003

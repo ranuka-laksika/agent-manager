@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from "react";
+import { EnvironmentSelector } from "@agent-management-platform/shared-component";
 import {
   DrawerContent,
   DrawerHeader,
@@ -339,6 +340,7 @@ export const TracesComponent: React.FC = () => {
             alignItems="center"
             flexWrap="wrap"
           >
+            <EnvironmentSelector />
             <TimeRangeSelector
               preset={timeRange}
               customStart={customStartTime}

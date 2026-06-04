@@ -51,6 +51,7 @@
     "@wso2/oxygen-ui": "0.10.1",
     "@wso2/oxygen-ui-icons-react": "0.10.1",
     "@wso2/oxygen-ui-charts-react": "0.10.1",
+    "@agent-management-platform/shared-component": "workspace:*",
     "@agent-management-platform/views": "workspace:*",
     "@agent-management-platform/api-client": "workspace:*",
     "@agent-management-platform/types": "workspace:*",

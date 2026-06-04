@@ -353,13 +353,13 @@ func (s *infraResourceManager) GetDataplanes(ctx context.Context, orgName string
 		return nil, err
 	}
 
-	s.logger.Debug("Fetching dataplanes from OpenChoreo", "orgName", orgName)
-	dataplanes, err := s.ocClient.ListDataPlanes(ctx, orgName)
+	s.logger.Debug("Fetching dataplanes from OpenChoreo")
+	dataplanes, err := s.ocClient.ListDataPlanes(ctx)
 	if err != nil {
-		s.logger.Error("Failed to get dataplanes from OpenChoreo", "orgName", orgName, "error", err)
+		s.logger.Error("Failed to get dataplanes from OpenChoreo", "error", err)
 		return nil, err
 	}
 
-	s.logger.Info("Fetched dataplanes successfully", "orgName", orgName, "count", len(dataplanes))
+	s.logger.Info("Fetched dataplanes successfully", "count", len(dataplanes))
 	return dataplanes, nil
 }

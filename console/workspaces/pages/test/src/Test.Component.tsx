@@ -18,6 +18,7 @@
 
 import React from "react";
 import { AgentChat } from "./AgentTest/AgentChat";
+import { EnvironmentSelector } from "@agent-management-platform/shared-component";
 import {
   NoDataFound,
   PageLayout,
@@ -96,7 +97,7 @@ export const TestComponent: React.FC = () => {
   }
 
   return (
-    <PageLayout title={"Try your agent"} disableIcon isLoading={isLoading}>
+    <PageLayout title={"Try your agent"} disableIcon isLoading={isLoading} actions={<EnvironmentSelector />}>
       {isLoading ? (
         <SkeletonTestPageLayout />
       ) : (

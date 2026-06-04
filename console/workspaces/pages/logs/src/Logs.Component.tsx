@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { EnvironmentSelector } from "@agent-management-platform/shared-component";
 import { LogsPanel, PageLayout, TimeRangeSelector, useTimeRangeParams } from "@agent-management-platform/views";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
@@ -200,6 +201,7 @@ export const LogsComponent: React.FC = () => {
       disableIcon
       actions={
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
+          <EnvironmentSelector />
           {/* Log Level Filter */}
           <Select
             size="small"

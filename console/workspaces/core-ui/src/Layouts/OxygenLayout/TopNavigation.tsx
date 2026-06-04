@@ -1,5 +1,6 @@
 import {
   useListAgents,
+  useListEnvironments,
   useListOrganizations,
   useListProjects,
 } from "@agent-management-platform/api-client";
@@ -23,18 +24,19 @@ import {
   X,
 } from "@wso2/oxygen-ui-icons-react";
 import { useMemo, useState } from "react";
-import { generatePath, useNavigate, useParams } from "react-router-dom";
+import { generatePath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useActiveAgentPage, useActiveOrgPage, useActiveProjectPage } from "./path-map";
 
 export function TopNavigation() {
   const navigate = useNavigate();
   const theme = useTheme();
-  const { orgId, projectId, agentId } = useParams<{
+  const { orgId, projectId, agentId, envId } = useParams<{
     orgId: string;
     projectId: string;
     agentId: string;
     envId: string;
   }>();
+  const { pathname } = useLocation();
 
   const commonOrgPages = useActiveOrgPage();
   const commonProjectPages = useActiveProjectPage();
@@ -74,6 +76,12 @@ export function TopNavigation() {
   const selectedAgent = useMemo(() => {
     return agents?.agents?.find((agent) => agent.name === agentId);
   }, [agents, agentId]);
+
+  // Get all environments for the organisation (only needed when on an env-scoped page)
+  const { data: environments } = useListEnvironments({ orgName: orgId });
+  const selectedEnvironment = useMemo(() => {
+    return environments?.find((env) => env.name === envId);
+  }, [environments, envId]);
 
   return (
     <>
@@ -406,6 +414,34 @@ export function TopNavigation() {
               </>
             )}
           </>
+        )}
+
+        {envId && environments && environments.length > 1 && (
+          <ComplexSelect
+            value={envId}
+            size="small"
+            label="Environments"
+            sx={{ minWidth: 160 }}
+            renderValue={() => (
+              <ComplexSelect.MenuItem.Text
+                primary={selectedEnvironment?.displayName ?? envId}
+              />
+            )}
+            onChange={(e) => {
+              const newEnvId = e.target.value as string;
+              navigate(
+                pathname.replace(`/environment/${envId}`, `/environment/${newEnvId}`),
+              );
+            }}
+          >
+            {environments.map((env) => (
+              <ComplexSelect.MenuItem key={env.name} value={env.name}>
+                <ComplexSelect.MenuItem.Text
+                  primary={env.displayName ?? env.name}
+                />
+              </ComplexSelect.MenuItem>
+            ))}
+          </ComplexSelect>
         )}
       </Header.Switchers>
     </>

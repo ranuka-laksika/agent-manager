@@ -485,8 +485,8 @@ func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, namespac
 // Data Plane Operations
 // -----------------------------------------------------------------------------
 
-func (c *openChoreoClient) ListDataPlanes(ctx context.Context, namespaceName string) ([]*models.DataPlaneResponse, error) {
-	resp, err := c.ocClient.ListDataPlanesWithResponse(ctx, namespaceName, nil)
+func (c *openChoreoClient) ListDataPlanes(ctx context.Context) ([]*models.DataPlaneResponse, error) {
+	resp, err := c.ocClient.ListClusterDataPlanesWithResponse(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list data planes: %w", err)
 	}
@@ -515,7 +515,6 @@ func (c *openChoreoClient) ListDataPlanes(ctx context.Context, namespaceName str
 
 		dataPlanes[i] = &models.DataPlaneResponse{
 			Name:        dp.Metadata.Name,
-			OrgName:     namespaceName,
 			DisplayName: displayName,
 			Description: description,
 			CreatedAt:   createdAt,

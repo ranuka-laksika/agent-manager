@@ -329,7 +329,7 @@ type OpenChoreoClientMock struct {
 	ListComponentsByKindFunc func(ctx context.Context, namespaceName string, projectName string, kindName string) ([]*models.AgentResponse, error)
 
 	// ListDataPlanesFunc mocks the ListDataPlanes method.
-	ListDataPlanesFunc func(ctx context.Context, namespaceName string) ([]*models.DataPlaneResponse, error)
+	ListDataPlanesFunc func(ctx context.Context) ([]*models.DataPlaneResponse, error)
 
 	// ListDeploymentPipelinesFunc mocks the ListDeploymentPipelines method.
 	ListDeploymentPipelinesFunc func(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error)
@@ -810,8 +810,6 @@ type OpenChoreoClientMock struct {
 		ListDataPlanes []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// NamespaceName is the namespaceName argument value.
-			NamespaceName string
 		}
 		// ListDeploymentPipelines holds details about calls to the ListDeploymentPipelines method.
 		ListDeploymentPipelines []struct {
@@ -2757,21 +2755,19 @@ func (mock *OpenChoreoClientMock) ListComponentsByKindCalls() []struct {
 }
 
 // ListDataPlanes calls ListDataPlanesFunc.
-func (mock *OpenChoreoClientMock) ListDataPlanes(ctx context.Context, namespaceName string) ([]*models.DataPlaneResponse, error) {
+func (mock *OpenChoreoClientMock) ListDataPlanes(ctx context.Context) ([]*models.DataPlaneResponse, error) {
 	if mock.ListDataPlanesFunc == nil {
 		panic("OpenChoreoClientMock.ListDataPlanesFunc: method is nil but OpenChoreoClient.ListDataPlanes was just called")
 	}
 	callInfo := struct {
-		Ctx           context.Context
-		NamespaceName string
+		Ctx context.Context
 	}{
-		Ctx:           ctx,
-		NamespaceName: namespaceName,
+		Ctx: ctx,
 	}
 	mock.lockListDataPlanes.Lock()
 	mock.calls.ListDataPlanes = append(mock.calls.ListDataPlanes, callInfo)
 	mock.lockListDataPlanes.Unlock()
-	return mock.ListDataPlanesFunc(ctx, namespaceName)
+	return mock.ListDataPlanesFunc(ctx)
 }
 
 // ListDataPlanesCalls gets all the calls that were made to ListDataPlanes.
@@ -2779,12 +2775,10 @@ func (mock *OpenChoreoClientMock) ListDataPlanes(ctx context.Context, namespaceN
 //
 //	len(mockedOpenChoreoClient.ListDataPlanesCalls())
 func (mock *OpenChoreoClientMock) ListDataPlanesCalls() []struct {
-	Ctx           context.Context
-	NamespaceName string
+	Ctx context.Context
 } {
 	var calls []struct {
-		Ctx           context.Context
-		NamespaceName string
+		Ctx context.Context
 	}
 	mock.lockListDataPlanes.RLock()
 	calls = mock.calls.ListDataPlanes
