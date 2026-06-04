@@ -17,8 +17,6 @@
 
 import { useState } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import { Button } from "@wso2/oxygen-ui";
-import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { PageLayout } from "@agent-management-platform/views";
 import type { Environment } from "@agent-management-platform/types";
 import { EnvironmentTable } from "./subComponents/EnvironmentTable";
@@ -36,20 +34,11 @@ export function EnvironmentsOrganization() {
         <Route
           index
           element={
-            <PageLayout
-              title="Environments"
-              disableIcon
-              actions={
-                <Button
-                  variant="contained"
-                  startIcon={<Plus size={16} />}
-                  onClick={() => setCreateOpen(true)}
-                >
-                  Create Environment
-                </Button>
-              }
-            >
-              <EnvironmentTable onEditEnvironment={setEnvToEdit} />
+            <PageLayout title="Environments" disableIcon>
+              <EnvironmentTable
+                onEditEnvironment={setEnvToEdit}
+                onCreateEnvironment={() => setCreateOpen(true)}
+              />
             </PageLayout>
           }
         />

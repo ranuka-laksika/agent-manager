@@ -36,7 +36,6 @@ export function TopNavigation() {
     agentId: string;
     envId: string;
   }>();
-  const { pathname } = useLocation();
 
   const commonOrgPages = useActiveOrgPage();
   const commonProjectPages = useActiveProjectPage();
@@ -414,34 +413,6 @@ export function TopNavigation() {
               </>
             )}
           </>
-        )}
-
-        {envId && environments && environments.length > 1 && (
-          <ComplexSelect
-            value={envId}
-            size="small"
-            label="Environments"
-            sx={{ minWidth: 160 }}
-            renderValue={() => (
-              <ComplexSelect.MenuItem.Text
-                primary={selectedEnvironment?.displayName ?? envId}
-              />
-            )}
-            onChange={(e) => {
-              const newEnvId = e.target.value as string;
-              navigate(
-                pathname.replace(`/environment/${envId}`, `/environment/${newEnvId}`),
-              );
-            }}
-          >
-            {environments.map((env) => (
-              <ComplexSelect.MenuItem key={env.name} value={env.name}>
-                <ComplexSelect.MenuItem.Text
-                  primary={env.displayName ?? env.name}
-                />
-              </ComplexSelect.MenuItem>
-            ))}
-          </ComplexSelect>
         )}
       </Header.Switchers>
     </>

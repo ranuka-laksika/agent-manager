@@ -32,6 +32,8 @@ import (
 type InfraResourceManager interface {
 	ListOrgEnvironments(ctx context.Context, orgName string) ([]*models.EnvironmentResponse, error)
 	GetProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string) (*models.DeploymentPipelineResponse, error)
+	CreateOrgDeploymentPipeline(ctx context.Context, orgName string, displayName string, description *string, projectName *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
+	UpdateOrgDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	UpdateProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	ListOrganizations(ctx context.Context, limit int, offset int) ([]*models.OrganizationResponse, int32, error)
 	GetOrganization(ctx context.Context, orgName string) (*models.OrganizationResponse, error)
@@ -322,6 +324,35 @@ func (s *infraResourceManager) GetProjectDeploymentPipeline(ctx context.Context,
 	s.logger.Info("Fetched deployment pipeline successfully", "orgName", orgName, "projectName", projectName)
 
 	return deploymentPipeline, nil
+}
+
+func (s *infraResourceManager) CreateOrgDeploymentPipeline(ctx context.Context, orgName string, displayName string, description *string, projectName *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	s.logger.Info("Creating deployment pipeline", "orgName", orgName, "displayName", displayName)
+
+	pipelineName := slugify(displayName) // slugify is defined in evaluator_manager.go
+	if pipelineName == "" {
+		return nil, fmt.Errorf("invalid display name: cannot derive a valid pipeline name")
+	}
+
+	created, err := s.ocClient.CreateDeploymentPipeline(ctx, orgName, pipelineName, &displayName, description, promotionPaths)
+	if err != nil {
+		s.logger.Error("Failed to create deployment pipeline", "orgName", orgName, "error", err)
+		return nil, err
+	}
+
+	s.logger.Info("Deployment pipeline created successfully", "orgName", orgName, "pipelineName", pipelineName)
+	return created, nil
+}
+
+func (s *infraResourceManager) UpdateOrgDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	s.logger.Info("Updating deployment pipeline", "orgName", orgName, "pipelineName", pipelineName)
+	updated, err := s.ocClient.UpdateDeploymentPipeline(ctx, orgName, pipelineName, displayName, description, promotionPaths)
+	if err != nil {
+		s.logger.Error("Failed to update deployment pipeline", "orgName", orgName, "pipelineName", pipelineName, "error", err)
+		return nil, err
+	}
+	s.logger.Info("Deployment pipeline updated successfully", "orgName", orgName, "pipelineName", pipelineName)
+	return updated, nil
 }
 
 func (s *infraResourceManager) UpdateProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {

@@ -165,30 +165,12 @@ export const EvalEvaluatorsComponent: React.FC = () => {
 
   return (
     <>
-      <PageLayout
-        title="Evaluators"
-        disableIcon
-        actions={
-          <Button
-            variant="contained"
-            component={Link}
-            to={generatePath(
-              evaluatorsRouteMap.children.create.path,
-              routeParams,
-            )}
-            startIcon={<Plus />}
-            color="primary"
-          >
-            Create Evaluator
-          </Button>
-        }
-      >
+      <PageLayout title="Evaluators" disableIcon>
         <Stack spacing={2}>
           <Stack
             direction="row"
             spacing={1}
             alignItems="center"
-            justifyContent="space-between"
             flexWrap="wrap"
             useFlexGap
           >
@@ -208,16 +190,30 @@ export const EvalEvaluatorsComponent: React.FC = () => {
                 />
               ))}
             </Stack>
-            <SearchBar
-              placeholder="Search evaluators"
-              size="small"
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                debouncedSetSearch(event.target.value);
-              }}
-              disabled={isLoading}
-            />
+            <Box flexGrow={1}>
+              <SearchBar
+                placeholder="Search evaluators"
+                size="small"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  debouncedSetSearch(event.target.value);
+                }}
+                disabled={isLoading}
+              />
+            </Box>
+            <Button
+              variant="contained"
+              component={Link}
+              to={generatePath(
+                evaluatorsRouteMap.children.create.path,
+                routeParams,
+              )}
+              startIcon={<Plus />}
+              color="primary"
+            >
+              Create Evaluator
+            </Button>
           </Stack>
 
           {evaluatorsError ? (

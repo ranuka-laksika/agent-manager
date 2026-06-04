@@ -21,10 +21,12 @@ import { PageLayout } from "@agent-management-platform/views";
 import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
 import { DeploymentPipelineTable } from "./subComponents/DeploymentPipelineTable";
 import { EditDeploymentPipelineDrawer } from "./subComponents/EditDeploymentPipelineDrawer";
+import { CreateDeploymentPipelineDrawer } from "./subComponents/CreateDeploymentPipelineDrawer";
 
 export function DeploymentPipelinesOrganization() {
   const { orgId } = useParams<{ orgId: string }>();
   const [pipelineToEdit, setPipelineToEdit] = useState<DeploymentPipelineResponse | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <>
@@ -33,12 +35,23 @@ export function DeploymentPipelinesOrganization() {
           index
           element={
             <PageLayout title="Deployment Pipelines" disableIcon>
-              <DeploymentPipelineTable onEditPipeline={setPipelineToEdit} />
+              <DeploymentPipelineTable
+                onEditPipeline={setPipelineToEdit}
+                onCreatePipeline={() => setCreateOpen(true)}
+              />
             </PageLayout>
           }
         />
         <Route path="*" element={<Navigate to={`/org/${orgId}/deployment-pipelines`} replace />} />
       </Routes>
+
+      {orgId && (
+        <CreateDeploymentPipelineDrawer
+          open={createOpen}
+          onClose={() => setCreateOpen(false)}
+          orgId={orgId}
+        />
+      )}
 
       {pipelineToEdit && orgId && (
         <EditDeploymentPipelineDrawer

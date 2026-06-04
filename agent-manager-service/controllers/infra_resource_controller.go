@@ -43,6 +43,8 @@ type InfraResourceController interface {
 	UpdateProject(w http.ResponseWriter, r *http.Request)
 	DeleteProject(w http.ResponseWriter, r *http.Request)
 	ListOrgDeploymentPipelines(w http.ResponseWriter, r *http.Request)
+	CreateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
+	UpdateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	DeleteProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	GetDataplanes(w http.ResponseWriter, r *http.Request)
@@ -387,6 +389,84 @@ func (c *infraResourceController) ListOrgEnvironments(w http.ResponseWriter, r *
 	utils.WriteSuccessResponse(w, http.StatusOK, environmentsListResponse)
 }
 
+func convertSpecPromotionPaths(specPaths []spec.PromotionPath) []models.PromotionPath {
+	modelPaths := make([]models.PromotionPath, len(specPaths))
+	for i, p := range specPaths {
+		targets := make([]models.TargetEnvironmentRef, len(p.TargetEnvironmentRefs))
+		for j, t := range p.TargetEnvironmentRefs {
+			targets[j] = models.TargetEnvironmentRef{Name: t.Name}
+		}
+		modelPaths[i] = models.PromotionPath{
+			SourceEnvironmentRef:  p.SourceEnvironmentRef,
+			TargetEnvironmentRefs: targets,
+		}
+	}
+	return modelPaths
+}
+
+func (c *infraResourceController) CreateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+
+	var payload spec.CreateDeploymentPipelineRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("CreateOrgDeploymentPipeline: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if payload.DisplayName == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "displayName is required")
+		return
+	}
+
+	if len(payload.PromotionPaths) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "promotionPaths is required and cannot be empty")
+		return
+	}
+
+	created, err := c.infraResourceManager.CreateOrgDeploymentPipeline(ctx, orgName, payload.DisplayName, payload.Description, payload.ProjectName, convertSpecPromotionPaths(payload.PromotionPaths))
+	if err != nil {
+		log.Error("CreateOrgDeploymentPipeline: failed to create deployment pipeline", "error", err)
+		handleCommonErrors(w, err, "Failed to create deployment pipeline")
+		return
+	}
+
+	response := utils.ConvertToDeploymentPipelineResponse(created)
+	utils.WriteSuccessResponse(w, http.StatusCreated, response)
+}
+
+func (c *infraResourceController) UpdateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	pipelineName := r.PathValue(utils.PathParamPipelineName)
+
+	var payload spec.UpdateDeploymentPipelineRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("UpdateOrgDeploymentPipeline: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(payload.PromotionPaths) == 0 {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "promotionPaths is required and cannot be empty")
+		return
+	}
+
+	updated, err := c.infraResourceManager.UpdateOrgDeploymentPipeline(ctx, orgName, pipelineName, payload.DisplayName, payload.Description, convertSpecPromotionPaths(payload.PromotionPaths))
+	if err != nil {
+		log.Error("UpdateOrgDeploymentPipeline: failed to update deployment pipeline", "error", err)
+		handleCommonErrors(w, err, "Failed to update deployment pipeline")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, utils.ConvertToDeploymentPipelineResponse(updated))
+}
+
 func (c *infraResourceController) GetProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -425,20 +505,7 @@ func (c *infraResourceController) UpdateProjectDeploymentPipeline(w http.Respons
 		return
 	}
 
-	// Convert spec promotion paths to model
-	modelPaths := make([]models.PromotionPath, len(payload.PromotionPaths))
-	for i, p := range payload.PromotionPaths {
-		targets := make([]models.TargetEnvironmentRef, len(p.TargetEnvironmentRefs))
-		for j, t := range p.TargetEnvironmentRefs {
-			targets[j] = models.TargetEnvironmentRef{Name: t.Name}
-		}
-		modelPaths[i] = models.PromotionPath{
-			SourceEnvironmentRef:  p.SourceEnvironmentRef,
-			TargetEnvironmentRefs: targets,
-		}
-	}
-
-	updated, err := c.infraResourceManager.UpdateProjectDeploymentPipeline(ctx, orgName, projectName, payload.DisplayName, payload.Description, modelPaths)
+	updated, err := c.infraResourceManager.UpdateProjectDeploymentPipeline(ctx, orgName, projectName, payload.DisplayName, payload.Description, convertSpecPromotionPaths(payload.PromotionPaths))
 	if err != nil {
 		log.Error("UpdateProjectDeploymentPipeline: failed to update deployment pipeline", "error", err)
 		handleCommonErrors(w, err, "Failed to update deployment pipeline")

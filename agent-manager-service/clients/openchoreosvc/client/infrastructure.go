@@ -381,6 +381,63 @@ func convertDeploymentPipeline(p *ocapi.DeploymentPipeline, orgName string) *mod
 	}
 }
 
+func (c *openChoreoClient) CreateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	annotations := make(map[string]string)
+	if displayName != nil {
+		annotations[AnnotationKeyDisplayName] = *displayName
+	}
+	if description != nil {
+		annotations[AnnotationKeyDescription] = *description
+	}
+
+	ocPaths := make([]ocapi.PromotionPath, len(promotionPaths))
+	for i, p := range promotionPaths {
+		targets := make([]ocapi.TargetEnvironmentRef, len(p.TargetEnvironmentRefs))
+		for j, t := range p.TargetEnvironmentRefs {
+			targets[j] = ocapi.TargetEnvironmentRef{Name: t.Name}
+		}
+		ocPaths[i] = ocapi.PromotionPath{
+			SourceEnvironmentRef: struct {
+				Kind *ocapi.PromotionPathSourceEnvironmentRefKind `json:"kind,omitempty"`
+				Name string                                       `json:"name"`
+			}{Name: p.SourceEnvironmentRef},
+			TargetEnvironmentRefs: targets,
+		}
+	}
+
+	pipeline := ocapi.DeploymentPipeline{
+		Metadata: ocapi.ObjectMeta{
+			Name:        pipelineName,
+			Namespace:   &namespaceName,
+			Annotations: &annotations,
+		},
+		Spec: &ocapi.DeploymentPipelineSpec{
+			PromotionPaths: &ocPaths,
+		},
+	}
+
+	resp, err := c.ocClient.CreateDeploymentPipelineWithResponse(ctx, namespaceName, pipeline)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create deployment pipeline: %w", err)
+	}
+
+	if resp.StatusCode() != http.StatusCreated {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON400: resp.JSON400,
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON409: resp.JSON409,
+			JSON500: resp.JSON500,
+		})
+	}
+
+	if resp.JSON201 == nil {
+		return nil, fmt.Errorf("empty response from create deployment pipeline")
+	}
+
+	return convertDeploymentPipeline(resp.JSON201, namespaceName), nil
+}
+
 func (c *openChoreoClient) UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
 	// Get existing pipeline to preserve metadata
 	getResp, err := c.ocClient.GetDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName)
@@ -497,45 +554,27 @@ func (c *openChoreoClient) DeleteDeploymentPipeline(ctx context.Context, namespa
 }
 
 func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error) {
-	// OpenChoreo has no list-pipelines endpoint; derive the set from projects.
-	projects, err := c.ListProjects(ctx, namespaceName)
+	resp, err := c.ocClient.ListDeploymentPipelinesWithResponse(ctx, namespaceName, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list projects: %w", err)
+		return nil, fmt.Errorf("failed to list deployment pipelines: %w", err)
 	}
 
-	// Collect unique pipeline names across all projects.
-	seen := make(map[string]struct{})
-	var pipelineNames []string
-	for _, p := range projects {
-		if p.DeploymentPipeline == "" {
-			continue
-		}
-		if _, exists := seen[p.DeploymentPipeline]; !exists {
-			seen[p.DeploymentPipeline] = struct{}{}
-			pipelineNames = append(pipelineNames, p.DeploymentPipeline)
-		}
+	if resp.StatusCode() != http.StatusOK {
+		return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
+			JSON401: resp.JSON401,
+			JSON403: resp.JSON403,
+			JSON500: resp.JSON500,
+		})
 	}
 
-	pipelines := make([]*models.DeploymentPipelineResponse, 0, len(pipelineNames))
-	for _, name := range pipelineNames {
-		resp, err := c.ocClient.GetDeploymentPipelineWithResponse(ctx, namespaceName, name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get deployment pipeline %s: %w", name, err)
-		}
-		if resp.StatusCode() != http.StatusOK {
-			return nil, handleErrorResponse(resp.StatusCode(), ErrorResponses{
-				JSON401: resp.JSON401,
-				JSON403: resp.JSON403,
-				JSON404: resp.JSON404,
-				JSON500: resp.JSON500,
-			})
-		}
-		if resp.JSON200 == nil {
-			continue
-		}
-		pipelines = append(pipelines, convertDeploymentPipeline(resp.JSON200, namespaceName))
+	if resp.JSON200 == nil || len(resp.JSON200.Items) == 0 {
+		return []*models.DeploymentPipelineResponse{}, nil
 	}
 
+	pipelines := make([]*models.DeploymentPipelineResponse, len(resp.JSON200.Items))
+	for i, p := range resp.JSON200.Items {
+		pipelines[i] = convertDeploymentPipeline(&p, namespaceName)
+	}
 	return pipelines, nil
 }
 

@@ -15,8 +15,12 @@
  * under the License.
  */
 
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
   Chip,
   IconButton,
   ListingTable,
@@ -27,147 +31,258 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit, Search, Server } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Edit, Plus, Search, Server } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
 import type { Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
 
-const PAGE_SIZE = 5;
-
 interface EnvironmentTableProps {
   onEditEnvironment?: (environment: Environment) => void;
+  onCreateEnvironment?: () => void;
 }
 
-export function EnvironmentTable({ onEditEnvironment }: EnvironmentTableProps) {
+export function EnvironmentTable({ onEditEnvironment, onCreateEnvironment }: EnvironmentTableProps) {
   const { orgId } = useParams<{ orgId: string }>();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const { data: environments, isLoading } = useListEnvironments({ orgName: orgId });
+  const { data: environments, isLoading, error } = useListEnvironments({ orgName: orgId });
 
   const items = environments ?? [];
 
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (e) =>
-          e.name.toLowerCase().includes(search.toLowerCase()) ||
-          (e.displayName ?? "").toLowerCase().includes(search.toLowerCase()),
-      ),
-    [items, search],
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter(
+      (e) =>
+        e.name.toLowerCase().includes(q) ||
+        (e.displayName ?? "").toLowerCase().includes(q),
+    );
+  }, [items, search]);
+
+  useEffect(() => {
+    if (page !== 0 && page * rowsPerPage >= filtered.length) setPage(0);
+  }, [filtered.length, page, rowsPerPage]);
+
+  const toolbar = (
+    <Stack direction="row" spacing={1} alignItems="center">
+      <Box flexGrow={1}>
+        <SearchBar
+          value={search}
+          onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+          placeholder="Search environments..."
+          size="small"
+          fullWidth
+          disabled={isLoading}
+        />
+      </Box>
+      {onCreateEnvironment && items.length > 0 && (
+        <Button
+          variant="contained"
+          startIcon={<Plus size={16} />}
+          onClick={onCreateEnvironment}
+        >
+          Create Environment
+        </Button>
+      )}
+    </Stack>
   );
 
-  const paginated = filtered.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
-
-  const handleSearch = (e: ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
-    setPage(0);
-  };
-
-  if (isLoading) {
+  if (error) {
     return (
       <Stack spacing={1}>
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} variant="rounded" height={48} />
-        ))}
+        {toolbar}
+        <ListingTable.Container>
+          <Alert severity="error" icon={<AlertTriangle size={18} />} sx={{ alignSelf: "stretch" }}>
+            Failed to load environments.{" "}
+            {error instanceof Error ? error.message : "Please try again."}
+          </Alert>
+        </ListingTable.Container>
       </Stack>
     );
   }
 
-  return (
-    <FadeIn>
-      <Stack spacing={2}>
-        <SearchBar
-          value={search}
-          onChange={handleSearch}
-          placeholder="Search environments..."
-          size="small"
-        />
+  if (isLoading) {
+    return (
+      <>
+        {toolbar}
+        <ListingTable.Container disablePaper>
+          <Stack spacing={1} mt={1}>
+            {Array.from({ length: rowsPerPage }).map((_, i) => (
+              <Stack
+                key={i}
+                direction="row"
+                alignItems="center"
+                spacing={2}
+                sx={{
+                  px: 2,
+                  py: 1.5,
+                  borderRadius: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flexShrink: 0 }}>
+                  <Skeleton variant="circular" width={36} height={36} />
+                  <Skeleton variant="text" width={140} height={20} />
+                </Stack>
+                <Skeleton variant="text" width={120} height={20} sx={{ flexShrink: 0 }} />
+                <Skeleton variant="rounded" width={80} height={24} sx={{ flexShrink: 0 }} />
+                <Skeleton variant="rounded" width={100} height={24} sx={{ flexShrink: 0, ml: "auto" }} />
+              </Stack>
+            ))}
+          </Stack>
+        </ListingTable.Container>
+      </>
+    );
+  }
 
-        {filtered.length === 0 ? (
-          <ListingTable.Container>
-            {search ? (
-              <ListingTable.EmptyState
-                illustration={<Search size={64} />}
-                title="No environments match your search"
-                description="Try a different keyword or clear the search filter."
-              />
-            ) : (
-              <ListingTable.EmptyState
-                illustration={<Server size={64} />}
-                title="No environments yet"
-                description="Environments are created and managed through your infrastructure configuration."
-              />
-            )}
-          </ListingTable.Container>
-        ) : (
-          <>
-            <ListingTable.Container>
-              <ListingTable>
-                <ListingTable.Head>
-                  <ListingTable.Row>
-                    <ListingTable.Cell>Environment</ListingTable.Cell>
-                    <ListingTable.Cell>Data Plane</ListingTable.Cell>
-                    <ListingTable.Cell>Type</ListingTable.Cell>
-                    <ListingTable.Cell>Created</ListingTable.Cell>
-                    <ListingTable.Cell align="right">Actions</ListingTable.Cell>
-                  </ListingTable.Row>
-                </ListingTable.Head>
-                <ListingTable.Body>
-                  {paginated.map((env) => (
-                    <ListingTable.Row key={env.name}>
-                      <ListingTable.Cell>
-                        <Typography variant="body2" fontWeight="medium">
-                          {env.displayName ?? env.name}
-                        </Typography>
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Typography variant="body2" color="text.secondary">
-                          {env.dataplaneRef}
-                        </Typography>
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        {env.isProduction ? (
-                          <Chip label="Production" color="error" size="small" />
-                        ) : (
-                          <Chip label="Non-production" size="small" />
-                        )}
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Typography variant="body2" color="text.secondary">
+  if (items.length === 0) {
+    return (
+      <Stack spacing={1}>
+        {toolbar}
+        <ListingTable.Container>
+          <ListingTable.EmptyState
+            illustration={<Server size={64} />}
+            title="No environments yet"
+            description="Create an environment to define where your agents are deployed."
+            action={
+              onCreateEnvironment && (
+                <Button
+                  variant="contained"
+                  startIcon={<Plus size={16} />}
+                  onClick={onCreateEnvironment}
+                >
+                  Create Environment
+                </Button>
+              )
+            }
+          />
+        </ListingTable.Container>
+      </Stack>
+    );
+  }
+
+  if (filtered.length === 0) {
+    return (
+      <Stack spacing={1}>
+        {toolbar}
+        <ListingTable.Container>
+          <ListingTable.EmptyState
+            illustration={<Search size={64} />}
+            title="No environments match your search"
+            description="Try a different keyword or clear the search filter."
+          />
+        </ListingTable.Container>
+      </Stack>
+    );
+  }
+
+  const paginated = filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
+  return (
+    <>
+      {toolbar}
+      <Stack pt={4}>
+        <ListingTable.Container disablePaper>
+          <ListingTable variant="card">
+            <ListingTable.Head>
+              <ListingTable.Row>
+                <ListingTable.Cell>Environment</ListingTable.Cell>
+                <ListingTable.Cell>Data Plane</ListingTable.Cell>
+                <ListingTable.Cell align="center" width="160px">Type</ListingTable.Cell>
+                <ListingTable.Cell align="right" width="160px">Created</ListingTable.Cell>
+              </ListingTable.Row>
+            </ListingTable.Head>
+            <ListingTable.Body>
+              {paginated.map((env) => (
+                <ListingTable.Row
+                  key={env.name}
+                  variant="card"
+                  hover
+                  onMouseEnter={() => setHoveredId(env.name)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onFocus={() => setHoveredId(env.name)}
+                  onBlur={() => setHoveredId(null)}
+                >
+                  <ListingTable.Cell>
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Avatar
+                        sx={{
+                          bgcolor: "primary.main",
+                          color: "primary.contrastText",
+                          fontSize: 16,
+                          height: 36,
+                          width: 36,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {(env.displayName ?? env.name)?.charAt(0)?.toUpperCase() ?? "E"}
+                      </Avatar>
+                      <Typography variant="body2" fontWeight={500} noWrap>
+                        {env.displayName ?? env.name}
+                      </Typography>
+                    </Stack>
+                  </ListingTable.Cell>
+
+                  <ListingTable.Cell>
+                    <Typography variant="body2" color="text.secondary">
+                      {env.dataplaneRef || "—"}
+                    </Typography>
+                  </ListingTable.Cell>
+
+                  <ListingTable.Cell align="center">
+                    <Chip
+                      label={env.isProduction ? "Production" : "Non-production"}
+                      size="small"
+                      variant="outlined"
+                      color={env.isProduction ? "primary" : "default"}
+                    />
+                  </ListingTable.Cell>
+
+                  <ListingTable.Cell align="right" onClick={(e) => e.stopPropagation()}>
+                    <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
+                      {hoveredId === env.name ? (
+                        <FadeIn>
+                          <Tooltip title="Edit environment">
+                            <IconButton size="small" onClick={() => onEditEnvironment?.(env)}>
+                              <Edit size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </FadeIn>
+                      ) : (
+                        <Typography variant="caption" color="text.secondary">
                           {formatDistanceToNow(new Date(env.createdAt), { addSuffix: true })}
                         </Typography>
-                      </ListingTable.Cell>
-                      <ListingTable.Cell align="right">
-                        <Tooltip title="Edit environment">
-                          <IconButton
-                            size="small"
-                            onClick={() => onEditEnvironment?.(env)}
-                          >
-                            <Edit size={16} />
-                          </IconButton>
-                        </Tooltip>
-                      </ListingTable.Cell>
-                    </ListingTable.Row>
-                  ))}
-                </ListingTable.Body>
-              </ListingTable>
-            </ListingTable.Container>
-            {filtered.length > PAGE_SIZE && (
-              <TablePagination
-                component="div"
-                count={filtered.length}
-                page={page}
-                rowsPerPage={PAGE_SIZE}
-                rowsPerPageOptions={[PAGE_SIZE]}
-                onPageChange={(_, newPage) => setPage(newPage)}
-              />
-            )}
-          </>
-        )}
+                      )}
+                    </Stack>
+                  </ListingTable.Cell>
+                </ListingTable.Row>
+              ))}
+            </ListingTable.Body>
+          </ListingTable>
+
+          {filtered.length > 5 && (
+            <TablePagination
+              component="div"
+              count={filtered.length}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              onPageChange={(_, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[5, 10, 25]}
+            />
+          )}
+        </ListingTable.Container>
       </Stack>
-    </FadeIn>
+    </>
   );
 }

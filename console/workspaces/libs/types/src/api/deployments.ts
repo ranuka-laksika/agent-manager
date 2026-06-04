@@ -201,6 +201,19 @@ export interface UpdateDeploymentPipelineRequest {
 
 export type UpdateDeploymentPipelinePathParams = OrgProjPathParams;
 
+// Update DeploymentPipeline (direct — by pipeline name, no project required)
+export type UpdateOrgDeploymentPipelinePathParams = { orgName: string | undefined; pipelineName: string };
+
+// Create DeploymentPipeline
+export interface CreateDeploymentPipelineRequest {
+  displayName: string;
+  description?: string;
+  projectName?: string;
+  promotionPaths: PromotionPath[];
+}
+
+export type CreateDeploymentPipelinePathParams = { orgName: string | undefined };
+
 // Update Environment
 export interface UpdateEnvironmentRequest {
   displayName?: string;

@@ -43,6 +43,9 @@ import type {
   PromoteAgentPathParams,
   PromoteAgentRequest,
   PromoteAgentResponse,
+  CreateDeploymentPipelinePathParams,
+  CreateDeploymentPipelineRequest,
+  UpdateOrgDeploymentPipelinePathParams,
   UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
@@ -221,6 +224,33 @@ export async function promoteAgent(params: PromoteAgentPathParams, body: Promote
     const token = getToken ? await getToken() : undefined;
     const res = await httpPOST(
         `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents/${encodeURIComponent(agentName)}/promote`,
+        body,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    return res.json();
+}
+
+// eslint-disable-next-line max-len
+export async function createDeploymentPipeline(params: CreateDeploymentPipelinePathParams, body: CreateDeploymentPipelineRequest, getToken?: () => Promise<string>)
+: Promise<DeploymentPipelineResponse> {
+    const { orgName = "default" } = params;
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpPOST(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/deployment-pipelines`,
+        body,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    return res.json();
+}
+
+export async function updateOrgDeploymentPipeline(params: UpdateOrgDeploymentPipelinePathParams, body: UpdateDeploymentPipelineRequest, getToken?: () => Promise<string>)
+: Promise<DeploymentPipelineResponse> {
+    const { orgName = "default", pipelineName } = params;
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpPUT(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/deployment-pipelines/${encodeURIComponent(pipelineName)}`,
         body,
         { token },
     );

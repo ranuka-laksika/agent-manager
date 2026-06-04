@@ -28,6 +28,8 @@ import {
   listDataPlanes,
   updateDeploymentState,
   promoteAgent,
+  createDeploymentPipeline,
+  updateOrgDeploymentPipeline,
   updateDeploymentPipeline,
   updateEnvironment,
   createEnvironment,
@@ -60,6 +62,9 @@ import type {
   PromoteAgentPathParams,
   PromoteAgentRequest,
   PromoteAgentResponse,
+  CreateDeploymentPipelinePathParams,
+  CreateDeploymentPipelineRequest,
+  UpdateOrgDeploymentPipelinePathParams,
   UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
@@ -194,6 +199,32 @@ export function usePromoteAgent() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent-deployments'] });
       queryClient.invalidateQueries({ queryKey: ['agent'] });
+    },
+  });
+}
+
+export function useCreateDeploymentPipeline() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<DeploymentPipelineResponse, unknown,
+  { params: CreateDeploymentPipelinePathParams; body: CreateDeploymentPipelineRequest }>({
+    action: { verb: 'create', target: 'deployment pipeline' },
+    mutationFn: ({ params, body }) => createDeploymentPipeline(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-pipelines'] });
+    },
+  });
+}
+
+export function useUpdateOrgDeploymentPipeline() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<DeploymentPipelineResponse, unknown,
+  { params: UpdateOrgDeploymentPipelinePathParams; body: UpdateDeploymentPipelineRequest }>({
+    action: { verb: 'update', target: 'deployment pipeline' },
+    mutationFn: ({ params, body }) => updateOrgDeploymentPipeline(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-pipelines'] });
     },
   });
 }

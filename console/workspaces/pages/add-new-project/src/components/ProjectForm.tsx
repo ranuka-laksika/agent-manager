@@ -28,8 +28,55 @@ import {
 import { useEffect, useMemo, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { debounce } from "lodash";
-import { useGenerateResourceName, useListDeploymentPipelines } from "@agent-management-platform/api-client";
+import { useGenerateResourceName, useListDeploymentPipelines, useListEnvironments } from "@agent-management-platform/api-client";
 import { AddProjectFormValues } from "../form/schema";
+import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
+
+function pipelineChainLabel(
+  pipeline: DeploymentPipelineResponse,
+  envDisplayNameMap: Map<string, string>,
+): string | null {
+  if (pipeline.promotionPaths.length === 0) return null;
+  const names = [
+    ...pipeline.promotionPaths.map((pp) => pp.sourceEnvironmentRef),
+    pipeline.promotionPaths[pipeline.promotionPaths.length - 1]?.targetEnvironmentRefs[0]?.name,
+  ].filter(Boolean) as string[];
+  return names.map((n) => envDisplayNameMap.get(n) ?? n).join(" → ");
+}
+
+function SelectedPipelineValue({
+  pipeline,
+  envDisplayNameMap,
+}: {
+  pipeline: DeploymentPipelineResponse;
+  envDisplayNameMap: Map<string, string>;
+}) {
+  const chain = pipelineChainLabel(pipeline, envDisplayNameMap);
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Typography variant="body2">{pipeline.displayName} | </Typography>
+      {chain && (
+        <Typography variant="caption" color="text.secondary">{chain}</Typography>
+      )}
+    </Stack>
+  );
+}
+
+function PipelineMenuItem({
+  pipeline,
+  envDisplayNameMap,
+}: {
+  pipeline: DeploymentPipelineResponse;
+  envDisplayNameMap: Map<string, string>;
+}) {
+  const chain = pipelineChainLabel(pipeline, envDisplayNameMap);
+  return (
+    <Stack>
+      <Typography variant="body2">{pipeline.displayName}</Typography>
+      {chain && <Typography variant="caption" color="text.secondary">{chain}</Typography>}
+    </Stack>
+  );
+}
 
 interface ProjectFormProps {
   formData: AddProjectFormValues;
@@ -77,6 +124,13 @@ export const ProjectForm = ({
     useListDeploymentPipelines({ orgName: orgId });
 
   const pipelines = pipelinesData?.deploymentPipelines ?? [];
+
+  const { data: environments } = useListEnvironments({ orgName: orgId });
+  const envDisplayNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (environments ?? []).forEach((e) => map.set(e.name, e.displayName ?? e.name));
+    return map;
+  }, [environments]);
 
   // Auto-select the first pipeline once data loads if nothing is selected yet.
   useEffect(() => {
@@ -196,6 +250,16 @@ export const ProjectForm = ({
               error={!!errors.deploymentPipeline}
               disabled={isPipelinesLoading}
               displayEmpty
+              renderValue={(value) => {
+                const selected = pipelines.find((p) => p.name === value);
+                if (!selected) return value;
+                return (
+                  <SelectedPipelineValue
+                    pipeline={selected}
+                    envDisplayNameMap={envDisplayNameMap}
+                  />
+                );
+              }}
               fullWidth
             >
               {isPipelinesLoading && (
@@ -213,7 +277,7 @@ export const ProjectForm = ({
               )}
               {pipelines.map((p) => (
                 <MenuItem key={p.name} value={p.name}>
-                  {p.displayName}
+                  <PipelineMenuItem pipeline={p} envDisplayNameMap={envDisplayNameMap} />
                 </MenuItem>
               ))}
             </Select>

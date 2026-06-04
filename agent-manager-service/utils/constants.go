@@ -51,6 +51,7 @@ const (
 	PathParamProxyId      = "proxyId"
 	PathParamConfigId     = "configId"
 	PathParamGatewayId    = "gatewayId"
+	PathParamPipelineName = "pipelineName"
 	PathParamEnvID        = "envID"
 	PathParamDeploymentId = "deploymentId"
 	PathParamMonitorName  = "monitorName"

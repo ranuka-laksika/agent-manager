@@ -21,7 +21,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Collapse,
   Form,
   FormControl,
   FormControlLabel,
@@ -61,9 +60,18 @@ const DEFAULT_FORM: CreateEnvironmentFormValues = {
   isProduction: false,
 };
 
+// Converts a display name to a valid lowercase-alphanumeric-hyphen name.
+function deriveNameFromDisplayName(displayName: string): string {
+  return displayName
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
 export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironmentDrawerProps) {
   const [formData, setFormData] = useState<CreateEnvironmentFormValues>(DEFAULT_FORM);
-  const [lastErrors, setLastErrors] = useState<Partial<Record<keyof CreateEnvironmentFormValues, string>>>({});
 
   const { errors, validateForm, setFieldError, validateField } =
     useFormValidation<CreateEnvironmentFormValues>(createEnvironmentSchema);
@@ -81,7 +89,6 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
   useEffect(() => {
     if (open) {
       setFormData(DEFAULT_FORM);
-      setLastErrors({});
       resetMutation();
     }
   }, [open, resetMutation]);
@@ -105,15 +112,33 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
     [validateField, setFieldError],
   );
 
-  // Auto-derive dnsPrefix from name unless the user has manually edited it.
+  // Auto-derive name from displayName, and dnsPrefix from name, unless manually edited.
+  const handleDisplayNameChange = useCallback(
+    (value: string) => {
+      setFormData((prev) => {
+        const derivedName = deriveNameFromDisplayName(value);
+        const nameInSync =
+          prev.name === "" || prev.name === deriveNameFromDisplayName(prev.displayName);
+        const newName = nameInSync ? derivedName : prev.name;
+        const next = {
+          ...prev,
+          displayName: value,
+          name: newName,
+          dnsPrefix: newName,
+        };
+        setFieldError("displayName", validateField("displayName", value, next));
+        setFieldError("name", validateField("name", newName, next));
+        return next;
+      });
+    },
+    [validateField, setFieldError],
+  );
+
+  // dnsPrefix always tracks name — no separate user input.
   const handleNameChange = useCallback(
     (value: string) => {
       setFormData((prev) => {
-        const next = {
-          ...prev,
-          name: value,
-          dnsPrefix: prev.dnsPrefix === prev.name || prev.dnsPrefix === "" ? value : prev.dnsPrefix,
-        };
+        const next = { ...prev, name: value, dnsPrefix: value };
         const err = validateField("name", value, next);
         setFieldError("name", err);
         return next;
@@ -127,15 +152,9 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
       e.preventDefault();
       const result = createEnvironmentSchema.safeParse(formData);
       if (!result.success) {
-        const fieldErrors: Partial<Record<keyof CreateEnvironmentFormValues, string>> = {};
-        result.error.issues.forEach((issue) => {
-          if (issue.path[0]) fieldErrors[issue.path[0] as keyof CreateEnvironmentFormValues] = issue.message;
-        });
-        setLastErrors(fieldErrors);
         validateForm(formData);
         return;
       }
-      setLastErrors({});
       try {
         await createEnvironment({
           params: { orgName: orgId },
@@ -144,7 +163,7 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
             displayName: result.data.displayName.trim(),
             description: result.data.description?.trim() || undefined,
             dataplaneRef: result.data.dataplaneRef,
-            dnsPrefix: result.data.dnsPrefix,
+            dnsPrefix: result.data.name,
             isProduction: result.data.isProduction,
           },
         });
@@ -161,8 +180,6 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
     [createError],
   );
 
-  const validationErrorsList = Object.values(lastErrors).filter(Boolean);
-
   return (
     <DrawerWrapper open={open} onClose={onClose}>
       <DrawerHeader icon={<Plus size={24} />} title="Create Environment" onClose={onClose} />
@@ -174,24 +191,39 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
                 <Typography variant="body2">{errorMessage}</Typography>
               </Alert>
             )}
-            <Collapse in={validationErrorsList.length > 0} timeout="auto" unmountOnExit>
-              <Alert severity="error">
-                {validationErrorsList.map((err, i) => (
-                  <Box key={i}>{err}</Box>
-                ))}
-              </Alert>
-            </Collapse>
 
             <Form.Section>
               <Form.Header>Environment Details</Form.Header>
               <Form.Stack spacing={2}>
+                {planes.length > 1 && (
+                  <FormControl fullWidth error={Boolean(errors.dataplaneRef)}>
+                    <FormLabel required>Data Plane</FormLabel>
+                    <Select
+                      size="small"
+                      value={formData.dataplaneRef}
+                      onChange={(e) => handleChange("dataplaneRef", e.target.value as string)}
+                      disabled={isPending}
+                      error={Boolean(errors.dataplaneRef)}
+                    >
+                      {planes.map((p: DataPlane) => (
+                        <MenuItem key={p.name} value={p.name}>
+                          {p.displayName || p.name}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                    {errors.dataplaneRef && (
+                      <Typography variant="caption" color="error">{errors.dataplaneRef}</Typography>
+                    )}
+                  </FormControl>
+                )}
+
                 <FormControl fullWidth error={Boolean(errors.displayName)}>
                   <FormLabel required>Display Name</FormLabel>
                   <TextField
                     size="small"
                     fullWidth
                     value={formData.displayName}
-                    onChange={(e) => handleChange("displayName", e.target.value)}
+                    onChange={(e) => handleDisplayNameChange(e.target.value)}
                     placeholder="e.g., Production"
                     error={Boolean(errors.displayName)}
                     helperText={errors.displayName}
@@ -237,51 +269,6 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
                   }
                   label="Production environment"
                 />
-              </Form.Stack>
-            </Form.Section>
-
-            <Form.Section>
-              <Form.Header>Infrastructure</Form.Header>
-              <Form.Stack spacing={2}>
-                <FormControl fullWidth error={Boolean(errors.dataplaneRef)}>
-                  <FormLabel required>Data Plane</FormLabel>
-                  <Select
-                    size="small"
-                    value={formData.dataplaneRef}
-                    onChange={(e) => handleChange("dataplaneRef", e.target.value as string)}
-                    disabled={isPending || planes.length === 0}
-                    displayEmpty
-                    error={Boolean(errors.dataplaneRef)}
-                  >
-                    {planes.length === 0 && (
-                      <MenuItem value="" disabled>
-                        No data planes available
-                      </MenuItem>
-                    )}
-                    {planes.map((p: DataPlane) => (
-                      <MenuItem key={p.name} value={p.name}>
-                        {p.displayName ?? p.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                  {errors.dataplaneRef && (
-                    <Typography variant="caption" color="error">{errors.dataplaneRef}</Typography>
-                  )}
-                </FormControl>
-
-                <FormControl fullWidth error={Boolean(errors.dnsPrefix)}>
-                  <FormLabel required>DNS Prefix</FormLabel>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    value={formData.dnsPrefix}
-                    onChange={(e) => handleChange("dnsPrefix", e.target.value)}
-                    placeholder="e.g., production"
-                    error={Boolean(errors.dnsPrefix)}
-                    helperText={errors.dnsPrefix}
-                    disabled={isPending}
-                  />
-                </FormControl>
               </Form.Stack>
             </Form.Section>
 

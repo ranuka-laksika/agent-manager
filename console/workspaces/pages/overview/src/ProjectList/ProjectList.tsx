@@ -249,7 +249,7 @@ export function ProjectList() {
   return (
     <PageLayout
       title="Projects"
-      description="List of projects"
+      disableIcon
       titleTail={
         <Box
           display="flex"

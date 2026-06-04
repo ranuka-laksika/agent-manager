@@ -215,6 +215,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Create a deployment pipeline for an organization
+      operationId: createDeploymentPipeline
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateDeploymentPipelineRequest"
+      responses:
+        "201":
+          description: Deployment pipeline created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeploymentPipelineResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Pipeline with that name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /orgs/{orgName}/projects:
     post:
@@ -8102,6 +8142,28 @@ components:
         - orgName
         - createdAt
         - promotionPaths
+
+    CreateDeploymentPipelineRequest:
+      type: object
+      required:
+        - displayName
+        - promotionPaths
+      properties:
+        displayName:
+          type: string
+          description: Human-readable name for the pipeline
+        description:
+          type: string
+          description: Optional description
+        projectName:
+          type: string
+          description: Optional project to associate the pipeline with
+        promotionPaths:
+          type: array
+          description: Ordered list of promotion paths
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PromotionPath"
 
     UpdateDeploymentPipelineRequest:
       type: object

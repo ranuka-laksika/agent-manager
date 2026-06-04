@@ -68,6 +68,7 @@ const (
 const (
 	DataPlaneRead            Permission = "data-plane:read"
 	DeploymentPipelineRead   Permission = "deployment-pipeline:read"
+	DeploymentPipelineCreate Permission = "deployment-pipeline:create"
 	DeploymentPipelineUpdate Permission = "deployment-pipeline:update"
 	DeploymentPipelineDelete Permission = "deployment-pipeline:delete"
 )
