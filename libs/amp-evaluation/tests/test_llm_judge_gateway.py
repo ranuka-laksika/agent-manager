@@ -157,8 +157,7 @@ def test_gateway_kwargs_gemini_uses_http_options():
 
 
 def test_gateway_kwargs_mistral_uses_async_client_headers():
-    import httpx
-
+    httpx = pytest.importorskip("httpx")  # skip when the mistral extra is absent
     _set_gateway()
     kw = LLMAsJudgeEvaluator._gateway_kwargs("mistral/mistral-small-latest")
     client = kw["client_args"]["async_client"]
