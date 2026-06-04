@@ -1857,6 +1857,8 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 		s.cleanupSecretReference(ctx, orgName, projectName, agentName, secretRefName)
 	}
 
+	s.deleteAgentLLMConfigurations(ctx, orgName, projectName, agentName)
+
 	// Step 5: Delete agent component in OpenChoreo
 	s.logger.Debug("Deleting oc agent", "agentName", agentName, "orgName", orgName, "projectName", projectName)
 	err = s.ocClient.DeleteComponent(ctx, orgName, projectName, agentName)
@@ -1864,7 +1866,6 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 		translatedErr := translateAgentError(err)
 		if errors.Is(translatedErr, utils.ErrAgentNotFound) {
 			s.logger.Warn("Agent not found during deletion, delete is idempotent", "agentName", agentName, "orgName", orgName, "projectName", projectName)
-			s.deleteAgentLLMConfigurations(ctx, orgName, projectName, agentName)
 			if configErr := s.agentConfigRepo.DeleteAllByAgent(orgName, projectName, agentName); configErr != nil {
 				s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 			}
@@ -1874,9 +1875,6 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 		s.logger.Error("Failed to delete oc agent", "agentName", agentName, "error", err)
 		return translatedErr
 	}
-
-	// Delete agent-level LLM configurations (proxies, API keys, secret references, DB rows).
-	s.deleteAgentLLMConfigurations(ctx, orgName, projectName, agentName)
 
 	// Cleanup agent configs from database
 	if configErr := s.agentConfigRepo.DeleteAllByAgent(orgName, projectName, agentName); configErr != nil {
@@ -1915,9 +1913,10 @@ func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, orgNam
 	}
 }
 
-// deleteAgentLLMConfigurations lists and deletes all agent-level LLM configurations for an agent.
-// Each deletion goes through the full AgentConfigurationService.Delete path so external resources
-// (proxy API keys, SecretReference CRs, proxy deployments) are cleaned up as well.
+// deleteAgentLLMConfigurations removes all LLM configurations for an agent during agent deletion.
+// It resolves the agent type once to avoid a redundant GetComponent call per config, then calls
+// DeleteForAgentDeletion which skips OC Component/Workload/ReleaseBinding patching and
+// SecretReference CR deletion (those are handled by the component teardown).
 // After all configs are deleted, the shared AI application records (one per agent+env) are removed.
 // Best-effort: individual failures are logged but do not abort the agent deletion.
 func (s *agentManagerService) deleteAgentLLMConfigurations(ctx context.Context, orgName, projectName, agentName string) {
@@ -1926,14 +1925,27 @@ func (s *agentManagerService) deleteAgentLLMConfigurations(ctx context.Context, 
 		s.logger.Warn("Failed to list agent LLM configurations for cleanup", "agentName", agentName, "error", err)
 		return
 	}
-	for _, cfg := range listResp.Configs {
-		configUUID, parseErr := uuid.Parse(cfg.UUID)
-		if parseErr != nil {
-			s.logger.Warn("Failed to parse LLM config UUID during agent deletion", "uuid", cfg.UUID, "error", parseErr)
-			continue
+
+	if len(listResp.Configs) > 0 {
+		// Resolve agent type once — DeleteForAgentDeletion skips GetComponent per config.
+		isExternalAgent := false
+		agentComp, compErr := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
+		if compErr != nil {
+			s.logger.Warn("Failed to determine agent type during LLM config cleanup, assuming internal",
+				"agentName", agentName, "error", compErr)
+		} else {
+			isExternalAgent = agentComp.Provisioning.Type == string(utils.ExternalAgent)
 		}
-		if delErr := s.agentConfigurationService.Delete(ctx, configUUID, orgName, projectName, agentName); delErr != nil {
-			s.logger.Warn("Failed to delete LLM configuration during agent deletion", "configUUID", cfg.UUID, "error", delErr)
+
+		for _, cfg := range listResp.Configs {
+			configUUID, parseErr := uuid.Parse(cfg.UUID)
+			if parseErr != nil {
+				s.logger.Warn("Failed to parse LLM config UUID during agent deletion", "uuid", cfg.UUID, "error", parseErr)
+				continue
+			}
+			if delErr := s.agentConfigurationService.DeleteForAgentDeletion(ctx, configUUID, orgName, projectName, agentName, isExternalAgent); delErr != nil {
+				s.logger.Warn("Failed to delete LLM configuration during agent deletion", "configUUID", cfg.UUID, "error", delErr)
+			}
 		}
 	}
 

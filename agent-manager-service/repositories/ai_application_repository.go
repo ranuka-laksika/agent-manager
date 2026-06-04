@@ -36,6 +36,8 @@ type AIApplicationRepository interface {
 	GetByAgentEnv(ctx context.Context, orgName, projectName, agentID, envName string) (*models.AIApplication, error)
 	// ListByOrg returns all AIApplication rows for the given organisation.
 	ListByOrg(ctx context.Context, orgName string) ([]models.AIApplication, error)
+	// ListByAgent returns all AIApplication rows for the given agent across all environments.
+	ListByAgent(ctx context.Context, orgName, agentID string) ([]models.AIApplication, error)
 	// DeleteByAgent removes all AIApplication rows for the given agent across all environments.
 	// Used during agent deletion after all per-config resources are cleaned up.
 	DeleteByAgent(ctx context.Context, orgName, agentID string) error
@@ -87,6 +89,15 @@ func (r *AIApplicationRepo) ListByOrg(ctx context.Context, orgName string) ([]mo
 	var apps []models.AIApplication
 	err := r.db.WithContext(ctx).
 		Where("organization_name = ?", orgName).
+		Find(&apps).Error
+	return apps, err
+}
+
+// ListByAgent returns all AIApplication rows for the given agent across all environments.
+func (r *AIApplicationRepo) ListByAgent(ctx context.Context, orgName, agentID string) ([]models.AIApplication, error) {
+	var apps []models.AIApplication
+	err := r.db.WithContext(ctx).
+		Where("organization_name = ? AND agent_id = ?", orgName, agentID).
 		Find(&apps).Error
 	return apps, err
 }
