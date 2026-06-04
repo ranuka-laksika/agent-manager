@@ -1912,6 +1912,7 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 		envIDNameMap[env.UUID] = env.Name
 	}
 
+	var cleanupErrs []string
 	for _, mapping := range mappings {
 		if mapping.LLMProxy == nil {
 			continue
@@ -1926,18 +1927,25 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 		proxyKeyName := fmt.Sprintf("%s-key", strings.TrimSuffix(proxyHandle, "-proxy"))
 		providerKeyName := proxyHandle
 
-		// Step 1: Revoke proxy API key.
+		// Step 1: Revoke proxy API key. ErrLLMProxyNotFound means already gone — idempotent.
 		if err := s.llmProxyAPIKeyService.RevokeAPIKey(ctx, orgName, proxyHandle, proxyKeyName); err != nil {
-			s.logger.Warn("Failed to revoke proxy API key during agent deletion (best-effort)",
-				"proxyHandle", proxyHandle, "keyName", proxyKeyName, "error", err)
+			if !errors.Is(err, utils.ErrLLMProxyNotFound) {
+				s.logger.Warn("Failed to revoke proxy API key during agent deletion",
+					"proxyHandle", proxyHandle, "keyName", proxyKeyName, "error", err)
+				cleanupErrs = append(cleanupErrs, fmt.Sprintf("revoke proxy key %s: %v", proxyKeyName, err))
+			}
 		}
 
 		// Step 2: Revoke provider API key (only if provider auth was configured).
+		// ErrLLMProviderNotFound means already gone — idempotent.
 		if mapping.LLMProxy.Configuration.UpstreamAuth != nil {
 			providerUUID := mapping.LLMProxy.ProviderUUID.String()
 			if err := s.llmProviderAPIKeyService.RevokeAPIKey(ctx, orgName, providerUUID, providerKeyName); err != nil {
-				s.logger.Warn("Failed to revoke provider API key during agent deletion (best-effort)",
-					"providerUUID", providerUUID, "keyName", providerKeyName, "error", err)
+				if !errors.Is(err, utils.ErrLLMProviderNotFound) {
+					s.logger.Warn("Failed to revoke provider API key during agent deletion",
+						"providerUUID", providerUUID, "keyName", providerKeyName, "error", err)
+					cleanupErrs = append(cleanupErrs, fmt.Sprintf("revoke provider key %s: %v", providerKeyName, err))
+				}
 			}
 		}
 
@@ -1945,14 +1953,16 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 		deployments, err := s.llmProxyDeploymentService.GetLLMProxyDeployments(proxyHandle, orgName, nil, nil)
 		if err != nil {
 			if !errors.Is(err, utils.ErrLLMProxyNotFound) {
-				s.logger.Warn("Failed to get proxy deployments during agent deletion (best-effort)",
+				s.logger.Warn("Failed to get proxy deployments during agent deletion",
 					"proxyHandle", proxyHandle, "error", err)
+				cleanupErrs = append(cleanupErrs, fmt.Sprintf("get deployments for proxy %s: %v", proxyHandle, err))
 			}
 		} else {
 			for _, dep := range deployments {
 				if _, err := s.llmProxyDeploymentService.UndeployLLMProxyDeployment(proxyHandle, dep.DeploymentID.String(), dep.GatewayUUID.String(), orgName); err != nil {
-					s.logger.Warn("Failed to undeploy proxy deployment during agent deletion (best-effort)",
+					s.logger.Warn("Failed to undeploy proxy deployment during agent deletion",
 						"proxyHandle", proxyHandle, "deploymentID", dep.DeploymentID, "error", err)
+					cleanupErrs = append(cleanupErrs, fmt.Sprintf("undeploy %s deployment %s: %v", proxyHandle, dep.DeploymentID, err))
 				}
 			}
 		}
@@ -1960,8 +1970,9 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 		// Step 4: Delete proxy record.
 		if err := s.llmProxyService.Delete(proxyHandle, orgName); err != nil {
 			if !errors.Is(err, utils.ErrLLMProxyNotFound) {
-				s.logger.Warn("Failed to delete proxy record during agent deletion (best-effort)",
+				s.logger.Warn("Failed to delete proxy record during agent deletion",
 					"proxyHandle", proxyHandle, "error", err)
+				cleanupErrs = append(cleanupErrs, fmt.Sprintf("delete proxy %s: %v", proxyHandle, err))
 			}
 		}
 
@@ -1994,12 +2005,21 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 			secretRefForDelete = proxySecretLoc.SecretRefName()
 		}
 		if err := s.secretClient.DeleteSecret(ctx, proxySecretLoc, secretRefForDelete); err != nil {
-			s.logger.Warn("Failed to delete proxy API key from KV during agent deletion (best-effort)",
+			s.logger.Warn("Failed to delete proxy API key from KV during agent deletion",
 				"proxyHandle", proxyHandle, "error", err)
+			cleanupErrs = append(cleanupErrs, fmt.Sprintf("delete KV secret for proxy %s: %v", proxyHandle, err))
 		}
 	}
 
-	// Step 6: Delete DB records.
+	// Step 6: Delete DB record only when all external resources were cleaned up successfully.
+	// If any step above failed, return an error so the DB row is preserved and the caller
+	// (deleteAgentLLMConfigurations) can log it — the row will be retried on the next
+	// agent deletion attempt via the idempotent delete path.
+	if len(cleanupErrs) > 0 {
+		return fmt.Errorf("external cleanup incomplete for config %s, DB record preserved for retry: %s",
+			configUUID, strings.Join(cleanupErrs, "; "))
+	}
+
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		return s.agentConfigRepo.Delete(ctx, tx, configUUID, orgName)
 	}); err != nil {
