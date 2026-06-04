@@ -27,6 +27,10 @@ type APIKeyRepository interface {
 	Upsert(key *models.StoredAPIKey) error
 	Delete(artifactUUID, name string) error
 	ListByArtifactKind(orgName, kind string) ([]models.StoredAPIKey, error)
+	// ListByArtifactKindAndEnvs returns all active API keys for artifacts of a given kind
+	// whose handle encodes one of the supplied environment UUIDs (handle format: "project/agent/<envUUID>").
+	// Used by the gateway bulk-sync path to scope agent keys to the gateway's own environments.
+	ListByArtifactKindAndEnvs(orgName, kind string, envUUIDs []string) ([]models.StoredAPIKey, error)
 	// ListPermanentByArtifactKind returns only user-managed (permanent) keys.
 	// Used by the Credentials list so console-managed test keys stay hidden.
 	ListPermanentByArtifactKind(orgName, kind string) ([]models.StoredAPIKey, error)
@@ -69,6 +73,28 @@ func (r *APIKeyRepo) ListByArtifactKind(orgName, kind string) ([]models.StoredAP
 		Joins("JOIN artifacts a ON api_keys.artifact_uuid = a.uuid").
 		Where("a.organization_name = ? AND a.kind = ?", orgName, kind).
 		Find(&keys).Error
+	return keys, err
+}
+
+// ListByArtifactKindAndEnvs returns all active API keys for artifacts whose handle ends with
+// "/<envUUID>" for any of the provided environment UUIDs. Empty envUUIDs returns nil, nil.
+func (r *APIKeyRepo) ListByArtifactKindAndEnvs(orgName, kind string, envUUIDs []string) ([]models.StoredAPIKey, error) {
+	if len(envUUIDs) == 0 {
+		return nil, nil
+	}
+	query := r.db.
+		Joins("JOIN artifacts a ON api_keys.artifact_uuid = a.uuid").
+		Where("a.organization_name = ? AND a.kind = ?", orgName, kind)
+
+	// Build OR conditions matching the environment UUID suffix in the artifact handle.
+	// Artifact handle format: "projectName/agentName/<environmentUUID>"
+	orCond := r.db.Where("a.handle LIKE ?", "%/"+envUUIDs[0])
+	for _, envUUID := range envUUIDs[1:] {
+		orCond = orCond.Or("a.handle LIKE ?", "%/"+envUUID)
+	}
+
+	var keys []models.StoredAPIKey
+	err := query.Where(orCond).Find(&keys).Error
 	return keys, err
 }
 

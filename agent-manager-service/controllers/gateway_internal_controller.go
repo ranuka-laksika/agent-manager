@@ -243,7 +243,25 @@ func (c *gatewayInternalController) getAPIKeysByKind(w http.ResponseWriter, r *h
 		return
 	}
 
-	keys, err := c.apiKeyRepo.ListByArtifactKind(gateway.OrganizationName, kind)
+	var keys []models.StoredAPIKey
+	if kind == models.KindAgent {
+		// Agent API keys are environment-scoped: only return keys for environments
+		// assigned to this gateway so the gateway controller doesn't try to load
+		// API configurations that belong to a different environment's data plane.
+		mappings, mappingErr := c.gatewayService.GetGatewayEnvironmentMappings(gateway.UUID.String())
+		if mappingErr != nil {
+			log.Error("Failed to get gateway environment mappings", "gatewayID", gateway.UUID, "error", mappingErr)
+			http.Error(w, "Failed to list API keys", http.StatusInternalServerError)
+			return
+		}
+		envUUIDs := make([]string, 0, len(mappings))
+		for _, m := range mappings {
+			envUUIDs = append(envUUIDs, m.EnvironmentUUID.String())
+		}
+		keys, err = c.apiKeyRepo.ListByArtifactKindAndEnvs(gateway.OrganizationName, kind, envUUIDs)
+	} else {
+		keys, err = c.apiKeyRepo.ListByArtifactKind(gateway.OrganizationName, kind)
+	}
 	if err != nil {
 		log.Error("Failed to list API keys", "kind", kind, "error", err)
 		http.Error(w, "Failed to list API keys", http.StatusInternalServerError)

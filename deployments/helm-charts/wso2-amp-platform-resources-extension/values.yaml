@@ -169,7 +169,3 @@ gatewayTls:
     # Issuer kind: Issuer or ClusterIssuer
     kind: Issuer
 
-# Gateway backend configuration for api-management trait
-gateway:
-  backendHost: "api-platform-default-default-gateway-gateway-runtime.openchoreo-data-plane"
-  backendPort: 22893

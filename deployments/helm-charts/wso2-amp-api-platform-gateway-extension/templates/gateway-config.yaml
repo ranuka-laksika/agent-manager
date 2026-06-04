@@ -42,9 +42,9 @@ data:
             format: json
         router:
           gateway_host: "*"
-          listener_port: {{ .Values.apiGateway.config.router.httpPort | default 22893 }}
+          listener_port: 22893
           https_enabled: true
-          https_port: {{ .Values.apiGateway.config.router.httpsPort | default 22894 }}
+          https_port: 22894
           access_logs:
             enabled: true
             format: json
@@ -134,8 +134,8 @@ data:
         service:
           type: LoadBalancer
           ports:
-            http: {{ .Values.apiGateway.config.router.httpPort | default 22893 }}
-            https: {{ .Values.apiGateway.config.router.httpsPort | default 22894 }}
+            http: 22893
+            https: 22894
             envoyAdmin: 9901
             policyEngineAdmin: 9002
             policyEngineMetrics: {{ .Values.apiGateway.config.router.metricsPort | default 9003 }}

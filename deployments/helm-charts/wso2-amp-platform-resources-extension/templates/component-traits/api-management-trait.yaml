@@ -64,6 +64,14 @@ spec:
           type: string
           description: "Label value matching the target gateway's apiSelector matchLabels (gateway.api-platform.wso2.com/restapi-target). Used as a default; per-environment environmentConfigs.gatewayTarget takes precedence when set."
           default: ""
+        backendHost:
+          type: string
+          description: "In-cluster hostname of the API platform gateway runtime service. Always injected per-environment by the agent-manager-service via environmentConfigs."
+          default: ""
+        backendPort:
+          type: integer
+          description: "Port of the API platform gateway runtime service. Always injected per-environment by the agent-manager-service via environmentConfigs."
+          default: 80
       required:
         - apiName
 
@@ -74,7 +82,6 @@ spec:
         policies:
           type: array
           description: "Environment-specific policies (CORS, API key auth, etc.)"
-          default: []
           items:
             type: object
             x-kubernetes-preserve-unknown-fields: true
@@ -86,6 +93,13 @@ spec:
           type: string
           description: "Label value matching the target gateway's apiSelector matchLabels (gateway.api-platform.wso2.com/restapi-target). Each environment should set this to the label value of its assigned gateway."
           default: ""
+        backendHost:
+          type: string
+          description: "Per-environment in-cluster hostname of the API platform gateway runtime service."
+          default: ""
+        backendPort:
+          type: integer
+          description: "Per-environment port of the API platform gateway runtime service."
 
   creates:
     # --- Backend: kgateway static backend pointing to WSO2 API Platform router ---
@@ -102,8 +116,8 @@ spec:
           type: Static
           static:
             hosts:
-              - host: {{ .Values.gateway.backendHost }}
-                port: {{ .Values.gateway.backendPort }}
+              - host: "${has(environmentConfigs.backendHost) && environmentConfigs.backendHost != '' ? environmentConfigs.backendHost : parameters.backendHost}"
+                port: "${has(environmentConfigs.backendPort) ? environmentConfigs.backendPort : parameters.backendPort}"
 
     # Create RestApi resource (discovered by gateway via apiSelector scope: LabelSelector)
     - template:

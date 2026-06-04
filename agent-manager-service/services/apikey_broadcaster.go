@@ -38,10 +38,22 @@ type apiKeyBroadcaster struct {
 	apiKeyRepo     repositories.APIKeyRepository
 }
 
-// broadcastCreate generates an API key, persists it, and broadcasts to all gateways.
+// broadcastCreate generates an API key, persists it, and broadcasts to all gateways for the org.
 // apiID is the identifier sent to the gateway (UUID for providers, handle for proxies).
 // artifactUUID is the DB UUID for persistence (always a valid UUID).
 func (b *apiKeyBroadcaster) broadcastCreate(orgID, apiID, artifactUUID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
+	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get gateways: %w", err)
+	}
+	if len(gateways) == 0 {
+		return nil, utils.ErrGatewayNotFound
+	}
+	return b.broadcastCreateToGateways(gateways, orgID, apiID, artifactUUID, req)
+}
+
+// broadcastCreateToGateways generates an API key, persists it, and broadcasts to the given gateways only.
+func (b *apiKeyBroadcaster) broadcastCreateToGateways(gateways []*models.Gateway, orgID, apiID, artifactUUID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
 	if req == nil {
 		return nil, fmt.Errorf("nil request")
 	}
@@ -68,14 +80,6 @@ func (b *apiKeyBroadcaster) broadcastCreate(orgID, apiID, artifactUUID string, r
 	purpose := req.Purpose
 	if purpose == 0 {
 		purpose = models.APIKeyPurposePermanent
-	}
-
-	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get gateways: %w", err)
-	}
-	if len(gateways) == 0 {
-		return nil, utils.ErrGatewayNotFound
 	}
 
 	keyUUID := uuid.Must(uuid.NewV7())
@@ -155,7 +159,11 @@ func (b *apiKeyBroadcaster) broadcastRevoke(orgID, apiID, artifactUUID, keyName 
 	if len(gateways) == 0 {
 		return utils.ErrGatewayNotFound
 	}
+	return b.broadcastRevokeToGateways(gateways, apiID, artifactUUID, keyName)
+}
 
+// broadcastRevokeToGateways removes a key from the store and broadcasts revocation to the given gateways only.
+func (b *apiKeyBroadcaster) broadcastRevokeToGateways(gateways []*models.Gateway, apiID, artifactUUID, keyName string) error {
 	// Remove from persistent store
 	if b.apiKeyRepo != nil {
 		if err := b.apiKeyRepo.Delete(artifactUUID, keyName); err != nil {
@@ -182,20 +190,24 @@ func (b *apiKeyBroadcaster) broadcastRevoke(orgID, apiID, artifactUUID, keyName 
 }
 
 func (b *apiKeyBroadcaster) broadcastRotate(orgID, apiID, artifactUUID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
-	if req == nil {
-		return nil, fmt.Errorf("nil request")
-	}
-	newAPIKey, err := utils.GenerateAPIKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate API key: %w", err)
-	}
-
 	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gateways: %w", err)
 	}
 	if len(gateways) == 0 {
 		return nil, utils.ErrGatewayNotFound
+	}
+	return b.broadcastRotateToGateways(gateways, orgID, apiID, artifactUUID, keyName, req)
+}
+
+// broadcastRotateToGateways generates a new key value, updates the store, and broadcasts to the given gateways only.
+func (b *apiKeyBroadcaster) broadcastRotateToGateways(gateways []*models.Gateway, orgID, apiID, artifactUUID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
+	if req == nil {
+		return nil, fmt.Errorf("nil request")
+	}
+	newAPIKey, err := utils.GenerateAPIKey()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate API key: %w", err)
 	}
 
 	nowTime := time.Now().UTC()

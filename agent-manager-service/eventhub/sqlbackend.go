@@ -571,7 +571,16 @@ func (b *SQLBackend) pollGatewayWithState(gw *gateway, state GatewayState) error
 	// and keep only the latest event per entity_id for all other types. When subscribers
 	// ARE present we deliver all events verbatim — deduplication must not drop live
 	// apikey events that arrived while the gateway was connected.
+	//
+	// Also track the last raw event before dedup so we can advance the cursor even
+	// when all events were skipped (e.g. only API key events). Without this,
+	// lastPolledTime stays zero and every future poll also takes the cold-start path,
+	// silencing all subsequent API key events.
+	var coldStartCursorEvent *Event
 	if !resuming && subscriberCountAtCheck == 0 {
+		if len(events) > 0 {
+			coldStartCursorEvent = &events[len(events)-1]
+		}
 		events = deduplicateLatestPerEntity(events)
 	}
 
@@ -629,6 +638,12 @@ func (b *SQLBackend) pollGatewayWithState(gw *gateway, state GatewayState) error
 		if lastDelivered != nil {
 			gw.lastPolledTime = lastDelivered.ProcessedTimestamp
 			gw.lastPolledEventID = lastDelivered.EventID
+		} else if coldStartCursorEvent != nil {
+			// Cold start where all events were skipped by dedup (e.g. only API
+			// key events): advance the cursor past those events so future polls
+			// use the resuming path and deliver new API key events individually.
+			gw.lastPolledTime = coldStartCursorEvent.ProcessedTimestamp
+			gw.lastPolledEventID = coldStartCursorEvent.EventID
 		}
 	}
 	b.registry.mu.Unlock()

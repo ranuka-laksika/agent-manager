@@ -2284,12 +2284,12 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	// so no per-env override is needed here. gatewayTarget is looked up from the
 	// gateway-environment mapping so the RestApi resource gets the correct label.
 	policies := buildPolicies(apiCfg)
-	gatewayTarget := ""
+	var deployGW gatewayInfo
 	if isAPIAgent && targetEnv != nil {
-		gatewayTarget = resolveGatewayTarget(s.gatewayRepo, targetEnv.UUID, lowestEnv)
+		deployGW = resolveGatewayInfo(s.gatewayRepo, targetEnv.UUID, lowestEnv)
 	}
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
-	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", gatewayTarget, isPythonBuildpack, enableAutoInstrumentation)
+	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", deployGW, isPythonBuildpack, enableAutoInstrumentation)
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2331,8 +2331,8 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 			traitOpts = append(traitOpts, client.WithUpstreamBasePath(config.GetConfig().DefaultChatAPI.DefaultBasePath))
 		}
 		traitOpts = append(traitOpts, client.WithPolicies(policies))
-		if gatewayTarget != "" {
-			traitOpts = append(traitOpts, client.WithGatewayTarget(gatewayTarget))
+		if deployGW.target != "" {
+			traitOpts = append(traitOpts, client.WithGatewayTarget(deployGW.target))
 		}
 
 		componentDeployConfig.TraitsToAttach = append(componentDeployConfig.TraitsToAttach, client.TraitRequest{
@@ -2509,7 +2509,7 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 // gateway's apiSelector (scope: LabelSelector) picks them up.
 // For Python buildpack agents, instrumentationEnabled is set per-environment on the OTEL trait so
 // the 'where' clause on patches can enable/disable instrumentation independently per environment.
-func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, gatewayTarget string, isPythonBuildpack bool, autoInstrumentation bool) map[string]interface{} {
+func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, gw gatewayInfo, isPythonBuildpack bool, autoInstrumentation bool) map[string]interface{} {
 	instanceName := func(traitType client.TraitType) string {
 		return agentName + "-" + string(traitType)
 	}
@@ -2519,8 +2519,14 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 	if artifactID != "" {
 		apiTraitCfg["artifactId"] = artifactID
 	}
-	if gatewayTarget != "" {
-		apiTraitCfg["gatewayTarget"] = gatewayTarget
+	if gw.target != "" {
+		apiTraitCfg["gatewayTarget"] = gw.target
+	}
+	if gw.backendHost != "" {
+		apiTraitCfg["backendHost"] = gw.backendHost
+	}
+	if gw.backendPort > 0 {
+		apiTraitCfg["backendPort"] = gw.backendPort
 	}
 	traitEnvConfigs := map[string]interface{}{
 		instanceName(client.TraitAPIManagement): apiTraitCfg,
@@ -2533,26 +2539,40 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 	return traitEnvConfigs
 }
 
-// resolveGatewayTarget looks up the gateway assigned to the given environment and returns
-// the label value used by the APIGateway CR's apiSelector (scope: LabelSelector).
-// The label is constructed as "<gatewayName>-<environmentName>", lowercased and truncated
-// to 63 characters (with trailing hyphens stripped) to match Kubernetes label value limits.
-// Returns an empty string if no gateway mapping is found (RestApi will still be created but
-// will not be targeted by any gateway's label selector until one is assigned).
-func resolveGatewayTarget(gatewayRepo repositories.GatewayRepository, environmentUUID, environmentName string) string {
+// gatewayRuntimeHTTPPort is the fixed HTTP listener port on every gateway runtime service.
+// All gateway deployments expose the router on this port regardless of the external vhost.
+const gatewayRuntimeHTTPPort = 22893
+
+// gatewayInfo holds resolved gateway label and backend connection details for an environment.
+type gatewayInfo struct {
+	target      string // apiSelector label value: "<gatewayName>-<environmentName>"
+	backendHost string // in-cluster service: "<gatewayName>-gateway-gateway-runtime.openchoreo-data-plane"
+	backendPort int    // fixed HTTP listener port of the gateway runtime service
+}
+
+// resolveGatewayInfo looks up the gateway assigned to the given environment and returns
+// the apiSelector label value, the in-cluster backend service hostname, and the HTTP port.
+// Returns a zero-value gatewayInfo if no gateway mapping is found.
+func resolveGatewayInfo(gatewayRepo repositories.GatewayRepository, environmentUUID, environmentName string) gatewayInfo {
 	mappings, err := gatewayRepo.GetEnvironmentMappingsByEnvironmentID(environmentUUID)
 	if err != nil || len(mappings) == 0 {
-		return ""
+		return gatewayInfo{}
 	}
 	gateway, err := gatewayRepo.GetByUUID(mappings[0].GatewayUUID.String())
 	if err != nil || gateway == nil {
-		return ""
+		return gatewayInfo{}
 	}
 	label := strings.ToLower(gateway.Name + "-" + environmentName)
 	if len(label) > 63 {
 		label = strings.TrimSuffix(label[:63], "-")
 	}
-	return label
+	backendHost := gateway.Name + "-gateway-gateway-runtime.openchoreo-data-plane"
+	return gatewayInfo{target: label, backendHost: backendHost, backendPort: gatewayRuntimeHTTPPort}
+}
+
+// resolveGatewayTarget is a convenience wrapper that returns only the apiSelector label value.
+func resolveGatewayTarget(gatewayRepo repositories.GatewayRepository, environmentUUID, environmentName string) string {
+	return resolveGatewayInfo(gatewayRepo, environmentUUID, environmentName).target
 }
 
 func findLowestEnvironment(promotionPaths []models.PromotionPath) string {
@@ -2782,9 +2802,9 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			return fmt.Errorf("failed to ensure target env API artifact: %w", artifactErr)
 		}
 		targetArtifactID = artifact.UUID.String()
-		gatewayTarget := resolveGatewayTarget(s.gatewayRepo, targetEnv.UUID, req.TargetEnvironment)
+		promoteGW := resolveGatewayInfo(s.gatewayRepo, targetEnv.UUID, req.TargetEnvironment)
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
-		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, gatewayTarget, promotePythonBuildpack, tracingCfg.EnableAutoInstrumentation)
+		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promoteGW, promotePythonBuildpack, tracingCfg.EnableAutoInstrumentation)
 
 		// Only generate API key and set otelEndpoint on first promotion to this environment.
 		// On subsequent promotions, these are already set on the release binding's traitEnvironmentConfigs.
