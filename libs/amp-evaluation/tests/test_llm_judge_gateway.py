@@ -201,25 +201,35 @@ def test_gateway_kwargs_azureopenai_passes_real_key_and_pinned_api_version():
     }
 
 
-def test_gateway_kwargs_azure_foundry_passes_real_key_and_pinned_api_version():
+def test_gateway_kwargs_azure_foundry_defaults_to_sdk_api_version():
+    # Foundry (azure-ai-inference) uses its own api-version; we don't pin one by
+    # default (empty config), so no client_args is emitted — the SDK default applies.
     _set_gateway()
     kw = LLMAsJudgeEvaluator._gateway_kwargs("azure/some-model")
-    assert kw == {
-        "api_base": "https://gw.example/v1",
-        "api_key": "secret-key",
-        "client_args": {"api_version": "2024-10-21"},
-    }
+    assert kw == {"api_base": "https://gw.example/v1", "api_key": "secret-key"}
 
 
-def test_gateway_kwargs_azure_api_version_is_configurable():
+def test_gateway_kwargs_azureopenai_api_version_is_configurable():
     _set_gateway()
-    os.environ["AMP_LLM_JUDGE_AZURE_API_VERSION"] = "2025-01-01-preview"
+    os.environ["AMP_LLM_JUDGE_AZURE_OPENAI_API_VERSION"] = "2025-01-01-preview"
     reload_config()
     try:
         kw = LLMAsJudgeEvaluator._gateway_kwargs("azureopenai/gpt-4o-mini")
         assert kw["client_args"] == {"api_version": "2025-01-01-preview"}
     finally:
-        os.environ.pop("AMP_LLM_JUDGE_AZURE_API_VERSION", None)
+        os.environ.pop("AMP_LLM_JUDGE_AZURE_OPENAI_API_VERSION", None)
+        reload_config()
+
+
+def test_gateway_kwargs_azure_foundry_api_version_is_configurable():
+    _set_gateway()
+    os.environ["AMP_LLM_JUDGE_AZURE_FOUNDRY_API_VERSION"] = "2024-05-01-preview"
+    reload_config()
+    try:
+        kw = LLMAsJudgeEvaluator._gateway_kwargs("azure/some-model")
+        assert kw["client_args"] == {"api_version": "2024-05-01-preview"}
+    finally:
+        os.environ.pop("AMP_LLM_JUDGE_AZURE_FOUNDRY_API_VERSION", None)
         reload_config()
 
 
