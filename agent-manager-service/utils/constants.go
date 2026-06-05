@@ -58,6 +58,9 @@ const (
 	PathParamRunId        = "runId"
 	PathParamEvaluatorId  = "evaluatorId"
 	PathParamSecretName   = "secretName"
+	PathParamUserID       = "userID"
+	PathParamGroupID      = "groupID"
+	PathParamRoleID       = "roleID"
 	PathParamKindName     = "kindName"
 	PathParamVersionTag   = "versionTag"
 )

@@ -17,18 +17,17 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterLLMProxyDeploymentRoutes registers all LLM proxy deployment-related routes
-func RegisterLLMProxyDeploymentRoutes(mux *http.ServeMux, ctrl controllers.LLMProxyDeploymentController) {
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments", ctrl.DeployLLMProxy)
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/undeploy", ctrl.UndeployLLMProxyDeployment)
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/restore", ctrl.RestoreLLMProxyDeployment)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments", ctrl.GetLLMProxyDeployments)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/{deploymentId}", ctrl.GetLLMProxyDeployment)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/{deploymentId}", ctrl.DeleteLLMProxyDeployment)
+func RegisterLLMProxyDeploymentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMProxyDeploymentController) {
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments", rbac.LLMProxyDeploy, ctrl.DeployLLMProxy)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/undeploy", rbac.LLMProxyDeploy, ctrl.UndeployLLMProxyDeployment)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/restore", rbac.LLMProxyDeploy, ctrl.RestoreLLMProxyDeployment)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments", rbac.LLMProxyRead, ctrl.GetLLMProxyDeployments)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/{deploymentId}", rbac.LLMProxyRead, ctrl.GetLLMProxyDeployment)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/deployments/{deploymentId}", rbac.LLMProxyDeploy, ctrl.DeleteLLMProxyDeployment)
 }

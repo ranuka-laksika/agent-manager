@@ -31,21 +31,24 @@ func setupWellKnownMux() *http.ServeMux {
 	return mux
 }
 
-func withWellKnownConfig(t *testing.T, publicURL string, authServers []string) {
+func withWellKnownConfig(t *testing.T, publicURL string, authServers []string, scopes []string) {
 	t.Helper()
 	cfg := config.GetConfig()
 	origURL := cfg.ServerPublicURL
 	origServers := cfg.OAuthAuthorizationServers
+	origScopes := cfg.OAuthScopesSupported
 	t.Cleanup(func() {
 		cfg.ServerPublicURL = origURL
 		cfg.OAuthAuthorizationServers = origServers
+		cfg.OAuthScopesSupported = origScopes
 	})
 	cfg.ServerPublicURL = publicURL
 	cfg.OAuthAuthorizationServers = authServers
+	cfg.OAuthScopesSupported = scopes
 }
 
 func TestWellKnownOAuthProtectedResource_HappyPath(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"})
+	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"}, []string{"org:view", "project:read"})
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
@@ -75,10 +78,13 @@ func TestWellKnownOAuthProtectedResource_HappyPath(t *testing.T) {
 	if len(body.BearerMethodsSupported) != 1 || body.BearerMethodsSupported[0] != "header" {
 		t.Errorf("expected bearer_methods_supported [header], got %v", body.BearerMethodsSupported)
 	}
+	if len(body.ScopesSupported) != 2 || body.ScopesSupported[0] != "org:view" || body.ScopesSupported[1] != "project:read" {
+		t.Errorf("expected scopes_supported [org:view, project:read], got %v", body.ScopesSupported)
+	}
 }
 
 func TestWellKnownOAuthProtectedResource_MultipleAuthorizationServers(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp1.example.com", "https://idp2.example.com"})
+	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp1.example.com", "https://idp2.example.com"}, []string{"org:view", "project:read"})
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
@@ -102,7 +108,7 @@ func TestWellKnownOAuthProtectedResource_MultipleAuthorizationServers(t *testing
 }
 
 func TestWellKnownOAuthProtectedResource_TrailingSlashPreserved(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com/", []string{"https://idp.example.com/"})
+	withWellKnownConfig(t, "https://am.example.com/", []string{"https://idp.example.com/"}, nil)
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
@@ -126,7 +132,7 @@ func TestWellKnownOAuthProtectedResource_TrailingSlashPreserved(t *testing.T) {
 }
 
 func TestWellKnownOAuthProtectedResource_MissingPublicURL(t *testing.T) {
-	withWellKnownConfig(t, "", []string{"https://idp.example.com"})
+	withWellKnownConfig(t, "", []string{"https://idp.example.com"}, nil)
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
@@ -139,7 +145,7 @@ func TestWellKnownOAuthProtectedResource_MissingPublicURL(t *testing.T) {
 }
 
 func TestWellKnownOAuthProtectedResource_MissingAuthorizationServers(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com", nil)
+	withWellKnownConfig(t, "https://am.example.com", nil, nil)
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
@@ -152,7 +158,7 @@ func TestWellKnownOAuthProtectedResource_MissingAuthorizationServers(t *testing.
 }
 
 func TestWellKnownOAuthProtectedResource_MethodNotAllowed(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"})
+	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"}, nil)
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodPost, "/.well-known/oauth-protected-resource", nil)
@@ -165,7 +171,7 @@ func TestWellKnownOAuthProtectedResource_MethodNotAllowed(t *testing.T) {
 }
 
 func TestWellKnownOAuthProtectedResource_NoAuthRequired(t *testing.T) {
-	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"})
+	withWellKnownConfig(t, "https://am.example.com", []string{"https://idp.example.com"}, nil)
 
 	mux := setupWellKnownMux()
 	req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)

@@ -23,6 +23,7 @@ import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMPro
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
+import { metaData as identitiesMetadata } from "@agent-management-platform/identities";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
 import { metaData as logsMetadata } from "@agent-management-platform/logs";
@@ -87,6 +88,8 @@ export const LazyAddLLMProvidersOrg =
 // Gateways
 export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 
+// Identities
+export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
 // Agent Kind
 export const LazyCatalogOrg = agentKindMetadata.levels!.organization as FC;
 export const LazyPublishComponent = agentKindMetadata.levels!.component as FC;

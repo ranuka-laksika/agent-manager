@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "type": "module",
   "import": "./dist/index.js",
-  "require": "./dist/index.js",
   "types": "dist/index.d.ts",
   "baseUrl": ".",
   "sideEffects": [
@@ -12,8 +11,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js"
     }
   },
   "files": [
@@ -32,7 +30,12 @@
     "build": "rushx clean && tsc -project tsconfig.lib.json && rushx copy-assets",
     "dev": "rushx clean && rushx copy-assets && tsc -project tsconfig.lib.json --watch"
   },
-  "keywords": ["ai", "agents", "page", "react"],
+  "keywords": [
+    "ai",
+    "agents",
+    "page",
+    "react"
+  ],
   "author": "",
   "license": "Apache-2.0",
   "description": "A page component for Deploy",
@@ -52,7 +55,7 @@
     "@agent-management-platform/types": "workspace:*",
     "@agent-management-platform/shared-component": "workspace:*",
     "@agent-management-platform/test": "workspace:*",
-    "zod": "4.3.6"    
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@storybook/addon-essentials": "8.6.13",

@@ -21,10 +21,73 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 const DefaultOrgName = "default"
+
+const orgNamePlaceholder = "{" + utils.PathParamOrgName + "}"
+
+// RouteRegistrar wraps an http.ServeMux and an OrgResolver to provide route
+// registration helpers that automatically apply org validation + resolution on
+// any pattern containing {orgName}.
+type RouteRegistrar struct {
+	mux         *http.ServeMux
+	orgResolver OrgResolver
+}
+
+// NewRouteRegistrar creates a RouteRegistrar backed by the given mux and resolver.
+func NewRouteRegistrar(mux *http.ServeMux, resolver OrgResolver) *RouteRegistrar {
+	return &RouteRegistrar{mux: mux, orgResolver: resolver}
+}
+
+func (rr *RouteRegistrar) HandleFuncWithValidation(pattern string, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	if strings.Contains(pattern, orgNamePlaceholder) {
+		handler = RequireOrgMatch(rr.orgResolver)(handler)
+	}
+	rr.mux.HandleFunc(pattern, handler)
+}
+
+func (rr *RouteRegistrar) HandleFuncWithValidationAndAuthz(pattern string, perm rbac.Permission, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequirePermission(perm)(handler)
+	if strings.Contains(pattern, orgNamePlaceholder) {
+		handler = RequireOrgMatch(rr.orgResolver)(handler)
+	}
+	rr.mux.HandleFunc(pattern, handler)
+}
+
+func (rr *RouteRegistrar) HandleFuncWithValidationAndAnyAuthz(pattern string, handler http.HandlerFunc, perms ...rbac.Permission) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequireAnyPermission(perms...)(handler)
+	if strings.Contains(pattern, orgNamePlaceholder) {
+		handler = RequireOrgMatch(rr.orgResolver)(handler)
+	}
+	rr.mux.HandleFunc(pattern, handler)
+}
+
+func (rr *RouteRegistrar) HandleFuncWithValidationAndDynamicAuthz(pattern string, resolver PermissionResolver, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequireDynamicPermission(resolver)(handler)
+	if strings.Contains(pattern, orgNamePlaceholder) {
+		handler = RequireOrgMatch(rr.orgResolver)(handler)
+	}
+	rr.mux.HandleFunc(pattern, handler)
+}
 
 // WithPathParamValidation wraps a handler and validates required path parameters
 // This runs after route matching, so r.PathValue() works correctly
@@ -42,20 +105,6 @@ func WithPathParamValidation(handler http.HandlerFunc, requiredParams ...string)
 		// All validations passed, call the original handler
 		handler(w, r)
 	}
-}
-
-// HandleFuncWithValidation is a helper that registers a route with automatic path parameter validation
-// It extracts parameter names from the pattern and applies validation automatically
-func HandleFuncWithValidation(mux *http.ServeMux, pattern string, handler http.HandlerFunc) {
-	// Extract parameter names from pattern like "GET /orgs/{orgName}/projects/{projName}"
-	params := extractPathParams(pattern)
-
-	if len(params) > 0 {
-		// Wrap handler with validation for extracted parameters
-		handler = WithPathParamValidation(handler, params...)
-	}
-
-	mux.HandleFunc(pattern, handler)
 }
 
 // extractPathParams extracts parameter names from a route pattern

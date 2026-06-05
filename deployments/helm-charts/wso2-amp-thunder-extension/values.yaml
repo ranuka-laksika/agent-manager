@@ -155,6 +155,98 @@ thunder:
         memory: 128Mi
   bootstrap:
     enabled: true
+    # Full list of AMP OAuth2 scopes that interactive clients are allowed to request.
+    # Thunder only grants scopes that appear in an app's registered scope list, so all
+    # permission scopes must be declared here for role-based access to work.
+    ampScopes:
+      - "openid"
+      - "profile"
+      - "email"
+      - "org:view"
+      - "org:modify-settings"
+      - "org:invite-member"
+      - "org:remove-member"
+      - "org:assign-role"
+      - "org:manage-idp"
+      - "org:manage-service-account"
+      - "project:create"
+      - "project:read"
+      - "project:update"
+      - "project:delete"
+      - "environment:create"
+      - "environment:read"
+      - "environment:update"
+      - "environment:delete"
+      - "gateway:create"
+      - "gateway:read"
+      - "gateway:update"
+      - "gateway:delete"
+      - "gateway:token:manage"
+      - "data-plane:read"
+      - "deployment-pipeline:read"
+      - "git-secret:create"
+      - "git-secret:read"
+      - "git-secret:delete"
+      - "llm-provider-template:create"
+      - "llm-provider-template:read"
+      - "llm-provider-template:update"
+      - "llm-provider-template:delete"
+      - "llm-provider:create"
+      - "llm-provider:read"
+      - "llm-provider:update"
+      - "llm-provider:delete"
+      - "llm-provider:configure-guardrail"
+      - "llm-provider:connect"
+      - "llm-provider:deploy"
+      - "llm-provider:api-key:manage"
+      - "mcp-server:create"
+      - "mcp-server:read"
+      - "mcp-server:update"
+      - "mcp-server:delete"
+      - "mcp-server:configure-guardrail"
+      - "mcp-server:connect"
+      - "llm-proxy:create"
+      - "llm-proxy:read"
+      - "llm-proxy:update"
+      - "llm-proxy:delete"
+      - "llm-proxy:deploy"
+      - "llm-proxy:api-key:manage"
+      - "evaluator:create"
+      - "evaluator:read"
+      - "evaluator:update"
+      - "evaluator:delete"
+      - "agent:create"
+      - "agent:read"
+      - "agent:update"
+      - "agent:delete"
+      - "agent:build"
+      - "agent:deploy:non-production"
+      - "agent:deploy:production"
+      - "agent:promote"
+      - "agent:rollback"
+      - "agent:suspend"
+      - "agent:token:manage"
+      - "monitor:create"
+      - "monitor:read"
+      - "monitor:update"
+      - "monitor:delete"
+      - "monitor:execute"
+      - "monitor:score:read"
+      - "monitor:score:publish"
+      - "observability:org-dashboard"
+      - "observability:project-dashboard"
+      - "observability:guardrail-metric"
+      - "observability:infra-metric"
+      - "role:create"
+      - "role:read"
+      - "role:update"
+      - "role:delete"
+      - "group:create"
+      - "group:read"
+      - "group:update"
+      - "group:delete"
+      - "catalog:read"
+      - "repository:read"
     configMap:
       name: amp-thunder-bootstrap
       files:
@@ -168,6 +260,8 @@ thunder:
         - 57-amp-system-client.sh
         - 58-amctl-client.sh
         - 59-am-mcp-client.sh
+        - 60-amp-resource-server.sh
+        - 61-amp-default-roles.sh
     # Observer Resource Reader Client configuration (for observability plane to read resources)
     observerResourceReaderClient:
       clientId: "openchoreo-observer-resource-reader-client" # clusterauthzrolebinding is already created with this clientId by openchoreo, so it should not be changed unless the corresponding ClusterAuthzRoleBinding is also updated
@@ -253,9 +347,11 @@ thunder:
       userAttributes:
         - "given_name"
         - "family_name"
+        - "email"
         - "username"
         - "groups"
         - "ouId"
+        - "ouHandle"
     # AMP MCP Client configuration (public PKCE client for interactive login)
     amMcpClient:
       clientId: "am-mcp"
@@ -279,9 +375,11 @@ thunder:
       userAttributes:
         - "given_name"
         - "family_name"
+        - "email"
         - "username"
         - "groups"
         - "ouId"
+        - "ouHandle"
     # AMP Console Client configuration
     ampConsoleClient:
       clientId: "amp-console-client"
@@ -306,9 +404,12 @@ thunder:
       userAttributes:
         - "given_name"
         - "family_name"
+        - "email"
         - "username"
         - "groups"
         - "ouId"
+        - "ouHandle"
+
     # Agent Manager Console Theme (applied to amp-console-client sign-in page)
     ampConsoleTheme:
       handle: "wso2-agent-manager-console"

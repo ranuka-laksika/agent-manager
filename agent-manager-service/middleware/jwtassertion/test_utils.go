@@ -30,9 +30,8 @@ func NewMockMiddleware(t *testing.T) Middleware {
 	t.Helper()
 
 	tokenClaims := &TokenClaims{
-		Scope:    "scopes",
-		OuId:     "mock-org-id",
-		OuHandle: "mock-org",
+		Scope: "scopes",
+		OuId:  "mock-org-id",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 		},

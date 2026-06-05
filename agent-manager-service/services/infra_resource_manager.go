@@ -58,29 +58,12 @@ func NewInfraResourceManager(
 	}
 }
 
-func (s *infraResourceManager) ListOrganizations(ctx context.Context, limit int, offset int) ([]*models.OrganizationResponse, int32, error) {
-	s.logger.Debug("ListOrganizations called", "limit", limit, "offset", offset)
-
-	// Fetch organizations from OpenChoreo
-	orgs, err := s.ocClient.ListOrganizations(ctx)
-	if err != nil {
-		s.logger.Error("Failed to list organizations from openchoreo", "error", err)
-		return nil, 0, err
-	}
-	s.logger.Debug("Retrieved organizations from openchoreo", "totalCount", len(orgs))
-
-	total := len(orgs)
-	// Apply pagination
-	start := offset
-	if start > len(orgs) {
-		start = len(orgs)
-	}
-	end := offset + limit
-	if end > len(orgs) {
-		end = len(orgs)
-	}
-	paginatedOrgs := orgs[start:end]
-	return paginatedOrgs, int32(total), nil
+func (s *infraResourceManager) ListOrganizations(_ context.Context, _ int, _ int) ([]*models.OrganizationResponse, int32, error) {
+	return []*models.OrganizationResponse{{
+		Name:        "default",
+		DisplayName: "default",
+		Namespace:   "default",
+	}}, 1, nil
 }
 
 func (s *infraResourceManager) GetOrganization(ctx context.Context, orgName string) (*models.OrganizationResponse, error) {

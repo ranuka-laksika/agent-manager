@@ -9,8 +9,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js"
     }
   },
   "files": [
@@ -29,7 +28,12 @@
     "build": "rushx clean && tsc -project tsconfig.lib.json && rushx copy-assets",
     "dev": "rushx clean && rushx copy-assets && tsc -project tsconfig.lib.json --watch"
   },
-  "keywords": ["ai", "agents", "page", "react"],
+  "keywords": [
+    "ai",
+    "agents",
+    "page",
+    "react"
+  ],
   "author": "",
   "license": "Apache-2.0",
   "description": "A page component for LLM Provider management",
@@ -101,4 +105,3 @@
     "react": "19.1.1"
   }
 }
-

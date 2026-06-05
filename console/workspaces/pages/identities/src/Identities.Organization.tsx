@@ -1,0 +1,72 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import React from "react";
+import { Navigate, Route, Routes, useParams, generatePath } from "react-router-dom";
+import { absoluteRouteMap } from "@agent-management-platform/types";
+import { UsersPage } from "./UsersPage";
+import { UserInvitePage } from "./UserInvitePage";
+import { UserAddPage } from "./UserAddPage";
+import { UserEditPage } from "./UserEditPage";
+import { RolesPage } from "./RolesPage";
+import { RoleCreatePage } from "./RoleCreatePage";
+import { RoleEditPage } from "./RoleEditPage";
+import { GroupsPage } from "./GroupsPage";
+import { GroupCreatePage } from "./GroupCreatePage";
+import { GroupEditPage } from "./GroupEditPage";
+
+export const IdentitiesOrganization: React.FC = () => {
+  const { orgId } = useParams<{ orgId: string }>();
+  const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
+    identities: { children: { users: { path: string } } };
+  }).identities;
+
+  return (
+    <Routes>
+      <Route
+        index
+        element={
+          <Navigate
+            to={generatePath(identitiesRoute.children.users.path, { orgId })}
+            replace
+          />
+        }
+      />
+      <Route path="users/invite" element={<UserInvitePage />} />
+      <Route path="users/add" element={<UserAddPage />} />
+      <Route path="users/:userId/edit" element={<UserEditPage />} />
+      <Route path="users/*" element={<UsersPage />} />
+      <Route path="roles/create" element={<RoleCreatePage />} />
+      <Route path="roles/:roleId/edit" element={<RoleEditPage />} />
+      <Route path="roles/*" element={<RolesPage />} />
+      <Route path="groups/create" element={<GroupCreatePage />} />
+      <Route path="groups/:groupId/edit" element={<GroupEditPage />} />
+      <Route path="groups/*" element={<GroupsPage />} />
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={generatePath(identitiesRoute.children.users.path, { orgId })}
+            replace
+          />
+        }
+      />
+    </Routes>
+  );
+};
+
+export default IdentitiesOrganization;

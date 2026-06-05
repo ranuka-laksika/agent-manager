@@ -17,31 +17,35 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterAgentConfigRoutes registers all agent configuration routes
-func RegisterAgentConfigRoutes(mux *http.ServeMux, ctrl controllers.AgentConfigurationController) {
-	middleware.HandleFuncWithValidation(mux,
+func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.AgentConfigurationController) {
+	rr.HandleFuncWithValidationAndAuthz(
 		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		ctrl.CreateAgentModelConfig)
+		rbac.AgentUpdate, ctrl.CreateAgentModelConfig,
+	)
 
-	middleware.HandleFuncWithValidation(mux,
+	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs",
-		ctrl.ListAgentModelConfigs)
+		rbac.AgentRead, ctrl.ListAgentModelConfigs,
+	)
 
-	middleware.HandleFuncWithValidation(mux,
+	rr.HandleFuncWithValidationAndAuthz(
 		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		ctrl.GetAgentModelConfig)
+		rbac.AgentRead, ctrl.GetAgentModelConfig,
+	)
 
-	middleware.HandleFuncWithValidation(mux,
+	rr.HandleFuncWithValidationAndAuthz(
 		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		ctrl.UpdateAgentModelConfig)
+		rbac.AgentUpdate, ctrl.UpdateAgentModelConfig,
+	)
 
-	middleware.HandleFuncWithValidation(mux,
+	rr.HandleFuncWithValidationAndAuthz(
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
-		ctrl.DeleteAgentModelConfig)
+		rbac.AgentDelete, ctrl.DeleteAgentModelConfig,
+	)
 }

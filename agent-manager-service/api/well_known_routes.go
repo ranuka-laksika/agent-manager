@@ -28,6 +28,7 @@ type protectedResourceMetadata struct {
 	Resource               string   `json:"resource"`
 	AuthorizationServers   []string `json:"authorization_servers,omitempty"`
 	BearerMethodsSupported []string `json:"bearer_methods_supported,omitempty"`
+	ScopesSupported        []string `json:"scopes_supported,omitempty"`
 }
 
 func registerWellKnownRoutes(mux *http.ServeMux) {
@@ -49,6 +50,7 @@ func registerWellKnownRoutes(mux *http.ServeMux) {
 			Resource:               cfg.ServerPublicURL,
 			AuthorizationServers:   cfg.OAuthAuthorizationServers,
 			BearerMethodsSupported: []string{"header"},
+			ScopesSupported:        cfg.OAuthScopesSupported,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

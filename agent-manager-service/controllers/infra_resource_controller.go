@@ -23,7 +23,10 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -82,11 +85,30 @@ func (c *infraResourceController) ListOrganizations(w http.ResponseWriter, r *ht
 		return
 	}
 
-	orgs, total, err := c.infraResourceManager.ListOrganizations(ctx, limit, offset)
-	if err != nil {
-		log.Error("ListOrganizations: failed to list organizations", "error", err)
-		handleCommonErrors(w, err, "Failed to list organizations")
-		return
+	var orgs []*models.OrganizationResponse
+	var total int32
+
+	if !config.GetConfig().IsOnPremDeployment {
+		// Cloud: each user's org is identified by the ouHandle in their JWT token.
+		claims := jwtassertion.GetTokenClaims(ctx)
+		if claims == nil || claims.OuHandle == "" {
+			utils.WriteErrorResponse(w, http.StatusForbidden, "missing org identity in token")
+			return
+		}
+		orgs = []*models.OrganizationResponse{{
+			Name:        claims.OuHandle,
+			DisplayName: claims.OuHandle,
+			Namespace:   claims.OuHandle,
+		}}
+		total = 1
+	} else {
+		var err error
+		orgs, total, err = c.infraResourceManager.ListOrganizations(ctx, limit, offset)
+		if err != nil {
+			log.Error("ListOrganizations: failed to list organizations", "error", err)
+			handleCommonErrors(w, err, "Failed to list organizations")
+			return
+		}
 	}
 
 	orgList := utils.ConvertToOrganizationListResponse(orgs)

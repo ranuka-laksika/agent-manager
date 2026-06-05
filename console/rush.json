@@ -421,6 +421,10 @@
       "projectFolder": "workspaces/pages/gateways"
     },
     {
+      "packageName": "@agent-management-platform/identities",
+      "projectFolder": "workspaces/pages/identities"
+    },
+    {
       "packageName": "@agent-management-platform/agent-security",
       "projectFolder": "workspaces/pages/agent-security"
     },

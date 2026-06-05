@@ -17,16 +17,15 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterGitSecretRoutes registers all git secret routes
-func RegisterGitSecretRoutes(mux *http.ServeMux, ctrl controllers.GitSecretController) {
+func RegisterGitSecretRoutes(rr *middleware.RouteRegistrar, ctrl controllers.GitSecretController) {
 	// Git Secrets (org-level)
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/git-secrets", ctrl.CreateGitSecret)
-	middleware.HandleFuncWithValidation(mux, "GET /orgs/{orgName}/git-secrets", ctrl.ListGitSecrets)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/git-secrets/{secretName}", ctrl.DeleteGitSecret)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/git-secrets", rbac.GitSecretCreate, ctrl.CreateGitSecret)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/git-secrets", rbac.GitSecretRead, ctrl.ListGitSecrets)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/git-secrets/{secretName}", rbac.GitSecretDelete, ctrl.DeleteGitSecret)
 }

@@ -17,15 +17,14 @@
 package api
 
 import (
-	"net/http"
-
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
 // RegisterLLMProviderAPIKeyRoutes registers API key routes for LLM providers
-func RegisterLLMProviderAPIKeyRoutes(mux *http.ServeMux, ctrl controllers.LLMProviderAPIKeyController) {
-	middleware.HandleFuncWithValidation(mux, "POST /orgs/{orgName}/llm-providers/{id}/api-keys", ctrl.CreateAPIKey)
-	middleware.HandleFuncWithValidation(mux, "DELETE /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", ctrl.RevokeAPIKey)
-	middleware.HandleFuncWithValidation(mux, "PUT /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", ctrl.RotateAPIKey)
+func RegisterLLMProviderAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMProviderAPIKeyController) {
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{id}/api-keys", rbac.LLMProviderAPIKeyManage, ctrl.CreateAPIKey)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage, ctrl.RevokeAPIKey)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage, ctrl.RotateAPIKey)
 }
