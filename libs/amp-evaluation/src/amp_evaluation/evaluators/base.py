@@ -614,12 +614,13 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
         return prompt
 
     @staticmethod
-    def _gateway_kwargs() -> dict:
+    def _gateway_kwargs(model: str) -> dict:
         """Build per-call routing kwargs when a gateway is configured.
 
         When ``llm_judge.api_base`` is set, every completion is routed through
-        that gateway and the configured key is injected as the ``api-key``
-        header on the underlying provider client. With no gateway configured
+        that gateway, authenticated with the gateway ``api-key`` header. The
+        mechanism for attaching that header differs by provider SDK, so this
+        dispatches on the model's provider prefix. With no gateway configured
         the providers are called directly (auth via their own env vars).
         """
         try:
@@ -632,18 +633,63 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
         if not cfg.api_base:
             return {}
 
-        kwargs: dict = {"api_base": cfg.api_base}
-        if cfg.api_key:
-            # The gateway authenticates via the api-key header, but the provider
-            # SDK still requires a non-empty api_key to construct its client. Pass
-            # a placeholder bearer token (the gateway ignores it) and send the real
-            # key only in the api-key header.
-            kwargs["api_key"] = "gateway"
-            kwargs["client_args"] = {"default_headers": {"api-key": cfg.api_key}}
-        # When api_base is set without a gateway key, auth is intentionally left
-        # to the provider's own env vars — no placeholder is forced, so an
-        # env-based provider key is not overridden.
-        return kwargs
+        # No gateway key: auth is intentionally left to the provider's own env
+        # vars — don't force a placeholder that would override an env-based key.
+        if not cfg.api_key:
+            return {"api_base": cfg.api_base}
+
+        provider = model.replace(":", "/").split("/", 1)[0].lower()
+        header = {"api-key": cfg.api_key}
+
+        # Azure SDKs send their api_key in the "api-key" header natively, which
+        # is exactly the gateway's auth header — pass the real key straight
+        # through (a placeholder would be sent as the gateway credential).
+        if provider in ("azureopenai", "azure"):
+            return {"api_base": cfg.api_base, "api_key": cfg.api_key}
+
+        # Other providers authenticate elsewhere (bearer / x-api-key / query
+        # param), so the gateway api-key must be injected as an explicit request
+        # header. The SDK still needs a non-empty api_key to construct its
+        # client, so pass a placeholder; the header carries the real key.
+        if provider == "gemini":
+            # google-genai takes custom headers via http_options, not default_headers.
+            client_args: dict = {"http_options": {"headers": header}}
+        elif provider == "mistral":
+            # The Mistral SDK only accepts headers through a custom http client.
+            import httpx
+
+            client_args = {"async_client": httpx.AsyncClient(headers=header)}
+        elif provider == "groq":
+            # any-llm's Groq provider ignores api_base; route via base_url instead.
+            return {"api_key": "gateway", "client_args": {"base_url": cfg.api_base, "default_headers": header}}
+        elif provider == "bedrock":
+            # boto3 has no default_headers hook. Build a client pointed at the
+            # gateway with dummy credentials (the gateway ignores the SigV4
+            # signature and authenticates via the api-key header) and inject that
+            # header through a botocore before-send handler.
+            import os
+
+            import boto3
+
+            key = cfg.api_key
+            bedrock_client = boto3.client(
+                "bedrock-runtime",
+                endpoint_url=cfg.api_base,
+                region_name=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-east-1",
+                aws_access_key_id="gateway",
+                aws_secret_access_key="gateway",
+            )
+
+            def _inject_gateway_header(request, **_):
+                request.headers["api-key"] = key
+
+            bedrock_client.meta.events.register("before-send.bedrock-runtime", _inject_gateway_header)
+            return {"client_args": {"client": bedrock_client}}
+        else:
+            # openai, anthropic, and other OpenAI-style clients accept default_headers.
+            client_args = {"default_headers": header}
+
+        return {"api_base": cfg.api_base, "api_key": "gateway", "client_args": client_args}
 
     def _call_llm_with_retry(self, prompt: str) -> EvalResult:
         """Call the LLM client, validate with Pydantic, retry on failure."""
@@ -654,42 +700,72 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
                 "The any-llm SDK is required for LLM-as-judge evaluators. Install with: pip install 'any-llm-sdk'"
             )
 
-        gateway_kwargs = self._gateway_kwargs()
+        gateway_kwargs = self._gateway_kwargs(self.model)
 
-        last_error = None
-        for attempt in range(self.max_retries + 1):
-            retry_ctx = ""
-            if last_error and attempt > 0:
-                retry_ctx = (
-                    f"\n\n[IMPORTANT: Your previous response was invalid: {last_error}. "
-                    f"You MUST respond with ONLY a JSON object containing exactly two fields:\n"
-                    f'{{"explanation": "<your analysis>", "score": <float between 0.0 and 1.0>}}\n'
-                    f"The 'score' MUST be a top-level numeric field in the JSON, NOT embedded in the explanation text.]"
-                )
+        try:
+            last_error = None
+            for attempt in range(self.max_retries + 1):
+                retry_ctx = ""
+                if last_error and attempt > 0:
+                    retry_ctx = (
+                        f"\n\n[IMPORTANT: Your previous response was invalid: {last_error}. "
+                        f"You MUST respond with ONLY a JSON object containing exactly two fields:\n"
+                        f'{{"explanation": "<your analysis>", "score": <float between 0.0 and 1.0>}}\n'
+                        f"The 'score' MUST be a top-level numeric field in the JSON, NOT embedded in the explanation text.]"
+                    )
 
+                try:
+                    response = completion(
+                        model=self.model,
+                        messages=[{"role": "user", "content": prompt + retry_ctx}],
+                        temperature=self.temperature,
+                        max_tokens=self.max_tokens,
+                        response_format=JudgeOutput,
+                        **gateway_kwargs,
+                    )
+                except Exception as e:
+                    last_error = str(e)
+                    continue
+
+                content = response.choices[0].message.content
+                result, error = self._parse_and_validate(content)
+                if result is not None:
+                    return result
+                last_error = error
+
+            # All retries exhausted — this is an infrastructure failure, not a genuine score
+            return EvalResult.skip(
+                f"LLM judge failed after {self.max_retries + 1} attempts: {last_error} [model={self.model}]"
+            )
+        finally:
+            self._close_gateway_client(gateway_kwargs)
+
+    @staticmethod
+    def _close_gateway_client(gateway_kwargs: dict) -> None:
+        """Release any per-call client built for gateway routing.
+
+        The Mistral path supplies a custom ``httpx.AsyncClient`` and the Bedrock
+        path a boto3 client; any-llm does not take ownership of either, so they
+        must be closed here to avoid leaking sockets across repeated judge runs.
+        """
+        client_args = gateway_kwargs.get("client_args") or {}
+
+        async_client = client_args.get("async_client")
+        if async_client is not None:
             try:
-                response = completion(
-                    model=self.model,
-                    messages=[{"role": "user", "content": prompt + retry_ctx}],
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
-                    response_format=JudgeOutput,
-                    **gateway_kwargs,
-                )
-            except Exception as e:
-                last_error = str(e)
-                continue
+                import asyncio
 
-            content = response.choices[0].message.content
-            result, error = self._parse_and_validate(content)
-            if result is not None:
-                return result
-            last_error = error
+                asyncio.run(async_client.aclose())
+            except Exception:
+                pass
 
-        # All retries exhausted — this is an infrastructure failure, not a genuine score
-        return EvalResult.skip(
-            f"LLM judge failed after {self.max_retries + 1} attempts: {last_error} [model={self.model}]"
-        )
+        boto_client = client_args.get("client")
+        close = getattr(boto_client, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
 
     def _parse_and_validate(self, content: str) -> Tuple[Optional[EvalResult], Optional[str]]:
         """

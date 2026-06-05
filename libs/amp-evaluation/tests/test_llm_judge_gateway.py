@@ -117,3 +117,113 @@ def test_without_gateway_config_no_api_base_or_client_args(mock_completion):
     kwargs = mock_completion.call_args.kwargs
     assert "api_base" not in kwargs
     assert "client_args" not in kwargs
+
+
+# ---------------------------------------------------------------------------
+# Per-provider header injection. The api-key header must reach every provider's
+# client, but the constructor kwarg differs by SDK (verified against real
+# clients): default_headers for OpenAI/Anthropic, http_options for Gemini, a
+# custom async http client for Mistral, and base_url+default_headers for Groq
+# (whose any-llm provider ignores api_base).
+# ---------------------------------------------------------------------------
+
+
+def _set_gateway(base="https://gw.example/v1", key="secret-key"):
+    os.environ["AMP_LLM_JUDGE_API_BASE"] = base
+    os.environ["AMP_LLM_JUDGE_API_KEY"] = key
+    reload_config()
+
+
+def test_gateway_kwargs_openai_uses_default_headers():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("openai/gpt-4o-mini")
+    assert kw["api_base"] == "https://gw.example/v1"
+    assert kw["api_key"] == "gateway"
+    assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
+
+
+def test_gateway_kwargs_anthropic_uses_default_headers():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("anthropic/claude-haiku-4-5")
+    assert kw["api_base"] == "https://gw.example/v1"
+    assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
+
+
+def test_gateway_kwargs_gemini_uses_http_options():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("gemini/gemini-2.5-flash")
+    assert kw["api_base"] == "https://gw.example/v1"
+    assert kw["client_args"] == {"http_options": {"headers": {"api-key": "secret-key"}}}
+
+
+def test_gateway_kwargs_mistral_uses_async_client_headers():
+    httpx = pytest.importorskip("httpx")  # skip when the mistral extra is absent
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("mistral/mistral-small-latest")
+    client = kw["client_args"]["async_client"]
+    assert isinstance(client, httpx.AsyncClient)
+    assert client.headers["api-key"] == "secret-key"
+
+
+def test_gateway_kwargs_groq_routes_via_base_url():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("groq/llama-3.3-70b-versatile")
+    assert kw["client_args"]["base_url"] == "https://gw.example/v1"
+    assert kw["client_args"]["default_headers"] == {"api-key": "secret-key"}
+
+
+def test_gateway_kwargs_azureopenai_passes_real_key_as_apikey():
+    # Azure OpenAI sends api_key in the api-key header natively, so the real
+    # gateway key is passed through directly (no placeholder, no client_args).
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("azureopenai/gpt-4o-mini")
+    assert kw == {"api_base": "https://gw.example/v1", "api_key": "secret-key"}
+
+
+def test_gateway_kwargs_azure_foundry_passes_real_key_as_apikey():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("azure/some-model")
+    assert kw == {"api_base": "https://gw.example/v1", "api_key": "secret-key"}
+
+
+def test_gateway_kwargs_bedrock_injects_header_via_boto3_client():
+    boto3 = pytest.importorskip("boto3")  # noqa: F841 -- skip when bedrock extra absent
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("bedrock/anthropic.claude-3-5-sonnet")
+    client = kw["client_args"]["client"]
+    assert client.meta.endpoint_url == "https://gw.example/v1"
+
+    # The before-send handler injects the gateway api-key header.
+    class _Req:
+        headers: dict = {}
+
+    req = _Req()
+    client.meta.events.emit("before-send.bedrock-runtime", request=req)
+    assert req.headers["api-key"] == "secret-key"
+
+
+def test_close_gateway_client_closes_mistral_async_client():
+    httpx = pytest.importorskip("httpx")
+    client = httpx.AsyncClient()
+    LLMAsJudgeEvaluator._close_gateway_client({"client_args": {"async_client": client}})
+    assert client.is_closed
+
+
+def test_close_gateway_client_is_noop_without_a_client():
+    # Providers that use default_headers (no async_client/client) must not error.
+    LLMAsJudgeEvaluator._close_gateway_client({"client_args": {"default_headers": {"api-key": "x"}}})
+    LLMAsJudgeEvaluator._close_gateway_client({})
+
+
+def test_gateway_kwargs_supports_colon_separator():
+    _set_gateway()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("gemini:gemini-2.5-flash")
+    assert kw["client_args"] == {"http_options": {"headers": {"api-key": "secret-key"}}}
+
+
+def test_gateway_kwargs_no_key_defers_to_provider_env():
+    os.environ["AMP_LLM_JUDGE_API_BASE"] = "https://gw.example/v1"
+    os.environ.pop("AMP_LLM_JUDGE_API_KEY", None)
+    reload_config()
+    kw = LLMAsJudgeEvaluator._gateway_kwargs("openai/gpt-4o-mini")
+    assert kw == {"api_base": "https://gw.example/v1"}
