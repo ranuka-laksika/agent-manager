@@ -8391,6 +8391,9 @@ components:
         description:
           type: string
           description: Description of the project
+        deploymentPipeline:
+          type: string
+          description: Name of the deployment pipeline associated with the project
         createdAt:
           type: string
           format: date-time

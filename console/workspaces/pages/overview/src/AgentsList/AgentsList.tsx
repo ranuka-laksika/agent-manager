@@ -63,6 +63,7 @@ import {
   useListAgentKinds,
 } from "@agent-management-platform/api-client";
 import { AgentTypeSummery } from "./subComponents/AgentTypeSummery";
+import { DeploymentPipelineCard } from "./subComponents/DeploymentPipelineCard";
 import { getErrorMessage, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { EditProjectDrawer } from "../ProjectList/EditProjectDrawer";
 import { formatDistanceToNow } from "date-fns";
@@ -554,8 +555,9 @@ export const AgentsList: React.FC = () => {
                 </ListingTable.Container>
               ) : null}
             </Stack>
-            <Box>
+            <Box display="flex" flexDirection="column" gap={2} width={450}>
               <AgentTypeSummery />
+              <DeploymentPipelineCard />
             </Box>
           </Stack>
         )}

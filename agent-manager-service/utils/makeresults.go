@@ -478,12 +478,13 @@ func ConvertToProjectListItem(project *models.ProjectResponse) spec.ProjectListI
 	}
 
 	return spec.ProjectListItem{
-		Uuid:        project.UUID,
-		Name:        project.Name,
-		DisplayName: project.DisplayName,
-		Description: &project.Description,
-		CreatedAt:   project.CreatedAt,
-		OrgName:     project.OrgName,
+		Uuid:               project.UUID,
+		Name:               project.Name,
+		DisplayName:        project.DisplayName,
+		Description:        &project.Description,
+		CreatedAt:          project.CreatedAt,
+		OrgName:            project.OrgName,
+		DeploymentPipeline: project.DeploymentPipeline,
 	}
 }
 

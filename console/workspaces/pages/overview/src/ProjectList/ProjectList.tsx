@@ -16,25 +16,26 @@
  * under the License.
  */
 
-import {
-  NoDataFound,
-  PageLayout,
-} from "@agent-management-platform/views";
+import { NoDataFound, PageLayout } from "@agent-management-platform/views";
 import {
   useDeleteProject,
+  useListDeploymentPipelines,
   useListProjects,
 } from "@agent-management-platform/api-client";
 import { generatePath, Link, useParams } from "react-router-dom";
 import {
   absoluteRouteMap,
-  ProjectResponse,
+  type DeploymentPipelineResponse,
+  type ProjectResponse,
 } from "@agent-management-platform/types";
 import {
   Avatar,
   Box,
   Button,
   CircularProgress,
+  Divider,
   Form,
+  formatRelativeTime,
   IconButton,
   SearchBar,
   Skeleton,
@@ -42,6 +43,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import {
+  GitBranch,
   Package,
   Plus,
   RefreshCcw,
@@ -50,7 +52,8 @@ import {
 } from "@wso2/oxygen-ui-icons-react";
 import { type MouseEvent, useCallback, useMemo, useState } from "react";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import { formatDistanceToNow } from "date-fns";
+
+const CARD_HEIGHT = 148;
 
 const projectGridTemplate = {
   xs: "repeat(1, minmax(0, 1fr))",
@@ -60,23 +63,24 @@ const projectGridTemplate = {
   xxl: "repeat(5, minmax(0, 1fr))",
 };
 
+
 function ProjectCard(props: {
   project: ProjectResponse;
+  pipeline: DeploymentPipelineResponse | undefined;
   handleDeleteProject: (project: ProjectResponse) => void;
 }) {
-  const { project, handleDeleteProject } = props;
+  const { project, pipeline, handleDeleteProject } = props;
   const { orgId } = useParams();
+
   const projectPath = generatePath(
     absoluteRouteMap.children.org.children.projects.path,
-    {
-      orgId: orgId,
-      projectId: project.name,
-    }
+    { orgId, projectId: project.name }
   );
 
-  const projectDescription = project.description?.trim()
-    ? project.description
-    : "No description provided";
+  const rawDesc = project.description?.trim() ?? "";
+  const createdAtText = project.createdAt
+    ? formatRelativeTime(new Date(project.createdAt))
+    : "—";
 
   const handleDeleteClick = useCallback(
     (event: MouseEvent<HTMLButtonElement>) => {
@@ -87,131 +91,156 @@ function ProjectCard(props: {
     [handleDeleteProject, project]
   );
 
-  const createdAtText = project.createdAt
-    ? formatDistanceToNow(new Date(project.createdAt), { addSuffix: true })
-    : "—";
-
   return (
     <Link to={projectPath} style={{ textDecoration: "none" }}>
       <Form.CardButton
-        sx={{ width: "100%", textAlign: "left", pt: 1.5, textDecoration: "none" }}
+        sx={{
+          position: "relative",
+          width: "100%",
+          height: CARD_HEIGHT,
+          textAlign: "left",
+          display: "flex",
+          flexDirection: "column",
+          p: 2,
+          boxSizing: "border-box",
+        }}
       >
-        <Form.CardHeader
-          sx={{ width: "100%" }}
-          title={
-            <Form.Stack direction="row" spacing={1.5} alignItems="center">
-              <Avatar sx={{ bgcolor: "secondary.main", color: "primary.light", height: 52, width: 52 }}>
-                <Package size={32} />
-              </Avatar>
-              <Form.Stack
-                direction="column"
-                spacing={0.5}
-                flex={1}
-                minWidth={0}
-              >
-                <Form.Stack direction="row" spacing={1} alignItems="center">
-                  <Typography
-                    variant="h5"
-                    noWrap
-                    textOverflow="ellipsis"
-                    sx={{ maxWidth: "90%" }}
-                  >
-                    {project.displayName}
-                  </Typography>
-                </Form.Stack>
-                <Typography variant="caption" color="textPrimary">
-                  {projectDescription}
-                </Typography>
-              </Form.Stack>
-            </Form.Stack>
-          }
-        />
-        <Form.CardContent sx={{ width: "100%" }}>
-          <Form.CardActions sx={{ justifyContent: "space-between", p: 0, width: "100%" }}>
-            <Typography
-              variant="caption"
-              color="textSecondary"
-              sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-            >
-              <TimerOutlined size={16} opacity={0.5} />
-              {createdAtText}
+        {/* Top: avatar + name + description */}
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5, minWidth: 0 }}>
+          <Avatar
+            sx={{
+              bgcolor: "secondary.main",
+              color: "primary.light",
+              height: 44,
+              width: 44,
+              flexShrink: 0,
+            }}
+          >
+            <Package size={26} />
+          </Avatar>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="h5" noWrap sx={{ lineHeight: 1.3, mb: 0.4 }}>
+              {project.displayName}
             </Typography>
-            <Form.DisappearingCardButtonContent>
+            <Tooltip title={rawDesc || ""} placement="bottom-start" disableHoverListener={!rawDesc}>
+              <Typography
+                variant="caption"
+                color={rawDesc ? "text.secondary" : "text.disabled"}
+                sx={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                  fontStyle: rawDesc ? "normal" : "italic",
+                  lineHeight: 1.5,
+                }}
+              >
+                {rawDesc || "No description"}
+              </Typography>
+            </Tooltip>
+          </Box>
+        </Box>
 
-              <Tooltip title="Delete Project">
-                <IconButton
-                  size="small"
-                  color="error"
-                  onClick={handleDeleteClick}
-                >
-                  <TrashOutline size={16} />
-                </IconButton>
-              </Tooltip>
-            </Form.DisappearingCardButtonContent>
-          </Form.CardActions>
-        </Form.CardContent>
+        <Divider sx={{ mb: 1 }} />
 
+        {/* Bottom: pipeline + time */}
+        <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, minWidth: 0 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, overflow: "hidden" }}>
+            <GitBranch size={13} style={{ opacity: 0.5, flexShrink: 0 }} />
+            {pipeline ? (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                noWrap
+              >
+                {pipeline.displayName || pipeline.name}
+              </Typography>
+            ) : (
+              <Typography variant="caption" color="text.disabled" sx={{ fontStyle: "italic" }}>
+                No pipeline
+              </Typography>
+            )}
+          </Box>
+
+          {/* Time — always visible */}
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ display: "flex", alignItems: "center", gap: 0.4 }}
+          >
+            <TimerOutlined size={12} />
+            {createdAtText}
+          </Typography>
+        </Box>
+
+        {/* Delete — bottom-right, hover-reveal */}
+        <Form.DisappearingCardButtonContent sx={{ position: "absolute", bottom: 8, right: 8 }}>
+          <Tooltip title="Delete Project">
+            <IconButton size="small" color="error" onClick={handleDeleteClick}>
+              <TrashOutline size={15} />
+            </IconButton>
+          </Tooltip>
+        </Form.DisappearingCardButtonContent>
       </Form.CardButton>
     </Link>
   );
 }
 
-function SkeletonPageLayout() {
-  // Show 4 skeleton cards for loading state
+function SkeletonCard() {
   return (
-    <Box
+    <Form.CardButton
+      tabIndex={-1}
       sx={{
-        display: "grid",
-        gridTemplateColumns: projectGridTemplate,
-        gap: 2,
         width: "100%",
+        height: CARD_HEIGHT,
+        textAlign: "left",
+        display: "flex",
+        flexDirection: "column",
+        p: 2,
+        boxSizing: "border-box",
+        pointerEvents: "none",
       }}
     >
-      {Array.from({ length: 4 }).map((_, index) => (
-        <Box
-          key={index}
-          sx={{
-            width: "100%",
-            borderRadius: 2,
-            boxShadow: 1,
-            bgcolor: "background.paper",
-            p: 2,
-            minHeight: 160,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-between",
-          }}
-        >
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-            <Skeleton variant="circular" width={52} height={52} />
-            <Box sx={{ flex: 1 }}>
-              <Skeleton variant="text" width="60%" height={28} sx={{ mb: 1 }} />
-              <Skeleton variant="text" width="80%" height={18} />
-            </Box>
-          </Box>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mt: 2 }}>
-            <Skeleton variant="rectangular" width={80} height={16} />
-            <Skeleton variant="circular" width={32} height={32} />
-          </Box>
+      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+        <Skeleton variant="circular" width={44} height={44} />
+        <Box sx={{ flex: 1 }}>
+          <Skeleton variant="text" width="55%" height={22} sx={{ mb: 0.5 }} />
+          <Skeleton variant="text" width="90%" height={14} />
+          <Skeleton variant="text" width="70%" height={14} />
         </Box>
-      ))}
-    </Box>
+      </Box>
+      <Box sx={{ flex: 1 }} />
+      <Divider sx={{ mb: 1 }} />
+      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Skeleton variant="text" width={90} height={16} />
+        <Skeleton variant="text" width={70} height={16} />
+      </Box>
+    </Form.CardButton>
   );
 }
 
 export function ProjectList() {
   const { orgId } = useParams();
+
   const {
     data: projects,
     isRefetching,
     refetch: refetchProjects,
     isPending: isLoadingProjects,
-  } = useListProjects({
-    orgName: orgId,
-  });
+  } = useListProjects({ orgName: orgId });
+
+  const { data: pipelinesData } = useListDeploymentPipelines({ orgName: orgId });
+
+  const pipelineMap = useMemo(
+    () =>
+      new Map<string, DeploymentPipelineResponse>(
+        pipelinesData?.deploymentPipelines?.map((p) => [p.name, p]) ?? []
+      ),
+    [pipelinesData]
+  );
+
   const { addConfirmation } = useConfirmationDialog();
-  const { mutate: deleteProject, isPending: isDeletingProject } =
-    useDeleteProject();
+  const { mutate: deleteProject, isPending: isDeletingProject } = useDeleteProject();
 
   const handleDeleteProject = useCallback(
     (project: ProjectResponse) => {
@@ -219,10 +248,7 @@ export function ProjectList() {
         title: "Delete Project?",
         description: `Are you sure you want to delete the project "${project.displayName}"? This action cannot be undone.`,
         onConfirm: () => {
-          deleteProject({
-            orgName: orgId,
-            projName: project.name,
-          });
+          deleteProject({ orgName: orgId, projName: project.name });
         },
         confirmButtonColor: "error",
         confirmButtonIcon: <TrashOutline size={16} />,
@@ -232,31 +258,24 @@ export function ProjectList() {
     [addConfirmation, deleteProject, orgId]
   );
 
+  const handleRefresh = useCallback(() => refetchProjects(), [refetchProjects]);
+
   const [search, setSearch] = useState("");
 
   const filteredProjects = useMemo(
     () =>
-      projects?.projects?.filter((project) =>
-        project.displayName.toLowerCase().includes(search.toLowerCase())
-      ) || [],
+      projects?.projects?.filter((p) =>
+        p.displayName.toLowerCase().includes(search.toLowerCase())
+      ) ?? [],
     [projects, search]
   );
-
-  const handleRefresh = useCallback(() => {
-    refetchProjects();
-  }, [refetchProjects]);
 
   return (
     <PageLayout
       title="Projects"
       disableIcon
       titleTail={
-        <Box
-          display="flex"
-          alignItems="center"
-          minWidth={32}
-          justifyContent="center"
-        >
+        <Box display="flex" alignItems="center" minWidth={32} justifyContent="center">
           {isRefetching ? (
             <CircularProgress size={18} color="primary" />
           ) : (
@@ -285,17 +304,13 @@ export function ProjectList() {
             size="small"
             startIcon={<Plus size={16} />}
             component={Link}
-            to={generatePath(
-              absoluteRouteMap.children.org.children.newProject.path,
-              {
-                orgId: orgId,
-              }
-            )}
+            to={generatePath(absoluteRouteMap.children.org.children.newProject.path, { orgId })}
           >
             Add Project
           </Button>
         </Box>
-        {filteredProjects?.length === 0 && !isLoadingProjects && (
+
+        {filteredProjects.length === 0 && !isLoadingProjects && (
           <NoDataFound
             message="No Projects Found"
             subtitle={
@@ -306,25 +321,24 @@ export function ProjectList() {
             iconElement={Package}
           />
         )}
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: projectGridTemplate,
-            gap: 2,
-            width: "100%",
-          }}
-        >
-          {!isDeletingProject &&
-            filteredProjects?.map((project) => (
-              <ProjectCard
-                key={project.name}
-                project={project}
-                handleDeleteProject={handleDeleteProject}
-              />
-            ))}
+
+        <Box sx={{ display: "grid", gridTemplateColumns: projectGridTemplate, gap: 2, width: "100%" }}>
+          {isLoadingProjects || isDeletingProject
+            ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
+            : filteredProjects.map((project) => (
+                <ProjectCard
+                  key={project.name}
+                  project={project}
+                  pipeline={
+                    project.deploymentPipeline
+                      ? pipelineMap.get(project.deploymentPipeline)
+                      : undefined
+                  }
+                  handleDeleteProject={handleDeleteProject}
+                />
+              ))}
         </Box>
       </Box>
-      {(isLoadingProjects || isDeletingProject) && <SkeletonPageLayout />}
     </PageLayout>
   );
 }

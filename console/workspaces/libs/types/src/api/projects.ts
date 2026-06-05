@@ -48,6 +48,7 @@ export interface ProjectListItem {
   name: string;
   orgName: string;
   displayName: string;
+  deploymentPipeline?: string;
   createdAt: string; // ISO date-time
   uuid?: string;
 }

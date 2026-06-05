@@ -29,6 +29,8 @@ type ProjectListItem struct {
 	DisplayName string `json:"displayName"`
 	// Description of the project
 	Description *string `json:"description,omitempty"`
+	// Deployment pipeline associated with the project
+	DeploymentPipeline string `json:"deploymentPipeline,omitempty"`
 	// Timestamp when the project was created
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -223,6 +225,9 @@ func (o ProjectListItem) ToMap() (map[string]interface{}, error) {
 	toSerialize["displayName"] = o.DisplayName
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
+	}
+	if o.DeploymentPipeline != "" {
+		toSerialize["deploymentPipeline"] = o.DeploymentPipeline
 	}
 	toSerialize["createdAt"] = o.CreatedAt
 	return toSerialize, nil

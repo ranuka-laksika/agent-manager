@@ -16,19 +16,63 @@
  * under the License.
  */
 
-import { Box, Button, Card, CardContent, Typography, TextField, Form } from "@wso2/oxygen-ui";
+import { Box, Button, Card, CardContent, CircularProgress, Form, MenuItem, Select, Stack, TextField, Typography } from "@wso2/oxygen-ui";
 import { Edit } from "@wso2/oxygen-ui-icons-react";
-import { 
-  DrawerWrapper, 
-  DrawerHeader, 
+import {
+  DrawerWrapper,
+  DrawerHeader,
   DrawerContent,
   useFormValidation,
   useDirtyState
 } from "@agent-management-platform/views";
 import { z } from "zod";
-import { useUpdateProject } from "@agent-management-platform/api-client";
-import { ProjectResponse, UpdateProjectRequest } from "@agent-management-platform/types";
+import { useListDeploymentPipelines, useListEnvironments, useUpdateProject } from "@agent-management-platform/api-client";
+import { type DeploymentPipelineResponse, ProjectResponse, UpdateProjectRequest } from "@agent-management-platform/types";
 import { useEffect, useState, useCallback, useMemo } from "react";
+
+function pipelineChainLabel(
+  pipeline: DeploymentPipelineResponse,
+  envDisplayNameMap: Map<string, string>,
+): string | null {
+  if (!pipeline.promotionPaths.length) return null;
+  const names = [
+    ...pipeline.promotionPaths.map((pp) => pp.sourceEnvironmentRef),
+    pipeline.promotionPaths[pipeline.promotionPaths.length - 1]?.targetEnvironmentRefs[0]?.name,
+  ].filter(Boolean) as string[];
+  return names.map((n) => envDisplayNameMap.get(n) ?? n).join(" → ");
+}
+
+function SelectedPipelineValue({
+  pipeline,
+  envDisplayNameMap,
+}: {
+  pipeline: DeploymentPipelineResponse;
+  envDisplayNameMap: Map<string, string>;
+}) {
+  const chain = pipelineChainLabel(pipeline, envDisplayNameMap);
+  return (
+    <Stack direction="row" alignItems="center" spacing={1}>
+      <Typography variant="body2">{pipeline.displayName}</Typography>
+      {chain && <Typography variant="caption" color="text.disabled">{chain}</Typography>}
+    </Stack>
+  );
+}
+
+function PipelineMenuItem({
+  pipeline,
+  envDisplayNameMap,
+}: {
+  pipeline: DeploymentPipelineResponse;
+  envDisplayNameMap: Map<string, string>;
+}) {
+  const chain = pipelineChainLabel(pipeline, envDisplayNameMap);
+  return (
+    <Stack>
+      <Typography variant="body2">{pipeline.displayName}</Typography>
+      {chain && <Typography variant="caption" color="text.disabled">{chain}</Typography>}
+    </Stack>
+  );
+}
 
 interface EditProjectDrawerProps {
   open: boolean;
@@ -68,7 +112,7 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
     name: project.name,
     displayName: project.displayName,
     description: project.description || '',
-    deploymentPipeline: project.deploymentPipeline || 'default',
+    deploymentPipeline: project.deploymentPipeline || '',
   });
 
   const { 
@@ -99,6 +143,23 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
     projName: project.name,
   });
 
+  const { data: pipelinesData, isLoading: isPipelinesLoading } = useListDeploymentPipelines({ orgName: orgId });
+  const pipelines = pipelinesData?.deploymentPipelines ?? [];
+
+  const { data: environments } = useListEnvironments({ orgName: orgId });
+  const envDisplayNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    (environments ?? []).forEach((e) => map.set(e.name, e.displayName ?? e.name));
+    return map;
+  }, [environments]);
+
+  // Auto-select the first pipeline if the project has none configured.
+  useEffect(() => {
+    if (!formData.deploymentPipeline && pipelines.length > 0) {
+      setFormData((prev) => ({ ...prev, deploymentPipeline: pipelines[0].name }));
+    }
+  }, [pipelines, formData.deploymentPipeline]);
+
   // Reset form when project changes or drawer opens
   useEffect(() => {
     if (open) {
@@ -106,7 +167,7 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
         name: project.name,
         displayName: project.displayName,
         description: project.description || '',
-        deploymentPipeline: project.deploymentPipeline || 'default',
+        deploymentPipeline: project.deploymentPipeline || '',
       });
       clearErrors();
       resetDirty();
@@ -188,6 +249,40 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
                       error={!!errors.description}
                       helperText={errors.description}
                     />
+                  </Form.ElementWrapper>
+                  <Form.ElementWrapper label="Deployment Pipeline" name="deploymentPipeline">
+                    <Select
+                      id="deploymentPipeline"
+                      value={formData.deploymentPipeline}
+                      onChange={(e) => handleFieldChange('deploymentPipeline', e.target.value as string)}
+                      error={!!errors.deploymentPipeline}
+                      disabled={isPipelinesLoading || isPending}
+                      displayEmpty
+                      renderValue={(value) => {
+                        const selected = pipelines.find((p) => p.name === value);
+                        if (!selected) return <Typography variant="body2" color="text.disabled">Select a pipeline</Typography>;
+                        return <SelectedPipelineValue pipeline={selected} envDisplayNameMap={envDisplayNameMap} />;
+                      }}
+                      fullWidth
+                      size="small"
+                    >
+                      {isPipelinesLoading && (
+                        <MenuItem value="" disabled>
+                          <Stack direction="row" alignItems="center" gap={1}>
+                            <CircularProgress size={12} />
+                            <Typography variant="caption">Loading pipelines...</Typography>
+                          </Stack>
+                        </MenuItem>
+                      )}
+                      {!isPipelinesLoading && pipelines.length === 0 && (
+                        <MenuItem value="" disabled>No deployment pipelines available</MenuItem>
+                      )}
+                      {pipelines.map((p) => (
+                        <MenuItem key={p.name} value={p.name}>
+                          <PipelineMenuItem pipeline={p} envDisplayNameMap={envDisplayNameMap} />
+                        </MenuItem>
+                      ))}
+                    </Select>
                   </Form.ElementWrapper>
                 </Box>
               </CardContent>

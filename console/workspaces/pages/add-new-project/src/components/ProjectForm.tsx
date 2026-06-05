@@ -54,9 +54,9 @@ function SelectedPipelineValue({
   const chain = pipelineChainLabel(pipeline, envDisplayNameMap);
   return (
     <Stack direction="row" alignItems="center" spacing={1}>
-      <Typography variant="body2">{pipeline.displayName} | </Typography>
+      <Typography variant="body2">{pipeline.displayName}</Typography>
       {chain && (
-        <Typography variant="caption" color="text.secondary">{chain}</Typography>
+        <Typography variant="caption" color="text.disabled">{chain}</Typography>
       )}
     </Stack>
   );
@@ -73,7 +73,7 @@ function PipelineMenuItem({
   return (
     <Stack>
       <Typography variant="body2">{pipeline.displayName}</Typography>
-      {chain && <Typography variant="caption" color="text.secondary">{chain}</Typography>}
+      {chain && <Typography variant="caption" color="text.disbaled">{chain}</Typography>}
     </Stack>
   );
 }
