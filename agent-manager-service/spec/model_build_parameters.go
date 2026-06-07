@@ -29,10 +29,12 @@ type BuildParameters struct {
 	CommitId string `json:"commitId"`
 	// Programming language
 	Language string `json:"language"`
-	// Language version
+	// Language version (buildpack builds only)
 	LanguageVersion string `json:"languageVersion"`
-	// Command to run the application
+	// Command to run the application (buildpack builds only)
 	RunCommand string `json:"runCommand"`
+	// Path to the Dockerfile relative to the app path (docker builds only)
+	DockerfilePath *string `json:"dockerfilePath,omitempty"`
 }
 
 // NewBuildParameters instantiates a new BuildParameters object
@@ -227,6 +229,38 @@ func (o *BuildParameters) SetRunCommand(v string) {
 	o.RunCommand = v
 }
 
+// GetDockerfilePath returns the DockerfilePath field value if set, zero value otherwise.
+func (o *BuildParameters) GetDockerfilePath() string {
+	if o == nil || IsNil(o.DockerfilePath) {
+		var ret string
+		return ret
+	}
+	return *o.DockerfilePath
+}
+
+// GetDockerfilePathOk returns a tuple with the DockerfilePath field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *BuildParameters) GetDockerfilePathOk() (*string, bool) {
+	if o == nil || IsNil(o.DockerfilePath) {
+		return nil, false
+	}
+	return o.DockerfilePath, true
+}
+
+// HasDockerfilePath returns a boolean if a field has been set.
+func (o *BuildParameters) HasDockerfilePath() bool {
+	if o != nil && !IsNil(o.DockerfilePath) {
+		return true
+	}
+
+	return false
+}
+
+// SetDockerfilePath gets a reference to the given string and assigns it to the DockerfilePath field.
+func (o *BuildParameters) SetDockerfilePath(v string) {
+	o.DockerfilePath = &v
+}
+
 func (o BuildParameters) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -244,6 +278,9 @@ func (o BuildParameters) ToMap() (map[string]interface{}, error) {
 	toSerialize["language"] = o.Language
 	toSerialize["languageVersion"] = o.LanguageVersion
 	toSerialize["runCommand"] = o.RunCommand
+	if !IsNil(o.DockerfilePath) {
+		toSerialize["dockerfilePath"] = o.DockerfilePath
+	}
 	return toSerialize, nil
 }
 

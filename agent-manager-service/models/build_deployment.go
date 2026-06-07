@@ -93,8 +93,9 @@ type BuildParameters struct {
 	Branch          string `json:"branch"`
 	CommitID        string `json:"commitId"`
 	Language        string `json:"language"`
-	LanguageVersion string `json:"languageVersion"`
-	RunCommand      string `json:"runCommand"`
+	LanguageVersion string `json:"languageVersion,omitempty"`
+	RunCommand      string `json:"runCommand,omitempty"`
+	DockerfilePath  string `json:"dockerfilePath,omitempty"`
 }
 
 // BuildStep represents a step in the build process

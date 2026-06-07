@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"path"
 	"strings"
 	"time"
 
@@ -321,9 +322,11 @@ func buildWorkflowParameters(req CreateComponentRequest) (map[string]any, error)
 			params["buildEnv"] = buildEnv
 		} else if req.Build.Docker != nil {
 			// Add docker configs in nested format expected by ClusterWorkflow
+			appPath := normalizePath(req.Repository.AppPath)
+			dockerfilePath := resolveDockerfilePath(appPath, req.Build.Docker.DockerfilePath)
 			dockerParams := map[string]any{
-				"context":  normalizePath(req.Repository.AppPath),
-				"filePath": normalizePath(req.Build.Docker.DockerfilePath),
+				"context":  appPath,
+				"filePath": dockerfilePath,
 			}
 			params["docker"] = dockerParams
 			// Initialize empty buildEnv and buildArgs for docker builds
@@ -475,6 +478,12 @@ func buildFileMounts(req CreateComponentRequest) []map[string]any {
 
 func normalizePath(path string) string {
 	return strings.TrimSuffix(path, "/")
+}
+
+// resolveDockerfilePath prepends appPath to dockerfilePath so the result
+// is relative to the repository root (as expected by the workflow).
+func resolveDockerfilePath(appPath, dockerfilePath string) string {
+	return normalizePath(appPath) + "/" + strings.TrimPrefix(normalizePath(dockerfilePath), "/")
 }
 
 func (c *openChoreoClient) GetComponent(ctx context.Context, namespaceName, projectName, componentName string) (*models.AgentResponse, error) {
@@ -2637,7 +2646,7 @@ func convertComponentFromTyped(comp *gen.Component) (*models.AgentResponse, erro
 		if comp.Spec.Workflow.Parameters != nil {
 			params := *comp.Spec.Workflow.Parameters
 			language := getLabel(comp.Metadata.Labels, string(LabelKeyAgentLanguage))
-			agent.Build = extractBuildParams(params, language)
+			agent.Build = extractBuildParams(params, language, agent.Provisioning.Repository.AppPath)
 			if inputInterface := extractInputInterface(params); inputInterface != nil {
 				if agent.InputInterface == nil {
 					agent.InputInterface = inputInterface
@@ -2712,13 +2721,18 @@ func extractRepositoryFromTyped(workflow *gen.ComponentWorkflowConfig) models.Re
 	}
 }
 
-// extractBuildParams extracts build configuration (buildpack or docker) from parameters
-func extractBuildParams(params map[string]interface{}, language string) *models.Build {
+// extractBuildParams extracts build configuration (buildpack or docker) from parameters.
+// appPath is used to convert the stored absolute filePath back to a path relative to appPath.
+func extractBuildParams(params map[string]interface{}, language, appPath string) *models.Build {
 	// Check for docker build (has docker object with filePath)
 	if dc, ok := params["docker"].(map[string]interface{}); ok {
+		filePath := path.Clean(getMapString(dc, "filePath"))
+		if appPath != "" {
+			filePath = strings.TrimPrefix(filePath, path.Clean(appPath))
+		}
 		return &models.Build{
 			Type:   BuildTypeDocker,
-			Docker: &models.DockerConfig{DockerfilePath: getMapString(dc, "filePath")},
+			Docker: &models.DockerConfig{DockerfilePath: filePath},
 		}
 	}
 
@@ -2814,3 +2828,4 @@ func buildEndpointURLString(ep *gen.EndpointURL) string {
 	}
 	return fmt.Sprintf("%s://%s%s", scheme, host, path)
 }
+

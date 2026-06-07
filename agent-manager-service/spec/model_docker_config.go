@@ -19,7 +19,7 @@ var _ MappedNullable = &DockerConfig{}
 
 // DockerConfig struct for DockerConfig
 type DockerConfig struct {
-	// Path to the Dockerfile relative to the repository root
+	// Path to the Dockerfile relative to the app path (e.g. \"Dockerfile\" or \"docker/Dockerfile\")
 	DockerfilePath string `json:"dockerfilePath"`
 }
 

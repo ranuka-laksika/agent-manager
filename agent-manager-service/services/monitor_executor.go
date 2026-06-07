@@ -271,7 +271,7 @@ func (e *monitorExecutor) resolveProxyURL(ctx context.Context, orgName, environm
 		return "", fmt.Errorf("no active gateway found for environment %s", environmentID)
 	}
 
-	return buildProxyURL(gateways[0].Vhost, proxy.Configuration.Context), nil
+	return buildProxyURL(gateways[0], proxy.Configuration.Context, true), nil
 }
 
 // buildWorkflowRunRequest constructs the workflow run request for a monitor.

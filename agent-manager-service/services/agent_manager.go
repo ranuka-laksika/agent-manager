@@ -2577,7 +2577,6 @@ func resolveGatewayInfo(gatewayRepo repositories.GatewayRepository, environmentU
 	return gatewayInfo{target: label, backendHost: backendHost, backendPort: gatewayRuntimeHTTPPort}
 }
 
-
 func findLowestEnvironment(promotionPaths []models.PromotionPath) string {
 	if len(promotionPaths) == 0 {
 		return ""
@@ -2722,15 +2721,13 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			return fmt.Errorf("agent %q has LLM configuration in environment %q but none in target environment %q: configure LLM for the target environment before promoting",
 				agentName, req.SourceEnvironment, req.TargetEnvironment)
 		} else if len(tgtSystemKeys) > 0 {
-			tgtEnvVars, _, tgtErr := s.ocClient.GetSourceEnvWorkloadOverrides(ctx, orgName, agentName, req.TargetEnvironment)
+			// Build system-managed env vars from the DB config rather than the ReleaseBinding,
+			// because on first promotion the target ReleaseBinding doesn't have them yet.
+			tgtEnvVars, tgtErr := s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, req.TargetEnvironment)
 			if tgtErr != nil {
-				s.logger.Warn("Failed to fetch target env workload overrides for promotion", "agentName", agentName, "error", tgtErr)
+				s.logger.Warn("Failed to build target env system-managed vars from config", "agentName", agentName, "error", tgtErr)
 			} else {
-				for _, ev := range tgtEnvVars {
-					if tgtSystemKeys[ev.Key] {
-						envOverrides = append(envOverrides, ev)
-					}
-				}
+				envOverrides = append(envOverrides, tgtEnvVars...)
 			}
 		}
 	} else if len(req.Env) > 0 || len(req.Files) > 0 {
@@ -2824,9 +2821,8 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 				envInjCfg["agentApiKey"] = apiKey
 			}
 
-			otelEndpoint := config.GetConfig().OTEL.ExporterEndpoint
-			if otelEndpoint != "" {
-				envInjCfg["otelEndpoint"] = otelEndpoint
+			if promoteGW.backendHost != "" {
+				envInjCfg["otelEndpoint"] = fmt.Sprintf("http://%s:%d/otel", promoteGW.backendHost, promoteGW.backendPort)
 			}
 
 			if len(envInjCfg) > 0 {

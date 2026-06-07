@@ -561,7 +561,7 @@ func resolveConsoleOtelEndpoint(value string) string {
 	if strings.TrimSpace(value) != "" {
 		return value
 	}
-	return "http://localhost:22893/otel"
+	return "http://default-default.gateway.localhost:19080/otel"
 }
 
 func buildInternalAgentRequest(name, displayName string, description *string, input internalAgentInput) (*spec.CreateAgentRequest, error) {

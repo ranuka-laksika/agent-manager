@@ -121,6 +121,7 @@ func (s *stubMonitorRepo) GetMonitorByID(_ uuid.UUID) (*models.Monitor, error) {
 func (s *stubMonitorRepo) ListMonitorsByAgent(_, _, _ string) ([]models.Monitor, error) {
 	return nil, nil
 }
+
 func (s *stubMonitorRepo) ListMonitorsByAgentEnvironment(_, _, _, _ string) ([]models.Monitor, error) {
 	return nil, nil
 }

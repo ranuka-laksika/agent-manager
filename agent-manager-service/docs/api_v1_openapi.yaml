@@ -7123,7 +7123,7 @@ components:
       properties:
         dockerfilePath:
           type: string
-          description: Path to the Dockerfile relative to the repository root
+          description: Path to the Dockerfile relative to the app path (e.g. "Dockerfile" or "docker/Dockerfile")
 
     BuildpackBuild:
       type: object
@@ -7531,10 +7531,13 @@ components:
           description: Programming language
         languageVersion:
           type: string
-          description: Language version
+          description: Language version (buildpack builds only)
         runCommand:
           type: string
-          description: Command to run the application
+          description: Command to run the application (buildpack builds only)
+        dockerfilePath:
+          type: string
+          description: Path to the Dockerfile relative to the app path (docker builds only)
       required:
         - commitId
         - branch

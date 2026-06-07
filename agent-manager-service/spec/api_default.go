@@ -6268,11 +6268,18 @@ func (a *DefaultAPIService) ListMonitorRunsExecute(r ApiListMonitorRunsRequest) 
 }
 
 type ApiListMonitorsRequest struct {
-	ctx        context.Context
-	ApiService *DefaultAPIService
-	orgName    string
-	projName   string
-	agentName  string
+	ctx         context.Context
+	ApiService  *DefaultAPIService
+	orgName     string
+	projName    string
+	agentName   string
+	environment *string
+}
+
+// Filter monitors by environment name
+func (r ApiListMonitorsRequest) Environment(environment string) ApiListMonitorsRequest {
+	r.environment = &environment
+	return r
 }
 
 func (r ApiListMonitorsRequest) Execute() (*MonitorListResponse, *http.Response, error) {
@@ -6325,6 +6332,9 @@ func (a *DefaultAPIService) ListMonitorsExecute(r ApiListMonitorsRequest) (*Moni
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
+	if r.environment != nil {
+		parameterAddToHeaderOrQuery(localVarQueryParams, "environment", r.environment, "")
+	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
 

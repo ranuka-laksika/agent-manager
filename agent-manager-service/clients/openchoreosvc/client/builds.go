@@ -23,6 +23,8 @@ import (
 	"log/slog"
 	"net/http"
 	"sort"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
@@ -336,9 +338,10 @@ func buildUpdatedWorkflowParameters(componentName string, existingParams map[str
 					context = existingContext
 				}
 			}
+			dockerfilePath := resolveDockerfilePath(context, req.Build.Docker.DockerfilePath)
 			dockerParams := map[string]any{
 				"context":  context,
-				"filePath": normalizePath(req.Build.Docker.DockerfilePath),
+				"filePath": dockerfilePath,
 			}
 			existingParams["docker"] = dockerParams
 			// Initialize empty buildEnv and buildArgs for docker builds
@@ -451,6 +454,15 @@ func toWorkflowRunBuild(run *gen.WorkflowRun, componentName, projectName string)
 				if commit, ok := revision["commit"].(string); ok && commit != "" {
 					build.BuildParameters.CommitID = utils.ToShortSHA(commit)
 				}
+			}
+		}
+		if docker, ok := params["docker"].(map[string]interface{}); ok {
+			if filePath, ok := docker["filePath"].(string); ok {
+				filePath = path.Clean(filePath)
+				if build.BuildParameters.AppPath != "" {
+					filePath = strings.TrimPrefix(filePath, path.Clean(build.BuildParameters.AppPath))
+				}
+				build.BuildParameters.DockerfilePath = filePath
 			}
 		}
 	}
