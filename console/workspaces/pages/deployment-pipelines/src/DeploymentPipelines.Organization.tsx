@@ -43,7 +43,7 @@ export function DeploymentPipelinesOrganization() {
       next.delete("edit");
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, pipelinesData]);
+  }, [searchParams, pipelinesData, setSearchParams]);
 
   return (
     <>

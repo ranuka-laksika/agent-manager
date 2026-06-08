@@ -63,7 +63,9 @@ function pipelineToChain(pipeline: DeploymentPipelineResponse): string[] {
   return [...sources, lastTarget];
 }
 
-export function EditDeploymentPipelineDrawer({ open, onClose, pipeline, orgId }: EditDeploymentPipelineDrawerProps) {
+export function EditDeploymentPipelineDrawer(
+  { open, onClose, pipeline, orgId }: EditDeploymentPipelineDrawerProps,
+) {
   const [formData, setFormData] = useState<EditPipelineFormValues>(() => ({
     displayName: pipeline.displayName,
     description: pipeline.description ?? "",
@@ -101,7 +103,10 @@ export function EditDeploymentPipelineDrawer({ open, onClose, pipeline, orgId }:
     (field: "displayName" | "description", value: string) => {
       setFormData((prev) => {
         const next = { ...prev, [field]: value };
-        setFieldError(field, validateField(field, next[field as keyof EditPipelineFormValues], next));
+        setFieldError(
+          field,
+          validateField(field, next[field as keyof EditPipelineFormValues], next),
+        );
         return next;
       });
     },

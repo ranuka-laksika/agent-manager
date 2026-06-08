@@ -97,7 +97,9 @@ function PromotionChainCell({
   );
 }
 
-export function DeploymentPipelineTable({ onEditPipeline, onCreatePipeline }: DeploymentPipelineTableProps) {
+export function DeploymentPipelineTable(
+  { onEditPipeline, onCreatePipeline }: DeploymentPipelineTableProps,
+) {
   const { orgId } = useParams<{ orgId: string }>();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -115,7 +117,10 @@ export function DeploymentPipelineTable({ onEditPipeline, onCreatePipeline }: De
     return map;
   }, [environments]);
 
-  const pipelines = data?.deploymentPipelines ?? [];
+  const pipelines = useMemo(
+    () => data?.deploymentPipelines ?? [],
+    [data?.deploymentPipelines],
+  );
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();

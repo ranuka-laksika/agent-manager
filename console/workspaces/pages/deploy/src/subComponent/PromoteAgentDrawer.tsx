@@ -116,7 +116,9 @@ export function PromoteAgentDrawer({
       setFormState({
         ...DEFAULT_STATE,
         targetEnvironment: targetEnvOptions[0]?.name ?? "",
-        env: cfg?.env?.map((e) => ({ key: e.key, value: e.value, isSensitive: e.isSensitive })) ?? [],
+        env: cfg?.env?.map((item) => (
+            { key: item.key, value: item.value, isSensitive: item.isSensitive }
+        )) ?? [],
         files: cfg?.files ?? [],
       });
       resetMutation();
@@ -193,7 +195,7 @@ export function PromoteAgentDrawer({
             ...(formState.useConfigFromSourceEnv
               ? {}
               : {
-                  env: formState.env.filter((e) => e.key),
+                  env: formState.env.filter((envVar) => envVar.key),
                   files: formState.files,
                 }),
           },

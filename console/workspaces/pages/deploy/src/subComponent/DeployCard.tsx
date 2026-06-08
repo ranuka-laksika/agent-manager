@@ -405,7 +405,10 @@ export function DeployCard(props: DeployCardProps) {
     if (agent?.configurations?.enableAutoInstrumentation !== undefined) {
       setTracingEnabled(agent.configurations.enableAutoInstrumentation);
     }
-  }, [agent?.configurations?.enableApiKeySecurity, agent?.configurations?.enableAutoInstrumentation]);
+  }, [
+    agent?.configurations?.enableApiKeySecurity,
+    agent?.configurations?.enableAutoInstrumentation,
+  ]);
 
   const { data: agentConfig } = useGetAgentConfigurations(
     { orgName: orgId, projName: projectId, agentName: agentId },
@@ -418,8 +421,12 @@ export function DeployCard(props: DeployCardProps) {
   const latestToggleRef = useRef({ apiKey: apiKeyEnabled, tracing: tracingEnabled });
   latestToggleRef.current = { apiKey: apiKeyEnabled, tracing: tracingEnabled };
 
-  const redeployContextRef = useRef({ orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack });
-  redeployContextRef.current = { orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack };
+  const redeployContextRef = useRef({
+    orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack,
+  });
+  redeployContextRef.current = {
+    orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack,
+  };
 
   const deployAgentRef = useRef(deployAgentMutate);
   deployAgentRef.current = deployAgentMutate;
@@ -429,7 +436,11 @@ export function DeployCard(props: DeployCardProps) {
   const debouncedRedeploy = useCallback(() => {
     clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
-      const { orgId: o, projectId: p, agentId: a, currentDeployment: dep, agentConfig: cfg, isApiAgent: isApi, isPythonBuildpack: isPy } = redeployContextRef.current;
+      const {
+        orgId: o, projectId: p, agentId: a,
+        currentDeployment: dep, agentConfig: cfg,
+        isApiAgent: isApi, isPythonBuildpack: isPy,
+      } = redeployContextRef.current;
       if (!dep?.imageId || !o || !p || !a) return;
       const { apiKey, tracing } = latestToggleRef.current;
       const existingEnv = cfg?.configurations?.env?.filter((e) => e.key && e.value !== undefined);
@@ -634,7 +645,9 @@ export function DeployCard(props: DeployCardProps) {
             />
           ))}
 
-          <Collapse in={[DeploymentStatus.ACTIVE, DeploymentStatus.ERROR, DeploymentStatus.FAILED].includes(currentDeployment?.status as DeploymentStatus)}>
+          <Collapse in={[
+            DeploymentStatus.ACTIVE, DeploymentStatus.ERROR, DeploymentStatus.FAILED,
+          ].includes(currentDeployment?.status as DeploymentStatus)}>
             <Stack gap={2}>
               <Card variant="outlined" sx={{ padding: 1.4, pt:0.5 }}>
                 <Stack gap={1}>

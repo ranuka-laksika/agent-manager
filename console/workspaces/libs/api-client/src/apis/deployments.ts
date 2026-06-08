@@ -245,8 +245,11 @@ export async function createDeploymentPipeline(params: CreateDeploymentPipelineP
     return res.json();
 }
 
-export async function updateOrgDeploymentPipeline(params: UpdateOrgDeploymentPipelinePathParams, body: UpdateDeploymentPipelineRequest, getToken?: () => Promise<string>)
-: Promise<DeploymentPipelineResponse> {
+export async function updateOrgDeploymentPipeline(
+  params: UpdateOrgDeploymentPipelinePathParams,
+  body: UpdateDeploymentPipelineRequest,
+  getToken?: () => Promise<string>,
+): Promise<DeploymentPipelineResponse> {
     const { orgName = "default", pipelineName } = params;
     const token = getToken ? await getToken() : undefined;
     const res = await httpPUT(

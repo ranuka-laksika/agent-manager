@@ -106,7 +106,8 @@ export function EditSecurityConfigDrawer({
   const { mutate: deployAgent, isPending } = useDeployAgent();
 
   const handleSave = useCallback(() => {
-    const existingEnv = configurations?.configurations?.env?.filter((e) => e.key && e.value !== undefined);
+    const existingEnv = configurations?.configurations?.env
+      ?.filter((e) => e.key && e.value !== undefined);
     const existingFiles = configurations?.configurations?.files;
 
     deployAgent(
@@ -143,8 +144,9 @@ export function EditSecurityConfigDrawer({
     );
   }, [
     configurations, imageId, orgName, projName, agentName,
-    agent?.configurations?.enableApiKeySecurity, agent?.configurations?.enableAutoInstrumentation,
-    corsEnabled, corsAllowAll, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
+    agent?.configurations?.enableApiKeySecurity,
+    agent?.configurations?.enableAutoInstrumentation,
+    corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
     hasWildcardOrigin, isApiAgent,
     deployAgent, onClose, pushSnackBar,
   ]);
@@ -159,7 +161,9 @@ export function EditSecurityConfigDrawer({
           {isApiAgent && (
             <Form.Section>
               <Form.Header>CORS Configuration</Form.Header>
-              <Form.Subheader>Control which origins, methods, and headers may access this endpoint.</Form.Subheader>
+              <Form.Subheader>
+                Control which origins, methods, and headers may access this endpoint.
+              </Form.Subheader>
               <Form.Stack spacing={1}>
                 <FormControlLabel
                   control={

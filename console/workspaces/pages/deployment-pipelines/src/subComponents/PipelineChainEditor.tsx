@@ -38,7 +38,9 @@ interface PipelineChainEditorProps {
   disabled?: boolean;
 }
 
-export function PipelineChainEditor({ chain, envOptions, onChange, disabled }: PipelineChainEditorProps) {
+export function PipelineChainEditor(
+  { chain, envOptions, onChange, disabled }: PipelineChainEditorProps,
+) {
   const [menuAnchor, setMenuAnchor] = useState<{ el: HTMLElement; index: number | "add" } | null>(null);
 
   const handleOpenMenu = useCallback((e: React.MouseEvent<HTMLElement>, index: number | "add") => {

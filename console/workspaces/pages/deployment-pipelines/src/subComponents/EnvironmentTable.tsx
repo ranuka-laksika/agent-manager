@@ -43,7 +43,9 @@ interface EnvironmentTableProps {
   onCreateEnvironment?: () => void;
 }
 
-export function EnvironmentTable({ onEditEnvironment, onCreateEnvironment }: EnvironmentTableProps) {
+export function EnvironmentTable(
+  { onEditEnvironment, onCreateEnvironment }: EnvironmentTableProps,
+) {
   const { orgId } = useParams<{ orgId: string }>();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);

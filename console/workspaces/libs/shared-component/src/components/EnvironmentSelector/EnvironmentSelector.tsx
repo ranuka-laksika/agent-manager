@@ -29,7 +29,9 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
  * Renders nothing when there is only one qualifying environment or no envId.
  */
 export function EnvironmentSelector() {
-    const { orgId, projectId, envId } = useParams<{ orgId: string; projectId: string; envId: string }>();
+    const { orgId, projectId, envId } = useParams<{
+        orgId: string; projectId: string; envId: string;
+    }>();
     const { pathname } = useLocation();
     const navigate = useNavigate();
 
@@ -41,13 +43,22 @@ export function EnvironmentSelector() {
         if (!environments) return [];
 
         const paths = pipelinesData?.deploymentPipelines
-            ?.find((p) => p.name === project?.deploymentPipeline)?.promotionPaths ?? [];
+            ?.find((p) => p.name === project?.deploymentPipeline)
+            ?.promotionPaths ?? [];
 
         if (!paths.length) return environments;
 
-        const allTargets = new Set(paths.flatMap((p) => p.targetEnvironmentRefs.map((t) => t.name)));
-        const adjacency = new Map(paths.map((p) => [p.sourceEnvironmentRef, p.targetEnvironmentRefs.map((t) => t.name)]));
-        const roots = [...new Set(paths.map((p) => p.sourceEnvironmentRef))].filter((s) => !allTargets.has(s));
+        const allTargets = new Set(
+            paths.flatMap((p) => p.targetEnvironmentRefs.map((t) => t.name)),
+        );
+        const adjacency = new Map(
+            paths.map((p) => [
+                p.sourceEnvironmentRef,
+                p.targetEnvironmentRefs.map((t) => t.name),
+            ]),
+        );
+        const roots = [...new Set(paths.map((p) => p.sourceEnvironmentRef))]
+            .filter((s) => !allTargets.has(s));
 
         const chain: string[] = [];
         const visited = new Set<string>();
@@ -64,20 +75,32 @@ export function EnvironmentSelector() {
             .filter(Boolean) as typeof environments;
     }, [environments, pipelinesData, project?.deploymentPipeline]);
 
+    const selectedEnvironment = useMemo(
+        () => pipelineEnvironments.find((env) => env.name === envId),
+        [pipelineEnvironments, envId],
+    );
+
     if (!envId || pipelineEnvironments.length <= 1) {
         return null;
     }
 
-    const selectedEnvironment = useMemo(() => pipelineEnvironments.find((env) => env.name === envId), [pipelineEnvironments, envId]);
     return (
         <FormControl size="small" sx={{ minWidth: 160 }}>
             <Select
                 value={envId}
                 onChange={(e) => {
                     const newEnvId = e.target.value as string;
-                    navigate(pathname.replace(`/environment/${envId}`, `/environment/${newEnvId}`));
+                    navigate(
+                        pathname.replace(`/environment/${envId}`, `/environment/${newEnvId}`),
+                    );
                 }}
-                renderValue={value=><Typography>{selectedEnvironment?.displayName ?? value} Environment </Typography>}
+                renderValue={(value) => (
+                    <Typography>
+                        {selectedEnvironment?.displayName ?? value}
+                        {" "}
+                        Environment
+                    </Typography>
+                )}
             >
                 {pipelineEnvironments.map((env) => (
                     <MenuItem key={env.name} value={env.name}>

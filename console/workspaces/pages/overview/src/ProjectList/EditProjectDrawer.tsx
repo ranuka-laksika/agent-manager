@@ -143,8 +143,13 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
     projName: project.name,
   });
 
-  const { data: pipelinesData, isLoading: isPipelinesLoading } = useListDeploymentPipelines({ orgName: orgId });
-  const pipelines = pipelinesData?.deploymentPipelines ?? [];
+  const { data: pipelinesData, isLoading: isPipelinesLoading } = useListDeploymentPipelines(
+    { orgName: orgId },
+  );
+  const pipelines = useMemo(
+    () => pipelinesData?.deploymentPipelines ?? [],
+    [pipelinesData?.deploymentPipelines],
+  );
 
   const { data: environments } = useListEnvironments({ orgName: orgId });
   const envDisplayNameMap = useMemo(() => {
@@ -260,8 +265,19 @@ export function EditProjectDrawer({ open, onClose, project, orgId }: EditProject
                       displayEmpty
                       renderValue={(value) => {
                         const selected = pipelines.find((p) => p.name === value);
-                        if (!selected) return <Typography variant="body2" color="text.disabled">Select a pipeline</Typography>;
-                        return <SelectedPipelineValue pipeline={selected} envDisplayNameMap={envDisplayNameMap} />;
+                        if (!selected) {
+                          return (
+                            <Typography variant="body2" color="text.disabled">
+                              Select a pipeline
+                            </Typography>
+                          );
+                        }
+                        return (
+                          <SelectedPipelineValue
+                            pipeline={selected}
+                            envDisplayNameMap={envDisplayNameMap}
+                          />
+                        );
                       }}
                       fullWidth
                       size="small"

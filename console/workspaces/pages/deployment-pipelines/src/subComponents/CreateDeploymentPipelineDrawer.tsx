@@ -54,7 +54,9 @@ const DEFAULT_FORM: CreatePipelineFormValues = {
   chain: [],
 };
 
-export function CreateDeploymentPipelineDrawer({ open, onClose, orgId }: CreateDeploymentPipelineDrawerProps) {
+export function CreateDeploymentPipelineDrawer(
+  { open, onClose, orgId }: CreateDeploymentPipelineDrawerProps,
+) {
   const [formData, setFormData] = useState<CreatePipelineFormValues>(DEFAULT_FORM);
 
   const { errors, validateForm, setFieldError, validateField } =

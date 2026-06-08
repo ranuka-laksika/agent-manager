@@ -128,7 +128,7 @@ export function EditEnvironmentDrawer({
         // handled by updateError
       }
     },
-    [formData, validateForm, updateEnvironment, environment, onClose],
+    [formData, validateForm, updateEnvironment, environment, onClose, orgId],
   );
 
   const errorMessage = useMemo(() => {

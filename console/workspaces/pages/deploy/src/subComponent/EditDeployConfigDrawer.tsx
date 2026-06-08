@@ -75,7 +75,9 @@ export function EditDeployConfigDrawer({
   useEffect(() => {
     if (!open) return;
     const cfg = configurations?.configurations;
-    setEnv(cfg?.env?.map((e) => ({ key: e.key, value: e.value, isSensitive: e.isSensitive })) ?? []);
+    setEnv(cfg?.env?.map(
+      (e) => ({ key: e.key, value: e.value, isSensitive: e.isSensitive }),
+    ) ?? []);
     setFiles(cfg?.files ?? []);
   }, [open, configurations]);
 

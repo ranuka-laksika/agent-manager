@@ -80,7 +80,9 @@ export function DeploymentPipelineCard() {
     projName: projectId,
   });
 
-  const { data: pipelinesData, isLoading: isLoadingPipelines } = useListDeploymentPipelines({ orgName: orgId });
+  const { data: pipelinesData, isLoading: isLoadingPipelines } = useListDeploymentPipelines(
+    { orgName: orgId },
+  );
 
   const { data: environments } = useListEnvironments({ orgName: orgId });
 
