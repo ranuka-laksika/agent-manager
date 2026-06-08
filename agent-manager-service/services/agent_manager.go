@@ -2656,7 +2656,6 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 
 		// Each environment must have its own unique artifact UUID so the gateway controller
 		// does not confuse two environments' RestApi resources (same UUID = one overwrites the other).
-		targetArtifactID := ""
 		targetEnv, targetEnvErr := s.ocClient.GetEnvironment(ctx, orgName, req.TargetEnvironment)
 		if targetEnvErr != nil {
 			return fmt.Errorf("failed to fetch target environment details: %w", targetEnvErr)
@@ -2666,7 +2665,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		if artifactErr != nil {
 			return fmt.Errorf("failed to ensure target env API artifact: %w", artifactErr)
 		}
-		targetArtifactID = artifact.UUID.String()
+		targetArtifactID := artifact.UUID.String()
 		promoteGW := resolveGatewayInfo(s.gatewayRepo, targetEnv.UUID, req.TargetEnvironment)
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promoteGW, promotePythonBuildpack, tracingCfg.EnableAutoInstrumentation)

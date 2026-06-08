@@ -300,14 +300,14 @@ func (c *openChoreoClient) findReleaseBindingForEnv(ctx context.Context, namespa
 		})
 	}
 	if listResp.JSON200 == nil {
-		return nil, nil
+		return nil, nil //nolint:nilnil // documented sentinel: callers distinguish "no binding" from "list failed"
 	}
 	for i, b := range listResp.JSON200.Items {
 		if b.Spec != nil && b.Spec.Environment == env {
 			return &listResp.JSON200.Items[i], nil
 		}
 	}
-	return nil, nil
+	return nil, nil //nolint:nilnil // documented sentinel: callers distinguish "no binding" from "list failed"
 }
 
 // setRestartedAt updates restartedAt on the ReleaseBinding for the given environment to trigger a pod rollout.

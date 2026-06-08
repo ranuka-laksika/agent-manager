@@ -1451,16 +1451,19 @@ type BuildParameters struct {
 	// CommitId Commit ID
 	CommitId string `json:"commitId"`
 
+	// DockerfilePath Path to the Dockerfile relative to the app path (docker builds only)
+	DockerfilePath *string `json:"dockerfilePath,omitempty"`
+
 	// Language Programming language
 	Language string `json:"language"`
 
-	// LanguageVersion Language version
+	// LanguageVersion Language version (buildpack builds only)
 	LanguageVersion string `json:"languageVersion"`
 
 	// RepoUrl Repository URL
 	RepoUrl string `json:"repoUrl"`
 
-	// RunCommand Command to run the application
+	// RunCommand Command to run the application (buildpack builds only)
 	RunCommand string `json:"runCommand"`
 }
 
@@ -2224,7 +2227,7 @@ type DockerBuildType string
 
 // DockerConfig defines model for DockerConfig.
 type DockerConfig struct {
-	// DockerfilePath Path to the Dockerfile relative to the repository root
+	// DockerfilePath Path to the Dockerfile relative to the app path (e.g. "Dockerfile" or "docker/Dockerfile")
 	DockerfilePath string `json:"dockerfilePath"`
 }
 
@@ -3486,6 +3489,47 @@ type ProjectResponse struct {
 	Uuid    string `json:"uuid"`
 }
 
+// PromoteAgentRequest defines model for PromoteAgentRequest.
+type PromoteAgentRequest struct {
+	CorsConfig *CORSConfig `json:"corsConfig,omitempty"`
+
+	// EnableApiKeySecurity Enable API key security for the agent endpoint in the target environment
+	EnableApiKeySecurity *bool `json:"enableApiKeySecurity,omitempty"`
+
+	// EnableAutoInstrumentation Enable auto instrumentation for observability in the target environment
+	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
+
+	// Env Environment-specific environment variables for the target environment.
+	Env *[]EnvironmentVariable `json:"env,omitempty"`
+
+	// Files Environment-specific file mounts for the target environment.
+	Files *[]FileMount `json:"files,omitempty"`
+
+	// SourceEnvironment Source environment to promote from
+	SourceEnvironment string `json:"sourceEnvironment"`
+
+	// TargetEnvironment Target environment to promote to
+	TargetEnvironment string `json:"targetEnvironment"`
+
+	// UseConfigFromSourceEnv When true, inherits env vars and file mounts from the source environment. Mutually exclusive with env/files.
+	UseConfigFromSourceEnv *bool `json:"useConfigFromSourceEnv,omitempty"`
+}
+
+// PromoteAgentResponse defines model for PromoteAgentResponse.
+type PromoteAgentResponse struct {
+	// AgentName Name of the promoted agent
+	AgentName *string `json:"agentName,omitempty"`
+
+	// ProjectName Project containing the agent
+	ProjectName *string `json:"projectName,omitempty"`
+
+	// SourceEnvironment Source environment promoted from
+	SourceEnvironment *string `json:"sourceEnvironment,omitempty"`
+
+	// TargetEnvironment Target environment promoted to
+	TargetEnvironment *string `json:"targetEnvironment,omitempty"`
+}
+
 // PromotionPath defines model for PromotionPath.
 type PromotionPath struct {
 	// SourceEnvironmentRef Reference to the source environment
@@ -3991,6 +4035,18 @@ type UpdateCustomEvaluatorRequest struct {
 	Tags   *[]string `json:"tags,omitempty"`
 }
 
+// UpdateDeploymentPipelineRequest defines model for UpdateDeploymentPipelineRequest.
+type UpdateDeploymentPipelineRequest struct {
+	// Description Updated description
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Updated display name
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// PromotionPaths Updated list of promotion paths
+	PromotionPaths []PromotionPath `json:"promotionPaths"`
+}
+
 // UpdateDeploymentStateRequest Request to update the deployment state of an agent
 type UpdateDeploymentStateRequest struct {
 	// Environment Target environment name
@@ -4025,6 +4081,9 @@ type UpdateEnvironmentRequest struct {
 
 	// DisplayName Updated display name
 	DisplayName *string `json:"displayName,omitempty"`
+
+	// IsProduction Whether this is a production environment
+	IsProduction *bool `json:"isProduction,omitempty"`
 }
 
 // UpdateGatewayRequest Update request for gateway properties (all fields optional, but at least one must be provided)
@@ -4378,6 +4437,12 @@ type ListAgentModelConfigsParams struct {
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListMonitorsParams defines parameters for ListMonitors.
+type ListMonitorsParams struct {
+	// Environment Filter monitors by environment name
+	Environment *string `form:"environment,omitempty" json:"environment,omitempty"`
+}
+
 // ListMonitorRunsParams defines parameters for ListMonitorRuns.
 type ListMonitorRunsParams struct {
 	// Limit Maximum number of runs to return (max 100)
@@ -4597,6 +4662,9 @@ type CreateMonitorJSONRequestBody = CreateMonitorRequest
 // UpdateMonitorJSONRequestBody defines body for UpdateMonitor for application/json ContentType.
 type UpdateMonitorJSONRequestBody = UpdateMonitorRequest
 
+// PromoteAgentJSONRequestBody defines body for PromoteAgent for application/json ContentType.
+type PromoteAgentJSONRequestBody = PromoteAgentRequest
+
 // PublishAgentKindJSONRequestBody defines body for PublishAgentKind for application/json ContentType.
 type PublishAgentKindJSONRequestBody = PublishAgentKindRequest
 
@@ -4608,6 +4676,9 @@ type FilterAgentRuntimeLogsJSONRequestBody = LogFilterRequest
 
 // GenerateAgentTokenJSONRequestBody defines body for GenerateAgentToken for application/json ContentType.
 type GenerateAgentTokenJSONRequestBody = TokenRequest
+
+// UpdateDeploymentPipelineJSONRequestBody defines body for UpdateDeploymentPipeline for application/json ContentType.
+type UpdateDeploymentPipelineJSONRequestBody = UpdateDeploymentPipelineRequest
 
 // CreateLLMProxyJSONRequestBody defines body for CreateLLMProxy for application/json ContentType.
 type CreateLLMProxyJSONRequestBody = CreateLLMProxyRequest

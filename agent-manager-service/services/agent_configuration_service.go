@@ -2764,8 +2764,11 @@ func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Cont
 
 	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
 	if err != nil {
-		// No LLM configuration exists for this agent — no system-managed keys
-		return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// No LLM configuration exists for this agent — no system-managed keys
+			return map[string]bool{}, nil
+		}
+		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
 	}
 
 	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
@@ -2795,7 +2798,10 @@ func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(ctx cont
 
 	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
 	if err != nil {
-		return nil, nil
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
 	}
 
 	// Get the env-agent mapping for this environment to find the proxy
