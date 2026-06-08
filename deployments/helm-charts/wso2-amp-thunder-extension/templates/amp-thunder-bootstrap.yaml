@@ -1651,4 +1651,31 @@ data:
 
     assign_user_to_role "amp-admin@wso2.com" "$ADMIN_ID" "admin"
 
+    # ===========================================================================
+    # Assign ampApiClient app to admin role so it gets all scopes in M2M tokens
+    # ===========================================================================
+    log_info "Assigning ampApiClient app to admin role..."
+    response=$(thunder_api_call GET "/applications")
+    http_code="${response: -3}"
+    body="${response%???}"
+    if [[ "$http_code" != "200" ]]; then
+      log_error "Failed to fetch applications (HTTP $http_code)"
+      exit 1
+    fi
+
+    AMP_API_CLIENT_ID=$(echo "$body" | sed 's/},{/}\n{/g' | grep '"clientId":"amp-api-client"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$AMP_API_CLIENT_ID" ]]; then
+      log_warning "ampApiClient app not found, skipping role assignment"
+    else
+      payload="{\"assignments\":[{\"id\":\"${AMP_API_CLIENT_ID}\",\"type\":\"app\"}]}"
+      response=$(thunder_api_call POST "/roles/${ADMIN_ID}/assignments/add" "$payload")
+      http_code="${response: -3}"
+      if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
+        log_success "Assigned ampApiClient to admin role"
+      else
+        log_error "Failed to assign ampApiClient to admin role (HTTP $http_code): ${response%???}"
+        exit 1
+      fi
+    fi
+
     log_info "Default role assignments complete."
