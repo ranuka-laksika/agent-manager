@@ -42,9 +42,6 @@ import (
 type AgentConfigurationService interface {
 	Create(ctx context.Context, orgName, projectName, agentID string,
 		req models.CreateAgentModelConfigRequest, createdBy string) (*models.AgentModelConfigResponse, error)
-	// ValidateProvidersInCatalog verifies each handle resolves to an existing provider
-	// that is in catalog. Returns ErrLLMProviderNotFound (missing) or ErrInvalidInput
-	// (empty handle / not in catalog). Handles are deduped.
 	ValidateProvidersInCatalog(ctx context.Context, orgName string, providerHandles []string) error
 	Get(ctx context.Context, configUUID uuid.UUID, orgName, projectName, agentName string) (*models.AgentModelConfigResponse, error)
 	GetByAgent(ctx context.Context, agentID, orgName string) (*models.AgentModelConfigResponse, error)
