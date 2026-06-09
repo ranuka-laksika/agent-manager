@@ -3,47 +3,52 @@ set -euo pipefail
 
 # Creates a new environment and installs its API Platform Gateway.
 #
-# Usage:
-#   add-environment.sh "Staging Environment"
-#   add-environment.sh "Production" --production
+# All inputs are provided via environment variables so the script can be piped
+# directly into bash:
 #
-# The environment name is derived from the display name by lowercasing
-# and replacing spaces/special characters with hyphens (e.g. "Staging Environment" → "staging-environment").
+#   curl -fsSL https://raw.githubusercontent.com/wso2/ai-agent-management-platform/main/deployments/scripts/add-environment.sh \
+#     | ENV_NAME=staging-environment \
+#       DISPLAY_NAME="Staging Environment" \
+#       AGENT_MANAGER_TOKEN=<token> \
+#       CHART_VERSION=0.1.0 \
+#       bash
+#
+# Add IS_PRODUCTION=true for a production environment.
+#
+# The console resolves a unique ENV_NAME via POST /orgs/{org}/utils/generate-name
+# and renders the full command for the user. Re-running with the same ENV_NAME
+# is idempotent.
 #
 # Prerequisites:
-#   - Agent Manager must be running (docker-compose or in-cluster)
-#   - The default environment and gateway must already be set up (via setup-gateway.sh)
 #   - kubectl and helm must be configured
+#   - AGENT_MANAGER_TOKEN: bearer token authorized to create environments
+#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.1.0).
+#     Chart is pulled from oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension
+#   - ENV_NAME: resource name (lowercase alphanumeric with hyphens)
+#   - DISPLAY_NAME: human-readable name
+# Optional:
+#   - IS_PRODUCTION (default: false)
+#   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
+#   - AGENT_MANAGER_URL (default: http://localhost:9000)
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# --- Required inputs ---
+: "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging-environment)}"
+: "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging Environment\")}"
+: "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
+: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.1.0)}"
 
-# --- Parse arguments ---
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <display-name> [--production]"
-    echo "  Example: $0 \"Staging Environment\""
-    echo "  Example: $0 \"Production\" --production"
-    exit 1
-fi
+IS_PRODUCTION="${IS_PRODUCTION:-false}"
+case "$IS_PRODUCTION" in
+    true|false) ;;
+    *)
+        echo "❌ IS_PRODUCTION must be 'true' or 'false' (got '${IS_PRODUCTION}')"
+        exit 1
+        ;;
+esac
 
-DISPLAY_NAME="$1"
-IS_PRODUCTION=false
-if [ "${2:-}" = "--production" ]; then
-    IS_PRODUCTION=true
-fi
-
-# Derive environment name from display name: lowercase, replace non-alphanumeric with hyphens, trim
-ENV_NAME=$(echo "$DISPLAY_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//')
-
-if [ -z "$ENV_NAME" ]; then
-    echo "❌ Could not derive environment name from display name: $DISPLAY_NAME"
-    exit 1
-fi
-
-# Keep env name short enough that the derived helm release name
-# (api-platform-<org>-<env>) stays within Helm's 53-char limit.
-if [ ${#ENV_NAME} -gt 25 ]; then
-    echo "❌ Environment name '${ENV_NAME}' is ${#ENV_NAME} characters (max 25)"
-    echo "   Use a shorter display name."
+if ! printf '%s' "$ENV_NAME" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'; then
+    echo "❌ Invalid ENV_NAME '${ENV_NAME}'"
+    echo "   Must be lowercase alphanumeric with hyphens (no leading/trailing hyphen)."
     exit 1
 fi
 
@@ -52,10 +57,9 @@ ORG_NAME="${ORG_NAME:-default}"
 DATAPLANE_REF="${DATAPLANE_REF:-default}"
 AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-IDP_TOKEN_URL="${IDP_TOKEN_URL:-http://thunder.amp.localhost:8080/oauth2/token}"
-IDP_CLIENT_ID="${IDP_CLIENT_ID:-amp-api-client}"
-IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-amp-api-client-secret}"
 GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+
+CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
 
@@ -81,32 +85,13 @@ until curl -sf "${AGENT_MANAGER_URL}/healthz" > /dev/null 2>&1; do
 done
 echo "✅ Agent Manager is healthy"
 
-# --- Step 1: Get JWT from Thunder IDP ---
-echo ""
-echo "🔑 Obtaining JWT..."
-BASIC_AUTH=$(printf '%s:%s' "${IDP_CLIENT_ID}" "${IDP_CLIENT_SECRET}" | base64 | tr -d '\n')
-TOKEN_RESPONSE=$(curl -sf -X POST "${IDP_TOKEN_URL}" \
-    -H "Authorization: Basic ${BASIC_AUTH}" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials&scope=openid") || {
-    echo "❌ Failed to call ${IDP_TOKEN_URL}"
-    exit 1
-}
-
-JWT=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || true
-if [ -z "${JWT:-}" ]; then
-    echo "❌ Could not parse access_token from response: ${TOKEN_RESPONSE}"
-    exit 1
-fi
-echo "✅ JWT obtained"
-
-AUTH_HEADER="Authorization: Bearer ${JWT}"
-
-# --- Step 2: Create environment ---
-echo ""
-echo "🌍 Creating environment '${ENV_NAME}'..."
+AUTH_HEADER="Authorization: Bearer ${AGENT_MANAGER_TOKEN}"
 # Escape backslashes and double quotes so the display name survives JSON embedding.
 DISPLAY_NAME_JSON=$(printf '%s' "${DISPLAY_NAME}" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
+
+# --- Step 1: Create environment ---
+echo ""
+echo "🌍 Creating environment '${ENV_NAME}'..."
 ENV_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${AGENT_MANAGER_API_URL}/orgs/${ORG_NAME}/environments" \
     -H "${AUTH_HEADER}" \
     -H "Content-Type: application/json" \
@@ -131,7 +116,7 @@ else
     exit 1
 fi
 
-# --- Step 3: Helm install the gateway ---
+# --- Step 2: Helm install the gateway ---
 echo ""
 echo "🌐 Installing API Platform Gateway for '${ENV_NAME}'..."
 
@@ -144,7 +129,8 @@ RELEASE_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 
 helm upgrade --install "${RELEASE_NAME}" \
-    "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension" \
+    "${CHART_REF}" \
+    --version "${CHART_VERSION}" \
     --namespace "${GATEWAY_NAMESPACE}" \
     --set agentManager.orgName="${ORG_NAME}" \
     --set gateway.environment="${ENV_NAME}" \
@@ -162,7 +148,7 @@ helm upgrade --install "${RELEASE_NAME}" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
 
-# --- Step 4: Wait for gateway to be ready ---
+# --- Step 3: Wait for gateway to be ready ---
 GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 echo ""
 echo "⏳ Waiting for gateway '${GATEWAY_NAME}' to be ready..."
