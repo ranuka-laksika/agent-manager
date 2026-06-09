@@ -102,6 +102,7 @@ export const RoleEditPage: React.FC = () => {
     orgName: orgId,
     roleId: roleId ?? "",
   });
+  const isPermissionsReadOnly = roleData?.name ? isPredefinedRole(roleData.name) : false;
   const { data: assignmentsData, isLoading: isLoadingAssignments } = useGetRoleAssignments({
     orgName: orgId,
     roleId: roleId ?? "",
@@ -323,7 +324,6 @@ export const RoleEditPage: React.FC = () => {
   const isLoading =
     isLoadingRole || isLoadingAssignments || isLoadingUsers || isLoadingGroups || isLoadingCatalog;
 
-  const isPermissionsReadOnly = roleData?.name ? isPredefinedRole(roleData.name) : false;
   const pageTitle = roleData?.name ? `Edit Role: ${roleData.name}` : "Edit Role";
 
   if (isLoading) {
@@ -417,7 +417,9 @@ export const RoleEditPage: React.FC = () => {
                           sx={{ mr: 0.5, p: 0.5 }}
                           onClick={(e) => e.stopPropagation()}
                           onChange={
-                            handleGroupToggle as unknown as React.ChangeEventHandler<HTMLInputElement>
+                            handleGroupToggle as unknown as React.ChangeEventHandler<
+                              HTMLInputElement
+                            >
                           }
                         />
                         <Typography
@@ -478,7 +480,11 @@ export const RoleEditPage: React.FC = () => {
                               key={p.name}
                               label={permLabel(p)}
                               size="small"
-                              onDelete={!isPermissionsReadOnly ? () => handleRemovePermission(p.name) : undefined}
+                              onDelete={
+                                !isPermissionsReadOnly
+                                  ? () => handleRemovePermission(p.name)
+                                  : undefined
+                              }
                             />
                           ))}
                       </Stack>
