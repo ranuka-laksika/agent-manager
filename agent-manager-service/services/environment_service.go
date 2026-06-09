@@ -236,13 +236,16 @@ func (s *environmentService) DeleteEnvironment(ctx context.Context, orgName stri
 	}
 
 	// Delete in OpenChoreo first. If OC refuses (release bindings still exist, etc.) we surface
-	// that error without having touched local state.
+	// that error without having touched local state. A not-found from OC after UUID resolution
+	// is treated as idempotent so we still clean up local gateway↔env mappings.
 	if err := s.ocClient.DeleteEnvironment(ctx, orgName, env.Name); err != nil {
 		s.logger.Error("Failed to delete environment in OpenChoreo", "orgName", orgName, "envID", envID, "error", err)
-		if errors.Is(err, utils.ErrNotFound) {
-			return utils.ErrEnvironmentNotFound
+		if errors.Is(err, utils.ErrNotFound) || errors.Is(err, utils.ErrEnvironmentNotFound) {
+			s.logger.Warn("Environment already absent in OpenChoreo; continuing local cleanup",
+				"orgName", orgName, "envID", envID, "envUUID", envUUID)
+		} else {
+			return fmt.Errorf("failed to delete environment in OpenChoreo: %w", err)
 		}
-		return fmt.Errorf("failed to delete environment in OpenChoreo: %w", err)
 	}
 
 	// Local cleanup: gateway↔env mapping rows. The gateway themselves are unaffected.

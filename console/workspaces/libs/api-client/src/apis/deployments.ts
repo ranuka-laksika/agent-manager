@@ -251,6 +251,9 @@ export async function updateOrgDeploymentPipeline(
   getToken?: () => Promise<string>,
 ): Promise<DeploymentPipelineResponse> {
     const { orgName = "default", pipelineName } = params;
+    if (!pipelineName) {
+        throw new Error("pipelineName is required");
+    }
     const token = getToken ? await getToken() : undefined;
     const res = await httpPUT(
         `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/deployment-pipelines/${encodeURIComponent(pipelineName)}`,

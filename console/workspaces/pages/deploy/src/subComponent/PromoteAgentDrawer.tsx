@@ -110,20 +110,28 @@ export function PromoteAgentDrawer({
     return path?.targetEnvironmentRefs ?? [];
   }, [pipeline, sourceEnvironment.name]);
 
+  // Initialize form state once per drawer-open cycle so background refetches of
+  // sourceConfigs/targetEnvOptions don't wipe in-progress user edits.
+  const [didInitOnOpen, setDidInitOnOpen] = useState(false);
+
   useEffect(() => {
-    if (open) {
-      const cfg = sourceConfigs?.configurations;
-      setFormState({
-        ...DEFAULT_STATE,
-        targetEnvironment: targetEnvOptions[0]?.name ?? "",
-        env: cfg?.env?.map((item) => (
-            { key: item.key, value: item.value, isSensitive: item.isSensitive }
-        )) ?? [],
-        files: cfg?.files ?? [],
-      });
-      resetMutation();
+    if (!open) {
+      setDidInitOnOpen(false);
+      return;
     }
-  }, [open, resetMutation, targetEnvOptions, sourceConfigs]);
+    if (didInitOnOpen) return;
+    const cfg = sourceConfigs?.configurations;
+    setFormState({
+      ...DEFAULT_STATE,
+      targetEnvironment: targetEnvOptions[0]?.name ?? "",
+      env: cfg?.env?.map((item) => (
+          { key: item.key, value: item.value, isSensitive: item.isSensitive }
+      )) ?? [],
+      files: cfg?.files ?? [],
+    });
+    resetMutation();
+    setDidInitOnOpen(true);
+  }, [open, didInitOnOpen, resetMutation, targetEnvOptions, sourceConfigs]);
 
   const handleToggleUseSourceConfig = useCallback(
     (checked: boolean) => {

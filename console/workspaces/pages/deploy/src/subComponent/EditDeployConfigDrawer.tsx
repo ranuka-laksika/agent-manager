@@ -85,13 +85,14 @@ export function EditDeployConfigDrawer({
 
   const handleSave = useCallback(() => {
     const validEnv = env.filter((e) => e.key);
+    const validFiles = files.filter((f) => f.key && f.mountPath);
     deployAgent(
       {
         params: { orgName, projName, agentName },
         body: {
           imageId,
           ...(validEnv.length && { env: validEnv }),
-          ...(files.length && { files }),
+          ...(validFiles.length && { files: validFiles }),
         },
       },
       {

@@ -48,27 +48,39 @@ export function EnvironmentSelector() {
 
         if (!paths.length) return environments;
 
-        const allTargets = new Set(
-            paths.flatMap((p) => p.targetEnvironmentRefs.map((t) => t.name)),
-        );
-        const adjacency = new Map(
-            paths.map((p) => [
-                p.sourceEnvironmentRef,
-                p.targetEnvironmentRefs.map((t) => t.name),
-            ]),
-        );
-        const roots = [...new Set(paths.map((p) => p.sourceEnvironmentRef))]
-            .filter((s) => !allTargets.has(s));
+        // Build adjacency and compute a topological order so branched promotion
+        // graphs (a → b, a → c, b → d, c → d) stay correctly ordered instead of
+        // following only the first outgoing edge of each node.
+        const adjacency = new Map<string, string[]>();
+        const allNodes = new Set<string>();
+        const inDegree = new Map<string, number>();
+
+        for (const p of paths) {
+            const targets = p.targetEnvironmentRefs.map((t) => t.name).filter(Boolean);
+            adjacency.set(p.sourceEnvironmentRef, targets);
+            allNodes.add(p.sourceEnvironmentRef);
+            inDegree.set(p.sourceEnvironmentRef, inDegree.get(p.sourceEnvironmentRef) ?? 0);
+            for (const t of targets) {
+                allNodes.add(t);
+                inDegree.set(t, (inDegree.get(t) ?? 0) + 1);
+            }
+        }
 
         const chain: string[] = [];
-        const visited = new Set<string>();
-        let current: string | undefined = roots[0];
-        while (current && !visited.has(current)) {
-            chain.push(current);
-            visited.add(current);
-            current = (adjacency.get(current) ?? [])[0];
+        const queue = [...allNodes].filter((n) => (inDegree.get(n) ?? 0) === 0);
+        while (queue.length > 0) {
+            const node = queue.shift()!;
+            chain.push(node);
+            for (const neighbor of adjacency.get(node) ?? []) {
+                const deg = (inDegree.get(neighbor) ?? 1) - 1;
+                inDegree.set(neighbor, deg);
+                if (deg === 0) queue.push(neighbor);
+            }
         }
-        allTargets.forEach((t) => { if (!visited.has(t)) chain.push(t); });
+
+        // Fallback for cycles/invalid graphs: keep any node that didn't make it
+        // into the topo order so we never silently drop environments.
+        allNodes.forEach((n) => { if (!chain.includes(n)) chain.push(n); });
 
         return chain
             .map((name) => environments.find((e) => e.name === name))

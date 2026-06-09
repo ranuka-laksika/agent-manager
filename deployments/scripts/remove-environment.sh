@@ -56,8 +56,11 @@ fi
 GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 echo ""
 echo "⏳ Waiting for gateway resources to be cleaned up..."
-kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null || true
-echo "✅ Gateway resources cleaned up"
+if kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null; then
+    echo "✅ Gateway resources cleaned up"
+else
+    echo "⚠️  Timed out or failed waiting for apigateway/${GATEWAY_NAME} to delete; continuing..."
+fi
 
 # --- Step 2: Delete the environment via Agent Manager API ---
 echo ""
@@ -91,7 +94,9 @@ fi
 
 echo ""
 echo "🌍 Deleting environment '${ENV_NAME}'..."
-DEL_HTTP_CODE=$(curl -s -o /tmp/amp-delete-env-response -w "%{http_code}" -X DELETE \
+RESP_FILE="$(mktemp)"
+trap 'rm -f "$RESP_FILE"' EXIT
+DEL_HTTP_CODE=$(curl -s -o "$RESP_FILE" -w "%{http_code}" -X DELETE \
     "${AGENT_MANAGER_API_URL}/orgs/${ORG_NAME}/environments/${ENV_NAME}" \
     -H "Authorization: Bearer ${JWT}")
 
@@ -104,12 +109,10 @@ case "$DEL_HTTP_CODE" in
         ;;
     *)
         echo "⚠️  Failed to delete environment (HTTP ${DEL_HTTP_CODE})"
-        cat /tmp/amp-delete-env-response 2>/dev/null; echo
-        rm -f /tmp/amp-delete-env-response
+        cat "$RESP_FILE" 2>/dev/null; echo
         exit 1
         ;;
 esac
-rm -f /tmp/amp-delete-env-response
 
 echo ""
 echo "=== Environment '${ENV_NAME}' removed ==="

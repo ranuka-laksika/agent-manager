@@ -86,10 +86,21 @@ export function EditSecurityConfigDrawer({
   const [corsHeaders, setCorsHeaders] = useState<string[]>(["authorization", "Content-Type", "Origin", "X-API-Key"]);
   const [corsAllowCredentials, setCorsAllowCredentials] = useState(false);
 
-  // Seed CORS form from agent config when drawer opens
+  // Seed CORS form from agent config when drawer opens. When no persisted
+  // config exists, reset to defaults so stale in-memory edits from a previous
+  // open don't leak across reopens.
   useEffect(() => {
-    if (!open || !agent?.configurations?.corsConfig) return;
-    const cors = agent.configurations.corsConfig;
+    if (!open) return;
+    const cors = agent?.configurations?.corsConfig;
+    if (!cors) {
+      setCorsEnabled(false);
+      setCorsAllowAll(true);
+      setCorsOrigins(["*"]);
+      setCorsMethods(["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]);
+      setCorsHeaders(["authorization", "Content-Type", "Origin", "X-API-Key"]);
+      setCorsAllowCredentials(false);
+      return;
+    }
     if (cors.enabled !== undefined) setCorsEnabled(cors.enabled);
     if (cors.allowOrigin !== undefined) {
       const isWildcard = cors.allowOrigin.length === 1 && cors.allowOrigin[0] === "*";

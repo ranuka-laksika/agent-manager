@@ -445,11 +445,11 @@ export function BuildCard(props: BuildCardProps) {
       />
 
       {/* Deployment Drawer */}
-      {currentBuild && (
+      {currentBuild?.imageId && (
         <EditDeployConfigDrawer
           open={isDrawerOpen}
           onClose={handleCloseDrawer}
-          imageId={currentBuild.imageId || "busybox"}
+          imageId={currentBuild.imageId}
           orgName={orgId || ""}
           projName={projectId || ""}
           agentName={agentId || ""}

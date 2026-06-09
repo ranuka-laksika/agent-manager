@@ -22,7 +22,7 @@ export const createPipelineSchema = z.object({
   description: z.string().optional(),
   chain: z
     .array(z.string().min(1, "Select an environment"))
-    .min(1, "At least one environment is required"),
+    .min(2, "Select at least two environments"),
 });
 
 export type CreatePipelineFormValues = z.infer<typeof createPipelineSchema>;
@@ -37,7 +37,7 @@ export const editPipelineSchema = z.object({
    */
   chain: z
     .array(z.string().min(1, "Select an environment"))
-    .min(1, "At least one environment is required"),
+    .min(2, "Select at least two environments"),
 });
 
 export type EditPipelineFormValues = z.infer<typeof editPipelineSchema>;

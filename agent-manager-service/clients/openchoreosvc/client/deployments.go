@@ -161,7 +161,7 @@ func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, com
 	}
 
 	if workloadResp.JSON200 == nil || len(workloadResp.JSON200.Items) == 0 {
-		return fmt.Errorf("no workload found for component: %w", utils.ErrNotFound)
+		return fmt.Errorf("no workload found for component %q: %w", componentName, utils.ErrBuildNotComplete)
 	}
 
 	workload := workloadResp.JSON200.Items[0]
@@ -300,7 +300,7 @@ func (c *openChoreoClient) findReleaseBindingForEnv(ctx context.Context, namespa
 		})
 	}
 	if listResp.JSON200 == nil {
-		return nil, nil //nolint:nilnil // documented sentinel: callers distinguish "no binding" from "list failed"
+		return nil, fmt.Errorf("invalid OpenChoreo response: missing release binding list payload for component %q", componentName)
 	}
 	for i, b := range listResp.JSON200.Items {
 		if b.Spec != nil && b.Spec.Environment == env {
@@ -425,12 +425,10 @@ func (c *openChoreoClient) PromoteComponent(ctx context.Context, namespaceName, 
 		if err := c.retryReleaseBindingUpdate(ctx, namespaceName, targetBindingName, func(binding *gen.ReleaseBinding) {
 			binding.Spec.ReleaseName = &sourceReleaseName
 			binding.Spec.State = &activeState
-			if workloadOverrides != nil {
-				binding.Spec.WorkloadOverrides = workloadOverrides
-			}
-			if traitConfigs != nil {
-				binding.Spec.TraitEnvironmentConfigs = traitConfigs
-			}
+			// Always replace overrides on re-promotion so a clean source environment
+			// clears any stale target-specific env vars, file mounts, or trait configs.
+			binding.Spec.WorkloadOverrides = workloadOverrides
+			binding.Spec.TraitEnvironmentConfigs = traitConfigs
 		}); err != nil {
 			return err
 		}

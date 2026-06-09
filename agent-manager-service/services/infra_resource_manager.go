@@ -340,6 +340,25 @@ func (s *infraResourceManager) CreateOrgDeploymentPipeline(ctx context.Context, 
 		return nil, err
 	}
 
+	// If a projectName was provided, link the newly created pipeline as the project's deploymentPipelineRef.
+	// OpenChoreo's DeploymentPipeline model has no projectName; the project↔pipeline link is represented
+	// via Project.spec.deploymentPipelineRef and must be set separately.
+	if projectName != nil && *projectName != "" {
+		project, getErr := s.ocClient.GetProject(ctx, orgName, *projectName)
+		if getErr != nil {
+			s.logger.Error("Failed to fetch project for pipeline linkage", "orgName", orgName, "projectName", *projectName, "error", getErr)
+			return nil, fmt.Errorf("failed to link deployment pipeline to project: %w", getErr)
+		}
+		if patchErr := s.ocClient.PatchProject(ctx, orgName, *projectName, client.PatchProjectRequest{
+			DisplayName:        project.DisplayName,
+			Description:        project.Description,
+			DeploymentPipeline: pipelineName,
+		}); patchErr != nil {
+			s.logger.Error("Failed to patch project with deployment pipeline ref", "orgName", orgName, "projectName", *projectName, "pipelineName", pipelineName, "error", patchErr)
+			return nil, fmt.Errorf("failed to link deployment pipeline to project: %w", patchErr)
+		}
+	}
+
 	s.logger.Info("Deployment pipeline created successfully", "orgName", orgName, "pipelineName", pipelineName)
 	return created, nil
 }
