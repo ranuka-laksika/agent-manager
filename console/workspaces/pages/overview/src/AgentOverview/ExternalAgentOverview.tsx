@@ -26,6 +26,7 @@ import {
   useGetProject,
   useListDeploymentPipelines,
   useListEnvironments,
+  useListGateways,
 } from "@agent-management-platform/api-client";
 import { EnvironmentCard } from "@agent-management-platform/shared-component";
 import { InstrumentationDrawer } from "./InstrumentationDrawer";
@@ -54,7 +55,18 @@ export const ExternalAgentOverview = () => {
     });
   }, [environmentList]);
 
-  const agentInstrumentationUrl = globalConfig.instrumentationUrl || "http://localhost:22893/otel";
+  // Per-env OTEL endpoint. The gateway mapped to the selected environment carries
+  // the externally-reachable vhost; the OTEL RestApi is published at `<vhost>/otel`.
+  // Falls back to globalConfig only when the gateway lookup hasn't resolved yet
+  // (e.g. before an env is selected).
+  const { data: envGatewayList } = useListGateways(
+    { orgName: orgId ?? "" },
+    { environment: selectedEnvironmentId },
+  );
+  const envGatewayVhost = envGatewayList?.gateways?.[0]?.vhost;
+  const agentInstrumentationUrl = envGatewayVhost
+    ? `${envGatewayVhost.replace(/\/$/, "")}/otel`
+    : (globalConfig.instrumentationUrl || "http://localhost:22893/otel");
 
   const handleSetupAgent = (environmentId: string) => {
     setSelectedEnvironmentId(environmentId);

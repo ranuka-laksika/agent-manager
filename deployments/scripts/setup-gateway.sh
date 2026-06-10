@@ -10,6 +10,15 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Gateway identity for the bootstrap default environment. Keep in sync with
+# add-environment.sh so every env's gateway record uses the same vhost convention
+# (otherwise the agent-manager `gateways.vhost` row is set from the chart's
+# misleading static default).
+ORG_NAME="${ORG_NAME:-default}"
+ENV_NAME="${ENV_NAME:-default}"
+GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
+GATEWAY_VHOST="${GATEWAY_VHOST:-http://${ENV_NAME}-${ORG_NAME}.gateway.localhost:${GATEWAY_VHOST_PORT}}"
+
 echo "=== Installing API Platform Gateway ==="
 
 # Verify Agent Manager is reachable
@@ -30,17 +39,18 @@ echo "✅ Agent Manager is healthy"
 
 echo ""
 echo "🌐 Installing gateway chart..."
-helm upgrade --install api-platform-default-default \
+helm upgrade --install "api-platform-${ORG_NAME}-${ENV_NAME}" \
     "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension" \
     --namespace openchoreo-data-plane \
-    --set agentManager.orgName=default \
-    --set gateway.environment=default \
+    --set agentManager.orgName="${ORG_NAME}" \
+    --set gateway.environment="${ENV_NAME}" \
+    --set gateway.vhost="${GATEWAY_VHOST}" \
     --set agentManager.apiUrl="http://host.docker.internal:9000/api/v1" \
     --set apiGateway.controlPlane.host="host.docker.internal:9243" \
     -f "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension/values-dev.yaml"
 
 echo "⏳ Waiting for Gateway to be ready..."
-if kubectl wait --for=condition=Programmed apigateway/api-platform-default-default -n openchoreo-data-plane --timeout=180s; then
+if kubectl wait --for=condition=Programmed "apigateway/api-platform-${ORG_NAME}-${ENV_NAME}" -n openchoreo-data-plane --timeout=180s; then
     echo "✅ Gateway is programmed"
 else
     echo "⚠️  Gateway did not become ready in time"
