@@ -1709,6 +1709,9 @@ type ConfigurationItem struct {
 	// IsSensitive Whether this configuration value is sensitive (e.g., a secret)
 	IsSensitive *bool `json:"isSensitive,omitempty"`
 
+	// IsSystem Whether this configuration is system-managed (injected by the platform, e.g. LLM_PROVIDER_URL, LLM_PROVIDER_KEY). System-managed items are read-only and should not be edited by users.
+	IsSystem *bool `json:"isSystem,omitempty"`
+
 	// Key Configuration key
 	Key string `json:"key"`
 
@@ -3511,7 +3514,11 @@ type PromoteAgentRequest struct {
 	// TargetEnvironment Target environment to promote to
 	TargetEnvironment string `json:"targetEnvironment"`
 
-	// UseConfigFromSourceEnv When true, inherits env vars and file mounts from the source environment. Mutually exclusive with env/files.
+	// UseConfigFromSourceEnv When true, the target environment inherits BOTH its configurations
+	// AND its deploy settings from the source environment.
+	// mode — they are mutually exclusive with useConfigFromSourceEnv=true.
+	// When false or omitted, the per-environment overrides must be
+	// supplied in the request.
 	UseConfigFromSourceEnv *bool `json:"useConfigFromSourceEnv,omitempty"`
 }
 
@@ -3988,6 +3995,32 @@ type UpdateAgentBuildParametersRequest struct {
 	// InputInterface Endpoint configurations
 	InputInterface InputInterface `json:"inputInterface"`
 	Provisioning   Provisioning   `json:"provisioning"`
+}
+
+// UpdateAgentConfigurationsRequest defines model for UpdateAgentConfigurationsRequest.
+type UpdateAgentConfigurationsRequest struct {
+	// Env Environment variables to apply to the agent's release binding for this environment. System-managed keys are filtered server-side and re-injected from the agent's LLM/MCP configuration. Sending an empty array clears all user-managed env vars.
+	Env *[]EnvironmentVariable `json:"env,omitempty"`
+
+	// EnvironmentName Name of the environment whose env vars / file mounts to replace.
+	EnvironmentName string `json:"environmentName"`
+
+	// Files File mounts to apply to the agent's release binding for this environment. Sending an empty array clears all user-managed file mounts.
+	Files *[]FileMount `json:"files,omitempty"`
+}
+
+// UpdateAgentDeploySettingsRequest defines model for UpdateAgentDeploySettingsRequest.
+type UpdateAgentDeploySettingsRequest struct {
+	CorsConfig *CORSConfig `json:"corsConfig,omitempty"`
+
+	// EnableApiKeySecurity Enable API key security for the agent endpoint in this environment. Omit to keep the current value.
+	EnableApiKeySecurity *bool `json:"enableApiKeySecurity,omitempty"`
+
+	// EnableAutoInstrumentation Enable auto instrumentation for observability in this environment. Omit to keep the current value.
+	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
+
+	// EnvironmentName Name of the environment whose deploy settings to update.
+	EnvironmentName string `json:"environmentName"`
 }
 
 // UpdateAgentKindRequest defines model for UpdateAgentKindRequest.
@@ -4634,6 +4667,12 @@ type UpdateAgentJSONRequestBody = UpdateAgentBasicInfoRequest
 
 // UpdateAgentBuildParametersJSONRequestBody defines body for UpdateAgentBuildParameters for application/json ContentType.
 type UpdateAgentBuildParametersJSONRequestBody = UpdateAgentBuildParametersRequest
+
+// UpdateAgentConfigurationsJSONRequestBody defines body for UpdateAgentConfigurations for application/json ContentType.
+type UpdateAgentConfigurationsJSONRequestBody = UpdateAgentConfigurationsRequest
+
+// UpdateAgentDeploySettingsJSONRequestBody defines body for UpdateAgentDeploySettings for application/json ContentType.
+type UpdateAgentDeploySettingsJSONRequestBody = UpdateAgentDeploySettingsRequest
 
 // DeployAgentJSONRequestBody defines body for DeployAgent for application/json ContentType.
 type DeployAgentJSONRequestBody = DeployAgentRequest

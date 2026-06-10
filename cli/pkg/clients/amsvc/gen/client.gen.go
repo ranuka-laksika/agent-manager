@@ -379,6 +379,16 @@ type ClientInterface interface {
 	// GetAgentConfigurations request
 	GetAgentConfigurations(ctx context.Context, orgName string, projName string, agentName string, params *GetAgentConfigurationsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpdateAgentConfigurationsWithBody request with any body
+	UpdateAgentConfigurationsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentConfigurations(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentConfigurationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentDeploySettingsWithBody request with any body
+	UpdateAgentDeploySettingsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentDeploySettings(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentDeploySettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgentDeployments request
 	ListAgentDeployments(ctx context.Context, orgName string, projName string, agentName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1815,6 +1825,54 @@ func (c *Client) GetBuildLogs(ctx context.Context, orgName string, projName stri
 
 func (c *Client) GetAgentConfigurations(ctx context.Context, orgName string, projName string, agentName string, params *GetAgentConfigurationsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAgentConfigurationsRequest(c.Server, orgName, projName, agentName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentConfigurationsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentConfigurationsRequestWithBody(c.Server, orgName, projName, agentName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentConfigurations(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentConfigurationsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentConfigurationsRequest(c.Server, orgName, projName, agentName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentDeploySettingsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDeploySettingsRequestWithBody(c.Server, orgName, projName, agentName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentDeploySettings(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentDeploySettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentDeploySettingsRequest(c.Server, orgName, projName, agentName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6977,6 +7035,128 @@ func NewGetAgentConfigurationsRequest(server string, orgName string, projName st
 	return req, nil
 }
 
+// NewUpdateAgentConfigurationsRequest calls the generic UpdateAgentConfigurations builder with application/json body
+func NewUpdateAgentConfigurationsRequest(server string, orgName string, projName string, agentName string, body UpdateAgentConfigurationsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentConfigurationsRequestWithBody(server, orgName, projName, agentName, "application/json", bodyReader)
+}
+
+// NewUpdateAgentConfigurationsRequestWithBody generates requests for UpdateAgentConfigurations with any type of body
+func NewUpdateAgentConfigurationsRequestWithBody(server string, orgName string, projName string, agentName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/configurations", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewUpdateAgentDeploySettingsRequest calls the generic UpdateAgentDeploySettings builder with application/json body
+func NewUpdateAgentDeploySettingsRequest(server string, orgName string, projName string, agentName string, body UpdateAgentDeploySettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentDeploySettingsRequestWithBody(server, orgName, projName, agentName, "application/json", bodyReader)
+}
+
+// NewUpdateAgentDeploySettingsRequestWithBody generates requests for UpdateAgentDeploySettings with any type of body
+func NewUpdateAgentDeploySettingsRequestWithBody(server string, orgName string, projName string, agentName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/deploy-settings", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListAgentDeploymentsRequest generates requests for ListAgentDeployments
 func NewListAgentDeploymentsRequest(server string, orgName string, projName string, agentName string) (*http.Request, error) {
 	var err error
@@ -10684,6 +10864,16 @@ type ClientWithResponsesInterface interface {
 	// GetAgentConfigurationsWithResponse request
 	GetAgentConfigurationsWithResponse(ctx context.Context, orgName string, projName string, agentName string, params *GetAgentConfigurationsParams, reqEditors ...RequestEditorFn) (*GetAgentConfigurationsResp, error)
 
+	// UpdateAgentConfigurationsWithBodyWithResponse request with any body
+	UpdateAgentConfigurationsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentConfigurationsResp, error)
+
+	UpdateAgentConfigurationsWithResponse(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentConfigurationsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentConfigurationsResp, error)
+
+	// UpdateAgentDeploySettingsWithBodyWithResponse request with any body
+	UpdateAgentDeploySettingsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDeploySettingsResp, error)
+
+	UpdateAgentDeploySettingsWithResponse(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentDeploySettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDeploySettingsResp, error)
+
 	// ListAgentDeploymentsWithResponse request
 	ListAgentDeploymentsWithResponse(ctx context.Context, orgName string, projName string, agentName string, reqEditors ...RequestEditorFn) (*ListAgentDeploymentsResp, error)
 
@@ -12912,6 +13102,54 @@ func (r GetAgentConfigurationsResp) StatusCode() int {
 	return 0
 }
 
+type UpdateAgentConfigurationsResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentConfigurationsResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentConfigurationsResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAgentDeploySettingsResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentDeploySettingsResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentDeploySettingsResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListAgentDeploymentsResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15103,6 +15341,40 @@ func (c *ClientWithResponses) GetAgentConfigurationsWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseGetAgentConfigurationsResp(rsp)
+}
+
+// UpdateAgentConfigurationsWithBodyWithResponse request with arbitrary body returning *UpdateAgentConfigurationsResp
+func (c *ClientWithResponses) UpdateAgentConfigurationsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentConfigurationsResp, error) {
+	rsp, err := c.UpdateAgentConfigurationsWithBody(ctx, orgName, projName, agentName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentConfigurationsResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentConfigurationsWithResponse(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentConfigurationsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentConfigurationsResp, error) {
+	rsp, err := c.UpdateAgentConfigurations(ctx, orgName, projName, agentName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentConfigurationsResp(rsp)
+}
+
+// UpdateAgentDeploySettingsWithBodyWithResponse request with arbitrary body returning *UpdateAgentDeploySettingsResp
+func (c *ClientWithResponses) UpdateAgentDeploySettingsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentDeploySettingsResp, error) {
+	rsp, err := c.UpdateAgentDeploySettingsWithBody(ctx, orgName, projName, agentName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentDeploySettingsResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentDeploySettingsWithResponse(ctx context.Context, orgName string, projName string, agentName string, body UpdateAgentDeploySettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentDeploySettingsResp, error) {
+	rsp, err := c.UpdateAgentDeploySettings(ctx, orgName, projName, agentName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentDeploySettingsResp(rsp)
 }
 
 // ListAgentDeploymentsWithResponse request returning *ListAgentDeploymentsResp
@@ -19526,6 +19798,86 @@ func ParseGetAgentConfigurationsResp(rsp *http.Response) (*GetAgentConfiguration
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentConfigurationsResp parses an HTTP response from a UpdateAgentConfigurationsWithResponse call
+func ParseUpdateAgentConfigurationsResp(rsp *http.Response) (*UpdateAgentConfigurationsResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentConfigurationsResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentDeploySettingsResp parses an HTTP response from a UpdateAgentDeploySettingsWithResponse call
+func ParseUpdateAgentDeploySettingsResp(rsp *http.Response) (*UpdateAgentDeploySettingsResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentDeploySettingsResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse

@@ -73,7 +73,12 @@ function deriveNameFromDisplayName(displayName: string): string {
     .replace(/^-|-$/g, "");
 }
 
-function buildScript(name: string, displayName: string, isProduction: boolean, token: string): string {
+function buildScript(
+  name: string,
+  displayName: string,
+  isProduction: boolean,
+  token: string,
+): string {
   const lines = [
     `curl -fsSL ${SCRIPT_URL} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
