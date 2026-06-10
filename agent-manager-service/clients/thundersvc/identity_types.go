@@ -113,12 +113,12 @@ type GroupMembersRequest struct {
 
 // ThunderRole represents a role in Thunder.
 type ThunderRole struct {
-	ID        string                  `json:"id"`
-	OuID      string                  `json:"ouId,omitempty"`
-	Name      string                  `json:"name"`
+	ID          string                  `json:"id"`
+	OuID        string                  `json:"ouId,omitempty"`
+	Name        string                  `json:"name"`
 	Description string                  `json:"description,omitempty"`
 	Permissions []RolePermissionRequest `json:"permissions,omitempty"`
-	IsReadOnly bool                   `json:"isReadOnly"`
+	IsReadOnly  bool                    `json:"isReadOnly"`
 	CreatedAt   string                  `json:"createdAt,omitempty"`
 	UpdatedAt   string                  `json:"updatedAt,omitempty"`
 }
