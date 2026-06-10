@@ -19,7 +19,7 @@ CLUSTER_NAME="amp-local"
 CLUSTER_CONTEXT="k3d-${CLUSTER_NAME}"
 OPENCHOREO_VERSION="1.0.1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-K3D_CONFIG="${SCRIPT_DIR}/k3d-config.yaml"
+K3D_CONFIG="${K3D_CONFIG:-${SCRIPT_DIR}/k3d-config.yaml}"
 
 # WSO2 API Platform / Gateway Operator versions
 GATEWAY_OPERATOR_VERSION="0.7.0"
@@ -664,7 +664,11 @@ fi
 log_step "Step 3/13: Applying CoreDNS Custom Configuration"
 
 log_info "Applying CoreDNS custom configuration for OpenChoreo and AMP..."
-COREDNS_FILE="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/k8s/coredns-amp-custom.yaml"
+# COREDNS_FILE is overridable (env) so the VM installer can substitute a config
+# that rewrites the in-cluster names to the k3d server node instead of
+# host.k3d.internal — required once host ports are loopback-bound. See
+# deployments/quick-start/vm/lib-vm.sh:render_coredns_vm_config.
+COREDNS_FILE="${COREDNS_FILE:-https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/k8s/coredns-amp-custom.yaml}"
 if kubectl apply -f "${COREDNS_FILE}"; then
     log_success "CoreDNS custom configuration applied successfully"
 else
@@ -862,7 +866,8 @@ helm_install_idempotent \
     "openchoreo-control-plane" \
     "${TIMEOUT_CONTROL_PLANE}" \
     --version "${OPENCHOREO_VERSION}" \
-    --values "https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/single-cluster/values-cp.yaml"
+    --values "https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/single-cluster/values-cp.yaml" \
+    "${CP_HELM_ARGS[@]}"
 
 wait_for_pods "openchoreo-control-plane" "${TIMEOUT_CONTROL_PLANE}"
 
@@ -894,6 +899,23 @@ if ! kubectl wait -n openchoreo-data-plane \
 fi
 CA_CERT=$(kubectl get secret cluster-agent-tls -n openchoreo-data-plane -o jsonpath='{.data.ca\.crt}' 2>/dev/null | base64 -d || echo "")
 
+# Data plane gateway external ingress (advertised host/port for deployed-agent
+# endpoints). Overridable so the VM installer can advertise a public sslip.io host
+# fronted by Caddy instead of the local openchoreoapis.localhost:19080. The default
+# keeps the local-install behaviour. See deployments/quick-start/vm/lib-vm.sh:
+# render_dataplane_external_ingress.
+DP_EXTERNAL_INGRESS="${DP_EXTERNAL_INGRESS:-$(cat <<'EOB'
+        http:
+          host: "openchoreoapis.localhost"
+          listenerName: http
+          port: 19080
+        https:
+          host: "openchoreoapis.localhost"
+          listenerName: https
+          port: 19443
+EOB
+)}"
+
 if [ -n "$CA_CERT" ]; then
     if kubectl apply -f - <<EOF
 apiVersion: openchoreo.dev/v1alpha1
@@ -912,14 +934,7 @@ $(echo "$CA_CERT" | sed 's/^/        /')
       external:
         name: gateway-default
         namespace: openchoreo-data-plane
-        http:
-          host: "openchoreoapis.localhost"
-          listenerName: http
-          port: 19080
-        https:
-          host: "openchoreoapis.localhost"
-          listenerName: https
-          port: 19443
+${DP_EXTERNAL_INGRESS}
   secretStoreRef:
     name: default
 EOF
@@ -1484,8 +1499,13 @@ log_step "Installation Complete!"
 log_success "OpenChoreo and Agent Management Platform are ready!"
 echo ""
 log_info "Cluster: ${CLUSTER_CONTEXT}"
-log_info "Agent Management Platform Console: http://localhost:3000"
-log_info "Observability Gateway (for traces): http://localhost:22893/otel"
+# Localhost URLs apply to the local quick-start. Wrappers that front the cluster
+# with a reverse proxy (e.g. the VM installer) set SHOW_LOCALHOST_URLS=false and
+# print their own reachable URLs instead.
+if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
+  log_info "Agent Management Platform Console: http://localhost:3000"
+  log_info "Observability Gateway (for traces): http://localhost:22893/otel"
+fi
 echo ""
 echo ""
 log_info "To check status: kubectl get pods -A"
