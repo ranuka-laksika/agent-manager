@@ -62,6 +62,8 @@ type AgentManagerService interface {
 	GetAgentResourceConfigs(ctx context.Context, orgName string, projectName string, agentName string, environment string) (*spec.AgentResourceConfigsResponse, error)
 	UpdateAgentResourceConfigs(ctx context.Context, orgName string, projectName string, agentName string, environment string, req *spec.UpdateAgentResourceConfigsRequest) (*spec.AgentResourceConfigsResponse, error)
 	PromoteAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.PromoteAgentRequest) error
+	UpdateAgentDeploySettings(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentDeploySettingsRequest) error
+	UpdateAgentConfigurations(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentConfigurationsRequest) error
 }
 
 type agentManagerService struct {
@@ -1696,6 +1698,34 @@ func (s *agentManagerService) GenerateName(ctx context.Context, orgName string, 
 		s.logger.Info("Generated unique project name", "projectName", uniqueName, "orgName", orgName)
 		return uniqueName, nil
 	}
+	if payload.ResourceType == string(utils.ResourceTypeEnvironment) {
+		// Env names are bounded tighter than other resources so the gateway runtime
+		// Service name fits within k8s's 63-char metadata.name limit.
+		maxEnvLen := utils.MaxEnvNameLength(org.Name)
+		if len(candidateName) > maxEnvLen {
+			candidateName = strings.TrimRight(candidateName[:maxEnvLen], "-")
+		}
+		// Check if candidate name is available
+		_, err = s.ocClient.GetEnvironment(ctx, org.Name, candidateName)
+		if err != nil && errors.Is(translateEnvironmentError(err), utils.ErrEnvironmentNotFound) {
+			// Name is available, return it
+			s.logger.Info("Generated unique env name", "envName", candidateName, "orgName", orgName)
+			return candidateName, nil
+		}
+		if err != nil {
+			s.logger.Error("Failed to check env name availability", "name", candidateName, "orgName", org.Name, "error", err)
+			return "", fmt.Errorf("failed to check env name availability: %w", err)
+		}
+		// Name is taken, generate unique name with suffix
+		uniqueName, err := s.generateUniqueEnvName(ctx, org.Name, candidateName)
+		if err != nil {
+			s.logger.Error("Failed to generate unique env name", "baseName", candidateName, "orgName", org.Name, "error", err)
+			return "", fmt.Errorf("failed to generate unique env name: %w", err)
+		}
+		s.logger.Info("Generated unique env name", "envName", uniqueName, "orgName", orgName)
+		return uniqueName, nil
+
+	}
 	return "", errors.New("invalid resource type for name generation")
 }
 
@@ -1721,6 +1751,43 @@ func (s *agentManagerService) generateUniqueProjectName(ctx context.Context, org
 	if err != nil {
 		s.logger.Error("Failed to generate unique project name", "baseName", baseName, "orgName", orgName, "error", err)
 		return "", fmt.Errorf("failed to generate unique project name: %w", err)
+	}
+
+	return uniqueName, nil
+}
+
+// generateUniqueEnvName creates a unique name by appending a random suffix
+func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, orgName string, baseName string) (string, error) {
+	// Bound the base so the resulting "<base>-XX" stays within the per-org env-name
+	// limit (which keeps the gateway runtime Service name ≤ 63 chars).
+	maxBaseLen := utils.MaxEnvNameLength(orgName) - utils.RandomSuffixLength - 1 // 1 for hyphen
+	if maxBaseLen < 1 {
+		maxBaseLen = 1
+	}
+	if len(baseName) > maxBaseLen {
+		baseName = strings.TrimRight(baseName[:maxBaseLen], "-")
+	}
+
+	// Create a name availability checker function that uses the project repository
+	nameChecker := func(name string) (bool, error) {
+		_, err := s.ocClient.GetEnvironment(ctx, orgName, name)
+		if err != nil && errors.Is(translateEnvironmentError(err), utils.ErrEnvironmentNotFound) {
+			// Name is available
+			return true, nil
+		}
+		if err != nil {
+			s.logger.Error("Failed to check env name availability", "name", name, "orgName", orgName, "error", err)
+			return false, fmt.Errorf("failed to check env name availability: %w", err)
+		}
+		// Name is taken
+		return false, nil
+	}
+
+	// Use the common unique name generation logic from utils
+	uniqueName, err := utils.GenerateUniqueNameWithSuffix(baseName, nameChecker)
+	if err != nil {
+		s.logger.Error("Failed to generate unique env name", "baseName", baseName, "orgName", orgName, "error", err)
+		return "", fmt.Errorf("failed to generate unique env name: %w", err)
 	}
 
 	return uniqueName, nil
@@ -2412,7 +2479,7 @@ const gatewayRuntimeHTTPPort = 22893
 
 // gatewayInfo holds resolved gateway label and backend connection details for an environment.
 type gatewayInfo struct {
-	target      string // apiSelector label value: "<gatewayName>-<environmentName>"
+	target      string // apiSelector label value: gateway.Name (matches the chart's apiGatewayName helper)
 	backendHost string // in-cluster service: "<gatewayName>-gateway-gateway-runtime.openchoreo-data-plane"
 	backendPort int    // fixed HTTP listener port of the gateway runtime service
 }
@@ -2429,7 +2496,10 @@ func resolveGatewayInfo(gatewayRepo repositories.GatewayRepository, environmentU
 	if err != nil || gateway == nil {
 		return gatewayInfo{}
 	}
-	label := strings.ToLower(gateway.Name + "-" + environmentName)
+	// gateway.Name already encodes the environment (chart's apiGatewayName helper:
+	// "api-platform-<org>-<env>"), and the APIGateway CR's apiSelector matchLabels
+	// uses exactly that value. Don't re-append environmentName here.
+	label := strings.ToLower(gateway.Name)
 	if len(label) > 63 {
 		label = strings.TrimSuffix(label[:63], "-")
 	}
@@ -2720,6 +2790,177 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	}
 
 	s.logger.Info("Agent promoted successfully", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)
+	return nil
+}
+
+// UpdateAgentDeploySettings updates per-environment deploy settings (CORS, API key security,
+// auto instrumentation) on an existing release binding without redeploying or promoting the
+// agent. Triggers a pod rollout so policy changes take effect immediately. Any field omitted
+// from the request keeps its current DB value.
+func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, orgName, projectName, agentName string, req *spec.UpdateAgentDeploySettingsRequest) error {
+	s.logger.Info("Updating agent deploy settings", "agentName", agentName, "orgName", orgName, "projectName", projectName, "environment", req.EnvironmentName)
+
+	if req.EnvironmentName == "" {
+		return fmt.Errorf("%w: environmentName is required", utils.ErrInvalidInput)
+	}
+
+	// Validate org/agent/env exist.
+	org, err := s.ocClient.GetOrganization(ctx, orgName)
+	if err != nil {
+		return translateOrgError(err)
+	}
+	agent, err := s.ocClient.GetComponent(ctx, org.Name, projectName, agentName)
+	if err != nil {
+		return translateAgentError(err)
+	}
+	if agent.Type.Type != string(utils.AgentTypeAPI) {
+		return fmt.Errorf("%w: deploy settings only apply to API-type agents (got %q)", utils.ErrInvalidInput, agent.Type.Type)
+	}
+	targetEnv, err := s.ocClient.GetEnvironment(ctx, orgName, req.EnvironmentName)
+	if err != nil {
+		return translateEnvironmentError(err)
+	}
+
+	// Resolve final settings: precedence is request → existing DB
+	var existingConfig *models.AgentConfig
+	if cfg, getErr := s.agentConfigRepo.Get(orgName, projectName, agentName, req.EnvironmentName); getErr == nil {
+		existingConfig = cfg
+	}
+	tracingCfg := resolveTracingConfig(existingConfig, req.EnableAutoInstrumentation, false)
+	apiCfg := resolveAPIConfig(existingConfig, req.EnableApiKeySecurity, req.CorsConfig, false)
+	policies := buildPolicies(apiCfg)
+
+	// Each environment must keep its own existing API artifact UUID so we don't churn the
+	// gateway's RestApi binding. ensureAgentEnvAPIArtifact is idempotent: returns the existing
+	// row if one is already allocated for (agent, env).
+	artifact, artifactErr := ensureAgentEnvAPIArtifact(s.db, s.artifactRepo, orgName, projectName, agentName, targetEnv.UUID)
+	if artifactErr != nil {
+		return fmt.Errorf("failed to ensure agent env API artifact: %w", artifactErr)
+	}
+	gw := resolveGatewayInfo(s.gatewayRepo, targetEnv.UUID, req.EnvironmentName)
+	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
+	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), gw, isPythonBuildpack, tracingCfg.EnableAutoInstrumentation)
+
+	// Apply to the release binding (atomic: trait configs + restartedAt in a single update).
+	if updateErr := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, orgName, agentName, req.EnvironmentName, traitEnvConfigs); updateErr != nil {
+		s.logger.Error("Failed to update release binding deploy settings", "agentName", agentName, "environment", req.EnvironmentName, "error", updateErr)
+		return fmt.Errorf("failed to update deploy settings: %w", updateErr)
+	}
+
+	// Persist resolved config so subsequent deploy/promote calls see the current values.
+	agentConfig := &models.AgentConfig{
+		OrgName:                   orgName,
+		ProjectName:               projectName,
+		AgentName:                 agentName,
+		EnvironmentName:           req.EnvironmentName,
+		EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+		EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
+		CORSEnabled:               apiCfg.CORSEnabled,
+		CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
+		CORSAllowMethods:          apiCfg.CORSAllowMethods,
+		CORSAllowHeaders:          apiCfg.CORSAllowHeaders,
+		CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
+	}
+	if existingConfig != nil {
+		// Preserve any pinned instrumentation_version that wasn't part of this request.
+		agentConfig.InstrumentationVersion = existingConfig.InstrumentationVersion
+	}
+	if upsertErr := s.agentConfigRepo.Upsert(agentConfig); upsertErr != nil {
+		s.logger.Error("Failed to persist agent deploy settings", "agentName", agentName, "environment", req.EnvironmentName, "error", upsertErr)
+		return fmt.Errorf("failed to persist agent deploy settings: %w", upsertErr)
+	}
+
+	s.logger.Info("Agent deploy settings updated successfully", "agentName", agentName, "environment", req.EnvironmentName)
+	return nil
+}
+
+// UpdateAgentConfigurations replaces the per-environment env vars and file mounts on the
+// agent's release binding. System-managed env vars (LLM_PROVIDER_*, MCP, OTEL, agent API key)
+// are filtered out of req.Env server-side and re-injected from the agent's DB-tracked config,
+// so the caller never has to know about them (mirrors the deploy/promote flow).
+// Triggers a pod rollout via the same Get→mutate→Update cycle that writes the overrides.
+func (s *agentManagerService) UpdateAgentConfigurations(ctx context.Context, orgName, projectName, agentName string, req *spec.UpdateAgentConfigurationsRequest) error {
+	s.logger.Info("Updating agent configurations", "agentName", agentName, "orgName", orgName, "projectName", projectName, "environment", req.EnvironmentName)
+
+	if req.EnvironmentName == "" {
+		return fmt.Errorf("%w: environmentName is required", utils.ErrInvalidInput)
+	}
+
+	// Validate org/agent/env exist.
+	org, err := s.ocClient.GetOrganization(ctx, orgName)
+	if err != nil {
+		return translateOrgError(err)
+	}
+	if _, err := s.ocClient.GetComponent(ctx, org.Name, projectName, agentName); err != nil {
+		return translateAgentError(err)
+	}
+	if _, err := s.ocClient.GetEnvironment(ctx, orgName, req.EnvironmentName); err != nil {
+		return translateEnvironmentError(err)
+	}
+
+	// Fetch system-managed env vars + their keys for the target env. We must filter the user's
+	// env list to drop these before processEnvVars (which would otherwise mangle their secret
+	// key refs), then re-append the canonical system values.
+	systemManagedEnvVars, systemManagedKeys, sysEnvErr := s.getSystemManagedEnvVars(ctx, orgName, projectName, req.EnvironmentName, agentName)
+	if sysEnvErr != nil {
+		s.logger.Warn("Failed to fetch system-managed env vars for configurations update", "agentName", agentName, "error", sysEnvErr)
+		systemManagedEnvVars = nil
+		systemManagedKeys = nil
+	}
+
+	// Build env overrides (nil-vs-empty has meaning at the client layer: nil = leave existing,
+	// empty slice = clear).
+	var envOverrides []client.EnvVar
+	if req.Env != nil {
+		userEnv := req.Env
+		if len(systemManagedKeys) > 0 {
+			userEnv = make([]spec.EnvironmentVariable, 0, len(req.Env))
+			for _, env := range req.Env {
+				if !systemManagedKeys[env.Key] {
+					userEnv = append(userEnv, env)
+				} else {
+					s.logger.Debug("Filtering system-managed env var from configurations request", "key", env.Key)
+				}
+			}
+		}
+		processed, err := s.processEnvVars(ctx, orgName, projectName, req.EnvironmentName, agentName, userEnv, req.Files)
+		if err != nil {
+			s.logger.Error("Failed to process env vars", "agentName", agentName, "environment", req.EnvironmentName, "error", err)
+			return fmt.Errorf("failed to process env vars: %w", err)
+		}
+		envOverrides = append(processed, systemManagedEnvVars...)
+		if envOverrides == nil {
+			// Caller sent an empty list and there are no system-managed vars to inject —
+			// preserve the "clear all" intent rather than collapsing to nil.
+			envOverrides = []client.EnvVar{}
+		}
+	}
+
+	// Build file overrides.
+	var fileOverrides []client.FileVar
+	if req.Files != nil {
+		processed, err := s.processFileVars(ctx, orgName, projectName, req.EnvironmentName, agentName, req.Files)
+		if err != nil {
+			s.logger.Error("Failed to process file mounts", "agentName", agentName, "environment", req.EnvironmentName, "error", err)
+			return fmt.Errorf("failed to process file mounts: %w", err)
+		}
+		fileOverrides = processed
+		if fileOverrides == nil {
+			fileOverrides = []client.FileVar{}
+		}
+	}
+
+	if envOverrides == nil && fileOverrides == nil {
+		// Nothing requested — surface as a clear error rather than silently no-op'ing.
+		return fmt.Errorf("%w: request must include env or files", utils.ErrInvalidInput)
+	}
+
+	if err := s.ocClient.ReplaceReleaseBindingWorkloadOverrides(ctx, orgName, agentName, req.EnvironmentName, envOverrides, fileOverrides); err != nil {
+		s.logger.Error("Failed to replace release binding workload overrides", "agentName", agentName, "environment", req.EnvironmentName, "error", err)
+		return fmt.Errorf("failed to update agent configurations: %w", err)
+	}
+
+	s.logger.Info("Agent configurations updated successfully", "agentName", agentName, "environment", req.EnvironmentName)
 	return nil
 }
 
@@ -3301,16 +3542,34 @@ func (s *agentManagerService) GetAgentConfigurations(ctx context.Context, orgNam
 		return nil, fmt.Errorf("failed to get configurations for agent %s: %w", agentName, err)
 	}
 
-	// Filter out system-injected environment variables
-	filteredConfigurations := make([]models.EnvVars, 0, len(configurations))
-	for _, config := range configurations {
-		if _, isSystemVar := client.SystemInjectedEnvVars[config.Key]; !isSystemVar {
-			filteredConfigurations = append(filteredConfigurations, config)
+	// Build the set of system-managed env var keys for this agent + env. The
+	// authoritative source is the env_variables table (populated when the user
+	// connects an LLM provider, MCP server, etc.) — not the static
+	// SystemInjectedEnvVars allowlist, which only covers platform-injected
+	// boot-time vars (OTEL, agent API key).
+	systemKeys := map[string]bool{}
+	if agent, agentErr := s.ocClient.GetComponent(ctx, orgName, projectName, agentName); agentErr == nil && agent != nil && agent.UUID != "" {
+		if dbKeys, listErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agent.Name, orgName, environment); listErr == nil {
+			systemKeys = dbKeys
+		} else {
+			s.logger.Warn("Failed to list system-managed env var keys; falling back to allowlist only", "agentName", agentName, "environment", environment, "error", listErr)
+		}
+	}
+	// Also mark statically-injected platform vars (OTEL endpoint, agent API key)
+	// so they show as read-only regardless of DB state.
+	for i := range configurations {
+		key := configurations[i].Key
+		if systemKeys[key] {
+			configurations[i].IsSystem = true
+			continue
+		}
+		if _, ok := client.SystemInjectedEnvVars[key]; ok {
+			configurations[i].IsSystem = true
 		}
 	}
 
-	s.logger.Info("Fetched configurations successfully", "agentName", agentName, "orgName", orgName, "projectName", projectName, "environment", environment, "configCount", len(filteredConfigurations))
-	return filteredConfigurations, nil
+	s.logger.Info("Fetched configurations successfully", "agentName", agentName, "orgName", orgName, "projectName", projectName, "environment", environment, "configCount", len(configurations))
+	return configurations, nil
 }
 
 func (s *agentManagerService) GetAgentFileMounts(ctx context.Context, orgName string, projectName string, agentName string, environment string) ([]models.FileMountEntry, error) {

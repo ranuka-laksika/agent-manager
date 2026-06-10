@@ -180,6 +180,9 @@ import (
 //			ReplaceReleaseBindingEnvVarsFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, envName string, keysToRemove []string, envVarsToAdd []client.EnvVar) error {
 //				panic("mock out the ReplaceReleaseBindingEnvVars method")
 //			},
+//			ReplaceReleaseBindingWorkloadOverridesFunc: func(ctx context.Context, namespaceName string, componentName string, environment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar) error {
+//				panic("mock out the ReplaceReleaseBindingWorkloadOverrides method")
+//			},
 //			TriggerBuildFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, commitID string) (*models.BuildResponse, error) {
 //				panic("mock out the TriggerBuild method")
 //			},
@@ -384,6 +387,9 @@ type OpenChoreoClientMock struct {
 
 	// ReplaceReleaseBindingEnvVarsFunc mocks the ReplaceReleaseBindingEnvVars method.
 	ReplaceReleaseBindingEnvVarsFunc func(ctx context.Context, namespaceName string, projectName string, componentName string, envName string, keysToRemove []string, envVarsToAdd []client.EnvVar) error
+
+	// ReplaceReleaseBindingWorkloadOverridesFunc mocks the ReplaceReleaseBindingWorkloadOverrides method.
+	ReplaceReleaseBindingWorkloadOverridesFunc func(ctx context.Context, namespaceName string, componentName string, environment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar) error
 
 	// TriggerBuildFunc mocks the TriggerBuild method.
 	TriggerBuildFunc func(ctx context.Context, namespaceName string, projectName string, componentName string, commitID string) (*models.BuildResponse, error)
@@ -998,6 +1004,21 @@ type OpenChoreoClientMock struct {
 			// EnvVarsToAdd is the envVarsToAdd argument value.
 			EnvVarsToAdd []client.EnvVar
 		}
+		// ReplaceReleaseBindingWorkloadOverrides holds details about calls to the ReplaceReleaseBindingWorkloadOverrides method.
+		ReplaceReleaseBindingWorkloadOverrides []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// NamespaceName is the namespaceName argument value.
+			NamespaceName string
+			// ComponentName is the componentName argument value.
+			ComponentName string
+			// Environment is the environment argument value.
+			Environment string
+			// EnvOverrides is the envOverrides argument value.
+			EnvOverrides []client.EnvVar
+			// FileOverrides is the fileOverrides argument value.
+			FileOverrides []client.FileVar
+		}
 		// TriggerBuild holds details about calls to the TriggerBuild method.
 		TriggerBuild []struct {
 			// Ctx is the ctx argument value.
@@ -1174,73 +1195,74 @@ type OpenChoreoClientMock struct {
 			Req client.CreateSecretReferenceRequest
 		}
 	}
-	lockAttachTraits                        sync.RWMutex
-	lockComponentExists                     sync.RWMutex
-	lockCreateComponent                     sync.RWMutex
-	lockCreateEnvironment                   sync.RWMutex
-	lockCreateGitSecret                     sync.RWMutex
-	lockCreateInternalAgentFromKindWorkload sync.RWMutex
-	lockCreateProject                       sync.RWMutex
-	lockCreateSecretReference               sync.RWMutex
-	lockCreateWorkflowRun                   sync.RWMutex
-	lockDeleteComponent                     sync.RWMutex
-	lockDeleteDeploymentPipeline            sync.RWMutex
-	lockDeleteEnvironment                   sync.RWMutex
-	lockDeleteGitSecret                     sync.RWMutex
-	lockDeleteProject                       sync.RWMutex
-	lockDeleteSecretReference               sync.RWMutex
-	lockDeploy                              sync.RWMutex
-	lockDetachTrait                         sync.RWMutex
-	lockEnsureClusterRoleBinding            sync.RWMutex
-	lockExpireWorkflowRun                   sync.RWMutex
-	lockGetBuild                            sync.RWMutex
-	lockGetComponent                        sync.RWMutex
-	lockGetComponentConfigurations          sync.RWMutex
-	lockGetComponentEndpoints               sync.RWMutex
-	lockGetComponentFileMounts              sync.RWMutex
-	lockGetDeployments                      sync.RWMutex
-	lockGetEnvResourceConfigs               sync.RWMutex
-	lockGetEnvironment                      sync.RWMutex
-	lockGetOrganization                     sync.RWMutex
-	lockGetProject                          sync.RWMutex
-	lockGetProjectDeploymentPipeline        sync.RWMutex
-	lockGetSecretReference                  sync.RWMutex
-	lockGetSourceEnvWorkloadOverrides       sync.RWMutex
-	lockGetWorkflowRun                      sync.RWMutex
-	lockGetWorkloadSecretRefNames           sync.RWMutex
-	lockHasTrait                            sync.RWMutex
-	lockIsDeploymentInProgress              sync.RWMutex
-	lockListBuilds                          sync.RWMutex
-	lockListComponents                      sync.RWMutex
-	lockListComponentsByKind                sync.RWMutex
-	lockListDataPlanes                      sync.RWMutex
-	lockListDeploymentPipelines             sync.RWMutex
-	lockListEnvironments                    sync.RWMutex
-	lockListGitSecrets                      sync.RWMutex
-	lockListOrganizations                   sync.RWMutex
-	lockListProjects                        sync.RWMutex
-	lockListSecretReferences                sync.RWMutex
-	lockPatchProject                        sync.RWMutex
-	lockPromoteComponent                    sync.RWMutex
-	lockRemoveComponentEnvironmentVariables sync.RWMutex
-	lockRemoveReleaseBindingEnvVars         sync.RWMutex
-	lockRemoveWorkloadEnvVars               sync.RWMutex
-	lockReplaceComponentEnvVars             sync.RWMutex
-	lockReplaceComponentFileMounts          sync.RWMutex
-	lockReplaceReleaseBindingEnvVars        sync.RWMutex
-	lockTriggerBuild                        sync.RWMutex
-	lockUpdateComponentBasicInfo            sync.RWMutex
-	lockUpdateComponentBuildParameters      sync.RWMutex
-	lockUpdateComponentDeploymentConfig     sync.RWMutex
-	lockUpdateComponentEnvVars              sync.RWMutex
-	lockCreateDeploymentPipeline            sync.RWMutex
-	lockUpdateDeploymentPipeline            sync.RWMutex
-	lockUpdateDeploymentState               sync.RWMutex
-	lockUpdateEnvResourceConfigs            sync.RWMutex
-	lockUpdateEnvironment                   sync.RWMutex
-	lockUpdateReleaseBindingEnvVars         sync.RWMutex
-	lockUpdateReleaseBindingTraitConfigs    sync.RWMutex
-	lockUpdateSecretReference               sync.RWMutex
+	lockAttachTraits                           sync.RWMutex
+	lockComponentExists                        sync.RWMutex
+	lockCreateComponent                        sync.RWMutex
+	lockCreateDeploymentPipeline               sync.RWMutex
+	lockCreateEnvironment                      sync.RWMutex
+	lockCreateGitSecret                        sync.RWMutex
+	lockCreateInternalAgentFromKindWorkload    sync.RWMutex
+	lockCreateProject                          sync.RWMutex
+	lockCreateSecretReference                  sync.RWMutex
+	lockCreateWorkflowRun                      sync.RWMutex
+	lockDeleteComponent                        sync.RWMutex
+	lockDeleteDeploymentPipeline               sync.RWMutex
+	lockDeleteEnvironment                      sync.RWMutex
+	lockDeleteGitSecret                        sync.RWMutex
+	lockDeleteProject                          sync.RWMutex
+	lockDeleteSecretReference                  sync.RWMutex
+	lockDeploy                                 sync.RWMutex
+	lockDetachTrait                            sync.RWMutex
+	lockEnsureClusterRoleBinding               sync.RWMutex
+	lockExpireWorkflowRun                      sync.RWMutex
+	lockGetBuild                               sync.RWMutex
+	lockGetComponent                           sync.RWMutex
+	lockGetComponentConfigurations             sync.RWMutex
+	lockGetComponentEndpoints                  sync.RWMutex
+	lockGetComponentFileMounts                 sync.RWMutex
+	lockGetDeployments                         sync.RWMutex
+	lockGetEnvResourceConfigs                  sync.RWMutex
+	lockGetEnvironment                         sync.RWMutex
+	lockGetOrganization                        sync.RWMutex
+	lockGetProject                             sync.RWMutex
+	lockGetProjectDeploymentPipeline           sync.RWMutex
+	lockGetSecretReference                     sync.RWMutex
+	lockGetSourceEnvWorkloadOverrides          sync.RWMutex
+	lockGetWorkflowRun                         sync.RWMutex
+	lockGetWorkloadSecretRefNames              sync.RWMutex
+	lockHasTrait                               sync.RWMutex
+	lockIsDeploymentInProgress                 sync.RWMutex
+	lockListBuilds                             sync.RWMutex
+	lockListComponents                         sync.RWMutex
+	lockListComponentsByKind                   sync.RWMutex
+	lockListDataPlanes                         sync.RWMutex
+	lockListDeploymentPipelines                sync.RWMutex
+	lockListEnvironments                       sync.RWMutex
+	lockListGitSecrets                         sync.RWMutex
+	lockListOrganizations                      sync.RWMutex
+	lockListProjects                           sync.RWMutex
+	lockListSecretReferences                   sync.RWMutex
+	lockPatchProject                           sync.RWMutex
+	lockPromoteComponent                       sync.RWMutex
+	lockRemoveComponentEnvironmentVariables    sync.RWMutex
+	lockRemoveReleaseBindingEnvVars            sync.RWMutex
+	lockRemoveWorkloadEnvVars                  sync.RWMutex
+	lockReplaceComponentEnvVars                sync.RWMutex
+	lockReplaceComponentFileMounts             sync.RWMutex
+	lockReplaceReleaseBindingEnvVars           sync.RWMutex
+	lockReplaceReleaseBindingWorkloadOverrides sync.RWMutex
+	lockTriggerBuild                           sync.RWMutex
+	lockUpdateComponentBasicInfo               sync.RWMutex
+	lockUpdateComponentBuildParameters         sync.RWMutex
+	lockUpdateComponentDeploymentConfig        sync.RWMutex
+	lockUpdateComponentEnvVars                 sync.RWMutex
+	lockUpdateDeploymentPipeline               sync.RWMutex
+	lockUpdateDeploymentState                  sync.RWMutex
+	lockUpdateEnvResourceConfigs               sync.RWMutex
+	lockUpdateEnvironment                      sync.RWMutex
+	lockUpdateReleaseBindingEnvVars            sync.RWMutex
+	lockUpdateReleaseBindingTraitConfigs       sync.RWMutex
+	lockUpdateSecretReference                  sync.RWMutex
 }
 
 // AttachTraits calls AttachTraitsFunc.
@@ -3572,6 +3594,58 @@ func (mock *OpenChoreoClientMock) ReplaceReleaseBindingEnvVarsCalls() []struct {
 	mock.lockReplaceReleaseBindingEnvVars.RLock()
 	calls = mock.calls.ReplaceReleaseBindingEnvVars
 	mock.lockReplaceReleaseBindingEnvVars.RUnlock()
+	return calls
+}
+
+// ReplaceReleaseBindingWorkloadOverrides calls ReplaceReleaseBindingWorkloadOverridesFunc.
+func (mock *OpenChoreoClientMock) ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, namespaceName string, componentName string, environment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar) error {
+	if mock.ReplaceReleaseBindingWorkloadOverridesFunc == nil {
+		panic("OpenChoreoClientMock.ReplaceReleaseBindingWorkloadOverridesFunc: method is nil but OpenChoreoClient.ReplaceReleaseBindingWorkloadOverrides was just called")
+	}
+	callInfo := struct {
+		Ctx           context.Context
+		NamespaceName string
+		ComponentName string
+		Environment   string
+		EnvOverrides  []client.EnvVar
+		FileOverrides []client.FileVar
+	}{
+		Ctx:           ctx,
+		NamespaceName: namespaceName,
+		ComponentName: componentName,
+		Environment:   environment,
+		EnvOverrides:  envOverrides,
+		FileOverrides: fileOverrides,
+	}
+	mock.lockReplaceReleaseBindingWorkloadOverrides.Lock()
+	mock.calls.ReplaceReleaseBindingWorkloadOverrides = append(mock.calls.ReplaceReleaseBindingWorkloadOverrides, callInfo)
+	mock.lockReplaceReleaseBindingWorkloadOverrides.Unlock()
+	return mock.ReplaceReleaseBindingWorkloadOverridesFunc(ctx, namespaceName, componentName, environment, envOverrides, fileOverrides)
+}
+
+// ReplaceReleaseBindingWorkloadOverridesCalls gets all the calls that were made to ReplaceReleaseBindingWorkloadOverrides.
+// Check the length with:
+//
+//	len(mockedOpenChoreoClient.ReplaceReleaseBindingWorkloadOverridesCalls())
+func (mock *OpenChoreoClientMock) ReplaceReleaseBindingWorkloadOverridesCalls() []struct {
+	Ctx           context.Context
+	NamespaceName string
+	ComponentName string
+	Environment   string
+	EnvOverrides  []client.EnvVar
+	FileOverrides []client.FileVar
+} {
+	var calls []struct {
+		Ctx           context.Context
+		NamespaceName string
+		ComponentName string
+		Environment   string
+		EnvOverrides  []client.EnvVar
+		FileOverrides []client.FileVar
+	}
+	mock.lockReplaceReleaseBindingWorkloadOverrides.RLock()
+	calls = mock.calls.ReplaceReleaseBindingWorkloadOverrides
+	mock.lockReplaceReleaseBindingWorkloadOverrides.RUnlock()
 	return calls
 }
 

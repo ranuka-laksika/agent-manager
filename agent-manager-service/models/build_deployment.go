@@ -62,6 +62,7 @@ type EnvVars struct {
 	IsSensitive bool   `json:"isSensitive,omitempty"`
 	SecretRef   string `json:"secretRef,omitempty"`
 	SecretKey   string `json:"secretKey,omitempty"` // The key within the secret (e.g., "api-key")
+	IsSystem    bool   `json:"isSystem,omitempty"`  // Platform-injected (e.g. LLM_PROVIDER_URL); read-only for users
 }
 
 // FileMountEntry represents a file mount configuration

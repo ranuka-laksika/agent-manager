@@ -54,6 +54,8 @@ type AgentController interface {
 	UpdateAgentResourceConfigs(w http.ResponseWriter, r *http.Request)
 	PublishKind(w http.ResponseWriter, r *http.Request)
 	PromoteAgent(w http.ResponseWriter, r *http.Request)
+	UpdateAgentDeploySettings(w http.ResponseWriter, r *http.Request)
+	UpdateAgentConfigurations(w http.ResponseWriter, r *http.Request)
 }
 
 type agentController struct {
@@ -617,6 +619,60 @@ func (c *agentController) PromoteAgent(w http.ResponseWriter, r *http.Request) {
 	utils.WriteSuccessResponse(w, http.StatusAccepted, response)
 }
 
+func (c *agentController) UpdateAgentDeploySettings(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+
+	var payload spec.UpdateAgentDeploySettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("UpdateAgentDeploySettings: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if payload.EnvironmentName == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "environmentName is required")
+		return
+	}
+
+	if err := c.agentService.UpdateAgentDeploySettings(ctx, orgName, projName, agentName, &payload); err != nil {
+		log.Error("UpdateAgentDeploySettings: failed to update deploy settings", "error", err)
+		handleCommonErrors(w, err, "Failed to update deploy settings")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (c *agentController) UpdateAgentConfigurations(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+
+	var payload spec.UpdateAgentConfigurationsRequest
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		log.Error("UpdateAgentConfigurations: failed to decode request body", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if payload.EnvironmentName == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "environmentName is required")
+		return
+	}
+
+	if err := c.agentService.UpdateAgentConfigurations(ctx, orgName, projName, agentName, &payload); err != nil {
+		log.Error("UpdateAgentConfigurations: failed to update configurations", "error", err)
+		handleCommonErrors(w, err, "Failed to update agent configurations")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (c *agentController) ListAgentBuilds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -860,6 +916,7 @@ func (c *agentController) GetAgentConfigurations(w http.ResponseWriter, r *http.
 			Value:       value,
 			IsSensitive: spec.PtrBool(config.IsSensitive),
 			SecretRef:   secretRef,
+			IsSystem:    spec.PtrBool(config.IsSystem),
 		}
 	}
 

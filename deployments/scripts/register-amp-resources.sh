@@ -224,7 +224,10 @@ create_action "$RS_ID" "$R_GW"           "Delete"  "delete"  "Delete a gateway"
 create_action "$RS_ID" "$R_GW_TOKEN"     "Manage"  "manage"  "Create, list, and delete gateway tokens"
 
 create_action "$RS_ID" "$R_DP"           "Read"    "read"    "View data planes"
+create_action "$RS_ID" "$R_PIPE"         "Create"  "create"  "Create a deployment pipeline"
 create_action "$RS_ID" "$R_PIPE"         "Read"    "read"    "View deployment pipelines"
+create_action "$RS_ID" "$R_PIPE"         "Update"  "update"  "Update a deployment pipeline"
+create_action "$RS_ID" "$R_PIPE"         "Delete"  "delete"  "Delete a deployment pipeline"
 
 create_action "$RS_ID" "$R_GIT"          "Create"  "create"  "Create a git secret"
 create_action "$RS_ID" "$R_GIT"          "Read"    "read"    "List git secrets"
@@ -300,4 +303,4 @@ create_action "$RS_ID" "$R_GROUP"        "Delete"  "delete"  "Delete a group"
 create_action "$RS_ID" "$R_CAT"          "Read"    "read"    "View the resource catalog"
 create_action "$RS_ID" "$R_REPO"         "Read"    "read"    "Browse repository branches and commits"
 
-log_success "Agent Manager resource server registration complete (81 permissions registered)."
+log_success "Agent Manager resource server registration complete (84 permissions registered)."

@@ -27,6 +27,8 @@ type ConfigurationItem struct {
 	IsSensitive *bool `json:"isSensitive,omitempty"`
 	// Reference to the secret storing this value. Only present for sensitive configurations.
 	SecretRef *string `json:"secretRef,omitempty"`
+	// Whether this configuration is system-managed (injected by the platform, e.g. LLM_PROVIDER_URL, LLM_PROVIDER_KEY). System-managed items are read-only and should not be edited by users.
+	IsSystem *bool `json:"isSystem,omitempty"`
 }
 
 // NewConfigurationItem instantiates a new ConfigurationItem object
@@ -39,6 +41,8 @@ func NewConfigurationItem(key string, value string) *ConfigurationItem {
 	this.Value = value
 	var isSensitive bool = false
 	this.IsSensitive = &isSensitive
+	var isSystem bool = false
+	this.IsSystem = &isSystem
 	return &this
 }
 
@@ -49,6 +53,8 @@ func NewConfigurationItemWithDefaults() *ConfigurationItem {
 	this := ConfigurationItem{}
 	var isSensitive bool = false
 	this.IsSensitive = &isSensitive
+	var isSystem bool = false
+	this.IsSystem = &isSystem
 	return &this
 }
 
@@ -164,6 +170,38 @@ func (o *ConfigurationItem) SetSecretRef(v string) {
 	o.SecretRef = &v
 }
 
+// GetIsSystem returns the IsSystem field value if set, zero value otherwise.
+func (o *ConfigurationItem) GetIsSystem() bool {
+	if o == nil || IsNil(o.IsSystem) {
+		var ret bool
+		return ret
+	}
+	return *o.IsSystem
+}
+
+// GetIsSystemOk returns a tuple with the IsSystem field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConfigurationItem) GetIsSystemOk() (*bool, bool) {
+	if o == nil || IsNil(o.IsSystem) {
+		return nil, false
+	}
+	return o.IsSystem, true
+}
+
+// HasIsSystem returns a boolean if a field has been set.
+func (o *ConfigurationItem) HasIsSystem() bool {
+	if o != nil && !IsNil(o.IsSystem) {
+		return true
+	}
+
+	return false
+}
+
+// SetIsSystem gets a reference to the given bool and assigns it to the IsSystem field.
+func (o *ConfigurationItem) SetIsSystem(v bool) {
+	o.IsSystem = &v
+}
+
 func (o ConfigurationItem) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -181,6 +219,9 @@ func (o ConfigurationItem) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.SecretRef) {
 		toSerialize["secretRef"] = o.SecretRef
+	}
+	if !IsNil(o.IsSystem) {
+		toSerialize["isSystem"] = o.IsSystem
 	}
 	return toSerialize, nil
 }

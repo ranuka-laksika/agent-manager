@@ -1368,6 +1368,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/deploy-settings:
+    put:
+      summary: Update agent deploy settings for an environment
+      description: |
+        Updates per-environment deploy settings (CORS, API key security, auto
+        instrumentation) on the agent's release binding without redeploying or
+        promoting. Triggers a pod rollout in the target environment so the new
+        policies take effect immediately. Any setting field omitted from the
+        request retains its current value.
+      operationId: updateAgentDeploySettings
+      parameters:
+        - name: agentName
+          in: path
+          description: Unique name of the agent
+          required: true
+          schema:
+            type: string
+        - name: orgName
+          in: path
+          description: Organization name
+          required: true
+          schema:
+            type: string
+        - name: projName
+          in: path
+          description: Project name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentDeploySettingsRequest"
+      responses:
+        "204":
+          description: Deploy settings updated successfully
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent or environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/endpoints:
     get:
       summary: Get agent endpoints for a specific environment
@@ -1457,6 +1514,58 @@ paths:
                 $ref: "#/components/schemas/ConfigurationResponse"
         "404":
           description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Replace agent configurations (env vars / file mounts) for an environment
+      description: |
+        Replaces the env vars and file mounts on the agent's release binding for
+        the specified environment. System-managed env vars (e.g. LLM_PROVIDER_URL/KEY)
+        are filtered server-side from the request and re-injected from the agent's
+        LLM/MCP configuration; the caller never needs to send them. Triggers a pod
+        rollout so the new configuration takes effect immediately.
+      operationId: updateAgentConfigurations
+      parameters:
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentConfigurationsRequest"
+      responses:
+        "204":
+          description: Configurations updated successfully
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent or environment not found
           content:
             application/json:
               schema:
@@ -8278,6 +8387,10 @@ components:
         secretRef:
           type: string
           description: Reference to the secret storing this value. Only present for sensitive configurations.
+        isSystem:
+          type: boolean
+          description: Whether this configuration is system-managed (injected by the platform, e.g. LLM_PROVIDER_URL, LLM_PROVIDER_KEY). System-managed items are read-only and should not be edited by users.
+          default: false
       required:
         - key
         - value
@@ -10023,6 +10136,45 @@ components:
         isProduction:
           type: boolean
           description: Whether this is a production environment
+
+    UpdateAgentConfigurationsRequest:
+      type: object
+      required:
+        - environmentName
+      properties:
+        environmentName:
+          type: string
+          description: Name of the environment whose env vars / file mounts to replace.
+          example: default
+        env:
+          type: array
+          description: Environment variables to apply to the agent's release binding for this environment. System-managed keys are filtered server-side and re-injected from the agent's LLM/MCP configuration. Sending an empty array clears all user-managed env vars.
+          items:
+            $ref: "#/components/schemas/EnvironmentVariable"
+        files:
+          type: array
+          description: File mounts to apply to the agent's release binding for this environment. Sending an empty array clears all user-managed file mounts.
+          items:
+            $ref: "#/components/schemas/FileMount"
+
+    UpdateAgentDeploySettingsRequest:
+      type: object
+      required:
+        - environmentName
+      properties:
+        environmentName:
+          type: string
+          description: Name of the environment whose deploy settings to update.
+          example: default
+        enableAutoInstrumentation:
+          type: boolean
+          description: Enable auto instrumentation for observability in this environment. Omit to keep the current value.
+        enableApiKeySecurity:
+          type: boolean
+          description: Enable API key security for the agent endpoint in this environment. Omit to keep the current value.
+        corsConfig:
+          description: CORS configuration for the agent endpoint in this environment. Omit to keep the current value.
+          $ref: "#/components/schemas/CORSConfig"
 
     PromoteAgentRequest:
       type: object

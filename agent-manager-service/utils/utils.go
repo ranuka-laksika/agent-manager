@@ -785,7 +785,7 @@ func ValidateResourceNameRequest(payload spec.ResourceNameRequest) error {
 	if err := ValidateResourceDisplayName(payload.DisplayName, "resource"); err != nil {
 		return fmt.Errorf("invalid resource display name: %w", err)
 	}
-	if payload.ResourceType != string(ResourceTypeAgent) && payload.ResourceType != string(ResourceTypeProject) {
+	if payload.ResourceType != string(ResourceTypeAgent) && payload.ResourceType != string(ResourceTypeProject) && payload.ResourceType != string(ResourceTypeEnvironment) {
 		return fmt.Errorf("invalid resource type")
 	}
 	if payload.ResourceType == string(ResourceTypeAgent) {
@@ -906,6 +906,22 @@ func GenerateCandidateName(displayName string) string {
 	candidate = re.ReplaceAllString(candidate, "")
 
 	return candidate
+}
+
+// MaxEnvNameLength returns the maximum environment name length for a given org.
+// The constraint comes from the gateway runtime Service name shape:
+//
+//	api-platform-<org>-<env>-gateway-gateway-runtime  ≤ 63 chars (k8s metadata.name)
+//
+// Fixed portion: len("api-platform-") + len("-") + len("-gateway-gateway-runtime") = 13 + 1 + 24 = 38
+// So: len(env) ≤ 63 - 38 - len(org) = 25 - len(org).
+// The returned value is never less than 1.
+func MaxEnvNameLength(orgName string) int {
+	maxLen := 25 - len(orgName)
+	if maxLen < 1 {
+		return 1
+	}
+	return maxLen
 }
 
 // NameChecker is a function type that checks if a name is available

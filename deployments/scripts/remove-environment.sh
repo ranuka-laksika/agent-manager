@@ -5,22 +5,25 @@ set -euo pipefail
 # deletes the Environment via the Agent Manager API (which in turn deletes it in
 # OpenChoreo and cleans up link tables).
 #
-# Usage:
-#   remove-environment.sh staging
+# All inputs are provided via environment variables so the script can be piped
+# directly into bash:
 #
-# Safe to run multiple times. Will refuse if the environment still has agents
-# configured in it (you must delete those agents first).
+#   curl -fsSL https://raw.githubusercontent.com/wso2/ai-agent-management-platform/main/deployments/scripts/remove-environment.sh \
+#     | ENV_NAME=staging \
+#       AGENT_MANAGER_TOKEN=<token> \
+#       bash
+#
+# Required:
+#   - ENV_NAME: the environment name to remove (cannot be 'default')
+#   - AGENT_MANAGER_TOKEN: bearer token authorized to delete environments
+# Optional:
+#   - ORG_NAME (default: default)
+#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-# --- Parse arguments ---
-if [ $# -lt 1 ]; then
-    echo "Usage: $0 <environment-name>"
-    echo "  Example: $0 staging"
-    exit 1
-fi
-
-ENV_NAME="$1"
+# --- Required inputs ---
+: "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
+: "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
 
 if [ "$ENV_NAME" = "default" ]; then
     echo "❌ Cannot remove the default environment"
@@ -31,9 +34,6 @@ fi
 ORG_NAME="${ORG_NAME:-default}"
 AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-IDP_TOKEN_URL="${IDP_TOKEN_URL:-http://thunder.amp.localhost:8080/oauth2/token}"
-IDP_CLIENT_ID="${IDP_CLIENT_ID:-amp-api-client}"
-IDP_CLIENT_SECRET="${IDP_CLIENT_SECRET:-amp-api-client-secret}"
 GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
 
 # Release name MUST match what add-environment.sh installs. Single org segment.
@@ -76,29 +76,13 @@ until curl -sf "${AGENT_MANAGER_URL}/healthz" > /dev/null 2>&1; do
     ELAPSED=$((ELAPSED + 3))
 done
 
-echo "🔑 Obtaining JWT..."
-BASIC_AUTH=$(printf '%s:%s' "${IDP_CLIENT_ID}" "${IDP_CLIENT_SECRET}" | base64 | tr -d '\n')
-TOKEN_RESPONSE=$(curl -sf -X POST "${IDP_TOKEN_URL}" \
-    -H "Authorization: Basic ${BASIC_AUTH}" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials&scope=openid") || {
-    echo "❌ Failed to call ${IDP_TOKEN_URL}"
-    exit 1
-}
-
-JWT=$(printf '%s' "$TOKEN_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || true
-if [ -z "${JWT:-}" ]; then
-    echo "❌ Could not parse access_token from response: ${TOKEN_RESPONSE}"
-    exit 1
-fi
-
 echo ""
 echo "🌍 Deleting environment '${ENV_NAME}'..."
 RESP_FILE="$(mktemp)"
 trap 'rm -f "$RESP_FILE"' EXIT
 DEL_HTTP_CODE=$(curl -s -o "$RESP_FILE" -w "%{http_code}" -X DELETE \
     "${AGENT_MANAGER_API_URL}/orgs/${ORG_NAME}/environments/${ENV_NAME}" \
-    -H "Authorization: Bearer ${JWT}")
+    -H "Authorization: Bearer ${AGENT_MANAGER_TOKEN}")
 
 case "$DEL_HTTP_CODE" in
     204)

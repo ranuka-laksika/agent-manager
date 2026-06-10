@@ -7,10 +7,10 @@ set -euo pipefail
 # directly into bash:
 #
 #   curl -fsSL https://raw.githubusercontent.com/wso2/ai-agent-management-platform/main/deployments/scripts/add-environment.sh \
-#     | ENV_NAME=staging-environment \
-#       DISPLAY_NAME="Staging Environment" \
+#     | ENV_NAME=staging \
+#       DISPLAY_NAME="Staging" \
 #       AGENT_MANAGER_TOKEN=<token> \
-#       CHART_VERSION=0.1.0 \
+#       CHART_VERSION=0.15.0 \
 #       bash
 #
 # Add IS_PRODUCTION=true for a production environment.
@@ -22,7 +22,7 @@ set -euo pipefail
 # Prerequisites:
 #   - kubectl and helm must be configured
 #   - AGENT_MANAGER_TOKEN: bearer token authorized to create environments
-#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.1.0).
+#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
 #     Chart is pulled from oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension
 #   - ENV_NAME: resource name (lowercase alphanumeric with hyphens)
 #   - DISPLAY_NAME: human-readable name
@@ -32,10 +32,10 @@ set -euo pipefail
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
 
 # --- Required inputs ---
-: "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging-environment)}"
-: "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging Environment\")}"
+: "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
+: "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging\")}"
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
-: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.1.0)}"
+: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.15.0)}"
 
 IS_PRODUCTION="${IS_PRODUCTION:-false}"
 case "$IS_PRODUCTION" in
@@ -54,12 +54,25 @@ fi
 
 # --- Configuration (can be overridden via env vars) ---
 ORG_NAME="${ORG_NAME:-default}"
+
+# The APIGateway controller materializes a Service named
+# "api-platform-<org>-<env>-gateway-gateway-runtime" (24-char suffix), which
+# must stay within k8s's 63-char metadata.name limit.
+# So: len(env) <= 63 - 13 ("api-platform-") - 1 ("-") - 24 - len(org) = 25 - len(org)
+MAX_ENV_NAME_LEN=$((25 - ${#ORG_NAME}))
+if [ "${#ENV_NAME}" -gt "$MAX_ENV_NAME_LEN" ]; then
+    echo "❌ ENV_NAME '${ENV_NAME}' is ${#ENV_NAME} characters; max ${MAX_ENV_NAME_LEN} for org '${ORG_NAME}'"
+    echo "   The gateway Service name would exceed Kubernetes' 63-char limit."
+    echo "   Use a shorter env name (e.g. 'staging' instead of 'staging-environment')."
+    exit 1
+fi
 DATAPLANE_REF="${DATAPLANE_REF:-default}"
 AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
 GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
 
 CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
+
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
 

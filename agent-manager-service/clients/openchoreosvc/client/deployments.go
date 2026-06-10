@@ -220,11 +220,11 @@ func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, com
 // retryReleaseBindingUpdate runs a Get → mutate → Update cycle on a named ReleaseBinding,
 // retrying on resource-version conflicts caused by concurrent controller reconciliation.
 //
-// Only HTTP 409 (Conflict) triggers a retry — that is the only status code that
-// semantically means "your resourceVersion is stale; refetch and try again." Other
-// 5xx responses are surfaced as real errors so transient bugs (DB hiccups, panics, OOM)
-// are not silently masked by retry loops. If OpenChoreo ever surfaces conflicts as some
-// other status, that needs to be fixed at the server, not papered over here.
+// Both HTTP 409 and HTTP 500 trigger a retry. OpenChoreo currently wraps the
+// k8s "object has been modified" conflict as a generic 500 rather than a 409,
+// so a strict 409-only policy gives up too early on what is really a stale
+// resourceVersion. Retrying 500 here is tactical — fix the real bug upstream in
+// OpenChoreo (return 409 for conflicts) and tighten this back to 409-only.
 func (c *openChoreoClient) retryReleaseBindingUpdate(
 	ctx context.Context,
 	namespaceName, bindingName string,
@@ -260,10 +260,13 @@ func (c *openChoreoClient) retryReleaseBindingUpdate(
 			return nil
 		}
 		// 409 Conflict = stale resourceVersion; re-fetch and try again until we hit maxRetries.
-		if updateResp.StatusCode() == http.StatusConflict && attempt < maxRetries {
-			slog.Warn("release binding update conflict, retrying with fresh version",
-				"binding", bindingName, "attempt", attempt, "maxRetries", maxRetries)
-			lastErr = fmt.Errorf("conflict on attempt %d", attempt)
+		// 500 is included because OpenChoreo currently surfaces conflict errors as a
+		// generic Internal Server Error rather than a 409. See the function-level comment.
+		if (updateResp.StatusCode() == http.StatusConflict ||
+			updateResp.StatusCode() == http.StatusInternalServerError) && attempt < maxRetries {
+			slog.Warn("release binding update failed, retrying with fresh version",
+				"binding", bindingName, "status", updateResp.StatusCode(), "attempt", attempt, "maxRetries", maxRetries)
+			lastErr = fmt.Errorf("status %d on attempt %d", updateResp.StatusCode(), attempt)
 			continue
 		}
 		return handleErrorResponse(updateResp.StatusCode(), ErrorResponses{
@@ -333,19 +336,66 @@ func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, co
 	})
 }
 
-// UpdateReleaseBindingTraitConfigs updates the traitEnvironmentConfigs on a release binding
-// for the given component and environment. Silently no-ops if the binding does not exist yet.
+// UpdateReleaseBindingTraitConfigs updates traitEnvironmentConfigs AND sets restartedAt on a
+// release binding in a single Get→mutate→Update cycle. Both changes go together because the
+// only reason to update trait configs is so the gateway/pod picks them up, which requires a
+// pod rollout. Splitting them produced races (two separate updates contending on the same
+// resourceVersion) without giving callers any control they'd actually use.
+// Returns ErrNotFound when no binding exists yet for (component, environment).
 func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, namespaceName, componentName, environment string, traitConfigs map[string]interface{}) error {
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
 	if err != nil {
 		return err
 	}
 	if binding == nil {
-		return nil // No binding for this environment yet
+		return fmt.Errorf("no release binding found for component %q in environment %q: %w", componentName, environment, utils.ErrNotFound)
 	}
 
 	return c.retryReleaseBindingUpdate(ctx, namespaceName, binding.Metadata.Name, func(rb *gen.ReleaseBinding) {
 		rb.Spec.TraitEnvironmentConfigs = &traitConfigs
+		if rb.Spec.ComponentTypeEnvironmentConfigs == nil {
+			overrides := make(map[string]interface{})
+			rb.Spec.ComponentTypeEnvironmentConfigs = &overrides
+		}
+		(*rb.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
+	})
+}
+
+// ReplaceReleaseBindingWorkloadOverrides replaces the container env vars and file mounts on the
+// release binding for the given (component, environment), and sets restartedAt to trigger a
+// pod rollout — all in a single Get→mutate→Update cycle.
+// Passing nil for envOverrides or fileOverrides leaves that aspect untouched; passing an empty
+// slice clears it. Returns ErrNotFound when no binding exists yet.
+func (c *openChoreoClient) ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, namespaceName, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error {
+	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
+	if err != nil {
+		return err
+	}
+	if binding == nil {
+		return fmt.Errorf("no release binding found for component %q in environment %q: %w", componentName, environment, utils.ErrNotFound)
+	}
+
+	return c.retryReleaseBindingUpdate(ctx, namespaceName, binding.Metadata.Name, func(rb *gen.ReleaseBinding) {
+		container := &gen.ContainerOverride{}
+		if envOverrides != nil {
+			envVars := toGenEnvVars(envOverrides)
+			container.Env = &envVars
+		} else if rb.Spec.WorkloadOverrides != nil && rb.Spec.WorkloadOverrides.Container != nil {
+			container.Env = rb.Spec.WorkloadOverrides.Container.Env
+		}
+		if fileOverrides != nil {
+			fileVars := toGenFileVars(fileOverrides)
+			container.Files = &fileVars
+		} else if rb.Spec.WorkloadOverrides != nil && rb.Spec.WorkloadOverrides.Container != nil {
+			container.Files = rb.Spec.WorkloadOverrides.Container.Files
+		}
+		rb.Spec.WorkloadOverrides = &gen.WorkloadOverrides{Container: container}
+
+		if rb.Spec.ComponentTypeEnvironmentConfigs == nil {
+			overrides := make(map[string]interface{})
+			rb.Spec.ComponentTypeEnvironmentConfigs = &overrides
+		}
+		(*rb.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 	})
 }
 

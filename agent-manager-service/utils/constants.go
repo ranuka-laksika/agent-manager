@@ -26,8 +26,9 @@ const (
 type ResourceType string
 
 const (
-	ResourceTypeAgent   ResourceType = "agent"
-	ResourceTypeProject ResourceType = "project"
+	ResourceTypeAgent       ResourceType = "agent"
+	ResourceTypeProject     ResourceType = "project"
+	ResourceTypeEnvironment ResourceType = "environment"
 )
 
 // Name generation constants
