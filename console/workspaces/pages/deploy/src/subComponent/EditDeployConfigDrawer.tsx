@@ -38,18 +38,27 @@ import {
 import {
   useDeployAgent,
   useGetAgentConfigurations,
+  useUpdateAgentConfigurations,
 } from "@agent-management-platform/api-client";
 import type { EnvironmentVariable, FileMount } from "@agent-management-platform/types";
 
 export interface EditDeployConfigDrawerProps {
   open: boolean;
   onClose: () => void;
-  imageId: string;
   orgName: string;
   projName: string;
   agentName: string;
   environment: string;
   title: string;
+  /**
+   * "update" — call PUT /configurations to swap env/files on an already-deployed
+   * release binding (no imageId needed). Used by DeployCard's Configure button.
+   * "deploy" — call POST /deployments with imageId, env, files. Used by BuildCard's
+   * "Configure & Deploy" button, which is creating the first deployment.
+   */
+  mode: "update" | "deploy";
+  /** Required when mode === "deploy". */
+  imageId?: string;
 }
 
 export function EditDeployConfigDrawer({
@@ -61,6 +70,7 @@ export function EditDeployConfigDrawer({
   agentName,
   environment,
   title,
+  mode,
 }: EditDeployConfigDrawerProps) {
   const { pushSnackBar } = useSnackBar();
 
@@ -81,11 +91,36 @@ export function EditDeployConfigDrawer({
     setFiles(cfg?.files ?? []);
   }, [open, configurations]);
 
-  const { mutate: deployAgent, isPending } = useDeployAgent();
+  const { mutate: deployAgent, isPending: isDeploying } = useDeployAgent();
+  const { mutate: updateConfigs, isPending: isUpdating } = useUpdateAgentConfigurations();
+  const isPending = isDeploying || isUpdating;
 
   const handleSave = useCallback(() => {
     const validEnv = env.filter((e) => e.key);
     const validFiles = files.filter((f) => f.key && f.mountPath);
+    const errorHandler = (error: unknown) => {
+      const body = (error as { body?: { message?: string } })?.body;
+      pushSnackBar({ message: body?.message ?? "Failed to apply configuration", type: "error" });
+    };
+
+    if (mode === "update") {
+      // Replace per-env env/files on the existing release binding. Sending an empty
+      // array clears user-managed entries (system-managed env vars are re-injected
+      // server-side and don't need to appear in this payload).
+      updateConfigs(
+        {
+          params: { orgName, projName, agentName },
+          body: { environmentName: environment, env: validEnv, files: validFiles },
+        },
+        { onSuccess: () => onClose(), onError: errorHandler },
+      );
+      return;
+    }
+
+    if (!imageId) {
+      pushSnackBar({ message: "imageId is required for the initial deploy", type: "error" });
+      return;
+    }
     deployAgent(
       {
         params: { orgName, projName, agentName },
@@ -95,15 +130,12 @@ export function EditDeployConfigDrawer({
           ...(validFiles.length && { files: validFiles }),
         },
       },
-      {
-        onSuccess: () => onClose(),
-        onError: (error) => {
-          const body = (error as { body?: { message?: string } })?.body;
-          pushSnackBar({ message: body?.message ?? "Failed to apply configuration", type: "error" });
-        },
-      },
+      { onSuccess: () => onClose(), onError: errorHandler },
     );
-  }, [env, files, imageId, orgName, projName, agentName, deployAgent, onClose, pushSnackBar]);
+  }, [
+    mode, env, files, environment, imageId, orgName, projName, agentName,
+    deployAgent, updateConfigs, onClose, pushSnackBar,
+  ]);
 
   // ── Env handlers ─────────────────────────────────────────────────────────
   const handleAddEnv = useCallback(() => {
@@ -233,7 +265,7 @@ export function EditDeployConfigDrawer({
               disabled={isPending}
               startIcon={isPending ? <CircularProgress size={16} /> : undefined}
             >
-              {isPending ? "Applying..." : "Apply & Redeploy"}
+              {isPending ? "Applying..." : mode === "deploy" ? "Apply & Deploy" : "Apply"}
             </Button>
           </Box>
         </Stack>

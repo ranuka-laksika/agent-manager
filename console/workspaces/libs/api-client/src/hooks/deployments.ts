@@ -20,6 +20,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import {
   deployAgent,
   updateAgentDeploySettings,
+  updateAgentConfigurations,
   listAgentDeployments,
   getAgentEndpoints,
   getAgentConfigurations,
@@ -41,6 +42,8 @@ import type {
   DeployAgentRequest,
   UpdateAgentDeploySettingsPathParams,
   UpdateAgentDeploySettingsRequest,
+  UpdateAgentConfigurationsPathParams,
+  UpdateAgentConfigurationsRequest,
   DeploymentListResponse,
   DeploymentResponse,
   ListAgentDeploymentsPathParams,
@@ -101,6 +104,21 @@ export function useUpdateAgentDeploySettings() {
   { params: UpdateAgentDeploySettingsPathParams; body: UpdateAgentDeploySettingsRequest }>({
     action: { verb: 'update', target: 'deploy settings' },
     mutationFn: ({ params, body }) => updateAgentDeploySettings(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['agent'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-configurations'] });
+      queryClient.invalidateQueries({ queryKey: ['agent-deployments'] });
+    },
+  });
+}
+
+export function useUpdateAgentConfigurations() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<void, unknown,
+  { params: UpdateAgentConfigurationsPathParams; body: UpdateAgentConfigurationsRequest }>({
+    action: { verb: 'update', target: 'configurations' },
+    mutationFn: ({ params, body }) => updateAgentConfigurations(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['agent'] });
       queryClient.invalidateQueries({ queryKey: ['agent-configurations'] });

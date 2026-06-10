@@ -325,6 +325,7 @@ export function BuildCard(props: BuildCardProps) {
           <EditDeployConfigDrawer
             open={isDrawerOpen}
             onClose={handleCloseDrawer}
+            mode="deploy"
             imageId={currentKindVersion.imageId}
             orgName={orgId || ""}
             projName={projectId || ""}
@@ -449,6 +450,7 @@ export function BuildCard(props: BuildCardProps) {
         <EditDeployConfigDrawer
           open={isDrawerOpen}
           onClose={handleCloseDrawer}
+          mode="deploy"
           imageId={currentBuild.imageId}
           orgName={orgId || ""}
           projName={projectId || ""}

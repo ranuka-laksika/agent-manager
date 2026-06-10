@@ -22,6 +22,8 @@ import type {
   DeployAgentRequest,
   UpdateAgentDeploySettingsPathParams,
   UpdateAgentDeploySettingsRequest,
+  UpdateAgentConfigurationsPathParams,
+  UpdateAgentConfigurationsRequest,
   DeploymentListResponse,
   DeploymentResponse,
   ListAgentDeploymentsPathParams,
@@ -90,6 +92,24 @@ export async function updateAgentDeploySettings(params: UpdateAgentDeploySetting
     const token = getToken ? await getToken() : undefined;
     const res = await httpPUT(
         `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents/${encodeURIComponent(agentName)}/deploy-settings`,
+        body,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+}
+
+// eslint-disable-next-line max-len
+export async function updateAgentConfigurations(params: UpdateAgentConfigurationsPathParams, body: UpdateAgentConfigurationsRequest, getToken?: () => Promise<string>)
+: Promise<void> {
+    const { orgName = "default", projName = "default", agentName } = params;
+
+    if (!agentName) {
+        throw new Error("agentName is required");
+    }
+
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpPUT(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents/${encodeURIComponent(agentName)}/configurations`,
         body,
         { token },
     );

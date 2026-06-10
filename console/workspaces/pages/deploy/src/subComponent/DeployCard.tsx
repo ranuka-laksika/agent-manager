@@ -772,11 +772,11 @@ export function DeployCard(props: DeployCardProps) {
               environment={currentEnvironment.name}
             />
           )}
-          {agentId && currentDeployment?.imageId && (
+          {agentId && (
             <EditDeployConfigDrawer
               open={configureDrawerOpen}
               onClose={handleCloseConfigureDrawer}
-              imageId={currentDeployment.imageId}
+              mode="update"
               orgName={orgId ?? ""}
               projName={projectId ?? ""}
               agentName={agentId}
