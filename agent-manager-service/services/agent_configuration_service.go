@@ -2426,6 +2426,32 @@ func (s *agentConfigurationService) loadExistingVarNames(ctx context.Context, co
 	return result, nil
 }
 
+// dedupeEnvVariablesByKey collapses per-environment DB rows into config-level entries.
+// Rows are stored per-environment but the variable name is config-level — agent source code
+// reads url/apikey by the same env var name regardless of which provider is bound to a given
+// environment. First occurrence per key wins.
+func (s *agentConfigurationService) dedupeEnvVariablesByKey(configUUID uuid.UUID, vars []models.AgentEnvConfigVariable) []models.EnvironmentVariableConfig {
+	seen := make(map[string]string)
+	result := make([]models.EnvironmentVariableConfig, 0, len(vars))
+	for _, v := range vars {
+		if existing, already := seen[v.VariableKey]; already {
+			if existing != v.VariableName {
+				s.logger.Warn(
+					"environment variable name differs across environments — using first-occurrence value",
+					"configUUID", configUUID,
+					"key", v.VariableKey,
+					"firstValue", existing,
+					"otherValue", v.VariableName,
+				)
+			}
+			continue
+		}
+		seen[v.VariableKey] = v.VariableName
+		result = append(result, models.EnvironmentVariableConfig{Name: v.VariableName, Key: v.VariableKey})
+	}
+	return result
+}
+
 // rollbackProxies cleans up created proxies, deployments, and API keys on failure
 func (s *agentConfigurationService) rollbackProxies(ctx context.Context, resources []rollbackResource, orgName string) {
 	s.logger.Warn("Rolling back created proxies and API keys", "count", len(resources))
@@ -2597,14 +2623,8 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 		}
 	}
 
-	// Build environment variables list (only variable names, not secrets)
-	envVars := make([]models.EnvironmentVariableConfig, len(config.EnvVariables))
-	for i, v := range config.EnvVariables {
-		envVars[i] = models.EnvironmentVariableConfig{
-			Name: v.VariableName,
-			Key:  v.VariableKey,
-		}
-	}
+	// Variable rows are stored per-environment but names are config-level — collapse to one entry per key.
+	envVars := s.dedupeEnvVariablesByKey(config.UUID, config.EnvVariables)
 
 	return &models.AgentModelConfigResponse{
 		UUID:                 config.UUID.String(),
@@ -2703,14 +2723,8 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 		}
 	}
 
-	// Build environment variables list
-	envVars := make([]models.EnvironmentVariableConfig, len(reloadedConfig.EnvVariables))
-	for i, v := range reloadedConfig.EnvVariables {
-		envVars[i] = models.EnvironmentVariableConfig{
-			Name: v.VariableName,
-			Key:  v.VariableKey,
-		}
-	}
+	// Variable rows are stored per-environment but names are config-level — collapse to one entry per key.
+	envVars := s.dedupeEnvVariablesByKey(reloadedConfig.UUID, reloadedConfig.EnvVariables)
 
 	return &models.AgentModelConfigResponse{
 		UUID:                 reloadedConfig.UUID.String(),
