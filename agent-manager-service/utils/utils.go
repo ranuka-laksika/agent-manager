@@ -274,6 +274,16 @@ func validateAgentPayload(payload agentPayload) error {
 	if err := validateAgentProvisioning(payload.provisioning); err != nil {
 		return err
 	}
+	// File mounts on the create payload (under .configuration.Files) — guard size /
+	// key shape / dedup early so a bad request fails before we touch OpenChoreo.
+	if payload.configuration != nil {
+		if err := ValidateFileMounts(payload.configuration.Files); err != nil {
+			return fmt.Errorf("invalid file mounts: %w", err)
+		}
+		if err := validateEnvironmentVariables(payload.configuration.Env); err != nil {
+			return fmt.Errorf("invalid environment variables: %w", err)
+		}
+	}
 	// For kind-sourced agents, agentType/build/inputInterface are enriched from the kind —
 	// skip only those validations; all other checks (e.g. env-var keys) still apply.
 	if payload.provisioning.AgentKind == nil {
@@ -706,7 +716,128 @@ func ValidateDeployAgentRequest(payload *spec.DeployAgentRequest) error {
 			return fmt.Errorf("invalid environment variables: %w", err)
 		}
 	}
+	if len(payload.Files) > 0 {
+		if err := ValidateFileMounts(payload.Files); err != nil {
+			return fmt.Errorf("invalid file mounts: %w", err)
+		}
+	}
+	return nil
+}
 
+// ValidatePromoteAgentRequest validates the promote agent request payload.
+// Checks request shape (required fields, source/target distinctness), env-var
+// and file-mount rules, and the useConfigFromSourceEnv mutual-exclusivity rule
+// (when useConfigFromSourceEnv=true the per-env override fields must be unset
+// — see the OpenAPI description on useConfigFromSourceEnv).
+func ValidatePromoteAgentRequest(payload *spec.PromoteAgentRequest) error {
+	if payload == nil {
+		return fmt.Errorf("request payload is required")
+	}
+
+	if payload.SourceEnvironment == "" {
+		return fmt.Errorf("sourceEnvironment is required")
+	}
+	if payload.TargetEnvironment == "" {
+		return fmt.Errorf("targetEnvironment is required")
+	}
+	if payload.SourceEnvironment == payload.TargetEnvironment {
+		return fmt.Errorf("sourceEnvironment and targetEnvironment must be different")
+	}
+
+	useSource := payload.UseConfigFromSourceEnv != nil && *payload.UseConfigFromSourceEnv
+	if useSource {
+		if len(payload.Env) > 0 || len(payload.Files) > 0 ||
+			payload.EnableAutoInstrumentation != nil ||
+			payload.EnableApiKeySecurity != nil ||
+			payload.CorsConfig != nil {
+			return fmt.Errorf("useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, enableApiKeySecurity, and corsConfig")
+		}
+	}
+
+	if len(payload.Env) > 0 {
+		if err := validateEnvironmentVariables(payload.Env); err != nil {
+			return fmt.Errorf("invalid environment variables: %w", err)
+		}
+	}
+	if len(payload.Files) > 0 {
+		if err := ValidateFileMounts(payload.Files); err != nil {
+			return fmt.Errorf("invalid file mounts: %w", err)
+		}
+	}
+	return nil
+}
+
+// fileMountKeyRe matches Kubernetes' allowed character set for ConfigMap/Secret data keys.
+var fileMountKeyRe = regexp.MustCompile(`^[-._a-zA-Z0-9]+$`)
+
+// fileMountPathRe restricts mountPath to a conservative POSIX subset.
+var fileMountPathRe = regexp.MustCompile(`^/[A-Za-z0-9._\-/]*$`)
+
+// ValidateFileMounts validates a file-mounts payload. Returns nil for an empty
+// slice — callers decide whether files are optional.
+//
+// Checks per entry: non-empty + well-formed key, absolute mountPath with no
+// traversal segments, non-empty value (when not a secret reference), per-file
+// size cap. Also enforces uniqueness on keys/paths and a total payload cap so
+// the rendered ConfigMap/Secret stays within Kubernetes' 1 MiB object limit.
+func ValidateFileMounts(files []spec.FileMount) error {
+	if len(files) == 0 {
+		return nil
+	}
+	seenKeys := make(map[string]bool, len(files))
+	seenPaths := make(map[string]bool, len(files))
+	total := 0
+	for i, f := range files {
+		// Key
+		if f.Key == "" {
+			return fmt.Errorf("file mount at index %d has an empty key", i)
+		}
+		if len(f.Key) > MaxFileMountKeyLength {
+			return fmt.Errorf("file mount key %q is longer than %d characters", f.Key, MaxFileMountKeyLength)
+		}
+		if !fileMountKeyRe.MatchString(f.Key) {
+			return fmt.Errorf("file mount key %q has invalid characters; allowed: letters, digits, '.', '_', '-'", f.Key)
+		}
+		if seenKeys[f.Key] {
+			return fmt.Errorf("duplicate file mount key %q", f.Key)
+		}
+		seenKeys[f.Key] = true
+
+		// Mount path
+		if f.MountPath == "" {
+			return fmt.Errorf("file mount %q has an empty mountPath", f.Key)
+		}
+		if len(f.MountPath) > MaxMountPathLength {
+			return fmt.Errorf("file mount %q mountPath is longer than %d characters", f.Key, MaxMountPathLength)
+		}
+		if !strings.HasPrefix(f.MountPath, "/") {
+			return fmt.Errorf("file mount %q mountPath %q must be an absolute path", f.Key, f.MountPath)
+		}
+		if strings.Contains(f.MountPath, "..") {
+			return fmt.Errorf("file mount %q mountPath %q must not contain path traversal (..)", f.Key, f.MountPath)
+		}
+		if !fileMountPathRe.MatchString(f.MountPath) {
+			return fmt.Errorf("file mount %q mountPath %q contains invalid characters", f.Key, f.MountPath)
+		}
+		if seenPaths[f.MountPath] {
+			return fmt.Errorf("duplicate file mount mountPath %q", f.MountPath)
+		}
+		seenPaths[f.MountPath] = true
+
+		// Size — only count direct values. Secret-ref mounts carry no inline
+		// content here, so they don't consume the budget.
+		valueLen := 0
+		if f.Value != nil {
+			valueLen = len(*f.Value)
+		}
+		if valueLen > MaxFileMountValueBytes {
+			return fmt.Errorf("file mount %q value is %d bytes; max %d", f.Key, valueLen, MaxFileMountValueBytes)
+		}
+		total += valueLen
+	}
+	if total > MaxFileMountsTotalBytes {
+		return fmt.Errorf("file mounts total size %d bytes exceeds limit %d", total, MaxFileMountsTotalBytes)
+	}
 	return nil
 }
 

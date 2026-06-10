@@ -142,7 +142,7 @@ export interface BuildPathParams extends AgentPathParams {
 }
 
 // Resource name generation
-export type ResourceType = 'agent' | 'project';
+export type ResourceType = 'agent' | 'project' | 'environment';
 
 export interface ResourceNameRequest {
   displayName: string;

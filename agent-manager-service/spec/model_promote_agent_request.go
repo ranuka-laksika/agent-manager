@@ -23,7 +23,7 @@ type PromoteAgentRequest struct {
 	SourceEnvironment string `json:"sourceEnvironment"`
 	// Target environment to promote to
 	TargetEnvironment string `json:"targetEnvironment"`
-	// When true, inherits env vars and file mounts from the source environment. Mutually exclusive with env/files.
+	// When true, the target environment inherits BOTH its configurations (env vars + file mounts) AND its deploy settings (CORS, API key security, auto instrumentation) from the source environment. The request fields env, files, enableAutoInstrumentation, enableApiKeySecurity, and corsConfig must not be provided in this mode — they are mutually exclusive with useConfigFromSourceEnv=true. When false or omitted, the per-environment overrides must be supplied explicitly in the request.
 	UseConfigFromSourceEnv *bool `json:"useConfigFromSourceEnv,omitempty"`
 	// Environment-specific environment variables for the target environment.
 	Env []EnvironmentVariable `json:"env,omitempty"`

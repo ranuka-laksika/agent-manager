@@ -113,6 +113,23 @@ type Config struct {
 
 	// PerAgentResourceLimits defines the operator-configured maximum values for agent resource configs
 	PerAgentResourceLimits ResourceLimitsConfig
+
+	// GatewayRuntime addresses the in-cluster service that fronts the API Platform
+	// Gateway runtime for each environment. Used to build the backend host/port the
+	// agent's RestApi binding routes to.
+	GatewayRuntime GatewayRuntimeConfig
+}
+
+// GatewayRuntimeConfig captures how to reach the gateway runtime Service from
+// inside the cluster. The host is constructed as "<gateway.Name><HostSuffix>",
+// so HostSuffix carries everything after the gateway name (including the
+// namespace component).
+type GatewayRuntimeConfig struct {
+	// HostSuffix appended to gateway.Name to form the in-cluster host.
+	// Example: "-gateway-gateway-runtime.openchoreo-data-plane".
+	HostSuffix string
+	// Port is the HTTP listener exposed by every gateway runtime service.
+	Port int
 }
 type TLSConfig struct {
 	// EnableTLS indicates whether TLS is enabled for the server

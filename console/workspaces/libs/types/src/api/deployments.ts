@@ -29,6 +29,23 @@ export interface DeployAgentRequest {
   corsConfig?: CorsConfig;
 }
 
+export interface UpdateAgentDeploySettingsRequest {
+  environmentName: string;
+  enableAutoInstrumentation?: boolean;
+  enableApiKeySecurity?: boolean;
+  corsConfig?: CorsConfig;
+}
+
+export type UpdateAgentDeploySettingsPathParams = AgentPathParams;
+
+export interface UpdateAgentConfigurationsRequest {
+  environmentName: string;
+  env?: EnvironmentVariable[];
+  files?: FileMount[];
+}
+
+export type UpdateAgentConfigurationsPathParams = AgentPathParams;
+
 // Responses
 export interface DeploymentResponse {
   agentName: string;

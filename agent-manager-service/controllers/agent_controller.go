@@ -598,9 +598,9 @@ func (c *agentController) PromoteAgent(w http.ResponseWriter, r *http.Request) {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
-	if payload.SourceEnvironment == "" || payload.TargetEnvironment == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "sourceEnvironment and targetEnvironment are required")
+	if err := utils.ValidatePromoteAgentRequest(&payload); err != nil {
+		log.Error("PromoteAgent: invalid request", "error", err)
+		utils.WriteValidationErrorResponse(w, err)
 		return
 	}
 

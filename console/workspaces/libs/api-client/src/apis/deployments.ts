@@ -20,6 +20,8 @@ import { httpGET, httpPOST, httpPUT, SERVICE_BASE } from '../utils';
 import type {
   DeployAgentPathParams,
   DeployAgentRequest,
+  UpdateAgentDeploySettingsPathParams,
+  UpdateAgentDeploySettingsRequest,
   DeploymentListResponse,
   DeploymentResponse,
   ListAgentDeploymentsPathParams,
@@ -61,11 +63,11 @@ import type {
 export async function deployAgent(params: DeployAgentPathParams, body: DeployAgentRequest, getToken?: () => Promise<string>)
 : Promise<DeploymentResponse> {
     const { orgName = "default", projName = "default", agentName } = params;
-    
+
     if (!agentName) {
         throw new Error("agentName is required");
     }
-    
+
     const token = getToken ? await getToken() : undefined;
     const res = await httpPOST(
         `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents/${encodeURIComponent(agentName)}/deployments`,
@@ -74,6 +76,24 @@ export async function deployAgent(params: DeployAgentPathParams, body: DeployAge
     );
     if (!res.ok) throw await res.json();
     return res.json();
+}
+
+export async function updateAgentDeploySettings(params: UpdateAgentDeploySettingsPathParams,
+     body: UpdateAgentDeploySettingsRequest, getToken?: () => Promise<string>)
+: Promise<void> {
+    const { orgName = "default", projName = "default", agentName } = params;
+
+    if (!agentName) {
+        throw new Error("agentName is required");
+    }
+
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpPUT(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents/${encodeURIComponent(agentName)}/deploy-settings`,
+        body,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
 }
 
 // eslint-disable-next-line max-len

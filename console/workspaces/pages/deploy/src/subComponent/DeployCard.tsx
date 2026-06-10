@@ -18,6 +18,7 @@
 
 import {
   useDeployAgent,
+  useUpdateAgentDeploySettings,
   useGetAgent,
   useGetAgentConfigurations,
   useGetAgentMetrics,
@@ -410,26 +411,31 @@ export function DeployCard(props: DeployCardProps) {
     agent?.configurations?.enableAutoInstrumentation,
   ]);
 
-  const { data: agentConfig } = useGetAgentConfigurations(
+  // Keep the configurations query mounted so its cache invalidates after
+  // deploy-settings / configuration mutations finish.
+  useGetAgentConfigurations(
     { orgName: orgId, projName: projectId, agentName: agentId },
     { environment: currentEnvironment.name },
   );
 
   const { mutate: deployAgentMutate } = useDeployAgent();
+  const { mutate: updateDeploySettingsMutate } = useUpdateAgentDeploySettings();
 
   // Stable debounced redeploy — reads latest values via ref at fire time
   const latestToggleRef = useRef({ apiKey: apiKeyEnabled, tracing: tracingEnabled });
   latestToggleRef.current = { apiKey: apiKeyEnabled, tracing: tracingEnabled };
 
   const redeployContextRef = useRef({
-    orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack,
+    orgId, projectId, agentId, currentEnvironment, isApiAgent, isPythonBuildpack,
   });
   redeployContextRef.current = {
-    orgId, projectId, agentId, currentDeployment, agentConfig, isApiAgent, isPythonBuildpack,
+    orgId, projectId, agentId, currentEnvironment, isApiAgent, isPythonBuildpack,
   };
 
   const deployAgentRef = useRef(deployAgentMutate);
   deployAgentRef.current = deployAgentMutate;
+  const updateDeploySettingsRef = useRef(updateDeploySettingsMutate);
+  updateDeploySettingsRef.current = updateDeploySettingsMutate;
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -446,21 +452,17 @@ export function DeployCard(props: DeployCardProps) {
     debounceTimerRef.current = setTimeout(() => {
       const {
         orgId: o, projectId: p, agentId: a,
-        currentDeployment: dep, agentConfig: cfg,
+        currentEnvironment: env,
         isApiAgent: isApi, isPythonBuildpack: isPy,
       } = redeployContextRef.current;
-      if (!dep?.imageId || !o || !p || !a) return;
+      if (!o || !p || !a || !env?.name) return;
       const { apiKey, tracing } = latestToggleRef.current;
-      const existingEnv = cfg?.configurations?.env?.filter((e) => e.key && e.value !== undefined);
-      const existingFiles = cfg?.configurations?.files;
       setIsSavingConfig(true);
-      deployAgentRef.current(
+      updateDeploySettingsRef.current(
         {
           params: { orgName: o, projName: p, agentName: a },
           body: {
-            imageId: dep.imageId,
-            ...(existingEnv?.length && { env: existingEnv }),
-            ...(existingFiles?.length && { files: existingFiles }),
+            environmentName: env.name,
             ...(isPy && { enableAutoInstrumentation: tracing }),
             ...(isApi && { enableApiKeySecurity: apiKey }),
           },
@@ -782,11 +784,10 @@ export function DeployCard(props: DeployCardProps) {
               title={`Update ${currentEnvironment.displayName ?? currentEnvironment.name} Environment Configuration`}
             />
           )}
-          {agentId && currentDeployment?.imageId && (
+          {agentId && (
             <EditSecurityConfigDrawer
               open={corsDrawerOpen}
               onClose={handleCloseCorsDrawer}
-              imageId={currentDeployment.imageId}
               orgName={orgId ?? ""}
               projName={projectId ?? ""}
               agentName={agentId}

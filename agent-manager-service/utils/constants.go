@@ -40,6 +40,16 @@ const (
 	NameGenerationAlphabet    = "abcdefghijklmnopqrstuvwxyz"
 )
 
+// File mount limits. Kubernetes caps each ConfigMap/Secret at 1 MiB total
+// (data + binaryData + metadata). We pick per-file and per-request caps that
+// leave headroom for other workload-overrides fields rendered alongside.
+const (
+	MaxFileMountValueBytes  = 256 * 1024 // 256 KiB per file
+	MaxFileMountsTotalBytes = 768 * 1024 // 768 KiB across all files in one request
+	MaxFileMountKeyLength   = 253        // matches k8s metadata.name limit
+	MaxMountPathLength      = 4095       // Linux PATH_MAX minus one for safety
+)
+
 // Path parameter names used in HTTP routes
 const (
 	PathParamOrgName      = "orgName"

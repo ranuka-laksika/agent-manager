@@ -10192,7 +10192,12 @@ components:
           example: staging
         useConfigFromSourceEnv:
           type: boolean
-          description: When true, inherits env vars and file mounts from the source environment. Mutually exclusive with env/files.
+          description: |
+            When true, the target environment inherits BOTH its configurations
+            AND its deploy settings from the source environment. 
+            mode — they are mutually exclusive with useConfigFromSourceEnv=true.
+            When false or omitted, the per-environment overrides must be
+            supplied in the request.
         env:
           type: array
           description: Environment-specific environment variables for the target environment.
@@ -12602,11 +12607,11 @@ components:
           description: Whether resource-wise rate limiting is enabled
           example: false
         request:
-          $ref: '#/components/schemas/RateLimitEntry'
+          $ref: "#/components/schemas/RateLimitEntry"
         token:
-          $ref: '#/components/schemas/RateLimitEntry'
+          $ref: "#/components/schemas/RateLimitEntry"
         cost:
-          $ref: '#/components/schemas/RateLimitEntry'
+          $ref: "#/components/schemas/RateLimitEntry"
 
     DeploymentSummary:
       type: object

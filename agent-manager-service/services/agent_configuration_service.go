@@ -33,6 +33,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -174,7 +175,8 @@ func scopedProxyIdentifier(projectName, agentName, configName, envName string) s
 func buildProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool) string {
 	base := gateway.Vhost
 	if isInternal {
-		base = fmt.Sprintf("http://%s-gateway-gateway-runtime.openchoreo-data-plane:%d", gateway.Name, gatewayRuntimeHTTPPort)
+		gwRuntime := config.GetConfig().GatewayRuntime
+		base = fmt.Sprintf("http://%s%s:%d", gateway.Name, gwRuntime.HostSuffix, gwRuntime.Port)
 	}
 	if contextPath != nil {
 		return fmt.Sprintf("%s%s", base, *contextPath)

@@ -237,6 +237,14 @@ func loadEnvs() {
 		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "512Mi"),
 	}
 
+	// Gateway runtime addressing — how RestApi bindings reach the API Platform Gateway
+	// in-cluster. Override per deployment if the data-plane namespace or service-name
+	// suffix differs from the openchoreo defaults.
+	config.GatewayRuntime = GatewayRuntimeConfig{
+		HostSuffix: r.readOptionalString("GATEWAY_RUNTIME_HOST_SUFFIX", "-gateway-gateway-runtime.openchoreo-data-plane"),
+		Port:       int(r.readOptionalInt64("GATEWAY_RUNTIME_PORT", 22893)),
+	}
+
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key)
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key).
 	// Validated at runtime in wiring.ProvideEncryptionKey() so that

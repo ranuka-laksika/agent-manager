@@ -17,9 +17,9 @@
  */
 
 import {
-  useDeployAgent,
   useGetAgent,
   useGetAgentConfigurations,
+  useUpdateAgentDeploySettings,
 } from "@agent-management-platform/api-client";
 import {
   Accordion,
@@ -52,7 +52,6 @@ import { useCallback, useEffect, useState } from "react";
 export interface EditSecurityConfigDrawerProps {
   open: boolean;
   onClose: () => void;
-  imageId: string;
   orgName: string;
   projName: string;
   agentName: string;
@@ -62,7 +61,6 @@ export interface EditSecurityConfigDrawerProps {
 export function EditSecurityConfigDrawer({
   open,
   onClose,
-  imageId,
   orgName,
   projName,
   agentName,
@@ -71,7 +69,9 @@ export function EditSecurityConfigDrawer({
   const { pushSnackBar } = useSnackBar();
 
   const { data: agent } = useGetAgent({ orgName, projName, agentName });
-  const { data: configurations } = useGetAgentConfigurations(
+  // Mount the configurations query so its cache invalidates after we save —
+  // /deploy-settings doesn't read this, but the page elsewhere does.
+  useGetAgentConfigurations(
     { orgName, projName, agentName },
     { environment },
   );
@@ -114,20 +114,14 @@ export function EditSecurityConfigDrawer({
 
   const hasWildcardOrigin = corsAllowAll || corsOrigins.includes("*");
 
-  const { mutate: deployAgent, isPending } = useDeployAgent();
+  const { mutate: updateDeploySettings, isPending } = useUpdateAgentDeploySettings();
 
   const handleSave = useCallback(() => {
-    const existingEnv = configurations?.configurations?.env
-      ?.filter((e) => e.key && e.value !== undefined);
-    const existingFiles = configurations?.configurations?.files;
-
-    deployAgent(
+    updateDeploySettings(
       {
         params: { orgName, projName, agentName },
         body: {
-          imageId,
-          ...(existingEnv?.length && { env: existingEnv }),
-          ...(existingFiles?.length && { files: existingFiles }),
+          environmentName: environment,
           ...(agent?.configurations?.enableApiKeySecurity !== undefined && {
             enableApiKeySecurity: agent.configurations.enableApiKeySecurity,
           }),
@@ -154,12 +148,12 @@ export function EditSecurityConfigDrawer({
       },
     );
   }, [
-    configurations, imageId, orgName, projName, agentName,
+    environment, orgName, projName, agentName,
     agent?.configurations?.enableApiKeySecurity,
     agent?.configurations?.enableAutoInstrumentation,
     corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
     hasWildcardOrigin, isApiAgent,
-    deployAgent, onClose, pushSnackBar,
+    updateDeploySettings, onClose, pushSnackBar,
   ]);
 
   return (
@@ -302,7 +296,7 @@ export function EditSecurityConfigDrawer({
               disabled={isPending}
               startIcon={isPending ? <CircularProgress size={16} /> : undefined}
             >
-              {isPending ? "Applying..." : "Apply & Redeploy"}
+              {isPending ? "Applying..." : "Apply"}
             </Button>
           </Box>
         </Form.Stack>
