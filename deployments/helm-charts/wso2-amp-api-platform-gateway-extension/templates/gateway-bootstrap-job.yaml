@@ -250,8 +250,8 @@ spec:
                 log_info "Environments response: ${ENV_RESPONSE}"
 
                 ENVIRONMENT_ID=$(echo "${ENV_RESPONSE}" | \
-                  grep -o '"id":"[^"]*"[^}]*"name":"'"${ENVIRONMENT_NAME}"'"\|"name":"'"${ENVIRONMENT_NAME}"'"[^}]*"id":"[^"]*"' | \
-                  grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+                  grep -o '"uuid":"[^"]*"[^}]*"name":"'"${ENVIRONMENT_NAME}"'"\|"name":"'"${ENVIRONMENT_NAME}"'"[^}]*"uuid":"[^"]*"' | \
+                  grep -o '"uuid":"[^"]*"' | head -1 | cut -d'"' -f4)
 
                 if [ -z "${ENVIRONMENT_ID}" ]; then
                   log_error "Environment '${ENVIRONMENT_NAME}' not found for org '${ORG_NAME}'. Available environments:"

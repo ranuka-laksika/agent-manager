@@ -691,44 +691,6 @@ export function DeployCard(props: DeployCardProps) {
                     {isSavingConfig && <CircularProgress size={14} />}
                   </Stack>
 
-                  {/* API Key Auth */}
-                  {isApiAgent && (
-                    <Box display="flex" alignItems="center" justifyContent="space-between">
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Key size={14} style={{ opacity: 0.6 }} />
-                        <Typography variant="body2">API Key Auth</Typography>
-                      </Box>
-                      <Switch
-                        size="small"
-                        checked={apiKeyEnabled}
-                        disabled={isSavingConfig}
-                        onChange={(_, checked) => {
-                          setApiKeyEnabled(checked);
-                          debouncedRedeploy();
-                        }}
-                      />
-                    </Box>
-                  )}
-
-                  {/* Auto-Instrumentation / Tracing */}
-                  {isPythonBuildpack && (
-                    <Box display="flex" alignItems="center" justifyContent="space-between">
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <Workflow size={14} style={{ opacity: 0.6 }} />
-                        <Typography variant="body2">Tracing</Typography>
-                      </Box>
-                      <Switch
-                        size="small"
-                        checked={tracingEnabled}
-                        disabled={isSavingConfig}
-                        onChange={(_, checked) => {
-                          setTracingEnabled(checked);
-                          debouncedRedeploy();
-                        }}
-                      />
-                    </Box>
-                  )}
-
                   {/* CORS — status + configure button */}
                   {isApiAgent && (
                     <Box display="flex" alignItems="center" justifyContent="space-between">
@@ -755,6 +717,47 @@ export function DeployCard(props: DeployCardProps) {
                       >
                         Configure
                       </Button>
+                    </Box>
+                  )}
+
+                  {/* API Key Auth */}
+                  {isApiAgent && (
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Key size={14} style={{ opacity: 0.6 }} />
+                        <Typography variant="body2">API Key Auth</Typography>
+                        <Tooltip title="Requests must include the header: x-api-key: <your-key>">
+                          <Info size={13} style={{ opacity: 0.5, cursor: "help" }} />
+                        </Tooltip>
+                      </Box>
+                      <Switch
+                        size="small"
+                        checked={apiKeyEnabled}
+                        disabled={isSavingConfig}
+                        onChange={(_, checked) => {
+                          setApiKeyEnabled(checked);
+                          debouncedRedeploy();
+                        }}
+                      />
+                    </Box>
+                  )}
+
+                  {/* Auto-Instrumentation */}
+                  {isPythonBuildpack && (
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Workflow size={14} style={{ opacity: 0.6 }} />
+                        <Typography variant="body2">Auto-Instrumentation</Typography>
+                      </Box>
+                      <Switch
+                        size="small"
+                        checked={tracingEnabled}
+                        disabled={isSavingConfig}
+                        onChange={(_, checked) => {
+                          setTracingEnabled(checked);
+                          debouncedRedeploy();
+                        }}
+                      />
                     </Box>
                   )}
                 </Stack>
