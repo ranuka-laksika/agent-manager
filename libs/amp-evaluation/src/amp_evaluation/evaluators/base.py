@@ -541,6 +541,13 @@ class LLMAsJudgeEvaluator(BaseEvaluator):
     max_tokens: int = Param(default=1024, description="Max tokens for LLM response")
     max_retries: int = Param(default=2, description="Max retries on invalid LLM output")
 
+    # Trace/agent/LLM judges that score the agent's *response* cannot evaluate
+    # an empty output — scoring a blank response yields a templated, misleading
+    # result (often a default high score). Such judges skip instead. Judges that
+    # do not read the response (e.g. context_relevance, which assesses retrieved
+    # context against the query) set this False.
+    _requires_response_output: bool = True
+
     # Output format instructions — auto-appended to the user's prompt
     _OUTPUT_INSTRUCTIONS = """
 
@@ -593,6 +600,16 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
         """Internal: calls build_prompt() -> LLM -> validate -> EvalResult."""
         trace_or_span = args[0] if args else None
         task = args[1] if len(args) > 1 else kwargs.get("task")
+        # Guard: do not let the judge score an empty output. A blank response
+        # makes the model emit a templated skeleton and a default score, which
+        # is worse than an explicit skip. The message stays level-agnostic
+        # because this base class judges Trace, AgentTrace, and LLMSpan outputs.
+        if self._requires_response_output and trace_or_span is not None:
+            output = getattr(trace_or_span, "output", None)
+            if not (isinstance(output, str) and output.strip()):
+                return EvalResult.skip(
+                    "No output found to evaluate; skipping LLM judge to avoid scoring an empty response."
+                )
         # 1. Dispatch to build_prompt() (respects signature param count)
         prompt = self._dispatch_build_prompt(trace_or_span, task)
 

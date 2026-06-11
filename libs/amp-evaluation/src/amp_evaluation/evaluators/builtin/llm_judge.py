@@ -267,6 +267,10 @@ class ContextRelevanceEvaluator(LLMAsJudgeEvaluator):
     )
     tags = ["llm-judge", "relevance"]
 
+    # Scores retrieved context against the query; never reads the agent
+    # response, so an empty trace.output must not skip it.
+    _requires_response_output = False
+
     on_missing_context: str = Param(
         default="skip",
         enum=["skip", "zero"],
@@ -574,6 +578,11 @@ class ReasoningQualityEvaluator(LLMAsJudgeEvaluator):
         "Scores whether the agent's execution steps are logical, purposeful, and well-reasoned. Runs per agent."
     )
     tags = ["llm-judge", "reasoning"]
+    # Agent-level judge: scores the execution trajectory (format_steps()), which
+    # is present even when the final response is empty, so an empty
+    # agent_trace.output must not skip it. instruction_following in particular
+    # is documented to always evaluate.
+    _requires_response_output = False
 
     def build_prompt(self, agent_trace: AgentTrace, task: Optional[Task] = None) -> str:
         task_section = f"\nTask: {task.description}" if task and task.description else ""
@@ -613,6 +622,11 @@ class PathEfficiencyEvaluator(LLMAsJudgeEvaluator):
         "Detects redundant steps, loops, and wasted work. Runs per agent."
     )
     tags = ["llm-judge", "efficiency"]
+    # Agent-level judge: scores the execution trajectory (format_steps()), which
+    # is present even when the final response is empty, so an empty
+    # agent_trace.output must not skip it. instruction_following in particular
+    # is documented to always evaluate.
+    _requires_response_output = False
 
     def build_prompt(self, agent_trace: AgentTrace, task: Optional[Task] = None) -> str:
         task_section = f"\nTask: {task.description}" if task and task.description else ""
@@ -653,6 +667,11 @@ class ErrorRecoveryEvaluator(LLMAsJudgeEvaluator):
         "Skips traces with no errors by default. Runs per agent."
     )
     tags = ["llm-judge", "reasoning"]
+    # Agent-level judge: scores the execution trajectory (format_steps()), which
+    # is present even when the final response is empty, so an empty
+    # agent_trace.output must not skip it. instruction_following in particular
+    # is documented to always evaluate.
+    _requires_response_output = False
 
     on_missing_context: str = Param(
         default="skip",
@@ -717,6 +736,11 @@ class InstructionFollowingEvaluator(LLMAsJudgeEvaluator):
         "Runs per agent. Always evaluates since user input is always available."
     )
     tags = ["llm-judge", "compliance"]
+    # Agent-level judge: scores the execution trajectory (format_steps()), which
+    # is present even when the final response is empty, so an empty
+    # agent_trace.output must not skip it. instruction_following in particular
+    # is documented to always evaluate.
+    _requires_response_output = False
 
     def build_prompt(self, agent_trace: AgentTrace, task: Optional[Task] = None) -> str:
         return f"""You are an expert evaluator. Your sole criterion is INSTRUCTION FOLLOWING: does the agent comply with all instructions — both from its system prompt and the user's request?

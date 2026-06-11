@@ -744,3 +744,192 @@ class TestFunctionLLMJudgeParams:
         call_args = mock_completion.call_args
         prompt_sent = call_args[1]["messages"][0]["content"]
         assert "strictness=0.8" in prompt_sent
+
+
+# =============================================================================
+# Empty-response guard
+# =============================================================================
+
+
+class TestEmptyResponseGuard:
+    """A judge that scores the response must skip when there is no response."""
+
+    def test_skips_when_output_empty(self):
+        evaluator = _SimpleJudge()
+        trace = _make_trace(output="")
+        result = evaluator.evaluate(trace)
+        assert result.is_skipped is True
+        assert "no output found" in result.skip_reason.lower()
+
+    def test_skips_when_output_whitespace(self):
+        evaluator = _SimpleJudge()
+        trace = _make_trace(output="   \n  ")
+        result = evaluator.evaluate(trace)
+        assert result.is_skipped is True
+
+    def test_does_not_skip_when_output_present(self):
+        evaluator = _SimpleJudge()
+        trace = _make_trace(output="AI is artificial intelligence.")
+        with patch("any_llm.completion", return_value=_mock_response(0.8)):
+            result = evaluator.evaluate(trace)
+        assert result.is_skipped is False
+        assert result.score == 0.8
+
+    def test_opt_out_evaluator_does_not_skip_on_empty_output(self):
+        class _InputOnlyJudge(LLMAsJudgeEvaluator):
+            _requires_response_output = False
+
+            def build_prompt(self, trace: Trace) -> str:
+                return f"Query only: {trace.input}"
+
+        evaluator = _InputOnlyJudge()
+        trace = _make_trace(output="")
+        with patch("any_llm.completion", return_value=_mock_response(0.5)):
+            result = evaluator.evaluate(trace)
+        assert result.is_skipped is False
+        assert result.score == 0.5
+
+    def test_guard_handles_non_str_output(self):
+        """Guard must not raise AttributeError when output is not a str."""
+
+        class _NonStrOutputJudge(LLMAsJudgeEvaluator):
+            """Judge with _requires_response_output=True (default) receiving a non-str output."""
+
+            def build_prompt(self, trace: Trace) -> str:
+                return f"Evaluate: {trace.input}"
+
+        evaluator = _NonStrOutputJudge()
+        # Simulate a trace whose output is an int (unexpected but must not crash)
+        trace = _make_trace(output="placeholder")
+        trace.output = 42  # bypass pydantic validation via direct assignment
+        result = evaluator.evaluate(trace)
+        # int is not a str → guard treats it as "no output" → skip
+        assert result.is_skipped is True
+
+
+# =============================================================================
+# Agent-level judge regression: must NOT skip on empty agent_trace.output
+# =============================================================================
+
+
+class TestAgentLevelJudgeEmptyOutputRegression:
+    """
+    Agent-level judges score the execution trajectory (format_steps()), not
+    the final response. They must NOT be skipped when agent_trace.output == "".
+    """
+
+    @patch("any_llm.completion")
+    def test_instruction_following_does_not_skip_on_empty_output(self, mock_completion):
+        """InstructionFollowingEvaluator must evaluate even when output is empty."""
+        from amp_evaluation.evaluators.builtin.llm_judge import InstructionFollowingEvaluator
+        from amp_evaluation.trace.models import AgentTrace, TraceMetrics, TokenUsage
+
+        mock_completion.return_value = _mock_response(0.7)
+
+        evaluator = InstructionFollowingEvaluator()
+        agent_trace = AgentTrace(
+            agent_id="agent-1",
+            input="Summarise the attached document.",
+            output="",  # empty — agent did not emit a final response
+            steps=[],
+            metrics=TraceMetrics(token_usage=TokenUsage(input_tokens=5, output_tokens=0, total_tokens=5)),
+        )
+        result = evaluator.evaluate(agent_trace)
+        assert result.is_skipped is False, (
+            f"InstructionFollowingEvaluator must not skip on empty output; got skip_reason={result.skip_reason!r}"
+        )
+        assert result.score == 0.7
+
+    @patch("any_llm.completion")
+    def test_reasoning_quality_does_not_skip_on_empty_output(self, mock_completion):
+        """ReasoningQualityEvaluator must evaluate even when output is empty."""
+        from amp_evaluation.evaluators.builtin.llm_judge import ReasoningQualityEvaluator
+        from amp_evaluation.trace.models import AgentTrace, TraceMetrics, TokenUsage
+
+        mock_completion.return_value = _mock_response(0.6)
+
+        evaluator = ReasoningQualityEvaluator()
+        agent_trace = AgentTrace(
+            agent_id="agent-2",
+            input="Find the latest exchange rate.",
+            output="",
+            steps=[],
+            metrics=TraceMetrics(token_usage=TokenUsage(input_tokens=5, output_tokens=0, total_tokens=5)),
+        )
+        result = evaluator.evaluate(agent_trace)
+        assert result.is_skipped is False, (
+            f"ReasoningQualityEvaluator must not skip on empty output; got skip_reason={result.skip_reason!r}"
+        )
+        assert result.score == 0.6
+
+    @patch("any_llm.completion")
+    def test_path_efficiency_does_not_skip_on_empty_output(self, mock_completion):
+        """PathEfficiencyEvaluator must evaluate even when output is empty."""
+        from amp_evaluation.evaluators.builtin.llm_judge import PathEfficiencyEvaluator
+        from amp_evaluation.trace.models import AgentTrace, TraceMetrics, TokenUsage
+
+        mock_completion.return_value = _mock_response(0.8)
+
+        evaluator = PathEfficiencyEvaluator()
+        agent_trace = AgentTrace(
+            agent_id="agent-3",
+            input="List all open issues.",
+            output="",
+            steps=[],
+            metrics=TraceMetrics(token_usage=TokenUsage(input_tokens=5, output_tokens=0, total_tokens=5)),
+        )
+        result = evaluator.evaluate(agent_trace)
+        assert result.is_skipped is False, (
+            f"PathEfficiencyEvaluator must not skip on empty output; got skip_reason={result.skip_reason!r}"
+        )
+        assert result.score == 0.8
+
+    @patch("any_llm.completion")
+    def test_error_recovery_with_errors_does_not_skip_on_empty_output(self, mock_completion):
+        """ErrorRecoveryEvaluator (with errors present) must evaluate even when output is empty."""
+        from amp_evaluation.evaluators.builtin.llm_judge import ErrorRecoveryEvaluator
+        from amp_evaluation.trace.models import AgentTrace, TraceMetrics, TokenUsage, ToolExecutionStep
+
+        mock_completion.return_value = _mock_response(0.5)
+
+        evaluator = ErrorRecoveryEvaluator()
+        error_step = ToolExecutionStep(tool_name="api_call", error="Timeout")
+        agent_trace = AgentTrace(
+            agent_id="agent-4",
+            input="Fetch weather data.",
+            output="",
+            steps=[error_step],
+            metrics=TraceMetrics(
+                error_count=1,
+                token_usage=TokenUsage(input_tokens=5, output_tokens=0, total_tokens=5),
+            ),
+        )
+        result = evaluator.evaluate(agent_trace)
+        assert result.is_skipped is False, (
+            f"ErrorRecoveryEvaluator must not skip on empty output when errors are present; "
+            f"got skip_reason={result.skip_reason!r}"
+        )
+        assert result.score == 0.5
+
+    def test_context_relevance_skip_reason_is_not_guard_message(self):
+        """ContextRelevanceEvaluator skips because there are NO retrievals, not because
+        output is empty. The skip_reason must reference retrievals, not the guard message.
+
+        Choice: asserting skip_reason is NOT the guard message is the most reliable
+        approach here — constructing a RetrievalSpan with valid docs just to pass the
+        retrieval-check and then verify non-skip would couple this test to the span
+        constructor internals. Instead we verify that the guard is NOT what causes the
+        skip: the 'no output found' guard message must be absent from skip_reason.
+        """
+        from amp_evaluation.evaluators.builtin.llm_judge import ContextRelevanceEvaluator
+
+        evaluator = ContextRelevanceEvaluator()
+        trace = _make_trace(output="")  # empty output AND no retrieval spans
+
+        result = evaluator.evaluate(trace)
+        # Must skip — but for the right reason (no retrievals), not the empty-output guard
+        assert result.is_skipped is True
+        assert "no output found" not in (result.skip_reason or "").lower(), (
+            f"ContextRelevanceEvaluator must not be stopped by the empty-output guard; "
+            f"got skip_reason={result.skip_reason!r}"
+        )
