@@ -147,6 +147,11 @@ type ClientInterface interface {
 	// ListDeploymentPipelines request
 	ListDeploymentPipelines(ctx context.Context, orgName string, params *ListDeploymentPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// CreateDeploymentPipelineWithBody request with any body
+	CreateDeploymentPipelineWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateDeploymentPipeline(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEnvironments request
 	ListEnvironments(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -817,6 +822,30 @@ func (c *Client) ListDataPlanes(ctx context.Context, orgName string, reqEditors 
 
 func (c *Client) ListDeploymentPipelines(ctx context.Context, orgName string, params *ListDeploymentPipelinesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListDeploymentPipelinesRequest(c.Server, orgName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateDeploymentPipelineWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDeploymentPipelineRequestWithBody(c.Server, orgName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateDeploymentPipeline(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateDeploymentPipelineRequest(c.Server, orgName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3591,6 +3620,53 @@ func NewListDeploymentPipelinesRequest(server string, orgName string, params *Li
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewCreateDeploymentPipelineRequest calls the generic CreateDeploymentPipeline builder with application/json body
+func NewCreateDeploymentPipelineRequest(server string, orgName string, body CreateDeploymentPipelineJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateDeploymentPipelineRequestWithBody(server, orgName, "application/json", bodyReader)
+}
+
+// NewCreateDeploymentPipelineRequestWithBody generates requests for CreateDeploymentPipeline with any type of body
+func NewCreateDeploymentPipelineRequestWithBody(server string, orgName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/deployment-pipelines", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10632,6 +10708,11 @@ type ClientWithResponsesInterface interface {
 	// ListDeploymentPipelinesWithResponse request
 	ListDeploymentPipelinesWithResponse(ctx context.Context, orgName string, params *ListDeploymentPipelinesParams, reqEditors ...RequestEditorFn) (*ListDeploymentPipelinesResp, error)
 
+	// CreateDeploymentPipelineWithBodyWithResponse request with any body
+	CreateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDeploymentPipelineResp, error)
+
+	CreateDeploymentPipelineWithResponse(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDeploymentPipelineResp, error)
+
 	// ListEnvironmentsWithResponse request
 	ListEnvironmentsWithResponse(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResp, error)
 
@@ -11475,6 +11556,31 @@ func (r ListDeploymentPipelinesResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListDeploymentPipelinesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateDeploymentPipelineResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *DeploymentPipelineResponse
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateDeploymentPipelineResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateDeploymentPipelineResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14607,6 +14713,23 @@ func (c *ClientWithResponses) ListDeploymentPipelinesWithResponse(ctx context.Co
 	return ParseListDeploymentPipelinesResp(rsp)
 }
 
+// CreateDeploymentPipelineWithBodyWithResponse request with arbitrary body returning *CreateDeploymentPipelineResp
+func (c *ClientWithResponses) CreateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateDeploymentPipelineResp, error) {
+	rsp, err := c.CreateDeploymentPipelineWithBody(ctx, orgName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDeploymentPipelineResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateDeploymentPipelineWithResponse(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDeploymentPipelineResp, error) {
+	rsp, err := c.CreateDeploymentPipeline(ctx, orgName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateDeploymentPipelineResp(rsp)
+}
+
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResp
 func (c *ClientWithResponses) ListEnvironmentsWithResponse(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResp, error) {
 	rsp, err := c.ListEnvironments(ctx, orgName, params, reqEditors...)
@@ -16686,6 +16809,53 @@ func ParseListDeploymentPipelinesResp(rsp *http.Response) (*ListDeploymentPipeli
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateDeploymentPipelineResp parses an HTTP response from a CreateDeploymentPipelineWithResponse call
+func ParseCreateDeploymentPipelineResp(rsp *http.Response) (*CreateDeploymentPipelineResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateDeploymentPipelineResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest DeploymentPipelineResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse

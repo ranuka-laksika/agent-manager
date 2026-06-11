@@ -484,7 +484,7 @@ func ConvertToProjectListItem(project *models.ProjectResponse) spec.ProjectListI
 		Description:        &project.Description,
 		CreatedAt:          project.CreatedAt,
 		OrgName:            project.OrgName,
-		DeploymentPipeline: project.DeploymentPipeline,
+		DeploymentPipeline: &project.DeploymentPipeline,
 	}
 }
 

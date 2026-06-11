@@ -7201,7 +7201,7 @@ func NewListDataPlanesRequest(server string, namespaceName NamespaceNameParam, p
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/v1/clusterdataplanes", pathParam0)
+	operationPath := fmt.Sprintf("/api/v1/namespaces/%s/dataplanes", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}

@@ -1852,6 +1852,21 @@ type CreateCustomEvaluatorRequestLevel string
 // CreateCustomEvaluatorRequestType Evaluator type
 type CreateCustomEvaluatorRequestType string
 
+// CreateDeploymentPipelineRequest defines model for CreateDeploymentPipelineRequest.
+type CreateDeploymentPipelineRequest struct {
+	// Description Optional description
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable name for the pipeline
+	DisplayName string `json:"displayName"`
+
+	// ProjectName Optional project to associate the pipeline with
+	ProjectName *string `json:"projectName,omitempty"`
+
+	// PromotionPaths Ordered list of promotion paths
+	PromotionPaths []PromotionPath `json:"promotionPaths"`
+}
+
 // CreateEnvironmentRequest defines model for CreateEnvironmentRequest.
 type CreateEnvironmentRequest struct {
 	// DataplaneRef Reference to the dataplane
@@ -3446,6 +3461,9 @@ type ProjectListItem struct {
 	// CreatedAt Timestamp when the project was created
 	CreatedAt time.Time `json:"createdAt"`
 
+	// DeploymentPipeline Name of the deployment pipeline associated with the project
+	DeploymentPipeline *string `json:"deploymentPipeline,omitempty"`
+
 	// Description Description of the project
 	Description *string `json:"description,omitempty"`
 
@@ -4607,6 +4625,9 @@ type UpdateAgentKindJSONRequestBody = UpdateAgentKindRequest
 
 // AddAgentKindVersionJSONRequestBody defines body for AddAgentKindVersion for application/json ContentType.
 type AddAgentKindVersionJSONRequestBody = AddAgentKindVersionRequest
+
+// CreateDeploymentPipelineJSONRequestBody defines body for CreateDeploymentPipeline for application/json ContentType.
+type CreateDeploymentPipelineJSONRequestBody = CreateDeploymentPipelineRequest
 
 // CreateEnvironmentJSONRequestBody defines body for CreateEnvironment for application/json ContentType.
 type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest

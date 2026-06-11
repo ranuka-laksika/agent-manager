@@ -29,8 +29,8 @@ type ProjectListItem struct {
 	DisplayName string `json:"displayName"`
 	// Description of the project
 	Description *string `json:"description,omitempty"`
-	// Deployment pipeline associated with the project
-	DeploymentPipeline string `json:"deploymentPipeline,omitempty"`
+	// Name of the deployment pipeline associated with the project
+	DeploymentPipeline *string `json:"deploymentPipeline,omitempty"`
 	// Timestamp when the project was created
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -185,6 +185,38 @@ func (o *ProjectListItem) SetDescription(v string) {
 	o.Description = &v
 }
 
+// GetDeploymentPipeline returns the DeploymentPipeline field value if set, zero value otherwise.
+func (o *ProjectListItem) GetDeploymentPipeline() string {
+	if o == nil || IsNil(o.DeploymentPipeline) {
+		var ret string
+		return ret
+	}
+	return *o.DeploymentPipeline
+}
+
+// GetDeploymentPipelineOk returns a tuple with the DeploymentPipeline field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ProjectListItem) GetDeploymentPipelineOk() (*string, bool) {
+	if o == nil || IsNil(o.DeploymentPipeline) {
+		return nil, false
+	}
+	return o.DeploymentPipeline, true
+}
+
+// HasDeploymentPipeline returns a boolean if a field has been set.
+func (o *ProjectListItem) HasDeploymentPipeline() bool {
+	if o != nil && !IsNil(o.DeploymentPipeline) {
+		return true
+	}
+
+	return false
+}
+
+// SetDeploymentPipeline gets a reference to the given string and assigns it to the DeploymentPipeline field.
+func (o *ProjectListItem) SetDeploymentPipeline(v string) {
+	o.DeploymentPipeline = &v
+}
+
 // GetCreatedAt returns the CreatedAt field value
 func (o *ProjectListItem) GetCreatedAt() time.Time {
 	if o == nil {
@@ -226,7 +258,7 @@ func (o ProjectListItem) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
 	}
-	if o.DeploymentPipeline != "" {
+	if !IsNil(o.DeploymentPipeline) {
 		toSerialize["deploymentPipeline"] = o.DeploymentPipeline
 	}
 	toSerialize["createdAt"] = o.CreatedAt
