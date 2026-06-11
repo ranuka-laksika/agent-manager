@@ -17,6 +17,7 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,7 @@ import (
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -175,6 +177,20 @@ func handleCommonErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 	}
 }
 
+// validateOrgFromPath validates that the org in the path matches the caller's token org.
+func validateOrgFromPath(w http.ResponseWriter, ctx context.Context, pathOrg string) bool {
+	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return false
+	}
+	if pathOrg != resolvedOrg.OuHandle {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "org mismatch with token identity")
+		return false
+	}
+	return true
+}
+
 func (c *agentController) GetAgent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -182,6 +198,10 @@ func (c *agentController) GetAgent(w http.ResponseWriter, r *http.Request) {
 	orgName := r.PathValue(utils.PathParamOrgName)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
+
+	if !validateOrgFromPath(w, ctx, orgName) {
+		return
+	}
 
 	agent, err := c.agentService.GetAgent(ctx, orgName, projName, agentName)
 	if err != nil {

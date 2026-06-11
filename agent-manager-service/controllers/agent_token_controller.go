@@ -21,6 +21,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -56,6 +57,17 @@ func (c *agentTokenController) GenerateToken(w http.ResponseWriter, r *http.Requ
 	orgName := r.PathValue(utils.PathParamOrgName)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
+
+	// Validate org matches the caller's token
+	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return
+	}
+	if orgName != resolvedOrg.OuHandle {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "org mismatch with token identity")
+		return
+	}
 
 	log.Info(
 		"GenerateToken request received",
