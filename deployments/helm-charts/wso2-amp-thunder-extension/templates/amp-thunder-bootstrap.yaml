@@ -1333,21 +1333,6 @@ data:
     log_info "Level-1 resources created."
 
     # ===========================================================================
-    # 3. Create level-2 sub-resources (handle collisions: token, api-key, etc.)
-    # ===========================================================================
-    log_info "Creating level-2 sub-resources..."
-
-    R_GW_TOKEN=$(create_or_get_resource   "$RS_ID" "Gateway Token"            "token"     "Gateway token management"           "$R_GW")
-    R_LLM_KEY=$(create_or_get_resource    "$RS_ID" "LLM Provider API Key"     "api-key"   "LLM provider API key management"    "$R_LLM")
-    R_PROXY_KEY=$(create_or_get_resource  "$RS_ID" "LLM Proxy API Key"        "api-key"   "LLM proxy API key management"       "$R_PROXY")
-    R_AGENT_DEPLOY=$(create_or_get_resource "$RS_ID" "Agent Deployment"       "deploy"    "Agent deployment operations"        "$R_AGENT")
-    R_AGENT_TOKEN=$(create_or_get_resource  "$RS_ID" "Agent Token"            "token"     "Agent token management"             "$R_AGENT")
-    R_AGENT_KEY=$(create_or_get_resource    "$RS_ID" "Agent API Key"          "api-key"   "Agent API key management"           "$R_AGENT")
-    R_MON_SCORE=$(create_or_get_resource  "$RS_ID" "Monitor Score"            "score"     "Monitor score management"           "$R_MON")
-
-    log_info "Level-2 sub-resources created."
-
-    # ===========================================================================
     # 4. Create actions
     # ===========================================================================
     log_info "Creating actions..."
@@ -1378,8 +1363,7 @@ data:
     create_action "$RS_ID" "$R_GW"           "Read"                   "read"                   "View gateway details and status"
     create_action "$RS_ID" "$R_GW"           "Update"                 "update"                 "Update gateway configuration"
     create_action "$RS_ID" "$R_GW"           "Delete"                 "delete"                 "Delete a gateway"
-    # gateway/token actions  → amp:gateway:token:<action>
-    create_action "$RS_ID" "$R_GW_TOKEN"     "Manage"                 "manage"                 "Create, list, and delete gateway tokens"
+    create_action "$RS_ID" "$R_GW"           "Manage Token"           "token-manage"           "Create, list, and delete gateway tokens"
 
     # data-plane actions  → amp:data-plane:<action>
     create_action "$RS_ID" "$R_DP"           "Read"                   "read"                   "View data planes"
@@ -1406,8 +1390,7 @@ data:
     create_action "$RS_ID" "$R_LLM"          "Configure Guardrail"    "configure-guardrail"    "Configure guardrails, rate limits, and budgets"
     create_action "$RS_ID" "$R_LLM"          "Connect"                "connect"                "Connect an agent to an LLM provider"
     create_action "$RS_ID" "$R_LLM"          "Deploy"                 "deploy"                 "Deploy, undeploy, and restore an LLM provider"
-    # llm-provider/api-key actions  → amp:llm-provider:api-key:<action>
-    create_action "$RS_ID" "$R_LLM_KEY"      "Manage"                 "manage"                 "Create, update, and delete LLM provider API keys"
+    create_action "$RS_ID" "$R_LLM"          "Manage API Key"         "api-key-manage"         "Create, update, and delete LLM provider API keys"
 
     # mcp-server actions  → amp:mcp-server:<action>
     create_action "$RS_ID" "$R_MCP"          "Create"                 "create"                 "Create an MCP server"
@@ -1423,8 +1406,7 @@ data:
     create_action "$RS_ID" "$R_PROXY"        "Update"                 "update"                 "Update an LLM proxy"
     create_action "$RS_ID" "$R_PROXY"        "Delete"                 "delete"                 "Delete an LLM proxy"
     create_action "$RS_ID" "$R_PROXY"        "Deploy"                 "deploy"                 "Deploy, undeploy, and restore an LLM proxy"
-    # llm-proxy/api-key actions  → amp:llm-proxy:api-key:<action>
-    create_action "$RS_ID" "$R_PROXY_KEY"    "Manage"                 "manage"                 "Create, update, and delete LLM proxy API keys"
+    create_action "$RS_ID" "$R_PROXY"        "Manage API Key"         "api-key-manage"         "Create, update, and delete LLM proxy API keys"
 
     # evaluator actions  → amp:evaluator:<action>
     create_action "$RS_ID" "$R_EVAL"         "Create"                 "create"                 "Create a custom evaluator"
@@ -1441,13 +1423,10 @@ data:
     create_action "$RS_ID" "$R_AGENT"        "Promote"                "promote"                "Promote an agent deployment across environments"
     create_action "$RS_ID" "$R_AGENT"        "Rollback"               "rollback"               "Rollback an agent deployment"
     create_action "$RS_ID" "$R_AGENT"        "Suspend"                "suspend"                "Suspend or stop an agent deployment"
-    # agent/deploy actions  → amp:agent:deploy:<action>
-    create_action "$RS_ID" "$R_AGENT_DEPLOY" "Non-Production"         "non-production"         "Deploy an agent to a non-production environment"
-    create_action "$RS_ID" "$R_AGENT_DEPLOY" "Production"             "production"             "Deploy an agent to a production environment"
-    # agent/token actions  → amp:agent:token:<action>
-    create_action "$RS_ID" "$R_AGENT_TOKEN"  "Manage"                 "manage"                 "Generate agent tokens"
-    # agent/api-key actions  → amp:agent:api-key:<action>
-    create_action "$RS_ID" "$R_AGENT_KEY"    "Manage"                 "manage"                 "Create, update, and delete agent API keys"
+    create_action "$RS_ID" "$R_AGENT"        "Deploy Non-Production"  "deploy-non-production"  "Deploy an agent to a non-production environment"
+    create_action "$RS_ID" "$R_AGENT"        "Deploy Production"      "deploy-production"      "Deploy an agent to a production environment"
+    create_action "$RS_ID" "$R_AGENT"        "Manage Token"           "token-manage"           "Generate agent tokens"
+    create_action "$RS_ID" "$R_AGENT"        "Manage API Key"         "api-key-manage"         "Create, update, and delete agent API keys"
 
     # agent-kind actions  → amp:agent-kind:<action>
     create_action "$RS_ID" "$R_AGENT_KIND"   "Create"                 "create"                 "Create an agent kind"
@@ -1461,9 +1440,8 @@ data:
     create_action "$RS_ID" "$R_MON"          "Update"                 "update"                 "Update a monitor"
     create_action "$RS_ID" "$R_MON"          "Delete"                 "delete"                 "Delete a monitor"
     create_action "$RS_ID" "$R_MON"          "Execute"                "execute"                "Start, stop, and rerun monitors"
-    # monitor/score actions  → amp:monitor:score:<action>
-    create_action "$RS_ID" "$R_MON_SCORE"    "Read"                   "read"                   "View scores, breakdowns, and timeseries"
-    create_action "$RS_ID" "$R_MON_SCORE"    "Publish"                "publish"                "Publish monitor scores (internal/system use)"
+    create_action "$RS_ID" "$R_MON"          "Read Score"             "score-read"             "View scores, breakdowns, and timeseries"
+    create_action "$RS_ID" "$R_MON"          "Publish Score"          "score-publish"          "Publish monitor scores (internal/system use)"
 
     # observability actions  → amp:observability:<action>
     create_action "$RS_ID" "$R_OBS"          "Org Dashboard"          "org-dashboard"          "Access the organization-level observability dashboard"
@@ -1489,7 +1467,7 @@ data:
     # repository actions  → amp:repository:<action>
     create_action "$RS_ID" "$R_REPO"         "Read"                   "read"                   "Browse repository branches and commits"
 
-    log_info "Agent Manager resource server registration complete (90 permissions registered)."
+    log_info "Agent Manager resource server registration complete (101 permissions registered)."
 
   61-amp-default-roles.sh: |
     #!/bin/bash
