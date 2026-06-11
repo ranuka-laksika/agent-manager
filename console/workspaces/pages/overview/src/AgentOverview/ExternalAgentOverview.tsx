@@ -23,8 +23,6 @@ import { useParams, useSearchParams } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {
   useGetAgent,
-  useGetProject,
-  useListDeploymentPipelines,
   useListEnvironments,
   useListGateways,
 } from "@agent-management-platform/api-client";
@@ -100,7 +98,6 @@ export const ExternalAgentOverview = () => {
                 environment && orgId && projectId && agentId && (
                   <EnvironmentCard
                     key={environment.name}
-                    external
                     orgId={orgId}
                     projectId={projectId}
                     agentId={agentId}

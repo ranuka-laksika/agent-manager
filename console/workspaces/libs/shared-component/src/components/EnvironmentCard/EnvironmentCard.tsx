@@ -145,19 +145,9 @@ const formatRelativeTime = (value?: string | number | Date) => {
 };
 
 export const EnvironmentCard = (props: EnvironmentCardProps) => {
-  const { environment, external, orgId, projectId, agentId, actions, bottomContent } = props;
-  const { data: deployments, isLoading: isDeploymentsLoading } =
-    useListAgentDeployments(
-      {
-        orgName: orgId,
-        projName: projectId,
-        agentName: agentId,
-      },
-      {
-        enabled: !!orgId && !!projectId && !!agentId && !external,
-      }
-    );
-  const { data: agent } = useGetAgent({
+  const { environment, orgId, projectId, agentId, actions, bottomContent } = props;
+  const theme = useTheme();
+  const { data: agent, isLoading: isAgentLoading } = useGetAgent({
     orgName: orgId,
     projName: projectId,
     agentName: agentId,
@@ -186,9 +176,9 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
   );
 
   const { data: buildsData } = useGetAgentBuilds({
-    orgName: !external ? orgId : "",
-    projName: !external ? projectId : "",
-    agentName: !external ? agentId : "",
+    orgName: !isExternal ? orgId : "",
+    projName: !isExternal ? projectId : "",
+    agentName: !isExternal ? agentId : "",
   });
 
   const hasSuccessfulBuild = buildsData?.builds?.some(
@@ -248,27 +238,16 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             </Box>
             <Box display="flex" flexDirection="row" gap={1} alignItems="center">
               {actions}
-              {!external && (
-                <Button
-                  startIcon={<Workflow size={16} />}
-                  variant="text"
-                  component={Link}
-                  to={generatePath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.environment.children.observability.children.traces.path,
-                    {
-                      orgId,
-                      projectId,
-                      agentId,
-                      envId: environment?.name ?? "",
-                    }
-                  )}
-                  color="primary"
-                  size="small"
-                >
-                  View Traces
-                </Button>
-              )}
+              <Button
+                startIcon={<Workflow size={16} />}
+                variant="text"
+                component={Link}
+                to={tracesPath}
+                color="primary"
+                size="small"
+              >
+                View Traces
+              </Button>
             </Box>
           </Box>
           {bottomContent}
@@ -307,7 +286,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             <Typography variant="h6">
               {environment?.displayName} Environment
             </Typography>
-            {currentDiployment?.status === DeploymentStatus.ACTIVE && (
+            {currentDeployment?.status === DeploymentStatus.ACTIVE && (
               <>
                 <EnvStatus status={DeploymentStatus.ACTIVE} />
                 <Box
@@ -317,13 +296,13 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                   alignItems="center"
                 >
                   <Clock size={16} color={theme.vars?.palette?.text?.secondary} />
-                  {formatRelativeTime(currentDiployment?.lastDeployed)}
+                  {formatRelativeTime(currentDeployment?.lastDeployed)}
                 </Box>
               </>
             )}
-            {(currentDiployment?.status === DeploymentStatus.ERROR ||
-              currentDiployment?.status === DeploymentStatus.FAILED) && (
-              <EnvStatus status={currentDiployment.status as DeploymentStatus} />
+            {(currentDeployment?.status === DeploymentStatus.ERROR ||
+              currentDeployment?.status === DeploymentStatus.FAILED) && (
+              <EnvStatus status={currentDeployment.status as DeploymentStatus} />
             )}
           </Box>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
@@ -335,7 +314,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                 variant="outlined"
               />
             )}
-            {currentDiployment?.status === DeploymentStatus.ACTIVE && (
+            {currentDeployment?.status === DeploymentStatus.ACTIVE && (
               <>
                 <Button
                   startIcon={<TryOutlined size={16} />}
@@ -371,7 +350,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
           pt={2}
           alignItems="center"
         >
-          {currentDiployment.status === DeploymentStatus.INACTIVE && (
+          {currentDeployment.status === DeploymentStatus.INACTIVE && (
             <NoDataFound
               disableBackground
               message="Not Deployed"
@@ -417,8 +396,8 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
           {currentDeployment.status === DeploymentStatus.DEPLOYING && (
             <NoDataFound disableBackground message="Deploying..." icon={<CircularProgress size={32} />} />
           )}
-          {(currentDiployment.status === DeploymentStatus.ERROR ||
-            currentDiployment.status === DeploymentStatus.FAILED) && (
+          {(currentDeployment.status === DeploymentStatus.ERROR ||
+            currentDeployment.status === DeploymentStatus.FAILED) && (
             <Alert
               severity="error"
               sx={{ width: "100%" }}

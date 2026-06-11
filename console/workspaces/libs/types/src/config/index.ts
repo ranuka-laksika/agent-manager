@@ -32,6 +32,19 @@ export interface AppConfig {
   /** When false, nav items are shown regardless of token scopes (mirrors RBAC_ENABLED). */
   rbacEnabled: boolean;
   instrumentationUrl: string;
+  /**
+   * Base URL the API Platform Gateway uses to reach Agent Manager from inside
+   * the cluster. The add-environment.sh script appends /api/v1 and
+   * /auth/external/jwks.json to this as needed.
+   * Used to render the curl|bash command in the Create Environment drawer.
+   */
+  agentManagerInternalBaseUrl?: string;
+  /**
+   * host:port the API Platform Gateway uses to reach Agent Manager's
+   * internal control-plane channel (port 9243). Used to render the
+   * add-environment.sh command in the Create Environment drawer.
+   */
+  agentManagerInternalCpHost?: string;
   guardrailsCatalogUrl: string;
   guardrailsDefinitionBaseUrl: string;
   /**

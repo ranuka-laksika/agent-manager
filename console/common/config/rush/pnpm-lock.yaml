@@ -3109,6 +3109,9 @@ importers:
       '@wso2/oxygen-ui':
         specifier: 0.10.1
         version: 0.10.1(@mui/system@7.3.11(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(@wso2/oxygen-ui-icons-react@0.10.1(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@wso2/oxygen-ui-charts-react':
+        specifier: 0.10.1
+        version: 0.10.1(@types/react@19.2.14)(@wso2/oxygen-ui@0.10.1(@mui/system@7.3.11(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(@wso2/oxygen-ui-icons-react@0.10.1(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react-is@19.2.7)(react@19.1.1)(redux@5.0.1)
       '@wso2/oxygen-ui-icons-react':
         specifier: 0.10.1
         version: 0.10.1(react@19.1.1)
@@ -10361,7 +10364,7 @@ snapshots:
       immer: 11.1.8
       redux: 5.0.1
       redux-thunk: 3.1.0(redux@5.0.1)
-      reselect: 5.1.1
+      reselect: 5.2.0
     optionalDependencies:
       react: 19.1.1
       react-redux: 9.3.0(@types/react@19.2.14)(react@19.1.1)(redux@5.0.1)

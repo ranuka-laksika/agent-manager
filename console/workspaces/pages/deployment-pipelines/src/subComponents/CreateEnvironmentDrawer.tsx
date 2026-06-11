@@ -41,7 +41,7 @@ import {
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useListDataPlanes } from "@agent-management-platform/api-client";
-import type { DataPlane } from "@agent-management-platform/types";
+import { globalConfig, type DataPlane } from "@agent-management-platform/types";
 import { createEnvironmentSchema, type CreateEnvironmentFormValues } from "../form/environmentSchema";
 
 const SCRIPT_URL =
@@ -79,6 +79,14 @@ function buildScript(
   isProduction: boolean,
   token: string,
 ): string {
+  // Cluster-internal addresses the gateway uses to reach Agent Manager. Sourced
+  // from runtime config so the same drawer renders the right values for
+  // docker-compose (host.docker.internal) vs in-cluster (svc.cluster.local)
+  // deployments. The script appends /api/v1 and /auth/external/jwks.json to the
+  // base URL itself, so we only need to pipe these two values through.
+  const internalBase = globalConfig.agentManagerInternalBaseUrl?.trim();
+  const internalCp = globalConfig.agentManagerInternalCpHost?.trim();
+
   const lines = [
     `curl -fsSL ${SCRIPT_URL} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
@@ -86,6 +94,8 @@ function buildScript(
     `    AGENT_MANAGER_TOKEN=${token} \\`,
     ...(isProduction ? ["    IS_PRODUCTION=true \\"] : []),
     `    CHART_VERSION=${GATEWAY_CHART_VERSION} \\`,
+    ...(internalBase ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`] : []),
+    ...(internalCp ? [`    AGENT_MANAGER_INTERNAL_CP=${internalCp} \\`] : []),
     "    bash",
   ];
   return lines.join("\n");

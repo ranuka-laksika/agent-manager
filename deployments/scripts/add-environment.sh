@@ -76,10 +76,13 @@ CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
 
-# For helm: how the gateway controller reaches agent-manager
-AGENT_MANAGER_INTERNAL_API="${AGENT_MANAGER_INTERNAL_API:-http://host.docker.internal:9000/api/v1}"
+# Base URL the gateway uses to reach Agent Manager. Both /api/v1 and the
+# unauthenticated /auth/external/jwks.json endpoint are served from this host:port
+# by AMS
+AGENT_MANAGER_INTERNAL_BASE_URL="${AGENT_MANAGER_INTERNAL_BASE_URL:-http://host.docker.internal:9000}"
 AGENT_MANAGER_INTERNAL_CP="${AGENT_MANAGER_INTERNAL_CP:-host.docker.internal:9243}"
-AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_JWKS:-http://host.docker.internal:9000/auth/external/jwks.json}"
+AGENT_MANAGER_INTERNAL_API="${AGENT_MANAGER_INTERNAL_BASE_URL}/api/v1"
+AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_BASE_URL}/auth/external/jwks.json"
 
 echo "=== Adding Environment: ${DISPLAY_NAME} (${ENV_NAME}) ==="
 echo ""

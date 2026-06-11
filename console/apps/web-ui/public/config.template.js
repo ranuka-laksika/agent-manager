@@ -41,6 +41,8 @@ window.__RUNTIME_CONFIG__ = {
   gatewayControlPlaneUrl: '$GATEWAY_CONTROL_PLANE_URL',
   gatewayVersion: '$GATEWAY_VERSION',
   instrumentationUrl: '$INSTRUMENTATION_URL',
+  agentManagerInternalBaseUrl: '$AGENT_MANAGER_INTERNAL_BASE_URL',
+  agentManagerInternalCpHost: '$AGENT_MANAGER_INTERNAL_CP_HOST',
   guardrailsCatalogUrl: '$GUARDRAILS_CATALOG_URL',
   guardrailsDefinitionBaseUrl: '$GUARDRAILS_DEFINITION_BASE_URL',
   guardrailCapabilities: {

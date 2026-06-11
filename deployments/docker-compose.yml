@@ -136,6 +136,12 @@ services:
       - GATEWAY_CONTROL_PLANE_URL=http://localhost:9243
       - GATEWAY_VERSION=v0.11.0
       - INSTRUMENTATION_URL=http://localhost:22893/otel
+      # Cluster-internal URLs the gateway uses to reach Agent Manager — piped
+      # into the add-environment.sh command rendered by the Create Environment
+      # drawer. In docker-compose mode AMS is on the host, so the gateway
+      # (which runs in k3d) reaches it via host.docker.internal.
+      - AGENT_MANAGER_INTERNAL_BASE_URL=http://host.docker.internal:9000
+      - AGENT_MANAGER_INTERNAL_CP_HOST=host.docker.internal:9243
       - GUARDRAILS_CATALOG_URL=https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies?categories=Guardrails,AI&limit=100
       - GUARDRAILS_DEFINITION_BASE_URL=https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies
       - DOCS_URL=https://wso2.github.io/agent-manager/docs/next
