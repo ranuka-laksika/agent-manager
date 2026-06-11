@@ -331,8 +331,9 @@ export const AddLLMProviderComponent: React.FC = () => {
   const isEditMode = !!configId;
 
   const [selectedEnvIndex, setSelectedEnvIndex] = useState(0);
+  type SelectedProvider = { uuid: string; id: string; template?: string };
   const [providerByEnv, setProviderByEnv] = useState<
-    Record<string, string | null>
+    Record<string, SelectedProvider | null>
   >({});
   const [guardrailsByEnv, setGuardrailsByEnv] = useState<Record<string, GuardrailSelection[]>>({});
   const [envVarNames, setEnvVarNames] = useState<Record<string, string>>(
@@ -411,15 +412,15 @@ export const AddLLMProviderComponent: React.FC = () => {
 
   useEffect(() => {
     if (!existingConfig || !isEditMode) return;
-    const nextProviderByEnv: Record<string, string | null> = {};
+    const nextProviderByEnv: Record<string, SelectedProvider | null> = {};
     for (const [envName, mapping] of Object.entries(
       existingConfig.envMappings ?? {},
     )) {
       const config = mapping.configuration;
       const providerUuid =
         config?.providerUuid ?? config?.proxyUuid ?? undefined;
-      if (providerUuid) {
-        nextProviderByEnv[envName] = providerUuid;
+      if (providerUuid && config?.providerName) {
+        nextProviderByEnv[envName] = { uuid: providerUuid, id: config.providerName };
       }
     }
     setProviderByEnv(nextProviderByEnv);
@@ -457,11 +458,9 @@ export const AddLLMProviderComponent: React.FC = () => {
   // Auto-generate env var names from the selected provider's template in create mode
   const primaryTemplate = useMemo(() => {
     const firstEnvName = environments[0]?.name;
-    const uuid = firstEnvName ? providerByEnv[firstEnvName] : undefined;
-    if (!uuid) return "";
-    const provider = providers.find((p) => p.uuid === uuid);
-    return provider?.template ?? provider?.id ?? "";
-  }, [providerByEnv, providers, environments]);
+    const entry = firstEnvName ? providerByEnv[firstEnvName] : undefined;
+    return entry ? (entry.template ?? entry.id ?? "") : "";
+  }, [providerByEnv, environments]);
 
   useEffect(() => {
     if (isEditMode || envVarNamesEditedRef.current) return;
@@ -520,46 +519,24 @@ export const AddLLMProviderComponent: React.FC = () => {
     let resolvedTemplate = "";
 
     for (const env of environments) {
-      const providerUuid = providerByEnv[env.name] ?? null;
-      if (providerUuid) {
-        const provider = providers.find((p) => p.uuid === providerUuid);
-        if (provider) {
-          hasAtLeastOneProvider = true;
-          if (!resolvedTemplate) resolvedTemplate = provider.template ?? provider.id ?? "";
-          const envGuardrails = guardrailsByEnv[env.name] ?? [];
-          const envPolicies = envGuardrails.map((g) => ({
-            name: g.name,
-            version: g.version,
-            paths: [{ path: "/*", methods: ["*"], params: g.settings ?? {} }],
-          }));
-          envMappings[env.name] = {
-            providerName: provider.id,
-            configuration: {
-              policies: envPolicies.length > 0 ? envPolicies : undefined,
-            },
-          };
-        } else if (isEditMode && existingConfig) {
-          // Provider not in current catalog page — preserve existing mapping
-          // to avoid dropping providers beyond the catalog page limit.
-          const existingMapping = existingConfig.envMappings?.[env.name];
-          const existingProviderName = existingMapping?.configuration?.providerName;
-          if (existingProviderName) {
-            hasAtLeastOneProvider = true;
-            const envGuardrails = guardrailsByEnv[env.name] ?? [];
-            const envPolicies = envGuardrails.map((g) => ({
-              name: g.name,
-              version: g.version,
-              paths: [{ path: "/*", methods: ["*"], params: g.settings ?? {} }],
-            }));
-            envMappings[env.name] = {
-              providerName: existingProviderName,
-              configuration: {
-                policies: envPolicies.length > 0 ? envPolicies : undefined,
-              },
-            };
-          }
-        }
-      }
+      const entry = providerByEnv[env.name];
+      if (!entry) continue;
+
+      hasAtLeastOneProvider = true;
+      if (!resolvedTemplate) resolvedTemplate = entry.template ?? entry.id ?? "";
+
+      const envGuardrails = guardrailsByEnv[env.name] ?? [];
+      const envPolicies = envGuardrails.map((g) => ({
+        name: g.name,
+        version: g.version,
+        paths: [{ path: "/*", methods: ["*"], params: g.settings ?? {} }],
+      }));
+      envMappings[env.name] = {
+        providerName: entry.id,
+        configuration: {
+          policies: envPolicies.length > 0 ? envPolicies : undefined,
+        },
+      };
     }
 
     if (!hasAtLeastOneProvider) {
@@ -643,7 +620,6 @@ export const AddLLMProviderComponent: React.FC = () => {
   }, [
     providerByEnv,
     environments,
-    providers,
     guardrailsByEnv,
     envVarNames,
     isExternal,
@@ -660,26 +636,14 @@ export const AddLLMProviderComponent: React.FC = () => {
     backHref,
   ]);
 
-  const hasAnyProvider = environments.some((env) => {
-    const uuid = providerByEnv[env.name];
-    if (!uuid) return false;
-    if (providers.some((p) => p.uuid === uuid)) return true;
-    if (isEditMode && existingConfig) {
-      const existing = existingConfig.envMappings?.[env.name];
-      return !!existing?.configuration?.providerName;
-    }
-    return false;
-  });
+  const hasProviderForEnv = (envName: string) =>
+    !!providerByEnv[envName]
+    || (isEditMode && !!existingConfig?.envMappings?.[envName]?.configuration?.providerName);
 
-  const allEnvsHaveProvider = environments.length > 0 && environments.every((env) => {
-    const uuid = providerByEnv[env.name];
-    if (uuid && providers.some((p) => p.uuid === uuid)) return true;
-    if (isEditMode && existingConfig) {
-      const existing = existingConfig.envMappings?.[env.name];
-      return !!existing?.configuration?.providerName;
-    }
-    return false;
-  });
+  const hasAnyProvider = environments.some((env) => hasProviderForEnv(env.name));
+
+  const allEnvsHaveProvider =
+    environments.length > 0 && environments.every((env) => hasProviderForEnv(env.name));
   const isFormValid = hasAnyProvider;
 
   const mutationError = createConfig.isError
@@ -782,27 +746,25 @@ export const AddLLMProviderComponent: React.FC = () => {
             </>
           )}
 
-          {providerByEnv[selectedEnvName] ? (
-            <Form.CardButton
-              onClick={() => setProviderDrawerOpen(true)}
-              selected
-              aria-label={`Selected: ${providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.name ?? "Unknown"}. Click to change.`}
-            >
-              <Form.CardContent>
-                <ProviderDisplay
-                  provider={
-                    providers.find(
-                      (p) => p.uuid === providerByEnv[selectedEnvName],
-                    ) ?? null
-                  }
-                  isSelected
-                  templateInfo={templateMap.get(
-                    providers.find((p) => p.uuid === providerByEnv[selectedEnvName])?.template ?? "",
-                  )}
-                />
-              </Form.CardContent>
-            </Form.CardButton>
-          ) : (
+          {providerByEnv[selectedEnvName] ? (() => {
+            const selectedUuid = providerByEnv[selectedEnvName]?.uuid;
+            const fullProvider = providers.find((p) => p.uuid === selectedUuid) ?? null;
+            return (
+              <Form.CardButton
+                onClick={() => setProviderDrawerOpen(true)}
+                selected
+                aria-label={`Selected: ${fullProvider?.name ?? "Unknown"}. Click to change.`}
+              >
+                <Form.CardContent>
+                  <ProviderDisplay
+                    provider={fullProvider}
+                    isSelected
+                    templateInfo={templateMap.get(fullProvider?.template ?? "")}
+                  />
+                </Form.CardContent>
+              </Form.CardButton>
+            );
+          })() : (
             <Box>
               {catalogData && providers.length === 0 ? (
                 <ListingTable.Container>
@@ -855,16 +817,20 @@ export const AddLLMProviderComponent: React.FC = () => {
             onClose={() => setProviderDrawerOpen(false)}
             providers={providers}
             templateMap={templateMap}
-            selectedUuid={providerByEnv[selectedEnvName] ?? undefined}
+            selectedUuid={providerByEnv[selectedEnvName]?.uuid ?? undefined}
             subtitle={
               environments.length > 1
                 ? `Choose the catalog provider for the ${environments[selectedEnvIndex]?.displayName ?? environments[selectedEnvIndex]?.name ?? ""} environment.`
                 : "Choose the catalog provider for this agent."
             }
             onSelect={(uuid) => {
-              if (selectedEnvName) {
-                setProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }));
-              }
+              if (!selectedEnvName) return;
+              const picked = providers.find((p) => p.uuid === uuid);
+              if (!picked) return;
+              setProviderByEnv((prev) => ({
+                ...prev,
+                [selectedEnvName]: { uuid, id: picked.id, template: picked.template },
+              }));
             }}
           />
           {providerByEnv[selectedEnvName] && (
