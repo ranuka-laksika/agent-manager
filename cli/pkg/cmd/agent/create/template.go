@@ -37,7 +37,7 @@ spec:
     repository:
       url: <https://github.com/org/repo>
       branch: <main>
-      appPath: </path/within/repo>
+      appPath: /<path-within-repo>    # must start with /
       # secretRef: <git-secret-name>    # private repositories
     # --- prebuilt Agent Kind variant: replace repository with ---
     # agentKind:
@@ -47,18 +47,18 @@ spec:
     type: buildpack             # or: docker
     buildpack:
       language: <python>
-      languageVersion: "<3.11>"         # optional (e.g. ballerina needs none)
-      runCommand: <python main.py>      # optional (e.g. ballerina needs none)
+      languageVersion: "<3.11>"         # required (only ballerina needs none)
+      runCommand: <python main.py>      # required (only ballerina needs none)
     # --- docker variant: replace buildpack with ---
     # docker:
     #   dockerfilePath: </Dockerfile>
   inputInterface:
     type: HTTP
-    # --- custom-api only ---
+    # --- custom-api only (all three required) ---
     # port: 8000
     # basePath: </api>
     # schema:
-    #   path: </openapi.yaml>
+    #   path: /<openapi.yaml>          # must start with /
   # configurations:
   #   env:
   #     - key: <KEY>

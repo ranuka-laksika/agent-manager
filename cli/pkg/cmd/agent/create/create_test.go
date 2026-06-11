@@ -139,6 +139,10 @@ func testCreateCmd(t *testing.T, ios *iostreams.IOStreams, clientFn func(context
 		},
 	}
 	root := &cobra.Command{Use: "amctl", SilenceErrors: true, SilenceUsage: true}
+	// Mirror the production root's persistent --json flag (pkg/cmd/root.go) so
+	// mode gating that checks Changed("json") is exercisable. Output JSON mode
+	// is still driven by newTestIO, not this flag.
+	root.PersistentFlags().Bool("json", false, "Output as JSON envelopes")
 	cmdutil.EnableOrgOverride(root, f)
 
 	agentCmd := &cobra.Command{Use: "agent"}

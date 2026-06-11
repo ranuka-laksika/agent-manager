@@ -38,6 +38,9 @@ const (
 	agentTypeInternal = "agent-api"
 	agentTypeExternal = "external-agent-api"
 
+	// The server exempts only Ballerina from languageVersion/runCommand.
+	langBallerina = "ballerina"
+
 	interfaceTypeHTTP = "HTTP"
 )
 
@@ -148,7 +151,7 @@ func buildBuild(opts *CreateOptions) (*amsvc.Build, []string) {
 		d := amsvc.DockerBuild{
 			Type: amsvc.Docker,
 			Docker: amsvc.DockerConfig{
-				DockerfilePath: opts.Dockerfile,
+				DockerfilePath: ensureLeadingSlash(opts.Dockerfile),
 			},
 		}
 		if err := b.FromDockerBuild(d); err != nil {

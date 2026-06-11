@@ -64,6 +64,17 @@ func TestCreate_TemplateMode_RejectsContentFlags(t *testing.T) {
 	assertContains(t, details, "--repo-url is not allowed with --template")
 }
 
+// --template prints a YAML document; --json promises a JSON envelope on
+// stdout, so the combination is rejected rather than silently emitting YAML.
+func TestCreate_TemplateMode_RejectsJSON(t *testing.T) {
+	ios, _, _ := newTestIO(true)
+	cmd := testCreateCmd(t, ios, nil, "")
+	cmd.SetArgs([]string{"agent", "create", "--template", "--json"})
+	err := cmd.Execute()
+	details := mustFlagDetails(t, err)
+	assertContains(t, details, "--json is not allowed with --template")
+}
+
 func TestCreate_TemplateMode_RejectsFile(t *testing.T) {
 	ios, _, _ := newTestIO(true)
 	cmd := testCreateCmd(t, ios, nil, "")
@@ -204,6 +215,8 @@ spec:
 	assertContains(t, details, "spec.provisioning.repository.branch is required")
 	assertContains(t, details, "spec.provisioning.repository.appPath is required")
 	assertContains(t, details, "spec.build is required for internal provisioning")
+	assertContains(t, details, "spec.agentType.type is required for internal provisioning")
+	assertContains(t, details, "spec.inputInterface is required for internal provisioning")
 	if !strings.Contains(err.Error(), "invalid agent spec") {
 		t.Errorf("error %q missing 'invalid agent spec' header", err.Error())
 	}

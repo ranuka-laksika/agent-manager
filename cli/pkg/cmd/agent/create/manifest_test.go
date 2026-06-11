@@ -53,6 +53,8 @@ spec:
       language: python
       languageVersion: "3.12"
       runCommand: python main.py
+  inputInterface:
+    type: HTTP
 `
 
 func TestLoadManifest_Internal(t *testing.T) {

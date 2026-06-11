@@ -182,8 +182,8 @@ func TestBuildBuild_Docker(t *testing.T) {
 		t.Fatalf("discriminator = %q, want docker", disc)
 	}
 	d, _ := b.AsDockerBuild()
-	if d.Docker.DockerfilePath != "build/Dockerfile" {
-		t.Errorf("DockerfilePath = %q, want build/Dockerfile", d.Docker.DockerfilePath)
+	if d.Docker.DockerfilePath != "/build/Dockerfile" {
+		t.Errorf("DockerfilePath = %q, want /build/Dockerfile (leading slash normalized)", d.Docker.DockerfilePath)
 	}
 }
 

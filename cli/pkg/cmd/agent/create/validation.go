@@ -19,6 +19,7 @@ package create
 import (
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -59,6 +60,9 @@ func validateTemplateMode(cmd *cobra.Command, args []string) error {
 	}
 	if cmd.Flags().Changed("file") {
 		v = append(v, "--file is not allowed with --template")
+	}
+	if cmd.Flags().Changed("json") {
+		v = append(v, "--json is not allowed with --template (the template is YAML)")
 	}
 	for _, name := range changedContentFlags(cmd) {
 		v = append(v, "--"+name+" is not allowed with --template")
@@ -147,9 +151,21 @@ func internalRequestViolations(req amsvc.CreateAgentRequest) []string {
 		}
 		if repo.AppPath == "" {
 			v = append(v, "spec.provisioning.repository.appPath is required")
+		} else if !strings.HasPrefix(repo.AppPath, "/") {
+			v = append(v, `spec.provisioning.repository.appPath must start with "/"`)
 		}
 		if req.Build == nil {
 			v = append(v, "spec.build is required for internal provisioning")
+		}
+		// Only agentKind-sourced agents may omit agentType and inputInterface
+		// (the server enriches them from the kind); source agents need both.
+		if req.AgentType == nil || req.AgentType.Type == "" {
+			v = append(v, fmt.Sprintf("spec.agentType.type is required for internal provisioning (%s)", agentTypeInternal))
+		}
+		if req.InputInterface == nil {
+			v = append(v, "spec.inputInterface is required for internal provisioning")
+		} else if req.InputInterface.Type == "" {
+			v = append(v, fmt.Sprintf("spec.inputInterface.type is required (must be %q)", interfaceTypeHTTP))
 		}
 	}
 	if hasKind {
@@ -176,8 +192,14 @@ func internalRequestViolations(req amsvc.CreateAgentRequest) []string {
 		if req.InputInterface == nil || req.InputInterface.BasePath == nil || *req.InputInterface.BasePath == "" {
 			v = append(v, "spec.inputInterface.basePath is required for subtype custom-api")
 		}
-		if req.InputInterface == nil || req.InputInterface.Schema == nil || req.InputInterface.Schema.Path == "" {
+		switch {
+		case req.InputInterface == nil || req.InputInterface.Schema == nil || req.InputInterface.Schema.Path == "":
 			v = append(v, "spec.inputInterface.schema.path is required for subtype custom-api")
+		case !strings.HasPrefix(req.InputInterface.Schema.Path, "/"):
+			v = append(v, `spec.inputInterface.schema.path must start with "/"`)
+		}
+		if req.InputInterface != nil && req.InputInterface.Port == nil {
+			v = append(v, "spec.inputInterface.port is required for subtype custom-api")
 		}
 	case "":
 		if hasRepo {
@@ -219,13 +241,35 @@ func buildViolations(b *amsvc.Build) []string {
 	switch disc {
 	case buildTypeBuildpack:
 		bp, err := b.AsBuildpackBuild()
-		if err == nil && bp.Buildpack.Language == "" {
+		if err != nil {
+			return nil
+		}
+		cfg := bp.Buildpack
+		if cfg.Language == "" {
 			return []string{"spec.build.buildpack.language is required"}
 		}
+		// Ballerina is the only language the server exempts from
+		// languageVersion and runCommand.
+		var v []string
+		if cfg.Language != langBallerina {
+			if cfg.LanguageVersion == nil || *cfg.LanguageVersion == "" {
+				v = append(v, fmt.Sprintf("spec.build.buildpack.languageVersion is required for language %q", cfg.Language))
+			}
+			if cfg.RunCommand == nil || *cfg.RunCommand == "" {
+				v = append(v, fmt.Sprintf("spec.build.buildpack.runCommand is required for language %q", cfg.Language))
+			}
+		}
+		return v
 	case buildTypeDocker:
 		d, err := b.AsDockerBuild()
-		if err == nil && d.Docker.DockerfilePath == "" {
+		if err != nil {
+			return nil
+		}
+		if d.Docker.DockerfilePath == "" {
 			return []string{"spec.build.docker.dockerfilePath is required"}
+		}
+		if !strings.HasPrefix(d.Docker.DockerfilePath, "/") {
+			return []string{`spec.build.docker.dockerfilePath must start with "/"`}
 		}
 	default:
 		return []string{fmt.Sprintf("spec.build.type must be %q or %q, got %q", buildTypeBuildpack, buildTypeDocker, disc)}
@@ -253,7 +297,9 @@ func envViolations(envs []amsvc.EnvironmentVariable) []string {
 func externalRequestViolations(req amsvc.CreateAgentRequest) []string {
 	var v []string
 
-	if req.AgentType != nil && req.AgentType.Type != "" && req.AgentType.Type != agentTypeExternal {
+	if req.AgentType == nil || req.AgentType.Type == "" {
+		v = append(v, fmt.Sprintf("spec.agentType.type is required for external provisioning (%s)", agentTypeExternal))
+	} else if req.AgentType.Type != agentTypeExternal {
 		v = append(v, fmt.Sprintf("spec.agentType.type must be %q for external provisioning, got %q", agentTypeExternal, req.AgentType.Type))
 	}
 

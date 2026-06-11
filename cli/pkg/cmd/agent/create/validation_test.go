@@ -184,10 +184,21 @@ func TestPrepare_BuildpackRequiresLanguage(t *testing.T) {
 	assertContains(t, details, "spec.build.buildpack.language is required")
 }
 
-// languageVersion and runCommand are optional in the API (Ballerina needs
-// neither); the old flag rule requiring both is intentionally relaxed.
-func TestPrepare_BuildpackVersionAndRunCommandOptional(t *testing.T) {
+// The server requires languageVersion and runCommand for every buildpack
+// language except Ballerina — flag mode must report both locally.
+func TestPrepare_BuildpackRequiresVersionAndRunCommand(t *testing.T) {
 	opts := validBuildpackOpts()
+	opts.LanguageVersion = ""
+	opts.RunCommand = ""
+	err := mustPrepareErr(t, opts)
+	details := mustFlagDetails(t, err)
+	assertContains(t, details, `spec.build.buildpack.languageVersion is required for language "go"`)
+	assertContains(t, details, `spec.build.buildpack.runCommand is required for language "go"`)
+}
+
+func TestPrepare_BallerinaNeedsNoVersionOrRunCommand(t *testing.T) {
+	opts := validBuildpackOpts()
+	opts.Language = "ballerina"
 	opts.LanguageVersion = ""
 	opts.RunCommand = ""
 	if _, err := prepare(opts); err != nil {
@@ -209,6 +220,24 @@ func TestPrepare_DockerRequiresDockerfile(t *testing.T) {
 	err := mustPrepareErr(t, opts)
 	details := mustFlagDetails(t, err)
 	assertContains(t, details, "spec.build.docker.dockerfilePath is required")
+}
+
+// --dockerfile is normalized like --repo-path: the server requires a leading
+// slash, so the builder prepends one instead of round-tripping a 400.
+func TestPrepare_DockerfileWithoutSlashNormalized(t *testing.T) {
+	opts := validDockerOpts()
+	opts.Dockerfile = "build/Dockerfile"
+	req, err := prepare(opts)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	d, err := req.Build.AsDockerBuild()
+	if err != nil {
+		t.Fatalf("build union: %v", err)
+	}
+	if d.Docker.DockerfilePath != "/build/Dockerfile" {
+		t.Errorf("DockerfilePath = %q, want /build/Dockerfile", d.Docker.DockerfilePath)
+	}
 }
 
 func TestPrepare_DockerRejectsBuildpackFlags(t *testing.T) {

@@ -202,9 +202,9 @@ func TestValidateRequest_BuildpackRequiresLanguage(t *testing.T) {
 	assertViolation(t, v, "spec.build.buildpack.language is required")
 }
 
-// languageVersion and runCommand are optional in the API (Ballerina needs
-// neither) — the old flag-mode rule requiring both is intentionally relaxed.
-func TestValidateRequest_BuildpackVersionAndRunCommandOptional(t *testing.T) {
+// Ballerina is the only language the server exempts from languageVersion and
+// runCommand (utils.validateLanguage / validateBuildConfiguration).
+func TestValidateRequest_BallerinaNeedsNoVersionOrRunCommand(t *testing.T) {
 	req := validInternalReq(t)
 	var b amsvc.Build
 	if err := b.FromBuildpackBuild(amsvc.BuildpackBuild{
@@ -217,6 +217,21 @@ func TestValidateRequest_BuildpackVersionAndRunCommandOptional(t *testing.T) {
 	assertNoViolations(t, validateRequest(req))
 }
 
+func TestValidateRequest_BuildpackRequiresVersionAndRunCommand(t *testing.T) {
+	req := validInternalReq(t)
+	var b amsvc.Build
+	if err := b.FromBuildpackBuild(amsvc.BuildpackBuild{
+		Type:      amsvc.Buildpack,
+		Buildpack: amsvc.BuildpackConfig{Language: "python"},
+	}); err != nil {
+		t.Fatalf("build union: %v", err)
+	}
+	req.Build = &b
+	v := validateRequest(req)
+	assertViolation(t, v, `spec.build.buildpack.languageVersion is required for language "python"`)
+	assertViolation(t, v, `spec.build.buildpack.runCommand is required for language "python"`)
+}
+
 func TestValidateRequest_DockerRequiresDockerfilePath(t *testing.T) {
 	req := validInternalReq(t)
 	var b amsvc.Build
@@ -226,6 +241,61 @@ func TestValidateRequest_DockerRequiresDockerfilePath(t *testing.T) {
 	req.Build = &b
 	v := validateRequest(req)
 	assertViolation(t, v, "spec.build.docker.dockerfilePath is required")
+}
+
+// The server rejects dockerfilePath without a leading / (utils.go) — file mode
+// must report it locally instead of after the API call.
+func TestValidateRequest_DockerfilePathLeadingSlash(t *testing.T) {
+	req := validInternalReq(t)
+	var b amsvc.Build
+	if err := b.FromDockerBuild(amsvc.DockerBuild{
+		Type:   amsvc.Docker,
+		Docker: amsvc.DockerConfig{DockerfilePath: "Dockerfile"},
+	}); err != nil {
+		t.Fatalf("build union: %v", err)
+	}
+	req.Build = &b
+	v := validateRequest(req)
+	assertViolation(t, v, `spec.build.docker.dockerfilePath must start with "/"`)
+}
+
+func TestValidateRequest_AppPathLeadingSlash(t *testing.T) {
+	req := validInternalReq(t)
+	req.Provisioning.Repository.AppPath = "app"
+	v := validateRequest(req)
+	assertViolation(t, v, `spec.provisioning.repository.appPath must start with "/"`)
+}
+
+// Internal source agents require agentType server-side (utils.go); only
+// agentKind-sourced agents may omit it (enriched from the kind).
+func TestValidateRequest_SourceRequiresAgentType(t *testing.T) {
+	req := validInternalReq(t)
+	req.AgentType = nil
+	v := validateRequest(req)
+	assertViolation(t, v, "spec.agentType.type is required for internal provisioning")
+}
+
+func TestValidateRequest_ExternalRequiresAgentType(t *testing.T) {
+	req := validExternalReq()
+	req.AgentType = nil
+	v := validateRequest(req)
+	assertViolation(t, v, "spec.agentType.type is required for external provisioning")
+}
+
+// Internal source agents require inputInterface for every subtype — chat-api
+// included (utils.validateInputInterface).
+func TestValidateRequest_SourceRequiresInputInterface(t *testing.T) {
+	req := validInternalReq(t)
+	req.InputInterface = nil
+	v := validateRequest(req)
+	assertViolation(t, v, "spec.inputInterface is required for internal provisioning")
+}
+
+func TestValidateRequest_SourceRequiresInterfaceType(t *testing.T) {
+	req := validInternalReq(t)
+	req.InputInterface.Type = ""
+	v := validateRequest(req)
+	assertViolation(t, v, `spec.inputInterface.type is required (must be "HTTP")`)
 }
 
 func TestValidateRequest_UnknownSubType(t *testing.T) {
@@ -248,6 +318,25 @@ func TestValidateRequest_CustomAPIRequiresBasePathAndSchema(t *testing.T) {
 	v := validateRequest(req)
 	assertViolation(t, v, "spec.inputInterface.basePath is required for subtype custom-api")
 	assertViolation(t, v, "spec.inputInterface.schema.path is required for subtype custom-api")
+}
+
+func TestValidateRequest_CustomAPIRequiresPort(t *testing.T) {
+	req := validInternalReq(t)
+	req.AgentType.SubType = strPtr("custom-api")
+	req.InputInterface.BasePath = strPtr("/v1")
+	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: "/openapi.yaml"}
+	req.InputInterface.Port = nil
+	v := validateRequest(req)
+	assertViolation(t, v, "spec.inputInterface.port is required for subtype custom-api")
+}
+
+func TestValidateRequest_CustomAPISchemaPathLeadingSlash(t *testing.T) {
+	req := validInternalReq(t)
+	req.AgentType.SubType = strPtr("custom-api")
+	req.InputInterface.BasePath = strPtr("/v1")
+	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: "openapi.yaml"}
+	v := validateRequest(req)
+	assertViolation(t, v, `spec.inputInterface.schema.path must start with "/"`)
 }
 
 func TestValidateRequest_CustomAPIValid(t *testing.T) {
