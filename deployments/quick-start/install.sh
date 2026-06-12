@@ -667,7 +667,7 @@ log_info "Applying CoreDNS custom configuration for OpenChoreo and AMP..."
 # COREDNS_FILE is overridable (env) so the VM installer can substitute a config
 # that rewrites the in-cluster names to the k3d server node instead of
 # host.k3d.internal — required once host ports are loopback-bound. See
-# deployments/quick-start/vm/lib-vm.sh:render_coredns_vm_config.
+# deployments/vm/lib-vm.sh:render_coredns_vm_config.
 COREDNS_FILE="${COREDNS_FILE:-https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/k8s/coredns-amp-custom.yaml}"
 if kubectl apply -f "${COREDNS_FILE}"; then
     log_success "CoreDNS custom configuration applied successfully"
@@ -902,7 +902,7 @@ CA_CERT=$(kubectl get secret cluster-agent-tls -n openchoreo-data-plane -o jsonp
 # Data plane gateway external ingress (advertised host/port for deployed-agent
 # endpoints). Overridable so the VM installer can advertise a public sslip.io host
 # fronted by Caddy instead of the local openchoreoapis.localhost:19080. The default
-# keeps the local-install behaviour. See deployments/quick-start/vm/lib-vm.sh:
+# keeps the local-install behaviour. See deployments/vm/lib-vm.sh:
 # render_dataplane_external_ingress.
 DP_EXTERNAL_INGRESS="${DP_EXTERNAL_INGRESS:-$(cat <<'EOB'
         http:

@@ -18,9 +18,12 @@
 set -euo pipefail
 
 VM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-QS_DIR="$(cd "${VM_DIR}/.." && pwd)"
+# This installer wraps the quick-start installer (install.sh + k3d-config.yaml).
+QS_DIR="$(cd "${VM_DIR}/../quick-start" && pwd)"
 # shellcheck source=lib-vm.sh
 source "${VM_DIR}/lib-vm.sh"
+# shellcheck source=lib-bootstrap.sh
+source "${VM_DIR}/lib-bootstrap.sh"
 
 VM_IP="" ACME_EMAIL="" EXTERNAL_GATEWAYS="true"
 # Capture the amp release from --version or the VERSION env, but keep it out of
@@ -53,86 +56,6 @@ done
 [[ -n "$AMP_VERSION" ]] || \
   die "--version <release> is required (an existing amp/v* tag, e.g. --version 0.15.0); see https://github.com/wso2/agent-manager/tags"
 
-ensure_docker() {
-  if ! command -v docker >/dev/null 2>&1; then
-    log "Installing Docker via get.docker.com"
-    curl -fsSL https://get.docker.com | sh
-  else
-    log "Docker CLI present"
-  fi
-  # command -v docker does not imply the daemon is running; bring it up either way.
-  systemctl enable --now docker
-  # Wait for the daemon to answer before anything else uses it.
-  local _
-  for _ in $(seq 1 15); do docker info >/dev/null 2>&1 && return; sleep 2; done
-  die "Docker daemon did not become ready"
-}
-
-# install.sh only *verifies* k3d/kubectl/helm/lsof (it targets a pre-provisioned
-# dev container). On a bare VM we must install them. Each step is idempotent.
-ensure_prerequisites() {
-  local arch; arch="$(dpkg --print-architecture)"   # amd64 | arm64
-
-  # Tools the installer assumes exist on a minimal image: curl (downloads) and
-  # lsof (install.sh port check).
-  local pkgs=()
-  command -v curl >/dev/null 2>&1 || pkgs+=(curl)
-  command -v lsof >/dev/null 2>&1 || pkgs+=(lsof)
-  if (( ${#pkgs[@]} )); then
-    log "Installing base packages: ${pkgs[*]}"
-    apt-get update -qq && apt-get install -y -qq "${pkgs[@]}"
-  fi
-
-  ensure_docker
-
-  if ! command -v k3d >/dev/null 2>&1; then
-    log "Installing k3d"
-    curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-  fi
-  if ! command -v kubectl >/dev/null 2>&1; then
-    log "Installing kubectl (${arch})"
-    local kver; kver="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-    curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${kver}/bin/linux/${arch}/kubectl"
-    chmod +x /usr/local/bin/kubectl
-  fi
-  if ! command -v helm >/dev/null 2>&1; then
-    log "Installing helm"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
-}
-
-ensure_firewall() {
-  # Only :443 faces the internet (k3d ports are loopback-bound; SSH stays as-is).
-  # Certs issue via TLS-ALPN-01 inside the :443 handshake, so port 80 is never needed.
-  if command -v ufw >/dev/null 2>&1; then
-    ufw allow 443/tcp || true
-    log "ufw: opened 443"
-  elif command -v firewall-cmd >/dev/null 2>&1; then
-    firewall-cmd --permanent --add-port=443/tcp || true
-    firewall-cmd --reload || true
-    log "firewalld: opened 443"
-  else
-    log "No ufw/firewalld found; assuming the host firewall is open for 443"
-  fi
-  # The host firewall is only half the story — the cloud security group must also
-  # permit inbound 443, and TLS-ALPN-01 needs it as raw TCP. We can't verify that
-  # from inside the VM, so just remind; Caddy fails loudly if 443 is unreachable.
-  log "Ensure inbound 443/tcp is open in your cloud security group (raw TCP, no TLS-terminating proxy) — Caddy needs it to obtain certificates."
-}
-
-# Warn (don't block) when the root filesystem is too small to build agents. The
-# in-cluster image store alone grows past 13 GB once agents are built; below ~40 GB
-# free the node hits DiskPressure, which evicts pods and can take cluster DNS down
-# mid-build. 50 GB is the documented minimum.
-ensure_disk() {
-  local avail_kb min_kb=$((40 * 1024 * 1024))
-  avail_kb="$(df -Pk / | awk 'NR==2 {print $4}')"
-  if [[ -n "$avail_kb" && "$avail_kb" -lt "$min_kb" ]]; then
-    log "WARNING: only $((avail_kb / 1024 / 1024)) GB free on / — agent builds may"
-    log "         hit DiskPressure. A 50 GB+ disk is recommended (see the VM docs)."
-  fi
-}
-
 start_caddy() {
   mkdir -p /opt/amp
   render_caddyfile "$VM_IP" "$ACME_EMAIL" "$EXTERNAL_GATEWAYS" >/opt/amp/Caddyfile
@@ -145,7 +68,7 @@ start_caddy() {
     -v amp-caddy-config:/config \
     -v /opt/amp/Caddyfile:/etc/caddy/Caddyfile:ro \
     caddy:2
-  log "Caddy started on :443"
+  verify_caddy_up
 }
 
 run_install() {
@@ -197,7 +120,7 @@ run_install() {
 
 log "Phase 1/2: bootstrap (Docker + tools + firewall)"
 ensure_prerequisites
-ensure_firewall
+ensure_firewall 443
 ensure_disk
 
 log "Phase 2/2: install Agent Manager + start Caddy (this takes 8-15 min)"
