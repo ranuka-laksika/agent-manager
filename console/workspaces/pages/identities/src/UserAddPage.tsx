@@ -23,10 +23,9 @@ import {
   CircularProgress,
   Stack,
 } from "@wso2/oxygen-ui";
-import { TextInput } from "@agent-management-platform/views";
+import { TextInput, PageLayout } from "@agent-management-platform/views";
 import { useNavigate, useParams, generatePath } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 
 export const UserAddPage: React.FC = () => {
