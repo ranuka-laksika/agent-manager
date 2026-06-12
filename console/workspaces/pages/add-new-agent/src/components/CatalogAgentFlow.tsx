@@ -24,7 +24,11 @@ import { absoluteRouteMap, type AgentKindVersionResponse, OrgProjPathParams } fr
 import { useCreateAgent, useGetAgentKind, useGetDeploymentPipeline } from "@agent-management-platform/api-client";
 import { createAgentSchema, type CreateAgentFormValues, type LLMProviderFormEntry } from "../form/schema";
 import { CreateButtons } from "./CreateButtons";
-import { buildCatalogAgentPayload, findLowestEnvironmentName } from "../utils/buildAgentPayload";
+import {
+  buildCatalogAgentPayload,
+  findLowestEnvironmentName,
+  hasMultipleEnvironments,
+} from "../utils/buildAgentPayload";
 import { CatalogAgentForm } from "../forms/CatalogAgentForm";
 import { LLMProviderSection } from "./LLMProviderSection";
 import { EnvironmentVariable } from "./EnvironmentVariable";
@@ -129,6 +133,13 @@ export const CatalogAgentFlow: React.FC = () => {
     () => findLowestEnvironmentName(deploymentPipeline?.promotionPaths),
     [deploymentPipeline?.promotionPaths],
   );
+  const multipleEnvironments = useMemo(
+    () => hasMultipleEnvironments(deploymentPipeline?.promotionPaths),
+    [deploymentPipeline?.promotionPaths],
+  );
+  // When the deployment pipeline spans multiple environments, the create-time
+  // config applies only to the first environment.
+  const firstEnvOnlyNotice = multipleEnvironments ? initialEnvironmentName : undefined;
 
   const llmReservedNames = useMemo(() => {
     const agentNameUpper = formData.displayName
@@ -267,6 +278,14 @@ export const CatalogAgentFlow: React.FC = () => {
               </Form.ElementWrapper>
             </Form.Stack>
           </Form.Section>
+        )}
+
+        {firstEnvOnlyNotice && (
+          <Alert severity="info">
+            LLM providers, environment variables, and file mounts below apply
+            only to the <strong>{firstEnvOnlyNotice}</strong> environment.
+            Configure values for other environments when promoting.
+          </Alert>
         )}
 
         <LLMProviderSection

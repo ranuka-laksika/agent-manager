@@ -39,6 +39,20 @@ export function findLowestEnvironmentName(
   )?.sourceEnvironmentRef;
 }
 
+export function hasMultipleEnvironments(
+  promotionPaths: PromotionPath[] = [],
+): boolean {
+  const names = new Set<string>();
+  for (const path of promotionPaths) {
+    if (path.sourceEnvironmentRef) names.add(path.sourceEnvironmentRef);
+    for (const target of path.targetEnvironmentRefs ?? []) {
+      if (target.name) names.add(target.name);
+    }
+    if (names.size > 1) return true;
+  }
+  return false;
+}
+
 function buildOneModelConfig(
   entry: LLMProviderFormEntry,
   initialEnvironmentName: string | undefined,

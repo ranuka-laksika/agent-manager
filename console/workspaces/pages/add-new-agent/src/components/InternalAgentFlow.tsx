@@ -28,7 +28,11 @@ import { useCreateAgent, useGetDeploymentPipeline } from "@agent-management-plat
 import { createAgentSchema, type CreateAgentFormValues, type LLMProviderFormEntry } from "../form/schema";
 import { InternalAgentForm } from "../forms/InternalAgentForm";
 import { CreateButtons } from "./CreateButtons";
-import { buildAgentCreationPayload, findLowestEnvironmentName } from "../utils/buildAgentPayload";
+import {
+  buildAgentCreationPayload,
+  findLowestEnvironmentName,
+  hasMultipleEnvironments,
+} from "../utils/buildAgentPayload";
 
 export const InternalAgentFlow: React.FC = () => {
   const navigate = useNavigate();
@@ -81,6 +85,14 @@ export const InternalAgentFlow: React.FC = () => {
     () => findLowestEnvironmentName(deploymentPipeline?.promotionPaths),
     [deploymentPipeline?.promotionPaths],
   );
+  const multipleEnvironments = useMemo(
+    () => hasMultipleEnvironments(deploymentPipeline?.promotionPaths),
+    [deploymentPipeline?.promotionPaths],
+  );
+  // When the deployment pipeline spans multiple environments, the create-time
+  // config (LLM providers, env vars, file mounts) applies only to the first
+  // environment. Pass the name down so each section can show that hint.
+  const firstEnvOnlyNotice = multipleEnvironments ? initialEnvironmentName : undefined;
 
   const handleCancel = useCallback(() => {
     navigate(
@@ -170,6 +182,7 @@ export const InternalAgentFlow: React.FC = () => {
           setLLMProviders={setLLMProviders}
           initialEnvironmentName={initialEnvironmentName}
           isInitialEnvironmentLoading={isDeploymentPipelineLoading}
+          firstEnvOnlyNotice={firstEnvOnlyNotice}
         />
 
         {!!error && (

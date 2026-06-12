@@ -50,6 +50,10 @@ interface InternalAgentFormProps {
   setLLMProviders: React.Dispatch<React.SetStateAction<LLMProviderFormEntry[]>>;
   initialEnvironmentName: string | undefined;
   isInitialEnvironmentLoading?: boolean;
+  // When the deployment pipeline has more than one environment, this carries
+  // the first env name so each section can warn that create-time config
+  // applies only to that environment.
+  firstEnvOnlyNotice?: string | undefined;
 }
 const languageOptions = [
   { label: "Python", value: "python" },
@@ -71,6 +75,7 @@ export const InternalAgentForm = ({
   setLLMProviders,
   initialEnvironmentName,
   isInitialEnvironmentLoading = false,
+  firstEnvOnlyNotice,
 }: InternalAgentFormProps) => {
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
   const privateRepoConfigs = useExternalConfigModules("private-repo-support");
@@ -583,6 +588,13 @@ export const InternalAgentForm = ({
         setFieldError={setFieldError}
         validateField={validateField}
       />
+      {firstEnvOnlyNotice && (
+        <Alert severity="info">
+          LLM providers, environment variables, and file mounts below apply only
+          to the <strong>{firstEnvOnlyNotice}</strong> environment. Configure
+          values for other environments when promoting.
+        </Alert>
+      )}
       <LLMProviderSection
         llmProviders={llmProviders}
         setLLMProviders={setLLMProviders}
