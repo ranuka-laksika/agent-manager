@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { httpGET, httpPOST, httpPUT, SERVICE_BASE } from '../utils';
+import { httpGET, httpPOST, httpPUT, httpDELETE, SERVICE_BASE } from '../utils';
 import type {
   DeployAgentPathParams,
   DeployAgentRequest,
@@ -50,6 +50,7 @@ import type {
   CreateDeploymentPipelinePathParams,
   CreateDeploymentPipelineRequest,
   UpdateOrgDeploymentPipelinePathParams,
+  DeleteDeploymentPipelinePathParams,
   UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
@@ -302,6 +303,26 @@ export async function updateOrgDeploymentPipeline(
     );
     if (!res.ok) throw await res.json();
     return res.json();
+}
+
+export async function deleteDeploymentPipeline(
+  params: DeleteDeploymentPipelinePathParams,
+  getToken?: () => Promise<string>,
+): Promise<void> {
+    const { orgName = "default", pipelineName } = params;
+    if (!pipelineName) {
+        throw new Error("pipelineName is required");
+    }
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpDELETE(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/deployment-pipelines/${encodeURIComponent(pipelineName)}`,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    // DELETE may return 204 No Content
+    if (res.status === 204 || res.headers.get('content-length') === '0') {
+        return;
+    }
 }
 
 // eslint-disable-next-line max-len

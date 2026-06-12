@@ -224,6 +224,12 @@ export type UpdateOrgDeploymentPipelinePathParams = {
   pipelineName: string;
 };
 
+// Delete DeploymentPipeline (direct — by pipeline name)
+export type DeleteDeploymentPipelinePathParams = {
+  orgName: string | undefined;
+  pipelineName: string;
+};
+
 // Create DeploymentPipeline
 export interface CreateDeploymentPipelineRequest {
   displayName: string;
