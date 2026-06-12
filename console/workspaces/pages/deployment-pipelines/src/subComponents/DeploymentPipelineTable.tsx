@@ -31,11 +31,16 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, ArrowRight, Edit, GitBranch, Plus, Search } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, ArrowRight, Edit, GitBranch, Plus, Search, Trash } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "react-router-dom";
-import { useListDeploymentPipelines, useListEnvironments } from "@agent-management-platform/api-client";
+import {
+  useDeleteDeploymentPipeline,
+  useListDeploymentPipelines,
+  useListEnvironments,
+} from "@agent-management-platform/api-client";
 import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
+import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { FadeIn } from "@agent-management-platform/views";
 import { validatePromotionChain } from "../utils/validatePromotionChain";
 
@@ -108,6 +113,8 @@ export function DeploymentPipelineTable(
 
   const { data, isLoading, error } = useListDeploymentPipelines({ orgName: orgId });
   const { data: environments } = useListEnvironments({ orgName: orgId });
+  const { addConfirmation } = useConfirmationDialog();
+  const { mutate: deletePipeline } = useDeleteDeploymentPipeline();
 
   const envMap = useMemo(() => {
     const map = new Map<string, EnvInfo>();
@@ -314,11 +321,32 @@ export function DeploymentPipelineTable(
                     <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
                       {hoveredId === pipeline.name ? (
                         <FadeIn>
-                          <Tooltip title="Edit pipeline">
-                            <IconButton size="small" onClick={() => onEditPipeline?.(pipeline)}>
-                              <Edit size={16} />
-                            </IconButton>
-                          </Tooltip>
+                          <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Edit pipeline">
+                              <IconButton size="small" onClick={() => onEditPipeline?.(pipeline)}>
+                                <Edit size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            <Tooltip title="Delete pipeline">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() =>
+                                  addConfirmation({
+                                    title: "Delete Deployment Pipeline",
+                                    description: `Are you sure you want to delete "${pipeline.displayName}"? This action cannot be undone.`,
+                                    confirmButtonText: "Delete",
+                                    confirmButtonColor: "error",
+                                    confirmButtonIcon: <Trash size={16} />,
+                                    onConfirm: () =>
+                                      deletePipeline({ orgName: orgId, pipelineName: pipeline.name }),
+                                  })
+                                }
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </Stack>
                         </FadeIn>
                       ) : (
                         <Typography variant="caption" color="text.secondary">

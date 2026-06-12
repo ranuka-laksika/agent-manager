@@ -32,6 +32,7 @@ import {
   promoteAgent,
   createDeploymentPipeline,
   updateOrgDeploymentPipeline,
+  deleteDeploymentPipeline,
   updateDeploymentPipeline,
   updateEnvironment,
   createEnvironment,
@@ -71,6 +72,7 @@ import type {
   CreateDeploymentPipelinePathParams,
   CreateDeploymentPipelineRequest,
   UpdateOrgDeploymentPipelinePathParams,
+  DeleteDeploymentPipelinePathParams,
   UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
@@ -259,6 +261,18 @@ export function useUpdateOrgDeploymentPipeline() {
   { params: UpdateOrgDeploymentPipelinePathParams; body: UpdateDeploymentPipelineRequest }>({
     action: { verb: 'update', target: 'deployment pipeline' },
     mutationFn: ({ params, body }) => updateOrgDeploymentPipeline(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deployment-pipelines'] });
+    },
+  });
+}
+
+export function useDeleteDeploymentPipeline() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<void, unknown, DeleteDeploymentPipelinePathParams>({
+    action: { verb: 'delete', target: 'deployment pipeline' },
+    mutationFn: (params) => deleteDeploymentPipeline(params, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deployment-pipelines'] });
     },
