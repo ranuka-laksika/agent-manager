@@ -433,6 +433,29 @@ func (c *identityController) ListGroups(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
+	// Check if Administrators group exists (first check current page, then early fetch if needed)
+	administratorsExists := false
+	for _, group := range groups {
+		if group.Name == "Administrators" {
+			administratorsExists = true
+			break
+		}
+	}
+
+	// If Administrators not in current page but might exist elsewhere, fetch first page to check
+	// (Administrators is typically a system group that appears early in listings)
+	if !administratorsExists && offset > 0 {
+		earlyGroups, _, err := c.client.ListGroupsByOUId(ctx, resolvedOrg.OUID, 0, limit)
+		if err == nil {
+			for _, group := range earlyGroups {
+				if group.Name == "Administrators" {
+					administratorsExists = true
+					break
+				}
+			}
+		}
+	}
+
 	// Filter out the Administrators group from public visibility
 	filteredGroups := make([]thundersvc.ThunderGroup, 0, len(groups))
 	for _, group := range groups {
@@ -441,7 +464,13 @@ func (c *identityController) ListGroups(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"groups": filteredGroups, "total": total - (len(groups) - len(filteredGroups)), "offset": offset, "limit": limit})
+	// Calculate adjusted total: consistently decrement by 1 if Administrators exists in the OU
+	adjustedTotal := total
+	if administratorsExists {
+		adjustedTotal = total - 1
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"groups": filteredGroups, "total": adjustedTotal, "offset": offset, "limit": limit})
 }
 
 func (c *identityController) GetGroup(w http.ResponseWriter, r *http.Request) {
