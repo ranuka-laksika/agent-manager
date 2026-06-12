@@ -28,6 +28,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/constants"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
+	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
@@ -156,32 +157,28 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var body struct {
-		Username   string                    `json:"username"`
-		Type       string                    `json:"type"`
-		Claims     []thundersvc.ThunderClaim `json:"claims,omitempty"`
-		Credential thundersvc.ThunderCred    `json:"credential"`
-	}
+	var body spec.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if body.Username == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "username is required")
+	if body.Type == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "type is required")
 		return
 	}
-	if strings.TrimSpace(body.Credential.Password) == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "password is required")
+	if body.Attributes == nil || body.Attributes["username"] == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "username in attributes is required")
+		return
+	}
+	password, ok := body.Attributes["password"]
+	if !ok || strings.TrimSpace(password) == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "password in attributes is required")
 		return
 	}
 
 	ouID := resolvedOrg.OUID
-
-	attrs := map[string]string{"username": body.Username}
-	for _, claim := range body.Claims {
-		if claim.Value != "" {
-			attrs[claim.Type] = claim.Value
-		}
+	if body.OuId != nil && *body.OuId != "" {
+		ouID = *body.OuId
 	}
 
 	userType := body.Type
@@ -189,16 +186,17 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 		userType = "engineer"
 	}
 
+	// Convert spec.CreateUserRequest to thundersvc.CreateUserRequest
 	req := thundersvc.CreateUserRequest{
 		OuID:       ouID,
 		Type:       userType,
-		Attributes: attrs,
-		Password:   body.Credential.Password,
+		Attributes: body.Attributes,
+		Password:   password,
 	}
 
 	user, err := c.client.CreateUser(ctx, req)
 	if err != nil {
-		log.Error("CreateUser failed", "username", body.Username, "error", err)
+		log.Error("CreateUser failed", "username", body.Attributes["username"], "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create user")
 		return
 	}
@@ -231,10 +229,18 @@ func (c *identityController) UpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req thundersvc.UpdateUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var body spec.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	attrs := make(map[string]string)
+	if body.Attributes != nil {
+		attrs = *body.Attributes
+	}
+	req := thundersvc.UpdateUserRequest{
+		Attributes: attrs,
 	}
 
 	updatedUser, err := c.client.UpdateUser(ctx, userID, req)
@@ -516,16 +522,31 @@ func (c *identityController) CreateGroup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req thundersvc.CreateGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var body spec.CreateGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.Name == "" {
+	if body.Name == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	req.OuID = resolvedOrg.OUID
+
+	ouID := resolvedOrg.OUID
+	if body.OuId != nil && *body.OuId != "" {
+		ouID = *body.OuId
+	}
+
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+
+	req := thundersvc.CreateGroupRequest{
+		Name:        body.Name,
+		OuID:        ouID,
+		Description: description,
+	}
 
 	group, err := c.client.CreateGroup(ctx, req)
 	if err != nil {
@@ -566,10 +587,24 @@ func (c *identityController) UpdateGroup(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var req thundersvc.UpdateGroupRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var body spec.UpdateGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	name := ""
+	if body.Name != nil {
+		name = *body.Name
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+
+	req := thundersvc.UpdateGroupRequest{
+		Name:        name,
+		Description: description,
 	}
 
 	updatedGroup, err := c.client.UpdateGroup(ctx, groupID, req)
@@ -893,16 +928,31 @@ func (c *identityController) CreateRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req thundersvc.CreateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var body spec.CreateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.Name == "" {
+	if body.Name == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "name is required")
 		return
 	}
-	req.OuID = resolvedOrg.OUID
+
+	ouID := resolvedOrg.OUID
+	if body.OuId != nil && *body.OuId != "" {
+		ouID = *body.OuId
+	}
+
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+
+	req := thundersvc.CreateRoleRequest{
+		Name:        body.Name,
+		OuID:        ouID,
+		Description: description,
+	}
 
 	role, err := c.client.CreateRole(ctx, req)
 	if err != nil {
@@ -944,10 +994,24 @@ func (c *identityController) UpdateRole(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var req thundersvc.UpdateRoleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var body spec.UpdateRoleRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	name := ""
+	if body.Name != nil {
+		name = *body.Name
+	}
+	description := ""
+	if body.Description != nil {
+		description = *body.Description
+	}
+
+	req := thundersvc.UpdateRoleRequest{
+		Name:        name,
+		Description: description,
 	}
 
 	updatedRole, err := c.client.UpdateRole(ctx, roleID, req)

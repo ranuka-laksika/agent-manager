@@ -68,24 +68,26 @@ export const UserAddPage: React.FC = () => {
         throw new Error("Password is required");
       }
 
-      const claims = [];
+      const attributes: Record<string, string> = {
+        username: formData.username,
+        password: formData.password,
+      };
+
       if (formData.firstName) {
-        claims.push({ type: "given_name", value: formData.firstName });
+        attributes.given_name = formData.firstName;
       }
       if (formData.lastName) {
-        claims.push({ type: "family_name", value: formData.lastName });
+        attributes.family_name = formData.lastName;
       }
       if (formData.email) {
-        claims.push({ type: "email", value: formData.email });
+        attributes.email = formData.email;
       }
 
       await createUserMutation({
         params: { orgName: orgId },
         body: {
-          username: formData.username,
-          credential: { password: formData.password },
           type: "engineer",
-          claims: claims.length > 0 ? claims : undefined,
+          attributes,
         },
       });
 
@@ -159,7 +161,7 @@ export const UserAddPage: React.FC = () => {
               <Button
                 variant="contained"
                 type="submit"
-                disabled={loading}
+                disabled={loading || !formData.username.trim() || !formData.password.trim()}
               >
                 {loading ? <CircularProgress size={20} /> : "Create User"}
               </Button>
