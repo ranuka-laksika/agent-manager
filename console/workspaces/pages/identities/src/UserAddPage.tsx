@@ -22,11 +22,10 @@ import {
   Button,
   CircularProgress,
   Stack,
-  TextField,
 } from "@wso2/oxygen-ui";
+import { TextInput, PageLayout } from "@agent-management-platform/views";
 import { useNavigate, useParams, generatePath } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 
 export const UserAddPage: React.FC = () => {
@@ -112,52 +111,47 @@ export const UserAddPage: React.FC = () => {
 
         <form onSubmit={handleSubmit}>
           <Stack spacing={2}>
-            <TextField
+            <TextInput
               label="Username"
               name="username"
               value={formData.username}
               onChange={handleChange}
-              fullWidth
               disabled={loading}
               required
             />
 
-            <TextField
+            <TextInput
               label="Password"
               name="password"
               type="password"
               value={formData.password}
               onChange={handleChange}
-              fullWidth
               disabled={loading}
               required
             />
 
-            <TextField
+            <TextInput
               label="First Name"
               name="firstName"
               value={formData.firstName}
               onChange={handleChange}
-              fullWidth
               disabled={loading}
             />
 
-            <TextField
+            <TextInput
               label="Last Name"
               name="lastName"
               value={formData.lastName}
               onChange={handleChange}
-              fullWidth
               disabled={loading}
             />
 
-            <TextField
+            <TextInput
               label="Email Address"
               name="email"
               type="email"
               value={formData.email}
               onChange={handleChange}
-              fullWidth
               disabled={loading}
             />
 
