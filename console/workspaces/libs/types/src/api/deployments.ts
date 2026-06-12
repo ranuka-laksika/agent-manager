@@ -97,6 +97,7 @@ export interface ConfigurationItem {
   value: string;
   isSensitive?: boolean;
   secretRef?: string;
+  isSystem?: boolean;
 }
 
 export interface ConfigurationData {

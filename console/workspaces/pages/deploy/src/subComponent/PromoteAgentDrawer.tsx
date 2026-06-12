@@ -120,14 +120,18 @@ export function PromoteAgentDrawer({
       return;
     }
     if (didInitOnOpen) return;
-    const cfg = sourceConfigs?.configurations;
+    // Pre-fill the editor with the source env's user-managed keys (isSystem=false),
+    // values blank. System-managed entries are platform-injected and not editable.
+    // Sensitivity is carried over so the row's "sensitive" badge matches the source,
+    // but secretRef is dropped — the user is providing a new value for this env.
+    const userEditableEnv =
+      (sourceConfigs?.configurations?.env ?? [])
+        .filter((e) => !e.isSystem)
+        .map((e) => ({ key: e.key, value: "", isSensitive: e.isSensitive }));
     setFormState({
       ...DEFAULT_STATE,
       targetEnvironment: targetEnvOptions[0]?.name ?? "",
-      env: cfg?.env?.map((item) => (
-          { key: item.key, value: item.value ?? "", isSensitive: item.isSensitive, secretRef: item.secretRef }
-      )) ?? [],
-      files: cfg?.files ?? [],
+      env: userEditableEnv,
     });
     resetMutation();
     setDidInitOnOpen(true);

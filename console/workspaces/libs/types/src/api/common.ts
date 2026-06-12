@@ -41,6 +41,9 @@ export interface EnvironmentVariable {
   value: string;
   isSensitive?: boolean;
   secretRef?: string;
+  // System-managed entries are injected by the platform (e.g. LLM_PROVIDER_URL).
+  // They are read-only and should be excluded from user-editable lists.
+  isSystem?: boolean;
 }
 
 export interface FileMount {
