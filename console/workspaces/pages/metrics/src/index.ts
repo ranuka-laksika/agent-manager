@@ -21,8 +21,8 @@ import type { PageMetadata } from '@agent-management-platform/types';
 import { BarChart3 } from '@wso2/oxygen-ui-icons-react';
 
 export const metaData: PageMetadata = {
-  title: 'Metrics',
-  description: 'A page component for Metrics',
+  title: 'System Metrics',
+  description: 'A page component for System Metrics',
   icon: BarChart3,
   path: '/metrics',
   component: MetricsComponent,

@@ -338,8 +338,13 @@ export function DeployCard(props: DeployCardProps) {
 
   const hasPromotionTarget = useMemo(() => {
     if (!pipeline) return false;
+    // Only show Promote when this environment has at least one downstream
+    // target. The last environment in a pipeline has no outgoing promotion
+    // path (or an empty target list), so the button is hidden for it.
     return pipeline.promotionPaths.some(
-      (p) => p.sourceEnvironmentRef === currentEnvironment.name,
+      (p) =>
+        p.sourceEnvironmentRef === currentEnvironment.name &&
+        (p.targetEnvironmentRefs?.length ?? 0) > 0,
     );
   }, [pipeline, currentEnvironment.name]);
   const { mutate: updateDeploymentState, isPending: isUpdating } =

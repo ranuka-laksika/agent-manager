@@ -31,7 +31,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, Edit, Plus, Search, Server } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Edit, Plus, Search, Server, Trash } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
@@ -41,10 +41,11 @@ import { FadeIn } from "@agent-management-platform/views";
 interface EnvironmentTableProps {
   onEditEnvironment?: (environment: Environment) => void;
   onCreateEnvironment?: () => void;
+  onDeleteEnvironment?: (environment: Environment) => void;
 }
 
 export function EnvironmentTable(
-  { onEditEnvironment, onCreateEnvironment }: EnvironmentTableProps,
+  { onEditEnvironment, onCreateEnvironment, onDeleteEnvironment }: EnvironmentTableProps,
 ) {
   const { orgId } = useParams<{ orgId: string }>();
   const [search, setSearch] = useState("");
@@ -251,11 +252,24 @@ export function EnvironmentTable(
                     <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
                       {hoveredId === env.name ? (
                         <FadeIn>
-                          <Tooltip title="Edit environment">
-                            <IconButton size="small" onClick={() => onEditEnvironment?.(env)}>
-                              <Edit size={16} />
-                            </IconButton>
-                          </Tooltip>
+                          <Stack direction="row" spacing={0.5}>
+                            <Tooltip title="Edit environment">
+                              <IconButton size="small" onClick={() => onEditEnvironment?.(env)}>
+                                <Edit size={16} />
+                              </IconButton>
+                            </Tooltip>
+                            {env.name !== "default" && onDeleteEnvironment && (
+                              <Tooltip title="Delete environment">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={() => onDeleteEnvironment(env)}
+                                >
+                                  <Trash size={16} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                          </Stack>
                         </FadeIn>
                       ) : (
                         <Typography variant="caption" color="text.secondary">

@@ -392,7 +392,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
                     <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                         <Typography variant="caption" color="text.secondary" fontWeight={600}
                             sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            Metrics
+                            System Metrics
                         </Typography>
                         <Button
                             size="small"

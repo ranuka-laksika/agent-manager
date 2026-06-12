@@ -39,7 +39,7 @@ function renderWithRouter(initialEntry = route) {
 describe("MetricsComponent", () => {
   it("renders without crashing", () => {
     renderWithRouter();
-    expect(screen.getByText("Metrics")).toBeInTheDocument();
+    expect(screen.getByText("System Metrics")).toBeInTheDocument();
   });
 
   it("renders refresh control", () => {

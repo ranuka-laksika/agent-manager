@@ -22,10 +22,12 @@ import type { Environment } from "@agent-management-platform/types";
 import { EnvironmentTable } from "./subComponents/EnvironmentTable";
 import { EditEnvironmentDrawer } from "./subComponents/EditEnvironmentDrawer";
 import { CreateEnvironmentDrawer } from "./subComponents/CreateEnvironmentDrawer";
+import { DeleteEnvironmentDrawer } from "./subComponents/DeleteEnvironmentDrawer";
 
 export function EnvironmentsOrganization() {
   const { orgId } = useParams<{ orgId: string }>();
   const [envToEdit, setEnvToEdit] = useState<Environment | null>(null);
+  const [envToDelete, setEnvToDelete] = useState<Environment | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
 
   return (
@@ -38,6 +40,7 @@ export function EnvironmentsOrganization() {
               <EnvironmentTable
                 onEditEnvironment={setEnvToEdit}
                 onCreateEnvironment={() => setCreateOpen(true)}
+                onDeleteEnvironment={setEnvToDelete}
               />
             </PageLayout>
           }
@@ -59,6 +62,14 @@ export function EnvironmentsOrganization() {
           onClose={() => setEnvToEdit(null)}
           environment={envToEdit}
           orgId={orgId}
+        />
+      )}
+
+      {envToDelete && (
+        <DeleteEnvironmentDrawer
+          open={envToDelete !== null}
+          onClose={() => setEnvToDelete(null)}
+          environment={envToDelete}
         />
       )}
     </>

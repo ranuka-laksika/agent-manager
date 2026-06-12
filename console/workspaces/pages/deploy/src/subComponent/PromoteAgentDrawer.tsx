@@ -125,7 +125,7 @@ export function PromoteAgentDrawer({
       ...DEFAULT_STATE,
       targetEnvironment: targetEnvOptions[0]?.name ?? "",
       env: cfg?.env?.map((item) => (
-          { key: item.key, value: item.value, isSensitive: item.isSensitive }
+          { key: item.key, value: item.value ?? "", isSensitive: item.isSensitive, secretRef: item.secretRef }
       )) ?? [],
       files: cfg?.files ?? [],
     });
@@ -144,7 +144,20 @@ export function PromoteAgentDrawer({
     (index: number, field: "key" | "value" | "isSensitive", value: string | boolean) => {
       setFormState((prev) => ({
         ...prev,
-        env: prev.env.map((item, i) => (i === index ? { ...item, [field]: value } : item)),
+        env: prev.env.map((item, i) => {
+          if (i !== index) return item;
+          const updated = { ...item, [field]: value };
+          // Clear the secret reference once the user enters a new value or
+          // unmarks the variable as secret, so the new value is sent instead.
+          if (item.secretRef) {
+            if (field === "value" && typeof value === "string" && value.length > 0) {
+              delete updated.secretRef;
+            } else if (field === "isSensitive" && value === false) {
+              delete updated.secretRef;
+            }
+          }
+          return updated;
+        }),
       }));
     },
     [],
@@ -203,7 +216,14 @@ export function PromoteAgentDrawer({
             ...(formState.useConfigFromSourceEnv
               ? {}
               : {
-                  env: formState.env.filter((envVar) => envVar.key),
+                  env: formState.env
+                    .filter((envVar) => envVar.key)
+                    .map(({ key, value, isSensitive, secretRef }) =>
+                      // Preserve the secret reference for secrets the user did not edit.
+                      isSensitive && secretRef && !value
+                        ? ({ key, isSensitive, secretRef } as EnvironmentVariable)
+                        : { key, value, isSensitive },
+                    ),
                   files: formState.files,
                 }),
           },
@@ -328,6 +348,7 @@ export function PromoteAgentDrawer({
                                   keyValue={item.key}
                                   valueValue={item.value}
                                   isSensitive={item.isSensitive ?? false}
+                                  isExistingSecret={!!(item.secretRef && item.isSensitive)}
                                   onKeyChange={(v) => handleEnvChange(index, "key", v)}
                                   onValueChange={(v) => handleEnvChange(index, "value", v)}
                                   onSensitiveChange={(v) =>

@@ -77,7 +77,7 @@ export const InternalAgentOverview = () => {
 
             <Stack spacing={2}>
                 {sortedEnvironmentList.map(
-                    (environment) =>
+                    (environment, index) =>
                         environment && orgId && projectId && agentId && (
                             <EnvironmentCard
                                 key={environment.name}
@@ -85,6 +85,7 @@ export const InternalAgentOverview = () => {
                                 projectId={projectId}
                                 agentId={agentId}
                                 environment={environment}
+                                isFirstEnvironment={index === 0}
                                 bottomContent={
                                     <>
                                         <EnvObservabilitySection

@@ -110,7 +110,7 @@ export const MetricsComponent: React.FC = () => {
 
   return (
     <PageLayout
-      title="Metrics"
+      title="System Metrics"
       disableIcon
       actions={
         <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap">
