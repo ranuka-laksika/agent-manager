@@ -181,7 +181,6 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 		ouID = *body.OuId
 	}
 
-
 	// Convert spec.CreateUserRequest to thundersvc.CreateUserRequest
 	req := thundersvc.CreateUserRequest{
 		OuID:       ouID,
