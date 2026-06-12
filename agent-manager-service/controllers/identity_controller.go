@@ -181,15 +181,11 @@ func (c *identityController) CreateUser(w http.ResponseWriter, r *http.Request) 
 		ouID = *body.OuId
 	}
 
-	userType := body.Type
-	if userType == "" {
-		userType = "engineer"
-	}
 
 	// Convert spec.CreateUserRequest to thundersvc.CreateUserRequest
 	req := thundersvc.CreateUserRequest{
 		OuID:       ouID,
-		Type:       userType,
+		Type:       body.Type,
 		Attributes: body.Attributes,
 		Password:   password,
 	}

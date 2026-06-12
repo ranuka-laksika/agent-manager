@@ -40,10 +40,8 @@ export interface ThunderUserListResponse extends PaginationMeta {
 }
 
 export interface CreateUserRequest {
-  username: string;
-  type?: string;
-  claims?: ThunderClaim[];
-  credential: { password: string };
+  type: string;
+  attributes: Record<string, string>;
 }
 
 export interface UpdateUserRequest {
