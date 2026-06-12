@@ -46,7 +46,7 @@ type InfraResourceController interface {
 	CreateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	UpdateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
-	DeleteProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
+	DeleteOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	GetDataplanes(w http.ResponseWriter, r *http.Request)
 }
 
@@ -521,15 +521,15 @@ func (c *infraResourceController) UpdateProjectDeploymentPipeline(w http.Respons
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
-func (c *infraResourceController) DeleteProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
+func (c *infraResourceController) DeleteOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
-	projectName := r.PathValue(utils.PathParamProjName)
+	deploymentPipelineName := r.PathValue(utils.PathParamPipelineName)
 
-	if err := c.infraResourceManager.DeleteProjectDeploymentPipeline(ctx, orgName, projectName); err != nil {
-		log.Error("DeleteProjectDeploymentPipeline: failed to delete deployment pipeline", "error", err)
+	if err := c.infraResourceManager.DeleteOrgDeploymentPipeline(ctx, orgName, deploymentPipelineName); err != nil {
+		log.Error("DeleteOrgDeploymentPipeline: failed to delete deployment pipeline", "error", err)
 		handleCommonErrors(w, err, "Failed to delete deployment pipeline")
 		return
 	}

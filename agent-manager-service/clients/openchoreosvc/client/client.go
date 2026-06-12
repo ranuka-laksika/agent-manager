@@ -111,7 +111,7 @@ type OpenChoreoClient interface {
 	GetProjectDeploymentPipeline(ctx context.Context, namespaceName, projectName string) (*models.DeploymentPipelineResponse, error)
 	CreateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
-	DeleteDeploymentPipeline(ctx context.Context, namespaceName, projectName string) error
+	DeleteOrgDeploymentPipeline(ctx context.Context, namespaceName string, pipelineName string) error
 	ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error)
 	ListDataPlanes(ctx context.Context) ([]*models.DataPlaneResponse, error)
 

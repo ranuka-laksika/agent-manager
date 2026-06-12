@@ -29,6 +29,8 @@ func registerInfraRoutes(rr *middleware.RouteRegistrar, ctrl controllers.InfraRe
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/deployment-pipelines", rbac.DeploymentPipelineRead, ctrl.ListOrgDeploymentPipelines)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/deployment-pipelines", rbac.DeploymentPipelineCreate, ctrl.CreateOrgDeploymentPipeline)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/deployment-pipelines/{pipelineName}", rbac.DeploymentPipelineUpdate, ctrl.UpdateOrgDeploymentPipeline)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/deployment-pipelines/{pipelineName}", rbac.DeploymentPipelineDelete, ctrl.DeleteOrgDeploymentPipeline)
+
 	// NOTE: /orgs/{orgName}/environments routes are now registered in environment_routes.go
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects", rbac.ProjectRead, ctrl.ListProjects)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects", rbac.ProjectCreate, ctrl.CreateProject)
@@ -36,6 +38,5 @@ func registerInfraRoutes(rr *middleware.RouteRegistrar, ctrl controllers.InfraRe
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}", rbac.ProjectUpdate, ctrl.UpdateProject)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/deployment-pipeline", rbac.DeploymentPipelineRead, ctrl.GetProjectDeploymentPipeline)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/deployment-pipeline", rbac.DeploymentPipelineUpdate, ctrl.UpdateProjectDeploymentPipeline)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/deployment-pipeline", rbac.DeploymentPipelineDelete, ctrl.DeleteProjectDeploymentPipeline)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}", rbac.ProjectDelete, ctrl.DeleteProject)
 }

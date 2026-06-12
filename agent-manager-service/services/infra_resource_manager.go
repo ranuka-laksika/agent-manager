@@ -42,7 +42,7 @@ type InfraResourceManager interface {
 	CreateProject(ctx context.Context, orgName string, payload spec.CreateProjectRequest) (*models.ProjectResponse, error)
 	UpdateProject(ctx context.Context, orgName string, projectName string, payload spec.UpdateProjectRequest) (*models.ProjectResponse, error)
 	DeleteProject(ctx context.Context, orgName string, projectName string) error
-	DeleteProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string) error
+	DeleteOrgDeploymentPipeline(ctx context.Context, orgName, pipelineName string) error
 	ListOrgDeploymentPipelines(ctx context.Context, orgName string, limit int, offset int) ([]*models.DeploymentPipelineResponse, int, error)
 	GetDataplanes(ctx context.Context, orgName string) ([]*models.DataPlaneResponse, error)
 }
@@ -394,15 +394,15 @@ func (s *infraResourceManager) UpdateProjectDeploymentPipeline(ctx context.Conte
 	return updated, nil
 }
 
-func (s *infraResourceManager) DeleteProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string) error {
-	s.logger.Info("Deleting deployment pipeline", "orgName", orgName, "projectName", projectName)
+func (s *infraResourceManager) DeleteOrgDeploymentPipeline(ctx context.Context, orgName string, pipelineName string) error {
+	s.logger.Info("Deleting deployment pipeline", "orgName", orgName, "pipelineName", pipelineName)
 
-	if err := s.ocClient.DeleteDeploymentPipeline(ctx, orgName, projectName); err != nil {
-		s.logger.Error("Failed to delete deployment pipeline", "orgName", orgName, "projectName", projectName, "error", err)
+	if err := s.ocClient.DeleteOrgDeploymentPipeline(ctx, orgName, pipelineName); err != nil {
+		s.logger.Error("Failed to delete deployment pipeline", "orgName", orgName, "pipelineName", pipelineName, "error", err)
 		return fmt.Errorf("failed to delete deployment pipeline: %w", err)
 	}
 
-	s.logger.Info("Deployment pipeline deleted successfully", "orgName", orgName, "projectName", projectName)
+	s.logger.Info("Deployment pipeline deleted successfully", "orgName", orgName, "pipelineName", pipelineName)
 	return nil
 }
 

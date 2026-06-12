@@ -1354,10 +1354,10 @@ func (a *DefaultAPIService) DeleteAgentModelConfigExecute(r ApiDeleteAgentModelC
 }
 
 type ApiDeleteDeploymentPipelineRequest struct {
-	ctx        context.Context
-	ApiService *DefaultAPIService
-	orgName    string
-	projName   string
+	ctx          context.Context
+	ApiService   *DefaultAPIService
+	orgName      string
+	pipelineName string
 }
 
 func (r ApiDeleteDeploymentPipelineRequest) Execute() (*http.Response, error) {
@@ -1365,21 +1365,21 @@ func (r ApiDeleteDeploymentPipelineRequest) Execute() (*http.Response, error) {
 }
 
 /*
-DeleteDeploymentPipeline Delete deployment pipeline for a project
+DeleteDeploymentPipeline Delete a deployment pipeline
 
-Deletes the deployment pipeline and all its promotion paths for the specified project.
+Deletes the named deployment pipeline.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name
-	@param projName Project name
+	@param pipelineName Deployment pipeline name
 	@return ApiDeleteDeploymentPipelineRequest
 */
-func (a *DefaultAPIService) DeleteDeploymentPipeline(ctx context.Context, orgName string, projName string) ApiDeleteDeploymentPipelineRequest {
+func (a *DefaultAPIService) DeleteDeploymentPipeline(ctx context.Context, orgName string, pipelineName string) ApiDeleteDeploymentPipelineRequest {
 	return ApiDeleteDeploymentPipelineRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		projName:   projName,
+		ApiService:   a,
+		ctx:          ctx,
+		orgName:      orgName,
+		pipelineName: pipelineName,
 	}
 }
 
@@ -1396,9 +1396,9 @@ func (a *DefaultAPIService) DeleteDeploymentPipelineExecute(r ApiDeleteDeploymen
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/deployment-pipeline"
+	localVarPath := localBasePath + "/orgs/{orgName}/deployment-pipelines/{pipelineName}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"pipelineName"+"}", url.PathEscape(parameterValueToString(r.pipelineName, "pipelineName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
