@@ -151,7 +151,15 @@ const formatRelativeTime = (value?: string | number | Date) => {
 };
 
 export const EnvironmentCard = (props: EnvironmentCardProps) => {
-  const { environment, orgId, projectId, agentId, actions, bottomContent, isFirstEnvironment = true } = props;
+  const {
+    environment,
+    orgId,
+    projectId,
+    agentId,
+    actions,
+    bottomContent,
+    isFirstEnvironment = true,
+  } = props;
   const theme = useTheme();
   const { data: agent, isLoading: isAgentLoading } = useGetAgent({
     orgName: orgId,

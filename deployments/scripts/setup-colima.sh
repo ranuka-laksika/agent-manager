@@ -10,8 +10,8 @@ source "$SCRIPT_DIR/utils.sh"
 # Configuration
 # ============================================================================
 PROFILE="${1:-dev}"
-COLIMA_CPU="${COLIMA_CPU:-4}"
-COLIMA_MEMORY="${COLIMA_MEMORY:-8}"
+COLIMA_CPU="${COLIMA_CPU:-8}"
+COLIMA_MEMORY="${COLIMA_MEMORY:-10}"
 COLIMA_VM_TYPE="${COLIMA_VM_TYPE:-vz}"
 
 # Check prerequisites

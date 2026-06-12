@@ -339,7 +339,10 @@ export function DeploymentPipelineTable(
                                     confirmButtonColor: "error",
                                     confirmButtonIcon: <Trash size={16} />,
                                     onConfirm: () =>
-                                      deletePipeline({ orgName: orgId, pipelineName: pipeline.name }),
+                                      deletePipeline({
+                                        orgName: orgId,
+                                        pipelineName: pipeline.name,
+                                      }),
                                   })
                                 }
                               >

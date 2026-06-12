@@ -152,6 +152,9 @@ type ClientInterface interface {
 
 	CreateDeploymentPipeline(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteDeploymentPipeline request
+	DeleteDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEnvironments request
 	ListEnvironments(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -533,9 +536,6 @@ type ClientInterface interface {
 	// GetTraceScores request
 	GetTraceScores(ctx context.Context, orgName string, projName string, agentName string, traceId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteDeploymentPipeline request
-	DeleteDeploymentPipeline(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// GetDeploymentPipeline request
 	GetDeploymentPipeline(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -846,6 +846,18 @@ func (c *Client) CreateDeploymentPipelineWithBody(ctx context.Context, orgName s
 
 func (c *Client) CreateDeploymentPipeline(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateDeploymentPipelineRequest(c.Server, orgName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteDeploymentPipelineRequest(c.Server, orgName, pipelineName)
 	if err != nil {
 		return nil, err
 	}
@@ -2524,18 +2536,6 @@ func (c *Client) GetTraceScores(ctx context.Context, orgName string, projName st
 	return c.Client.Do(req)
 }
 
-func (c *Client) DeleteDeploymentPipeline(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteDeploymentPipelineRequest(c.Server, orgName, projName)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) GetDeploymentPipeline(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetDeploymentPipelineRequest(c.Server, orgName, projName)
 	if err != nil {
@@ -3667,6 +3667,47 @@ func NewCreateDeploymentPipelineRequestWithBody(server string, orgName string, c
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteDeploymentPipelineRequest generates requests for DeleteDeploymentPipeline
+func NewDeleteDeploymentPipelineRequest(server string, orgName string, pipelineName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "pipelineName", pipelineName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/deployment-pipelines/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -9795,47 +9836,6 @@ func NewGetTraceScoresRequest(server string, orgName string, projName string, ag
 	return req, nil
 }
 
-// NewDeleteDeploymentPipelineRequest generates requests for DeleteDeploymentPipeline
-func NewDeleteDeploymentPipelineRequest(server string, orgName string, projName string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/deployment-pipeline", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewGetDeploymentPipelineRequest generates requests for GetDeploymentPipeline
 func NewGetDeploymentPipelineRequest(server string, orgName string, projName string) (*http.Request, error) {
 	var err error
@@ -10713,6 +10713,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateDeploymentPipelineWithResponse(ctx context.Context, orgName string, body CreateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateDeploymentPipelineResp, error)
 
+	// DeleteDeploymentPipelineWithResponse request
+	DeleteDeploymentPipelineWithResponse(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*DeleteDeploymentPipelineResp, error)
+
 	// ListEnvironmentsWithResponse request
 	ListEnvironmentsWithResponse(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResp, error)
 
@@ -11093,9 +11096,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetTraceScoresWithResponse request
 	GetTraceScoresWithResponse(ctx context.Context, orgName string, projName string, agentName string, traceId string, reqEditors ...RequestEditorFn) (*GetTraceScoresResp, error)
-
-	// DeleteDeploymentPipelineWithResponse request
-	DeleteDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*DeleteDeploymentPipelineResp, error)
 
 	// GetDeploymentPipelineWithResponse request
 	GetDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*GetDeploymentPipelineResp, error)
@@ -11581,6 +11581,29 @@ func (r CreateDeploymentPipelineResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateDeploymentPipelineResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteDeploymentPipelineResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteDeploymentPipelineResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteDeploymentPipelineResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14179,29 +14202,6 @@ func (r GetTraceScoresResp) StatusCode() int {
 	return 0
 }
 
-type DeleteDeploymentPipelineResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON404      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteDeploymentPipelineResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteDeploymentPipelineResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type GetDeploymentPipelineResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -14728,6 +14728,15 @@ func (c *ClientWithResponses) CreateDeploymentPipelineWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseCreateDeploymentPipelineResp(rsp)
+}
+
+// DeleteDeploymentPipelineWithResponse request returning *DeleteDeploymentPipelineResp
+func (c *ClientWithResponses) DeleteDeploymentPipelineWithResponse(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*DeleteDeploymentPipelineResp, error) {
+	rsp, err := c.DeleteDeploymentPipeline(ctx, orgName, pipelineName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteDeploymentPipelineResp(rsp)
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResp
@@ -15945,15 +15954,6 @@ func (c *ClientWithResponses) GetTraceScoresWithResponse(ctx context.Context, or
 	return ParseGetTraceScoresResp(rsp)
 }
 
-// DeleteDeploymentPipelineWithResponse request returning *DeleteDeploymentPipelineResp
-func (c *ClientWithResponses) DeleteDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*DeleteDeploymentPipelineResp, error) {
-	rsp, err := c.DeleteDeploymentPipeline(ctx, orgName, projName, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteDeploymentPipelineResp(rsp)
-}
-
 // GetDeploymentPipelineWithResponse request returning *GetDeploymentPipelineResp
 func (c *ClientWithResponses) GetDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*GetDeploymentPipelineResp, error) {
 	rsp, err := c.GetDeploymentPipeline(ctx, orgName, projName, reqEditors...)
@@ -16856,6 +16856,39 @@ func ParseCreateDeploymentPipelineResp(rsp *http.Response) (*CreateDeploymentPip
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteDeploymentPipelineResp parses an HTTP response from a DeleteDeploymentPipelineWithResponse call
+func ParseDeleteDeploymentPipelineResp(rsp *http.Response) (*DeleteDeploymentPipelineResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteDeploymentPipelineResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse
@@ -21774,39 +21807,6 @@ func ParseGetTraceScoresResp(rsp *http.Response) (*GetTraceScoresResp, error) {
 		}
 		response.JSON400 = &dest
 
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteDeploymentPipelineResp parses an HTTP response from a DeleteDeploymentPipelineWithResponse call
-func ParseDeleteDeploymentPipelineResp(rsp *http.Response) (*DeleteDeploymentPipelineResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteDeploymentPipelineResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

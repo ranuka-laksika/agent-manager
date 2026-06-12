@@ -117,7 +117,7 @@ export function DeleteEnvironmentDrawer({
       <DrawerContent>
         <Stack spacing={3}>
           <Typography variant="body2" color="text.secondary">
-            Environments are removed by a script that uninstalls the environment's API Platform
+            Environments are removed by a script that uninstalls the environment&apos;s API Platform
             Gateway via Helm and then deletes the environment in Agent Manager. Copy and run the
             command below in a terminal with <code>kubectl</code> and <code>helm</code> configured
             against your cluster.

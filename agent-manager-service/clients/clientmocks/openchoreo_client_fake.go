@@ -51,14 +51,14 @@ import (
 //			DeleteComponentFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string) error {
 //				panic("mock out the DeleteComponent method")
 //			},
-//			DeleteDeploymentPipelineFunc: func(ctx context.Context, namespaceName string, projectName string) error {
-//				panic("mock out the DeleteDeploymentPipeline method")
-//			},
 //			DeleteEnvironmentFunc: func(ctx context.Context, namespaceName string, environmentName string) error {
 //				panic("mock out the DeleteEnvironment method")
 //			},
 //			DeleteGitSecretFunc: func(ctx context.Context, namespaceName string, secretName string) error {
 //				panic("mock out the DeleteGitSecret method")
+//			},
+//			DeleteOrgDeploymentPipelineFunc: func(ctx context.Context, namespaceName string, pipelineName string) error {
+//				panic("mock out the DeleteOrgDeploymentPipeline method")
 //			},
 //			DeleteProjectFunc: func(ctx context.Context, namespaceName string, projectName string) error {
 //				panic("mock out the DeleteProject method")
@@ -262,14 +262,14 @@ type OpenChoreoClientMock struct {
 	// DeleteComponentFunc mocks the DeleteComponent method.
 	DeleteComponentFunc func(ctx context.Context, namespaceName string, projectName string, componentName string) error
 
-	// DeleteDeploymentPipelineFunc mocks the DeleteDeploymentPipeline method.
-	DeleteDeploymentPipelineFunc func(ctx context.Context, namespaceName string, projectName string) error
-
 	// DeleteEnvironmentFunc mocks the DeleteEnvironment method.
 	DeleteEnvironmentFunc func(ctx context.Context, namespaceName string, environmentName string) error
 
 	// DeleteGitSecretFunc mocks the DeleteGitSecret method.
 	DeleteGitSecretFunc func(ctx context.Context, namespaceName string, secretName string) error
+
+	// DeleteOrgDeploymentPipelineFunc mocks the DeleteOrgDeploymentPipeline method.
+	DeleteOrgDeploymentPipelineFunc func(ctx context.Context, namespaceName string, pipelineName string) error
 
 	// DeleteProjectFunc mocks the DeleteProject method.
 	DeleteProjectFunc func(ctx context.Context, namespaceName string, projectName string) error
@@ -554,15 +554,6 @@ type OpenChoreoClientMock struct {
 			// ComponentName is the componentName argument value.
 			ComponentName string
 		}
-		// DeleteDeploymentPipeline holds details about calls to the DeleteDeploymentPipeline method.
-		DeleteDeploymentPipeline []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// NamespaceName is the namespaceName argument value.
-			NamespaceName string
-			// ProjectName is the projectName argument value.
-			ProjectName string
-		}
 		// DeleteEnvironment holds details about calls to the DeleteEnvironment method.
 		DeleteEnvironment []struct {
 			// Ctx is the ctx argument value.
@@ -580,6 +571,15 @@ type OpenChoreoClientMock struct {
 			NamespaceName string
 			// SecretName is the secretName argument value.
 			SecretName string
+		}
+		// DeleteOrgDeploymentPipeline holds details about calls to the DeleteOrgDeploymentPipeline method.
+		DeleteOrgDeploymentPipeline []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// NamespaceName is the namespaceName argument value.
+			NamespaceName string
+			// PipelineName is the pipelineName argument value.
+			PipelineName string
 		}
 		// DeleteProject holds details about calls to the DeleteProject method.
 		DeleteProject []struct {
@@ -1209,9 +1209,9 @@ type OpenChoreoClientMock struct {
 	lockCreateSecretReference                  sync.RWMutex
 	lockCreateWorkflowRun                      sync.RWMutex
 	lockDeleteComponent                        sync.RWMutex
-	lockDeleteDeploymentPipeline               sync.RWMutex
 	lockDeleteEnvironment                      sync.RWMutex
 	lockDeleteGitSecret                        sync.RWMutex
+	lockDeleteOrgDeploymentPipeline            sync.RWMutex
 	lockDeleteProject                          sync.RWMutex
 	lockDeleteSecretReference                  sync.RWMutex
 	lockDeploy                                 sync.RWMutex
@@ -1748,46 +1748,6 @@ func (mock *OpenChoreoClientMock) DeleteComponentCalls() []struct {
 	return calls
 }
 
-// DeleteDeploymentPipeline calls DeleteDeploymentPipelineFunc.
-func (mock *OpenChoreoClientMock) DeleteDeploymentPipeline(ctx context.Context, namespaceName string, projectName string) error {
-	if mock.DeleteDeploymentPipelineFunc == nil {
-		panic("OpenChoreoClientMock.DeleteDeploymentPipelineFunc: method is nil but OpenChoreoClient.DeleteDeploymentPipeline was just called")
-	}
-	callInfo := struct {
-		Ctx           context.Context
-		NamespaceName string
-		ProjectName   string
-	}{
-		Ctx:           ctx,
-		NamespaceName: namespaceName,
-		ProjectName:   projectName,
-	}
-	mock.lockDeleteDeploymentPipeline.Lock()
-	mock.calls.DeleteDeploymentPipeline = append(mock.calls.DeleteDeploymentPipeline, callInfo)
-	mock.lockDeleteDeploymentPipeline.Unlock()
-	return mock.DeleteDeploymentPipelineFunc(ctx, namespaceName, projectName)
-}
-
-// DeleteDeploymentPipelineCalls gets all the calls that were made to DeleteDeploymentPipeline.
-// Check the length with:
-//
-//	len(mockedOpenChoreoClient.DeleteDeploymentPipelineCalls())
-func (mock *OpenChoreoClientMock) DeleteDeploymentPipelineCalls() []struct {
-	Ctx           context.Context
-	NamespaceName string
-	ProjectName   string
-} {
-	var calls []struct {
-		Ctx           context.Context
-		NamespaceName string
-		ProjectName   string
-	}
-	mock.lockDeleteDeploymentPipeline.RLock()
-	calls = mock.calls.DeleteDeploymentPipeline
-	mock.lockDeleteDeploymentPipeline.RUnlock()
-	return calls
-}
-
 // DeleteEnvironment calls DeleteEnvironmentFunc.
 func (mock *OpenChoreoClientMock) DeleteEnvironment(ctx context.Context, namespaceName string, environmentName string) error {
 	if mock.DeleteEnvironmentFunc == nil {
@@ -1865,6 +1825,46 @@ func (mock *OpenChoreoClientMock) DeleteGitSecretCalls() []struct {
 	mock.lockDeleteGitSecret.RLock()
 	calls = mock.calls.DeleteGitSecret
 	mock.lockDeleteGitSecret.RUnlock()
+	return calls
+}
+
+// DeleteOrgDeploymentPipeline calls DeleteOrgDeploymentPipelineFunc.
+func (mock *OpenChoreoClientMock) DeleteOrgDeploymentPipeline(ctx context.Context, namespaceName string, pipelineName string) error {
+	if mock.DeleteOrgDeploymentPipelineFunc == nil {
+		panic("OpenChoreoClientMock.DeleteOrgDeploymentPipelineFunc: method is nil but OpenChoreoClient.DeleteOrgDeploymentPipeline was just called")
+	}
+	callInfo := struct {
+		Ctx           context.Context
+		NamespaceName string
+		PipelineName  string
+	}{
+		Ctx:           ctx,
+		NamespaceName: namespaceName,
+		PipelineName:  pipelineName,
+	}
+	mock.lockDeleteOrgDeploymentPipeline.Lock()
+	mock.calls.DeleteOrgDeploymentPipeline = append(mock.calls.DeleteOrgDeploymentPipeline, callInfo)
+	mock.lockDeleteOrgDeploymentPipeline.Unlock()
+	return mock.DeleteOrgDeploymentPipelineFunc(ctx, namespaceName, pipelineName)
+}
+
+// DeleteOrgDeploymentPipelineCalls gets all the calls that were made to DeleteOrgDeploymentPipeline.
+// Check the length with:
+//
+//	len(mockedOpenChoreoClient.DeleteOrgDeploymentPipelineCalls())
+func (mock *OpenChoreoClientMock) DeleteOrgDeploymentPipelineCalls() []struct {
+	Ctx           context.Context
+	NamespaceName string
+	PipelineName  string
+} {
+	var calls []struct {
+		Ctx           context.Context
+		NamespaceName string
+		PipelineName  string
+	}
+	mock.lockDeleteOrgDeploymentPipeline.RLock()
+	calls = mock.calls.DeleteOrgDeploymentPipeline
+	mock.lockDeleteOrgDeploymentPipeline.RUnlock()
 	return calls
 }
 
