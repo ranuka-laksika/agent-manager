@@ -72,4 +72,3 @@ func extractOrgFromPath(path string) string {
 	}
 	return ""
 }
-
