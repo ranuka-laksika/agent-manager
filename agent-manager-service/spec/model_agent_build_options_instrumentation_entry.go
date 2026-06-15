@@ -21,6 +21,8 @@ var _ MappedNullable = &AgentBuildOptionsInstrumentationEntry{}
 type AgentBuildOptionsInstrumentationEntry struct {
 	// The amp-instrumentation semver.
 	Version string `json:"version"`
+	// The bundled OpenLLMetry (Traceloop) SDK version this instrumentation release ships. Optional: operator-supplied extension entries may omit it.
+	TraceloopSdk *string `json:"traceloopSdk,omitempty"`
 	// Bare-minor Python versions this instrumentation version supports. The init-container image is ABI-locked to the Python runtime, so a selection outside this list will fail to pull at deploy time.
 	PythonVersions []string `json:"pythonVersions"`
 }
@@ -68,6 +70,38 @@ func (o *AgentBuildOptionsInstrumentationEntry) SetVersion(v string) {
 	o.Version = v
 }
 
+// GetTraceloopSdk returns the TraceloopSdk field value if set, zero value otherwise.
+func (o *AgentBuildOptionsInstrumentationEntry) GetTraceloopSdk() string {
+	if o == nil || IsNil(o.TraceloopSdk) {
+		var ret string
+		return ret
+	}
+	return *o.TraceloopSdk
+}
+
+// GetTraceloopSdkOk returns a tuple with the TraceloopSdk field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *AgentBuildOptionsInstrumentationEntry) GetTraceloopSdkOk() (*string, bool) {
+	if o == nil || IsNil(o.TraceloopSdk) {
+		return nil, false
+	}
+	return o.TraceloopSdk, true
+}
+
+// HasTraceloopSdk returns a boolean if a field has been set.
+func (o *AgentBuildOptionsInstrumentationEntry) HasTraceloopSdk() bool {
+	if o != nil && !IsNil(o.TraceloopSdk) {
+		return true
+	}
+
+	return false
+}
+
+// SetTraceloopSdk gets a reference to the given string and assigns it to the TraceloopSdk field.
+func (o *AgentBuildOptionsInstrumentationEntry) SetTraceloopSdk(v string) {
+	o.TraceloopSdk = &v
+}
+
 // GetPythonVersions returns the PythonVersions field value
 func (o *AgentBuildOptionsInstrumentationEntry) GetPythonVersions() []string {
 	if o == nil {
@@ -103,6 +137,9 @@ func (o AgentBuildOptionsInstrumentationEntry) MarshalJSON() ([]byte, error) {
 func (o AgentBuildOptionsInstrumentationEntry) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["version"] = o.Version
+	if !IsNil(o.TraceloopSdk) {
+		toSerialize["traceloopSdk"] = o.TraceloopSdk
+	}
 	toSerialize["pythonVersions"] = o.PythonVersions
 	return toSerialize, nil
 }

@@ -1116,6 +1116,11 @@ type AgentBuildOptionsInstrumentationEntry struct {
 	// selection outside this list will fail to pull at deploy time.
 	PythonVersions []string `json:"pythonVersions"`
 
+	// TraceloopSdk The bundled OpenLLMetry (Traceloop) SDK version this
+	// instrumentation release ships. Optional: operator-supplied
+	// extension entries may omit it.
+	TraceloopSdk *string `json:"traceloopSdk,omitempty"`
+
 	// Version The amp-instrumentation semver.
 	Version string `json:"version"`
 }

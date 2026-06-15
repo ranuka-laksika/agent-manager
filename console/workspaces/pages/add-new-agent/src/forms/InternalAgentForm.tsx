@@ -97,7 +97,12 @@ export const InternalAgentForm = ({
   // Empty list when no AMP-provided instrumentation covers that Python —
   // the form then offers the manual-instrumentation fallback.
   const compatibleInstrumentation = useMemo(() => {
-    if (!buildOptions) return [] as { version: string; pythonVersions: string[] }[];
+    if (!buildOptions)
+      return [] as {
+        version: string;
+        traceloopSdk?: string;
+        pythonVersions: string[];
+      }[];
     const py = formData.languageVersion;
     if (!py) return buildOptions.instrumentation.versions;
     return buildOptions.instrumentation.versions.filter((v) =>
@@ -423,7 +428,9 @@ export const InternalAgentForm = ({
                       >
                         {compatibleInstrumentation.map((v) => (
                           <MenuItem key={v.version} value={v.version}>
-                            {v.version}
+                            {v.traceloopSdk
+                              ? `${v.version} (OpenLLMetry v${v.traceloopSdk})`
+                              : v.version}
                           </MenuItem>
                         ))}
                       </Select>

@@ -29,6 +29,8 @@ export type AgentBuildOptions = {
     defaultVersion: string;
     versions: Array<{
       version: string;
+      /** Bundled OpenLLMetry (Traceloop) SDK version, when known. */
+      traceloopSdk?: string;
       pythonVersions: string[];
     }>;
   };

@@ -71,10 +71,14 @@ func (c *agentBuildOptionsController) GetAgentBuildOptions(w http.ResponseWriter
 
 	entries := make([]spec.AgentBuildOptionsInstrumentationEntry, 0, len(sorted))
 	for _, v := range sorted {
-		entries = append(entries, spec.AgentBuildOptionsInstrumentationEntry{
+		entry := spec.AgentBuildOptionsInstrumentationEntry{
 			Version:        v.Version,
 			PythonVersions: v.PythonVersions,
-		})
+		}
+		if v.TraceloopSDK != "" {
+			entry.TraceloopSdk = &v.TraceloopSDK
+		}
+		entries = append(entries, entry)
 	}
 
 	resp := spec.AgentBuildOptionsResponse{

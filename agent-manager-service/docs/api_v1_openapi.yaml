@@ -13015,6 +13015,13 @@ components:
           type: string
           description: The amp-instrumentation semver.
           example: "0.2.1"
+        traceloopSdk:
+          type: string
+          description: |
+            The bundled OpenLLMetry (Traceloop) SDK version this
+            instrumentation release ships. Optional: operator-supplied
+            extension entries may omit it.
+          example: "0.61.0"
         pythonVersions:
           type: array
           description: |

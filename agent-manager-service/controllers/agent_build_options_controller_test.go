@@ -29,7 +29,7 @@ import (
 func TestAgentBuildOptions_ResponseShape(t *testing.T) {
 	cat := instrumentation.NewForTest([]instrumentation.Version{
 		{Version: "0.2.1", PythonVersions: []string{"3.10", "3.11"}, ImageRepository: "x"},
-		{Version: "0.4.0", PythonVersions: []string{"3.11", "3.12"}, ImageRepository: "x"},
+		{Version: "0.4.0", TraceloopSDK: "0.61.0", PythonVersions: []string{"3.11", "3.12"}, ImageRepository: "x"},
 	}, "0.2.1")
 	c := NewAgentBuildOptionsController(cat, []string{"3.10", "3.11", "3.12"}, "3.11")
 
@@ -59,6 +59,14 @@ func TestAgentBuildOptions_ResponseShape(t *testing.T) {
 	// Sorted newest-first.
 	if got.Instrumentation.Versions[0].Version != "0.4.0" || got.Instrumentation.Versions[1].Version != "0.2.1" {
 		t.Errorf("versions = %v, want [0.4.0, 0.2.1]", got.Instrumentation.Versions)
+	}
+	// traceloopSdk is carried through when present and omitted otherwise.
+	if got.Instrumentation.Versions[0].TraceloopSdk == nil ||
+		*got.Instrumentation.Versions[0].TraceloopSdk != "0.61.0" {
+		t.Errorf("versions[0].traceloopSdk = %v, want 0.61.0", got.Instrumentation.Versions[0].TraceloopSdk)
+	}
+	if got.Instrumentation.Versions[1].TraceloopSdk != nil {
+		t.Errorf("versions[1].traceloopSdk = %v, want nil", *got.Instrumentation.Versions[1].TraceloopSdk)
 	}
 }
 
