@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
-# Unit tests for lib-vm.sh. Run: bash deployments/quick-start/vm/tests/run.sh
+# Unit tests for lib-vm.sh + lib-advanced.sh. Run: bash deployments/vm/tests/run.sh
+#
+# Test groups set AMP_HOST_*/config vars and call the sourced lib functions, which
+# read them via bash dynamic scope. shellcheck cannot follow that across the source
+# boundary, and the per-group subshells are intentional isolation, so the following
+# are expected false positives here:
+# shellcheck disable=SC2034  # vars are consumed by sourced lib functions
+# shellcheck disable=SC2030,SC2031  # subshell isolation of test-group vars is intentional
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib-vm.sh disable=SC1091
 source "${SCRIPT_DIR}/../lib-vm.sh"
+# shellcheck source=../lib-advanced.sh disable=SC1091
+source "${SCRIPT_DIR}/../lib-advanced.sh"
 
-FAILED=0
+# Failures are recorded in a marker file (not just a shell var) so that assertions
+# inside subshells — used to scope AMP_HOST_* per test group — still fail the suite.
+FAILLOG="$(mktemp)"
+trap 'rm -f "$FAILLOG"' EXIT
 assert_eq() {
   local label="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then
     printf 'ok   - %s\n' "$label"
   else
     printf 'FAIL - %s\n      expected: %q\n      actual:   %q\n' "$label" "$expected" "$actual"
-    FAILED=1
+    echo 1 >>"$FAILLOG"
   fi
 }
 # has <haystack> <needle> -> "yes" if needle present, else "no"
@@ -243,5 +255,275 @@ assert_eq "agent CORS preflight short-circuit" "yes" "$(has "$cf_ai" 'respond @c
 assert_eq "agent site on_demand + disable_http_challenge" "yes" \
   "$(printf '%s' "$cf_ai" | awk '/\*\.agents\./{f=1} f' | grep -qF 'disable_http_challenge' && echo yes || echo no)"
 
-if [[ "$FAILED" -ne 0 ]]; then echo "TESTS FAILED"; exit 1; fi
+# --- hostname-driven cores: set AMP_HOST_* and call the core directly ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=cp.amp.example.com
+  AMP_AGENTS_BASE=agents.amp.example.com
+
+  core_amp="$(amp_helm_args)"
+  assert_eq "core amp serverPublicURL (service key)" \
+    "agentManagerService.config.serverPublicURL=https://api.amp.example.com" \
+    "$(grep -F 'agentManagerService.config.serverPublicURL' <<<"$core_amp")"
+  assert_eq "core amp cp url present" \
+    "console.config.gatewayControlPlaneUrl=https://cp.amp.example.com" \
+    "$(grep -F 'gatewayControlPlaneUrl' <<<"$core_amp")"
+
+  core_th="$(thunder_helm_args)"
+  assert_eq "core thunder jwt.issuer" \
+    "thunder.configuration.jwt.issuer=https://thunder.amp.example.com" \
+    "$(grep -F 'jwt.issuer' <<<"$core_th")"
+
+  core_gw="$(gateway_helm_args)"
+  assert_eq "core gateway vhost" \
+    "gateway.vhost=https://gateway.amp.example.com" \
+    "$(grep -F 'gateway.vhost' <<<"$core_gw")"
+
+  core_cp="$(cp_helm_args)"
+  assert_eq "core cp oidc issuer" \
+    "security.oidc.issuer=https://thunder.amp.example.com" \
+    "$(grep -F 'security.oidc.issuer' <<<"$core_cp")"
+)
+
+# --- core respects AMP_HOST_CP="" as external-gateways-off ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=""
+  AMP_AGENTS_BASE=agents.amp.example.com
+  assert_eq "core amp no cp when AMP_HOST_CP empty" "" \
+    "$(grep -F 'gatewayControlPlaneUrl' <<<"$(amp_helm_args)")"
+)
+
+# --- dataplane_external_ingress core reads AMP_AGENTS_BASE ---
+(
+  AMP_AGENTS_BASE=agents.amp.example.com
+  dpe_core="$(dataplane_external_ingress)"
+  assert_eq "core dp external host" "yes" "$(has "$dpe_core" 'host: "agents.amp.example.com"')"
+  assert_eq "core dp external port 443" "yes" "$(has "$dpe_core" 'port: 443')"
+)
+
+# --- caddyfile core, letsencrypt mode ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=cp.amp.example.com
+  AMP_AGENTS_BASE=agents.amp.example.com
+  cf_le="$(caddyfile letsencrypt "ops@example.com" "" "" "")"
+  assert_eq "core caddy LE console site" "yes" "$(has "$cf_le" 'console.amp.example.com {')"
+  assert_eq "core caddy LE console upstream" "yes" "$(has "$cf_le" 'reverse_proxy 127.0.0.1:3000')"
+  assert_eq "core caddy LE issuer acme" "yes" "$(has "$cf_le" 'issuer acme')"
+  assert_eq "core caddy LE disable_http_challenge" "yes" "$(has "$cf_le" 'disable_http_challenge')"
+  assert_eq "core caddy LE email" "yes" "$(has "$cf_le" 'email ops@example.com')"
+  assert_eq "core caddy LE cp site" "yes" "$(has "$cf_le" 'cp.amp.example.com {')"
+  assert_eq "core caddy LE agent wildcard" "yes" "$(has "$cf_le" '*.agents.amp.example.com {')"
+  assert_eq "core caddy LE on_demand ask" "yes" "$(has "$cf_le" 'ask http://127.0.0.1:9753')"
+)
+
+# --- caddyfile core, byoc mode ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=cp.amp.example.com
+  AMP_AGENTS_BASE=agents.amp.example.com
+  cf_byoc="$(caddyfile byoc "" /opt/amp/certs/fullchain.pem /opt/amp/certs/privkey.pem "")"
+  assert_eq "byoc serves provided cert/key" "yes" \
+    "$(has "$cf_byoc" 'tls /opt/amp/certs/fullchain.pem /opt/amp/certs/privkey.pem')"
+  assert_eq "byoc no acme issuer" "no" "$(has "$cf_byoc" 'issuer acme')"
+  assert_eq "byoc no on_demand ask endpoint" "no" "$(has "$cf_byoc" 'ask http://127.0.0.1:9753')"
+  assert_eq "byoc agent site uses provided cert (not on_demand)" "no" "$(has "$cf_byoc" 'on_demand')"
+  assert_eq "byoc still has agent wildcard" "yes" "$(has "$cf_byoc" '*.agents.amp.example.com {')"
+  assert_eq "byoc still serves https (no http:// site)" "no" "$(has "$cf_byoc" 'http://console')"
+  assert_eq "byoc keeps CORS for agents" "yes" "$(has "$cf_byoc" 'X-API-Key')"
+)
+
+# --- caddyfile core, upstream mode (LB terminates TLS; Caddy routes plain HTTP) ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=cp.amp.example.com
+  AMP_AGENTS_BASE=agents.amp.example.com
+  cf_up="$(caddyfile upstream "" "" "" 8080)"
+  assert_eq "upstream sets http_port" "yes" "$(has "$cf_up" 'http_port 8080')"
+  assert_eq "upstream trusts proxy headers" "yes" "$(has "$cf_up" 'trusted_proxies static 0.0.0.0/0')"
+  assert_eq "upstream console site is plain http" "yes" "$(has "$cf_up" 'http://console.amp.example.com:8080 {')"
+  assert_eq "upstream console upstream port" "yes" "$(has "$cf_up" 'reverse_proxy 127.0.0.1:3000')"
+  assert_eq "upstream no acme" "no" "$(has "$cf_up" 'issuer acme')"
+  assert_eq "upstream no tls cert directive" "no" "$(has "$cf_up" 'tls /')"
+  assert_eq "upstream agent wildcard plain http" "yes" "$(has "$cf_up" 'http://*.agents.amp.example.com:8080 {')"
+  assert_eq "upstream keeps CORS" "yes" "$(has "$cf_up" 'X-API-Key')"
+)
+
+# --- upstream default listen port is 80 ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=""
+  AMP_AGENTS_BASE=agents.amp.example.com
+  cf_up80="$(caddyfile upstream "" "" "" "")"
+  assert_eq "upstream default port 80" "yes" "$(has "$cf_up80" 'http_port 80')"
+  assert_eq "upstream console site port 80" "yes" "$(has "$cf_up80" 'http://console.amp.example.com:80 {')"
+  assert_eq "upstream no cp site when AMP_HOST_CP empty" "no" "$(has "$cf_up80" 'cp.amp.example.com')"
+)
+
+# --- derive_hosts: defaults from DOMAIN_BASE ---
+(
+  DOMAIN_BASE=amp.mycompany.com
+  EXTERNAL_GATEWAYS=true
+  derive_hosts
+  assert_eq "derive console default" "console.amp.mycompany.com" "$AMP_HOST_CONSOLE"
+  assert_eq "derive api default"     "api.amp.mycompany.com"     "$AMP_HOST_API"
+  assert_eq "derive thunder default" "thunder.amp.mycompany.com" "$AMP_HOST_THUNDER"
+  assert_eq "derive cp default"      "cp.amp.mycompany.com"      "$AMP_HOST_CP"
+  assert_eq "derive agents default"  "agents.amp.mycompany.com"  "$AMP_AGENTS_BASE"
+)
+
+# --- derive_hosts: per-service override + custom AGENTS_BASE ---
+(
+  DOMAIN_BASE=amp.mycompany.com
+  EXTERNAL_GATEWAYS=true
+  HOST_CONSOLE=ui.mycompany.com
+  AGENTS_BASE=run.mycompany.com
+  derive_hosts
+  assert_eq "derive console override" "ui.mycompany.com" "$AMP_HOST_CONSOLE"
+  assert_eq "derive api still default" "api.amp.mycompany.com" "$AMP_HOST_API"
+  assert_eq "derive agents override" "run.mycompany.com" "$AMP_AGENTS_BASE"
+)
+
+# --- derive_hosts: external gateways off => empty cp host ---
+(
+  DOMAIN_BASE=amp.mycompany.com
+  EXTERNAL_GATEWAYS=false
+  derive_hosts
+  assert_eq "derive cp empty when external gateways off" "" "$AMP_HOST_CP"
+)
+
+# --- validate_config: complete letsencrypt config passes ---
+(
+  AMP_VERSION=0.15.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=letsencrypt
+  ACME_EMAIL=ops@mycompany.com
+  validate_config; rc=$?
+  assert_eq "validate complete LE config rc=0" "0" "$rc"
+)
+
+# --- validate_config: ACME_EMAIL is optional (recommended) -> letsencrypt without it passes ---
+(
+  AMP_VERSION=0.16.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=letsencrypt
+  validate_config 2>/dev/null; rc=$?
+  assert_eq "validate LE without ACME_EMAIL rc=0" "0" "$rc"
+)
+
+# --- validate_config: missing DOMAIN_BASE fails ---
+(
+  AMP_VERSION=0.15.0; TLS_MODE=letsencrypt; ACME_EMAIL=ops@mycompany.com
+  validate_config; rc=$?
+  assert_eq "validate missing DOMAIN_BASE rc=1" "1" "$rc"
+  assert_eq "validate names DOMAIN_BASE" "yes" \
+    "$(printf '%s\n' "${CONFIG_ERRORS[@]}" | grep -qF 'DOMAIN_BASE' && echo yes || echo no)"
+)
+
+# --- validate_config: bad TLS_MODE fails ---
+(
+  AMP_VERSION=0.15.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=banana
+  validate_config; rc=$?
+  assert_eq "validate bad TLS_MODE rc=1" "1" "$rc"
+)
+
+# --- validate_config: byoc requires cert+key ---
+(
+  AMP_VERSION=0.15.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=byoc
+  validate_config; rc=$?
+  assert_eq "validate byoc without cert rc=1" "1" "$rc"
+  assert_eq "validate byoc names TLS_CERT_FILE" "yes" \
+    "$(printf '%s\n' "${CONFIG_ERRORS[@]}" | grep -qF 'TLS_CERT_FILE' && echo yes || echo no)"
+)
+
+# --- install-advanced.sh --init emits a sourceable, complete template ---
+ADV="${SCRIPT_DIR}/../install-advanced.sh"
+init_out="$(bash "$ADV" --init)"
+assert_eq "init has AMP_VERSION"  "yes" "$(has "$init_out" 'AMP_VERSION=')"
+assert_eq "init has DOMAIN_BASE"  "yes" "$(has "$init_out" 'DOMAIN_BASE=')"
+assert_eq "init has TLS_MODE"     "yes" "$(has "$init_out" 'TLS_MODE=')"
+assert_eq "init mentions byoc keys" "yes" "$(has "$init_out" 'TLS_CERT_FILE=')"
+assert_eq "init mentions upstream port" "yes" "$(has "$init_out" 'UPSTREAM_LISTEN_PORT=')"
+# The emitted template must be valid shell (sourceable without error).
+tmp_init="$(mktemp)"; printf '%s\n' "$init_out" > "$tmp_init"
+if bash -n "$tmp_init"; then assert_eq "init template is valid shell" "0" "0"; else assert_eq "init template is valid shell" "0" "1"; fi
+rm -f "$tmp_init"
+
+# --- --dry-run renders Caddyfile + helm args for an upstream config, no cluster work ---
+tmp_cfg="$(mktemp)"
+cat > "$tmp_cfg" <<'CFG'
+AMP_VERSION=0.15.0
+DOMAIN_BASE=amp.mycompany.com
+TLS_MODE=upstream
+UPSTREAM_LISTEN_PORT=80
+EXTERNAL_GATEWAYS=true
+CFG
+# upstream mode skips cert + DNS hard checks, so dry-run can run hermetically.
+dry_out="$(bash "$ADV" --config "$tmp_cfg" --dry-run 2>&1)"
+assert_eq "dry-run renders console site" "yes" "$(has "$dry_out" 'http://console.amp.mycompany.com:80 {')"
+assert_eq "dry-run renders amp helm arg" "yes" "$(has "$dry_out" 'serverPublicURL=https://api.amp.mycompany.com')"
+assert_eq "dry-run does NOT start install" "no" "$(has "$dry_out" 'Running base installer')"
+rm -f "$tmp_cfg"
+
+# --- validate_config: UPSTREAM_LISTEN_PORT must be a valid, non-colliding port ---
+(
+  AMP_VERSION=0.16.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=upstream; UPSTREAM_LISTEN_PORT=8088
+  validate_config; rc=$?
+  assert_eq "validate upstream good port rc=0" "0" "$rc"
+)
+(
+  AMP_VERSION=0.16.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=upstream; UPSTREAM_LISTEN_PORT=http
+  validate_config; rc=$?
+  assert_eq "validate upstream non-numeric port rc=1" "1" "$rc"
+)
+(
+  AMP_VERSION=0.16.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=upstream; UPSTREAM_LISTEN_PORT=70000
+  validate_config; rc=$?
+  assert_eq "validate upstream out-of-range port rc=1" "1" "$rc"
+)
+(
+  # 8080 is a loopback-bound cluster port (Thunder/kgateway) -> must be rejected.
+  AMP_VERSION=0.16.0; DOMAIN_BASE=amp.mycompany.com; TLS_MODE=upstream; UPSTREAM_LISTEN_PORT=8080
+  validate_config; rc=$?
+  assert_eq "validate upstream colliding port rc=1" "1" "$rc"
+  assert_eq "validate names the collision" "yes" \
+    "$(printf '%s\n' "${CONFIG_ERRORS[@]}" | grep -qF 'collides with a loopback-bound cluster port' && echo yes || echo no)"
+)
+
+# --- caddyfile upstream: trusted_proxies is configurable (6th arg) ---
+(
+  AMP_HOST_CONSOLE=console.amp.example.com
+  AMP_HOST_API=api.amp.example.com
+  AMP_HOST_THUNDER=thunder.amp.example.com
+  AMP_HOST_OBSERVER=observer.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
+  AMP_HOST_CP=""
+  AMP_AGENTS_BASE=agents.amp.example.com
+  cf_tp="$(caddyfile upstream "" "" "" 80 "130.211.0.0/22 35.191.0.0/16")"
+  assert_eq "upstream custom trusted_proxies" "yes" \
+    "$(has "$cf_tp" 'trusted_proxies static 130.211.0.0/22 35.191.0.0/16')"
+)
+
+if [[ -s "$FAILLOG" ]]; then echo "TESTS FAILED"; exit 1; fi
 echo "ALL TESTS PASSED"
