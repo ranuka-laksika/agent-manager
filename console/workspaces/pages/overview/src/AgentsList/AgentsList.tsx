@@ -555,7 +555,7 @@ export const AgentsList: React.FC = () => {
                 </ListingTable.Container>
               ) : null}
             </Stack>
-            <Box display="flex" flexDirection="column" gap={2} width={450}>
+            <Box display="flex" flexDirection="column" gap={2} width={450} height="fit-content">
               <AgentTypeSummery />
               <DeploymentPipelineCard />
             </Box>

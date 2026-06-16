@@ -40,7 +40,6 @@ import { generatePath, Link, useParams } from "react-router-dom";
 const CARD_SX = {
   minWidth: 300,
   flexGrow: 1,
-  "&.MuiCard-root": { backgroundColor: "background.paper" },
 };
 
 function buildPromotionChain(paths: PromotionPath[]): string[] {
