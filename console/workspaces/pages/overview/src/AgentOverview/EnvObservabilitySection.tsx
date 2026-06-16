@@ -247,7 +247,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
     );
 
     const { traceList, isLoading: isTracesLoading } = useTraceList(
-        orgId, projectId, agentId, envId, TraceListTimeRange.ONE_HOUR, 30, "desc",
+        orgId, projectId, agentId, envId, TraceListTimeRange.ONE_DAY, 10, "desc",
         undefined, undefined, { enableAutoRefresh: true, enabled: !hideObservability },
     );
 
@@ -377,15 +377,17 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
                         isLoading={isTracesLoading}
                     />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
-                    <MetricCard
-                        label="Avg Score"
-                        value={avgScore !== null ? `${(avgScore * 100).toFixed(1)}%` : "—"}
-                        points={scorePoints}
-                        color={theme.vars?.palette?.success?.main}
-                        isLoading={isTracesLoading}
-                    />
-                </Grid>
+                {avgScore !== null && (
+                    <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+                        <MetricCard
+                            label="Avg Score"
+                            value={`${(avgScore * 100).toFixed(1)}%`}
+                            points={scorePoints}
+                            color={theme.vars?.palette?.success?.main}
+                            isLoading={isTracesLoading}
+                        />
+                    </Grid>
+                )}
                 <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                     <DonutMetricCard
                         label="Success Rate"

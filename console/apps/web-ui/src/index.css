@@ -32,3 +32,16 @@ html[data-color-scheme="light"] {
 html[data-color-scheme="dark"] {
   color-scheme: dark;
 }
+
+/* Oxygen UI (lucide) icon stroke override.
+   The package ships this in @wso2/oxygen-ui-icons-react/dist/icons.css as a
+   side-effect import that Rollup drops during the production build, so icons
+   fall back to the default stroke-width: 2 and render too thick. Define it
+   here so it is always bundled. */
+.lucide:not(.lucide-logo) {
+  stroke-width: 1.5px;
+}
+
+.lucide:not(.lucide-logo) * {
+  vector-effect: non-scaling-stroke;
+}

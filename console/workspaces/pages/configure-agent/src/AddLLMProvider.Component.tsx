@@ -62,10 +62,10 @@ import {
   useGetAgentModelConfig,
   useListAgentModelConfigs,
   useListCatalogLLMProviders,
-  useListEnvironments,
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
+import { usePipelineEnvironments } from "@agent-management-platform/shared-component";
 import {
   GuardrailsSection,
   type GuardrailSelection,
@@ -359,9 +359,7 @@ export const AddLLMProviderComponent: React.FC = () => {
   });
   const isExternal = agent?.provisioning?.type === "external";
 
-  const { data: environments = [], isLoading: isLoadingEnvironments } = useListEnvironments({
-    orgName: orgId,
-  });
+  const environments = usePipelineEnvironments(orgId, projectId);
   const { data: existingConfigsList } = useListAgentModelConfigs({
     orgName: orgId,
     projName: projectId,
@@ -712,7 +710,7 @@ export const AddLLMProviderComponent: React.FC = () => {
         ) : null}
         <Form.Section>
           <Form.Header>Service Provider</Form.Header>
-          {environments.length > 1 && !isLoadingEnvironments && (
+          {environments.length > 1 && (
             <>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Select which catalog provider to use in each environment.

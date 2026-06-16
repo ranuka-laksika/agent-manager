@@ -70,7 +70,6 @@ export function AgentTypeSummery() {
       sx={{
         minWidth: 300,
         flexGrow: 1,
-        "&.MuiCard-root": { backgroundColor: "background.paper" },
       }}
     >
       <CardContent>

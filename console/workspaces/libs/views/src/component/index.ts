@@ -31,7 +31,6 @@ export * from './Drawer';
 export * from './JSONView';
 export * from './MarkdownView';
 export * from './Logo';
-export * from './AgentIcons';
 export * from './LogsPanel';
 export * from './SnackBar';
 export * from './ExternalModuleManager';
