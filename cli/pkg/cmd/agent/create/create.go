@@ -41,6 +41,9 @@ type CreateOptions struct {
 	Proj  string
 	Scope render.Scope
 
+	Template bool
+	File     string
+
 	Name        string
 	DisplayName string
 	Description string
@@ -89,13 +92,39 @@ func NewCreateCmd(f *cmdutil.Factory) *cobra.Command {
 		Short: "Create an agent",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				opts.Name = args[0]
+			if opts.Template {
+				if err := validateTemplateMode(cmd, args); err != nil {
+					return render.Error(opts.IO, render.Scope{}, err)
+				}
+				// Only the manifest goes to stdout so `>` yields a clean file.
+				fmt.Fprint(opts.IO.Out, agentTemplate)
+				return nil
 			}
-			opts.PortSet = cmd.Flags().Changed("port")
 
-			if err := validate(opts); err != nil {
-				return render.Error(opts.IO, render.Scope{}, err)
+			var req amsvc.CreateAgentRequest
+			if opts.File != "" {
+				if err := validateFileMode(cmd, args); err != nil {
+					return render.Error(opts.IO, render.Scope{}, err)
+				}
+				loaded, err := loadManifest(opts.File)
+				if err != nil {
+					return render.Error(opts.IO, render.Scope{}, cmdutil.FlagErrorWrap(err))
+				}
+				if v := validateRequest(loaded); len(v) > 0 {
+					return render.Error(opts.IO, render.Scope{}, cmdutil.FlagErrorsHeader("invalid agent spec", v))
+				}
+				req = loaded
+			} else {
+				if len(args) > 0 {
+					opts.Name = args[0]
+				}
+				opts.PortSet = cmd.Flags().Changed("port")
+
+				built, err := prepare(opts)
+				if err != nil {
+					return render.Error(opts.IO, render.Scope{}, err)
+				}
+				req = built
 			}
 
 			org, proj, err := opts.ResolveScope(cmd, true, true)
@@ -105,9 +134,13 @@ func NewCreateCmd(f *cmdutil.Factory) *cobra.Command {
 			}
 			opts.Org, opts.Proj, opts.Scope = org, proj, scope
 
-			return runCreate(cmd.Context(), opts)
+			return runCreate(cmd.Context(), opts, req)
 		},
 	}
+
+	cmd.Flags().BoolVar(&opts.Template, "template", false, "Print an agent manifest template and exit (takes no other input)")
+	cmd.Flags().StringVarP(&opts.File, "file", "f", "", "Create the agent from a YAML manifest file")
+	_ = cmd.MarkFlagFilename("file", "yaml", "yml")
 
 	cmd.Flags().StringVar(&opts.DisplayName, "display-name", "", "Human-readable name (required)")
 	cmd.Flags().StringVar(&opts.Type, "type", "", "Agent type (auto-derived from --provisioning)")
@@ -150,12 +183,7 @@ func NewCreateCmd(f *cmdutil.Factory) *cobra.Command {
 	return cmd
 }
 
-func runCreate(ctx context.Context, opts *CreateOptions) error {
-	req, err := Build(opts)
-	if err != nil {
-		return render.Error(opts.IO, opts.Scope, err)
-	}
-
+func runCreate(ctx context.Context, opts *CreateOptions, req amsvc.CreateAgentRequest) error {
 	client, err := opts.Client(ctx)
 	if err != nil {
 		return render.Error(opts.IO, opts.Scope, err)
@@ -173,7 +201,9 @@ func runCreate(ctx context.Context, opts *CreateOptions) error {
 		printAgentSummary(opts.IO, resp.JSON202)
 	}
 
-	if opts.Provisioning != provisioningExternal {
+	// Branch on the request body, not the --provisioning flag — in file mode
+	// the manifest is the only source of truth.
+	if req.Provisioning.Type != amsvc.ProvisioningTypeExternal {
 		if opts.IO.JSON {
 			return render.JSONSuccess(opts.IO, opts.Scope, resp.JSON202)
 		}

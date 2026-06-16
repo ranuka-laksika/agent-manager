@@ -139,6 +139,10 @@ func testCreateCmd(t *testing.T, ios *iostreams.IOStreams, clientFn func(context
 		},
 	}
 	root := &cobra.Command{Use: "amctl", SilenceErrors: true, SilenceUsage: true}
+	// Mirror the production root's persistent --json flag (pkg/cmd/root.go) so
+	// mode gating that checks Changed("json") is exercisable. Output JSON mode
+	// is still driven by newTestIO, not this flag.
+	root.PersistentFlags().Bool("json", false, "Output as JSON envelopes")
 	cmdutil.EnableOrgOverride(root, f)
 
 	agentCmd := &cobra.Command{Use: "agent"}
@@ -452,11 +456,11 @@ func TestCreate_ValidationError_Text(t *testing.T) {
 	}
 
 	output := errOut.String()
-	if !strings.Contains(output, "invalid flags") {
-		t.Errorf("output missing 'invalid flags', got:\n%s", output)
+	if !strings.Contains(output, "invalid agent spec") {
+		t.Errorf("output missing 'invalid agent spec', got:\n%s", output)
 	}
-	if !strings.Contains(output, "name argument is required") {
-		t.Errorf("output missing 'name argument is required', got:\n%s", output)
+	if !strings.Contains(output, "spec.name is required") {
+		t.Errorf("output missing 'spec.name is required', got:\n%s", output)
 	}
 }
 
@@ -512,18 +516,18 @@ func TestCreate_MissingName_BatchedError(t *testing.T) {
 	foundDisplayName := false
 	for _, d := range details {
 		s := d.(string)
-		if strings.Contains(s, "name argument is required") {
+		if strings.Contains(s, "spec.name is required") {
 			foundName = true
 		}
-		if strings.Contains(s, "--display-name is required") {
+		if strings.Contains(s, "spec.displayName is required") {
 			foundDisplayName = true
 		}
 	}
 	if !foundName {
-		t.Errorf("expected 'name argument is required' in details, got %v", details)
+		t.Errorf("expected 'spec.name is required' in details, got %v", details)
 	}
 	if !foundDisplayName {
-		t.Errorf("expected '--display-name is required' in details, got %v", details)
+		t.Errorf("expected 'spec.displayName is required' in details, got %v", details)
 	}
 }
 

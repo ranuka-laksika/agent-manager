@@ -17,6 +17,7 @@
 package create
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -37,10 +38,19 @@ const (
 	agentTypeInternal = "agent-api"
 	agentTypeExternal = "external-agent-api"
 
+	// The server exempts only Ballerina from languageVersion/runCommand.
+	langBallerina = "ballerina"
+
 	interfaceTypeHTTP = "HTTP"
 )
 
-func Build(opts *CreateOptions) (amsvc.CreateAgentRequest, error) {
+// Build converts flag input into the API request type. It is total: it never
+// hard-fails. Inputs that cannot be represented in the request — or that the
+// builder would otherwise silently drop — are returned as flag-phrased
+// violations; everything else passes through and is judged by validateRequest.
+func Build(opts *CreateOptions) (amsvc.CreateAgentRequest, []string) {
+	var v []string
+
 	agentType := opts.Type
 	if agentType == "" {
 		switch opts.Provisioning {
@@ -67,20 +77,26 @@ func Build(opts *CreateOptions) (amsvc.CreateAgentRequest, error) {
 		req.AgentType.SubType = &opts.SubType
 	}
 
-	if opts.Provisioning == provisioningExternal {
-		return req, nil
+	switch opts.Provisioning {
+	case provisioningExternal:
+		return req, append(v, droppedExternalFlags(opts)...)
+	case provisioningInternal, "":
+	default:
+		// Unknown provisioning passes through for validateRequest to report;
+		// no internal sections can be built for it.
+		return req, v
 	}
 
-	b, err := buildBuild(opts)
-	if err != nil {
-		return amsvc.CreateAgentRequest{}, err
-	}
+	b, bv := buildBuild(opts)
+	v = append(v, bv...)
 	req.Build = b
 	req.InputInterface = buildInterface(opts)
-	req.Configurations = buildConfig(opts)
+	cfg, cv := buildConfig(opts)
+	v = append(v, cv...)
+	req.Configurations = cfg
 	req.ModelConfig = buildModelConfig(opts)
 
-	return req, nil
+	return req, append(v, droppedInternalFlags(opts)...)
 }
 
 func ensureLeadingSlash(s string) string {
@@ -91,24 +107,28 @@ func ensureLeadingSlash(s string) string {
 }
 
 func buildProvisioning(opts *CreateOptions) amsvc.Provisioning {
-	if opts.Provisioning == provisioningExternal {
+	switch opts.Provisioning {
+	case provisioningExternal:
 		return amsvc.Provisioning{Type: amsvc.ProvisioningTypeExternal}
-	}
-	repo := &amsvc.RepositoryConfig{
-		Url:     opts.RepoURL,
-		Branch:  opts.RepoBranch,
-		AppPath: ensureLeadingSlash(opts.RepoPath),
-	}
-	if opts.RepoSecret != "" {
-		repo.SecretRef = &opts.RepoSecret
-	}
-	return amsvc.Provisioning{
-		Type:       amsvc.ProvisioningTypeInternal,
-		Repository: repo,
+	case provisioningInternal, "":
+		repo := &amsvc.RepositoryConfig{
+			Url:     opts.RepoURL,
+			Branch:  opts.RepoBranch,
+			AppPath: ensureLeadingSlash(opts.RepoPath),
+		}
+		if opts.RepoSecret != "" {
+			repo.SecretRef = &opts.RepoSecret
+		}
+		return amsvc.Provisioning{
+			Type:       amsvc.ProvisioningTypeInternal,
+			Repository: repo,
+		}
+	default:
+		return amsvc.Provisioning{Type: amsvc.ProvisioningType(opts.Provisioning)}
 	}
 }
 
-func buildBuild(opts *CreateOptions) (*amsvc.Build, error) {
+func buildBuild(opts *CreateOptions) (*amsvc.Build, []string) {
 	var b amsvc.Build
 	switch opts.BuildType {
 	case buildTypeBuildpack:
@@ -125,17 +145,29 @@ func buildBuild(opts *CreateOptions) (*amsvc.Build, error) {
 			bp.Buildpack.RunCommand = &opts.RunCommand
 		}
 		if err := b.FromBuildpackBuild(bp); err != nil {
-			return nil, fmt.Errorf("buildpack: %w", err)
+			return nil, []string{fmt.Sprintf("--build-type=buildpack: %v", err)}
 		}
 	case buildTypeDocker:
 		d := amsvc.DockerBuild{
 			Type: amsvc.Docker,
 			Docker: amsvc.DockerConfig{
-				DockerfilePath: opts.Dockerfile,
+				DockerfilePath: ensureLeadingSlash(opts.Dockerfile),
 			},
 		}
 		if err := b.FromDockerBuild(d); err != nil {
-			return nil, fmt.Errorf("docker: %w", err)
+			return nil, []string{fmt.Sprintf("--build-type=docker: %v", err)}
+		}
+	case "":
+		return nil, nil
+	default:
+		// Unknown build type survives as the raw union discriminator so
+		// validateRequest reports it alongside everything else.
+		raw, err := json.Marshal(map[string]string{"type": opts.BuildType})
+		if err != nil {
+			return nil, []string{fmt.Sprintf("--build-type: %v", err)}
+		}
+		if err := b.UnmarshalJSON(raw); err != nil {
+			return nil, []string{fmt.Sprintf("--build-type: %v", err)}
 		}
 	}
 	return &b, nil
@@ -161,27 +193,35 @@ func buildInterface(opts *CreateOptions) *amsvc.InputInterface {
 	return iface
 }
 
-func buildConfig(opts *CreateOptions) *amsvc.Configurations {
+func buildConfig(opts *CreateOptions) (*amsvc.Configurations, []string) {
 	var envs []amsvc.EnvironmentVariable
+	var v []string
 
-	for _, entry := range opts.Env {
-		k, v := splitEnv(entry)
-		envs = append(envs, amsvc.EnvironmentVariable{Key: k, Value: &v})
+	appendEnvs := func(entries []string, flag string, mk func(k, val string) amsvc.EnvironmentVariable) {
+		for _, entry := range entries {
+			k, val, ok := strings.Cut(entry, "=")
+			if !ok {
+				v = append(v, fmt.Sprintf("%s %q: missing '=' separator", flag, entry))
+				continue
+			}
+			envs = append(envs, mk(k, val))
+		}
 	}
-	for _, entry := range opts.EnvSecret {
-		k, v := splitEnv(entry)
+	appendEnvs(opts.Env, "--env", func(k, val string) amsvc.EnvironmentVariable {
+		return amsvc.EnvironmentVariable{Key: k, Value: &val}
+	})
+	appendEnvs(opts.EnvSecret, "--env-secret", func(k, val string) amsvc.EnvironmentVariable {
 		tr := true
-		envs = append(envs, amsvc.EnvironmentVariable{Key: k, Value: &v, IsSensitive: &tr})
-	}
-	for _, entry := range opts.EnvFromSecret {
-		k, v := splitEnv(entry)
-		envs = append(envs, amsvc.EnvironmentVariable{Key: k, SecretRef: &v})
-	}
+		return amsvc.EnvironmentVariable{Key: k, Value: &val, IsSensitive: &tr}
+	})
+	appendEnvs(opts.EnvFromSecret, "--env-from-secret", func(k, val string) amsvc.EnvironmentVariable {
+		return amsvc.EnvironmentVariable{Key: k, SecretRef: &val}
+	})
 
 	hasEnv := len(envs) > 0
 	hasInstr := opts.DisableAutoInstrumentation
 	if !hasEnv && !hasInstr {
-		return nil
+		return nil, v
 	}
 
 	cfg := &amsvc.Configurations{}
@@ -192,7 +232,7 @@ func buildConfig(opts *CreateOptions) *amsvc.Configurations {
 		f := false
 		cfg.EnableAutoInstrumentation = &f
 	}
-	return cfg
+	return cfg, v
 }
 
 func buildModelConfig(opts *CreateOptions) *[]amsvc.ModelConfigRequest {
@@ -213,7 +253,80 @@ func buildModelConfig(opts *CreateOptions) *[]amsvc.ModelConfigRequest {
 	return &[]amsvc.ModelConfigRequest{mc}
 }
 
-func splitEnv(entry string) (string, string) {
-	k, v, _ := strings.Cut(entry, "=")
-	return k, v
+// droppedInternalFlags reports internal-mode flag input the builder dropped:
+// chat-api never carries base-path/openapi-spec (and the port is fixed), the
+// build union holds exactly one variant's fields, and LLM env names without a
+// provider never reach modelConfig.
+func droppedInternalFlags(opts *CreateOptions) []string {
+	var v []string
+
+	if opts.SubType == subTypeChatAPI {
+		if opts.PortSet {
+			v = append(v, "--port is not allowed for subtype chat-api")
+		}
+		if opts.BasePath != "" {
+			v = append(v, "--base-path is not allowed for subtype chat-api")
+		}
+		if opts.OpenAPISpec != "" {
+			v = append(v, "--openapi-spec is not allowed for subtype chat-api")
+		}
+	}
+
+	switch opts.BuildType {
+	case buildTypeBuildpack:
+		if opts.Dockerfile != "" {
+			v = append(v, "--build-type=buildpack conflicts with --dockerfile")
+		}
+	case buildTypeDocker:
+		if opts.Language != "" {
+			v = append(v, "--build-type=docker conflicts with --language")
+		}
+		if opts.LanguageVersion != "" {
+			v = append(v, "--build-type=docker conflicts with --language-version")
+		}
+		if opts.RunCommand != "" {
+			v = append(v, "--build-type=docker conflicts with --run-command")
+		}
+	}
+
+	if (opts.LLMURLEnv != "" || opts.LLMAPIKeyEnv != "") && opts.LLMProvider == "" {
+		v = append(v, "--llm-url-env/--llm-api-key-env require --llm-provider")
+	}
+
+	return v
+}
+
+// droppedExternalFlags reports internal-only flag input that the builder
+// drops entirely for external provisioning.
+func droppedExternalFlags(opts *CreateOptions) []string {
+	var v []string
+	disallow := func(flag string, set bool) {
+		if set {
+			v = append(v, flag+" is not allowed for external provisioning")
+		}
+	}
+
+	disallow("--subtype", opts.SubType != "")
+	disallow("--repo-url", opts.RepoURL != "")
+	disallow("--repo-branch", opts.RepoBranch != "")
+	disallow("--repo-path", opts.RepoPath != "")
+	disallow("--repo-secret", opts.RepoSecret != "")
+	disallow("--build-type", opts.BuildType != "")
+	disallow("--language", opts.Language != "")
+	disallow("--language-version", opts.LanguageVersion != "")
+	disallow("--run-command", opts.RunCommand != "")
+	disallow("--dockerfile", opts.Dockerfile != "")
+	// PortSet (not Port != 0) — the --port flag defaults to 8000.
+	disallow("--port", opts.PortSet)
+	disallow("--base-path", opts.BasePath != "")
+	disallow("--openapi-spec", opts.OpenAPISpec != "")
+	disallow("--env", len(opts.Env) > 0)
+	disallow("--env-secret", len(opts.EnvSecret) > 0)
+	disallow("--env-from-secret", len(opts.EnvFromSecret) > 0)
+	disallow("--no-auto-instrumentation", opts.DisableAutoInstrumentation)
+	disallow("--llm-provider", opts.LLMProvider != "")
+	disallow("--llm-url-env", opts.LLMURLEnv != "")
+	disallow("--llm-api-key-env", opts.LLMAPIKeyEnv != "")
+
+	return v
 }

@@ -21,185 +21,299 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/spf13/cobra"
+
+	amsvc "github.com/wso2/agent-manager/cli/pkg/clients/amsvc/gen"
 	"github.com/wso2/agent-manager/cli/pkg/cmdutil"
 )
 
 var envKeyRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func validate(opts *CreateOptions) error {
+// contentFlags carry request content. They are owned by flag mode: --template
+// takes no input at all, and with --file the manifest is the source of truth.
+// Contextual flags (--org, --project, --json) stay allowed in every mode.
+var contentFlags = []string{
+	"display-name", "description", "provisioning", "subtype", "type",
+	"repo-url", "repo-branch", "repo-path", "repo-secret",
+	"build-type", "language", "language-version", "run-command", "dockerfile",
+	"port", "base-path", "openapi-spec", "no-auto-instrumentation",
+	"env", "env-secret", "env-from-secret",
+	"llm-provider", "llm-url-env", "llm-api-key-env",
+}
+
+// changedContentFlags uses Changed (not zero-value checks) because --port
+// defaults to 8000.
+func changedContentFlags(cmd *cobra.Command) []string {
+	var changed []string
+	for _, name := range contentFlags {
+		if cmd.Flags().Changed(name) {
+			changed = append(changed, name)
+		}
+	}
+	return changed
+}
+
+func validateTemplateMode(cmd *cobra.Command, args []string) error {
 	var v []string
-
-	if opts.Name == "" {
-		v = append(v, "name argument is required")
-	} else if strings.Contains(opts.Name, "/") {
-		v = append(v, "name must not contain '/'")
+	if len(args) > 0 {
+		v = append(v, "name argument is not allowed with --template")
 	}
-	if opts.DisplayName == "" {
-		v = append(v, "--display-name is required")
+	if cmd.Flags().Changed("file") {
+		v = append(v, "--file is not allowed with --template")
 	}
-
-	switch opts.Provisioning {
-	case provisioningExternal:
-		v = append(v, validateExternal(opts)...)
-	case provisioningInternal:
-		v = append(v, validateInternal(opts)...)
-	default:
-		v = append(v, fmt.Sprintf("--provisioning must be %q or %q, got %q", provisioningInternal, provisioningExternal, opts.Provisioning))
+	if cmd.Flags().Changed("json") {
+		v = append(v, "--json is not allowed with --template (the template is YAML)")
 	}
-
+	for _, name := range changedContentFlags(cmd) {
+		v = append(v, "--"+name+" is not allowed with --template")
+	}
 	if len(v) == 0 {
 		return nil
 	}
 	return cmdutil.FlagErrors(v)
 }
 
-func validateInternal(opts *CreateOptions) []string {
+func validateFileMode(cmd *cobra.Command, args []string) error {
+	var v []string
+	if len(args) > 0 {
+		v = append(v, "name argument is not allowed with --file (set spec.name in the manifest)")
+	}
+	for _, name := range changedContentFlags(cmd) {
+		v = append(v, "--"+name+" is not allowed with --file (the manifest is the source of truth)")
+	}
+	if len(v) == 0 {
+		return nil
+	}
+	return cmdutil.FlagErrors(v)
+}
+
+// prepare is the flag-mode entry point: convert the flags into the API
+// request type, then validate the request. Conversion-layer violations
+// (flag input that cannot survive the conversion) and request-layer
+// violations are aggregated into a single error.
+func prepare(opts *CreateOptions) (amsvc.CreateAgentRequest, error) {
+	req, v := Build(opts)
+	v = append(v, validateRequest(req)...)
+	if len(v) > 0 {
+		return req, cmdutil.FlagErrorsHeader("invalid agent spec", v)
+	}
+	return req, nil
+}
+
+// validateRequest is the shared semantic rule set for both flag mode and file
+// mode, defined against the request type the server receives. Messages are
+// phrased as manifest field paths. Coverage is structural (required fields,
+// enum validity, variant shape); server-owned business rules (name format,
+// repo URL format, supported languages) are deliberately not mirrored.
+func validateRequest(req amsvc.CreateAgentRequest) []string {
 	var v []string
 
-	if opts.RepoURL == "" {
-		v = append(v, "--repo-url is required for internal provisioning")
+	if req.Name == "" {
+		v = append(v, "spec.name is required")
 	}
-	if opts.RepoBranch == "" {
-		v = append(v, "--repo-branch is required for internal provisioning")
-	}
-	if opts.RepoPath == "" {
-		v = append(v, "--repo-path is required for internal provisioning")
+	if req.DisplayName == "" {
+		v = append(v, "spec.displayName is required")
 	}
 
-	switch opts.BuildType {
+	switch req.Provisioning.Type {
+	case amsvc.ProvisioningTypeInternal:
+		v = append(v, internalRequestViolations(req)...)
+	case amsvc.ProvisioningTypeExternal:
+		v = append(v, externalRequestViolations(req)...)
+	case "":
+		v = append(v, "spec.provisioning.type is required")
+	default:
+		v = append(v, fmt.Sprintf("spec.provisioning.type must be %q or %q, got %q", provisioningInternal, provisioningExternal, req.Provisioning.Type))
+	}
+
+	return v
+}
+
+func internalRequestViolations(req amsvc.CreateAgentRequest) []string {
+	var v []string
+
+	if req.AgentType != nil && req.AgentType.Type != "" && req.AgentType.Type != agentTypeInternal {
+		v = append(v, fmt.Sprintf("spec.agentType.type must be %q for internal provisioning, got %q", agentTypeInternal, req.AgentType.Type))
+	}
+
+	hasRepo := req.Provisioning.Repository != nil
+	hasKind := req.Provisioning.AgentKind != nil
+	if hasRepo == hasKind {
+		v = append(v, "spec.provisioning requires exactly one of repository or agentKind for internal provisioning")
+	}
+	if hasRepo {
+		repo := req.Provisioning.Repository
+		if repo.Url == "" {
+			v = append(v, "spec.provisioning.repository.url is required")
+		}
+		if repo.Branch == "" {
+			v = append(v, "spec.provisioning.repository.branch is required")
+		}
+		if repo.AppPath == "" {
+			v = append(v, "spec.provisioning.repository.appPath is required")
+		} else if !strings.HasPrefix(repo.AppPath, "/") {
+			v = append(v, `spec.provisioning.repository.appPath must start with "/"`)
+		}
+		if req.Build == nil {
+			v = append(v, "spec.build is required for internal provisioning")
+		}
+		// Only agentKind-sourced agents may omit agentType and inputInterface
+		// (the server enriches them from the kind); source agents need both.
+		if req.AgentType == nil || req.AgentType.Type == "" {
+			v = append(v, fmt.Sprintf("spec.agentType.type is required for internal provisioning (%s)", agentTypeInternal))
+		}
+		if req.InputInterface == nil {
+			v = append(v, "spec.inputInterface is required for internal provisioning")
+		} else if req.InputInterface.Type == "" {
+			v = append(v, fmt.Sprintf("spec.inputInterface.type is required (must be %q)", interfaceTypeHTTP))
+		}
+	}
+	if hasKind {
+		kind := req.Provisioning.AgentKind
+		if kind.Name == "" {
+			v = append(v, "spec.provisioning.agentKind.name is required")
+		}
+		if kind.Version == "" {
+			v = append(v, "spec.provisioning.agentKind.version is required")
+		}
+	}
+
+	if req.Build != nil {
+		v = append(v, buildViolations(req.Build)...)
+	}
+
+	subType := ""
+	if req.AgentType != nil && req.AgentType.SubType != nil {
+		subType = *req.AgentType.SubType
+	}
+	switch subType {
+	case subTypeChatAPI:
+	case subTypeCustomAPI:
+		if req.InputInterface == nil || req.InputInterface.BasePath == nil || *req.InputInterface.BasePath == "" {
+			v = append(v, "spec.inputInterface.basePath is required for subtype custom-api")
+		}
+		switch {
+		case req.InputInterface == nil || req.InputInterface.Schema == nil || req.InputInterface.Schema.Path == "":
+			v = append(v, "spec.inputInterface.schema.path is required for subtype custom-api")
+		case !strings.HasPrefix(req.InputInterface.Schema.Path, "/"):
+			v = append(v, `spec.inputInterface.schema.path must start with "/"`)
+		}
+		if req.InputInterface != nil && req.InputInterface.Port == nil {
+			v = append(v, "spec.inputInterface.port is required for subtype custom-api")
+		}
+	case "":
+		if hasRepo {
+			v = append(v, "spec.agentType.subType is required for internal provisioning (chat-api or custom-api)")
+		}
+	default:
+		v = append(v, fmt.Sprintf("spec.agentType.subType must be %q or %q, got %q", subTypeChatAPI, subTypeCustomAPI, subType))
+	}
+
+	if iface := req.InputInterface; iface != nil {
+		if iface.Type != "" && iface.Type != interfaceTypeHTTP {
+			v = append(v, fmt.Sprintf("spec.inputInterface.type must be %q, got %q", interfaceTypeHTTP, iface.Type))
+		}
+		if iface.Port != nil && (*iface.Port < 1 || *iface.Port > 65535) {
+			v = append(v, fmt.Sprintf("spec.inputInterface.port must be 1..65535, got %d", *iface.Port))
+		}
+	}
+
+	if req.Configurations != nil && req.Configurations.Env != nil {
+		v = append(v, envViolations(*req.Configurations.Env)...)
+	}
+
+	if req.ModelConfig != nil {
+		for i, mc := range *req.ModelConfig {
+			if mc.ProviderName == "" {
+				v = append(v, fmt.Sprintf("spec.modelConfig[%d].providerName is required", i))
+			}
+		}
+	}
+
+	return v
+}
+
+func buildViolations(b *amsvc.Build) []string {
+	disc, err := b.Discriminator()
+	if err != nil {
+		disc = ""
+	}
+	switch disc {
 	case buildTypeBuildpack:
-		if opts.Language == "" {
-			v = append(v, "--build-type=buildpack requires --language")
-		}
-		if opts.LanguageVersion == "" {
-			v = append(v, "--build-type=buildpack requires --language-version")
-		}
-		if opts.RunCommand == "" {
-			v = append(v, "--build-type=buildpack requires --run-command")
-		}
-		if opts.Dockerfile != "" {
-			v = append(v, "--build-type=buildpack conflicts with --dockerfile")
-		}
-	case buildTypeDocker:
-		if opts.Dockerfile == "" {
-			v = append(v, "--build-type=docker requires --dockerfile")
-		}
-		if opts.Language != "" {
-			v = append(v, "--build-type=docker conflicts with --language")
-		}
-		if opts.LanguageVersion != "" {
-			v = append(v, "--build-type=docker conflicts with --language-version")
-		}
-		if opts.RunCommand != "" {
-			v = append(v, "--build-type=docker conflicts with --run-command")
-		}
-	case "":
-		v = append(v, "--build-type is required for internal provisioning")
-	default:
-		v = append(v, fmt.Sprintf("--build-type must be %q or %q, got %q", buildTypeBuildpack, buildTypeDocker, opts.BuildType))
-	}
-
-	switch opts.SubType {
-	case subTypeChatAPI, subTypeCustomAPI:
-	case "":
-		v = append(v, "--subtype is required (chat-api or custom-api)")
-	default:
-		v = append(v, fmt.Sprintf("--subtype must be %q or %q, got %q", subTypeChatAPI, subTypeCustomAPI, opts.SubType))
-	}
-	if opts.SubType == subTypeChatAPI {
-		if opts.PortSet {
-			v = append(v, "--port is not allowed for subtype chat-api")
-		}
-		if opts.BasePath != "" {
-			v = append(v, "--base-path is not allowed for subtype chat-api")
-		}
-		if opts.OpenAPISpec != "" {
-			v = append(v, "--openapi-spec is not allowed for subtype chat-api")
-		}
-	} else {
-		if opts.Port < 1 || opts.Port > 65535 {
-			v = append(v, fmt.Sprintf("--port must be 1..65535, got %d", opts.Port))
-		}
-		if opts.SubType == subTypeCustomAPI {
-			if opts.BasePath == "" {
-				v = append(v, "--subtype=custom-api requires --base-path")
-			}
-			if opts.OpenAPISpec == "" {
-				v = append(v, "--subtype=custom-api requires --openapi-spec")
-			}
-		}
-	}
-
-	seen := map[string]string{}
-	v = append(v, validateEnvSlice(opts.Env, "--env", seen)...)
-	v = append(v, validateEnvSlice(opts.EnvSecret, "--env-secret", seen)...)
-	v = append(v, validateEnvSlice(opts.EnvFromSecret, "--env-from-secret", seen)...)
-
-	if (opts.LLMURLEnv != "" || opts.LLMAPIKeyEnv != "") && opts.LLMProvider == "" {
-		v = append(v, "--llm-url-env/--llm-api-key-env require --llm-provider")
-	}
-
-	return v
-}
-
-func validateEnvSlice(entries []string, flag string, seen map[string]string) []string {
-	var v []string
-	for _, entry := range entries {
-		key, err := parseEnvKey(entry)
+		bp, err := b.AsBuildpackBuild()
 		if err != nil {
-			v = append(v, fmt.Sprintf("%s %q: %s", flag, entry, err))
+			return nil
+		}
+		cfg := bp.Buildpack
+		if cfg.Language == "" {
+			return []string{"spec.build.buildpack.language is required"}
+		}
+		// Ballerina is the only language the server exempts from
+		// languageVersion and runCommand.
+		var v []string
+		if !strings.EqualFold(cfg.Language, langBallerina) {
+			if cfg.LanguageVersion == nil || *cfg.LanguageVersion == "" {
+				v = append(v, fmt.Sprintf("spec.build.buildpack.languageVersion is required for language %q", cfg.Language))
+			}
+			if cfg.RunCommand == nil || *cfg.RunCommand == "" {
+				v = append(v, fmt.Sprintf("spec.build.buildpack.runCommand is required for language %q", cfg.Language))
+			}
+		}
+		return v
+	case buildTypeDocker:
+		d, err := b.AsDockerBuild()
+		if err != nil {
+			return nil
+		}
+		if d.Docker.DockerfilePath == "" {
+			return []string{"spec.build.docker.dockerfilePath is required"}
+		}
+		if !strings.HasPrefix(d.Docker.DockerfilePath, "/") {
+			return []string{`spec.build.docker.dockerfilePath must start with "/"`}
+		}
+	default:
+		return []string{fmt.Sprintf("spec.build.type must be %q or %q, got %q", buildTypeBuildpack, buildTypeDocker, disc)}
+	}
+	return nil
+}
+
+func envViolations(envs []amsvc.EnvironmentVariable) []string {
+	var v []string
+	seen := map[string]bool{}
+	for _, e := range envs {
+		if !envKeyRE.MatchString(e.Key) {
+			v = append(v, fmt.Sprintf("spec.configurations.env: invalid key %q (must match [A-Za-z_][A-Za-z0-9_]*)", e.Key))
 			continue
 		}
-		if prev, dup := seen[key]; dup {
-			v = append(v, fmt.Sprintf("duplicate env key %q (set by %s and %s)", key, prev, flag))
+		if seen[e.Key] {
+			v = append(v, fmt.Sprintf("spec.configurations.env: duplicate key %q", e.Key))
 			continue
 		}
-		seen[key] = flag
+		seen[e.Key] = true
 	}
 	return v
 }
 
-func parseEnvKey(entry string) (string, error) {
-	idx := strings.IndexByte(entry, '=')
-	if idx < 0 {
-		return "", fmt.Errorf("missing '=' separator")
-	}
-	key := entry[:idx]
-	if !envKeyRE.MatchString(key) {
-		return "", fmt.Errorf("invalid key %q (must match [A-Za-z_][A-Za-z0-9_]*)", key)
-	}
-	return key, nil
-}
-
-func validateExternal(opts *CreateOptions) []string {
+func externalRequestViolations(req amsvc.CreateAgentRequest) []string {
 	var v []string
-	disallow := func(flag string, set bool) {
-		if set {
-			v = append(v, flag+" is not allowed for external provisioning")
+
+	if req.AgentType == nil || req.AgentType.Type == "" {
+		v = append(v, fmt.Sprintf("spec.agentType.type is required for external provisioning (%s)", agentTypeExternal))
+	} else if req.AgentType.Type != agentTypeExternal {
+		v = append(v, fmt.Sprintf("spec.agentType.type must be %q for external provisioning, got %q", agentTypeExternal, req.AgentType.Type))
+	}
+
+	disallow := func(path string, present bool) {
+		if present {
+			v = append(v, path+" is not allowed for external provisioning")
 		}
 	}
-
-	disallow("--subtype", opts.SubType != "")
-	disallow("--repo-url", opts.RepoURL != "")
-	disallow("--repo-branch", opts.RepoBranch != "")
-	disallow("--repo-path", opts.RepoPath != "")
-	disallow("--repo-secret", opts.RepoSecret != "")
-	disallow("--build-type", opts.BuildType != "")
-	disallow("--language", opts.Language != "")
-	disallow("--language-version", opts.LanguageVersion != "")
-	disallow("--run-command", opts.RunCommand != "")
-	disallow("--dockerfile", opts.Dockerfile != "")
-	// PortSet (not Port != 0) — the --port flag defaults to 8000.
-	disallow("--port", opts.PortSet)
-	disallow("--base-path", opts.BasePath != "")
-	disallow("--openapi-spec", opts.OpenAPISpec != "")
-	disallow("--env", len(opts.Env) > 0)
-	disallow("--env-secret", len(opts.EnvSecret) > 0)
-	disallow("--env-from-secret", len(opts.EnvFromSecret) > 0)
-	disallow("--no-auto-instrumentation", opts.DisableAutoInstrumentation)
-	disallow("--llm-provider", opts.LLMProvider != "")
-	disallow("--llm-url-env", opts.LLMURLEnv != "")
-	disallow("--llm-api-key-env", opts.LLMAPIKeyEnv != "")
+	disallow("spec.provisioning.repository", req.Provisioning.Repository != nil)
+	disallow("spec.provisioning.agentKind", req.Provisioning.AgentKind != nil)
+	disallow("spec.build", req.Build != nil)
+	disallow("spec.inputInterface", req.InputInterface != nil)
+	disallow("spec.configurations", req.Configurations != nil)
+	disallow("spec.modelConfig", req.ModelConfig != nil)
 
 	return v
 }

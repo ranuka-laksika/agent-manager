@@ -42,3 +42,10 @@ jobs:
       - name: Build CLI against regenerated client
         working-directory: ./cli
         run: go build ./...
+
+      # Catches CLI artifacts that track the OpenAPI spec beyond compilation —
+      # e.g. the agent manifest template round-trip test — in the same PR that
+      # changes the spec.
+      - name: Run CLI tests against regenerated client
+        working-directory: ./cli
+        run: go test ./...

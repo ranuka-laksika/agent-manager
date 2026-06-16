@@ -118,9 +118,9 @@ func TestBuildBuild_Buildpack(t *testing.T) {
 		LanguageVersion: "1.22",
 		RunCommand:      "go run .",
 	}
-	b, err := buildBuild(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	b, v := buildBuild(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	disc, err := b.Discriminator()
 	if err != nil {
@@ -146,9 +146,9 @@ func TestBuildBuild_Buildpack(t *testing.T) {
 
 func TestBuildBuild_BuildpackLowercasesLanguage(t *testing.T) {
 	opts := &CreateOptions{BuildType: "buildpack", Language: "Python"}
-	b, err := buildBuild(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	b, v := buildBuild(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	bp, _ := b.AsBuildpackBuild()
 	if bp.Buildpack.Language != "python" {
@@ -158,9 +158,9 @@ func TestBuildBuild_BuildpackLowercasesLanguage(t *testing.T) {
 
 func TestBuildBuild_BuildpackMinimal(t *testing.T) {
 	opts := &CreateOptions{BuildType: "buildpack", Language: "python"}
-	b, err := buildBuild(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	b, v := buildBuild(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	bp, _ := b.AsBuildpackBuild()
 	if bp.Buildpack.LanguageVersion != nil {
@@ -173,17 +173,17 @@ func TestBuildBuild_BuildpackMinimal(t *testing.T) {
 
 func TestBuildBuild_Docker(t *testing.T) {
 	opts := &CreateOptions{BuildType: "docker", Dockerfile: "build/Dockerfile"}
-	b, err := buildBuild(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	b, v := buildBuild(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	disc, _ := b.Discriminator()
 	if disc != "docker" {
 		t.Fatalf("discriminator = %q, want docker", disc)
 	}
 	d, _ := b.AsDockerBuild()
-	if d.Docker.DockerfilePath != "build/Dockerfile" {
-		t.Errorf("DockerfilePath = %q, want build/Dockerfile", d.Docker.DockerfilePath)
+	if d.Docker.DockerfilePath != "/build/Dockerfile" {
+		t.Errorf("DockerfilePath = %q, want /build/Dockerfile (leading slash normalized)", d.Docker.DockerfilePath)
 	}
 }
 
@@ -241,7 +241,7 @@ func TestBuildInterface_ChatAPI(t *testing.T) {
 
 func TestBuildConfig_None(t *testing.T) {
 	opts := &CreateOptions{}
-	cfg := buildConfig(opts)
+	cfg, _ := buildConfig(opts)
 	if cfg != nil {
 		t.Errorf("expected nil, got %+v", cfg)
 	}
@@ -249,7 +249,7 @@ func TestBuildConfig_None(t *testing.T) {
 
 func TestBuildConfig_DisableAutoInstrumentation(t *testing.T) {
 	opts := &CreateOptions{DisableAutoInstrumentation: true}
-	cfg := buildConfig(opts)
+	cfg, _ := buildConfig(opts)
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
 	}
@@ -264,7 +264,7 @@ func TestBuildConfig_EnvVariables(t *testing.T) {
 		EnvSecret:     []string{"SECRET=hunter2"},
 		EnvFromSecret: []string{"DB_PASS=my-secret"},
 	}
-	cfg := buildConfig(opts)
+	cfg, _ := buildConfig(opts)
 	if cfg == nil {
 		t.Fatal("expected non-nil config")
 	}
@@ -288,7 +288,7 @@ func TestBuildConfig_EnvVariables(t *testing.T) {
 
 func TestBuildConfig_EnvAutoInstrumentationOmittedByDefault(t *testing.T) {
 	opts := &CreateOptions{Env: []string{"A=1"}}
-	cfg := buildConfig(opts)
+	cfg, _ := buildConfig(opts)
 	if cfg.EnableAutoInstrumentation != nil {
 		t.Errorf("EnableAutoInstrumentation = %v, want nil", cfg.EnableAutoInstrumentation)
 	}
@@ -308,9 +308,9 @@ func TestBuild_FullBuildpack(t *testing.T) {
 		Language:     "go",
 		Port:         8000,
 	}
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.AgentType.Type != "agent-api" {
 		t.Errorf("AgentType.Type = %q, want agent-api (derived from internal provisioning)", req.AgentType.Type)
@@ -363,9 +363,9 @@ func TestBuild_ExplicitTypeOverride(t *testing.T) {
 		Language:     "go",
 		Port:         8000,
 	}
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.AgentType.Type != "custom-type" {
 		t.Errorf("AgentType.Type = %q, want custom-type (explicit override)", req.AgentType.Type)
@@ -384,9 +384,9 @@ func TestBuild_FullDocker(t *testing.T) {
 		Dockerfile:   "Dockerfile.prod",
 		Port:         8000,
 	}
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.AgentType.Type != "agent-api" {
 		t.Errorf("AgentType.Type = %q, want agent-api", req.AgentType.Type)
@@ -400,9 +400,9 @@ func TestBuild_FullDocker(t *testing.T) {
 func TestBuild_ModelConfig_ProviderOnly(t *testing.T) {
 	opts := validBuildpackOpts()
 	opts.LLMProvider = "openai"
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.ModelConfig == nil || len(*req.ModelConfig) != 1 {
 		t.Fatalf("ModelConfig = %v, want 1 entry", req.ModelConfig)
@@ -421,9 +421,9 @@ func TestBuild_ModelConfig_WithEnvOverrides(t *testing.T) {
 	opts.LLMProvider = "openai"
 	opts.LLMURLEnv = "MY_URL"
 	opts.LLMAPIKeyEnv = "MY_KEY"
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	mc := (*req.ModelConfig)[0]
 	if mc.EnvironmentVariables == nil {
@@ -440,9 +440,9 @@ func TestBuild_ModelConfig_WithEnvOverrides(t *testing.T) {
 
 func TestBuild_ModelConfig_OmittedWhenNoProvider(t *testing.T) {
 	opts := validBuildpackOpts()
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.ModelConfig != nil {
 		t.Errorf("ModelConfig = %v, want nil when --llm-provider unset", req.ModelConfig)
@@ -451,9 +451,9 @@ func TestBuild_ModelConfig_OmittedWhenNoProvider(t *testing.T) {
 
 func TestBuild_NoConfigWhenUnset(t *testing.T) {
 	opts := validBuildpackOpts()
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
 	}
 	if req.Configurations != nil {
 		t.Errorf("Configurations = %v, want nil", req.Configurations)
@@ -478,9 +478,9 @@ func TestBuild_External(t *testing.T) {
 		Description:  "dssdf",
 		Provisioning: "external",
 	}
-	req, err := Build(opts)
-	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("Build returned violations: %v", v)
 	}
 	if req.Name != "testing" || req.DisplayName != "Testing" {
 		t.Errorf("name/displayName mismatch: %+v", req)
@@ -508,6 +508,70 @@ func TestBuild_External(t *testing.T) {
 	}
 	if req.Configurations != nil {
 		t.Errorf("Configurations should be nil for external, got %+v", req.Configurations)
+	}
+}
+
+// An unknown --build-type survives conversion as the raw union discriminator
+// so validateRequest reports it as a field-path violation instead of the
+// builder hard-failing.
+func TestBuildBuild_UnknownTypePassesThrough(t *testing.T) {
+	opts := &CreateOptions{BuildType: "nix"}
+	b, v := buildBuild(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
+	}
+	if b == nil {
+		t.Fatal("Build is nil, want raw union carrying the unknown type")
+	}
+	disc, err := b.Discriminator()
+	if err != nil {
+		t.Fatalf("discriminator: %v", err)
+	}
+	if disc != "nix" {
+		t.Errorf("discriminator = %q, want nix", disc)
+	}
+}
+
+func TestBuildBuild_EmptyTypeReturnsNil(t *testing.T) {
+	b, v := buildBuild(&CreateOptions{})
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
+	}
+	if b != nil {
+		t.Errorf("Build = %+v, want nil when --build-type unset", b)
+	}
+}
+
+// Entries without '=' are reported and skipped — they must not be smuggled
+// into the request as KEY="".
+func TestBuildConfig_MissingSeparatorSkipsEntry(t *testing.T) {
+	opts := &CreateOptions{Env: []string{"NOEQUALS", "GOOD=1"}}
+	cfg, v := buildConfig(opts)
+	if len(v) != 1 {
+		t.Fatalf("violations = %v, want exactly one", v)
+	}
+	if cfg == nil || cfg.Env == nil || len(*cfg.Env) != 1 || (*cfg.Env)[0].Key != "GOOD" {
+		t.Errorf("Env = %+v, want only GOOD", cfg.Env)
+	}
+}
+
+// An unknown --provisioning passes through so validateRequest reports it;
+// internal-only sections are not built for it.
+func TestBuild_UnknownProvisioningPassesThrough(t *testing.T) {
+	opts := &CreateOptions{
+		Name:         "x",
+		DisplayName:  "X",
+		Provisioning: "cloud",
+	}
+	req, v := Build(opts)
+	if len(v) != 0 {
+		t.Fatalf("unexpected violations: %v", v)
+	}
+	if string(req.Provisioning.Type) != "cloud" {
+		t.Errorf("Provisioning.Type = %q, want cloud (passthrough)", req.Provisioning.Type)
+	}
+	if req.Provisioning.Repository != nil || req.Build != nil || req.InputInterface != nil {
+		t.Errorf("internal sections should not be built for unknown provisioning: %+v", req)
 	}
 }
 

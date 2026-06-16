@@ -57,8 +57,14 @@ func FlagErrorWrap(err error) error {
 // The message is newline-delimited for text rendering; AdditionalData["details"]
 // carries the structured list for JSON consumers.
 func FlagErrors(violations []string) error {
+	return FlagErrorsHeader("invalid flags", violations)
+}
+
+// FlagErrorsHeader is FlagErrors with a custom first-line header, for
+// violation sets that aren't about flag usage (e.g. an invalid agent spec).
+func FlagErrorsHeader(header string, violations []string) error {
 	var buf strings.Builder
-	buf.WriteString("invalid flags")
+	buf.WriteString(header)
 	for _, v := range violations {
 		buf.WriteString("\n    ")
 		buf.WriteString(v)
