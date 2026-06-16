@@ -185,7 +185,15 @@ type KeyManagerConfigurations struct {
 }
 
 type AgentWorkload struct {
-	CORS CORSConfig
+	CORS  CORSConfig
+	OAuth OAuthWorkloadConfig
+}
+
+type OAuthWorkloadConfig struct {
+	// DefaultIssuer is the key manager name (referencing a gateway-side
+	// system.keyManagers entry) applied to the jwt-auth policy when an agent
+	// enables OAuth without specifying issuers.
+	DefaultIssuer string
 }
 
 type CORSConfig struct {
