@@ -2078,6 +2078,59 @@ func APIKeyAuthPolicy() map[string]interface{} {
 	}
 }
 
+// OAuth (jwt-auth) policy contract. These literals are the gateway policy's
+// contract (configured under policy_configurations.jwtauth_v1) and are the only
+// place "jwt" wording survives — user-facing surfaces say "OAuth".
+const (
+	OAuthPolicyName              = "jwt-auth"
+	OAuthPolicyVersion           = "v1"
+	OAuthDefaultHeaderName       = "Authorization"
+	OAuthDefaultAuthHeaderPrefix = "Bearer"
+)
+
+// OAuthPolicyParams holds the jwt-auth policy parameters resolved for an agent.
+type OAuthPolicyParams struct {
+	Issuers          []string
+	Audiences        []string
+	RequiredScopes   []string
+	RequiredClaims   map[string]interface{}
+	HeaderName       string
+	AuthHeaderPrefix string
+}
+
+// OAuthPolicy returns the policy map for OAuth (JWT) authentication. Empty
+// optional params are omitted so the gateway applies its own defaults.
+func OAuthPolicy(p OAuthPolicyParams) map[string]interface{} {
+	params := map[string]interface{}{}
+	if len(p.Issuers) > 0 {
+		params["issuers"] = p.Issuers
+	}
+	if len(p.Audiences) > 0 {
+		params["audiences"] = p.Audiences
+	}
+	if len(p.RequiredScopes) > 0 {
+		params["requiredScopes"] = p.RequiredScopes
+	}
+	if len(p.RequiredClaims) > 0 {
+		params["requiredClaims"] = p.RequiredClaims
+	}
+	headerName := p.HeaderName
+	if headerName == "" {
+		headerName = OAuthDefaultHeaderName
+	}
+	authHeaderPrefix := p.AuthHeaderPrefix
+	if authHeaderPrefix == "" {
+		authHeaderPrefix = OAuthDefaultAuthHeaderPrefix
+	}
+	params["headerName"] = headerName
+	params["authHeaderPrefix"] = authHeaderPrefix
+	return map[string]interface{}{
+		"name":    OAuthPolicyName,
+		"version": OAuthPolicyVersion,
+		"params":  params,
+	}
+}
+
 // CORSPolicy returns a CORS policy map with the given allowed origins, methods, headers, and credentials flag.
 func CORSPolicy(allowedOrigins, allowedMethods, allowedHeaders []string, allowCredentials bool) map[string]interface{} {
 	return map[string]interface{}{
