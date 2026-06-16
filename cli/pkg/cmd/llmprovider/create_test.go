@@ -254,6 +254,11 @@ func TestCreate_KeyWithAuthNone(t *testing.T) {
 		"an API key cannot be used with --auth-type none")
 }
 
+func TestCreate_BlankAPIKey(t *testing.T) {
+	runTreeExpectViolation(t, []string{"llm-provider", "create", "p", "--display-name", "X", "--template", "openai", "--api-key", "   "},
+		"--api-key must not be blank")
+}
+
 func TestCreate_BadGateway(t *testing.T) {
 	runTreeExpectViolation(t, []string{"llm-provider", "create", "p", "--display-name", "X", "--template", "openai", "--gateways", "not-a-uuid"},
 		"invalid gateway id")

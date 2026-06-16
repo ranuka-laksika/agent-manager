@@ -106,6 +106,9 @@ func validateCreate(opts *CreateOptions) error {
 	if opts.APIKey != "" && opts.APIKeyStdin {
 		v = append(v, "--api-key and --api-key-stdin are mutually exclusive")
 	}
+	if opts.APIKey != "" && strings.TrimSpace(opts.APIKey) == "" {
+		v = append(v, "--api-key must not be blank")
+	}
 	if opts.keyRequested() && opts.AuthType == "none" {
 		v = append(v, "an API key cannot be used with --auth-type none")
 	}
