@@ -17,7 +17,7 @@
  */
 
 import { Suspense } from "react";
-import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams, Outlet } from "react-router-dom";
 import { OxygenLayout } from "../Layouts";
 import { Protected } from "../Providers/Protected";
 import { ErrorPages } from '@agent-management-platform/shared-component';
@@ -57,6 +57,11 @@ import {
 import { LoadingFallback } from "../components/LoadingFallback";
 import { relativeRouteMap } from "@agent-management-platform/types";
 import { useExternalPageModules, type ExternalPageModule } from "@agent-management-platform/views";
+import {
+  useListOrganizations,
+  useGetProject,
+  useGetAgent,
+} from "@agent-management-platform/api-client";
 import { MountPoints } from "../types";
 
 // Remounts the Security page on agent change so per-agent component state
@@ -65,6 +70,69 @@ import { MountPoints } from "../types";
 function SecurityRouteElement() {
   const { agentId } = useParams();
   return <LazySecurityComponent key={agentId} />;
+}
+function GuardedOutlet({
+  isLoading,
+  isError,
+  title,
+  message,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  title: string;
+  message: string;
+}) {
+  if (isLoading) {
+    return <LoadingFallback />;
+  }
+  if (isError) {
+    return <ErrorPages.CustomError title={title} message={message} />;
+  }
+  return <Outlet />;
+}
+
+function OrgGuard() {
+  const { orgId } = useParams();
+  const { data, isLoading, error } = useListOrganizations();
+  const orgExists = data?.organizations?.some((o) => o.name === orgId);
+  return (
+    <GuardedOutlet
+      isLoading={isLoading}
+      isError={!!error || (!isLoading && !orgExists)}
+      title="Organization Not Found"
+      message={`The organization "${orgId}" doesn't exist or you don't have access to it.`}
+    />
+  );
+}
+
+function ProjectGuard() {
+  const { orgId, projectId } = useParams();
+  const { isLoading, isError } = useGetProject({ orgName: orgId, projName: projectId });
+  return (
+    <GuardedOutlet
+      isLoading={isLoading}
+      isError={isError}
+      title="Project Not Found"
+      message={`The project "${projectId}" doesn't exist or you don't have access to it.`}
+    />
+  );
+}
+
+function AgentGuard() {
+  const { orgId, projectId, agentId } = useParams();
+  const { isLoading, isError } = useGetAgent({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
+  });
+  return (
+    <GuardedOutlet
+      isLoading={isLoading}
+      isError={isError}
+      title="Agent Not Found"
+      message={`The agent "${agentId}" doesn't exist or you don't have access to it.`}
+    />
+  );
 }
 
 export function RootRouter() {
@@ -115,7 +183,7 @@ export function RootRouter() {
             </Protected>
           }
         >
-          <Route path={relativeRouteMap.children.org.path}>
+          <Route path={relativeRouteMap.children.org.path} element={<OrgGuard />}>
             <Route index element={<LazyOverviewOrg />} />
             {
               orgPageModules.map((module) => (
@@ -215,7 +283,10 @@ export function RootRouter() {
                 </Suspense>
               }
             />
-            <Route path={relativeRouteMap.children.org.children.projects.path}>
+            <Route
+              path={relativeRouteMap.children.org.children.projects.path}
+              element={<ProjectGuard />}
+            >
               <Route index element={<LazyOverviewProject />} />
               {
                 projectPageModules.map((module) => (
@@ -246,6 +317,7 @@ export function RootRouter() {
                   relativeRouteMap.children.org.children.projects.children
                     .agents.path
                 }
+                element={<AgentGuard />}
               >
                 <Route
                   index

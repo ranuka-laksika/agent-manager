@@ -21,12 +21,17 @@ import { FullPageLoader } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { Navigate, useLocation, generatePath, useParams } from "react-router-dom";
 import { useListOrganizations, useListProjects } from "@agent-management-platform/api-client";
+import { ErrorPages, getErrorMessage } from "@agent-management-platform/shared-component";
 
 export const Protected = ({ children }: { children: React.ReactNode }) => {
-    const { isAuthenticated, isLoadingIsAuthenticated } = useAuthHooks();
+    const { isAuthenticated, isLoadingIsAuthenticated, logout } = useAuthHooks();
     const location = useLocation();
-    const { data: organizations, isLoading: isLoadingOrganizations } = useListOrganizations();
-    const {orgId} = useParams();
+    const {
+        data: organizations,
+        isLoading: isLoadingOrganizations,
+        error: organizationsError,
+    } = useListOrganizations();
+    const { orgId } = useParams();
 
     // When authenticated without an org in the URL, land the user inside their
     // first organization. We only resolve this once organizations have loaded;
@@ -55,27 +60,38 @@ export const Protected = ({ children }: { children: React.ReactNode }) => {
         );
     }
 
+    if (isLoadingOrganizations || (shouldResolveLanding && isLoadingProjects)) {
+        return <FullPageLoader />;
+    }
+
+    // Organizations failed to load: surface a recoverable error page before
+    // attempting any landing resolution or rendering children.
+    if (organizationsError) {
+        return (
+            <ErrorPages.CustomError
+                title="Failed to Load Organizations"
+                message={getErrorMessage(organizationsError) || "An unexpected error occurred while loading your organizations."}
+                onLogout={logout}
+            />
+        );
+    }
+
     // Authenticated without an org in the URL: wait for orgs (and the project
     // list) to load, then redirect to the resolved landing location instead of
     // rendering children prematurely.
-    if (!orgId) {
-        if (isLoadingOrganizations || (shouldResolveLanding && isLoadingProjects)) {
-            return <FullPageLoader />;
-        }
-        if (shouldResolveLanding) {
-            const projects = projectList?.projects ?? [];
-            // Prefer the default project, fall back to the first available
-            // project, and if the org has no projects yet, land on the org
-            // overview (project listing) so the user can create one.
-            const landingProject = projects.find((p) => p.name === "default") ?? projects[0];
-            const landingPath = landingProject
-                ? generatePath(absoluteRouteMap.children.org.children.projects.path, {
-                      orgId: targetOrg,
-                      projectId: landingProject.name,
-                  })
-                : generatePath(absoluteRouteMap.children.org.path, { orgId: targetOrg });
-            return <Navigate to={landingPath} state={navigationState} />;
-        }
+    if (!orgId && shouldResolveLanding) {
+        const projects = projectList?.projects ?? [];
+        // Prefer the default project, fall back to the first available
+        // project, and if the org has no projects yet, land on the org
+        // overview (project listing) so the user can create one.
+        const landingProject = projects.find((p) => p.name === "default") ?? projects[0];
+        const landingPath = landingProject
+            ? generatePath(absoluteRouteMap.children.org.children.projects.path, {
+                orgId: targetOrg,
+                projectId: landingProject.name,
+            })
+            : generatePath(absoluteRouteMap.children.org.path, { orgId: targetOrg });
+        return <Navigate to={landingPath} state={navigationState} />;
     }
 
     return (

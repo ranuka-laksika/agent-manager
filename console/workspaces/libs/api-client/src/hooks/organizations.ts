@@ -34,11 +34,12 @@ import { useApiMutation, useApiQuery } from "./react-query-notifications";
 export function useListOrganizations(
   query?: ListOrganizationsQuery,
 ) {
-  const { getToken } = useAuthHooks();
+  const { getToken, isAuthenticated, userInfo } = useAuthHooks();
   return useApiQuery<OrganizationListResponse>({
-    queryKey: ['organizations', query],
+    queryKey: ['organizations', query, isAuthenticated, userInfo?.sub],
     queryFn: () => listOrganizations(query, getToken),
     retry: false,
+    retryOnMount: false,
   });
 }
 

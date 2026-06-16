@@ -16,71 +16,158 @@
  * under the License.
  */
 
-import { Box, Button, Stack, Typography } from "@wso2/oxygen-ui";
+import { Box, Button, Card, CardContent, Stack, Typography } from "@wso2/oxygen-ui";
+import { LogOut, RefreshCw, TriangleAlert } from "@wso2/oxygen-ui-icons-react";
+import type { ReactNode } from "react";
 
-function NotFoundErrorPage () {
+interface ErrorLayoutProps {
+    /** Visual anchor shown above the title — an icon or a large glyph. */
+    visual: ReactNode;
+    title: string;
+    message: string;
+    subTitle?: string;
+    /** Recovery action, typically a button. */
+    action: ReactNode;
+}
+
+/**
+ * Shared, centered card layout for full-page error/empty states. Mirrors the
+ * `NoDataFound` empty-state aesthetic (outlined card on a muted background) so
+ * error screens feel consistent with the rest of the product.
+ */
+function ErrorLayout({ visual, title, message, subTitle, action }: ErrorLayoutProps) {
     return (
-        <Box
-            sx={{
-                minHeight: '80vh',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-            }}
+        <Stack
+            alignItems="center"
+            justifyContent="center"
+            sx={{ minHeight: '90vh', width: '100%', p: 4 }}
         >
-            <Stack spacing={2} alignItems="center" sx={{ maxWidth: 480, textAlign: 'center' }}>
-                <Typography variant="h1" color="text.secondary" sx={{ fontWeight: 700, fontSize: '6rem' }}>
+            <Card
+                variant="outlined"
+                sx={{
+                    width: '100%',
+                    maxWidth: 480,
+                    animation: 'errorFadeIn 0.3s ease-in-out',
+                    '@keyframes errorFadeIn': {
+                        '0%': { opacity: 0 },
+                        '100%': { opacity: 1 },
+                    },
+                }}
+            >
+                <CardContent sx={{ p: 5 }}>
+                    <Stack spacing={2} alignItems="center" sx={{ textAlign: 'center' }}>
+                        {visual}
+                        <Typography variant="h4">
+                            {title}
+                        </Typography>
+                        {subTitle && (
+                            <Typography variant="subtitle1" color="text.secondary">
+                                {subTitle}
+                            </Typography>
+                        )}
+                        <Typography variant="body1" color="text.secondary">
+                            {message}
+                        </Typography>
+                        <Stack
+                            direction="row"
+                            spacing={1.5}
+                            useFlexGap
+                            justifyContent="center"
+                            sx={{ mt: 1, flexWrap: 'wrap' }}
+                        >
+                            {action}
+                        </Stack>
+                    </Stack>
+                </CardContent>
+            </Card>
+        </Stack>
+    );
+}
+
+// Shared error glyph used by the generic error states (Oops / CustomError).
+const errorVisual = (
+    <Box sx={{ color: 'error.main', display: 'flex' }}>
+        <TriangleAlert size={56} strokeWidth={1.5} />
+    </Box>
+);
+
+function NotFoundErrorPage() {
+    return (
+        <ErrorLayout
+            visual={
+                <Typography variant="h1" color="text.secondary" sx={{ fontWeight: 'bold', lineHeight: 1 }}>
                     404
                 </Typography>
-                <Typography variant="h5">
-                    Page Not Found
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    The page you are looking for does not exist or has been moved.
-                </Typography>
+            }
+            title="Page Not Found"
+            message="The page you are looking for does not exist or has been moved."
+            action={
                 <Button variant="contained" color="primary" href="/">
                     Go to Home
                 </Button>
-            </Stack>
-        </Box>
-    )
+            }
+        />
+    );
 }
 
-function OopsErrorPage () {
+function OopsErrorPage() {
     return (
-        <Box
-            sx={{
-                minHeight: '80vh',
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 4,
-            }}
-        >
-            <Stack spacing={2} alignItems="center" sx={{ maxWidth: 480, textAlign: 'center' }}>
-                <Typography variant="h1" color="text.secondary" sx={{ fontWeight: 700, fontSize: '6rem' }}>
-                    Oops!
-                </Typography>
-                <Typography variant="h5">
-                    Something went wrong.
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    An unexpected error has occurred. Please try again later.
-                </Typography>
+        <ErrorLayout
+            visual={errorVisual}
+            title="Something went wrong."
+            message="An unexpected error has occurred. Please try again later."
+            action={
                 <Button variant="contained" color="primary" href="/">
                     Go to Home
                 </Button>
-            </Stack>
-        </Box>
-    )
+            }
+        />
+    );
 }
 
+interface ErrorPageProps {
+    message: string;
+    title: string;
+    subTitle?: string;
+    /** When provided, shows a secondary "Log Out" button next to "Try Again". */
+    onLogout?: () => void;
+}
 
+function ErrorPage({ message, title, subTitle, onLogout }: ErrorPageProps) {
+    return (
+        <ErrorLayout
+            visual={errorVisual}
+            title={title}
+            subTitle={subTitle}
+            message={message}
+            action={
+                <>
+                    {onLogout && (
+                        <Button
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<LogOut size={18} />}
+                            onClick={onLogout}
+                        >
+                            Log Out
+                        </Button>
+                    )}
+                    <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<RefreshCw size={18} />}
+                        onClick={() => window.location.reload()}
+                    >
+                        Try Again
+                    </Button>
+                </>
+            }
+        />
+    );
+}
 
 export const ErrorPages = {
     NotFound: NotFoundErrorPage,
-    Oops: OopsErrorPage
+    Oops: OopsErrorPage,
+    CustomError: ErrorPage
 }
