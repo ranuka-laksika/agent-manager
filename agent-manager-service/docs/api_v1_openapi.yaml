@@ -2721,6 +2721,226 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/gateways/{gatewayID}/key-managers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: gatewayID
+        in: path
+        required: true
+        description: Gateway UUID or name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Gateway Key Managers
+      summary: List gateway key managers
+      description: |
+        Retrieve the JWT key managers (token issuers) configured for a gateway.
+
+        Key managers are owned by the gateway's runtime configuration; this list
+        mirrors that configuration and is used to populate the issuer options when
+        applying OAuth security to an agent endpoint. The reserved internal key
+        manager used for platform trace ingestion is never included.
+      operationId: listGatewayKeyManagers
+      responses:
+        "200":
+          description: List of gateway key managers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyManagerListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/gateways/{gatewayID}/key-managers/{name}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: gatewayID
+        in: path
+        required: true
+        description: Gateway UUID or name
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Unique key manager name within the gateway
+        schema:
+          type: string
+
+    put:
+      tags:
+        - Gateway Key Managers
+      summary: Upsert a gateway key manager
+      description: |
+        Create or update a key manager in the gateway's AMS mirror.
+
+        This endpoint only updates the mirror used by the console and agent OAuth
+        configuration. The gateway runtime configuration (ConfigMap) is the source
+        of truth and must be patched separately via the manage-keymanager script.
+        The console renders that command rather than calling this endpoint directly.
+      operationId: upsertGatewayKeyManager
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertKeyManagerRequest"
+      responses:
+        "200":
+          description: Key manager upserted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyManager"
+        "400":
+          description: Bad request - invalid parameters or reserved name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Gateway Key Managers
+      summary: Delete a gateway key manager
+      description: |
+        Remove a key manager from the gateway's AMS mirror. As with upsert, the
+        gateway runtime configuration must be patched separately.
+      operationId: deleteGatewayKeyManager
+      responses:
+        "204":
+          description: Key manager deleted successfully
+        "400":
+          description: Bad request - reserved name cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway or key manager not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{environmentId}/key-managers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: environmentId
+        in: path
+        required: true
+        description: Environment UUID or name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Gateway Key Managers
+      summary: List key managers available in an environment
+      description: |
+        Retrieve the union of key managers configured on the gateways mapped to an
+        environment. These are the issuer options offered when applying OAuth
+        security to an agent endpoint in this environment. The reserved internal
+        key manager used for platform trace ingestion is never included.
+      operationId: listEnvironmentKeyManagers
+      responses:
+        "200":
+          description: List of key managers available in the environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeyManagerListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/data-planes:
     get:
       summary: List all data planes in an organization
@@ -11557,6 +11777,67 @@ components:
           description: List of token metadata
           items:
             $ref: "#/components/schemas/GatewayTokenInfo"
+
+    KeyManager:
+      type: object
+      description: |
+        A JWT key manager (token issuer) configured on a gateway. Mirrors a
+        gateway-side jwt-auth `system.keyManagers` entry. Only the fields needed to
+        identify an issuer and validate its tokens are surfaced.
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Unique key manager name within the gateway (referenced as an issuer).
+          example: ThunderKeyManager
+        issuer:
+          type: string
+          description: Expected `iss` claim value for tokens validated by this key manager.
+          example: http://thunder.amp.localhost:8080
+        jwksUri:
+          type: string
+          description: Remote JWKS endpoint used to fetch signing keys.
+          example: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
+        skipTlsVerify:
+          type: boolean
+          description: Skip TLS verification when fetching the JWKS endpoint (testing/trusted internal only).
+          default: false
+          example: true
+
+    KeyManagerListResponse:
+      type: object
+      required:
+        - count
+        - list
+      properties:
+        count:
+          type: integer
+          description: Number of key managers in this response
+          example: 1
+        list:
+          type: array
+          description: List of key managers
+          items:
+            $ref: "#/components/schemas/KeyManager"
+
+    UpsertKeyManagerRequest:
+      type: object
+      description: Request body for creating or updating a gateway key manager (name is taken from the path).
+      properties:
+        issuer:
+          type: string
+          description: Expected `iss` claim value for tokens validated by this key manager.
+          example: http://thunder.amp.localhost:8080
+        jwksUri:
+          type: string
+          description: Remote JWKS endpoint used to fetch signing keys.
+          example: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
+        skipTlsVerify:
+          type: boolean
+          description: Skip TLS verification when fetching the JWKS endpoint.
+          default: false
+          example: true
 
     CreateGatewayRequest:
       type: object
