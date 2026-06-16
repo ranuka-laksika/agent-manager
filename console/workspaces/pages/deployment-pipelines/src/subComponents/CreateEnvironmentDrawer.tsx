@@ -46,7 +46,6 @@ import { createEnvironmentSchema, type CreateEnvironmentFormValues } from "../fo
 
 const SCRIPT_URL =
   "https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/add-environment.sh";
-const GATEWAY_CHART_VERSION = "0.1.0";
 const TOKEN_MASK = "•••••••••••••••";
 
 interface CreateEnvironmentDrawerProps {
@@ -93,7 +92,6 @@ function buildScript(
     `    DISPLAY_NAME="${displayName || "<display-name>"}" \\`,
     `    AGENT_MANAGER_TOKEN=${token} \\`,
     ...(isProduction ? ["    IS_PRODUCTION=true \\"] : []),
-    `    CHART_VERSION=${GATEWAY_CHART_VERSION} \\`,
     ...(internalBase ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`] : []),
     ...(internalCp ? [`    AGENT_MANAGER_INTERNAL_CP=${internalCp} \\`] : []),
     "    bash",

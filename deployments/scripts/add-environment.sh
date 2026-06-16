@@ -10,7 +10,6 @@ set -euo pipefail
 #     | ENV_NAME=staging \
 #       DISPLAY_NAME="Staging" \
 #       AGENT_MANAGER_TOKEN=<token> \
-#       CHART_VERSION=0.15.0 \
 #       bash
 #
 # Add IS_PRODUCTION=true for a production environment.
@@ -22,11 +21,14 @@ set -euo pipefail
 # Prerequisites:
 #   - kubectl and helm must be configured
 #   - AGENT_MANAGER_TOKEN: bearer token authorized to create environments
-#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
-#     Chart is pulled from oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension
 #   - ENV_NAME: resource name (lowercase alphanumeric with hyphens)
 #   - DISPLAY_NAME: human-readable name
 # Optional:
+#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
+#     When unset (the default), the latest published version is resolved from
+#     oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension so new
+#     environments always get the newest gateway chart. Set it only to pin a
+#     specific version.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
@@ -35,7 +37,6 @@ set -euo pipefail
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
 : "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging\")}"
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
-: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.15.0)}"
 
 IS_PRODUCTION="${IS_PRODUCTION:-false}"
 case "$IS_PRODUCTION" in
@@ -73,8 +74,26 @@ GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
 
 CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 
-# Port the data-plane gateway HTTP listener exposes (matches the ClusterDataPlane
-# gateway http listener). HTTPS is left to inherit from the dataplane gateway.
+
+# --- Resolve chart version ---
+# CHART_VERSION is optional. When unset, resolve the latest published version
+# from the OCI registry so new environments always get the newest gateway chart.
+# `helm show chart` without --version pulls the registry's highest semver tag.
+CHART_VERSION="${CHART_VERSION:-}"
+if [ -z "$CHART_VERSION" ]; then
+    echo "🔎 Resolving latest gateway chart version from ${CHART_REF}..."
+    CHART_VERSION=$(helm show chart "${CHART_REF}" 2>/dev/null | awk '/^version:/ {print $2; exit}')
+    if [ -z "$CHART_VERSION" ]; then
+        echo "❌ Could not resolve the latest chart version from ${CHART_REF}"
+        echo "   Pin a version explicitly and retry (e.g. CHART_VERSION=0.15.0)."
+        exit 1
+    fi
+    echo "✅ Using latest chart version: ${CHART_VERSION}"
+else
+    echo "📌 Using pinned chart version: ${CHART_VERSION}"
+fi
+
+# Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
 
 # Base URL the gateway uses to reach Agent Manager. Both /api/v1 and the
