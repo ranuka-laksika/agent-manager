@@ -10184,6 +10184,8 @@ components:
           type: integer
           format: int32
           description: Port number
+          minimum: 1
+          maximum: 65535
         host:
           type: string
           description: Virtual host for the listener

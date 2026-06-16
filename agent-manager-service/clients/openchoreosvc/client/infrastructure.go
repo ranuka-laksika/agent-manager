@@ -18,6 +18,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -124,7 +125,7 @@ func (c *openChoreoClient) CreateEnvironment(ctx context.Context, namespaceName 
 	dataplaneRefKind := ocapi.EnvironmentSpecDataPlaneRefKindClusterDataPlane
 
 	gateway, err := c.resolveEnvGatewaySpec(ctx, req.DataplaneRef, req.Gateway)
-	if err != nil {
+	if err != nil && !errors.Is(err, errInheritGateway) {
 		return nil, fmt.Errorf("failed to resolve gateway spec: %w", err)
 	}
 
@@ -217,7 +218,7 @@ func (c *openChoreoClient) UpdateEnvironment(ctx context.Context, namespaceName,
 			dataPlaneRef = env.Spec.DataPlaneRef.Name
 		}
 		gateway, gwErr := c.resolveEnvGatewaySpec(ctx, dataPlaneRef, req.Gateway)
-		if gwErr != nil {
+		if gwErr != nil && !errors.Is(gwErr, errInheritGateway) {
 			return nil, fmt.Errorf("failed to resolve gateway spec: %w", gwErr)
 		}
 		env.Spec.Gateway = gateway
@@ -675,24 +676,26 @@ func convertEnvironmentToResponse(env *ocapi.Environment) *models.EnvironmentRes
 // its hostname from "<env>-<org>.<listener.host>".
 //
 
+// errInheritGateway signals that no gateway spec should be emitted and the
+// environment should inherit the dataplane gateway. It is an expected outcome,
+// not a failure — callers check it with errors.Is and treat the spec as absent.
+var errInheritGateway = errors.New("no gateway spec; inherit dataplane gateway")
+
 // resolveEnvGatewaySpec turns the caller-supplied (trimmed) gateway override into
 // a complete OC GatewaySpec by seeding from the dataplane's gateway and applying
-// only the host/port the caller set. Returns (nil, nil) to mean "omit — inherit
-// the dataplane gateway", which is the case when there is no override or no
-// dataplane base to anchor Name/Namespace.
+// only the host/port the caller set. It returns errInheritGateway when there is
+// no override or no dataplane base to anchor Name/Namespace, meaning the
+// environment should inherit the dataplane gateway.
 func (c *openChoreoClient) resolveEnvGatewaySpec(ctx context.Context, dataPlaneRef string, override *GatewaySpec) (*ocapi.GatewaySpec, error) {
 	if override == nil {
-		return nil, nil
+		return nil, errInheritGateway
 	}
 
+	// Propagates errInheritGateway when the dataplane has no gateway to seed
+	// Name/Namespace from — we can't form a valid override, so inherit instead.
 	base, err := c.getClusterDataPlaneGateway(ctx, dataPlaneRef)
 	if err != nil {
 		return nil, err
-	}
-	if base == nil {
-		// No dataplane gateway to seed Name/Namespace from — can't form a valid
-		// override. Inherit instead of emitting an invalid block.
-		return nil, nil
 	}
 
 	return &ocapi.GatewaySpec{
@@ -703,7 +706,8 @@ func (c *openChoreoClient) resolveEnvGatewaySpec(ctx context.Context, dataPlaneR
 
 // getClusterDataPlaneGateway fetches the ClusterDataPlane's gateway config (the
 // source OC falls back to). Environments here always reference a ClusterDataPlane
-// (see CreateEnvironment). Returns nil if the dataplane has no gateway set.
+// (see CreateEnvironment). It returns errInheritGateway when the dataplane has no
+// gateway set, so there is no base to seed an override from.
 func (c *openChoreoClient) getClusterDataPlaneGateway(ctx context.Context, dataPlaneRef string) (*ocapi.GatewaySpec, error) {
 	resp, err := c.ocClient.GetClusterDataPlaneWithResponse(ctx, dataPlaneRef)
 	if err != nil {
@@ -717,8 +721,8 @@ func (c *openChoreoClient) getClusterDataPlaneGateway(ctx context.Context, dataP
 			JSON500: resp.JSON500,
 		})
 	}
-	if resp.JSON200.Spec == nil {
-		return nil, nil
+	if resp.JSON200.Spec == nil || resp.JSON200.Spec.Gateway == nil {
+		return nil, errInheritGateway
 	}
 	return resp.JSON200.Spec.Gateway, nil
 }

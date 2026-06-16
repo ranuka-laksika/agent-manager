@@ -1886,6 +1886,9 @@ type CreateEnvironmentRequest struct {
 	// DnsPrefix DNS prefix for the environment
 	DnsPrefix string `json:"dnsPrefix"`
 
+	// Gateway Gateway configuration with ingress and egress network specs
+	Gateway *GatewaySpec `json:"gateway,omitempty"`
+
 	// IsProduction Whether this is a production environment
 	IsProduction *bool `json:"isProduction,omitempty"`
 
@@ -2503,6 +2506,18 @@ type FileMount struct {
 	Value *string `json:"value,omitempty"`
 }
 
+// GatewayEndpointSpec Gateway resource endpoint configuration
+type GatewayEndpointSpec struct {
+	// Http Gateway listener configuration
+	Http *GatewayListenerSpec `json:"http,omitempty"`
+
+	// Https Gateway listener configuration
+	Https *GatewayListenerSpec `json:"https,omitempty"`
+
+	// Tls Gateway listener configuration
+	Tls *GatewayListenerSpec `json:"tls,omitempty"`
+}
+
 // GatewayEnvironmentResponse defines model for GatewayEnvironmentResponse.
 type GatewayEnvironmentResponse struct {
 	// CreatedAt Timestamp when the environment was created
@@ -2519,6 +2534,9 @@ type GatewayEnvironmentResponse struct {
 
 	// DnsPrefix DNS prefix for the environment
 	DnsPrefix string `json:"dnsPrefix"`
+
+	// Gateway Gateway configuration with ingress and egress network specs
+	Gateway *GatewaySpec `json:"gateway,omitempty"`
 
 	// Id Unique identifier for the environment
 	Id string `json:"id"`
@@ -2548,6 +2566,24 @@ type GatewayListResponse struct {
 
 	// Total Total number of gateways matching the filter
 	Total int32 `json:"total"`
+}
+
+// GatewayListenerSpec Gateway listener configuration
+type GatewayListenerSpec struct {
+	// Host Virtual host for the listener
+	Host *string `json:"host,omitempty"`
+
+	// Port Port number
+	Port *int32 `json:"port,omitempty"`
+}
+
+// GatewayNetworkSpec External and internal gateway endpoints
+type GatewayNetworkSpec struct {
+	// External Gateway resource endpoint configuration
+	External *GatewayEndpointSpec `json:"external,omitempty"`
+
+	// Internal Gateway resource endpoint configuration
+	Internal *GatewayEndpointSpec `json:"internal,omitempty"`
 }
 
 // GatewayResponse defines model for GatewayResponse.
@@ -2593,6 +2629,15 @@ type GatewayResponse struct {
 
 	// Vhost Virtual host for the gateway
 	Vhost string `json:"vhost"`
+}
+
+// GatewaySpec Gateway configuration with ingress and egress network specs
+type GatewaySpec struct {
+	// Egress External and internal gateway endpoints
+	Egress *GatewayNetworkSpec `json:"egress,omitempty"`
+
+	// Ingress External and internal gateway endpoints
+	Ingress *GatewayNetworkSpec `json:"ingress,omitempty"`
 }
 
 // GatewayStatus Gateway operational status:
@@ -4137,6 +4182,9 @@ type UpdateEnvironmentRequest struct {
 
 	// DisplayName Updated display name
 	DisplayName *string `json:"displayName,omitempty"`
+
+	// Gateway Gateway configuration with ingress and egress network specs
+	Gateway *GatewaySpec `json:"gateway,omitempty"`
 
 	// IsProduction Whether this is a production environment
 	IsProduction *bool `json:"isProduction,omitempty"`
