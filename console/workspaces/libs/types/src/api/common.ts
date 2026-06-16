@@ -97,13 +97,30 @@ export interface CorsConfig {
   allowCredentials?: boolean;
 }
 
+export interface OAuthConfig {
+  /** Issuer names referencing gateway-side key manager entries. Empty uses the platform default. */
+  issuers?: string[];
+  /** Accepted token audiences (aud claim). Empty disables audience validation. */
+  audiences?: string[];
+  /** Scopes the token must contain. */
+  requiredScopes?: string[];
+  /** Claims (key/value pairs) the token must contain. */
+  requiredClaims?: Record<string, unknown>;
+  /** Request header carrying the token. Defaults to "Authorization". */
+  headerName?: string;
+  /** Prefix before the token in the header value. Defaults to "Bearer". */
+  authHeaderPrefix?: string;
+}
+
 export interface Configurations {
   env?: EnvironmentVariable[];
   files?: FileMount[];
   enableAutoInstrumentation?: boolean;
   instrumentationVersion?: string;
   enableApiKeySecurity?: boolean;
+  enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
+  oauthConfig?: OAuthConfig;
 }
 
 export interface EndpointSchema {

@@ -74,13 +74,17 @@ export function AgentChat() {
     agentName: agentId,
   });
   const securityEnabled = agent?.configurations?.enableApiKeySecurity ?? true;
+  const oauthOnly = !!(
+    agent?.configurations?.enableOAuthSecurity &&
+    !agent?.configurations?.enableApiKeySecurity
+  );
   const {
     data: testKey,
     isLoading: isLoadingTestKey,
     error: testKeyError,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
-    { enabled: securityEnabled },
+    { enabled: securityEnabled && !oauthOnly },
   );
   const endpointOptions = useMemo(() => {
     return Object.entries(endpoints ?? {}).map(([key, value]) => ({
@@ -100,7 +104,7 @@ export function AgentChat() {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!message.trim() || isLoading) return;
+    if (!message.trim() || isLoading || oauthOnly) return;
     if (securityEnabled && !testKey?.apiKey) {
       setError("API key security is enabled, but a test API key is not available yet.");
       return;
@@ -203,11 +207,22 @@ export function AgentChat() {
   };
 
   const inputDisabled =
+    oauthOnly ||
     isLoading ||
     isEndpointsLoading ||
     isLoadingTestKey ||
     (securityEnabled && !testKey?.apiKey);
   const sendDisabled = inputDisabled || !message.trim();
+
+  if (oauthOnly) {
+    return (
+      <Alert severity="info">
+        OAuth authentication is enabled for this agent. In-console testing is
+        only available with API key security. Test this endpoint out-of-band
+        with an <code>Authorization: Bearer &lt;token&gt;</code> header.
+      </Alert>
+    );
+  }
 
   if (messages.length === 0) {
     return (

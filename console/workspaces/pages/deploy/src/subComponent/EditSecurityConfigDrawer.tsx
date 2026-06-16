@@ -25,6 +25,7 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -36,11 +37,14 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
+  IconButton,
+  Radio,
+  RadioGroup,
   Switch,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { ChevronDown, Shield } from "@wso2/oxygen-ui-icons-react";
+import { ChevronDown, Plus, Shield, Trash2 } from "@wso2/oxygen-ui-icons-react";
 import {
   DrawerContent,
   DrawerHeader,
@@ -79,6 +83,21 @@ export function EditSecurityConfigDrawer({
   const isApiAgent = agent?.agentType?.type === "agent-api";
 
   // ── State ─────────────────────────────────────────────────────────────────
+  // Endpoint authentication mode — mutually exclusive by construction.
+  // Maps to two backend booleans: apikey -> enableApiKeySecurity, oauth -> enableOAuthSecurity.
+  const [authMode, setAuthMode] = useState<"none" | "apikey" | "oauth">(
+    "apikey",
+  );
+  const [oauthIssuers, setOauthIssuers] = useState<string[]>([]);
+  const [oauthAudiences, setOauthAudiences] = useState<string[]>([]);
+  const [oauthScopes, setOauthScopes] = useState<string[]>([]);
+  const [oauthClaims, setOauthClaims] = useState<
+    Array<{ key: string; value: string }>
+  >([]);
+  const [oauthHeaderName, setOauthHeaderName] =
+    useState<string>("Authorization");
+  const [oauthHeaderPrefix, setOauthHeaderPrefix] = useState<string>("Bearer");
+
   const [corsEnabled, setCorsEnabled] = useState(false);
   const [corsAllowAll, setCorsAllowAll] = useState(true);
   const [corsOrigins, setCorsOrigins] = useState<string[]>(["*"]);
@@ -112,6 +131,41 @@ export function EditSecurityConfigDrawer({
     if (cors.allowCredentials !== undefined) setCorsAllowCredentials(cors.allowCredentials);
   }, [open, agent?.configurations?.corsConfig]);
 
+  // Seed Endpoint Authentication form from agent config when drawer opens.
+  useEffect(() => {
+    if (!open) return;
+    const cfg = agent?.configurations;
+    if (cfg?.enableOAuthSecurity) {
+      setAuthMode("oauth");
+    } else if (cfg?.enableApiKeySecurity) {
+      setAuthMode("apikey");
+    } else if (cfg?.enableApiKeySecurity === false) {
+      setAuthMode("none");
+    } else {
+      setAuthMode("apikey");
+    }
+
+    const oauth = cfg?.oauthConfig;
+    setOauthIssuers(oauth?.issuers ?? []);
+    setOauthAudiences(oauth?.audiences ?? []);
+    setOauthScopes(oauth?.requiredScopes ?? []);
+    setOauthClaims(
+      oauth?.requiredClaims
+        ? Object.entries(oauth.requiredClaims).map(([key, value]) => ({
+            key,
+            value: String(value ?? ""),
+          }))
+        : [],
+    );
+    setOauthHeaderName(oauth?.headerName || "Authorization");
+    setOauthHeaderPrefix(oauth?.authHeaderPrefix || "Bearer");
+  }, [
+    open,
+    agent?.configurations?.enableApiKeySecurity,
+    agent?.configurations?.enableOAuthSecurity,
+    agent?.configurations?.oauthConfig,
+  ]);
+
   const hasWildcardOrigin = corsAllowAll || corsOrigins.includes("*");
 
   const { mutate: updateDeploySettings, isPending } = useUpdateAgentDeploySettings();
@@ -122,9 +176,25 @@ export function EditSecurityConfigDrawer({
         params: { orgName, projName, agentName },
         body: {
           environmentName: environment,
-          ...(agent?.configurations?.enableApiKeySecurity !== undefined && {
-            enableApiKeySecurity: agent.configurations.enableApiKeySecurity,
+          ...(isApiAgent && {
+            enableApiKeySecurity: authMode === "apikey",
+            enableOAuthSecurity: authMode === "oauth",
           }),
+          ...(isApiAgent &&
+            authMode === "oauth" && {
+              oauthConfig: {
+                issuers: oauthIssuers,
+                audiences: oauthAudiences,
+                requiredScopes: oauthScopes,
+                requiredClaims: Object.fromEntries(
+                  oauthClaims
+                    .filter((c) => c.key.trim())
+                    .map((c) => [c.key.trim(), c.value]),
+                ),
+                headerName: oauthHeaderName.trim() || "Authorization",
+                authHeaderPrefix: oauthHeaderPrefix.trim() || "Bearer",
+              },
+            }),
           ...(agent?.configurations?.enableAutoInstrumentation !== undefined && {
             enableAutoInstrumentation: agent.configurations.enableAutoInstrumentation,
           }),
@@ -149,8 +219,9 @@ export function EditSecurityConfigDrawer({
     );
   }, [
     environment, orgName, projName, agentName,
-    agent?.configurations?.enableApiKeySecurity,
     agent?.configurations?.enableAutoInstrumentation,
+    authMode, oauthIssuers, oauthAudiences, oauthScopes, oauthClaims,
+    oauthHeaderName, oauthHeaderPrefix,
     corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
     hasWildcardOrigin, isApiAgent,
     updateDeploySettings, onClose, pushSnackBar,
@@ -158,9 +229,203 @@ export function EditSecurityConfigDrawer({
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Shield size={24} />} title="Update CORS Configuration" onClose={onClose} />
+      <DrawerHeader icon={<Shield size={24} />} title="Update Security Configuration" onClose={onClose} />
       <DrawerContent>
         <Form.Stack spacing={3}>
+
+          {/* ── Endpoint Authentication ──────────────────────────────── */}
+          {isApiAgent && (
+            <Form.Section>
+              <Form.Header>Endpoint Authentication</Form.Header>
+              <Form.Subheader>
+                Choose how callers authenticate against this agent endpoint.
+              </Form.Subheader>
+              <Form.Stack spacing={1}>
+                <FormControl>
+                  <RadioGroup
+                    value={authMode}
+                    onChange={(_, value) =>
+                      setAuthMode(value as "none" | "apikey" | "oauth")
+                    }
+                  >
+                    <FormControlLabel
+                      value="none"
+                      control={<Radio disabled={isPending} />}
+                      label="No authentication"
+                    />
+                    <FormControlLabel
+                      value="apikey"
+                      control={<Radio disabled={isPending} />}
+                      label="API key"
+                    />
+                    <FormControlLabel
+                      value="oauth"
+                      control={<Radio disabled={isPending} />}
+                      label="OAuth"
+                    />
+                  </RadioGroup>
+                </FormControl>
+
+                <Collapse in={authMode === "apikey"}>
+                  <TextField
+                    label="Header"
+                    value="X-API-Key"
+                    size="small"
+                    fullWidth
+                    disabled
+                    sx={{ mt: 1 }}
+                  />
+                </Collapse>
+
+                <Collapse in={authMode === "oauth"}>
+                  <Form.Stack spacing={2} sx={{ mt: 1 }}>
+                    <Alert severity="info">
+                      Callers authenticate with a standard{" "}
+                      <code>Authorization: Bearer &lt;token&gt;</code> header.
+                      Token validation key managers are configured gateway-side
+                      under <code>policy_configurations.jwtauth_v1</code>.
+                    </Alert>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Issuers</FormLabel>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={[]}
+                        value={oauthIssuers}
+                        onChange={(_, v) => setOauthIssuers(v as string[])}
+                        disabled={isPending}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField {...params} size="small" placeholder="Add issuer and press Enter" />
+                        )}
+                      />
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Audiences</FormLabel>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={[]}
+                        value={oauthAudiences}
+                        onChange={(_, v) => setOauthAudiences(v as string[])}
+                        disabled={isPending}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField {...params} size="small" placeholder="Add audience and press Enter" />
+                        )}
+                      />
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Required scopes</FormLabel>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={[]}
+                        value={oauthScopes}
+                        onChange={(_, v) => setOauthScopes(v as string[])}
+                        disabled={isPending}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField {...params} size="small" placeholder="Add scope and press Enter" />
+                        )}
+                      />
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Required claims</FormLabel>
+                      <Form.Stack spacing={1}>
+                        {oauthClaims.map((claim, index) => (
+                          <Box key={index} display="flex" gap={1} alignItems="center">
+                            <TextField
+                              size="small"
+                              placeholder="Claim"
+                              value={claim.key}
+                              disabled={isPending}
+                              onChange={(e) =>
+                                setOauthClaims((prev) =>
+                                  prev.map((c, i) => (i === index ? { ...c, key: e.target.value } : c)),
+                                )
+                              }
+                            />
+                            <TextField
+                              size="small"
+                              placeholder="Value"
+                              value={claim.value}
+                              disabled={isPending}
+                              onChange={(e) =>
+                                setOauthClaims((prev) =>
+                                  prev.map((c, i) => (i === index ? { ...c, value: e.target.value } : c)),
+                                )
+                              }
+                            />
+                            <IconButton
+                              size="small"
+                              disabled={isPending}
+                              aria-label="Remove claim"
+                              onClick={() =>
+                                setOauthClaims((prev) => prev.filter((_, i) => i !== index))
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </IconButton>
+                          </Box>
+                        ))}
+                        <Box>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            startIcon={<Plus size={16} />}
+                            disabled={isPending}
+                            onClick={() =>
+                              setOauthClaims((prev) => [...prev, { key: "", value: "" }])
+                            }
+                          >
+                            Add claim
+                          </Button>
+                        </Box>
+                      </Form.Stack>
+                    </FormControl>
+
+                    <Box display="flex" gap={2}>
+                      <TextField
+                        label="Header name"
+                        size="small"
+                        fullWidth
+                        value={oauthHeaderName}
+                        disabled={isPending}
+                        onChange={(e) => setOauthHeaderName(e.target.value)}
+                        placeholder="Authorization"
+                      />
+                      <TextField
+                        label="Auth header prefix"
+                        size="small"
+                        fullWidth
+                        value={oauthHeaderPrefix}
+                        disabled={isPending}
+                        onChange={(e) => setOauthHeaderPrefix(e.target.value)}
+                        placeholder="Bearer"
+                      />
+                    </Box>
+                  </Form.Stack>
+                </Collapse>
+              </Form.Stack>
+            </Form.Section>
+          )}
 
           {/* ── CORS ─────────────────────────────────────────────────── */}
           {isApiAgent && (

@@ -61,6 +61,10 @@ export function Swagger() {
     agentName: agentId,
   });
   const securityEnabled = !!agent?.configurations?.enableApiKeySecurity;
+  const oauthOnly = !!(
+    agent?.configurations?.enableOAuthSecurity &&
+    !agent?.configurations?.enableApiKeySecurity
+  );
   const {
     data: testKey,
     isLoading: isLoadingTestKey,
@@ -68,7 +72,7 @@ export function Swagger() {
     error: testKeyError,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
-    { enabled: securityEnabled },
+    { enabled: securityEnabled && !oauthOnly },
   );
   const testApiKey = testKey?.apiKey;
 
@@ -127,6 +131,13 @@ export function Swagger() {
 
   return (
     <Suspense fallback={<Skeleton variant="rounded" height={500} />}>
+      {oauthOnly && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          OAuth authentication is enabled for this agent. Try it out is only
+          available with API key security. Test this endpoint out-of-band with
+          an <code>Authorization: Bearer &lt;token&gt;</code> header.
+        </Alert>
+      )}
       <Box sx={{ "& .swagger-ui .wrapper": { padding: 0 } }}>
         <SwaggerUI
           spec={data?.[endpoint].schema.content}
@@ -134,6 +145,7 @@ export function Swagger() {
           plugins={[disableAuthorizeAndInfoPluginCustomSecuritySchema]}
           docExpansion="list"
           requestInterceptor={requestInterceptor}
+          supportedSubmitMethods={oauthOnly ? [] : undefined}
         />
       </Box>
     </Suspense>

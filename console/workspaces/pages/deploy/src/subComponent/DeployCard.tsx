@@ -398,23 +398,31 @@ export function DeployCard(props: DeployCardProps) {
     "buildpack" in (agent.build ?? {}) &&
     (agent.build as { buildpack?: { language?: string } }).buildpack?.language === "python";
 
-  // Inline toggles: API key auth + tracing
-  const [apiKeyEnabled, setApiKeyEnabled] = useState(false);
+  // Inline toggle: tracing. Endpoint authentication (none/api-key/oauth) is
+  // managed in the security drawer since it spans three mutually-exclusive
+  // modes plus OAuth config fields.
   const [tracingEnabled, setTracingEnabled] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
-    if (agent?.configurations?.enableApiKeySecurity !== undefined) {
-      setApiKeyEnabled(agent.configurations.enableApiKeySecurity);
-    }
     if (agent?.configurations?.enableAutoInstrumentation !== undefined) {
       setTracingEnabled(agent.configurations.enableAutoInstrumentation);
     }
-  }, [
-    agent?.configurations?.enableApiKeySecurity,
-    agent?.configurations?.enableAutoInstrumentation,
-  ]);
+  }, [agent?.configurations?.enableAutoInstrumentation]);
+
+  const authMode: "none" | "apikey" | "oauth" = agent?.configurations
+    ?.enableOAuthSecurity
+    ? "oauth"
+    : agent?.configurations?.enableApiKeySecurity
+      ? "apikey"
+      : "none";
+  const authLabel =
+    authMode === "oauth"
+      ? "OAuth"
+      : authMode === "apikey"
+        ? "API key"
+        : "None";
 
   // Keep the configurations query mounted so its cache invalidates after
   // deploy-settings / configuration mutations finish.
@@ -427,8 +435,8 @@ export function DeployCard(props: DeployCardProps) {
   const { mutate: updateDeploySettingsMutate } = useUpdateAgentDeploySettings();
 
   // Stable debounced redeploy — reads latest values via ref at fire time
-  const latestToggleRef = useRef({ apiKey: apiKeyEnabled, tracing: tracingEnabled });
-  latestToggleRef.current = { apiKey: apiKeyEnabled, tracing: tracingEnabled };
+  const latestToggleRef = useRef({ tracing: tracingEnabled });
+  latestToggleRef.current = { tracing: tracingEnabled };
 
   const redeployContextRef = useRef({
     orgId, projectId, agentId, currentEnvironment, isApiAgent, isPythonBuildpack,
@@ -458,18 +466,19 @@ export function DeployCard(props: DeployCardProps) {
       const {
         orgId: o, projectId: p, agentId: a,
         currentEnvironment: env,
-        isApiAgent: isApi, isPythonBuildpack: isPy,
+        isPythonBuildpack: isPy,
       } = redeployContextRef.current;
       if (!o || !p || !a || !env?.name) return;
-      const { apiKey, tracing } = latestToggleRef.current;
+      const { tracing } = latestToggleRef.current;
       setIsSavingConfig(true);
+      // Auth + CORS are omitted so resolveAPIConfig preserves them from the
+      // existing DB config; only the tracing toggle is changed here.
       updateDeploySettingsRef.current(
         {
           params: { orgName: o, projName: p, agentName: a },
           body: {
             environmentName: env.name,
             ...(isPy && { enableAutoInstrumentation: tracing }),
-            ...(isApi && { enableApiKeySecurity: apiKey }),
           },
         },
         { onSuccess: () => setIsSavingConfig(false), onError: () => setIsSavingConfig(false) },
@@ -725,25 +734,40 @@ export function DeployCard(props: DeployCardProps) {
                     </Box>
                   )}
 
-                  {/* API Key Auth */}
+                  {/* Endpoint Authentication */}
                   {isApiAgent && (
                     <Box display="flex" alignItems="center" justifyContent="space-between">
                       <Box display="flex" alignItems="center" gap={1}>
                         <Key size={14} style={{ opacity: 0.6 }} />
-                        <Typography variant="body2">API Key Auth</Typography>
-                        <Tooltip title="Requests must include the header: x-api-key: <your-key>">
-                          <Info size={13} style={{ opacity: 0.5, cursor: "help" }} />
+                        <Typography variant="body2">Authentication</Typography>
+                        <Tooltip
+                          title={
+                            authMode === "oauth"
+                              ? "Callers send an Authorization: Bearer <token> header validated by the gateway"
+                              : authMode === "apikey"
+                                ? "Requests must include the header: x-api-key: <your-key>"
+                                : "Endpoint is publicly accessible without authentication"
+                          }
+                        >
+                          <Chip
+                            size="small"
+                            label={authLabel}
+                            color={authMode === "none" ? "default" : "success"}
+                            variant="outlined"
+                            sx={{ height: 18, fontSize: "0.65rem", cursor: "default" }}
+                          />
                         </Tooltip>
                       </Box>
-                      <Switch
+                      <Button
+                        variant="text"
                         size="small"
-                        checked={apiKeyEnabled}
-                        disabled={isSavingConfig}
-                        onChange={(_, checked) => {
-                          setApiKeyEnabled(checked);
-                          debouncedRedeploy();
-                        }}
-                      />
+                        color="inherit"
+                        sx={{ minWidth: 0, px: 0.5 }}
+                        startIcon={<SlidersVertical size={16} />}
+                        onClick={handleOpenCorsDrawer}
+                      >
+                        Configure
+                      </Button>
                     </Box>
                   )}
 
