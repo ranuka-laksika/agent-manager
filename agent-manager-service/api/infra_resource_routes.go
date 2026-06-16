@@ -37,6 +37,5 @@ func registerInfraRoutes(rr *middleware.RouteRegistrar, ctrl controllers.InfraRe
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}", rbac.ProjectRead, ctrl.GetProject)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}", rbac.ProjectUpdate, ctrl.UpdateProject)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/deployment-pipeline", rbac.DeploymentPipelineRead, ctrl.GetProjectDeploymentPipeline)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/deployment-pipeline", rbac.DeploymentPipelineUpdate, ctrl.UpdateProjectDeploymentPipeline)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}", rbac.ProjectDelete, ctrl.DeleteProject)
 }

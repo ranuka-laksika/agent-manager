@@ -217,8 +217,6 @@ export interface UpdateDeploymentPipelineRequest {
   promotionPaths: PromotionPath[];
 }
 
-export type UpdateDeploymentPipelinePathParams = OrgProjPathParams;
-
 // Update DeploymentPipeline (direct — by pipeline name, no project required)
 export type UpdateOrgDeploymentPipelinePathParams = {
   orgName: string | undefined;

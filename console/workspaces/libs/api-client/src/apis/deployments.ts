@@ -51,7 +51,6 @@ import type {
   CreateDeploymentPipelineRequest,
   UpdateOrgDeploymentPipelinePathParams,
   DeleteDeploymentPipelinePathParams,
-  UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
   UpdateEnvironmentRequest,
@@ -323,20 +322,6 @@ export async function deleteDeploymentPipeline(
     if (res.status === 204 || res.headers.get('content-length') === '0') {
         return;
     }
-}
-
-// eslint-disable-next-line max-len
-export async function updateDeploymentPipeline(params: UpdateDeploymentPipelinePathParams, body: UpdateDeploymentPipelineRequest, getToken?: () => Promise<string>)
-: Promise<DeploymentPipelineResponse> {
-    const { orgName = "default", projName = "default" } = params;
-    const token = getToken ? await getToken() : undefined;
-    const res = await httpPUT(
-        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/deployment-pipeline`,
-        body,
-        { token },
-    );
-    if (!res.ok) throw await res.json();
-    return res.json();
 }
 
 // eslint-disable-next-line max-len

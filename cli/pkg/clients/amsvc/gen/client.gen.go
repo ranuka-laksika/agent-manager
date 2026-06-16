@@ -155,6 +155,11 @@ type ClientInterface interface {
 	// DeleteDeploymentPipeline request
 	DeleteDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// UpdateDeploymentPipelineWithBody request with any body
+	UpdateDeploymentPipelineWithBody(ctx context.Context, orgName string, pipelineName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEnvironments request
 	ListEnvironments(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -558,11 +563,6 @@ type ClientInterface interface {
 	// GetDeploymentPipeline request
 	GetDeploymentPipeline(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateDeploymentPipelineWithBody request with any body
-	UpdateDeploymentPipelineWithBody(ctx context.Context, orgName string, projName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	UpdateDeploymentPipeline(ctx context.Context, orgName string, projName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
 	// ListLLMProxies request
 	ListLLMProxies(ctx context.Context, orgName string, projName string, params *ListLLMProxiesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -877,6 +877,30 @@ func (c *Client) CreateDeploymentPipeline(ctx context.Context, orgName string, b
 
 func (c *Client) DeleteDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteDeploymentPipelineRequest(c.Server, orgName, pipelineName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateDeploymentPipelineWithBody(ctx context.Context, orgName string, pipelineName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateDeploymentPipelineRequestWithBody(c.Server, orgName, pipelineName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateDeploymentPipelineRequest(c.Server, orgName, pipelineName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2651,30 +2675,6 @@ func (c *Client) GetDeploymentPipeline(ctx context.Context, orgName string, proj
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateDeploymentPipelineWithBody(ctx context.Context, orgName string, projName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateDeploymentPipelineRequestWithBody(c.Server, orgName, projName, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateDeploymentPipeline(ctx context.Context, orgName string, projName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateDeploymentPipelineRequest(c.Server, orgName, projName, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
 func (c *Client) ListLLMProxies(ctx context.Context, orgName string, projName string, params *ListLLMProxiesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListLLMProxiesRequest(c.Server, orgName, projName, params)
 	if err != nil {
@@ -3811,6 +3811,60 @@ func NewDeleteDeploymentPipelineRequest(server string, orgName string, pipelineN
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewUpdateDeploymentPipelineRequest calls the generic UpdateDeploymentPipeline builder with application/json body
+func NewUpdateDeploymentPipelineRequest(server string, orgName string, pipelineName string, body UpdateDeploymentPipelineJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateDeploymentPipelineRequestWithBody(server, orgName, pipelineName, "application/json", bodyReader)
+}
+
+// NewUpdateDeploymentPipelineRequestWithBody generates requests for UpdateDeploymentPipeline with any type of body
+func NewUpdateDeploymentPipelineRequestWithBody(server string, orgName string, pipelineName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "pipelineName", pipelineName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/deployment-pipelines/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -10305,60 +10359,6 @@ func NewGetDeploymentPipelineRequest(server string, orgName string, projName str
 	return req, nil
 }
 
-// NewUpdateDeploymentPipelineRequest calls the generic UpdateDeploymentPipeline builder with application/json body
-func NewUpdateDeploymentPipelineRequest(server string, orgName string, projName string, body UpdateDeploymentPipelineJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateDeploymentPipelineRequestWithBody(server, orgName, projName, "application/json", bodyReader)
-}
-
-// NewUpdateDeploymentPipelineRequestWithBody generates requests for UpdateDeploymentPipeline with any type of body
-func NewUpdateDeploymentPipelineRequestWithBody(server string, orgName string, projName string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/deployment-pipeline", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewListLLMProxiesRequest generates requests for ListLLMProxies
 func NewListLLMProxiesRequest(server string, orgName string, projName string, params *ListLLMProxiesParams) (*http.Request, error) {
 	var err error
@@ -11144,6 +11144,11 @@ type ClientWithResponsesInterface interface {
 	// DeleteDeploymentPipelineWithResponse request
 	DeleteDeploymentPipelineWithResponse(ctx context.Context, orgName string, pipelineName string, reqEditors ...RequestEditorFn) (*DeleteDeploymentPipelineResp, error)
 
+	// UpdateDeploymentPipelineWithBodyWithResponse request with any body
+	UpdateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, pipelineName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error)
+
+	UpdateDeploymentPipelineWithResponse(ctx context.Context, orgName string, pipelineName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error)
+
 	// ListEnvironmentsWithResponse request
 	ListEnvironmentsWithResponse(ctx context.Context, orgName string, params *ListEnvironmentsParams, reqEditors ...RequestEditorFn) (*ListEnvironmentsResp, error)
 
@@ -11546,11 +11551,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetDeploymentPipelineWithResponse request
 	GetDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, reqEditors ...RequestEditorFn) (*GetDeploymentPipelineResp, error)
-
-	// UpdateDeploymentPipelineWithBodyWithResponse request with any body
-	UpdateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, projName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error)
-
-	UpdateDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error)
 
 	// ListLLMProxiesWithResponse request
 	ListLLMProxiesWithResponse(ctx context.Context, orgName string, projName string, params *ListLLMProxiesParams, reqEditors ...RequestEditorFn) (*ListLLMProxiesResp, error)
@@ -12051,6 +12051,31 @@ func (r DeleteDeploymentPipelineResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r DeleteDeploymentPipelineResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateDeploymentPipelineResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *DeploymentPipelineResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateDeploymentPipelineResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateDeploymentPipelineResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14797,31 +14822,6 @@ func (r GetDeploymentPipelineResp) StatusCode() int {
 	return 0
 }
 
-type UpdateDeploymentPipelineResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *DeploymentPipelineResponse
-	JSON400      *ErrorResponse
-	JSON404      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateDeploymentPipelineResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateDeploymentPipelineResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type ListLLMProxiesResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15308,6 +15308,23 @@ func (c *ClientWithResponses) DeleteDeploymentPipelineWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseDeleteDeploymentPipelineResp(rsp)
+}
+
+// UpdateDeploymentPipelineWithBodyWithResponse request with arbitrary body returning *UpdateDeploymentPipelineResp
+func (c *ClientWithResponses) UpdateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, pipelineName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error) {
+	rsp, err := c.UpdateDeploymentPipelineWithBody(ctx, orgName, pipelineName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateDeploymentPipelineResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateDeploymentPipelineWithResponse(ctx context.Context, orgName string, pipelineName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error) {
+	rsp, err := c.UpdateDeploymentPipeline(ctx, orgName, pipelineName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateDeploymentPipelineResp(rsp)
 }
 
 // ListEnvironmentsWithResponse request returning *ListEnvironmentsResp
@@ -16595,23 +16612,6 @@ func (c *ClientWithResponses) GetDeploymentPipelineWithResponse(ctx context.Cont
 	return ParseGetDeploymentPipelineResp(rsp)
 }
 
-// UpdateDeploymentPipelineWithBodyWithResponse request with arbitrary body returning *UpdateDeploymentPipelineResp
-func (c *ClientWithResponses) UpdateDeploymentPipelineWithBodyWithResponse(ctx context.Context, orgName string, projName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error) {
-	rsp, err := c.UpdateDeploymentPipelineWithBody(ctx, orgName, projName, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateDeploymentPipelineResp(rsp)
-}
-
-func (c *ClientWithResponses) UpdateDeploymentPipelineWithResponse(ctx context.Context, orgName string, projName string, body UpdateDeploymentPipelineJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateDeploymentPipelineResp, error) {
-	rsp, err := c.UpdateDeploymentPipeline(ctx, orgName, projName, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateDeploymentPipelineResp(rsp)
-}
-
 // ListLLMProxiesWithResponse request returning *ListLLMProxiesResp
 func (c *ClientWithResponses) ListLLMProxiesWithResponse(ctx context.Context, orgName string, projName string, params *ListLLMProxiesParams, reqEditors ...RequestEditorFn) (*ListLLMProxiesResp, error) {
 	rsp, err := c.ListLLMProxies(ctx, orgName, projName, params, reqEditors...)
@@ -17515,6 +17515,53 @@ func ParseDeleteDeploymentPipelineResp(rsp *http.Response) (*DeleteDeploymentPip
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateDeploymentPipelineResp parses an HTTP response from a UpdateDeploymentPipelineWithResponse call
+func ParseUpdateDeploymentPipelineResp(rsp *http.Response) (*UpdateDeploymentPipelineResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateDeploymentPipelineResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DeploymentPipelineResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -22706,53 +22753,6 @@ func ParseGetDeploymentPipelineResp(rsp *http.Response) (*GetDeploymentPipelineR
 			return nil, err
 		}
 		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateDeploymentPipelineResp parses an HTTP response from a UpdateDeploymentPipelineWithResponse call
-func ParseUpdateDeploymentPipelineResp(rsp *http.Response) (*UpdateDeploymentPipelineResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateDeploymentPipelineResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest DeploymentPipelineResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse

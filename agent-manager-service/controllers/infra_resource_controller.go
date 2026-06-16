@@ -45,7 +45,6 @@ type InfraResourceController interface {
 	ListOrgDeploymentPipelines(w http.ResponseWriter, r *http.Request)
 	CreateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	UpdateOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
-	UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	DeleteOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request)
 	GetDataplanes(w http.ResponseWriter, r *http.Request)
 }
@@ -490,35 +489,6 @@ func (c *infraResourceController) GetProjectDeploymentPipeline(w http.ResponseWr
 
 	deploymentPipelineResponse := utils.ConvertToDeploymentPipelineResponse(deploymentPipeline)
 	utils.WriteSuccessResponse(w, http.StatusOK, deploymentPipelineResponse)
-}
-
-func (c *infraResourceController) UpdateProjectDeploymentPipeline(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	orgName := r.PathValue(utils.PathParamOrgName)
-	projectName := r.PathValue(utils.PathParamProjName)
-
-	var payload spec.UpdateDeploymentPipelineRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Error("UpdateProjectDeploymentPipeline: failed to decode request body", "error", err)
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if !requirePromotionPaths(w, payload.PromotionPaths) {
-		return
-	}
-
-	updated, err := c.infraResourceManager.UpdateProjectDeploymentPipeline(ctx, orgName, projectName, payload.DisplayName, payload.Description, convertSpecPromotionPaths(payload.PromotionPaths))
-	if err != nil {
-		log.Error("UpdateProjectDeploymentPipeline: failed to update deployment pipeline", "error", err)
-		handleCommonErrors(w, err, "Failed to update deployment pipeline")
-		return
-	}
-
-	response := utils.ConvertToDeploymentPipelineResponse(updated)
-	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 func (c *infraResourceController) DeleteOrgDeploymentPipeline(w http.ResponseWriter, r *http.Request) {

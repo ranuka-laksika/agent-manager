@@ -34,7 +34,6 @@ type InfraResourceManager interface {
 	GetProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string) (*models.DeploymentPipelineResponse, error)
 	CreateOrgDeploymentPipeline(ctx context.Context, orgName string, displayName string, description *string, projectName *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	UpdateOrgDeploymentPipeline(ctx context.Context, orgName string, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
-	UpdateProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
 	ListOrganizations(ctx context.Context, limit int, offset int) ([]*models.OrganizationResponse, int32, error)
 	GetOrganization(ctx context.Context, orgName string) (*models.OrganizationResponse, error)
 	ListProjects(ctx context.Context, orgName string, limit int, offset int) ([]*models.ProjectResponse, int32, error)
@@ -371,26 +370,6 @@ func (s *infraResourceManager) UpdateOrgDeploymentPipeline(ctx context.Context, 
 		return nil, err
 	}
 	s.logger.Info("Deployment pipeline updated successfully", "orgName", orgName, "pipelineName", pipelineName)
-	return updated, nil
-}
-
-func (s *infraResourceManager) UpdateProjectDeploymentPipeline(ctx context.Context, orgName string, projectName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
-	s.logger.Info("Updating deployment pipeline", "orgName", orgName, "projectName", projectName)
-
-	// Get the project's deployment pipeline reference
-	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
-	if err != nil {
-		s.logger.Error("Failed to get deployment pipeline", "orgName", orgName, "projectName", projectName, "error", err)
-		return nil, err
-	}
-
-	updated, err := s.ocClient.UpdateDeploymentPipeline(ctx, orgName, pipeline.Name, displayName, description, promotionPaths)
-	if err != nil {
-		s.logger.Error("Failed to update deployment pipeline", "orgName", orgName, "pipelineName", pipeline.Name, "error", err)
-		return nil, fmt.Errorf("failed to update deployment pipeline: %w", err)
-	}
-
-	s.logger.Info("Deployment pipeline updated successfully", "orgName", orgName, "projectName", projectName)
 	return updated, nil
 }
 

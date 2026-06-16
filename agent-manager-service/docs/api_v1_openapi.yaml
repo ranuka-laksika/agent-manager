@@ -2789,9 +2789,11 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/deployment-pipelines/{pipelineName}:
     put:
-      summary: Update deployment pipeline for a project
-      description: Updates the promotion paths of the deployment pipeline for the specified project
+      summary: Update a deployment pipeline
+      description: Updates the named deployment pipeline's display name, description, and promotion paths.
       operationId: updateDeploymentPipeline
       parameters:
         - name: orgName
@@ -2800,9 +2802,9 @@ paths:
           required: true
           schema:
             type: string
-        - name: projName
+        - name: pipelineName
           in: path
-          description: Project name
+          description: Deployment pipeline name
           required: true
           schema:
             type: string
@@ -2826,7 +2828,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Project or pipeline not found
+          description: Pipeline not found
           content:
             application/json:
               schema:
@@ -2837,8 +2839,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/deployment-pipelines/{pipelineName}:
     delete:
       summary: Delete a deployment pipeline
       description: Deletes the named deployment pipeline.

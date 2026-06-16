@@ -4715,6 +4715,9 @@ type AddAgentKindVersionJSONRequestBody = AddAgentKindVersionRequest
 // CreateDeploymentPipelineJSONRequestBody defines body for CreateDeploymentPipeline for application/json ContentType.
 type CreateDeploymentPipelineJSONRequestBody = CreateDeploymentPipelineRequest
 
+// UpdateDeploymentPipelineJSONRequestBody defines body for UpdateDeploymentPipeline for application/json ContentType.
+type UpdateDeploymentPipelineJSONRequestBody = UpdateDeploymentPipelineRequest
+
 // CreateEnvironmentJSONRequestBody defines body for CreateEnvironment for application/json ContentType.
 type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest
 
@@ -4828,9 +4831,6 @@ type FilterAgentRuntimeLogsJSONRequestBody = LogFilterRequest
 
 // GenerateAgentTokenJSONRequestBody defines body for GenerateAgentToken for application/json ContentType.
 type GenerateAgentTokenJSONRequestBody = TokenRequest
-
-// UpdateDeploymentPipelineJSONRequestBody defines body for UpdateDeploymentPipeline for application/json ContentType.
-type UpdateDeploymentPipelineJSONRequestBody = UpdateDeploymentPipelineRequest
 
 // CreateLLMProxyJSONRequestBody defines body for CreateLLMProxy for application/json ContentType.
 type CreateLLMProxyJSONRequestBody = CreateLLMProxyRequest

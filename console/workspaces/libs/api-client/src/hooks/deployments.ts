@@ -33,7 +33,6 @@ import {
   createDeploymentPipeline,
   updateOrgDeploymentPipeline,
   deleteDeploymentPipeline,
-  updateDeploymentPipeline,
   updateEnvironment,
   createEnvironment,
 } from '../apis';
@@ -73,7 +72,6 @@ import type {
   CreateDeploymentPipelineRequest,
   UpdateOrgDeploymentPipelinePathParams,
   DeleteDeploymentPipelinePathParams,
-  UpdateDeploymentPipelinePathParams,
   UpdateDeploymentPipelineRequest,
   UpdateEnvironmentPathParams,
   UpdateEnvironmentRequest,
@@ -279,18 +277,6 @@ export function useDeleteDeploymentPipeline() {
   });
 }
 
-export function useUpdateDeploymentPipeline() {
-  const queryClient = useQueryClient();
-  const { getToken } = useAuthHooks();
-  return useApiMutation<DeploymentPipelineResponse, unknown,
-  { params: UpdateDeploymentPipelinePathParams; body: UpdateDeploymentPipelineRequest }>({
-    action: { verb: 'update', target: 'deployment pipeline' },
-    mutationFn: ({ params, body }) => updateDeploymentPipeline(params, body, getToken),
-    onSuccess: (_, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['deployment-pipeline', params] });
-    },
-  });
-}
 
 export function useUpdateEnvironment() {
   const queryClient = useQueryClient();
