@@ -133,7 +133,16 @@ Because the challenge happens inside the TLS handshake, the public `:443` must r
 
 ## Persistence and teardown
 
-Application data (PostgreSQL), issued certificates, and the k3d cluster persist across Docker/host restarts via named volumes. To tear down, use the existing `uninstall.sh` in `deployments/quick-start/` and `docker rm -f amp-caddy`.
+Application data (PostgreSQL), issued certificates, and the k3d cluster persist across Docker/host restarts via named volumes. To tear down completely, delete the cluster, then remove the Caddy front door and its volumes (which hold the issued certificates and ACME account):
+
+```bash
+cd agent-manager/deployments/quick-start
+sudo ./uninstall.sh --delete-cluster                    # delete the k3d cluster (workloads + app data)
+sudo docker rm -f amp-caddy                              # remove the Caddy front door
+sudo docker volume rm amp-caddy-data amp-caddy-config    # drop the cached certs + ACME account
+```
+
+Use `sudo` — the installer runs Docker and k3d as root. Plain `./uninstall.sh` (without `--delete-cluster`) only removes the Helm releases and leaves the cluster running; `uninstall.sh` does not touch the Caddy container or its volumes, so remove those separately as shown.
 
 ## Connect an external gateway
 
@@ -268,9 +277,18 @@ It runs in two phases — bootstrap (Docker + tools + firewall) and the platform
 
 ## Persistence and teardown {#adv-persistence}
 
-Application data (PostgreSQL), issued certificates, and the k3d cluster persist across Docker/host restarts via named volumes. In `letsencrypt` mode the `amp-caddy-data` volume caches issued certificates and the ACME account, so restarts do not re-request them. To tear down, use the existing `uninstall.sh` in `deployments/quick-start/` and `docker rm -f amp-caddy`.
+Application data (PostgreSQL), issued certificates, and the k3d cluster persist across Docker/host restarts via named volumes. In `letsencrypt` mode the `amp-caddy-data` volume caches issued certificates and the ACME account, so restarts do not re-request them. To tear down completely:
 
-**Changing the domain or hostnames after install requires a teardown first.** The platform install is idempotent in the "create if missing" sense — on a re-run it skips releases that already exist, so editing `DOMAIN_BASE` (or the `HOST_*` overrides) and re-running does **not** reconfigure the already-installed services; only Caddy's front-door TLS changes, leaving the apps advertising the old hostnames. To move an existing install to a different domain, tear it down (`./uninstall.sh --delete-cluster`) and install again with the new config. (Switching only the `TLS_MODE` between `letsencrypt`/`byoc`/`upstream` while keeping the same hostnames is fine — that only re-renders Caddy.)
+```bash
+cd agent-manager/deployments/quick-start
+sudo ./uninstall.sh --delete-cluster                    # delete the k3d cluster (workloads + app data)
+sudo docker rm -f amp-caddy                              # remove the Caddy front door
+sudo docker volume rm amp-caddy-data amp-caddy-config    # drop the cached certs + ACME account
+```
+
+Use `sudo` (Docker and k3d run as root). Plain `./uninstall.sh` without `--delete-cluster` only removes the Helm releases and leaves the cluster running; `uninstall.sh` does not touch the Caddy container or its volumes, so remove those separately as shown.
+
+**Changing the domain or hostnames after install requires a teardown first.** The platform install is idempotent in the "create if missing" sense — on a re-run it skips releases that already exist, so editing `DOMAIN_BASE` (or the `HOST_*` overrides) and re-running does **not** reconfigure the already-installed services; only Caddy's front-door TLS changes, leaving the apps advertising the old hostnames. To move an existing install to a different domain, tear it down (`sudo ./uninstall.sh --delete-cluster`, then remove `amp-caddy` and its volumes as in [Persistence and teardown](#adv-persistence)) and install again with the new config. (Switching only the `TLS_MODE` between `letsencrypt`/`byoc`/`upstream` while keeping the same hostnames is fine — that only re-renders Caddy.)
 
 ## Connect an external gateway {#adv-external-gw}
 
