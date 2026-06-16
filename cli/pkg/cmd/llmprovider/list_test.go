@@ -71,6 +71,22 @@ func TestList_SuccessJSON(t *testing.T) {
 	}
 }
 
+func TestList_RequestsPageSize50(t *testing.T) {
+	io, _, _ := newTestIO(true)
+	clientFn, captured, closeFn := newTestClient(t, http.StatusOK, sampleListResponse())
+	defer closeFn()
+
+	err := runList(context.Background(), &ListOptions{
+		IO: io, Client: clientFn, Org: "acme", Scope: baseScope(),
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := captured.rawQuery; !strings.Contains(got, "limit=50") {
+		t.Errorf("query = %q, want it to contain limit=50", got)
+	}
+}
+
 func TestList_Table(t *testing.T) {
 	io, out, _ := newTestIO(false)
 	io.JSON = false

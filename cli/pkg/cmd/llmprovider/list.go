@@ -29,6 +29,9 @@ import (
 	"github.com/wso2/agent-manager/cli/pkg/tableprinter"
 )
 
+// defaultListLimit is the page size requested by `list`, matching `project list`.
+const defaultListLimit = 50
+
 type ListOptions struct {
 	IO           *iostreams.IOStreams
 	Client       func(context.Context) (*amsvc.ClientWithResponses, error)
@@ -68,8 +71,10 @@ func runList(ctx context.Context, o *ListOptions) error {
 		return render.Error(o.IO, o.Scope, err)
 	}
 
-	// TODO: paginate
-	resp, err := client.ListLLMProvidersWithResponse(ctx, o.Org, &amsvc.ListLLMProvidersParams{})
+	// Request a 50-item page to match `project list`; --limit/--offset paging
+	// is not exposed yet.
+	limit := int32(defaultListLimit)
+	resp, err := client.ListLLMProvidersWithResponse(ctx, o.Org, &amsvc.ListLLMProvidersParams{Limit: &limit})
 	if err != nil {
 		return render.Error(o.IO, o.Scope, clierr.Newf(clierr.Transport, "%v", err))
 	}

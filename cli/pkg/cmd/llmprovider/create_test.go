@@ -209,7 +209,34 @@ func TestCreate_MissingRequired(t *testing.T) {
 
 func TestCreate_IDWithSlash(t *testing.T) {
 	runTreeExpectViolation(t, []string{"llm-provider", "create", "bad/id", "--display-name", "X", "--template", "openai"},
-		"id must not contain '/'")
+		"id must contain only letters, digits, '-' or '_'")
+}
+
+func TestCreate_BadID(t *testing.T) {
+	runTreeExpectViolation(t, []string{"llm-provider", "create", "DX Test Bad!", "--display-name", "X", "--template", "openai"},
+		"id must contain only letters, digits, '-' or '_'")
+}
+
+func TestCreate_ContextMissingLeadingSlash(t *testing.T) {
+	runTreeExpectViolation(t, []string{"llm-provider", "create", "p", "--display-name", "X", "--template", "openai", "--context", "v1/api"},
+		"--context must start with '/'")
+}
+
+func TestCreate_ContextTrailingSlash(t *testing.T) {
+	runTreeExpectViolation(t, []string{"llm-provider", "create", "p", "--display-name", "X", "--template", "openai", "--context", "/v1/api/"},
+		"--context must not end with '/'")
+}
+
+// TestValidateCreate_RootContextOK guards that the default root context "/" is
+// not caught by the trailing-slash rule.
+func TestValidateCreate_RootContextOK(t *testing.T) {
+	err := validateCreate(&CreateOptions{
+		ID: "openai", DisplayName: "OpenAI", Template: "openai",
+		Context: "/", AuthType: "api-key",
+	})
+	if err != nil {
+		t.Fatalf("expected valid options, got %v", err)
+	}
 }
 
 func TestCreate_BadAuthType(t *testing.T) {

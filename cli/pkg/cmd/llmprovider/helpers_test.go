@@ -39,6 +39,7 @@ type capturedRequest struct {
 	called      bool
 	method      string
 	path        string
+	rawQuery    string
 	contentType string
 	body        []byte
 }
@@ -50,6 +51,7 @@ func newTestClient(t *testing.T, status int, body any) (func(context.Context) (*
 		captured.called = true
 		captured.method = r.Method
 		captured.path = r.URL.Path
+		captured.rawQuery = r.URL.RawQuery
 		captured.contentType = r.Header.Get("Content-Type")
 		if r.Body != nil {
 			raw, err := io.ReadAll(r.Body)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -87,14 +88,17 @@ func validateCreate(opts *CreateOptions) error {
 
 	if opts.ID == "" {
 		v = append(v, "id argument is required")
-	} else if strings.Contains(opts.ID, "/") {
-		v = append(v, "id must not contain '/'")
+	} else if msg := handleViolation(opts.ID); msg != "" {
+		v = append(v, msg)
 	}
 	if opts.DisplayName == "" {
 		v = append(v, "--display-name is required")
 	}
 	if opts.Template == "" {
 		v = append(v, "--template is required")
+	}
+	if msg := contextViolation(opts.Context); msg != "" {
+		v = append(v, msg)
 	}
 	if !isValidAuthType(opts.AuthType) {
 		v = append(v, fmt.Sprintf("--auth-type must be one of: %s", strings.Join(validAuthTypes, ", ")))
@@ -117,6 +121,37 @@ func validateCreate(opts *CreateOptions) error {
 
 func isValidAuthType(t string) bool {
 	return slices.Contains(validAuthTypes, t)
+}
+
+// handleRegex matches a valid resource handle: letters, digits, '-' and '_'.
+// It mirrors the server-side rule (utils.ValidateTemplateHandle).
+var handleRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+// handleViolation returns a validation message when id is not a valid resource
+// handle, or "" when it is valid: at most 255 characters and limited to
+// letters, digits, '-' and '_'. The empty case is reported separately so the
+// caller can emit the "id argument is required" message.
+func handleViolation(id string) string {
+	if len(id) > 255 {
+		return "id must be at most 255 characters"
+	}
+	if !handleRegex.MatchString(id) {
+		return "id must contain only letters, digits, '-' or '_'"
+	}
+	return ""
+}
+
+// contextViolation returns a validation message when the API context path is
+// malformed, or "" when valid. The path must start with '/' and must not end
+// with '/', except the root path "/". This mirrors the console's validation.
+func contextViolation(ctx string) string {
+	if !strings.HasPrefix(ctx, "/") {
+		return "--context must start with '/'"
+	}
+	if ctx != "/" && strings.HasSuffix(ctx, "/") {
+		return "--context must not end with '/'"
+	}
+	return ""
 }
 
 // parseGateways converts the raw --gateways values into typed UUIDs, reporting
@@ -149,7 +184,10 @@ func NewCreateCmd(f *cmdutil.Factory) *cobra.Command {
 		Long: "Create a new LLM provider in an organization.\n\n" +
 			"The endpoint URL and auth scheme are inherited from the chosen --template; " +
 			"override them with --upstream-url/--auth-type/--auth-header only when needed. " +
-			"Supply the provider credential with --api-key-stdin (recommended) or --api-key.",
+			"Supply the provider credential with --api-key-stdin (recommended) or --api-key.\n\n" +
+			"Built-in --template handles: anthropic, awsbedrock, azure-openai, azureai-foundry, " +
+			"gemini, mistralai, openai. Shell completion on --template lists the live set " +
+			"(built-in plus any custom templates) for your org.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -174,7 +212,7 @@ func NewCreateCmd(f *cmdutil.Factory) *cobra.Command {
 	cmd.Flags().StringVar(&opts.DisplayName, "display-name", "", "Human-readable display name (required)")
 	cmd.Flags().StringVar(&opts.Template, "template", "", "Provider template handle, e.g. openai, anthropic, mistralai (required)")
 	cmd.Flags().StringVar(&opts.Version, "version", defaultVersion, "Provider version")
-	cmd.Flags().StringVar(&opts.Context, "context", defaultContext, "API context path (must start with /)")
+	cmd.Flags().StringVar(&opts.Context, "context", defaultContext, "API context path (must start with /, no trailing slash)")
 	cmd.Flags().StringVar(&opts.Description, "description", "", "Provider description")
 	cmd.Flags().StringVar(&opts.UpstreamURL, "upstream-url", "", "Override the template's upstream endpoint URL")
 	cmd.Flags().StringVar(&opts.AuthType, "auth-type", defaultAuthType, "Upstream auth type: api-key, basic, bearer, or none")
