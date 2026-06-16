@@ -241,6 +241,78 @@ func CompleteBuildWithAgentContext(cmd *cobra.Command, f *Factory, args []string
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
+// CompleteLLMProviders returns sorted LLM provider handles in the resolved org.
+// Org resolution follows ResolveOrgProject(cmd, true, false). Returns nil if org
+// cannot be resolved or on any API error.
+func CompleteLLMProviders(cmd *cobra.Command, f *Factory) []string {
+	const op = "CompleteLLMProviders"
+	org, _, err := f.ResolveOrgProject(cmd, true, false)
+	if err != nil {
+		logCompletionErr(op, nil, err)
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), completionTimeout)
+	defer cancel()
+
+	client, err := f.AgentManager(ctx)
+	if err != nil {
+		logCompletionErr(op, map[string]string{"org": org}, err)
+		return nil
+	}
+	resp, err := client.ListLLMProvidersWithResponse(ctx, org, &amsvc.ListLLMProvidersParams{})
+	if err != nil {
+		logCompletionErr(op, map[string]string{"org": org}, err)
+		return nil
+	}
+	if resp.JSON200 == nil {
+		logCompletionErr(op, map[string]string{"org": org}, fmt.Errorf("status %d", resp.StatusCode()))
+		return nil
+	}
+	out := make([]string, 0, len(resp.JSON200.Providers))
+	for _, p := range resp.JSON200.Providers {
+		out = append(out, p.Id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// CompleteLLMProviderTemplates returns sorted LLM provider template handles in
+// the resolved org (including built-in system templates). Returns nil if org
+// cannot be resolved or on any API error.
+func CompleteLLMProviderTemplates(cmd *cobra.Command, f *Factory) []string {
+	const op = "CompleteLLMProviderTemplates"
+	org, _, err := f.ResolveOrgProject(cmd, true, false)
+	if err != nil {
+		logCompletionErr(op, nil, err)
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), completionTimeout)
+	defer cancel()
+
+	client, err := f.AgentManager(ctx)
+	if err != nil {
+		logCompletionErr(op, map[string]string{"org": org}, err)
+		return nil
+	}
+	resp, err := client.ListLLMProviderTemplatesWithResponse(ctx, org, &amsvc.ListLLMProviderTemplatesParams{})
+	if err != nil {
+		logCompletionErr(op, map[string]string{"org": org}, err)
+		return nil
+	}
+	if resp.JSON200 == nil {
+		logCompletionErr(op, map[string]string{"org": org}, fmt.Errorf("status %d", resp.StatusCode()))
+		return nil
+	}
+	out := make([]string, 0, len(resp.JSON200.Templates))
+	for _, t := range resp.JSON200.Templates {
+		out = append(out, t.Id)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // CompleteOrgs returns sorted organization names. Returns nil on any error
 // (no instance, network, server). Times out at 2s.
 func CompleteOrgs(cmd *cobra.Command, f *Factory) []string {
