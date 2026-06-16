@@ -400,7 +400,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
             </Grid>
             {!hideMetrics && (isSuspended ? (
                 <NoDataFound
-                    iconElement={PauseCircle}
+                    icon={<PauseCircle size={32}/>}
                     message="Environment Suspended"
                     subtitle="Metrics are unavailable while the environment is suspended."
                     disableBackground

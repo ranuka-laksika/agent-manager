@@ -95,12 +95,20 @@ function OrgGuard() {
   const { orgId } = useParams();
   const { data, isLoading, error } = useListOrganizations();
   const orgExists = data?.organizations?.some((o) => o.name === orgId);
+  // A failed list query is a load failure (network/server/auth), not a missing
+  // org — only treat the org as "not found" when the list loaded successfully
+  // but does not contain it.
+  const loadFailed = !!error;
   return (
     <GuardedOutlet
       isLoading={isLoading}
-      isError={!!error || (!isLoading && !orgExists)}
-      title="Organization Not Found"
-      message={`The organization "${orgId}" doesn't exist or you don't have access to it.`}
+      isError={loadFailed || (!isLoading && !orgExists)}
+      title={loadFailed ? "Failed to Load Organization" : "Organization Not Found"}
+      message={
+        loadFailed
+          ? "Something went wrong while loading your organizations. Please try again."
+          : `The organization "${orgId}" doesn't exist or you don't have access to it.`
+      }
     />
   );
 }

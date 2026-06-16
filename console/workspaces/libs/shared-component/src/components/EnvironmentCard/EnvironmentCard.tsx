@@ -47,6 +47,7 @@ import {
   FlaskConical as TryOutlined,
   Link as LinkOutlined,
   PauseCircle,
+  Play,
   Tag,
   Wrench,
 } from "@wso2/oxygen-ui-icons-react";
@@ -270,6 +271,15 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
   }
 
   // ── Internal agent — deployment exists ────────────────────────────────────
+  const deploymentStatus = currentDeployment.status as DeploymentStatus;
+  // Metrics/traces and monitor sections only carry meaningful data while the
+  // deployment is serving traffic (active) or has failed while running (error).
+  // For idle/transitional states (deploying, suspended) there is nothing live
+  // to show, so we hide them and surface an empty state instead.
+  const showObservability =
+    deploymentStatus === DeploymentStatus.ACTIVE ||
+    deploymentStatus === DeploymentStatus.ERROR ||
+    deploymentStatus === DeploymentStatus.FAILED;
   return (
     <Card variant="outlined">
       <CardContent>
@@ -302,6 +312,9 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             {(currentDeployment?.status === DeploymentStatus.ERROR ||
               currentDeployment?.status === DeploymentStatus.FAILED) && (
               <EnvStatus status={currentDeployment.status as DeploymentStatus} />
+            )}
+            {currentDeployment?.status === DeploymentStatus.SUSPENDED && (
+              <EnvStatus status={DeploymentStatus.SUSPENDED} />
             )}
           </Box>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
@@ -420,6 +433,29 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
               Deployment failed. Check the deployment page for more details.
             </Alert>
           )}
+          {currentDeployment.status === DeploymentStatus.SUSPENDED && (
+            <NoDataFound
+              disableBackground
+              message="Suspended"
+              icon={<PauseCircle size={32} />}
+              subtitle="This deployment is currently suspended. Resume it from the deployment page to make the agent available again."
+              action={
+                <Button
+                  startIcon={<Play size={16} />}
+                  variant="outlined"
+                  component={Link}
+                  to={generatePath(
+                    absoluteRouteMap.children.org.children.projects.children
+                      .agents.children.deployment.path,
+                    { orgId, projectId, agentId }
+                  )}
+                  size="small"
+                >
+                  Go to Deployment
+                </Button>
+              }
+            />
+          )}
           {currentDeployment.status === DeploymentStatus.ACTIVE && (
             <Box display="flex" flexGrow={1} flexDirection="column" width="100%" gap={isKindOutdated ? 2 : 4} alignItems="flex-start">
               {isKindOutdated && (
@@ -440,7 +476,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             </Box>
           )}
         </Box>
-        {bottomContent}
+        {showObservability && bottomContent}
       </CardContent>
     </Card>
   );
