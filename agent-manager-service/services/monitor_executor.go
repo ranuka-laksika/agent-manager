@@ -408,18 +408,12 @@ func (e *monitorExecutor) serializeEvaluators(orgName string, evaluators []model
 		for k, v := range eval.Config {
 			jobConfig[k] = v
 		}
-		// When a proxy is in use, always normalise the model to a bare name first,
-		// then optionally prepend the provider prefix. This prevents a stale
-		// "oldprovider/model" value from leaking through when the provider changes.
+		// When a proxy is in use, qualify the user-supplied model with the
+		// gateway provider prefix the eval job expects. The model name is
+		// trusted as-is — any vendor namespace such as "meta/" is preserved —
+		// see ApplyProviderPrefix.
 		if model, ok := jobConfig["model"].(string); ok && model != "" && templateHandle != "" {
-			if idx := strings.Index(model, "/"); idx != -1 {
-				model = model[idx+1:]
-			}
-			if hasPrefix {
-				jobConfig["model"] = providerPrefix + "/" + model
-			} else {
-				jobConfig["model"] = model
-			}
+			jobConfig["model"] = catalog.ApplyProviderPrefix(model, providerPrefix, hasPrefix)
 		}
 		je := evalJobEvaluator{
 			Identifier:  eval.Identifier,

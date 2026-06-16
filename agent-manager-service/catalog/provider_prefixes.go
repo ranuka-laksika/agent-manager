@@ -39,3 +39,17 @@ func GetProviderPrefix(templateHandle string) (string, bool) {
 	prefix, ok := providerModelPrefixes[templateHandle]
 	return prefix, ok
 }
+
+// ApplyProviderPrefix qualifies a user-supplied model name with the gateway
+// provider prefix the evaluation job's LLM client expects (e.g. "openai/gpt-4").
+// The model name is trusted and passed through unchanged — including any vendor
+// namespace such as "meta/" in "meta/llama-3.1-70b-instruct", so an
+// OpenAI-compatible gateway like NVIDIA receives the exact model id rather than
+// a truncated one (issue #951). When hasPrefix is false (unknown template) the
+// bare model name is returned.
+func ApplyProviderPrefix(model, providerPrefix string, hasPrefix bool) string {
+	if hasPrefix {
+		return providerPrefix + "/" + model
+	}
+	return model
+}
