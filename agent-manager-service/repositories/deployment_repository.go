@@ -50,6 +50,7 @@ type DeploymentRepository interface {
 
 	// Gateway mapping methods (derived from deployment status)
 	GetDeployedGatewaysByProvider(artifactUUID uuid.UUID, orgUUID string) ([]string, error)
+	GetTrackedGatewaysByProvider(artifactUUID uuid.UUID, orgUUID string) ([]string, error)
 	GetDeployedProvidersByGateway(gatewayUUID uuid.UUID, orgUUID string) ([]string, error)
 	IsProviderDeployedToGateway(artifactUUID uuid.UUID, gatewayUUID uuid.UUID, orgUUID string) (bool, error)
 	GetByArtifactAndGateway(artifactUUID, gatewayUUID, orgUUID string) (*models.Deployment, error)
@@ -177,7 +178,7 @@ func (r *DeploymentRepo) Delete(deploymentID, artifactUUID, orgUUID string) erro
 // GetCurrentByGateway retrieves the currently DEPLOYED deployment for an artifact on a gateway
 func (r *DeploymentRepo) GetCurrentByGateway(artifactUUID, gatewayID, orgUUID string) (*models.Deployment, error) {
 	var deployment models.Deployment
-	err := r.db.Table("deployments d").
+	result := r.db.Table("deployments d").
 		Select("d.deployment_id, d.name, d.artifact_uuid, d.organization_name, d.gateway_uuid, "+
 			"d.base_deployment_id, d.content, d.metadata, d.created_at, "+
 			"s.status, s.updated_at AS status_updated_at").
@@ -189,12 +190,13 @@ func (r *DeploymentRepo) GetCurrentByGateway(artifactUUID, gatewayID, orgUUID st
 			artifactUUID, gatewayID, orgUUID, string(models.DeploymentStatusDeployed)).
 		Order("d.created_at DESC").
 		Limit(1).
-		Scan(&deployment).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, err
-		}
-		return nil, err
+		Scan(&deployment)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		//nolint:nilnil // A nil deployment with nil error means no active deployment; callers handle deployment == nil.
+		return nil, nil
 	}
 	return &deployment, nil
 }
@@ -398,6 +400,22 @@ func (r *DeploymentRepo) GetDeployedGatewaysByProvider(artifactUUID uuid.UUID, o
 	err := r.db.Table("deployment_status").
 		Where("artifact_uuid = ? AND organization_name = ? AND status = ?",
 			artifactUUID, orgUUID, models.DeploymentStatusDeployed).
+		Pluck("gateway_uuid", &gatewayUUIDs).Error
+	if err != nil {
+		return nil, err
+	}
+
+	return gatewayUUIDs, nil
+}
+
+// GetTrackedGatewaysByProvider returns all gateway UUIDs where this provider has a
+// deployment_status row, regardless of whether the current status is DEPLOYED or
+// UNDEPLOYED. Used by save-time redeploy flows that must reach every gateway the proxy
+// has ever been pushed to, including ones whose last deploy ack failed.
+func (r *DeploymentRepo) GetTrackedGatewaysByProvider(artifactUUID uuid.UUID, orgUUID string) ([]string, error) {
+	var gatewayUUIDs []string
+	err := r.db.Table("deployment_status").
+		Where("artifact_uuid = ? AND organization_name = ?", artifactUUID, orgUUID).
 		Pluck("gateway_uuid", &gatewayUUIDs).Error
 	if err != nil {
 		return nil, err

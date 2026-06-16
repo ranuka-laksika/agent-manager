@@ -55,6 +55,7 @@
     "@agent-management-platform/metrics": "workspace:*",
     "@agent-management-platform/eval": "workspace:*",
     "@agent-management-platform/llm-providers": "workspace:*",
+    "@agent-management-platform/mcp-proxies": "workspace:*",
     "@agent-management-platform/gateways": "workspace:*",
     "@agent-management-platform/identities": "workspace:*",
     "@agent-management-platform/deployment-pipelines": "workspace:*",

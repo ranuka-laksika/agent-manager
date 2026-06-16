@@ -34,6 +34,7 @@ export default defineConfig({
       { find: '@agent-management-platform/metrics', replacement: path.resolve(__dirname, '../../workspaces/pages/metrics/src') },
       { find: '@agent-management-platform/eval', replacement: path.resolve(__dirname, '../../workspaces/pages/eval/src') },
       { find: '@agent-management-platform/llm-providers', replacement: path.resolve(__dirname, '../../workspaces/pages/llm-providers/src') },
+      { find: '@agent-management-platform/mcp-proxies', replacement: path.resolve(__dirname, '../../workspaces/pages/mcp-proxies/src') },
       { find: '@agent-management-platform/gateways', replacement: path.resolve(__dirname, '../../workspaces/pages/gateways/src') },
       { find: '@agent-management-platform/agent-security', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-security/src') },
       { find: '@agent-management-platform/agent-kind', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-kind/src') },

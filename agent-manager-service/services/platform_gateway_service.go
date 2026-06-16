@@ -319,6 +319,22 @@ func (s *PlatformGatewayService) GetGateway(gatewayID, orgName string) (*Gateway
 	return response, nil
 }
 
+// SaveGatewayPolicyManifest stores the latest gateway-reported policy manifest.
+func (s *PlatformGatewayService) SaveGatewayPolicyManifest(gatewayID string, manifest map[string]interface{}) error {
+	gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
+	if err != nil {
+		return err
+	}
+	if gateway == nil {
+		return utils.ErrGatewayNotFound
+	}
+
+	gateway.Manifest = manifest
+	gateway.UpdatedAt = time.Now().UTC()
+
+	return s.gatewayRepo.UpdateGateway(gateway)
+}
+
 // UpdateGateway updates gateway details
 func (s *PlatformGatewayService) UpdateGateway(
 	gatewayID, orgName string,

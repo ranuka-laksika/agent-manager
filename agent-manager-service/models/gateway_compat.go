@@ -81,6 +81,18 @@ type LLMProxyDeploymentEvent struct {
 	Status         string `json:"status"`
 }
 
+// MCPProxyDeploymentEvent represents an MCP proxy deployment event.
+type MCPProxyDeploymentEvent struct {
+	ProxyID      string    `json:"proxyId"`
+	DeploymentID string    `json:"deploymentId"`
+	PerformedAt  time.Time `json:"performedAt"`
+}
+
+// MCPProxyDeletionEvent represents an MCP proxy deletion event.
+type MCPProxyDeletionEvent struct {
+	ProxyID string `json:"proxyId"`
+}
+
 // LLMProxyUndeploymentEvent represents an LLM proxy undeployment event
 type LLMProxyUndeploymentEvent struct {
 	ProxyID        string `json:"proxyId"`

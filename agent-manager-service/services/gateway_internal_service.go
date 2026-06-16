@@ -99,6 +99,29 @@ func NewGatewayInternalAPIService(
 	}
 }
 
+// GetActiveMCPProxyDeploymentByGateway retrieves the currently deployed MCP artifact for the
+// given UUID on this gateway. The UUID may identify a source MCP proxy (mcp_proxies) or an
+// agent-scoped mapping artifact (artifacts); both live in the deployments table keyed by
+// artifact_uuid, so a single lookup handles both cases.
+func (s *GatewayInternalAPIService) GetActiveMCPProxyDeploymentByGateway(ctx context.Context, proxyID, orgName, gatewayID string) (map[string]string, error) {
+	deployment, err := s.deploymentRepo.GetCurrentByGateway(proxyID, gatewayID, orgName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get deployment: %w", err)
+	}
+	if deployment == nil {
+		return nil, utils.ErrMCPProxyNotFound
+	}
+
+	resolvedYaml, err := s.resolveAllSecretsInYAML(ctx, string(deployment.Content))
+	if err != nil {
+		slog.Error("GatewayInternalAPIService: failed to resolve secrets in MCP proxy YAML",
+			"proxyID", proxyID, "error", err)
+		return nil, fmt.Errorf("failed to resolve secrets: %w", err)
+	}
+
+	return map[string]string{proxyID: resolvedYaml}, nil
+}
+
 // GetActiveDeploymentByGateway retrieves the currently deployed API artifact for a specific gateway
 func (s *GatewayInternalAPIService) GetActiveDeploymentByGateway(apiID, orgName, gatewayID string) (map[string]string, error) {
 	// Get the active deployment for this API on this gateway
@@ -237,18 +260,13 @@ func (s *GatewayInternalAPIService) resolveSecretsInYAML(ctx context.Context, ya
 		return yamlContent, nil // No secretRef, return as-is
 	}
 
-	// Decrypt the encrypted value
-	ciphertext, err := base64.StdEncoding.DecodeString(secretRef)
+	plaintext, err := s.decryptSecretRef(secretRef)
 	if err != nil {
-		return "", fmt.Errorf("failed to base64-decode secretRef: %w", err)
-	}
-	plaintext, err := utils.DecryptBytes(ciphertext, s.encryptionKey)
-	if err != nil {
-		return "", fmt.Errorf("failed to decrypt secretRef: %w", err)
+		return "", err
 	}
 
 	// Replace secretRef with decrypted value
-	auth["value"] = string(plaintext)
+	auth["value"] = plaintext
 	delete(auth, "secretRef")
 
 	// Re-marshal to YAML
@@ -258,4 +276,80 @@ func (s *GatewayInternalAPIService) resolveSecretsInYAML(ctx context.Context, ya
 	}
 
 	return string(resolved), nil
+}
+
+// resolveAllSecretsInYAML walks the entire YAML and decrypts every `secretRef` field it
+// finds, replacing it with `value: <plaintext>`. Use this when secrets may appear at
+// multiple or unknown locations in the doc (e.g. MCP proxy YAML, where the upstream auth
+// is re-expressed as headers inside a set-headers policy). For YAMLs with a single
+// known secret location, prefer resolveSecretsInYAML — it's targeted and won't touch
+// any field outside the specified path.
+func (s *GatewayInternalAPIService) resolveAllSecretsInYAML(_ context.Context, yamlContent string) (string, error) {
+	var doc interface{}
+	if err := yaml.Unmarshal([]byte(yamlContent), &doc); err != nil {
+		return "", fmt.Errorf("failed to parse YAML: %w", err)
+	}
+	changed, err := s.decryptSecretRefsIn(doc)
+	if err != nil {
+		return "", err
+	}
+	if !changed {
+		return yamlContent, nil
+	}
+	out, err := yaml.Marshal(doc)
+	if err != nil {
+		return "", fmt.Errorf("failed to re-marshal YAML after secret resolution: %w", err)
+	}
+	return string(out), nil
+}
+
+// decryptSecretRefsIn recursively visits v. For every map that has a non-empty string
+// `secretRef`, it decrypts the value and rewrites the map to carry `value: <plaintext>`
+// instead. Returns true if any rewrite happened.
+func (s *GatewayInternalAPIService) decryptSecretRefsIn(v interface{}) (bool, error) {
+	switch x := v.(type) {
+	case map[string]interface{}:
+		changed := false
+		if ref, ok := x["secretRef"].(string); ok && ref != "" {
+			plaintext, err := s.decryptSecretRef(ref)
+			if err != nil {
+				return false, err
+			}
+			x["value"] = plaintext
+			delete(x, "secretRef")
+			changed = true
+		}
+		for _, child := range x {
+			c, err := s.decryptSecretRefsIn(child)
+			if err != nil {
+				return changed, err
+			}
+			changed = changed || c
+		}
+		return changed, nil
+	case []interface{}:
+		changed := false
+		for _, child := range x {
+			c, err := s.decryptSecretRefsIn(child)
+			if err != nil {
+				return changed, err
+			}
+			changed = changed || c
+		}
+		return changed, nil
+	default:
+		return false, nil
+	}
+}
+
+func (s *GatewayInternalAPIService) decryptSecretRef(secretRef string) (string, error) {
+	ciphertext, err := base64.StdEncoding.DecodeString(secretRef)
+	if err != nil {
+		return "", fmt.Errorf("failed to base64-decode secretRef: %w", err)
+	}
+	plaintext, err := utils.DecryptBytes(ciphertext, s.encryptionKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt secretRef: %w", err)
+	}
+	return string(plaintext), nil
 }

@@ -41,9 +41,9 @@ import {
 } from "../form/schema";
 import { useValidatedForm } from "../hooks/useValidatedForm";
 import {
-  GuardrailsSection,
-  type GuardrailSelection,
-} from "./GuardrailsSection";
+  PolicyListSection,
+  type PolicySelection as GuardrailSelection,
+} from "@agent-management-platform/shared-component";
 import { useListGateways } from "@agent-management-platform/api-client";
 import { useParams } from "react-router-dom";
 
@@ -522,11 +522,25 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
       </Collapse>
       {/* Guardrails */}
       <Collapse in={!!formData.templateId}>
-        <GuardrailsSection
-          guardrails={guardrails}
-          onAddGuardrail={handleAddGuardrail}
-          onEditGuardrail={handleEditGuardrail}
-          onRemoveGuardrail={handleRemoveGuardrail}
+        <PolicyListSection
+          title="Guardrails"
+          description="Add safety policies to enforce consistent protections."
+          addButtonLabel="Add Guardrail"
+          drawerAddTitle="Add Guardrail"
+          drawerEditTitle="Edit Guardrail"
+          drawerAddSubtitle="Choose a guardrail to configure advanced options."
+          drawerEditSubtitle="Update the guardrail configuration."
+          policyNoun="guardrail"
+          loadingLabel="Loading guardrails..."
+          searchPlaceholder="Search guardrails..."
+          catalogErrorLabel="Failed to load guardrails."
+          emptySearchTitle="No guardrails match your search"
+          emptyCatalogTitle="No guardrails available"
+          emptyCatalogDescription="No guardrail policies are available in the catalog."
+          policies={guardrails}
+          onAdd={handleAddGuardrail}
+          onEdit={handleEditGuardrail}
+          onRemove={handleRemoveGuardrail}
         />
       </Collapse>
       <Collapse in={!!formData.templateId}>

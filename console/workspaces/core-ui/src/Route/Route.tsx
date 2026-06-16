@@ -28,8 +28,11 @@ import {
   LazyOverviewComponent,
   LazyConfigureComponent,
   LazyLLMProvidersOrg,
+  LazyMCPProxiesOrg,
   LazyAddLLMProvidersComponent,
   LazyLLMProvidersComponent, LazyViewLLMProviderComponent, LazyAddLLMProvidersOrg,
+  LazyAddMCPServerComponent,
+  LazyViewMCPServerComponent,
   LazyGatewaysOrg,
   LazyIdentitiesOrg,
   LazyDeploymentPipelinesOrg,
@@ -159,6 +162,12 @@ export function RootRouter() {
                 relativeRouteMap.children.org.children.llmProviders.path + "/*"
               }
               element={<LazyLLMProvidersOrg />}
+            />
+            <Route
+              path={
+                relativeRouteMap.children.org.children.mcpProxies.path + "/*"
+              }
+              element={<LazyMCPProxiesOrg />}
             />
             <Route
               path={
@@ -333,6 +342,40 @@ export function RootRouter() {
                   element={
                     <Suspense fallback={<LoadingFallback />}>
                       <LazyViewLLMProviderComponent />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path={
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.path +
+                    "/" +
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.children.mcpProxies.path +
+                    "/" +
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.children.mcpProxies.children.add.path
+                  }
+                  element={
+                    <Suspense fallback={<LoadingFallback />}>
+                      <LazyAddMCPServerComponent />
+                    </Suspense>
+                  }
+                />
+                <Route
+                  path={
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.path +
+                    "/" +
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.children.mcpProxies.path +
+                    "/" +
+                    relativeRouteMap.children.org.children.projects.children
+                      .agents.children.configure.children.mcpProxies.children.view.path
+                  }
+                  element={
+                    <Suspense fallback={<LoadingFallback />}>
+                      <LazyViewMCPServerComponent />
                     </Suspense>
                   }
                 />

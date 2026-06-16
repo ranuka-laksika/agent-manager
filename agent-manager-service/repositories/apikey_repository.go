@@ -26,6 +26,7 @@ import (
 type APIKeyRepository interface {
 	Upsert(key *models.StoredAPIKey) error
 	Delete(artifactUUID, name string) error
+	ListByArtifact(artifactUUID string) ([]models.StoredAPIKey, error)
 	ListByArtifactKind(orgName, kind string) ([]models.StoredAPIKey, error)
 	// ListByArtifactKindAndEnvs returns all active API keys for artifacts of a given kind
 	// whose handle encodes one of the supplied environment UUIDs (handle format: "project/agent/<envUUID>").
@@ -63,6 +64,13 @@ func (r *APIKeyRepo) Upsert(key *models.StoredAPIKey) error {
 func (r *APIKeyRepo) Delete(artifactUUID, name string) error {
 	return r.db.Where("artifact_uuid = ? AND name = ?", artifactUUID, name).
 		Delete(&models.StoredAPIKey{}).Error
+}
+
+// ListByArtifact returns all persisted API keys for a single artifact UUID.
+func (r *APIKeyRepo) ListByArtifact(artifactUUID string) ([]models.StoredAPIKey, error) {
+	var keys []models.StoredAPIKey
+	err := r.db.Where("artifact_uuid = ?", artifactUUID).Find(&keys).Error
+	return keys, err
 }
 
 // ListByArtifactKind returns all active API keys for artifacts of a given kind (e.g., "LlmProvider", "LlmProxy").

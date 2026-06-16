@@ -112,6 +112,22 @@ export const rootRouteMap: AppRoute = {
                         },
                     },
                 },
+                mcpProxies: {
+                    path: 'mcp-proxies',
+                    index: true,
+                    children: {
+                        add: {
+                            path: 'add',
+                            index: true,
+                            children: {},
+                        },
+                        view: {
+                            path: 'view/:proxyId',
+                            index: true,
+                            children: {},
+                        },
+                    },
+                },
                 evaluators: {
                     path: 'evaluators',
                     index: true,
@@ -220,6 +236,22 @@ export const rootRouteMap: AppRoute = {
                                                 },
                                                 edit: {
                                                     path: 'edit/:configId',
+                                                    index: true,
+                                                    children: {},
+                                                },
+                                            },
+                                        },
+                                        mcpProxies: {
+                                            path: 'mcp-proxies',
+                                            index: true,
+                                            children: {
+                                                add: {
+                                                    path: 'add',
+                                                    index: true,
+                                                    children: {},
+                                                },
+                                                view: {
+                                                    path: 'view/:proxyId',
                                                     index: true,
                                                     children: {},
                                                 },

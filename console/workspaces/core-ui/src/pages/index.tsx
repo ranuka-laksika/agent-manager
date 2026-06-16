@@ -23,12 +23,13 @@ import {
   environmentsMetaData,
 } from "@agent-management-platform/deployment-pipelines";
 import { metaData as agentSecurityMetadata } from "@agent-management-platform/agent-security";
-import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMProviderComponent } from "@agent-management-platform/configure-agent";
+import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMProviderComponent, AddMCPServerComponent, ViewMCPServerComponent } from "@agent-management-platform/configure-agent";
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
 import { metaData as identitiesMetadata } from "@agent-management-platform/identities";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
+import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
 import { metaData as logsMetadata } from "@agent-management-platform/logs";
 import { metaData as metricsMetadata } from "@agent-management-platform/metrics";
@@ -53,6 +54,8 @@ export const LazySecurityComponent = agentSecurityMetadata.levels!.component as 
 export const LazyConfigureComponent = configureAgentMetadata.component as FC;
 export const LazyAddLLMProvidersComponent = AddLLMProviderComponent as FC;
 export const LazyViewLLMProviderComponent = ViewLLMProviderComponent as FC;
+export const LazyAddMCPServerComponent = AddMCPServerComponent as FC;
+export const LazyViewMCPServerComponent = ViewMCPServerComponent as FC;
 
 // Deploy
 export const LazyDeploymentComponent = deploymentMetadata.levels!.component as FC;
@@ -89,6 +92,9 @@ export const LazyLLMProvidersComponent = llmProvidersMetadata.levels!.component 
 export const LazyAddLLMProvidersOrg =
   llmProvidersMetadata.levels!.addLLMProvidersOrganization as FC;
 
+// MCP Proxies
+export const LazyMCPProxiesOrg = mcpProxiesMetadata.levels!.organization as FC;
+
 // Gateways
 export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 
@@ -118,6 +124,5 @@ export const LazyAddNewProject = lazy(() =>
     default: module.metaData.component as ComponentType,
   }))
 );
-
 
 

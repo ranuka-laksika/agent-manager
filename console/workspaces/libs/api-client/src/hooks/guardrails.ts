@@ -17,7 +17,10 @@
  */
 
 import { useAuthHooks } from "@agent-management-platform/auth";
-import { globalConfig, type GuardrailCapabilities } from "@agent-management-platform/types";
+import {
+  globalConfig,
+  type GuardrailCapabilities,
+} from "@agent-management-platform/types";
 import { useApiQuery } from "./react-query-notifications";
 
 export interface GuardrailDefinition {
@@ -58,10 +61,10 @@ const NON_GUARDRAIL_POLICY_EXCLUDELIST = new Set([
 // Typed as Record<keyof GuardrailCapabilities, ...> so adding a new capability flag
 // without a corresponding policy entry (or vice versa) is a compile error.
 const CAPABILITY_POLICY_MAP: Record<keyof GuardrailCapabilities, string[]> = {
-  awsBedrock:         ["aws-bedrock-guardrail"],
+  awsBedrock: ["aws-bedrock-guardrail"],
   azureContentSafety: ["azure-content-safety-content-moderation"],
-  graniteGuardian:    ["granite-guardian-prompt-injection"],
-  nemoGuard:          ["nvidia-nemoguard-content-safety"],
+  graniteGuardian: ["granite-guardian-prompt-injection"],
+  nemoGuard: ["nvidia-nemoguard-content-safety"],
   semanticGuardrails: ["semantic-prompt-guard", "semantic-cache"],
 };
 
@@ -82,14 +85,20 @@ export function filterGuardrailPolicies(
   capabilities?: GuardrailCapabilities,
 ): GuardrailDefinition[] {
   const enabledCapabilityPolicies = new Set(
-    (Object.entries(CAPABILITY_POLICY_MAP) as [keyof GuardrailCapabilities, string[]][])
+    (
+      Object.entries(CAPABILITY_POLICY_MAP) as [
+        keyof GuardrailCapabilities,
+        string[],
+      ][]
+    )
       .filter(([key]) => capabilities?.[key])
       .flatMap(([, names]) => names),
   );
 
   return policies.filter((p) => {
     if (NON_GUARDRAIL_POLICY_EXCLUDELIST.has(p.name)) return false;
-    if (ALL_CAPABILITY_GATED_POLICIES.has(p.name)) return enabledCapabilityPolicies.has(p.name);
+    if (ALL_CAPABILITY_GATED_POLICIES.has(p.name))
+      return enabledCapabilityPolicies.has(p.name);
     return true;
   });
 }
@@ -99,13 +108,13 @@ export interface GuardrailsCatalogResponse {
   data: GuardrailDefinition[];
 }
 
-export function useGuardrailsCatalog() {
+export function useGuardrailsCatalog(enabled = true) {
   const url = globalConfig.guardrailsCatalogUrl;
   const { getToken } = useAuthHooks();
 
   return useApiQuery<GuardrailsCatalogResponse>({
     queryKey: ["Guardrails catalog", url],
-    enabled: Boolean(url),
+    enabled: enabled && Boolean(url),
     queryFn: async () => {
       if (!url) {
         throw new Error("Guardrails catalog URL is not configured.");
@@ -113,9 +122,7 @@ export function useGuardrailsCatalog() {
 
       const token = await getToken();
       const res = await fetch(url, {
-        headers: token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!res.ok) {
         const text = await res.text().catch(() => "");
@@ -146,37 +153,31 @@ export function useGuardrailPolicyDefinition(
   const enabled = Boolean(baseUrl && name && version);
 
   return useApiQuery<string>({
-    queryKey: [
-      "Guardrail policy definition", baseUrl, name, version,
-    ],
+    queryKey: ["Guardrail policy definition", baseUrl, name, version],
     enabled,
     queryFn: async () => {
       if (!baseUrl || !name || !version) {
         throw new Error(
-          "Guardrails definition base URL, policy name,"
-          + " and version are required.",
+          "Guardrails definition base URL, policy name," +
+            " and version are required.",
         );
       }
 
       const token = await getToken();
       const url =
-        `${baseUrl}/${encodeURIComponent(name)}`
-        + `/versions/${encodeURIComponent(version)}`
-        + `/definition`;
+        `${baseUrl}/${encodeURIComponent(name)}` +
+        `/versions/${encodeURIComponent(version)}` +
+        `/definition`;
       const res = await fetch(url, {
-        headers: token
-          ? { Authorization: `Bearer ${token}` }
-          : undefined,
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
         throw new Error(
-          errText
-          || `Failed to fetch policy definition: ${res.status}`,
+          errText || `Failed to fetch policy definition: ${res.status}`,
         );
       }
       return res.text();
     },
   });
 }
-

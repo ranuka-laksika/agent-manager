@@ -67,6 +67,8 @@ func (f *CatalogListFilters) Validate() error {
 			CatalogKindLLMProvider: true,
 			CatalogKindAgent:       true,
 			CatalogKindMCP:         true,
+			CatalogKindMCPProxy:    true,
+			CatalogKindMCPMapping:  true,
 		}
 		if !validKinds[f.Kind] {
 			return fmt.Errorf("invalid kind: %s", f.Kind)

@@ -417,6 +417,10 @@
       "projectFolder": "workspaces/pages/llm-providers"
     },
     {
+      "packageName": "@agent-management-platform/mcp-proxies",
+      "projectFolder": "workspaces/pages/mcp-proxies"
+    },
+    {
       "packageName": "@agent-management-platform/gateways",
       "projectFolder": "workspaces/pages/gateways"
     },

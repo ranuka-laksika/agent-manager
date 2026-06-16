@@ -229,6 +229,7 @@ func (r *GatewayRepo) UpdateGateway(gateway *models.Gateway) error {
 			"description":  gateway.Description,
 			"is_critical":  gateway.IsCritical,
 			"properties":   gateway.Properties,
+			"manifest":     gateway.Manifest,
 			"updated_at":   gateway.UpdatedAt,
 		})
 	if res.Error != nil {

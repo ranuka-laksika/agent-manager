@@ -432,6 +432,25 @@ type ClientInterface interface {
 
 	RotateAgentAPIKey(ctx context.Context, orgName string, projName string, agentName string, envID string, keyName string, body RotateAgentAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentMCPConfigs request
+	ListAgentMCPConfigs(ctx context.Context, orgName string, projName string, agentName string, params *ListAgentMCPConfigsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateAgentMCPConfigWithBody request with any body
+	CreateAgentMCPConfigWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, body CreateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAgentMCPConfig request
+	DeleteAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentMCPConfig request
+	GetAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateAgentMCPConfigWithBody request with any body
+	UpdateAgentMCPConfigWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAgentMetricsWithBody request with any body
 	GetAgentMetricsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2070,6 +2089,90 @@ func (c *Client) RotateAgentAPIKeyWithBody(ctx context.Context, orgName string, 
 
 func (c *Client) RotateAgentAPIKey(ctx context.Context, orgName string, projName string, agentName string, envID string, keyName string, body RotateAgentAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRotateAgentAPIKeyRequest(c.Server, orgName, projName, agentName, envID, keyName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAgentMCPConfigs(ctx context.Context, orgName string, projName string, agentName string, params *ListAgentMCPConfigsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentMCPConfigsRequest(c.Server, orgName, projName, agentName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAgentMCPConfigWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentMCPConfigRequestWithBody(c.Server, orgName, projName, agentName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, body CreateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateAgentMCPConfigRequest(c.Server, orgName, projName, agentName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAgentMCPConfigRequest(c.Server, orgName, projName, agentName, configId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentMCPConfigRequest(c.Server, orgName, projName, agentName, configId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentMCPConfigWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentMCPConfigRequestWithBody(c.Server, orgName, projName, agentName, configId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateAgentMCPConfigRequest(c.Server, orgName, projName, agentName, configId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7825,6 +7928,331 @@ func NewRotateAgentAPIKeyRequestWithBody(server string, orgName string, projName
 	return req, nil
 }
 
+// NewListAgentMCPConfigsRequest generates requests for ListAgentMCPConfigs
+func NewListAgentMCPConfigsRequest(server string, orgName string, projName string, agentName string, params *ListAgentMCPConfigsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateAgentMCPConfigRequest calls the generic CreateAgentMCPConfig builder with application/json body
+func NewCreateAgentMCPConfigRequest(server string, orgName string, projName string, agentName string, body CreateAgentMCPConfigJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateAgentMCPConfigRequestWithBody(server, orgName, projName, agentName, "application/json", bodyReader)
+}
+
+// NewCreateAgentMCPConfigRequestWithBody generates requests for CreateAgentMCPConfig with any type of body
+func NewCreateAgentMCPConfigRequestWithBody(server string, orgName string, projName string, agentName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteAgentMCPConfigRequest generates requests for DeleteAgentMCPConfig
+func NewDeleteAgentMCPConfigRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAgentMCPConfigRequest generates requests for GetAgentMCPConfig
+func NewGetAgentMCPConfigRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateAgentMCPConfigRequest calls the generic UpdateAgentMCPConfig builder with application/json body
+func NewUpdateAgentMCPConfigRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateAgentMCPConfigRequestWithBody(server, orgName, projName, agentName, configId, "application/json", bodyReader)
+}
+
+// NewUpdateAgentMCPConfigRequestWithBody generates requests for UpdateAgentMCPConfig with any type of body
+func NewUpdateAgentMCPConfigRequestWithBody(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetAgentMetricsRequest calls the generic GetAgentMetrics builder with application/json body
 func NewGetAgentMetricsRequest(server string, orgName string, projName string, agentName string, body GetAgentMetricsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -10993,6 +11421,25 @@ type ClientWithResponsesInterface interface {
 
 	RotateAgentAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, envID string, keyName string, body RotateAgentAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateAgentAPIKeyResp, error)
 
+	// ListAgentMCPConfigsWithResponse request
+	ListAgentMCPConfigsWithResponse(ctx context.Context, orgName string, projName string, agentName string, params *ListAgentMCPConfigsParams, reqEditors ...RequestEditorFn) (*ListAgentMCPConfigsResp, error)
+
+	// CreateAgentMCPConfigWithBodyWithResponse request with any body
+	CreateAgentMCPConfigWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentMCPConfigResp, error)
+
+	CreateAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, body CreateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentMCPConfigResp, error)
+
+	// DeleteAgentMCPConfigWithResponse request
+	DeleteAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteAgentMCPConfigResp, error)
+
+	// GetAgentMCPConfigWithResponse request
+	GetAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAgentMCPConfigResp, error)
+
+	// UpdateAgentMCPConfigWithBodyWithResponse request with any body
+	UpdateAgentMCPConfigWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error)
+
+	UpdateAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error)
+
 	// GetAgentMetricsWithBodyWithResponse request with any body
 	GetAgentMetricsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetAgentMetricsResp, error)
 
@@ -13507,6 +13954,130 @@ func (r RotateAgentAPIKeyResp) StatusCode() int {
 	return 0
 }
 
+type ListAgentMCPConfigsResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentModelConfigListResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentMCPConfigsResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentMCPConfigsResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateAgentMCPConfigResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *AgentModelConfigResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateAgentMCPConfigResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateAgentMCPConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteAgentMCPConfigResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAgentMCPConfigResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAgentMCPConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetAgentMCPConfigResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentModelConfigResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentMCPConfigResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentMCPConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateAgentMCPConfigResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentModelConfigResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateAgentMCPConfigResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateAgentMCPConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetAgentMetricsResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15620,6 +16191,67 @@ func (c *ClientWithResponses) RotateAgentAPIKeyWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseRotateAgentAPIKeyResp(rsp)
+}
+
+// ListAgentMCPConfigsWithResponse request returning *ListAgentMCPConfigsResp
+func (c *ClientWithResponses) ListAgentMCPConfigsWithResponse(ctx context.Context, orgName string, projName string, agentName string, params *ListAgentMCPConfigsParams, reqEditors ...RequestEditorFn) (*ListAgentMCPConfigsResp, error) {
+	rsp, err := c.ListAgentMCPConfigs(ctx, orgName, projName, agentName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentMCPConfigsResp(rsp)
+}
+
+// CreateAgentMCPConfigWithBodyWithResponse request with arbitrary body returning *CreateAgentMCPConfigResp
+func (c *ClientWithResponses) CreateAgentMCPConfigWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateAgentMCPConfigResp, error) {
+	rsp, err := c.CreateAgentMCPConfigWithBody(ctx, orgName, projName, agentName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentMCPConfigResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, body CreateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateAgentMCPConfigResp, error) {
+	rsp, err := c.CreateAgentMCPConfig(ctx, orgName, projName, agentName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateAgentMCPConfigResp(rsp)
+}
+
+// DeleteAgentMCPConfigWithResponse request returning *DeleteAgentMCPConfigResp
+func (c *ClientWithResponses) DeleteAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*DeleteAgentMCPConfigResp, error) {
+	rsp, err := c.DeleteAgentMCPConfig(ctx, orgName, projName, agentName, configId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAgentMCPConfigResp(rsp)
+}
+
+// GetAgentMCPConfigWithResponse request returning *GetAgentMCPConfigResp
+func (c *ClientWithResponses) GetAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetAgentMCPConfigResp, error) {
+	rsp, err := c.GetAgentMCPConfig(ctx, orgName, projName, agentName, configId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentMCPConfigResp(rsp)
+}
+
+// UpdateAgentMCPConfigWithBodyWithResponse request with arbitrary body returning *UpdateAgentMCPConfigResp
+func (c *ClientWithResponses) UpdateAgentMCPConfigWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error) {
+	rsp, err := c.UpdateAgentMCPConfigWithBody(ctx, orgName, projName, agentName, configId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentMCPConfigResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error) {
+	rsp, err := c.UpdateAgentMCPConfig(ctx, orgName, projName, agentName, configId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateAgentMCPConfigResp(rsp)
 }
 
 // GetAgentMetricsWithBodyWithResponse request with arbitrary body returning *GetAgentMetricsResp
@@ -20539,6 +21171,234 @@ func ParseRotateAgentAPIKeyResp(rsp *http.Response) (*RotateAgentAPIKeyResp, err
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentMCPConfigsResp parses an HTTP response from a ListAgentMCPConfigsWithResponse call
+func ParseListAgentMCPConfigsResp(rsp *http.Response) (*ListAgentMCPConfigsResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentMCPConfigsResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentModelConfigListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateAgentMCPConfigResp parses an HTTP response from a CreateAgentMCPConfigWithResponse call
+func ParseCreateAgentMCPConfigResp(rsp *http.Response) (*CreateAgentMCPConfigResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateAgentMCPConfigResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AgentModelConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteAgentMCPConfigResp parses an HTTP response from a DeleteAgentMCPConfigWithResponse call
+func ParseDeleteAgentMCPConfigResp(rsp *http.Response) (*DeleteAgentMCPConfigResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAgentMCPConfigResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentMCPConfigResp parses an HTTP response from a GetAgentMCPConfigWithResponse call
+func ParseGetAgentMCPConfigResp(rsp *http.Response) (*GetAgentMCPConfigResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentMCPConfigResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentModelConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateAgentMCPConfigResp parses an HTTP response from a UpdateAgentMCPConfigWithResponse call
+func ParseUpdateAgentMCPConfigResp(rsp *http.Response) (*UpdateAgentMCPConfigResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateAgentMCPConfigResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentModelConfigResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
 
 	}
 

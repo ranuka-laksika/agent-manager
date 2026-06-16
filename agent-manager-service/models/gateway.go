@@ -31,6 +31,7 @@ type Gateway struct {
 	DisplayName              string                 `gorm:"column:display_name" json:"displayName"`
 	Description              string                 `gorm:"column:description" json:"description"`
 	Properties               map[string]interface{} `gorm:"column:properties;type:jsonb;serializer:json" json:"properties,omitempty"`
+	Manifest                 map[string]interface{} `gorm:"column:manifest;type:jsonb;serializer:json" json:"manifest,omitempty"`
 	Vhost                    string                 `gorm:"column:vhost" json:"vhost"`
 	IsCritical               bool                   `gorm:"column:is_critical" json:"isCritical"`
 	GatewayFunctionalityType string                 `gorm:"column:gateway_functionality_type" json:"functionalityType"`

@@ -99,6 +99,33 @@ function getActionSuccessMessage(action: MutationActionConfig): string {
 }
 
 /**
+ * Extracts a human-readable, server-provided message from a thrown error so it
+ * can be surfaced to the user (e.g. a CONFLICT explaining why a delete failed).
+ * Handles both proper Errors (thrown by the http write helpers, whose `message`
+ * is the backend `message` field) and raw JSON error bodies (`{ code, message }`).
+ * Returns undefined for synthetic transport messages so the caller can fall back
+ * to a friendly generic message instead of leaking "HTTP error! status: 500".
+ */
+function extractServerErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+  const candidates: unknown[] = [
+    (error as { message?: unknown }).message,
+    (error as { body?: { message?: unknown } }).body?.message,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (trimmed && !/^HTTP error! status:/i.test(trimmed)) {
+        return trimmed;
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
  * Handles auth/session-related failures (may call `logout`) and other cases
  * where a generic error snackbar should not appear. Returns true when the
  * error is considered handled for notification purposes.
@@ -230,6 +257,7 @@ export function useApiMutation<
   const {
     action,
     successMessage,
+    errorMessage,
     showSuccess = Boolean(action || successMessage),
     showError = true,
     onSuccess,
@@ -259,12 +287,16 @@ export function useApiMutation<
         isAuthenticated &&
         !handleAuthAndExpectedErrors(error, logout)
       ) {
-        // Determine subject for error message
+        // Surface an explicit error message when available, preferring a
+        // caller-supplied resolver, then the server-provided message (e.g. a
+        // CONFLICT explaining a failed delete), then a friendly generic fallback.
         const subject = action?.target || "data";
-        // Use a generic message for mutation errors
         const fallbackMessage = `Failed to submit ${subject}`;
         pushSnackBar({
-          message: fallbackMessage,
+          message:
+            resolveMessage(errorMessage, error, variables) ??
+            extractServerErrorMessage(error) ??
+            fallbackMessage,
           type: "error",
         });
       }

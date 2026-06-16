@@ -44,4 +44,7 @@ func RegisterGatewayInternalRoutes(mux *http.ServeMux, ctrl controllers.GatewayI
 
 	// LLM Proxy endpoints
 	mux.HandleFunc("GET /llm-proxies/{proxyId}", ctrl.GetLLMProxy)
+
+	// MCP Proxy endpoints
+	mux.HandleFunc("GET /mcp-proxies/{proxyId}", ctrl.GetMCPProxy)
 }

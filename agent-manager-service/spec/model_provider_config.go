@@ -23,6 +23,14 @@ type ProviderConfig struct {
 	ProviderName string `json:"providerName"`
 	// UUID of the proxy created
 	ProxyUuid string `json:"proxyUuid"`
+	// Name/handle of the MCP proxy
+	ProxyName *string `json:"proxyName,omitempty"`
+	// ID/handle of the MCP proxy
+	ProxyId *string `json:"proxyId,omitempty"`
+	// Name/handle of the MCP proxy
+	McpProxyName *string `json:"mcpProxyName,omitempty"`
+	// ID/handle of the MCP proxy
+	McpProxyId *string `json:"mcpProxyId,omitempty"`
 	// url of the created proxy
 	Url      string    `json:"url"`
 	AuthInfo *AuthInfo `json:"authInfo,omitempty"`
@@ -98,6 +106,134 @@ func (o *ProviderConfig) GetProxyUuidOk() (*string, bool) {
 // SetProxyUuid sets field value
 func (o *ProviderConfig) SetProxyUuid(v string) {
 	o.ProxyUuid = v
+}
+
+// GetProxyName returns the ProxyName field value if set, zero value otherwise.
+func (o *ProviderConfig) GetProxyName() string {
+	if o == nil || IsNil(o.ProxyName) {
+		var ret string
+		return ret
+	}
+	return *o.ProxyName
+}
+
+// GetProxyNameOk returns a tuple with the ProxyName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ProviderConfig) GetProxyNameOk() (*string, bool) {
+	if o == nil || IsNil(o.ProxyName) {
+		return nil, false
+	}
+	return o.ProxyName, true
+}
+
+// HasProxyName returns a boolean if a field has been set.
+func (o *ProviderConfig) HasProxyName() bool {
+	if o != nil && !IsNil(o.ProxyName) {
+		return true
+	}
+
+	return false
+}
+
+// SetProxyName gets a reference to the given string and assigns it to the ProxyName field.
+func (o *ProviderConfig) SetProxyName(v string) {
+	o.ProxyName = &v
+}
+
+// GetProxyId returns the ProxyId field value if set, zero value otherwise.
+func (o *ProviderConfig) GetProxyId() string {
+	if o == nil || IsNil(o.ProxyId) {
+		var ret string
+		return ret
+	}
+	return *o.ProxyId
+}
+
+// GetProxyIdOk returns a tuple with the ProxyId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ProviderConfig) GetProxyIdOk() (*string, bool) {
+	if o == nil || IsNil(o.ProxyId) {
+		return nil, false
+	}
+	return o.ProxyId, true
+}
+
+// HasProxyId returns a boolean if a field has been set.
+func (o *ProviderConfig) HasProxyId() bool {
+	if o != nil && !IsNil(o.ProxyId) {
+		return true
+	}
+
+	return false
+}
+
+// SetProxyId gets a reference to the given string and assigns it to the ProxyId field.
+func (o *ProviderConfig) SetProxyId(v string) {
+	o.ProxyId = &v
+}
+
+// GetMcpProxyName returns the McpProxyName field value if set, zero value otherwise.
+func (o *ProviderConfig) GetMcpProxyName() string {
+	if o == nil || IsNil(o.McpProxyName) {
+		var ret string
+		return ret
+	}
+	return *o.McpProxyName
+}
+
+// GetMcpProxyNameOk returns a tuple with the McpProxyName field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ProviderConfig) GetMcpProxyNameOk() (*string, bool) {
+	if o == nil || IsNil(o.McpProxyName) {
+		return nil, false
+	}
+	return o.McpProxyName, true
+}
+
+// HasMcpProxyName returns a boolean if a field has been set.
+func (o *ProviderConfig) HasMcpProxyName() bool {
+	if o != nil && !IsNil(o.McpProxyName) {
+		return true
+	}
+
+	return false
+}
+
+// SetMcpProxyName gets a reference to the given string and assigns it to the McpProxyName field.
+func (o *ProviderConfig) SetMcpProxyName(v string) {
+	o.McpProxyName = &v
+}
+
+// GetMcpProxyId returns the McpProxyId field value if set, zero value otherwise.
+func (o *ProviderConfig) GetMcpProxyId() string {
+	if o == nil || IsNil(o.McpProxyId) {
+		var ret string
+		return ret
+	}
+	return *o.McpProxyId
+}
+
+// GetMcpProxyIdOk returns a tuple with the McpProxyId field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ProviderConfig) GetMcpProxyIdOk() (*string, bool) {
+	if o == nil || IsNil(o.McpProxyId) {
+		return nil, false
+	}
+	return o.McpProxyId, true
+}
+
+// HasMcpProxyId returns a boolean if a field has been set.
+func (o *ProviderConfig) HasMcpProxyId() bool {
+	if o != nil && !IsNil(o.McpProxyId) {
+		return true
+	}
+
+	return false
+}
+
+// SetMcpProxyId gets a reference to the given string and assigns it to the McpProxyId field.
+func (o *ProviderConfig) SetMcpProxyId(v string) {
+	o.McpProxyId = &v
 }
 
 // GetUrl returns the Url field value
@@ -232,6 +368,18 @@ func (o ProviderConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["providerName"] = o.ProviderName
 	toSerialize["proxyUuid"] = o.ProxyUuid
+	if !IsNil(o.ProxyName) {
+		toSerialize["proxyName"] = o.ProxyName
+	}
+	if !IsNil(o.ProxyId) {
+		toSerialize["proxyId"] = o.ProxyId
+	}
+	if !IsNil(o.McpProxyName) {
+		toSerialize["mcpProxyName"] = o.McpProxyName
+	}
+	if !IsNil(o.McpProxyId) {
+		toSerialize["mcpProxyId"] = o.McpProxyId
+	}
 	toSerialize["url"] = o.Url
 	if !IsNil(o.AuthInfo) {
 		toSerialize["authInfo"] = o.AuthInfo

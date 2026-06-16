@@ -134,6 +134,14 @@ func (s *GatewayEventsService) BroadcastLLMProxyDeploymentEvent(gatewayID string
 	return s.broadcastEvent(gatewayID, "llmproxy.deployed", "CREATE", event.ProxyID, event)
 }
 
+func (s *GatewayEventsService) BroadcastMCPProxyDeploymentEvent(gatewayID string, event *models.MCPProxyDeploymentEvent) error {
+	return s.broadcastEvent(gatewayID, "mcpproxy.deployed", "CREATE", event.ProxyID, event)
+}
+
+func (s *GatewayEventsService) BroadcastMCPProxyDeletionEvent(gatewayID string, event *models.MCPProxyDeletionEvent) error {
+	return s.broadcastEvent(gatewayID, "mcpproxy.deleted", "DELETE", event.ProxyID, event)
+}
+
 func (s *GatewayEventsService) BroadcastLLMProxyUndeploymentEvent(gatewayID string, event *models.LLMProxyUndeploymentEvent) error {
 	return s.broadcastEvent(gatewayID, "llmproxy.undeployed", "DELETE", event.ProxyID, event)
 }

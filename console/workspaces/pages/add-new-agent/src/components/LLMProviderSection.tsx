@@ -66,9 +66,9 @@ import {
   useListLLMProviderTemplates,
 } from "@agent-management-platform/api-client";
 import {
-  GuardrailsSection,
-  type GuardrailSelection,
-} from "@agent-management-platform/llm-providers";
+  PolicyListSection,
+  type PolicySelection as GuardrailSelection,
+} from "@agent-management-platform/shared-component";
 import {
   absoluteRouteMap,
   type CatalogRateLimitingSummary,
@@ -485,11 +485,25 @@ const EntryCard: React.FC<EntryCardProps> = ({
             </Stack>
           </Box>
 
-          <GuardrailsSection
-            guardrails={entry.guardrails}
-            onAddGuardrail={handleAddGuardrail}
-            onEditGuardrail={handleEditGuardrail}
-            onRemoveGuardrail={handleRemoveGuardrail}
+          <PolicyListSection
+            title="Guardrails"
+            description="Add safety policies to enforce consistent protections."
+            addButtonLabel="Add Guardrail"
+            drawerAddTitle="Add Guardrail"
+            drawerEditTitle="Edit Guardrail"
+            drawerAddSubtitle="Choose a guardrail to configure advanced options."
+            drawerEditSubtitle="Update the guardrail configuration."
+            policyNoun="guardrail"
+            loadingLabel="Loading guardrails..."
+            searchPlaceholder="Search guardrails..."
+            catalogErrorLabel="Failed to load guardrails."
+            emptySearchTitle="No guardrails match your search"
+            emptyCatalogTitle="No guardrails available"
+            emptyCatalogDescription="No guardrail policies are available in the catalog."
+            policies={entry.guardrails}
+            onAdd={handleAddGuardrail}
+            onEdit={handleEditGuardrail}
+            onRemove={handleRemoveGuardrail}
           />
         </Stack>
       </AccordionDetails>

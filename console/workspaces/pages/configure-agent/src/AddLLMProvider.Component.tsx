@@ -15,11 +15,14 @@
  * under the License.
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  PageLayout,
-  TextInput,
-} from "@agent-management-platform/views";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { PageLayout, TextInput } from "@agent-management-platform/views";
 import {
   Alert,
   Avatar,
@@ -65,41 +68,25 @@ import {
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
-import { usePipelineEnvironments } from "@agent-management-platform/shared-component";
 import {
-  GuardrailsSection,
-  type GuardrailSelection,
-} from "@agent-management-platform/llm-providers";
+  PolicyListSection,
+  type PolicySelection as GuardrailSelection,
+  usePipelineEnvironments,
+} from "@agent-management-platform/shared-component";
 import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
+import {
+  ENV_VAR_KEYS,
+  generateEnvVarNames,
+  generateUniqueConfigName,
+  type EnvVarKey,
+} from "./utils/envConfig";
 
 type DeploymentSummary = { gatewayName?: string; deployedAt?: string };
-
-const ENV_VAR_KEYS = ["url", "apikey"] as const;
-type EnvVarKey = (typeof ENV_VAR_KEYS)[number];
 
 const ENV_VAR_DESCRIPTIONS: Record<EnvVarKey, string> = {
   url: "Base URL of the LLM provider",
   apikey: "API key for authenticating with the LLM provider",
 };
-
-function generateEnvVarNames(prefix: string): Record<EnvVarKey, string> {
-  let sanitized = prefix.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase();
-  if (sanitized.length > 0 && sanitized[0] >= "0" && sanitized[0] <= "9") {
-    sanitized = "_" + sanitized;
-  }
-  return {
-    url: sanitized ? `${sanitized}_URL` : "URL",
-    apikey: sanitized ? `${sanitized}_API_KEY` : "API_KEY",
-  };
-}
-
-function generateConfigName(templateId: string, existingNames: string[]): string {
-  const base = templateId.replace(/[^A-Za-z0-9-]/g, "-").toLowerCase();
-  if (!existingNames.includes(base)) return base;
-  let i = 2;
-  while (existingNames.includes(`${base}-${i}`)) i++;
-  return `${base}-${i}`;
-}
 
 function getLatestDeployment(
   deployments: DeploymentSummary[] | undefined,
@@ -120,7 +107,11 @@ function formatCost(amount: number): string {
 
 function formatResetWindow(duration?: number, unit?: string): string {
   if (!unit) return "";
-  const abbrev: Record<string, string> = { minute: "min", hour: "hr", day: "day" };
+  const abbrev: Record<string, string> = {
+    minute: "min",
+    hour: "hr",
+    day: "day",
+  };
   const u = abbrev[unit.toLowerCase()] ?? unit;
   return duration && duration !== 1 ? `${duration} ${u}` : u;
 }
@@ -131,7 +122,10 @@ const RateLimitDisplay: React.FC<{
   if (!rateLimiting) {
     return (
       <Typography variant="caption" color="text.secondary">
-        Rate Limiting: <Typography component="span" variant="body2" color="text.disabled">Not configured</Typography>
+        Rate Limiting:{" "}
+        <Typography component="span" variant="body2" color="text.disabled">
+          Not configured
+        </Typography>
       </Typography>
     );
   }
@@ -143,12 +137,16 @@ const RateLimitDisplay: React.FC<{
   const consumerEnabled = cl?.globalEnabled ?? false;
   // Whether the consumer level has its own per-consumer numeric limits configured
   const consumerHasLimits =
-    consumerEnabled && (cl?.request != null || cl?.token != null || cl?.cost != null);
+    consumerEnabled &&
+    (cl?.request != null || cl?.token != null || cl?.cost != null);
 
   if (!consumerEnabled && !pl?.globalEnabled) {
     return (
       <Typography variant="caption" color="text.secondary">
-        Rate Limiting: <Typography component="span" variant="body2" color="text.disabled">Configured (disabled)</Typography>
+        Rate Limiting:{" "}
+        <Typography component="span" variant="body2" color="text.disabled">
+          Configured (disabled)
+        </Typography>
       </Typography>
     );
   }
@@ -160,16 +158,37 @@ const RateLimitDisplay: React.FC<{
 
   const limits: { icon: React.ReactNode; label: string; value: string }[] = [];
   if (limitScope?.request) {
-    const w = formatResetWindow(limitScope.request.resetDuration, limitScope.request.resetUnit);
-    limits.push({ icon: <Zap size={12} />, label: "Requests", value: `${limitScope.request.limit.toLocaleString()}${w ? `/${w}` : ""}` });
+    const w = formatResetWindow(
+      limitScope.request.resetDuration,
+      limitScope.request.resetUnit,
+    );
+    limits.push({
+      icon: <Zap size={12} />,
+      label: "Requests",
+      value: `${limitScope.request.limit.toLocaleString()}${w ? `/${w}` : ""}`,
+    });
   }
   if (limitScope?.token) {
-    const w = formatResetWindow(limitScope.token.resetDuration, limitScope.token.resetUnit);
-    limits.push({ icon: <Hash size={12} />, label: "Tokens", value: `${limitScope.token.limit.toLocaleString()}${w ? `/${w}` : ""}` });
+    const w = formatResetWindow(
+      limitScope.token.resetDuration,
+      limitScope.token.resetUnit,
+    );
+    limits.push({
+      icon: <Hash size={12} />,
+      label: "Tokens",
+      value: `${limitScope.token.limit.toLocaleString()}${w ? `/${w}` : ""}`,
+    });
   }
   if (limitScope?.cost) {
-    const w = formatResetWindow(limitScope.cost.resetDuration, limitScope.cost.resetUnit);
-    limits.push({ icon: <Coins size={12} />, label: "Budget", value: `${formatCost(limitScope.cost.limit)}${w ? `/${w}` : ""}` });
+    const w = formatResetWindow(
+      limitScope.cost.resetDuration,
+      limitScope.cost.resetUnit,
+    );
+    limits.push({
+      icon: <Coins size={12} />,
+      label: "Budget",
+      value: `${formatCost(limitScope.cost.limit)}${w ? `/${w}` : ""}`,
+    });
   }
 
   return (
@@ -184,7 +203,15 @@ const RateLimitDisplay: React.FC<{
             placement="top"
             arrow
           >
-            <Box component="span" sx={{ display: "inline-flex", alignItems: "center", color: "text.secondary", cursor: "default" }}>
+            <Box
+              component="span"
+              sx={{
+                display: "inline-flex",
+                alignItems: "center",
+                color: "text.secondary",
+                cursor: "default",
+              }}
+            >
               <Info size={12} />
             </Box>
           </Tooltip>
@@ -195,7 +222,14 @@ const RateLimitDisplay: React.FC<{
           {limits.map(({ icon, label, value }) => (
             <Chip
               key={label}
-              icon={<Box component="span" sx={{ display: "inline-flex", alignItems: "center", pl: 0.5 }}>{icon}</Box>}
+              icon={
+                <Box
+                  component="span"
+                  sx={{ display: "inline-flex", alignItems: "center", pl: 0.5 }}
+                >
+                  {icon}
+                </Box>
+              }
               label={`${label}: ${value}`}
               size="small"
               variant="outlined"
@@ -205,7 +239,9 @@ const RateLimitDisplay: React.FC<{
           ))}
         </Stack>
       ) : (
-        <Typography variant="body2" color="text.secondary">Enabled (no numeric limits set)</Typography>
+        <Typography variant="body2" color="text.secondary">
+          Enabled (no numeric limits set)
+        </Typography>
       )}
     </Stack>
   );
@@ -225,7 +261,13 @@ export const ProviderDisplay: React.FC<{
   hideCheckbox?: boolean;
   templateInfo?: { displayName: string; logoUrl?: string } | null;
   fallbackLabel?: string;
-}> = ({ provider, isSelected, templateInfo, fallbackLabel = "Select provider", hideCheckbox }) => {
+}> = ({
+  provider,
+  isSelected,
+  templateInfo,
+  fallbackLabel = "Select provider",
+  hideCheckbox,
+}) => {
   const latest = getLatestDeployment(provider?.deployments);
   return (
     <Stack direction="row" spacing={2} flexGrow={1} alignItems="center">
@@ -292,29 +334,42 @@ export const ProviderDisplay: React.FC<{
           <Stack>
             <Typography variant="caption" color="text.secondary">
               Guardrails:{" "}
-              <Typography component="span" variant="body2" color={provider?.policies?.length ? "text.primary" : "text.disabled"}>
-                {provider?.policies?.length
-                  ? (
-                    <Stack direction="row" spacing={0.25} flexWrap="wrap" alignItems="center">
-                      {provider.policies.slice(0, 3).map((p) => (
-                        <Chip key={p} label={p} size="small" variant="outlined" />
-                      ))}
-                      {
-                        provider.policies.length > 3 &&
-                        <Tooltip title={provider.policies.join(", ")} placement="top" arrow>
-                          <Typography variant="caption" color="text.secondary">
-                            {` +${provider.policies.length - 3} more..`}
-                          </Typography>
-                        </Tooltip>
-                      }
-                    </Stack>
-                  )
-                  : "None"}
+              <Typography
+                component="span"
+                variant="body2"
+                color={
+                  provider?.policies?.length ? "text.primary" : "text.disabled"
+                }
+              >
+                {provider?.policies?.length ? (
+                  <Stack
+                    direction="row"
+                    spacing={0.25}
+                    flexWrap="wrap"
+                    alignItems="center"
+                  >
+                    {provider.policies.slice(0, 3).map((p) => (
+                      <Chip key={p} label={p} size="small" variant="outlined" />
+                    ))}
+                    {provider.policies.length > 3 && (
+                      <Tooltip
+                        title={provider.policies.join(", ")}
+                        placement="top"
+                        arrow
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          {` +${provider.policies.length - 3} more..`}
+                        </Typography>
+                      </Tooltip>
+                    )}
+                  </Stack>
+                ) : (
+                  "None"
+                )}
               </Typography>
             </Typography>
           </Stack>
         </Stack>
-
       </Stack>
     </Stack>
   );
@@ -335,9 +390,11 @@ export const AddLLMProviderComponent: React.FC = () => {
   const [providerByEnv, setProviderByEnv] = useState<
     Record<string, SelectedProvider | null>
   >({});
-  const [guardrailsByEnv, setGuardrailsByEnv] = useState<Record<string, GuardrailSelection[]>>({});
-  const [envVarNames, setEnvVarNames] = useState<Record<string, string>>(
-    () => generateEnvVarNames(""),
+  const [guardrailsByEnv, setGuardrailsByEnv] = useState<
+    Record<string, GuardrailSelection[]>
+  >({});
+  const [envVarNames, setEnvVarNames] = useState<Record<string, string>>(() =>
+    generateEnvVarNames(""),
   );
   // Track whether the user has manually edited env var names
   const envVarNamesEditedRef = useRef(false);
@@ -346,10 +403,10 @@ export const AddLLMProviderComponent: React.FC = () => {
   const backHref =
     orgId && projectId && agentId
       ? generatePath(
-        absoluteRouteMap.children.org.children.projects.children.agents
-          .children.configure.path,
-        { orgId, projectId, agentId },
-      )
+          absoluteRouteMap.children.org.children.projects.children.agents
+            .children.configure.path,
+          { orgId, projectId, agentId },
+        )
       : "#";
 
   const { data: agent } = useGetAgent({
@@ -370,9 +427,9 @@ export const AddLLMProviderComponent: React.FC = () => {
     { orgName: orgId },
     { limit: 50, environmentId: selectedEnvironmentId },
   );
-  const { data: templatesData } = useListLLMProviderTemplates(
-    { orgName: orgId },
-  );
+  const { data: templatesData } = useListLLMProviderTemplates({
+    orgName: orgId,
+  });
   const templateMap = useMemo(() => {
     const map = new Map<string, { displayName: string; logoUrl?: string }>();
     for (const t of templatesData?.templates ?? []) {
@@ -418,12 +475,17 @@ export const AddLLMProviderComponent: React.FC = () => {
       const providerUuid =
         config?.providerUuid ?? config?.proxyUuid ?? undefined;
       if (providerUuid && config?.providerName) {
-        nextProviderByEnv[envName] = { uuid: providerUuid, id: config.providerName };
+        nextProviderByEnv[envName] = {
+          uuid: providerUuid,
+          id: config.providerName,
+        };
       }
     }
     setProviderByEnv(nextProviderByEnv);
     const nextGuardrailsByEnv: Record<string, GuardrailSelection[]> = {};
-    for (const [envName, mapping] of Object.entries(existingConfig.envMappings ?? {})) {
+    for (const [envName, mapping] of Object.entries(
+      existingConfig.envMappings ?? {},
+    )) {
       const envPolicies = mapping.configuration?.policies ?? [];
       const seen = new Set<string>();
       const envGuardrails: GuardrailSelection[] = [];
@@ -478,32 +540,47 @@ export const AddLLMProviderComponent: React.FC = () => {
     [guardrailsByEnv, selectedEnvName],
   );
 
-  const handleAddGuardrail = useCallback((guardrail: GuardrailSelection) => {
-    setGuardrailsByEnv((prev) => {
-      const list = prev[selectedEnvName] ?? [];
-      const exists = list.some((g) => g.name === guardrail.name && g.version === guardrail.version);
-      if (exists) return prev;
-      return { ...prev, [selectedEnvName]: [...list, guardrail] };
-    });
-  }, [selectedEnvName]);
+  const handleAddGuardrail = useCallback(
+    (guardrail: GuardrailSelection) => {
+      setGuardrailsByEnv((prev) => {
+        const list = prev[selectedEnvName] ?? [];
+        const exists = list.some(
+          (g) => g.name === guardrail.name && g.version === guardrail.version,
+        );
+        if (exists) return prev;
+        return { ...prev, [selectedEnvName]: [...list, guardrail] };
+      });
+    },
+    [selectedEnvName],
+  );
 
-  const handleEditGuardrail = useCallback((guardrail: GuardrailSelection) => {
-    setGuardrailsByEnv((prev) => {
-      const list = prev[selectedEnvName] ?? [];
-      const updated = list.map(
-        (g) => g.name === guardrail.name && g.version === guardrail.version ? guardrail : g,
-      );
-      return { ...prev, [selectedEnvName]: updated };
-    });
-  }, [selectedEnvName]);
+  const handleEditGuardrail = useCallback(
+    (guardrail: GuardrailSelection) => {
+      setGuardrailsByEnv((prev) => {
+        const list = prev[selectedEnvName] ?? [];
+        const updated = list.map((g) =>
+          g.name === guardrail.name && g.version === guardrail.version
+            ? guardrail
+            : g,
+        );
+        return { ...prev, [selectedEnvName]: updated };
+      });
+    },
+    [selectedEnvName],
+  );
 
-  const handleRemoveGuardrail = useCallback((gName: string, gVersion: string) => {
-    setGuardrailsByEnv((prev) => {
-      const list = prev[selectedEnvName] ?? [];
-      const filtered = list.filter((g) => !(g.name === gName && g.version === gVersion));
-      return { ...prev, [selectedEnvName]: filtered };
-    });
-  }, [selectedEnvName]);
+  const handleRemoveGuardrail = useCallback(
+    (gName: string, gVersion: string) => {
+      setGuardrailsByEnv((prev) => {
+        const list = prev[selectedEnvName] ?? [];
+        const filtered = list.filter(
+          (g) => !(g.name === gName && g.version === gVersion),
+        );
+        return { ...prev, [selectedEnvName]: filtered };
+      });
+    },
+    [selectedEnvName],
+  );
 
   const handleSave = useCallback(() => {
     const envMappings: Record<
@@ -521,7 +598,8 @@ export const AddLLMProviderComponent: React.FC = () => {
       if (!entry) continue;
 
       hasAtLeastOneProvider = true;
-      if (!resolvedTemplate) resolvedTemplate = entry.template ?? entry.id ?? "";
+      if (!resolvedTemplate)
+        resolvedTemplate = entry.template ?? entry.id ?? "";
 
       const envGuardrails = guardrailsByEnv[env.name] ?? [];
       const envPolicies = envGuardrails.map((g) => ({
@@ -547,21 +625,24 @@ export const AddLLMProviderComponent: React.FC = () => {
 
     const environmentVariables = !isExternal
       ? ENV_VAR_KEYS.map((key) => ({
-        key,
-        name: (envVarNames[key] ?? "").trim(),
-      })).filter((ev) => ev.name.length > 0)
+          key,
+          name: (envVarNames[key] ?? "").trim(),
+        })).filter((ev) => ev.name.length > 0)
       : [];
 
     // In create mode, auto-generate a name from the provider template
-    const existingNames = (existingConfigsList?.configs ?? []).map((c) => c.name);
+    const existingNames = (existingConfigsList?.configs ?? []).map(
+      (c) => c.name,
+    );
     const autoName = isEditMode
       ? (existingConfig?.name ?? resolvedTemplate)
-      : generateConfigName(resolvedTemplate || "llm", existingNames);
+      : generateUniqueConfigName(resolvedTemplate, "llm", existingNames);
 
     const body = {
       name: autoName,
       envMappings,
-      environmentVariables: environmentVariables.length > 0 ? environmentVariables : undefined,
+      environmentVariables:
+        environmentVariables.length > 0 ? environmentVariables : undefined,
     };
 
     if (isEditMode && configId) {
@@ -594,9 +675,13 @@ export const AddLLMProviderComponent: React.FC = () => {
         {
           onSuccess: (data) => {
             // Collect authInfo from all env mappings to pass via router state
-            const authInfoByEnv: Record<string,
-              { type: string; in: string; name: string; value?: string }> = {};
-            for (const [envName, mapping] of Object.entries(data.envMappings ?? {})) {
+            const authInfoByEnv: Record<
+              string,
+              { type: string; in: string; name: string; value?: string }
+            > = {};
+            for (const [envName, mapping] of Object.entries(
+              data.envMappings ?? {},
+            )) {
               if (mapping.configuration?.authInfo) {
                 authInfoByEnv[envName] = mapping.configuration.authInfo;
               }
@@ -635,13 +720,17 @@ export const AddLLMProviderComponent: React.FC = () => {
   ]);
 
   const hasProviderForEnv = (envName: string) =>
-    !!providerByEnv[envName]
-    || (isEditMode && !!existingConfig?.envMappings?.[envName]?.configuration?.providerName);
+    !!providerByEnv[envName] ||
+    (isEditMode &&
+      !!existingConfig?.envMappings?.[envName]?.configuration?.providerName);
 
-  const hasAnyProvider = environments.some((env) => hasProviderForEnv(env.name));
+  const hasAnyProvider = environments.some((env) =>
+    hasProviderForEnv(env.name),
+  );
 
   const allEnvsHaveProvider =
-    environments.length > 0 && environments.every((env) => hasProviderForEnv(env.name));
+    environments.length > 0 &&
+    environments.every((env) => hasProviderForEnv(env.name));
   const isFormValid = hasAnyProvider;
 
   const mutationError = createConfig.isError
@@ -721,17 +810,37 @@ export const AddLLMProviderComponent: React.FC = () => {
                 sx={{ mb: 2 }}
               >
                 {environments.map((env, idx) => {
-                  const hasProvider = !!providerByEnv[env.name] || (isEditMode
-                    && !!existingConfig?.envMappings?.[env.name]?.configuration?.providerName);
+                  const hasProvider =
+                    !!providerByEnv[env.name] ||
+                    (isEditMode &&
+                      !!existingConfig?.envMappings?.[env.name]?.configuration
+                        ?.providerName);
                   return (
                     <Tab
                       key={env.name}
                       label={
-                        <Stack direction="row" spacing={0.5} alignItems="center">
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          alignItems="center"
+                        >
                           <span>{env.displayName ?? env.name}</span>
                           {!hasProvider && (
-                            <Tooltip title="No provider selected" placement="top" arrow>
-                              <Box component="span" sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "warning.main", display: "inline-block" }} />
+                            <Tooltip
+                              title="No provider selected"
+                              placement="top"
+                              arrow
+                            >
+                              <Box
+                                component="span"
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  bgcolor: "warning.main",
+                                  display: "inline-block",
+                                }}
+                              />
                             </Tooltip>
                           )}
                         </Stack>
@@ -744,25 +853,30 @@ export const AddLLMProviderComponent: React.FC = () => {
             </>
           )}
 
-          {providerByEnv[selectedEnvName] ? (() => {
-            const selectedUuid = providerByEnv[selectedEnvName]?.uuid;
-            const fullProvider = providers.find((p) => p.uuid === selectedUuid) ?? null;
-            return (
-              <Form.CardButton
-                onClick={() => setProviderDrawerOpen(true)}
-                selected
-                aria-label={`Selected: ${fullProvider?.name ?? "Unknown"}. Click to change.`}
-              >
-                <Form.CardContent>
-                  <ProviderDisplay
-                    provider={fullProvider}
-                    isSelected
-                    templateInfo={templateMap.get(fullProvider?.template ?? "")}
-                  />
-                </Form.CardContent>
-              </Form.CardButton>
-            );
-          })() : (
+          {providerByEnv[selectedEnvName] ? (
+            (() => {
+              const selectedUuid = providerByEnv[selectedEnvName]?.uuid;
+              const fullProvider =
+                providers.find((p) => p.uuid === selectedUuid) ?? null;
+              return (
+                <Form.CardButton
+                  onClick={() => setProviderDrawerOpen(true)}
+                  selected
+                  aria-label={`Selected: ${fullProvider?.name ?? "Unknown"}. Click to change.`}
+                >
+                  <Form.CardContent>
+                    <ProviderDisplay
+                      provider={fullProvider}
+                      isSelected
+                      templateInfo={templateMap.get(
+                        fullProvider?.template ?? "",
+                      )}
+                    />
+                  </Form.CardContent>
+                </Form.CardButton>
+              );
+            })()
+          ) : (
             <Box>
               {catalogData && providers.length === 0 ? (
                 <ListingTable.Container>
@@ -779,8 +893,8 @@ export const AddLLMProviderComponent: React.FC = () => {
                           onClick={() =>
                             navigate(
                               generatePath(
-                                absoluteRouteMap.children.org.children.
-                                  llmProviders.children.add.path,
+                                absoluteRouteMap.children.org.children
+                                  .llmProviders.children.add.path,
                                 { orgId },
                               ),
                             )
@@ -802,8 +916,13 @@ export const AddLLMProviderComponent: React.FC = () => {
                   >
                     Select a Service Provider
                   </Button>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-                    Selecting a provider will auto-generate environment variable names below.
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ display: "block", mt: 1 }}
+                  >
+                    Selecting a provider will auto-generate environment variable
+                    names below.
                   </Typography>
                 </Box>
               )}
@@ -827,16 +946,34 @@ export const AddLLMProviderComponent: React.FC = () => {
               if (!picked) return;
               setProviderByEnv((prev) => ({
                 ...prev,
-                [selectedEnvName]: { uuid, id: picked.id, template: picked.template },
+                [selectedEnvName]: {
+                  uuid,
+                  id: picked.id,
+                  template: picked.template,
+                },
               }));
             }}
           />
           {providerByEnv[selectedEnvName] && (
-            <GuardrailsSection
-              guardrails={guardrails}
-              onAddGuardrail={handleAddGuardrail}
-              onEditGuardrail={handleEditGuardrail}
-              onRemoveGuardrail={handleRemoveGuardrail}
+            <PolicyListSection
+              title="Guardrails"
+              description="Add safety policies to enforce consistent protections."
+              addButtonLabel="Add Guardrail"
+              drawerAddTitle="Add Guardrail"
+              drawerEditTitle="Edit Guardrail"
+              drawerAddSubtitle="Choose a guardrail to configure advanced options."
+              drawerEditSubtitle="Update the guardrail configuration."
+              policyNoun="guardrail"
+              loadingLabel="Loading guardrails..."
+              searchPlaceholder="Search guardrails..."
+              catalogErrorLabel="Failed to load guardrails."
+              emptySearchTitle="No guardrails match your search"
+              emptyCatalogTitle="No guardrails available"
+              emptyCatalogDescription="No guardrail policies are available in the catalog."
+              policies={guardrails}
+              onAdd={handleAddGuardrail}
+              onEdit={handleEditGuardrail}
+              onRemove={handleRemoveGuardrail}
             />
           )}
         </Form.Section>
@@ -845,15 +982,24 @@ export const AddLLMProviderComponent: React.FC = () => {
           <Form.Section>
             <Form.Header>Environment Variable Names</Form.Header>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              These names are shared across all environments. The platform injects the actual URL
-              and API key values at runtime per environment. Edit only if your code uses different
-              names.
+              These names are shared across all environments. The platform
+              injects the actual URL and API key values at runtime per
+              environment. Edit only if your code uses different names.
             </Typography>
             <ListingTable.Container>
               <ListingTable density="compact">
                 <ListingTable.Head>
                   <ListingTable.Row>
-                    <ListingTable.Cell>Variable Name <Typography component="span" variant="caption" color="text.secondary">(editable)</Typography></ListingTable.Cell>
+                    <ListingTable.Cell>
+                      Variable Name{" "}
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        color="text.secondary"
+                      >
+                        (editable)
+                      </Typography>
+                    </ListingTable.Cell>
                     <ListingTable.Cell>Description</ListingTable.Cell>
                   </ListingTable.Row>
                 </ListingTable.Head>
@@ -890,7 +1036,8 @@ export const AddLLMProviderComponent: React.FC = () => {
 
         {hasAnyProvider && !allEnvsHaveProvider && (
           <Alert severity="info" icon={<AlertTriangle size={18} />}>
-            Some environments don&apos;t have a provider selected. They will be skipped on save.
+            Some environments don&apos;t have a provider selected. They will be
+            skipped on save.
           </Alert>
         )}
 
@@ -900,7 +1047,11 @@ export const AddLLMProviderComponent: React.FC = () => {
             Cancel
           </Button>
           <Tooltip
-            title={!isFormValid && !isPending ? "Select a service provider for at least one environment to enable save" : ""}
+            title={
+              !isFormValid && !isPending
+                ? "Select a service provider for at least one environment to enable save"
+                : ""
+            }
             placement="top"
           >
             <span>

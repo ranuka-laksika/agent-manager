@@ -48,4 +48,29 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}",
 		rbac.AgentDelete, ctrl.DeleteAgentModelConfig,
 	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
+		rbac.AgentUpdate, ctrl.CreateAgentMCPConfig,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs",
+		rbac.AgentRead, ctrl.ListAgentMCPConfigs,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
+		rbac.AgentRead, ctrl.GetAgentMCPConfig,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
+		rbac.AgentUpdate, ctrl.UpdateAgentMCPConfig,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
+		rbac.AgentDelete, ctrl.DeleteAgentMCPConfig,
+	)
 }

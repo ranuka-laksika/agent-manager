@@ -1,0 +1,167 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { useQueryClient } from "@tanstack/react-query";
+import { useAuthHooks } from "@agent-management-platform/auth";
+import type {
+  CreateMCPProxyAPIKeyPathParams,
+  CreateMCPProxyAPIKeyRequest,
+  CreateMCPProxyAPIKeyResponse,
+  CreateMCPProxyPathParams,
+  DeleteMCPProxyPathParams,
+  FetchMCPProxyServerInfoPathParams,
+  GetMCPProxyPathParams,
+  ListMCPProxiesPathParams,
+  ListMCPProxiesQuery,
+  MCPProxy,
+  MCPProxyListResponse,
+  MCPServerInfoFetchRequest,
+  MCPServerInfoFetchResponse,
+  RevokeMCPProxyAPIKeyPathParams,
+  RotateMCPProxyAPIKeyPathParams,
+  RotateMCPProxyAPIKeyRequest,
+  RotateMCPProxyAPIKeyResponse,
+  UpdateMCPProxyPathParams,
+} from "@agent-management-platform/types";
+import {
+  createMCPProxyAPIKey,
+  createMCPProxy,
+  deleteMCPProxy,
+  fetchMCPProxyServerInfo,
+  getMCPProxy,
+  listMCPProxies,
+  revokeMCPProxyAPIKey,
+  rotateMCPProxyAPIKey,
+  updateMCPProxy,
+} from "../apis";
+import { useApiMutation, useApiQuery } from "./react-query-notifications";
+
+export function useListMCPProxies(
+  params: ListMCPProxiesPathParams,
+  query?: ListMCPProxiesQuery,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<MCPProxyListResponse>({
+    queryKey: ["mcp-proxies", params, query],
+    queryFn: () => listMCPProxies(params, query, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useCreateMCPProxy() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    MCPProxy,
+    unknown,
+    { params: CreateMCPProxyPathParams; body: MCPProxy }
+  >({
+    action: { verb: "create", target: "mcp proxy" },
+    mutationFn: ({ params, body }) => createMCPProxy(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxies"] });
+    },
+  });
+}
+
+export function useGetMCPProxy(params: GetMCPProxyPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<MCPProxy>({
+    queryKey: ["mcp-proxy", params],
+    queryFn: () => getMCPProxy(params, getToken),
+    enabled: !!params.orgName && !!params.proxyId,
+  });
+}
+
+export function useUpdateMCPProxy() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    MCPProxy,
+    unknown,
+    { params: UpdateMCPProxyPathParams; body: MCPProxy }
+  >({
+    action: { verb: "update", target: "mcp proxy" },
+    mutationFn: ({ params, body }) => updateMCPProxy(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxies"] });
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxy"] });
+    },
+  });
+}
+
+export function useDeleteMCPProxy() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, DeleteMCPProxyPathParams>({
+    action: { verb: "delete", target: "mcp proxy" },
+    mutationFn: (params) => deleteMCPProxy(params, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxies"] });
+    },
+  });
+}
+
+export function useFetchMCPProxyServerInfo() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<
+    MCPServerInfoFetchResponse,
+    unknown,
+    {
+      params: FetchMCPProxyServerInfoPathParams;
+      body: MCPServerInfoFetchRequest;
+    }
+  >({
+    mutationFn: ({ params, body }) =>
+      fetchMCPProxyServerInfo(params, body, getToken),
+    showSuccess: false,
+  });
+}
+
+export function useCreateMCPProxyAPIKey() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<
+    CreateMCPProxyAPIKeyResponse,
+    unknown,
+    { params: CreateMCPProxyAPIKeyPathParams; body: CreateMCPProxyAPIKeyRequest }
+  >({
+    action: { verb: "create", target: "mcp proxy api key" },
+    mutationFn: ({ params, body }) =>
+      createMCPProxyAPIKey(params, body, getToken),
+  });
+}
+
+export function useRotateMCPProxyAPIKey() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<
+    RotateMCPProxyAPIKeyResponse,
+    unknown,
+    { params: RotateMCPProxyAPIKeyPathParams; body: RotateMCPProxyAPIKeyRequest }
+  >({
+    action: { verb: "rotate", target: "mcp proxy api key" },
+    mutationFn: ({ params, body }) =>
+      rotateMCPProxyAPIKey(params, body, getToken),
+  });
+}
+
+export function useRevokeMCPProxyAPIKey() {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<void, unknown, RevokeMCPProxyAPIKeyPathParams>({
+    action: { verb: "revoke", target: "mcp proxy api key" },
+    mutationFn: (params) => revokeMCPProxyAPIKey(params, getToken),
+  });
+}

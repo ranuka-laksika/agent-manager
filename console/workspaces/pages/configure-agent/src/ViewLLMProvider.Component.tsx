@@ -23,7 +23,11 @@ import {
   PageLayout,
   TextInput,
 } from "@agent-management-platform/views";
-import { CodeBlock } from "@agent-management-platform/shared-component";
+import {
+  CodeBlock,
+  PolicyListSection,
+  type PolicySelection as GuardrailSelection,
+} from "@agent-management-platform/shared-component";
 import {
   Alert,
   Box,
@@ -34,7 +38,6 @@ import {
   Form,
   FormLabel,
   IconButton,
-  ListingTable,
   Skeleton,
   Stack,
   Tab,
@@ -55,12 +58,9 @@ import {
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
-import {
-  GuardrailsSection,
-  type GuardrailSelection,
-} from "@agent-management-platform/llm-providers";
 import { ProviderDisplay } from "./AddLLMProvider.Component";
 import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
+import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
 
 function generateDisplayName(key: string): string {
   switch (key) {
@@ -559,251 +559,216 @@ export const ViewLLMProviderComponent: React.FC = () => {
   const showPanel = (isExternal && !!providerConfig)
     || (!isExternal && (config.environmentVariables?.length ?? 0) > 0);
 
-  const envVarsPanel = showPanel && (
-    <DrawerWrapper
-      open={panelOpen}
-      onClose={(_, reason) => { if (isExternal && reason === "backdropClick") return; setPanelOpen(false); }}
-      minWidth={640}
-      maxWidth={640}
-    >
-      <DrawerHeader
-        icon={<BookOpen size={24} />}
-        title={isExternal ? "Connect to LLM Provider" : "Environment Variables & Integration Guide"}
-        onClose={() => setPanelOpen(false)}
-      />
-      <DrawerContent>
-        <Stack spacing={3}>
-        {isExternal && providerConfig && (() => {
-          const authEntry = authInfoByEnv?.[selectedEnvName];
-          const apiKeyEnvVar = config.environmentVariables?.find((ev) => ev.key === "apikey");
-          const headerName = authEntry?.name || "Authorization";
-          const headerValue = authEntry?.value || (apiKeyEnvVar ? `$${apiKeyEnvVar.name}` : "<api-key>");
-          const curlCode = [
-            `curl -X POST ${providerConfig.url || "<endpoint-url>"}`,
-            `  --header "${headerName}: ${headerValue}"`,
-            `  -d '{"model": "", "messages": [{"role": "user", "content": "Hi..."}]}'`,
-          ].join(" \\\n");
-          return (
-            <Stack spacing={2}>
-              {!authEntry && (
-                <Alert severity="info">
-                  <Typography variant="body2">
-                    The credentials for this provider were issued during initial setup. To route
-                    your agent&apos;s traffic through the governance layer, configure your client
-                    with the provided endpoint and API key.
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
-                    Security Reminder: Credentials are only displayed once at creation time.
-                  </Typography>
-                </Alert>
-              )}
-              {authEntry && (
-                <>
-                  <Alert severity="info">
-                    <Typography variant="body2">
-                      To route your agent&apos;s LLM traffic through the governance layer,
-                      configure your client with the credentials below.
-                    </Typography>
-                  </Alert>
-                  <Alert severity="warning">
-                    <Typography variant="body2" fontWeight={600}>
-                      Make sure to copy your API key now — you will not be able to see it again.
-                    </Typography>
-                  </Alert>
-                </>
-              )}
-              {Boolean(providerConfig.url) && (
-                <TextInput
-                  label="Endpoint URL"
-                  value={providerConfig.url ?? ""}
-                  copyable
-                  copyTooltipText="Copy Endpoint URL"
-                  slotProps={{ input: { readOnly: true } }}
-                  size="small"
-                />
-              )}
-              {authEntry && (
-                <TextInput
-                  label="Header Name"
-                  value={authEntry.name}
-                  copyable
-                  copyTooltipText="Copy Header Name"
-                  slotProps={{ input: { readOnly: true } }}
-                  size="small"
-                />
-              )}
-              {authEntry?.value && (
-                <TextInput
-                  label="API Key"
-                  type="password"
-                  value={authEntry.value}
-                  copyable
-                  copyTooltipText="Copy API Key"
-                  slotProps={{ input: { readOnly: true } }}
-                  size="small"
-                />
-              )}
-              {apiKeyValue && (
-                <TextInput
-                  label="API Key"
-                  type="password"
-                  value={apiKeyValue}
-                  copyable
-                  copyTooltipText="Copy API Key"
-                  slotProps={{ input: { readOnly: true } }}
-                  size="small"
-                />
-              )}
-              <Box>
-                <FormLabel sx={{ display: "block", mb: 0.5 }}>Example cURL</FormLabel>
-                <CodeBlock code={curlCode} language="bash" fieldId="curl" />
-              </Box>
-            </Stack>
-          );
-        })()}
-        {!isExternal && isDirty && !updateConfig.isError && (
-          <Alert
-            severity="warning"
-            action={
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Button size="small" variant="outlined" onClick={() => { setPanelOpen(false); navigate(backHref); }}>
-                  Cancel
-                </Button>
-                <Button
-                  size="small"
-                  variant="contained"
-                  onClick={handleSave}
-                  disabled={updateConfig.isPending || hasEmptyEnvVarName}
-                >
-                  {updateConfig.isPending ? "Saving…" : "Save changes"}
-                </Button>
-              </Stack>
-            }
-          >
-            You have unsaved changes.
-          </Alert>
+  const envVarReferenceRows = (config.environmentVariables ?? []).map((envVar) => ({
+    key: envVar.key,
+    name: envVarNames[envVar.key] ?? envVar.name,
+    description: generateDisplayName(envVar.key),
+  }));
+
+  const integrationGuide = (
+    <>
+      <Divider sx={{ my: 2 }} />
+      <Stack spacing={2}>
+        <Stack spacing={0.5}>
+          <Typography variant="subtitle1" fontWeight={600}>Integration Guide</Typography>
+          <Typography variant="body2" color="text.secondary">
+            Copy the snippet below into your agent code. The environment variables will be
+            injected automatically at runtime — do not hardcode their values.
+          </Typography>
+        </Stack>
+        <ToggleButtonGroup
+          size="small"
+          value={snippetTab}
+          exclusive
+          color="primary"
+          onChange={(_, v: number | null) => { if (v !== null) setSnippetTab(v); }}
+        >
+          <ToggleButton value={0} sx={{ textTransform: "none" }}>Python</ToggleButton>
+          <ToggleButton value={1} sx={{ textTransform: "none" }}>Copilot Prompt</ToggleButton>
+        </ToggleButtonGroup>
+
+        {snippetTab === 0 && (
+          <CodeBlock
+            language="python"
+            code={(() => {
+              const clientSetup = getClientSetupSnippet(
+                catalogProvider?.template,
+                config.environmentVariables.map((ev) => ev.key),
+              );
+              const imports = ["import os"];
+              if (clientSetup) imports.push(clientSetup.importLine);
+              const envVars = config.environmentVariables.map(
+                (envVar) =>
+                  `${envVar.key} = os.environ.get('${envVarNames[envVar.key] ?? envVar.name}')`,
+              );
+              const parts = [imports.join("\n"), "", ...envVars];
+              if (clientSetup) parts.push("", clientSetup.setup);
+              return parts.join("\n");
+            })()}
+          />
         )}
 
-        {!isExternal && <>
-          <Stack spacing={1}>
-            <Typography variant="subtitle1" fontWeight={600}>Environment Variable Names</Typography>
-            <Typography variant="body2" color="text.secondary">
-              These variable names are injected into the agent at runtime with environment-specific
-              values. Rename them here if your code already uses different names — then save.
-            </Typography>
-            <ListingTable.Container>
-              <ListingTable density="compact">
-                <ListingTable.Head>
-                  <ListingTable.Row>
-                    <ListingTable.Cell>Variable Name <Typography component="span" variant="caption" color="text.secondary">(editable)</Typography></ListingTable.Cell>
-                    <ListingTable.Cell>Description</ListingTable.Cell>
-                  </ListingTable.Row>
-                </ListingTable.Head>
-                <ListingTable.Body>
-                  {config.environmentVariables.map((envVar) => (
-                    <ListingTable.Row key={envVar.key}>
-                      <ListingTable.Cell>
-                        <TextInput
-                          value={envVarNames[envVar.key] ?? envVar.name}
-                          onChange={(e) =>
-                            setEnvVarNames((prev) => ({
-                              ...prev,
-                              [envVar.key]: e.target.value,
-                            }))
-                          }
-                          copyable
-                          copyTooltipText={`Copy ${envVarNames[envVar.key] ?? envVar.name}`}
-                          size="small"
-                        />
-                      </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        <Typography variant="body2" color="text.secondary">
-                          {generateDisplayName(envVar.key)}
-                        </Typography>
-                      </ListingTable.Cell>
-                    </ListingTable.Row>
-                  ))}
-                </ListingTable.Body>
-              </ListingTable>
-            </ListingTable.Container>
-          </Stack>
+        {snippetTab === 1 && (
+          <CodeBlock
+            language="markdown"
+            code={(() => {
+              const providerName = templateDisplayName
+                ?? catalogProvider?.name
+                ?? providerConfig?.providerName
+                ?? "the LLM provider";
+              const envVarList = config.environmentVariables
+                .map(
+                  (ev) =>
+                    `- ${generateDisplayName(ev.key)}: \`${envVarNames[ev.key] ?? ev.name}\``,
+                )
+                .join("\n");
+              return [
+                `Update my code to use ${providerName}.`,
+                "",
+                "Environment variables that will be injected at runtime:",
+                envVarList,
+                "",
+                "Requirements:",
+                `- Read the environment variables listed above to configure the client for ${providerName}.`,
+                `- Initialize the ${providerName} client with the URL and API key from those variables.`,
+                "- Do not hardcode any secrets or endpoint URLs.",
+                "- Keep the rest of my code unchanged.",
+              ].join("\n");
+            })()}
+          />
+        )}
+      </Stack>
+    </>
+  );
 
-          <Divider />
-
-          <Stack spacing={2}>
-            <Stack spacing={0.5}>
-              <Typography variant="subtitle1" fontWeight={600}>Integration Guide</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Copy the snippet below into your agent code. The environment variables will be
-                injected automatically at runtime — do not hardcode their values.
-              </Typography>
-            </Stack>
-            <ToggleButtonGroup
-              size="small"
-              value={snippetTab}
-              exclusive
-              color="primary"
-              onChange={(_, v: number | null) => { if (v !== null) setSnippetTab(v); }}
-            >
-              <ToggleButton value={0} sx={{ textTransform: "none" }}>Python</ToggleButton>
-              <ToggleButton value={1} sx={{ textTransform: "none" }}>Copilot Prompt</ToggleButton>
-            </ToggleButtonGroup>
-
-            {snippetTab === 0 && (
-              <CodeBlock
-                language="python"
-                code={(() => {
-                  const clientSetup = getClientSetupSnippet(
-                    catalogProvider?.template,
-                    config.environmentVariables.map((ev) => ev.key),
-                  );
-                  const imports = ["import os"];
-                  if (clientSetup) imports.push(clientSetup.importLine);
-                  const envVars = config.environmentVariables.map(
-                    (envVar) =>
-                      `${envVar.key} = os.environ.get('${envVarNames[envVar.key] ?? envVar.name}')`,
-                  );
-                  const parts = [imports.join("\n"), "", ...envVars];
-                  if (clientSetup) parts.push("", clientSetup.setup);
-                  return parts.join("\n");
-                })()}
-              />
-            )}
-
-            {snippetTab === 1 && (
-              <CodeBlock
-                language="markdown"
-                code={(() => {
-                  const providerName = templateDisplayName
-                    ?? catalogProvider?.name
-                    ?? providerConfig?.providerName
-                    ?? "the LLM provider";
-                  const envVarList = config.environmentVariables
-                    .map(
-                      (ev) =>
-                        `- ${generateDisplayName(ev.key)}: \`${envVarNames[ev.key] ?? ev.name}\``,
-                    )
-                    .join("\n");
-                  return [
-                    `Update my code to use ${providerName}.`,
-                    "",
-                    "Environment variables that will be injected at runtime:",
-                    envVarList,
-                    "",
-                    "Requirements:",
-                    `- Read the environment variables listed above to configure the client for ${providerName}.`,
-                    `- Initialize the ${providerName} client with the URL and API key from those variables.`,
-                    "- Do not hardcode any secrets or endpoint URLs.",
-                    "- Keep the rest of my code unchanged.",
-                  ].join("\n");
-                })()}
-              />
-            )}
-          </Stack>
-        </>}
-        </Stack>
-      </DrawerContent>
-    </DrawerWrapper>
+  const envVarsPanel = showPanel && (
+    isExternal && providerConfig ? (
+      <DrawerWrapper
+        open={panelOpen}
+        onClose={(_, reason) => { if (reason === "backdropClick") return; setPanelOpen(false); }}
+        minWidth={640}
+        maxWidth={640}
+      >
+        <DrawerHeader
+          icon={<BookOpen size={24} />}
+          title="Connect to LLM Provider"
+          onClose={() => setPanelOpen(false)}
+        />
+        <DrawerContent>
+          {(() => {
+            const authEntry = authInfoByEnv?.[selectedEnvName];
+            const apiKeyEnvVar = config.environmentVariables?.find((ev) => ev.key === "apikey");
+            const headerName = authEntry?.name || "Authorization";
+            const headerValue = authEntry?.value || (apiKeyEnvVar ? `$${apiKeyEnvVar.name}` : "<api-key>");
+            const curlCode = [
+              `curl -X POST ${providerConfig.url || "<endpoint-url>"}`,
+              `  --header "${headerName}: ${headerValue}"`,
+              `  -d '{"model": "", "messages": [{"role": "user", "content": "Hi..."}]}'`,
+            ].join(" \\\n");
+            return (
+              <Stack spacing={2}>
+                {!authEntry && (
+                  <Alert severity="info">
+                    <Typography variant="body2">
+                      The credentials for this provider were issued during initial setup. To route
+                      your agent&apos;s traffic through the governance layer, configure your client
+                      with the provided endpoint and API key.
+                    </Typography>
+                    <Typography variant="body2" sx={{ mt: 1, fontWeight: 600 }}>
+                      Security Reminder: Credentials are only displayed once at creation time.
+                    </Typography>
+                  </Alert>
+                )}
+                {authEntry && (
+                  <>
+                    <Alert severity="info">
+                      <Typography variant="body2">
+                        To route your agent&apos;s LLM traffic through the governance layer,
+                        configure your client with the credentials below.
+                      </Typography>
+                    </Alert>
+                    <Alert severity="warning">
+                      <Typography variant="body2" fontWeight={600}>
+                        Make sure to copy your API key now — you will not be able to see it again.
+                      </Typography>
+                    </Alert>
+                  </>
+                )}
+                {Boolean(providerConfig.url) && (
+                  <TextInput
+                    label="Endpoint URL"
+                    value={providerConfig.url ?? ""}
+                    copyable
+                    copyTooltipText="Copy Endpoint URL"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {authEntry && (
+                  <TextInput
+                    label="Header Name"
+                    value={authEntry.name}
+                    copyable
+                    copyTooltipText="Copy Header Name"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {authEntry?.value && (
+                  <TextInput
+                    label="API Key"
+                    type="password"
+                    value={authEntry.value}
+                    copyable
+                    copyTooltipText="Copy API Key"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                {apiKeyValue && (
+                  <TextInput
+                    label="API Key"
+                    type="password"
+                    value={apiKeyValue}
+                    copyable
+                    copyTooltipText="Copy API Key"
+                    slotProps={{ input: { readOnly: true } }}
+                    size="small"
+                  />
+                )}
+                <Box>
+                  <FormLabel sx={{ display: "block", mb: 0.5 }}>Example cURL</FormLabel>
+                  <CodeBlock code={curlCode} language="bash" fieldId="curl" />
+                </Box>
+              </Stack>
+            );
+          })()}
+        </DrawerContent>
+      </DrawerWrapper>
+    ) : (
+      <EnvironmentVariablesGuideDrawer
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        onCancel={() => { setPanelOpen(false); navigate(backHref); }}
+        onSave={handleSave}
+        isDirty={isDirty}
+        isSaving={updateConfig.isPending}
+        hasInvalidNames={hasEmptyEnvVarName}
+        error={updateConfig.isError ? updateConfig.error : undefined}
+        description={
+          "These variable names are injected into the agent at runtime with environment-specific values. Rename them here if your code already uses different names, then save."
+        }
+        rows={envVarReferenceRows}
+        onNameChange={(key, value) =>
+          setEnvVarNames((prev) => ({
+            ...prev,
+            [key]: value,
+          }))
+        }
+      >
+        {integrationGuide}
+      </EnvironmentVariablesGuideDrawer>
+    )
   );
 
   return (
@@ -937,11 +902,25 @@ export const ViewLLMProviderComponent: React.FC = () => {
               );
             })()}
 
-            <GuardrailsSection
-              guardrails={guardrails}
-              onAddGuardrail={handleAddGuardrail}
-              onEditGuardrail={handleEditGuardrail}
-              onRemoveGuardrail={handleRemoveGuardrail}
+            <PolicyListSection
+              title="Guardrails"
+              description="Add safety policies to enforce consistent protections."
+              addButtonLabel="Add Guardrail"
+              drawerAddTitle="Add Guardrail"
+              drawerEditTitle="Edit Guardrail"
+              drawerAddSubtitle="Choose a guardrail to configure advanced options."
+              drawerEditSubtitle="Update the guardrail configuration."
+              policyNoun="guardrail"
+              loadingLabel="Loading guardrails..."
+              searchPlaceholder="Search guardrails..."
+              catalogErrorLabel="Failed to load guardrails."
+              emptySearchTitle="No guardrails match your search"
+              emptyCatalogTitle="No guardrails available"
+              emptyCatalogDescription="No guardrail policies are available in the catalog."
+              policies={guardrails}
+              onAdd={handleAddGuardrail}
+              onEdit={handleEditGuardrail}
+              onRemove={handleRemoveGuardrail}
             />
 
             {isDirty && (

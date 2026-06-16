@@ -17,11 +17,13 @@
 package controllers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -34,6 +36,7 @@ import (
 type GatewayInternalController interface {
 	GetLLMProvider(w http.ResponseWriter, r *http.Request)
 	GetLLMProxy(w http.ResponseWriter, r *http.Request)
+	GetMCPProxy(w http.ResponseWriter, r *http.Request)
 	GetLLMProviderAPIKeys(w http.ResponseWriter, r *http.Request)
 	GetLLMProxyAPIKeys(w http.ResponseWriter, r *http.Request)
 	GetAPIKeys(w http.ResponseWriter, r *http.Request)
@@ -198,6 +201,70 @@ func (c *gatewayInternalController) GetLLMProxy(w http.ResponseWriter, r *http.R
 	}
 }
 
+// GetMCPProxy handles GET /api/internal/v1/mcp-proxies/:proxyId
+func (c *gatewayInternalController) GetMCPProxy(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	clientIP := getClientIP(r)
+
+	apiKey := r.Header.Get("api-key")
+	if apiKey == "" {
+		log.Warn("Unauthorized access attempt - Missing API key", "ip", clientIP)
+		http.Error(w, "API key is required. Provide 'api-key' header.", http.StatusUnauthorized)
+		return
+	}
+
+	gateway, err := c.gatewayService.VerifyToken(apiKey)
+	if err != nil {
+		log.Warn("Authentication failed", "ip", clientIP, "error", err)
+		http.Error(w, "Invalid or expired API key", http.StatusUnauthorized)
+		return
+	}
+
+	orgName := gateway.OrganizationName
+	gatewayID := gateway.UUID.String()
+	proxyID := r.PathValue("proxyId")
+	if proxyID == "" {
+		http.Error(w, "Proxy ID is required", http.StatusBadRequest)
+		return
+	}
+	if _, err := uuid.Parse(proxyID); err != nil {
+		http.Error(w, "MCP proxy ID must be an artifact UUID", http.StatusBadRequest)
+		return
+	}
+
+	proxy, err := c.gatewayInternalService.GetActiveMCPProxyDeploymentByGateway(ctx, proxyID, orgName, gatewayID)
+	if err != nil {
+		if errors.Is(err, utils.ErrDeploymentNotActive) {
+			http.Error(w, "No active deployment found for this MCP proxy on this gateway", http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, utils.ErrMCPProxyNotFound) {
+			http.Error(w, "MCP proxy not found", http.StatusNotFound)
+			return
+		}
+		log.Error("Failed to get MCP proxy", "error", err)
+		http.Error(w, "Failed to get MCP proxy", http.StatusInternalServerError)
+		return
+	}
+
+	zipData, err := utils.CreateMCPProxyYamlZip(proxy)
+	if err != nil {
+		log.Error("Failed to create ZIP file for MCP proxy", "proxyID", proxyID, "error", err)
+		http.Error(w, "Failed to create MCP proxy package", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"mcp-proxy-%s.zip\"", proxyID))
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(zipData)))
+
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(zipData); err != nil {
+		log.Error("Failed to write ZIP response", "proxyID", proxyID, "error", err)
+	}
+}
+
 // GetLLMProviderAPIKeys handles GET /api/internal/v1/llm-providers/api-keys
 func (c *gatewayInternalController) GetLLMProviderAPIKeys(w http.ResponseWriter, r *http.Request) {
 	c.getAPIKeysByKind(w, r, models.KindLLMProvider)
@@ -205,7 +272,7 @@ func (c *gatewayInternalController) GetLLMProviderAPIKeys(w http.ResponseWriter,
 
 // GetLLMProxyAPIKeys handles GET /api/internal/v1/llm-proxies/api-keys
 func (c *gatewayInternalController) GetLLMProxyAPIKeys(w http.ResponseWriter, r *http.Request) {
-	c.getAPIKeysByKind(w, r, models.KindLLMProxy)
+	c.getAPIKeysByKinds(w, r, models.KindLLMProxy, models.KindMCPProxy, models.KindMCPMapping)
 }
 
 // GetAPIKeys handles GET /api/internal/v1/apis/api-keys
@@ -229,6 +296,10 @@ type controlPlaneAPIKeyResponse struct {
 }
 
 func (c *gatewayInternalController) getAPIKeysByKind(w http.ResponseWriter, r *http.Request, kind string) {
+	c.getAPIKeysByKinds(w, r, kind)
+}
+
+func (c *gatewayInternalController) getAPIKeysByKinds(w http.ResponseWriter, r *http.Request, kinds ...string) {
 	log := logger.GetLogger(r.Context())
 
 	apiKey := r.Header.Get("api-key")
@@ -243,29 +314,36 @@ func (c *gatewayInternalController) getAPIKeysByKind(w http.ResponseWriter, r *h
 		return
 	}
 
-	var keys []models.StoredAPIKey
-	if kind == models.KindAgent {
-		// Agent API keys are environment-scoped: only return keys for environments
-		// assigned to this gateway so the gateway controller doesn't try to load
-		// API configurations that belong to a different environment's data plane.
-		mappings, mappingErr := c.gatewayService.GetGatewayEnvironmentMappings(gateway.UUID.String())
-		if mappingErr != nil {
-			log.Error("Failed to get gateway environment mappings", "gatewayID", gateway.UUID, "error", mappingErr)
+	keys := make([]models.StoredAPIKey, 0)
+	var envUUIDs []string
+	for _, kind := range kinds {
+		var kindKeys []models.StoredAPIKey
+		if kind == models.KindAgent {
+			// Agent API keys are environment-scoped: only return keys for environments
+			// assigned to this gateway so the gateway controller doesn't try to load
+			// API configurations that belong to a different environment's data plane.
+			if envUUIDs == nil {
+				mappings, mappingErr := c.gatewayService.GetGatewayEnvironmentMappings(gateway.UUID.String())
+				if mappingErr != nil {
+					log.Error("Failed to get gateway environment mappings", "gatewayID", gateway.UUID, "error", mappingErr)
+					http.Error(w, "Failed to list API keys", http.StatusInternalServerError)
+					return
+				}
+				envUUIDs = make([]string, 0, len(mappings))
+				for _, m := range mappings {
+					envUUIDs = append(envUUIDs, m.EnvironmentUUID.String())
+				}
+			}
+			kindKeys, err = c.apiKeyRepo.ListByArtifactKindAndEnvs(gateway.OrganizationName, kind, envUUIDs)
+		} else {
+			kindKeys, err = c.apiKeyRepo.ListByArtifactKind(gateway.OrganizationName, kind)
+		}
+		if err != nil {
+			log.Error("Failed to list API keys", "kind", kind, "error", err)
 			http.Error(w, "Failed to list API keys", http.StatusInternalServerError)
 			return
 		}
-		envUUIDs := make([]string, 0, len(mappings))
-		for _, m := range mappings {
-			envUUIDs = append(envUUIDs, m.EnvironmentUUID.String())
-		}
-		keys, err = c.apiKeyRepo.ListByArtifactKindAndEnvs(gateway.OrganizationName, kind, envUUIDs)
-	} else {
-		keys, err = c.apiKeyRepo.ListByArtifactKind(gateway.OrganizationName, kind)
-	}
-	if err != nil {
-		log.Error("Failed to list API keys", "kind", kind, "error", err)
-		http.Error(w, "Failed to list API keys", http.StatusInternalServerError)
-		return
+		keys = append(keys, kindKeys...)
 	}
 
 	result := make([]controlPlaneAPIKeyResponse, 0, len(keys))
@@ -377,10 +455,46 @@ func (c *gatewayInternalController) GetApplications(w http.ResponseWriter, r *ht
 // PushGatewayManifest handles POST /api/internal/v1/gateways/{gatewayId}/manifest
 // Receives the gateway's installed policy manifest.
 func (c *gatewayInternalController) PushGatewayManifest(w http.ResponseWriter, r *http.Request) {
-	// Drain and discard the request body
-	_, _ = io.Copy(io.Discard, r.Body)
 	log := logger.GetLogger(r.Context())
 	gatewayID := r.PathValue("gatewayId")
-	log.Info("Received gateway manifest push", "gatewayId", gatewayID)
+	if gatewayID == "" {
+		http.Error(w, "Gateway ID is required", http.StatusBadRequest)
+		return
+	}
+
+	apiKey := r.Header.Get("api-key")
+	if apiKey == "" {
+		log.Warn("Unauthorized gateway manifest push - Missing API key", "gatewayId", gatewayID)
+		http.Error(w, "API key is required. Provide 'api-key' header.", http.StatusUnauthorized)
+		return
+	}
+	gateway, err := c.gatewayService.VerifyToken(apiKey)
+	if err != nil {
+		log.Warn("Gateway manifest authentication failed", "gatewayId", gatewayID, "error", err)
+		http.Error(w, "Invalid or expired API key", http.StatusUnauthorized)
+		return
+	}
+	if gateway.UUID.String() != gatewayID {
+		log.Warn("Gateway manifest token does not match gateway", "gatewayId", gatewayID, "tokenGatewayId", gateway.UUID)
+		http.Error(w, "Gateway token does not match gateway ID", http.StatusForbidden)
+		return
+	}
+
+	var manifest map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&manifest); err != nil {
+		log.Error("Failed to decode gateway manifest", "gatewayId", gatewayID, "error", err)
+		http.Error(w, "Invalid gateway manifest", http.StatusBadRequest)
+		return
+	}
+	if err := c.gatewayService.SaveGatewayPolicyManifest(gatewayID, manifest); err != nil {
+		if errors.Is(err, utils.ErrGatewayNotFound) {
+			http.Error(w, "Gateway not found", http.StatusNotFound)
+			return
+		}
+		log.Error("Failed to store gateway manifest", "gatewayId", gatewayID, "error", err)
+		http.Error(w, "Failed to store gateway manifest", http.StatusInternalServerError)
+		return
+	}
+
 	w.WriteHeader(http.StatusNoContent)
 }

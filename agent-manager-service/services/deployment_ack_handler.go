@@ -77,9 +77,9 @@ func (h *DeploymentAckHandler) handleDeploymentAck(gatewayID string, payload jso
 		log.Info("Gateway deployment ack received")
 	}
 
-	// Only process acks for LLM providers and proxies
+	// Only process acks for deployable gateway artifacts with current deployment state.
 	switch ack.ResourceType {
-	case "llmprovider", "llmproxy":
+	case "llmprovider", "llmproxy", "mcpproxy":
 		// Update deployment status based on ack
 		if ack.DeploymentID == "" {
 			log.Warn("DeploymentAckHandler: missing deploymentID in ack, skipping status update")

@@ -40,7 +40,3 @@ export {
   LLMProvidersOrganization,
   AddLLMProvidersOrganization,
 };
-export {
-  GuardrailsSection,
-  type GuardrailSelection,
-} from './subComponents/GuardrailsSection';

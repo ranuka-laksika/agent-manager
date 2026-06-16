@@ -74,7 +74,7 @@ func (c *catalogController) ListCatalog(w http.ResponseWriter, r *http.Request) 
 
 	// Validate kind parameter if provided
 	if kind != "" && !isValidCatalogKind(kind) {
-		validKinds := []string{models.CatalogKindLLMProvider, models.CatalogKindAgent, models.CatalogKindMCP}
+		validKinds := validCatalogKinds()
 		log.Error("ListCatalog: invalid kind parameter", "kind", kind)
 		utils.WriteErrorResponse(w, http.StatusBadRequest,
 			fmt.Sprintf("Invalid kind parameter. Must be one of: %s", strings.Join(validKinds, ", ")))
@@ -327,17 +327,22 @@ func convertRateLimitingScope(scope *models.RateLimitingScope) *spec.RateLimitin
 
 // isValidCatalogKind validates if the provided kind is a valid catalog kind
 func isValidCatalogKind(kind string) bool {
-	validKinds := []string{
-		models.CatalogKindLLMProvider,
-		models.CatalogKindAgent,
-		models.CatalogKindMCP,
-	}
-	for _, validKind := range validKinds {
+	for _, validKind := range validCatalogKinds() {
 		if kind == validKind {
 			return true
 		}
 	}
 	return false
+}
+
+func validCatalogKinds() []string {
+	return []string{
+		models.CatalogKindLLMProvider,
+		models.CatalogKindAgent,
+		models.CatalogKindMCP,
+		models.CatalogKindMCPProxy,
+		models.CatalogKindMCPMapping,
+	}
 }
 
 // safeIntToInt32 safely converts int to int32 with validation

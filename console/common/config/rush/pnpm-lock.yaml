@@ -145,6 +145,9 @@ importers:
       '@agent-management-platform/logs':
         specifier: workspace:*
         version: link:../pages/logs
+      '@agent-management-platform/mcp-proxies':
+        specifier: workspace:*
+        version: link:../pages/mcp-proxies
       '@agent-management-platform/metrics':
         specifier: workspace:*
         version: link:../pages/metrics
@@ -443,6 +446,9 @@ importers:
       date-fns:
         specifier: 4.1.0
         version: 4.1.0
+      js-yaml:
+        specifier: 4.1.1
+        version: 4.1.1
       react-dom:
         specifier: 19.1.1
         version: 19.1.1(react@19.1.1)
@@ -498,6 +504,9 @@ importers:
       '@types/jest':
         specifier: 29.5.14
         version: 29.5.14
+      '@types/js-yaml':
+        specifier: 4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: 24.6.0
         version: 24.6.0
@@ -851,6 +860,9 @@ importers:
       '@agent-management-platform/llm-providers':
         specifier: workspace:*
         version: link:../llm-providers
+      '@agent-management-platform/shared-component':
+        specifier: workspace:*
+        version: link:../../libs/shared-component
       '@agent-management-platform/types':
         specifier: workspace:*
         version: link:../../libs/types
@@ -1609,6 +1621,9 @@ importers:
       '@agent-management-platform/llm-providers':
         specifier: workspace:*
         version: link:../llm-providers
+      '@agent-management-platform/mcp-proxies':
+        specifier: workspace:*
+        version: link:../mcp-proxies
       '@agent-management-platform/shared-component':
         specifier: workspace:*
         version: link:../../libs/shared-component
@@ -2895,6 +2910,121 @@ importers:
       vitest:
         specifier: 3.1.3
         version: 3.1.3(@types/debug@4.1.13)(@types/node@24.6.0)(jsdom@26.1.0)(less@4.3.0)(lightningcss@1.32.0)
+
+  ../../workspaces/pages/mcp-proxies:
+    dependencies:
+      '@agent-management-platform/api-client':
+        specifier: workspace:*
+        version: link:../../libs/api-client
+      '@agent-management-platform/shared-component':
+        specifier: workspace:*
+        version: link:../../libs/shared-component
+      '@agent-management-platform/types':
+        specifier: workspace:*
+        version: link:../../libs/types
+      '@agent-management-platform/views':
+        specifier: workspace:*
+        version: link:../../libs/views
+      '@emotion/react':
+        specifier: 11.13.5
+        version: 11.13.5(@types/react@19.2.14)(react@19.1.1)
+      '@emotion/styled':
+        specifier: 11.13.5
+        version: 11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1)
+      '@mui/material':
+        specifier: 7.0.0
+        version: 7.0.0(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@wso2/oxygen-ui':
+        specifier: 0.10.1
+        version: 0.10.1(@mui/system@7.3.11(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(@wso2/oxygen-ui-icons-react@0.10.1(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@wso2/oxygen-ui-icons-react':
+        specifier: 0.10.1
+        version: 0.10.1(react@19.1.1)
+      react-dom:
+        specifier: 19.1.1
+        version: 19.1.1(react@19.1.1)
+      react-router-dom:
+        specifier: 6.28.0
+        version: 6.28.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+    devDependencies:
+      '@agent-management-platform/eslint-config':
+        specifier: workspace:*
+        version: link:../../libs/eslint-config
+      '@eslint/eslintrc':
+        specifier: 3.3.1
+        version: 3.3.1
+      '@eslint/js':
+        specifier: 9.36.0
+        version: 9.36.0
+      '@types/node':
+        specifier: 24.6.0
+        version: 24.6.0
+      '@types/react':
+        specifier: 19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 19.1.9
+        version: 19.1.9(@types/react@19.2.14)
+      '@typescript-eslint/eslint-plugin':
+        specifier: 8.33.1
+        version: 8.33.1(@typescript-eslint/parser@8.33.1(eslint@9.36.0)(typescript@5.9.3))(eslint@9.36.0)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: 8.33.1
+        version: 8.33.1(eslint@9.36.0)(typescript@5.9.3)
+      '@vitejs/plugin-react':
+        specifier: 5.0.4
+        version: 5.0.4(vite@6.3.5(@types/node@24.6.0)(less@4.3.0)(lightningcss@1.32.0))
+      eslint:
+        specifier: 9.36.0
+        version: 9.36.0
+      eslint-config-prettier:
+        specifier: 10.1.5
+        version: 10.1.5(eslint@9.36.0)
+      eslint-import-resolver-typescript:
+        specifier: 4.4.1
+        version: 4.4.1(eslint-plugin-import@2.31.0(eslint@9.36.0))(eslint@9.36.0)
+      eslint-plugin-import:
+        specifier: 2.31.0
+        version: 2.31.0(eslint@9.36.0)
+      eslint-plugin-prettier:
+        specifier: 5.4.0
+        version: 5.4.0(eslint-config-prettier@10.1.5(eslint@9.36.0))(eslint@9.36.0)(prettier@3.5.3)
+      eslint-plugin-react:
+        specifier: 7.37.5
+        version: 7.37.5(eslint@9.36.0)
+      eslint-plugin-react-hooks:
+        specifier: 7.0.0
+        version: 7.0.0(eslint@9.36.0)
+      eslint-plugin-storybook:
+        specifier: 0.12.0
+        version: 0.12.0(eslint@9.36.0)(typescript@5.9.3)
+      globals:
+        specifier: 16.4.0
+        version: 16.4.0
+      postcss:
+        specifier: 8.5.3
+        version: 8.5.3
+      postcss-simple-vars:
+        specifier: 7.0.1
+        version: 7.0.1(postcss@8.5.3)
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+      react:
+        specifier: 19.1.1
+        version: 19.1.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.45.0
+        version: 8.45.0(eslint@9.36.0)(typescript@5.9.3)
+      vite:
+        specifier: 6.3.5
+        version: 6.3.5(@types/node@24.6.0)(less@4.3.0)(lightningcss@1.32.0)
+      vite-plugin-dts:
+        specifier: 4.5.4
+        version: 4.5.4(@types/node@24.6.0)(rollup@4.60.4)(typescript@5.9.3)(vite@6.3.5(@types/node@24.6.0)(less@4.3.0)(lightningcss@1.32.0))
 
   ../../workspaces/pages/metrics:
     dependencies:

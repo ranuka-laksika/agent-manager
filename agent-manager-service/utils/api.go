@@ -119,3 +119,35 @@ func CreateLLMProxyYamlZip(proxyYamlMap map[string]string) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+// CreateMCPProxyYamlZip creates a ZIP file containing MCP proxy YAML files.
+func CreateMCPProxyYamlZip(proxyYamlMap map[string]string) ([]byte, error) {
+	var buf bytes.Buffer
+	zipWriter := zip.NewWriter(&buf)
+
+	for proxyID, yamlContent := range proxyYamlMap {
+		fileName := fmt.Sprintf("mcp-proxy-%s.yaml", proxyID)
+		fileWriter, err := zipWriter.Create(fileName)
+		if err != nil {
+			if closeErr := zipWriter.Close(); closeErr != nil {
+				return nil, errors.Join(fmt.Errorf("failed to create file in zip: %w", err), fmt.Errorf("close error: %w", closeErr))
+			}
+			return nil, fmt.Errorf("failed to create file in zip: %w", err)
+		}
+
+		_, err = fileWriter.Write([]byte(yamlContent))
+		if err != nil {
+			if closeErr := zipWriter.Close(); closeErr != nil {
+				return nil, errors.Join(fmt.Errorf("failed to write file content: %w", err), fmt.Errorf("close error: %w", closeErr))
+			}
+			return nil, fmt.Errorf("failed to write file content: %w", err)
+		}
+	}
+
+	err := zipWriter.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed to close zip writer: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}

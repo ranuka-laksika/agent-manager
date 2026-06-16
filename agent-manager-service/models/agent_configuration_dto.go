@@ -71,11 +71,12 @@ type EnvModelConfigResponse struct {
 
 // LLMProxyInfo contains proxy details exposed in response
 type LLMProxyInfo struct {
-	URL          *string     `json:"proxyUrl,omitempty"` // Included for external agents
-	APIKey       *string     `json:"apiKey,omitempty"`   // Only during creation for external agents
-	ProxyUUID    *string     `json:"proxyUuid"`
-	ProviderName *string     `json:"providerName"` // Handle/name of the provider
-	Policies     []LLMPolicy `json:"policies,omitempty"`
+	URL            *string     `json:"proxyUrl,omitempty"` // Included for external agents
+	APIKey         *string     `json:"apiKey,omitempty"`   // Only during creation for external agents
+	AuthHeaderName *string     `json:"authHeaderName,omitempty"`
+	ProxyUUID      *string     `json:"proxyUuid"`
+	ProviderName   *string     `json:"providerName"` // Handle/name of the provider
+	Policies       []LLMPolicy `json:"policies,omitempty"`
 }
 
 // EnvironmentVariableConfig represents the variable name exposed to agent

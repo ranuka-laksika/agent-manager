@@ -45,8 +45,10 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { ChevronDown, Plus, Search, ShieldAlert } from "@wso2/oxygen-ui-icons-react";
-import type { ParameterValues } from "../PolicyParameterEditor/types";
-import { GuardrailSelectorDrawer } from "../components/GuardrailSelectorDrawer";
+import {
+  PolicySelectorDrawer,
+  type ParameterValues,
+} from "@agent-management-platform/shared-component";
 import { useOpenApiSpec } from "../hooks/useOpenApiSpec";
 import {
   extractResourcesFromSpec,
@@ -675,11 +677,18 @@ export function LLMProviderGuardrailsTab({
         </Button>
       </Stack>
 
-      <GuardrailSelectorDrawer
+      <PolicySelectorDrawer
         open={drawerOpen}
         onClose={handleCloseDrawer}
         onSubmit={handleDrawerSubmit}
-        disabledGuardrailKeys={
+        policyNoun="guardrail"
+        loadingLabel="Loading guardrails..."
+        searchPlaceholder="Search guardrails..."
+        catalogErrorLabel="Failed to load guardrails."
+        emptySearchTitle="No guardrails match your search"
+        emptyCatalogTitle="No guardrails available"
+        emptyCatalogDescription="No guardrail policies are available in the catalog."
+        disabledPolicyKeys={
           editingContext
             ? []
             : policies
@@ -699,7 +708,7 @@ export function LLMProviderGuardrailsTab({
                 .map((p) => `${p.name}@${p.version}`)
         }
         existingSettings={editingContext?.params}
-        editGuardrailKey={
+        editPolicyKey={
           editingContext
             ? `${editingContext.guardrailName}@${editingContext.guardrailVersion}`
             : undefined

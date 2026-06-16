@@ -48,6 +48,7 @@ import { metaData as metricsMetadata } from "@agent-management-platform/metrics"
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
+import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
 import { gatewaysMetadata } from "@agent-management-platform/gateways";
 import { identitiesMetadata } from "@agent-management-platform/identities";
@@ -121,6 +122,12 @@ export function useNavigationItems(): Array<
       { path: string; wildPath: string }
     >
   ).llmProviders;
+  const mcpProxiesOrgRoute = (
+    absoluteRouteMap.children.org.children as unknown as Record<
+      string,
+      { path: string; wildPath: string }
+    >
+  ).mcpProxies;
   const agentsChildren = absoluteRouteMap.children.org.children.projects
     .children.agents.children as Record<string, { path: string; wildPath: string }>;
   const gatewaysOrgRoute = (
@@ -702,6 +709,13 @@ export function useNavigationItems(): Array<
                   icon: <llmProvidersMetadata.icon size={20} />,
                   href: generatePath(llmProvidersOrgRoute.path, { orgId }),
                   isActive: !!matchPath(llmProvidersOrgRoute.wildPath, pathname),
+                },
+                {
+                  label: mcpProxiesMetadata.title,
+                  type: "item" as const,
+                  icon: <mcpProxiesMetadata.icon size={20} />,
+                  href: generatePath(mcpProxiesOrgRoute.path, { orgId }),
+                  isActive: !!matchPath(mcpProxiesOrgRoute.wildPath, pathname),
                 },
               ],
             },

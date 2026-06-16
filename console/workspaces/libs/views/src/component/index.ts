@@ -28,6 +28,7 @@ export * from './FileMountEditor';
 export * from './TraceExplorer';
 export * from './FormElements';
 export * from './Drawer';
+export * from './SelectionIndicator';
 export * from './JSONView';
 export * from './MarkdownView';
 export * from './Logo';

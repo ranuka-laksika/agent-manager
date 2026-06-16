@@ -40,6 +40,11 @@ type AgentConfigurationController interface {
 	ListAgentModelConfigs(w http.ResponseWriter, r *http.Request)
 	UpdateAgentModelConfig(w http.ResponseWriter, r *http.Request)
 	DeleteAgentModelConfig(w http.ResponseWriter, r *http.Request)
+	CreateAgentMCPConfig(w http.ResponseWriter, r *http.Request)
+	GetAgentMCPConfig(w http.ResponseWriter, r *http.Request)
+	ListAgentMCPConfigs(w http.ResponseWriter, r *http.Request)
+	UpdateAgentMCPConfig(w http.ResponseWriter, r *http.Request)
+	DeleteAgentMCPConfig(w http.ResponseWriter, r *http.Request)
 }
 
 type agentConfigurationController struct {
@@ -78,10 +83,9 @@ func (c *agentConfigurationController) CreateAgentModelConfig(w http.ResponseWri
 		return
 	}
 
-	validTypes := map[string]bool{"llm": true, "mcp": true, "other": true}
-	if !validTypes[specReq.Type] {
+	if specReq.Type != models.AgentConfigTypeLLM {
 		log.Warn("CreateAgentModelConfig: invalid type", "type", specReq.Type)
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "Type must be one of: llm, mcp, other")
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Type must be llm")
 		return
 	}
 
@@ -105,6 +109,9 @@ func (c *agentConfigurationController) CreateAgentModelConfig(w http.ResponseWri
 			return
 		case errors.Is(err, utils.ErrLLMProviderNotFound):
 			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM provider not found")
+			return
+		case errors.Is(err, utils.ErrMCPProxyNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "MCP proxy not found")
 			return
 		case errors.Is(err, utils.ErrInvalidInput):
 			utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
@@ -158,6 +165,11 @@ func (c *agentConfigurationController) GetAgentModelConfig(w http.ResponseWriter
 		return
 	}
 
+	if response.Type != models.AgentConfigTypeLLM {
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+		return
+	}
+
 	// Convert response to spec model
 	specResponse := convertAgentModelConfigResponse(*response)
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
@@ -185,7 +197,7 @@ func (c *agentConfigurationController) ListAgentModelConfigs(w http.ResponseWrit
 		offset = 0
 	}
 
-	response, err := c.agentConfigService.List(ctx, orgName, projectName, agentName, limit, offset)
+	response, err := c.agentConfigService.ListByType(ctx, orgName, projectName, agentName, models.AgentConfigTypeIDLLM, limit, offset)
 	if err != nil {
 		log.Error("ListAgentModelConfigs: failed to list configurations", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list configurations")
@@ -238,6 +250,21 @@ func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWri
 		return
 	}
 
+	existing, err := c.agentConfigService.Get(ctx, configUUID, orgName, projectName, agentName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("UpdateAgentModelConfig: failed to get configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update configuration")
+		return
+	}
+	if existing.Type != models.AgentConfigTypeLLM {
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+		return
+	}
+
 	response, err := c.agentConfigService.Update(ctx, configUUID, orgName, projectName, agentName, req)
 	if err != nil {
 		switch {
@@ -246,6 +273,9 @@ func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWri
 			return
 		case errors.Is(err, utils.ErrLLMProviderNotFound):
 			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM provider not found")
+			return
+		case errors.Is(err, utils.ErrMCPProxyNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "MCP proxy not found")
 			return
 		case errors.Is(err, utils.ErrInvalidInput):
 			utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
@@ -282,6 +312,21 @@ func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWri
 		return
 	}
 
+	existing, err := c.agentConfigService.Get(ctx, configUUID, orgName, projectName, agentName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("DeleteAgentModelConfig: failed to get configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete configuration")
+		return
+	}
+	if existing.Type != models.AgentConfigTypeLLM {
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+		return
+	}
+
 	if err := c.agentConfigService.Delete(ctx, configUUID, orgName, projectName, agentName); err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -295,16 +340,257 @@ func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWri
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// CreateAgentMCPConfig handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs
+func (c *agentConfigurationController) CreateAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	createdBy := "system"
+
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+	var specReq spec.CreateAgentModelConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil {
+		log.Error("CreateAgentMCPConfig: failed to decode request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	specReq.Type = models.AgentConfigTypeMCP
+
+	if err := utils.ValidateConfigName(specReq.Name); err != nil {
+		log.Warn("CreateAgentMCPConfig: invalid name", "error", err)
+		utils.WriteValidationErrorResponse(w, err)
+		return
+	}
+
+	req, err := convertCreateAgentModelConfigRequest(specReq)
+	if err != nil {
+		log.Error("CreateAgentMCPConfig: failed to convert request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("Invalid request: %v", err))
+		return
+	}
+
+	response, err := c.agentConfigService.Create(ctx, orgName, projectName, agentName, req, createdBy)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrAgentConfigAlreadyExists):
+			utils.WriteErrorResponse(w, http.StatusConflict, "Agent MCP configuration already exists")
+			return
+		case errors.Is(err, utils.ErrAgentNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Agent not found")
+			return
+		case errors.Is(err, utils.ErrMCPProxyNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "MCP proxy not found")
+			return
+		case errors.Is(err, utils.ErrInvalidInput):
+			utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
+			return
+		case errors.Is(err, utils.ErrUnauthorized):
+			utils.WriteErrorResponse(w, http.StatusUnauthorized, "Unauthorized access")
+			return
+		case errors.Is(err, utils.ErrForbidden):
+			utils.WriteErrorResponse(w, http.StatusForbidden, "Forbidden")
+			return
+		default:
+			log.Error("CreateAgentMCPConfig: failed to create configuration", "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create agent MCP configuration")
+			return
+		}
+	}
+
+	specResponse := convertAgentModelConfigResponse(*response)
+	utils.WriteSuccessResponse(w, http.StatusCreated, specResponse)
+}
+
+// GetAgentMCPConfig handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+func (c *agentConfigurationController) GetAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	configID := r.PathValue(utils.PathParamConfigId)
+
+	configUUID, err := uuid.Parse(configID)
+	if err != nil {
+		log.Error("GetAgentMCPConfig: invalid config ID", "configId", configID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid configuration ID")
+		return
+	}
+
+	response, err := c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("GetAgentMCPConfig: failed to get configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get configuration")
+		return
+	}
+	specResponse := convertAgentModelConfigResponse(*response)
+	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
+}
+
+// ListAgentMCPConfigs handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs
+func (c *agentConfigurationController) ListAgentMCPConfigs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	limit := getIntQueryParam(r, "limit", 20)
+	offset := getIntQueryParam(r, "offset", 0)
+
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	response, err := c.agentConfigService.ListMCP(ctx, orgName, projectName, agentName, limit, offset)
+	if err != nil {
+		log.Error("ListAgentMCPConfigs: failed to list configurations", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list configurations")
+		return
+	}
+
+	specResponse := convertAgentModelConfigListResponse(*response)
+	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
+}
+
+// UpdateAgentMCPConfig handles PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+func (c *agentConfigurationController) UpdateAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	configID := r.PathValue(utils.PathParamConfigId)
+
+	configUUID, err := uuid.Parse(configID)
+	if err != nil {
+		log.Error("UpdateAgentMCPConfig: invalid config ID", "configId", configID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid configuration ID")
+		return
+	}
+
+	_, err = c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("UpdateAgentMCPConfig: failed to get configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update configuration")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1MB limit
+	var specReq spec.UpdateAgentModelConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil {
+		log.Error("UpdateAgentMCPConfig: failed to decode request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if specReq.Name != nil {
+		if err := utils.ValidateConfigName(*specReq.Name); err != nil {
+			log.Warn("UpdateAgentMCPConfig: invalid name", "error", err)
+			utils.WriteValidationErrorResponse(w, err)
+			return
+		}
+	}
+
+	req, err := convertUpdateAgentModelConfigRequest(specReq)
+	if err != nil {
+		log.Error("UpdateAgentMCPConfig: failed to convert request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, fmt.Sprintf("Invalid request: %v", err))
+		return
+	}
+
+	response, err := c.agentConfigService.UpdateMCP(ctx, configUUID, orgName, projectName, agentName, req)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrAgentConfigNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		case errors.Is(err, utils.ErrMCPProxyNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "MCP proxy not found")
+			return
+		case errors.Is(err, utils.ErrInvalidInput):
+			utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
+			return
+		default:
+			log.Error("UpdateAgentMCPConfig: failed to update configuration", "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update configuration")
+			return
+		}
+	}
+
+	specResponse := convertAgentModelConfigResponse(*response)
+	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
+}
+
+// DeleteAgentMCPConfig handles DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+func (c *agentConfigurationController) DeleteAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projectName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	configID := r.PathValue(utils.PathParamConfigId)
+
+	configUUID, err := uuid.Parse(configID)
+	if err != nil {
+		log.Error("DeleteAgentMCPConfig: invalid config ID", "configId", configID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid configuration ID")
+		return
+	}
+
+	_, err = c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("DeleteAgentMCPConfig: failed to get configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete configuration")
+		return
+	}
+	if err := c.agentConfigService.DeleteMCP(ctx, configUUID, orgName, projectName, agentName); err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("DeleteAgentMCPConfig: failed to delete configuration", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete configuration")
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // Converter functions between spec and models
 
 func convertCreateAgentModelConfigRequest(specReq spec.CreateAgentModelConfigRequest) (models.CreateAgentModelConfigRequest, error) {
 	envMappings := make(map[string]models.EnvModelConfigRequest)
 	for envName, envConfig := range specReq.EnvMappings {
-		if envConfig.ProviderName == "" {
-			return models.CreateAgentModelConfigRequest{}, fmt.Errorf("providerName is required for environment %s", envName)
+		proxyName := resolveEnvConfigProxyName(envConfig)
+		if proxyName == "" {
+			return models.CreateAgentModelConfigRequest{}, fmt.Errorf("providerName or proxyName is required for environment %s", envName)
 		}
 		envMappings[envName] = models.EnvModelConfigRequest{
-			ProviderName: envConfig.ProviderName,
+			ProviderName: proxyName,
 			Configuration: models.EnvProviderConfiguration{
 				Policies: convertToModelPolicies(&envConfig.Configuration),
 			},
@@ -340,11 +626,12 @@ func convertUpdateAgentModelConfigRequest(specReq spec.UpdateAgentModelConfigReq
 	if specReq.EnvMappings != nil {
 		envMappings := make(map[string]models.EnvModelConfigRequest)
 		for envName, envConfig := range *specReq.EnvMappings {
-			if envConfig.ProviderName == "" {
-				return models.UpdateAgentModelConfigRequest{}, fmt.Errorf("providerName is required for environment %s", envName)
+			proxyName := resolveEnvConfigProxyName(envConfig)
+			if proxyName == "" {
+				return models.UpdateAgentModelConfigRequest{}, fmt.Errorf("providerName or proxyName is required for environment %s", envName)
 			}
 			envMappings[envName] = models.EnvModelConfigRequest{
-				ProviderName: envConfig.ProviderName,
+				ProviderName: proxyName,
 				Configuration: models.EnvProviderConfiguration{
 					Policies: convertToModelPolicies(&envConfig.Configuration),
 				},
@@ -385,6 +672,12 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 				ProviderName: providerName,
 				Policies:     convertToSpecPolicies(&envConfig.LLMProxy.Policies),
 			}
+			if modelResp.Type == "mcp" {
+				modelEnvConfig.SetProxyName(providerName)
+				modelEnvConfig.SetProxyId(providerName)
+				modelEnvConfig.SetMcpProxyName(providerName)
+				modelEnvConfig.SetMcpProxyId(providerName)
+			}
 
 			// Add proxy URL if present
 			if envConfig.LLMProxy.URL != nil {
@@ -396,6 +689,9 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 				authType := "api-key"
 				authIn := "header"
 				headerName := "api-key"
+				if envConfig.LLMProxy.AuthHeaderName != nil && *envConfig.LLMProxy.AuthHeaderName != "" {
+					headerName = *envConfig.LLMProxy.AuthHeaderName
+				}
 				modelEnvConfig.AuthInfo = &spec.AuthInfo{
 					Type:  authType,
 					In:    authIn,
@@ -433,6 +729,23 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 		EnvironmentVariables: envVars,
 		CreatedAt:            modelResp.CreatedAt,
 		UpdatedAt:            modelResp.UpdatedAt,
+	}
+}
+
+func resolveEnvConfigProxyName(envConfig spec.EnvModelConfigRequest) string {
+	switch {
+	case envConfig.GetProviderName() != "":
+		return envConfig.GetProviderName()
+	case envConfig.GetProxyName() != "":
+		return envConfig.GetProxyName()
+	case envConfig.GetProxyId() != "":
+		return envConfig.GetProxyId()
+	case envConfig.GetMcpProxyName() != "":
+		return envConfig.GetMcpProxyName()
+	case envConfig.GetMcpProxyId() != "":
+		return envConfig.GetMcpProxyId()
+	default:
+		return ""
 	}
 }
 

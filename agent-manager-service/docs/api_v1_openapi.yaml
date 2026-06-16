@@ -3226,6 +3226,296 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs:
+    post:
+      summary: Create agent MCP configuration
+      description: Creates a new MCP configuration for an agent with environment-specific MCP proxy mappings
+      operationId: createAgentMCPConfig
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Organization name
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Project name
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAgentModelConfigRequest"
+      responses:
+        "201":
+          description: Agent MCP configuration created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentModelConfigResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: User authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent or MCP proxy not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Agent MCP configuration already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      summary: List agent MCP configurations
+      description: Lists all MCP configurations for an agent with pagination
+      operationId: listAgentMCPConfigs
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Organization name
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Project name
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent name
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+          description: Maximum number of results to return
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of results to skip
+      responses:
+        "200":
+          description: List of agent MCP configurations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentModelConfigListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}:
+    get:
+      summary: Get agent MCP configuration
+      description: Retrieves a specific MCP configuration by ID
+      operationId: getAgentMCPConfig
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Organization name
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Project name
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent name
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Configuration UUID
+      responses:
+        "200":
+          description: Agent MCP configuration details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentModelConfigResponse"
+        "400":
+          description: Invalid configuration ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update agent MCP configuration
+      description: Updates an existing MCP configuration
+      operationId: updateAgentMCPConfig
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Organization name
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Project name
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent name
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Configuration UUID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAgentModelConfigRequest"
+      responses:
+        "200":
+          description: Agent MCP configuration updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentModelConfigResponse"
+        "400":
+          description: Invalid request or configuration ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete agent MCP configuration
+      description: Deletes an MCP configuration
+      operationId: deleteAgentMCPConfig
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Organization name
+        - name: projName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Project name
+        - name: agentName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Agent name
+        - name: configId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Configuration UUID
+      responses:
+        "204":
+          description: Agent MCP configuration deleted successfully
+        "400":
+          description: Invalid configuration ID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /auth/external/jwks.json:
     servers:
       - url: /
@@ -12110,13 +12400,28 @@ components:
     EnvModelConfigRequest:
       type: object
       required:
-        - providerName
         - configuration
       properties:
         providerName:
           type: string
-          description: Handle of the LLM provider for this environment
+          description: Handle of the LLM provider for this environment. For MCP configs, proxyName/proxyId may be used instead.
           example: "openai-gpt4"
+        proxyName:
+          type: string
+          description: Handle/name of the MCP proxy for this environment
+          example: "github-mcp"
+        proxyId:
+          type: string
+          description: ID/handle of the MCP proxy for this environment
+          example: "github-mcp"
+        mcpProxyName:
+          type: string
+          description: Handle/name of the MCP proxy for this environment
+          example: "github-mcp"
+        mcpProxyId:
+          type: string
+          description: ID/handle of the MCP proxy for this environment
+          example: "github-mcp"
         configuration:
           $ref: "#/components/schemas/EnvProviderConfiguration"
 
@@ -12266,6 +12571,22 @@ components:
           type: string
           format: uuid
           description: UUID of the proxy created
+        proxyName:
+          type: string
+          description: Name/handle of the MCP proxy
+          example: "github-mcp"
+        proxyId:
+          type: string
+          description: ID/handle of the MCP proxy
+          example: "github-mcp"
+        mcpProxyName:
+          type: string
+          description: Name/handle of the MCP proxy
+          example: "github-mcp"
+        mcpProxyId:
+          type: string
+          description: ID/handle of the MCP proxy
+          example: "github-mcp"
         url:
           type: string
           description: url of the created proxy

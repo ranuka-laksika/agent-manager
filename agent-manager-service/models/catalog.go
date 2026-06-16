@@ -45,6 +45,8 @@ const (
 	CatalogKindLLMProvider = "LlmProvider"
 	CatalogKindAgent       = "agent"
 	CatalogKindMCP         = "mcp"
+	CatalogKindMCPProxy    = "McpProxy"
+	CatalogKindMCPMapping  = "McpProxyMapping"
 )
 
 // CatalogLLMProviderEntry represents a comprehensive LLM provider in the catalog

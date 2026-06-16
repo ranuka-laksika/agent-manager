@@ -51,6 +51,12 @@ type AgentConfigurationRepository interface {
 	// CountByAgent counts total configurations for a specific agent
 	CountByAgent(ctx context.Context, orgName, projectName, agentName string) (int64, error)
 
+	// ListByAgentAndType retrieves configurations scoped to a specific agent and config type with pagination
+	ListByAgentAndType(ctx context.Context, orgName, projectName, agentName string, typeID uint, limit, offset int) ([]models.AgentConfiguration, error)
+
+	// CountByAgentAndType counts configurations scoped to a specific agent and config type
+	CountByAgentAndType(ctx context.Context, orgName, projectName, agentName string, typeID uint) (int64, error)
+
 	// Update updates an existing configuration (use within transaction)
 	Update(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error
 
@@ -88,6 +94,10 @@ func (r *agentConfigurationRepository) GetByUUID(ctx context.Context, configUUID
 	err := r.db.WithContext(ctx).
 		Preload("EnvMappings").
 		Preload("EnvMappings.LLMProxy").
+		Preload("EnvMCPMappings").
+		Preload("EnvMCPMappings.Artifact").
+		Preload("EnvMCPMappings.MCPProxy").
+		Preload("EnvMCPMappings.MCPProxy.Artifact").
 		Preload("EnvVariables").
 		Where("uuid = ? AND organization_name = ?", configUUID, orgName).
 		First(&config).Error
@@ -99,6 +109,10 @@ func (r *agentConfigurationRepository) GetByAgentID(ctx context.Context, agentID
 	err := r.db.WithContext(ctx).
 		Preload("EnvMappings").
 		Preload("EnvMappings.LLMProxy").
+		Preload("EnvMCPMappings").
+		Preload("EnvMCPMappings.Artifact").
+		Preload("EnvMCPMappings.MCPProxy").
+		Preload("EnvMCPMappings.MCPProxy.Artifact").
 		Preload("EnvVariables").
 		Where("agent_id = ? AND organization_name = ?", agentID, orgName).
 		First(&config).Error
@@ -141,6 +155,30 @@ func (r *agentConfigurationRepository) CountByAgent(ctx context.Context, orgName
 	err := r.db.WithContext(ctx).
 		Model(&models.AgentConfiguration{}).
 		Where("organization_name = ? AND project_name = ? AND agent_id = ?", orgName, projectName, agentName).
+		Count(&count).Error
+	return count, err
+}
+
+func (r *agentConfigurationRepository) ListByAgentAndType(
+	ctx context.Context, orgName, projectName, agentName string, typeID uint, limit, offset int,
+) ([]models.AgentConfiguration, error) {
+	var configs []models.AgentConfiguration
+	err := r.db.WithContext(ctx).
+		Where("organization_name = ? AND project_name = ? AND agent_id = ? AND type_id = ?", orgName, projectName, agentName, typeID).
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&configs).Error
+	return configs, err
+}
+
+func (r *agentConfigurationRepository) CountByAgentAndType(
+	ctx context.Context, orgName, projectName, agentName string, typeID uint,
+) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&models.AgentConfiguration{}).
+		Where("organization_name = ? AND project_name = ? AND agent_id = ? AND type_id = ?", orgName, projectName, agentName, typeID).
 		Count(&count).Error
 	return count, err
 }

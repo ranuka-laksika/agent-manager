@@ -47,4 +47,6 @@ const (
 	KindLLMProvider = "LlmProvider"
 	KindLLMProxy    = "LlmProxy"
 	KindAgent       = "Agent"
+	KindMCPProxy    = "McpProxy"
+	KindMCPMapping  = "McpProxyMapping"
 )

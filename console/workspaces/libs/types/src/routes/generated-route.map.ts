@@ -93,6 +93,22 @@ export const generatedRouteMap =  {
             }
           }
         },
+        "mcpProxies": {
+          "path": "/org/:orgId/mcp-proxies",
+          "wildPath": "/org/:orgId/mcp-proxies/*",
+          "children": {
+            "add": {
+              "path": "/org/:orgId/mcp-proxies/add",
+              "wildPath": "/org/:orgId/mcp-proxies/add/*",
+              "children": {}
+            },
+            "view": {
+              "path": "/org/:orgId/mcp-proxies/view/:proxyId",
+              "wildPath": "/org/:orgId/mcp-proxies/view/:proxyId/*",
+              "children": {}
+            }
+          }
+        },
         "evaluators": {
           "path": "/org/:orgId/evaluators",
           "wildPath": "/org/:orgId/evaluators/*",
@@ -202,6 +218,22 @@ export const generatedRouteMap =  {
                         "edit": {
                           "path": "/org/:orgId/project/:projectId/agents/:agentId/configure/llm-providers/edit/:configId",
                           "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/configure/llm-providers/edit/:configId/*",
+                          "children": {}
+                        }
+                      }
+                    },
+                    "mcpProxies": {
+                      "path": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies",
+                      "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies/*",
+                      "children": {
+                        "add": {
+                          "path": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies/add",
+                          "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies/add/*",
+                          "children": {}
+                        },
+                        "view": {
+                          "path": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies/view/:proxyId",
+                          "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/configure/mcp-proxies/view/:proxyId/*",
                           "children": {}
                         }
                       }

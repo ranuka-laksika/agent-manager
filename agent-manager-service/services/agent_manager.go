@@ -1902,7 +1902,7 @@ func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, orgNam
 	}
 }
 
-// deleteAgentLLMConfigurations removes all LLM configurations for an agent during agent deletion.
+// deleteAgentLLMConfigurations removes all LLM and MCP configurations for an agent during agent deletion.
 // isExternalAgent must be resolved by the caller before the component is deleted so this function
 // requires no OC calls. Calls DeleteForAgentDeletion which skips Component/Workload/ReleaseBinding
 // patching and SecretReference CR deletion (handled by component teardown).
@@ -1911,18 +1911,17 @@ func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, orgNam
 func (s *agentManagerService) deleteAgentLLMConfigurations(ctx context.Context, orgName, projectName, agentName string, isExternalAgent bool) {
 	listResp, err := s.agentConfigurationService.List(ctx, orgName, projectName, agentName, 1000, 0)
 	if err != nil {
-		s.logger.Warn("Failed to list agent LLM configurations for cleanup", "agentName", agentName, "error", err)
+		s.logger.Warn("Failed to list agent configurations for cleanup", "agentName", agentName, "error", err)
 		return
 	}
-
 	for _, cfg := range listResp.Configs {
 		configUUID, parseErr := uuid.Parse(cfg.UUID)
 		if parseErr != nil {
-			s.logger.Warn("Failed to parse LLM config UUID during agent deletion", "uuid", cfg.UUID, "error", parseErr)
+			s.logger.Warn("Failed to parse config UUID during agent deletion", "uuid", cfg.UUID, "type", cfg.Type, "error", parseErr)
 			continue
 		}
 		if delErr := s.agentConfigurationService.DeleteForAgentDeletion(ctx, configUUID, orgName, projectName, agentName, isExternalAgent); delErr != nil {
-			s.logger.Warn("Failed to delete LLM configuration during agent deletion", "configUUID", cfg.UUID, "error", delErr)
+			s.logger.Warn("Failed to delete configuration during agent deletion", "configUUID", cfg.UUID, "type", cfg.Type, "error", delErr)
 		}
 	}
 
@@ -2124,6 +2123,13 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 
 	// Combine user-processed env vars with preserved system-managed env vars
 	deployReq.Env = append(envVars, systemManagedEnvVars...)
+
+	// Ensure Env is always non-nil so Deploy() replaces the Workload env vars rather than
+	// skipping the update. A nil slice is a no-op in Deploy(); an empty slice clears all vars.
+	if deployReq.Env == nil {
+		deployReq.Env = []client.EnvVar{}
+	}
+
 	s.logger.Debug("Final deploy env vars", "agentName", agentName, "totalCount", len(deployReq.Env))
 
 	// Process file mounts

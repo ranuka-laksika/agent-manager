@@ -31,6 +31,8 @@ import type {
   CreateAgentModelConfigPathParams,
   CreateAgentModelConfigRequest,
   DeleteAgentModelConfigPathParams,
+  EnvProviderConfigMappings,
+  ProviderConfig,
   GetAgentModelConfigPathParams,
   ListAgentModelConfigsPathParams,
   ListAgentModelConfigsQuery,
@@ -80,7 +82,7 @@ export async function createAgentModelConfig(
 
   const res = await httpPOST(baseUrl, cloneDeep(body), { token });
   if (!res.ok) throw await res.json();
-  return res.json();
+  return normalizeAgentModelConfigResponse(await res.json());
 }
 
 export async function getAgentModelConfig(
@@ -93,7 +95,7 @@ export async function getAgentModelConfig(
 
   const res = await httpGET(baseUrl, { token });
   if (!res.ok) throw await res.json();
-  return res.json();
+  return normalizeAgentModelConfigResponse(await res.json());
 }
 
 export async function updateAgentModelConfig(
@@ -107,7 +109,7 @@ export async function updateAgentModelConfig(
 
   const res = await httpPUT(baseUrl, cloneDeep(body), { token });
   if (!res.ok) throw await res.json();
-  return res.json();
+  return normalizeAgentModelConfigResponse(await res.json());
 }
 
 export async function deleteAgentModelConfig(
@@ -120,4 +122,53 @@ export async function deleteAgentModelConfig(
 
   const res = await httpDELETE(baseUrl, { token });
   if (!res.ok) throw await res.json();
+}
+
+export function normalizeAgentModelConfigResponse(
+  raw: AgentModelConfigResponse & {
+    envModelConfig?: Record<string, {
+      environmentName: string;
+      llmProxy?: {
+        proxyUrl?: string;
+        proxyUuid?: string;
+        providerName?: string;
+        policies?: unknown[];
+        apiKey?: string;
+      };
+      configuration?: unknown;
+    }>;
+  },
+): AgentModelConfigResponse {
+  if (raw.envMappings) {
+    return raw;
+  }
+
+  const envModelConfig = raw.envModelConfig ?? {};
+  return {
+    ...raw,
+    envMappings: Object.fromEntries(
+      Object.entries(envModelConfig).map(([envName, mapping]) => [
+        envName,
+        {
+          environmentName: mapping.environmentName ?? envName,
+          configuration: (mapping.configuration ?? (mapping.llmProxy
+            ? {
+                providerName: mapping.llmProxy.providerName,
+                proxyUuid: mapping.llmProxy.proxyUuid,
+                url: mapping.llmProxy.proxyUrl,
+                authInfo: mapping.llmProxy.apiKey
+                  ? {
+                      type: "apikey",
+                      in: "header",
+                      name: "Authorization",
+                      value: mapping.llmProxy.apiKey,
+                    }
+                  : undefined,
+                policies: mapping.llmProxy.policies,
+              }
+            : undefined)) as ProviderConfig | undefined,
+        },
+      ]),
+    ) as Record<string, EnvProviderConfigMappings>,
+  };
 }

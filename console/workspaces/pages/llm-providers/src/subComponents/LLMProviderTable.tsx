@@ -18,35 +18,28 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Avatar,
   Box,
-  Button,
   Chip,
   IconButton,
   ListingTable,
-  SearchBar,
-  Skeleton,
   Stack,
   TablePagination,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import {
-  AlertTriangle,
-  Plus,
-  Search,
-  ServerCog,
-  Trash,
-} from "@wso2/oxygen-ui-icons-react";
-import { formatDistanceToNow } from "date-fns";
+import { ServerCog, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, Link, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteLLMProvider,
   useListLLMProviders,
   useListLLMProviderTemplates,
 } from "@agent-management-platform/api-client";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import {
+  formatRelativeTime,
+  ResourceListShell,
+  useConfirmationDialog,
+} from "@agent-management-platform/shared-component";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
 
@@ -122,162 +115,41 @@ export function LLMProviderTable() {
     }
   }, [filteredProviders.length, page, rowsPerPage]);
 
-  const toolbar = (
-    <Stack direction="row" spacing={1} alignItems="center">
-      <Box flexGrow={1}>
-        <SearchBar
-          key="search-bar"
-          placeholder="Search providers..."
-          size="small"
-          fullWidth
-          value={searchValue}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setSearchValue(e.target.value)
-          }
-        />
-      </Box>
-
-      <Button
-        component={Link}
-        to={generatePath(
-          absoluteRouteMap.children.org.children.llmProviders.children.add.path,
-          { orgId },
-        )}
-        variant="contained"
-        color="primary"
-        startIcon={<Plus size={16} />}
-      >
-        Add Service Provider
-      </Button>
-    </Stack>
-  );
-
-  if (error) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
-        <ListingTable.Container>
-          <Alert
-            severity="error"
-            icon={<AlertTriangle size={18} />}
-            sx={{ alignSelf: "stretch" }}
-          >
-            {error instanceof Error
-              ? error.message
-              : "Failed to load providers. Please try again."}
-          </Alert>
-        </ListingTable.Container>
-      </Stack>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
-        <ListingTable.Container disablePaper>
-          <Stack spacing={1} mt={1}>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Stack
-                key={i}
-                direction="row"
-                alignItems="center"
-                spacing={2}
-                sx={{
-                  px: 2,
-                  py: 1.5,
-                  borderRadius: 1,
-                  border: "1px solid",
-                  borderColor: "divider",
-                  bgcolor: "background.paper",
-                }}
-              >
-                {/* Name: avatar + text — 300px */}
-                <Stack
-                  direction="row"
-                  alignItems="center"
-                  spacing={1.5}
-                  sx={{ width: 300, flexShrink: 0 }}
-                >
-                  <Skeleton variant="circular" width={36} height={36} />
-                  <Skeleton variant="text" width={140} height={20} />
-                </Stack>
-
-                {/* ID — 120px */}
-                <Skeleton
-                  variant="rounded"
-                  width={90}
-                  height={24}
-                  sx={{ flexShrink: 0 }}
-                />
-
-                {/* Created By — flexible */}
-                <Skeleton variant="text" sx={{ flex: 1 }} height={18} />
-
-                {/* Template — 140px */}
-                <Skeleton
-                  variant="rounded"
-                  width={100}
-                  height={24}
-                  sx={{ flexShrink: 0 }}
-                />
-
-                {/* Status — 120px */}
-                <Skeleton
-                  variant="rounded"
-                  width={72}
-                  height={24}
-                  sx={{ flexShrink: 0, ml: "auto" }}
-                />
-              </Stack>
-            ))}
-          </Stack>
-        </ListingTable.Container>
-      </Stack>
-    );
-  }
-
-  if (!providers.length) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
-        <ListingTable.Container>
-          <ListingTable.EmptyState
-            illustration={<ServerCog size={64} />}
-            title="No LLM service providers yet"
-            description="Add an LLM service provider to start routing AI traffic through the gateway."
-          />
-        </ListingTable.Container>
-      </Stack>
-    );
-  }
-
-  if (!filteredProviders.length) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
-        <Stack spacing={1}>
-          <ListingTable.Container>
-            <ListingTable.EmptyState
-              illustration={<Search size={64} />}
-              title="No providers match your search"
-              description="Try a different keyword or clear the search filter."
-            />
-          </ListingTable.Container>
-        </Stack>
-      </Stack>
-    );
-  }
-
   const paginated = filteredProviders.slice(
     page * rowsPerPage,
     page * rowsPerPage + rowsPerPage,
   );
 
   return (
-    <ListingTable.Container disablePaper>
-      {toolbar}
-      <Stack pt={4}>
+    <ResourceListShell
+      searchValue={searchValue}
+      onSearchChange={setSearchValue}
+      searchPlaceholder="Search providers..."
+      addButton={{
+        label: "Add Service Provider",
+        component: Link,
+        to: generatePath(
+          absoluteRouteMap.children.org.children.llmProviders.children.add.path,
+          { orgId },
+        ),
+      }}
+      error={error}
+      isLoading={isLoading}
+      isEmpty={!providers.length}
+      isSearchEmpty={!filteredProviders.length}
+      emptyState={{
+        illustration: <ServerCog size={64} />,
+        title: "No LLM service providers yet",
+        description:
+          "Add an LLM service provider to start routing AI traffic through the gateway.",
+      }}
+      searchEmptyState={{
+        illustration: <ServerCog size={64} />,
+        title: "No providers match your search",
+        description: "Try a different keyword or clear the search filter.",
+      }}
+    >
+      <Stack>
         <ListingTable variant="card">
           <ListingTable.Head>
             <ListingTable.Row>
@@ -403,9 +275,7 @@ export function LLMProviderTable() {
                         </FadeIn>
                       ) : provider.createdAt ? (
                         <Typography variant="caption" color="text.secondary">
-                          {formatDistanceToNow(new Date(provider.createdAt), {
-                            addSuffix: true,
-                          })}
+                          {formatRelativeTime(provider.createdAt)}
                         </Typography>
                       ) : null}
                     </Stack>
@@ -430,6 +300,6 @@ export function LLMProviderTable() {
           rowsPerPageOptions={[5, 10, 25]}
         />
       )}
-    </ListingTable.Container>
+    </ResourceListShell>
   );
 }

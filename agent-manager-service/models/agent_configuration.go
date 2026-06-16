@@ -62,8 +62,9 @@ type AgentConfiguration struct {
 	UpdatedAt        time.Time `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`
 
 	// Relations (eager loaded)
-	EnvMappings  []EnvAgentModelMapping   `gorm:"foreignKey:ConfigUUID;constraint:OnDelete:CASCADE" json:"envMappings,omitempty"`
-	EnvVariables []AgentEnvConfigVariable `gorm:"foreignKey:ConfigUUID;constraint:OnDelete:CASCADE" json:"-"`
+	EnvMappings    []EnvAgentModelMapping   `gorm:"foreignKey:ConfigUUID;constraint:OnDelete:CASCADE" json:"envMappings,omitempty"`
+	EnvMCPMappings []EnvAgentMCPMapping     `gorm:"foreignKey:ConfigUUID;constraint:OnDelete:CASCADE" json:"mcpEnvMappings,omitempty"`
+	EnvVariables   []AgentEnvConfigVariable `gorm:"foreignKey:ConfigUUID;constraint:OnDelete:CASCADE" json:"-"`
 }
 
 // TableName returns the table name for the AgentConfiguration model
@@ -87,6 +88,26 @@ type EnvAgentModelMapping struct {
 // TableName returns the table name for the EnvAgentModelMapping model
 func (EnvAgentModelMapping) TableName() string {
 	return "env_agent_model_mapping"
+}
+
+// EnvAgentMCPMapping represents environment-specific MCP configuration.
+type EnvAgentMCPMapping struct {
+	ID              uint      `gorm:"column:id;primaryKey;autoIncrement" json:"-"`
+	ConfigUUID      uuid.UUID `gorm:"column:config_uuid;type:uuid;not null" json:"configUuid"`
+	EnvironmentUUID uuid.UUID `gorm:"column:environment_uuid;type:uuid;not null" json:"environmentUuid"`
+	MCPProxyUUID    uuid.UUID `gorm:"column:mcp_proxy_uuid;type:uuid;not null" json:"mcpProxyUuid"`
+	ArtifactUUID    uuid.UUID `gorm:"column:artifact_uuid;type:uuid;not null" json:"artifactUuid"`
+	CreatedAt       time.Time `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
+
+	// Relations (for preloading)
+	MCPProxy        *MCPProxy        `gorm:"foreignKey:MCPProxyUUID" json:"mcpProxy,omitempty"`
+	MCPProxyMapping *MCPProxyMapping `gorm:"foreignKey:ArtifactUUID;references:UUID" json:"mcpProxyMapping,omitempty"`
+	Artifact        *Artifact        `gorm:"foreignKey:ArtifactUUID;references:UUID" json:"artifact,omitempty"`
+}
+
+// TableName returns the table name for the EnvAgentMCPMapping model.
+func (EnvAgentMCPMapping) TableName() string {
+	return "env_agent_mcp_mapping"
 }
 
 // AgentEnvConfigVariable represents environment variable configuration

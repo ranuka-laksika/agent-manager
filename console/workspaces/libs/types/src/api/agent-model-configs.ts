@@ -35,6 +35,10 @@ export interface EnvProviderConfiguration {
 export interface EnvModelConfigRequest {
   providerName?: string;
   providerUuid?: string;
+  proxyName?: string;
+  proxyId?: string;
+  mcpProxyName?: string;
+  mcpProxyId?: string;
   configuration: EnvProviderConfiguration;
 }
 
@@ -60,10 +64,14 @@ export interface UpdateAgentModelConfigRequest {
 // -----------------------------------------------------------------------------
 
 export interface ProviderConfig {
-  providerName: string;
-  proxyUuid: string;
+  providerName?: string;
+  proxyUuid?: string;
   providerUuid?: string;
-  url: string;
+  proxyName?: string;
+  proxyId?: string;
+  mcpProxyName?: string;
+  mcpProxyId?: string;
+  url?: string;
   authInfo?: AuthInfo;
   policies?: LLMPolicy[];
   status?: string;
@@ -90,6 +98,7 @@ export interface AgentModelConfigResponse {
   organizationName: string;
   projectName: string;
   envMappings: Record<string, EnvProviderConfigMappings>;
+  envModelConfig?: Record<string, EnvProviderConfigMappings>;
   environmentVariables: EnvironmentVariableConfig[];
   createdAt: string;
   updatedAt: string;

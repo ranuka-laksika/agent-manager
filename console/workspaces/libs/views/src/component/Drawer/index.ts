@@ -19,8 +19,13 @@
 export { DrawerWrapper } from "./DrawerWrapper";
 export { DrawerHeader } from "./DrawerHeader";
 export { DrawerContent } from "./DrawerContent";
+export { SelectionDrawer } from "./SelectionDrawer";
 
 export type { DrawerWrapperProps } from "./DrawerWrapper";
 export type { DrawerHeaderProps } from "./DrawerHeader";
 export type { DrawerContentProps } from "./DrawerContent";
+export type {
+  SelectionDrawerProps,
+  SelectionDrawerEmptyState,
+} from "./SelectionDrawer";
 

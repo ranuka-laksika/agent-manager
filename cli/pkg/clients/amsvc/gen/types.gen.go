@@ -2283,8 +2283,20 @@ type EndpointsResponse map[string]EndpointConfiguration
 type EnvModelConfigRequest struct {
 	Configuration EnvProviderConfiguration `json:"configuration"`
 
-	// ProviderName Handle of the LLM provider for this environment
-	ProviderName string `json:"providerName"`
+	// McpProxyId ID/handle of the MCP proxy for this environment
+	McpProxyId *string `json:"mcpProxyId,omitempty"`
+
+	// McpProxyName Handle/name of the MCP proxy for this environment
+	McpProxyName *string `json:"mcpProxyName,omitempty"`
+
+	// ProviderName Handle of the LLM provider for this environment. For MCP configs, proxyName/proxyId may be used instead.
+	ProviderName *string `json:"providerName,omitempty"`
+
+	// ProxyId ID/handle of the MCP proxy for this environment
+	ProxyId *string `json:"proxyId,omitempty"`
+
+	// ProxyName Handle/name of the MCP proxy for this environment
+	ProxyName *string `json:"proxyName,omitempty"`
 }
 
 // EnvProviderConfigMappings defines model for EnvProviderConfigMappings.
@@ -3618,11 +3630,23 @@ type PromotionPath struct {
 type ProviderConfig struct {
 	AuthInfo *AuthInfo `json:"authInfo,omitempty"`
 
+	// McpProxyId ID/handle of the MCP proxy
+	McpProxyId *string `json:"mcpProxyId,omitempty"`
+
+	// McpProxyName Name/handle of the MCP proxy
+	McpProxyName *string `json:"mcpProxyName,omitempty"`
+
 	// Policies Provider-specific policy configurations
 	Policies *[]LLMPolicy `json:"policies,omitempty"`
 
 	// ProviderName Name of the llm provider
 	ProviderName string `json:"providerName"`
+
+	// ProxyId ID/handle of the MCP proxy
+	ProxyId *string `json:"proxyId,omitempty"`
+
+	// ProxyName Name/handle of the MCP proxy
+	ProxyName *string `json:"proxyName,omitempty"`
 
 	// ProxyUuid UUID of the proxy created
 	ProxyUuid openapi_types.UUID `json:"proxyUuid"`
@@ -4532,6 +4556,15 @@ type GetAgentEndpointsParams struct {
 	Environment string `form:"environment" json:"environment"`
 }
 
+// ListAgentMCPConfigsParams defines parameters for ListAgentMCPConfigs.
+type ListAgentMCPConfigsParams struct {
+	// Limit Maximum number of results to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of results to skip
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListAgentModelConfigsParams defines parameters for ListAgentModelConfigs.
 type ListAgentModelConfigsParams struct {
 	// Limit Maximum number of results to return
@@ -4759,6 +4792,12 @@ type CreateAgentAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 
 // RotateAgentAPIKeyJSONRequestBody defines body for RotateAgentAPIKey for application/json ContentType.
 type RotateAgentAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
+
+// CreateAgentMCPConfigJSONRequestBody defines body for CreateAgentMCPConfig for application/json ContentType.
+type CreateAgentMCPConfigJSONRequestBody = CreateAgentModelConfigRequest
+
+// UpdateAgentMCPConfigJSONRequestBody defines body for UpdateAgentMCPConfig for application/json ContentType.
+type UpdateAgentMCPConfigJSONRequestBody = UpdateAgentModelConfigRequest
 
 // GetAgentMetricsJSONRequestBody defines body for GetAgentMetrics for application/json ContentType.
 type GetAgentMetricsJSONRequestBody = MetricsFilterRequest

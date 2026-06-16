@@ -17,6 +17,7 @@
  */
 
 export * from './agent-model-configs';
+export * from './agent-mcp-configs';
 export * from './agent-api-keys';
 export * from './catalog';
 export * from './agents';
@@ -32,6 +33,9 @@ export * from './runtime-logs';
 export * from './repositories';
 export * from './resource-configs';
 export * from './llm-providers';
+export * from './mcp-proxies';
+export * from './mcp-policies';
+export * from './agent-mcp-proxies';
 export * from './gateways';
 export * from './guardrails';
 export * from './git-secrets';

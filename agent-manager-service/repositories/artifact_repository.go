@@ -70,11 +70,19 @@ func (r *ArtifactRepo) Delete(tx *gorm.DB, uuid string) error {
 // Update modifies an artifact within a transaction
 func (r *ArtifactRepo) Update(tx *gorm.DB, artifact *models.Artifact) error {
 	artifact.UpdatedAt = time.Now()
+	updates := map[string]interface{}{
+		"updated_at": artifact.UpdatedAt,
+	}
+	if artifact.Name != "" {
+		updates["name"] = artifact.Name
+	}
+	if artifact.Version != "" {
+		updates["version"] = artifact.Version
+	}
+
 	result := tx.Model(&models.Artifact{}).
 		Where("uuid = ? AND organization_name = ?", artifact.UUID, artifact.OrganizationName).
-		Updates(map[string]interface{}{
-			"updated_at": artifact.UpdatedAt,
-		})
+		Updates(updates)
 
 	if result.Error != nil {
 		return result.Error
