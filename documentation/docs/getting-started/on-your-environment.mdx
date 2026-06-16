@@ -353,6 +353,14 @@ gateway:
 EOF
 ```
 
+:::note Webhook race condition
+If the install fails with `no endpoints available for service "controller-manager-webhook-service"`, this is a known transient race in OpenChoreo v1.1.1. Wait for the control plane deployments to become ready, then rerun the `helm upgrade --install` command.
+```bash
+kubectl wait --for=condition=Available deployment --all \
+  -n openchoreo-control-plane --timeout=300s
+```
+:::
+
 Wait for the LoadBalancer IP and derive the base domain:
 
 ```bash
