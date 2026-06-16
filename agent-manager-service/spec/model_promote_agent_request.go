@@ -34,6 +34,9 @@ type PromoteAgentRequest struct {
 	// Enable API key security for the agent endpoint in the target environment
 	EnableApiKeySecurity *bool       `json:"enableApiKeySecurity,omitempty"`
 	CorsConfig           *CORSConfig `json:"corsConfig,omitempty"`
+	// Enable OAuth security for the agent endpoint in the target environment. Mutually exclusive with enableApiKeySecurity.
+	EnableOAuthSecurity *bool        `json:"enableOAuthSecurity,omitempty"`
+	OauthConfig         *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 // NewPromoteAgentRequest instantiates a new PromoteAgentRequest object
@@ -295,6 +298,70 @@ func (o *PromoteAgentRequest) SetCorsConfig(v CORSConfig) {
 	o.CorsConfig = &v
 }
 
+// GetEnableOAuthSecurity returns the EnableOAuthSecurity field value if set, zero value otherwise.
+func (o *PromoteAgentRequest) GetEnableOAuthSecurity() bool {
+	if o == nil || IsNil(o.EnableOAuthSecurity) {
+		var ret bool
+		return ret
+	}
+	return *o.EnableOAuthSecurity
+}
+
+// GetEnableOAuthSecurityOk returns a tuple with the EnableOAuthSecurity field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PromoteAgentRequest) GetEnableOAuthSecurityOk() (*bool, bool) {
+	if o == nil || IsNil(o.EnableOAuthSecurity) {
+		return nil, false
+	}
+	return o.EnableOAuthSecurity, true
+}
+
+// HasEnableOAuthSecurity returns a boolean if a field has been set.
+func (o *PromoteAgentRequest) HasEnableOAuthSecurity() bool {
+	if o != nil && !IsNil(o.EnableOAuthSecurity) {
+		return true
+	}
+
+	return false
+}
+
+// SetEnableOAuthSecurity gets a reference to the given bool and assigns it to the EnableOAuthSecurity field.
+func (o *PromoteAgentRequest) SetEnableOAuthSecurity(v bool) {
+	o.EnableOAuthSecurity = &v
+}
+
+// GetOauthConfig returns the OauthConfig field value if set, zero value otherwise.
+func (o *PromoteAgentRequest) GetOauthConfig() OAuthConfig {
+	if o == nil || IsNil(o.OauthConfig) {
+		var ret OAuthConfig
+		return ret
+	}
+	return *o.OauthConfig
+}
+
+// GetOauthConfigOk returns a tuple with the OauthConfig field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PromoteAgentRequest) GetOauthConfigOk() (*OAuthConfig, bool) {
+	if o == nil || IsNil(o.OauthConfig) {
+		return nil, false
+	}
+	return o.OauthConfig, true
+}
+
+// HasOauthConfig returns a boolean if a field has been set.
+func (o *PromoteAgentRequest) HasOauthConfig() bool {
+	if o != nil && !IsNil(o.OauthConfig) {
+		return true
+	}
+
+	return false
+}
+
+// SetOauthConfig gets a reference to the given OAuthConfig and assigns it to the OauthConfig field.
+func (o *PromoteAgentRequest) SetOauthConfig(v OAuthConfig) {
+	o.OauthConfig = &v
+}
+
 func (o PromoteAgentRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -324,6 +391,12 @@ func (o PromoteAgentRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.CorsConfig) {
 		toSerialize["corsConfig"] = o.CorsConfig
+	}
+	if !IsNil(o.EnableOAuthSecurity) {
+		toSerialize["enableOAuthSecurity"] = o.EnableOAuthSecurity
+	}
+	if !IsNil(o.OauthConfig) {
+		toSerialize["oauthConfig"] = o.OauthConfig
 	}
 	return toSerialize, nil
 }
