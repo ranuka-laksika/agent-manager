@@ -41,11 +41,13 @@ type AgentResponse struct {
 
 // Configurations contains runtime configurations for an agent
 type Configurations struct {
-	EnableAutoInstrumentation *bool       `json:"enableAutoInstrumentation,omitempty"`
-	InstrumentationVersion    *string     `json:"instrumentationVersion,omitempty"`
-	Env                       []EnvVars   `json:"env,omitempty"`
-	EnableApiKeySecurity      *bool       `json:"enableApiKeySecurity,omitempty"`
-	CorsConfig                *CorsConfig `json:"corsConfig,omitempty"`
+	EnableAutoInstrumentation *bool        `json:"enableAutoInstrumentation,omitempty"`
+	InstrumentationVersion    *string      `json:"instrumentationVersion,omitempty"`
+	Env                       []EnvVars    `json:"env,omitempty"`
+	EnableApiKeySecurity      *bool        `json:"enableApiKeySecurity,omitempty"`
+	CorsConfig                *CorsConfig  `json:"corsConfig,omitempty"`
+	EnableOAuthSecurity       *bool        `json:"enableOAuthSecurity,omitempty"`
+	OAuthConfig               *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 type CorsConfig struct {
@@ -54,6 +56,23 @@ type CorsConfig struct {
 	AllowMethods     []string `json:"allowMethods,omitempty"`
 	AllowHeaders     []string `json:"allowHeaders,omitempty"`
 	AllowCredentials *bool    `json:"allowCredentials,omitempty"`
+}
+
+// Default OAuth header values used when a config omits them. They mirror the
+// gateway jwt-auth policy defaults so callers send a standard
+// `Authorization: Bearer <token>` header.
+const (
+	DefaultOAuthHeaderName       = "Authorization"
+	DefaultOAuthAuthHeaderPrefix = "Bearer"
+)
+
+type OAuthConfig struct {
+	Issuers          []string               `json:"issuers,omitempty"`
+	Audiences        []string               `json:"audiences,omitempty"`
+	RequiredScopes   []string               `json:"requiredScopes,omitempty"`
+	RequiredClaims   map[string]interface{} `json:"requiredClaims,omitempty"`
+	HeaderName       string                 `json:"headerName,omitempty"`
+	AuthHeaderPrefix string                 `json:"authHeaderPrefix,omitempty"`
 }
 
 type AgentType struct {
