@@ -260,7 +260,11 @@ def _run_cell(
     provider = PROVIDERS[cell.provider_name]
     validator = ContractValidator.load(provider.contract_schema_id())
     coverage = validator.assert_coverage(spans, expected_kinds=expected)
-    shape_results = validator.validate_all(spans)
+    # Heavy spans round-trip through the observer/OpenSearch, which returns
+    # numeric attributes as strings; coerce the schema-declared numeric
+    # attributes back before shape-validating. The emission tier validates
+    # native-typed cassette spans and stays strict (coerce_numeric=False).
+    shape_results = validator.validate_all(spans, coerce_numeric=True)
     violations = [
         {
             "spanName": r.span_name,

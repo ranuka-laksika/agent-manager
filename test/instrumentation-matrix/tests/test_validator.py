@@ -268,3 +268,51 @@ def test_assert_coverage_counts_tool_event_as_tool_kind():
     cov = v.assert_coverage([llm_span_with_tool_event], expected_kinds=["llm", "tool"])
     assert cov.ok is True
     assert "tool" in cov.actual
+
+
+# ---------- Heavy-tier numeric coercion (observer/OpenSearch round-trip) ----------
+
+
+def test_heavy_round_trip_stringifies_numbers_fails_without_coercion():
+    # The observer returns numeric attributes as strings; without coercion the
+    # heavy tier sees a type error — exactly the matrix's "'1' is not of type
+    # 'number'" / "'301' is not of type 'integer'" failures.
+    v = ContractValidator.load("traceloop/v1")
+    span = _llm_span(
+        extra={
+            "gen_ai.usage.input_tokens": "301",
+            "gen_ai.usage.output_tokens": "12",
+            "gen_ai.request.temperature": "1",
+        }
+    )
+    assert not v.validate(span, kind="llm").ok
+
+
+def test_heavy_coercion_accepts_stringified_numbers():
+    v = ContractValidator.load("traceloop/v1")
+    span = _llm_span(
+        extra={
+            "gen_ai.usage.input_tokens": "301",
+            "gen_ai.usage.output_tokens": "12",
+            "gen_ai.request.temperature": "1",
+        }
+    )
+    assert v.validate(span, kind="llm", coerce_numeric=True).ok
+
+
+def test_heavy_coercion_only_touches_schema_numeric_attributes():
+    # A string-typed attribute holding digits (here the model name) must NOT be
+    # coerced — coercion is schema-driven, not value-shape-driven.
+    v = ContractValidator.load("traceloop/v1")
+    span = _llm_span(extra={"gen_ai.request.model": "123"})
+    r = v.validate(span, kind="llm", coerce_numeric=True)
+    assert r.ok
+    assert span["attributes"]["gen_ai.request.model"] == "123"
+
+
+def test_heavy_coercion_preserves_genuine_integer_type_error():
+    # A non-integral value for an integer field is a real mismatch and must
+    # still fail even with coercion enabled.
+    v = ContractValidator.load("traceloop/v1")
+    span = _llm_span(extra={"gen_ai.usage.input_tokens": "1.5"})
+    assert not v.validate(span, kind="llm", coerce_numeric=True).ok
