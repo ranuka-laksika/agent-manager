@@ -1937,6 +1937,18 @@ type CreateGitSecretRequest struct {
 // CreateGitSecretRequestType Authentication type
 type CreateGitSecretRequestType string
 
+// CreateGroupRequest defines model for CreateGroupRequest.
+type CreateGroupRequest struct {
+	// Description Group description
+	Description *string `json:"description,omitempty"`
+
+	// Name Group name
+	Name string `json:"name"`
+
+	// OuId Organization unit ID
+	OuId *string `json:"ouId,omitempty"`
+}
+
 // CreateLLMAPIKeyRequest defines model for CreateLLMAPIKeyRequest.
 type CreateLLMAPIKeyRequest struct {
 	// DisplayName Human-readable display name for the API key.
@@ -2089,6 +2101,30 @@ type CreateProjectRequest struct {
 
 	// Name Name of the project
 	Name string `json:"name"`
+}
+
+// CreateRoleRequest defines model for CreateRoleRequest.
+type CreateRoleRequest struct {
+	// Description Role description
+	Description *string `json:"description,omitempty"`
+
+	// Name Role name
+	Name string `json:"name"`
+
+	// OuId Organization unit ID
+	OuId *string `json:"ouId,omitempty"`
+}
+
+// CreateUserRequest defines model for CreateUserRequest.
+type CreateUserRequest struct {
+	// Attributes User attributes map (include password when creating credentials)
+	Attributes map[string]string `json:"attributes"`
+
+	// OuId Organization unit ID (optional; resolved from org context when omitted)
+	OuId *string `json:"ouId,omitempty"`
+
+	// Type User type
+	Type string `json:"type"`
 }
 
 // DataPlane defines model for DataPlane.
@@ -2737,6 +2773,35 @@ type GitSecretListResponse struct {
 type GitSecretResponse struct {
 	// Name Name of the git secret
 	Name string `json:"name"`
+}
+
+// GroupListResponse defines model for GroupListResponse.
+type GroupListResponse struct {
+	Groups []GroupResponse `json:"groups"`
+
+	// Limit Maximum results returned
+	Limit int `json:"limit"`
+
+	// Offset Number of results skipped
+	Offset int `json:"offset"`
+
+	// Total Total number of groups
+	Total int `json:"total"`
+}
+
+// GroupResponse defines model for GroupResponse.
+type GroupResponse struct {
+	// Description Group description
+	Description *string `json:"description,omitempty"`
+
+	// Id Group ID
+	Id string `json:"id"`
+
+	// Name Group name
+	Name string `json:"name"`
+
+	// OuId Organization unit ID
+	OuId *string `json:"ouId,omitempty"`
 }
 
 // GroupedScoresResponse defines model for GroupedScoresResponse.
@@ -3852,6 +3917,43 @@ type ResourceWiseRateLimitingConfig struct {
 	Resources []RateLimitingResourceLimit `json:"resources"`
 }
 
+// RoleListResponse defines model for RoleListResponse.
+type RoleListResponse struct {
+	// Limit Maximum results returned
+	Limit int `json:"limit"`
+
+	// Offset Number of results skipped
+	Offset int            `json:"offset"`
+	Roles  []RoleResponse `json:"roles"`
+
+	// Total Total number of roles
+	Total int `json:"total"`
+}
+
+// RoleResponse defines model for RoleResponse.
+type RoleResponse struct {
+	// Description Role description
+	Description *string `json:"description,omitempty"`
+
+	// Id Role ID
+	Id string `json:"id"`
+
+	// IsReadOnly Whether this is a predefined read-only role
+	IsReadOnly *bool `json:"isReadOnly,omitempty"`
+
+	// Name Role name
+	Name string `json:"name"`
+
+	// OuId Organization unit ID
+	OuId *string `json:"ouId,omitempty"`
+
+	// Permissions Role permissions
+	Permissions *[]struct {
+		Permissions      *[]string `json:"permissions,omitempty"`
+		ResourceServerId *string   `json:"resourceServerId,omitempty"`
+	} `json:"permissions,omitempty"`
+}
+
 // RotateLLMAPIKeyRequest defines model for RotateLLMAPIKeyRequest.
 type RotateLLMAPIKeyRequest struct {
 	// DisplayName Updated display name for the API key.
@@ -4230,6 +4332,15 @@ type UpdateGatewayRequest struct {
 	Status *GatewayStatus `json:"status,omitempty"`
 }
 
+// UpdateGroupRequest defines model for UpdateGroupRequest.
+type UpdateGroupRequest struct {
+	// Description Group description
+	Description *string `json:"description,omitempty"`
+
+	// Name Group name
+	Name *string `json:"name,omitempty"`
+}
+
 // UpdateLLMProviderCatalogRequest defines model for UpdateLLMProviderCatalogRequest.
 type UpdateLLMProviderCatalogRequest struct {
 	// InCatalog Whether the provider should be available in the catalog.
@@ -4339,6 +4450,21 @@ type UpdateProjectRequest struct {
 	DisplayName string `json:"displayName"`
 }
 
+// UpdateRoleRequest defines model for UpdateRoleRequest.
+type UpdateRoleRequest struct {
+	// Description Role description
+	Description *string `json:"description,omitempty"`
+
+	// Name Role name
+	Name *string `json:"name,omitempty"`
+}
+
+// UpdateUserRequest defines model for UpdateUserRequest.
+type UpdateUserRequest struct {
+	// Attributes User attributes to update
+	Attributes *map[string]string `json:"attributes,omitempty"`
+}
+
 // UpstreamAuth defines model for UpstreamAuth.
 type UpstreamAuth struct {
 	// Header Authentication header name
@@ -4369,6 +4495,34 @@ type UpstreamEndpoint struct {
 
 	// Url Upstream endpoint URL
 	Url *string `json:"url,omitempty"`
+}
+
+// UserListResponse defines model for UserListResponse.
+type UserListResponse struct {
+	// Limit Maximum results returned
+	Limit int `json:"limit"`
+
+	// Offset Number of results skipped
+	Offset int `json:"offset"`
+
+	// Total Total number of users
+	Total int            `json:"total"`
+	Users []UserResponse `json:"users"`
+}
+
+// UserResponse defines model for UserResponse.
+type UserResponse struct {
+	// Attributes User custom attributes (values can be any type)
+	Attributes *map[string]interface{} `json:"attributes,omitempty"`
+
+	// Display User display name/username
+	Display string `json:"display"`
+
+	// Id User ID
+	Id string `json:"id"`
+
+	// OuId Organization unit ID
+	OuId *string `json:"ouId,omitempty"`
 }
 
 // ListOrganizationsParams defines parameters for ListOrganizations.
@@ -4453,6 +4607,33 @@ type ListGitSecretsParams struct {
 
 	// Offset Number of results to skip
 	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListGroupsParams defines parameters for ListGroups.
+type ListGroupsParams struct {
+	// Offset Number of results to skip
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListRolesParams defines parameters for ListRoles.
+type ListRolesParams struct {
+	// Offset Number of results to skip
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListUsersParams defines parameters for ListUsers.
+type ListUsersParams struct {
+	// Offset Number of results to skip
+	Offset *int `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListLLMProviderTemplatesParams defines parameters for ListLLMProviderTemplates.
@@ -4738,6 +4919,24 @@ type UpdateGatewayJSONRequestBody = UpdateGatewayRequest
 
 // CreateGitSecretJSONRequestBody defines body for CreateGitSecret for application/json ContentType.
 type CreateGitSecretJSONRequestBody = CreateGitSecretRequest
+
+// CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
+type CreateGroupJSONRequestBody = CreateGroupRequest
+
+// UpdateGroupJSONRequestBody defines body for UpdateGroup for application/json ContentType.
+type UpdateGroupJSONRequestBody = UpdateGroupRequest
+
+// CreateRoleJSONRequestBody defines body for CreateRole for application/json ContentType.
+type CreateRoleJSONRequestBody = CreateRoleRequest
+
+// UpdateRoleJSONRequestBody defines body for UpdateRole for application/json ContentType.
+type UpdateRoleJSONRequestBody = UpdateRoleRequest
+
+// CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
+type CreateUserJSONRequestBody = CreateUserRequest
+
+// UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
+type UpdateUserJSONRequestBody = UpdateUserRequest
 
 // CreateLLMProviderTemplateJSONRequestBody defines body for CreateLLMProviderTemplate for application/json ContentType.
 type CreateLLMProviderTemplateJSONRequestBody = CreateLLMProviderTemplateRequest

@@ -35,14 +35,15 @@ export interface TextInputProps extends Omit<TextFieldProps, 'variant'> {
   copyTooltipText?: string;
 }
 
-export const TextInput = ({ 
-  label, 
+export const TextInput = ({
+  label,
   labelAction,
   copyable = false,
   copyTooltipText,
   value,
   slotProps,
-  ...props 
+  required,
+  ...props
 }: TextInputProps) => {
   const [copied, setCopied] = useState(false);
 
@@ -89,7 +90,7 @@ export const TextInput = ({
 
   return (
     <FormControl fullWidth>
-      {label && <FormLabel htmlFor={label}>{label}{labelAction}</FormLabel>}
+      {label && <FormLabel htmlFor={label} required={required}>{label}{labelAction}</FormLabel>}
       <TextField
         id={label}
         sx={{
@@ -98,6 +99,7 @@ export const TextInput = ({
         variant="outlined"
         value={value}
         slotProps={mergedSlotProps}
+        required={required}
         {...props}
       />
     </FormControl>

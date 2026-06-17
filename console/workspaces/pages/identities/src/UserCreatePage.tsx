@@ -63,19 +63,24 @@ export const UserCreatePage: React.FC = () => {
   const handleSubmit = async () => {
     if (!validate()) return;
 
-    const optionalClaims = [
-      { type: "given_name", value: givenName.trim() },
-      { type: "family_name", value: familyName.trim() },
-    ].filter((c) => c.value);
+    const attributes: Record<string, string> = {
+      username: username.trim(),
+      password,
+    };
+
+    if (givenName.trim()) {
+      attributes.given_name = givenName.trim();
+    }
+    if (familyName.trim()) {
+      attributes.family_name = familyName.trim();
+    }
 
     try {
       await createUser({
         params: { orgName: orgId },
         body: {
-          username: username.trim(),
           type: "engineer",
-          claims: optionalClaims,
-          credential: { password },
+          attributes,
         },
       });
       navigate(usersPath);
@@ -176,7 +181,7 @@ export const UserCreatePage: React.FC = () => {
           <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isCreating}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={isCreating}>
+          <Button variant="contained" onClick={handleSubmit} disabled={isCreating || !username.trim() || !password.trim()}>
             {isCreating ? "Creating..." : "Create User"}
           </Button>
         </Stack>

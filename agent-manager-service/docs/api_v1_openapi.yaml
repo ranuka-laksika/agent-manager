@@ -7361,6 +7361,726 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/identities/users:
+    get:
+      summary: List users in an organization
+      operationId: listUsers
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: offset
+          in: query
+          description: Number of results to skip
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Create a new user
+      operationId: createUser
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identities/users/{userId}:
+    get:
+      summary: Get user details
+      operationId: getUser
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "403":
+          description: Forbidden - missing org context or user does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update user
+      operationId: updateUser
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context or user does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete user
+      operationId: deleteUser
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+      responses:
+        "204":
+          description: User deleted successfully
+        "403":
+          description: Forbidden - missing org context or user does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identities/groups:
+    get:
+      summary: List groups in an organization
+      operationId: listGroups
+      tags:
+        - Identity - Groups
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: offset
+          in: query
+          description: Number of results to skip
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupListResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Create a new group
+      operationId: createGroup
+      tags:
+        - Identity - Groups
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: Group created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identities/groups/{groupId}:
+    get:
+      summary: Get group details
+      operationId: getGroup
+      tags:
+        - Identity - Groups
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: groupId
+          in: path
+          required: true
+          description: Group ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "403":
+          description: Forbidden - missing org context or group does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update group
+      operationId: updateGroup
+      tags:
+        - Identity - Groups
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: groupId
+          in: path
+          required: true
+          description: Group ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupRequest"
+      responses:
+        "200":
+          description: Group updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context or group does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete group
+      operationId: deleteGroup
+      tags:
+        - Identity - Groups
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: groupId
+          in: path
+          required: true
+          description: Group ID
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Group deleted successfully
+        "403":
+          description: Forbidden - missing org context or group does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identities/roles:
+    get:
+      summary: List roles in an organization
+      operationId: listRoles
+      tags:
+        - Identity - Roles
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: offset
+          in: query
+          description: Number of results to skip
+          required: false
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+      responses:
+        "200":
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleListResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      summary: Create a new role
+      operationId: createRole
+      tags:
+        - Identity - Roles
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleRequest"
+      responses:
+        "201":
+          description: Role created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identities/roles/{roleId}:
+    get:
+      summary: Get role details
+      operationId: getRole
+      tags:
+        - Identity - Roles
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: roleId
+          in: path
+          required: true
+          description: Role ID
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Role details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleResponse"
+        "403":
+          description: Forbidden - missing org context or role does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      summary: Update role
+      operationId: updateRole
+      tags:
+        - Identity - Roles
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: roleId
+          in: path
+          required: true
+          description: Role ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleRequest"
+      responses:
+        "200":
+          description: Role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoleResponse"
+        "400":
+          description: Invalid request or cannot edit predefined roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context or role does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      summary: Delete role
+      operationId: deleteRole
+      tags:
+        - Identity - Roles
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: roleId
+          in: path
+          required: true
+          description: Role ID
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Role deleted successfully
+        "400":
+          description: Invalid request or cannot delete predefined roles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - missing org context or role does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     ConfigResponse:
@@ -13404,3 +14124,260 @@ components:
           items:
             type: string
           example: ["3.10", "3.11", "3.12", "3.13"]
+
+    # Identity Management Schemas
+    UserResponse:
+      type: object
+      required:
+        - id
+        - display
+      properties:
+        id:
+          type: string
+          description: User ID
+          example: "user-123"
+        display:
+          type: string
+          description: User display name/username
+          example: "john.doe"
+        ouId:
+          type: string
+          description: Organization unit ID
+          example: "ou-456"
+        attributes:
+          type: object
+          additionalProperties: true
+          description: User custom attributes (values can be any type)
+          example:
+            username: "john.doe"
+            email: "john@example.com"
+
+    CreateUserRequest:
+      type: object
+      required:
+        - attributes
+        - type
+      properties:
+        ouId:
+          type: string
+          description: Organization unit ID (optional; resolved from org context when omitted)
+          example: "ou-456"
+        type:
+          type: string
+          description: User type
+          example: "engineer"
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: User attributes map (include password when creating credentials)
+          example:
+            username: "john.doe"
+            password: "secure-password"
+            email: "john@example.com"
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+          description: User attributes to update
+
+    UserListResponse:
+      type: object
+      required:
+        - users
+        - total
+        - offset
+        - limit
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserResponse"
+        total:
+          type: integer
+          description: Total number of users
+          example: 100
+        offset:
+          type: integer
+          description: Number of results skipped
+          example: 0
+        limit:
+          type: integer
+          description: Maximum results returned
+          example: 20
+
+    GroupResponse:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Group ID
+          example: "group-123"
+        name:
+          type: string
+          description: Group name
+          example: "developers"
+        description:
+          type: string
+          description: Group description
+          example: "Development team members"
+        ouId:
+          type: string
+          description: Organization unit ID
+          example: "ou-456"
+
+    CreateGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Group name
+          minLength: 1
+          example: "developers"
+        ouId:
+          type: string
+          description: Organization unit ID
+          example: "ou-456"
+        description:
+          type: string
+          description: Group description
+          example: "Development team members"
+
+    UpdateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Group name
+          minLength: 1
+        description:
+          type: string
+          description: Group description
+
+    GroupListResponse:
+      type: object
+      required:
+        - groups
+        - total
+        - offset
+        - limit
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/GroupResponse"
+        total:
+          type: integer
+          description: Total number of groups
+          example: 50
+        offset:
+          type: integer
+          description: Number of results skipped
+          example: 0
+        limit:
+          type: integer
+          description: Maximum results returned
+          example: 20
+
+    RoleResponse:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          description: Role ID
+          example: "role-123"
+        name:
+          type: string
+          description: Role name
+          example: "admin"
+        description:
+          type: string
+          description: Role description
+          example: "Administrator role with full access"
+        isReadOnly:
+          type: boolean
+          description: Whether this is a predefined read-only role
+          example: false
+        ouId:
+          type: string
+          description: Organization unit ID
+          example: "ou-456"
+        permissions:
+          type: array
+          description: Role permissions
+          items:
+            type: object
+            properties:
+              resourceServerId:
+                type: string
+              permissions:
+                type: array
+                items:
+                  type: string
+
+    CreateRoleRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Role name
+          minLength: 1
+          example: "developer"
+        ouId:
+          type: string
+          description: Organization unit ID
+          example: "ou-456"
+        description:
+          type: string
+          description: Role description
+          example: "Developer role with project management access"
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Role name
+          minLength: 1
+        description:
+          type: string
+          description: Role description
+
+    RoleListResponse:
+      type: object
+      required:
+        - roles
+        - total
+        - offset
+        - limit
+      properties:
+        roles:
+          type: array
+          items:
+            $ref: "#/components/schemas/RoleResponse"
+        total:
+          type: integer
+          description: Total number of roles
+          example: 10
+        offset:
+          type: integer
+          description: Number of results skipped
+          example: 0
+        limit:
+          type: integer
+          description: Maximum results returned
+          example: 20

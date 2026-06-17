@@ -111,6 +111,7 @@ jobs:
           context: ./agent-manager-service
           file: ./agent-manager-service/Dockerfile
           push: false
+          load: true
           tags: agent-manager-service:pr-check
           cache-from: type=gha
           cache-to: type=gha,mode=max
