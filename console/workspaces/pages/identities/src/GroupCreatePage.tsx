@@ -15,30 +15,39 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
+  Collapse,
   Form,
-  FormControl,
-  FormLabel,
-  Stack,
   TextField,
 } from "@wso2/oxygen-ui";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateGroup } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
+import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
+import { createGroupSchema, type CreateGroupFormValues } from "./forms/schemas";
 
 export const GroupCreatePage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [nameError, setNameError] = useState<string | undefined>();
+  const [formData, setFormData] = useState<CreateGroupFormValues>({
+    name: "",
+    description: "",
+  });
 
-  const { mutateAsync: createGroup, isPending: isCreating, error: createError } = useCreateGroup();
+  const { errors, validateField, validateForm, clearErrors, setFieldError } =
+    useFormValidation<CreateGroupFormValues>(createGroupSchema);
+  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
+    useState<typeof errors>({});
+
+  const { mutateAsync: createGroup, isPending: isCreating, error: createError } =
+    useCreateGroup();
 
   const groupsPath = orgId
     ? generatePath(
@@ -49,23 +58,43 @@ export const GroupCreatePage: React.FC = () => {
       )
     : "#";
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      setNameError("Name is required");
+  const handleFieldChange = useCallback(
+    (field: keyof CreateGroupFormValues, value: string) => {
+      const newData = { ...formData, [field]: value };
+      setFormData(newData);
+      checkDirty(newData);
+      setFieldError(field, validateField(field, value));
+    },
+    [formData, checkDirty, validateField, setFieldError],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm(formData)) {
+      setLastSubmittedValidationErrors(errors);
       return;
     }
-    setNameError(undefined);
+    setLastSubmittedValidationErrors({});
 
     try {
       await createGroup({
         params: { orgName: orgId },
-        body: { name: name.trim(), description: description.trim() || undefined },
+        body: {
+          name: formData.name.trim(),
+          description: formData.description?.trim() || undefined,
+        },
       });
+      resetDirty();
+      clearErrors();
       navigate(groupsPath);
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }
-  };
+  }, [
+    formData, validateForm, errors, createGroup, orgId,
+    resetDirty, clearErrors, navigate, groupsPath,
+  ]);
+
+  const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
     <PageLayout
@@ -74,59 +103,72 @@ export const GroupCreatePage: React.FC = () => {
       backLabel="Back to Groups"
       disableIcon
     >
-      <Stack spacing={3} sx={{ maxWidth: 700 }}>
+      <Box display="flex" flexDirection="column" gap={2}>
         {createError != null && (
           <Alert severity="error">
             {(createError as Error)?.message ?? "Failed to create group"}
           </Alert>
         )}
 
-        <Form.Section>
-          <Form.Header>Group Details</Form.Header>
-          <Form.Stack spacing={2}>
-            <FormControl fullWidth error={Boolean(nameError)}>
-              <FormLabel required>Name</FormLabel>
-              <TextField
-                fullWidth
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (nameError) setNameError(undefined);
-                }}
-                placeholder="developers"
-                autoComplete="off"
-                error={Boolean(nameError)}
-                helperText={nameError}
-              />
-            </FormControl>
+        <Form.Stack spacing={3}>
+          <Form.Section>
+            <Form.Subheader>Group Details</Form.Subheader>
+            <Form.Stack spacing={2}>
+              <Form.ElementWrapper label="Name" name="name">
+                <TextField
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                  placeholder="engineering"
+                  autoComplete="off"
+                  error={!!errors.name}
+                  helperText={errors.name}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
 
-            <FormControl fullWidth>
-              <FormLabel>Description</FormLabel>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the group's purpose and membership"
-              />
-            </FormControl>
-          </Form.Stack>
-        </Form.Section>
+              <Form.ElementWrapper label="Description (optional)" name="description">
+                <TextField
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => handleFieldChange("description", e.target.value)}
+                  placeholder="Describe the group's purpose"
+                  multiline
+                  minRows={2}
+                  maxRows={6}
+                  error={!!errors.description}
+                  helperText={errors.description}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
+            </Form.Stack>
+          </Form.Section>
+        </Form.Stack>
 
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => navigate(groupsPath)} disabled={isCreating}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={isCreating || !name.trim()}
-          >
-            {isCreating ? "Creating..." : "Create Group"}
-          </Button>
-        </Stack>
-      </Stack>
+        <Box display="flex" flexDirection="column" gap={3}>
+          <Collapse in={submitErrors.length > 0} timeout="auto" unmountOnExit>
+            <Alert severity="error">
+              {submitErrors.map((error, index) => (
+                <Box key={index}>{error}</Box>
+              ))}
+            </Alert>
+          </Collapse>
+          <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            <Button variant="outlined" color="primary" onClick={() => navigate(groupsPath)}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Plus size={16} />}
+              onClick={handleSubmit}
+              disabled={isCreating || !formData.name.trim()}
+            >
+              Create Group
+            </Button>
+          </Box>
+        </Box>
+      </Box>
     </PageLayout>
   );
 };

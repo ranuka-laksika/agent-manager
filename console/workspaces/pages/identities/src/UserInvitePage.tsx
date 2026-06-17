@@ -15,36 +15,41 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  Collapse,
   Form,
-  FormControl,
-  FormLabel,
   IconButton,
-  Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Check, Copy, Mail } from "@wso2/oxygen-ui-icons-react";
+import { Check, Copy, Link2 } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useInviteUser } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
+import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
+import { inviteUserSchema, type InviteUserFormValues } from "./forms/schemas";
 
 export const UserInvitePage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState<string | undefined>();
+  const [formData, setFormData] = useState<InviteUserFormValues>({ email: "" });
   const [inviteLink, setInviteLink] = useState<string | undefined>();
   const [copied, setCopied] = useState(false);
 
-  const { mutateAsync: inviteUser, isPending: isInviting, error: inviteError } = useInviteUser();
+  const { errors, validateField, validateForm, clearErrors, setFieldError } =
+    useFormValidation<InviteUserFormValues>(inviteUserSchema);
+  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
+    useState<typeof errors>({});
+
+  const { mutateAsync: inviteUser, isPending: isInviting, error: inviteError } =
+    useInviteUser();
 
   const usersPath = orgId
     ? generatePath(
@@ -55,37 +60,50 @@ export const UserInvitePage: React.FC = () => {
       )
     : "#";
 
-  const validateEmail = (value: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const handleFieldChange = useCallback(
+    (field: keyof InviteUserFormValues, value: string) => {
+      const newData = { ...formData, [field]: value };
+      setFormData(newData);
+      checkDirty(newData);
+      setFieldError(field, validateField(field, value));
+    },
+    [formData, checkDirty, validateField, setFieldError],
+  );
 
-  const handleSubmit = async () => {
-    if (!email.trim()) {
-      setEmailError("Email is required");
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm(formData)) {
+      setLastSubmittedValidationErrors(errors);
       return;
     }
-    if (!validateEmail(email.trim())) {
-      setEmailError("Enter a valid email address");
-      return;
-    }
-    setEmailError(undefined);
+    setLastSubmittedValidationErrors({});
 
     try {
       const result = await inviteUser({
         params: { orgName: orgId },
-        body: { email: email.trim() },
+        body: { email: formData.email.trim() },
       });
       setInviteLink(result.inviteLink);
     } catch {
       // inviteError state is set by React Query and displayed in the Alert above
     }
-  };
+  }, [formData, validateForm, errors, inviteUser, orgId]);
 
-  const handleCopy = async () => {
+  const handleInviteAnother = useCallback(() => {
+    setInviteLink(undefined);
+    setFormData({ email: "" });
+    resetDirty();
+    clearErrors();
+    setLastSubmittedValidationErrors({});
+  }, [resetDirty, clearErrors]);
+
+  const handleCopy = useCallback(async () => {
     if (!inviteLink) return;
     await navigator.clipboard.writeText(inviteLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
+  }, [inviteLink]);
+
+  const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
     <PageLayout
@@ -94,7 +112,7 @@ export const UserInvitePage: React.FC = () => {
       backLabel="Back to Users"
       disableIcon
     >
-      <Stack spacing={3} sx={{ maxWidth: 700 }}>
+      <Box display="flex" flexDirection="column" gap={2}>
         {inviteError != null && (
           <Alert severity="error">
             {(inviteError as Error)?.message ?? "Failed to send invitation"}
@@ -103,84 +121,92 @@ export const UserInvitePage: React.FC = () => {
 
         {inviteLink == null ? (
           <>
-            <Form.Section>
-              <Form.Header>Invite Details</Form.Header>
-              <Form.Stack spacing={2}>
-                <FormControl fullWidth error={Boolean(emailError)}>
-                  <FormLabel required>Email Address</FormLabel>
-                  <TextField
-                    fullWidth
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (emailError) setEmailError(undefined);
-                    }}
-                    placeholder="user@example.com"
-                    autoComplete="off"
-                    error={Boolean(emailError)}
-                    helperText={emailError}
-                  />
-                </FormControl>
-              </Form.Stack>
-            </Form.Section>
+            <Form.Stack spacing={3}>
+              <Form.Section>
+                <Form.Subheader>Invite Details</Form.Subheader>
+                <Form.Stack spacing={2}>
+                  <Form.ElementWrapper label="Email Address" name="email">
+                    <TextField
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleFieldChange("email", e.target.value)}
+                      placeholder="user@example.com"
+                      autoComplete="off"
+                      error={!!errors.email}
+                      helperText={errors.email}
+                      fullWidth
+                    />
+                  </Form.ElementWrapper>
+                </Form.Stack>
+              </Form.Section>
+            </Form.Stack>
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isInviting}>
-                Cancel
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<Mail />}
-                onClick={handleSubmit}
-                disabled={isInviting || !email.trim()}
-              >
-                {isInviting ? "Sending Invite..." : "Send Invite"}
-              </Button>
-            </Stack>
+            <Box display="flex" flexDirection="column" gap={3}>
+              <Collapse in={submitErrors.length > 0} timeout="auto" unmountOnExit>
+                <Alert severity="error">
+                  {submitErrors.map((error, index) => (
+                    <Box key={index}>{error}</Box>
+                  ))}
+                </Alert>
+              </Collapse>
+              <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+                <Button variant="outlined" color="primary" onClick={() => navigate(usersPath)} disabled={isInviting}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<Link2   size={16} />}
+                  onClick={handleSubmit}
+                  disabled={isInviting || !formData.email.trim()}
+                >
+                  Get Invitation Link
+                </Button>
+              </Box>
+            </Box>
           </>
         ) : (
-          <Form.Section>
-            <Form.Header>Invitation Created</Form.Header>
-            <Form.Stack spacing={2}>
-              <Alert severity="success">
-                An invitation has been created for <strong>{email}</strong>.{" "}
-                Share the link below with the user to complete registration.
-              </Alert>
+          <Form.Stack spacing={3}>
+            <Form.Section>
+              <Form.Subheader>Invitation Created</Form.Subheader>
+              <Form.Stack spacing={2}>
+                <Alert severity="success">
+                  An invitation has been created for <strong>{formData.email}</strong>.{" "}
+                  Share the link below with the user to complete registration.
+                </Alert>
 
-              <Box>
-                <Typography variant="body2" color="text.secondary" mb={1}>
-                  Invite Link
-                </Typography>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <TextField
-                    fullWidth
-                    value={inviteLink}
-                    InputProps={{ readOnly: true }}
-                  />
-                  <Tooltip title={copied ? "Copied!" : "Copy link"}>
-                    <IconButton onClick={handleCopy} size="small">
-                      {copied ? <Check size={16} /> : <Copy size={16} />}
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Box>
+                <Box>
+                  <Typography variant="body2" color="text.secondary" mb={1}>
+                    Invite Link
+                  </Typography>
+                  <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+                    <TextField
+                      fullWidth
+                      value={inviteLink}
+                      InputProps={{ readOnly: true }}
+                    />
+                    <Tooltip title={copied ? "Copied!" : "Copy link"}>
+                      <IconButton onClick={handleCopy} size="small">
+                        {copied ? <Check size={16} /> : <Copy size={16} />}
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                </Box>
 
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button
-                  variant="outlined"
-                  onClick={() => { setInviteLink(undefined); setEmail(""); }}
-                >
-                  Invite Another
-                </Button>
-                <Button variant="contained" onClick={() => navigate(usersPath)}>
-                  Done
-                </Button>
-              </Stack>
-            </Form.Stack>
-          </Form.Section>
+                <Box display="flex" flexDirection="row" gap={1} alignItems="center" justifyContent="flex-end">
+                  <Button variant="outlined" color="primary" onClick={handleInviteAnother}>
+                    Invite Another
+                  </Button>
+                  <Button variant="contained" color="primary" onClick={() => navigate(usersPath)}>
+                    Done
+                  </Button>
+                </Box>
+              </Form.Stack>
+            </Form.Section>
+          </Form.Stack>
         )}
-      </Stack>
+      </Box>
     </PageLayout>
   );
 };
