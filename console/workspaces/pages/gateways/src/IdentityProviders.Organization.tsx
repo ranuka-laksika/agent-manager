@@ -24,10 +24,17 @@ import { IdentityProvidersTable } from "./subComponents/IdentityProvidersTable";
 export const IdentityProvidersOrganization: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
 
+  const identityProvidersPath = generatePath(
+    absoluteRouteMap.children.org.children.security.children.identityProviders.path,
+    { orgId },
+  );
+
   return (
     <Routes>
+      {/* /security → /security/identity-providers */}
+      <Route index element={<Navigate to={identityProvidersPath} replace />} />
       <Route
-        index
+        path="identity-providers"
         element={
           <PageLayout
             title="Identity Providers"
@@ -38,17 +45,7 @@ export const IdentityProvidersOrganization: React.FC = () => {
           </PageLayout>
         }
       />
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to={generatePath(
-              absoluteRouteMap.children.org.children.security.children.identityProviders.path,
-              { orgId },
-            )}
-          />
-        }
-      />
+      <Route path="*" element={<Navigate to={identityProvidersPath} replace />} />
     </Routes>
   );
 };
