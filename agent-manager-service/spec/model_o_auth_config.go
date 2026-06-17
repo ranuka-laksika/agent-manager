@@ -19,7 +19,7 @@ var _ MappedNullable = &OAuthConfig{}
 
 // OAuthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
 type OAuthConfig struct {
-	// Issuer names for token validation, referencing key manager entries configured gateway-side. Empty uses the platform default issuer.
+	// Issuer names for token validation, referencing identity provider entries configured gateway-side. Must be non-empty when OAuth security is enabled, and every name must be one of the environment's configured identity providers.
 	Issuers []string `json:"issuers,omitempty"`
 	// Accepted token audiences (aud claim). Empty disables audience validation.
 	Audiences []string `json:"audiences,omitempty"`

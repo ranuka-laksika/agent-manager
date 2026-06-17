@@ -2721,7 +2721,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/gateways/{gatewayID}/key-managers:
+  /orgs/{orgName}/identity-providers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: List all identity providers in an organization
+      description: |
+        Retrieve every identity provider (token issuer) mirrored across all gateways
+        in the organization. Each entry is enriched with the environment and gateway
+        it is registered to, for the org-level Security → Identity Providers table.
+        The reserved internal provider used for platform trace ingestion is never
+        included.
+      operationId: listIdentityProviders
+      responses:
+        "200":
+          description: List of identity providers in the organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProviderListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/gateways/{gatewayID}/identity-providers:
     parameters:
       - name: orgName
         in: path
@@ -2741,23 +2784,23 @@ paths:
 
     get:
       tags:
-        - Gateway Key Managers
-      summary: List gateway key managers
+        - Gateway Identity Providers
+      summary: List gateway identity providers
       description: |
-        Retrieve the JWT key managers (token issuers) configured for a gateway.
+        Retrieve the JWT identity providers (token issuers) configured for a gateway.
 
-        Key managers are owned by the gateway's runtime configuration; this list
+        Identity providers are owned by the gateway's runtime configuration; this list
         mirrors that configuration and is used to populate the issuer options when
-        applying OAuth security to an agent endpoint. The reserved internal key
-        manager used for platform trace ingestion is never included.
-      operationId: listGatewayKeyManagers
+        applying OAuth security to an agent endpoint. The reserved internal identity
+        provider used for platform trace ingestion is never included.
+      operationId: listGatewayIdentityProviders
       responses:
         "200":
-          description: List of gateway key managers
+          description: List of gateway identity providers
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/KeyManagerListResponse"
+                $ref: "#/components/schemas/IdentityProviderListResponse"
         "401":
           description: Unauthorized - invalid or missing authentication
           content:
@@ -2777,7 +2820,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/gateways/{gatewayID}/key-managers/{name}:
+  /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}:
     parameters:
       - name: orgName
         in: path
@@ -2797,35 +2840,36 @@ paths:
       - name: name
         in: path
         required: true
-        description: Unique key manager name within the gateway
+        description: Unique identity provider name within the gateway
         schema:
           type: string
 
     put:
       tags:
-        - Gateway Key Managers
-      summary: Upsert a gateway key manager
+        - Gateway Identity Providers
+      summary: Upsert a gateway identity provider
       description: |
-        Create or update a key manager in the gateway's AMS mirror.
+        Create or update an identity provider in the gateway's AMS mirror.
 
         This endpoint only updates the mirror used by the console and agent OAuth
         configuration. The gateway runtime configuration (ConfigMap) is the source
-        of truth and must be patched separately via the manage-keymanager script.
-        The console renders that command rather than calling this endpoint directly.
-      operationId: upsertGatewayKeyManager
+        of truth and must be patched separately via the manage-identity-provider
+        script. The console renders that command rather than calling this endpoint
+        directly.
+      operationId: upsertGatewayIdentityProvider
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/UpsertKeyManagerRequest"
+              $ref: "#/components/schemas/UpsertIdentityProviderRequest"
       responses:
         "200":
-          description: Key manager upserted successfully
+          description: Identity provider upserted successfully
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/KeyManager"
+                $ref: "#/components/schemas/IdentityProvider"
         "400":
           description: Bad request - invalid parameters or reserved name
           content:
@@ -2853,17 +2897,18 @@ paths:
 
     delete:
       tags:
-        - Gateway Key Managers
-      summary: Delete a gateway key manager
+        - Gateway Identity Providers
+      summary: Delete a gateway identity provider
       description: |
-        Remove a key manager from the gateway's AMS mirror. As with upsert, the
-        gateway runtime configuration must be patched separately.
-      operationId: deleteGatewayKeyManager
+        Remove an identity provider from the gateway's AMS mirror. As with upsert, the
+        gateway runtime configuration must be patched separately. System identity
+        providers (e.g. ThunderKeyManager) cannot be deleted.
+      operationId: deleteGatewayIdentityProvider
       responses:
         "204":
-          description: Key manager deleted successfully
+          description: Identity provider deleted successfully
         "400":
-          description: Bad request - reserved name cannot be deleted
+          description: Bad request - reserved or system provider cannot be deleted
           content:
             application/json:
               schema:
@@ -2875,7 +2920,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "404":
-          description: Gateway or key manager not found
+          description: Gateway or identity provider not found
           content:
             application/json:
               schema:
@@ -2887,7 +2932,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/environments/{environmentId}/key-managers:
+  /orgs/{orgName}/environments/{environmentId}/identity-providers:
     parameters:
       - name: orgName
         in: path
@@ -2907,21 +2952,21 @@ paths:
 
     get:
       tags:
-        - Gateway Key Managers
-      summary: List key managers available in an environment
+        - Gateway Identity Providers
+      summary: List identity providers available in an environment
       description: |
-        Retrieve the union of key managers configured on the gateways mapped to an
-        environment. These are the issuer options offered when applying OAuth
+        Retrieve the union of identity providers configured on the gateways mapped to
+        an environment. These are the issuer options offered when applying OAuth
         security to an agent endpoint in this environment. The reserved internal
-        key manager used for platform trace ingestion is never included.
-      operationId: listEnvironmentKeyManagers
+        identity provider used for platform trace ingestion is never included.
+      operationId: listEnvironmentIdentityProviders
       responses:
         "200":
-          description: List of key managers available in the environment
+          description: List of identity providers available in the environment
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/KeyManagerListResponse"
+                $ref: "#/components/schemas/IdentityProviderListResponse"
         "401":
           description: Unauthorized - invalid or missing authentication
           content:
@@ -8792,8 +8837,9 @@ components:
           items:
             type: string
           description: >-
-            Issuer names for token validation, referencing key manager entries
-            configured gateway-side. Empty uses the platform default issuer.
+            Issuer names for token validation, referencing identity provider entries
+            configured gateway-side. Must be non-empty when OAuth security is enabled,
+            and every name must be one of the environment's configured identity providers.
         audiences:
           type: array
           items:
@@ -11778,10 +11824,10 @@ components:
           items:
             $ref: "#/components/schemas/GatewayTokenInfo"
 
-    KeyManager:
+    IdentityProvider:
       type: object
       description: |
-        A JWT key manager (token issuer) configured on a gateway. Mirrors a
+        A JWT identity provider (token issuer) configured on a gateway. Mirrors a
         gateway-side jwt-auth `system.keyManagers` entry. Only the fields needed to
         identify an issuer and validate its tokens are surfaced.
       required:
@@ -11789,11 +11835,11 @@ components:
       properties:
         name:
           type: string
-          description: Unique key manager name within the gateway (referenced as an issuer).
+          description: Unique identity provider name within the gateway (referenced as an issuer).
           example: ThunderKeyManager
         issuer:
           type: string
-          description: Expected `iss` claim value for tokens validated by this key manager.
+          description: Expected `iss` claim value for tokens validated by this identity provider.
           example: http://thunder.amp.localhost:8080
         jwksUri:
           type: string
@@ -11804,8 +11850,32 @@ components:
           description: Skip TLS verification when fetching the JWKS endpoint (testing/trusted internal only).
           default: false
           example: true
+        description:
+          type: string
+          description: Optional human-readable description (mirror-only).
+        type:
+          type: string
+          description: |
+            Provenance of the identity provider. `system` providers (e.g.
+            ThunderKeyManager) are seeded with the platform and cannot be deleted;
+            `custom` providers are added by operators via the management script.
+          enum:
+            - system
+            - custom
+          default: custom
+          example: system
+        environmentName:
+          type: string
+          description: Environment this provider's gateway is mapped to (read-only, set on org-wide listing).
+          example: production
+        gatewayId:
+          type: string
+          description: UUID of the gateway this provider is registered to (read-only, set on org-wide listing).
+        gatewayName:
+          type: string
+          description: Name of the gateway this provider is registered to (read-only, set on org-wide listing).
 
-    KeyManagerListResponse:
+    IdentityProviderListResponse:
       type: object
       required:
         - count
@@ -11813,21 +11883,21 @@ components:
       properties:
         count:
           type: integer
-          description: Number of key managers in this response
+          description: Number of identity providers in this response
           example: 1
         list:
           type: array
-          description: List of key managers
+          description: List of identity providers
           items:
-            $ref: "#/components/schemas/KeyManager"
+            $ref: "#/components/schemas/IdentityProvider"
 
-    UpsertKeyManagerRequest:
+    UpsertIdentityProviderRequest:
       type: object
-      description: Request body for creating or updating a gateway key manager (name is taken from the path).
+      description: Request body for creating or updating a gateway identity provider (name is taken from the path).
       properties:
         issuer:
           type: string
-          description: Expected `iss` claim value for tokens validated by this key manager.
+          description: Expected `iss` claim value for tokens validated by this identity provider.
           example: http://thunder.amp.localhost:8080
         jwksUri:
           type: string
@@ -11838,6 +11908,9 @@ components:
           description: Skip TLS verification when fetching the JWKS endpoint.
           default: false
           example: true
+        description:
+          type: string
+          description: Optional human-readable description (mirror-only).
 
     CreateGatewayRequest:
       type: object

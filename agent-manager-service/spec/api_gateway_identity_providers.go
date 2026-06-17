@@ -19,35 +19,36 @@ import (
 	"strings"
 )
 
-// GatewayKeyManagersAPIService GatewayKeyManagersAPI service
-type GatewayKeyManagersAPIService service
+// GatewayIdentityProvidersAPIService GatewayIdentityProvidersAPI service
+type GatewayIdentityProvidersAPIService service
 
-type ApiDeleteGatewayKeyManagerRequest struct {
+type ApiDeleteGatewayIdentityProviderRequest struct {
 	ctx        context.Context
-	ApiService *GatewayKeyManagersAPIService
+	ApiService *GatewayIdentityProvidersAPIService
 	orgName    string
 	gatewayID  string
 	name       string
 }
 
-func (r ApiDeleteGatewayKeyManagerRequest) Execute() (*http.Response, error) {
-	return r.ApiService.DeleteGatewayKeyManagerExecute(r)
+func (r ApiDeleteGatewayIdentityProviderRequest) Execute() (*http.Response, error) {
+	return r.ApiService.DeleteGatewayIdentityProviderExecute(r)
 }
 
 /*
-DeleteGatewayKeyManager Delete a gateway key manager
+DeleteGatewayIdentityProvider Delete a gateway identity provider
 
-Remove a key manager from the gateway's AMS mirror. As with upsert, the
-gateway runtime configuration must be patched separately.
+Remove an identity provider from the gateway's AMS mirror. As with upsert, the
+gateway runtime configuration must be patched separately. System identity
+providers (e.g. ThunderKeyManager) cannot be deleted.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
 	@param gatewayID Gateway UUID or name
-	@param name Unique key manager name within the gateway
-	@return ApiDeleteGatewayKeyManagerRequest
+	@param name Unique identity provider name within the gateway
+	@return ApiDeleteGatewayIdentityProviderRequest
 */
-func (a *GatewayKeyManagersAPIService) DeleteGatewayKeyManager(ctx context.Context, orgName string, gatewayID string, name string) ApiDeleteGatewayKeyManagerRequest {
-	return ApiDeleteGatewayKeyManagerRequest{
+func (a *GatewayIdentityProvidersAPIService) DeleteGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string) ApiDeleteGatewayIdentityProviderRequest {
+	return ApiDeleteGatewayIdentityProviderRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
@@ -57,19 +58,19 @@ func (a *GatewayKeyManagersAPIService) DeleteGatewayKeyManager(ctx context.Conte
 }
 
 // Execute executes the request
-func (a *GatewayKeyManagersAPIService) DeleteGatewayKeyManagerExecute(r ApiDeleteGatewayKeyManagerRequest) (*http.Response, error) {
+func (a *GatewayIdentityProvidersAPIService) DeleteGatewayIdentityProviderExecute(r ApiDeleteGatewayIdentityProviderRequest) (*http.Response, error) {
 	var (
 		localVarHTTPMethod = http.MethodDelete
 		localVarPostBody   interface{}
 		formFiles          []formFile
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayKeyManagersAPIService.DeleteGatewayKeyManager")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.DeleteGatewayIdentityProvider")
 	if err != nil {
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/key-managers/{name}"
+	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"gatewayID"+"}", url.PathEscape(parameterValueToString(r.gatewayID, "gatewayID")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"name"+"}", url.PathEscape(parameterValueToString(r.name, "name")), -1)
@@ -172,32 +173,32 @@ func (a *GatewayKeyManagersAPIService) DeleteGatewayKeyManagerExecute(r ApiDelet
 	return localVarHTTPResponse, nil
 }
 
-type ApiListEnvironmentKeyManagersRequest struct {
+type ApiListEnvironmentIdentityProvidersRequest struct {
 	ctx           context.Context
-	ApiService    *GatewayKeyManagersAPIService
+	ApiService    *GatewayIdentityProvidersAPIService
 	orgName       string
 	environmentId string
 }
 
-func (r ApiListEnvironmentKeyManagersRequest) Execute() (*KeyManagerListResponse, *http.Response, error) {
-	return r.ApiService.ListEnvironmentKeyManagersExecute(r)
+func (r ApiListEnvironmentIdentityProvidersRequest) Execute() (*IdentityProviderListResponse, *http.Response, error) {
+	return r.ApiService.ListEnvironmentIdentityProvidersExecute(r)
 }
 
 /*
-ListEnvironmentKeyManagers List key managers available in an environment
+ListEnvironmentIdentityProviders List identity providers available in an environment
 
-Retrieve the union of key managers configured on the gateways mapped to an
-environment. These are the issuer options offered when applying OAuth
+Retrieve the union of identity providers configured on the gateways mapped to
+an environment. These are the issuer options offered when applying OAuth
 security to an agent endpoint in this environment. The reserved internal
-key manager used for platform trace ingestion is never included.
+identity provider used for platform trace ingestion is never included.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
 	@param environmentId Environment UUID or name
-	@return ApiListEnvironmentKeyManagersRequest
+	@return ApiListEnvironmentIdentityProvidersRequest
 */
-func (a *GatewayKeyManagersAPIService) ListEnvironmentKeyManagers(ctx context.Context, orgName string, environmentId string) ApiListEnvironmentKeyManagersRequest {
-	return ApiListEnvironmentKeyManagersRequest{
+func (a *GatewayIdentityProvidersAPIService) ListEnvironmentIdentityProviders(ctx context.Context, orgName string, environmentId string) ApiListEnvironmentIdentityProvidersRequest {
+	return ApiListEnvironmentIdentityProvidersRequest{
 		ApiService:    a,
 		ctx:           ctx,
 		orgName:       orgName,
@@ -207,21 +208,21 @@ func (a *GatewayKeyManagersAPIService) ListEnvironmentKeyManagers(ctx context.Co
 
 // Execute executes the request
 //
-//	@return KeyManagerListResponse
-func (a *GatewayKeyManagersAPIService) ListEnvironmentKeyManagersExecute(r ApiListEnvironmentKeyManagersRequest) (*KeyManagerListResponse, *http.Response, error) {
+//	@return IdentityProviderListResponse
+func (a *GatewayIdentityProvidersAPIService) ListEnvironmentIdentityProvidersExecute(r ApiListEnvironmentIdentityProvidersRequest) (*IdentityProviderListResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *KeyManagerListResponse
+		localVarReturnValue *IdentityProviderListResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayKeyManagersAPIService.ListEnvironmentKeyManagers")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.ListEnvironmentIdentityProviders")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/environments/{environmentId}/key-managers"
+	localVarPath := localBasePath + "/orgs/{orgName}/environments/{environmentId}/identity-providers"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"environmentId"+"}", url.PathEscape(parameterValueToString(r.environmentId, "environmentId")), -1)
 
@@ -321,34 +322,34 @@ func (a *GatewayKeyManagersAPIService) ListEnvironmentKeyManagersExecute(r ApiLi
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiListGatewayKeyManagersRequest struct {
+type ApiListGatewayIdentityProvidersRequest struct {
 	ctx        context.Context
-	ApiService *GatewayKeyManagersAPIService
+	ApiService *GatewayIdentityProvidersAPIService
 	orgName    string
 	gatewayID  string
 }
 
-func (r ApiListGatewayKeyManagersRequest) Execute() (*KeyManagerListResponse, *http.Response, error) {
-	return r.ApiService.ListGatewayKeyManagersExecute(r)
+func (r ApiListGatewayIdentityProvidersRequest) Execute() (*IdentityProviderListResponse, *http.Response, error) {
+	return r.ApiService.ListGatewayIdentityProvidersExecute(r)
 }
 
 /*
-ListGatewayKeyManagers List gateway key managers
+ListGatewayIdentityProviders List gateway identity providers
 
-Retrieve the JWT key managers (token issuers) configured for a gateway.
+Retrieve the JWT identity providers (token issuers) configured for a gateway.
 
-Key managers are owned by the gateway's runtime configuration; this list
+Identity providers are owned by the gateway's runtime configuration; this list
 mirrors that configuration and is used to populate the issuer options when
-applying OAuth security to an agent endpoint. The reserved internal key
-manager used for platform trace ingestion is never included.
+applying OAuth security to an agent endpoint. The reserved internal identity
+provider used for platform trace ingestion is never included.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
 	@param gatewayID Gateway UUID or name
-	@return ApiListGatewayKeyManagersRequest
+	@return ApiListGatewayIdentityProvidersRequest
 */
-func (a *GatewayKeyManagersAPIService) ListGatewayKeyManagers(ctx context.Context, orgName string, gatewayID string) ApiListGatewayKeyManagersRequest {
-	return ApiListGatewayKeyManagersRequest{
+func (a *GatewayIdentityProvidersAPIService) ListGatewayIdentityProviders(ctx context.Context, orgName string, gatewayID string) ApiListGatewayIdentityProvidersRequest {
+	return ApiListGatewayIdentityProvidersRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
@@ -358,21 +359,21 @@ func (a *GatewayKeyManagersAPIService) ListGatewayKeyManagers(ctx context.Contex
 
 // Execute executes the request
 //
-//	@return KeyManagerListResponse
-func (a *GatewayKeyManagersAPIService) ListGatewayKeyManagersExecute(r ApiListGatewayKeyManagersRequest) (*KeyManagerListResponse, *http.Response, error) {
+//	@return IdentityProviderListResponse
+func (a *GatewayIdentityProvidersAPIService) ListGatewayIdentityProvidersExecute(r ApiListGatewayIdentityProvidersRequest) (*IdentityProviderListResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *KeyManagerListResponse
+		localVarReturnValue *IdentityProviderListResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayKeyManagersAPIService.ListGatewayKeyManagers")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.ListGatewayIdentityProviders")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/key-managers"
+	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/identity-providers"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"gatewayID"+"}", url.PathEscape(parameterValueToString(r.gatewayID, "gatewayID")), -1)
 
@@ -472,42 +473,178 @@ func (a *GatewayKeyManagersAPIService) ListGatewayKeyManagersExecute(r ApiListGa
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiUpsertGatewayKeyManagerRequest struct {
-	ctx                     context.Context
-	ApiService              *GatewayKeyManagersAPIService
-	orgName                 string
-	gatewayID               string
-	name                    string
-	upsertKeyManagerRequest *UpsertKeyManagerRequest
+type ApiListIdentityProvidersRequest struct {
+	ctx        context.Context
+	ApiService *GatewayIdentityProvidersAPIService
+	orgName    string
 }
 
-func (r ApiUpsertGatewayKeyManagerRequest) UpsertKeyManagerRequest(upsertKeyManagerRequest UpsertKeyManagerRequest) ApiUpsertGatewayKeyManagerRequest {
-	r.upsertKeyManagerRequest = &upsertKeyManagerRequest
-	return r
-}
-
-func (r ApiUpsertGatewayKeyManagerRequest) Execute() (*KeyManager, *http.Response, error) {
-	return r.ApiService.UpsertGatewayKeyManagerExecute(r)
+func (r ApiListIdentityProvidersRequest) Execute() (*IdentityProviderListResponse, *http.Response, error) {
+	return r.ApiService.ListIdentityProvidersExecute(r)
 }
 
 /*
-UpsertGatewayKeyManager Upsert a gateway key manager
+ListIdentityProviders List all identity providers in an organization
 
-Create or update a key manager in the gateway's AMS mirror.
+Retrieve every identity provider (token issuer) mirrored across all gateways
+in the organization. Each entry is enriched with the environment and gateway
+it is registered to, for the org-level Security → Identity Providers table.
+The reserved internal provider used for platform trace ingestion is never
+included.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@return ApiListIdentityProvidersRequest
+*/
+func (a *GatewayIdentityProvidersAPIService) ListIdentityProviders(ctx context.Context, orgName string) ApiListIdentityProvidersRequest {
+	return ApiListIdentityProvidersRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return IdentityProviderListResponse
+func (a *GatewayIdentityProvidersAPIService) ListIdentityProvidersExecute(r ApiListIdentityProvidersRequest) (*IdentityProviderListResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *IdentityProviderListResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.ListIdentityProviders")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/identity-providers"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if strlen(r.orgName) < 1 {
+		return localVarReturnValue, nil, reportError("orgName must have at least 1 elements")
+	}
+	if strlen(r.orgName) > 64 {
+		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiUpsertGatewayIdentityProviderRequest struct {
+	ctx                           context.Context
+	ApiService                    *GatewayIdentityProvidersAPIService
+	orgName                       string
+	gatewayID                     string
+	name                          string
+	upsertIdentityProviderRequest *UpsertIdentityProviderRequest
+}
+
+func (r ApiUpsertGatewayIdentityProviderRequest) UpsertIdentityProviderRequest(upsertIdentityProviderRequest UpsertIdentityProviderRequest) ApiUpsertGatewayIdentityProviderRequest {
+	r.upsertIdentityProviderRequest = &upsertIdentityProviderRequest
+	return r
+}
+
+func (r ApiUpsertGatewayIdentityProviderRequest) Execute() (*IdentityProvider, *http.Response, error) {
+	return r.ApiService.UpsertGatewayIdentityProviderExecute(r)
+}
+
+/*
+UpsertGatewayIdentityProvider Upsert a gateway identity provider
+
+Create or update an identity provider in the gateway's AMS mirror.
 
 This endpoint only updates the mirror used by the console and agent OAuth
 configuration. The gateway runtime configuration (ConfigMap) is the source
-of truth and must be patched separately via the manage-keymanager script.
-The console renders that command rather than calling this endpoint directly.
+of truth and must be patched separately via the manage-identity-provider
+script. The console renders that command rather than calling this endpoint
+directly.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
 	@param gatewayID Gateway UUID or name
-	@param name Unique key manager name within the gateway
-	@return ApiUpsertGatewayKeyManagerRequest
+	@param name Unique identity provider name within the gateway
+	@return ApiUpsertGatewayIdentityProviderRequest
 */
-func (a *GatewayKeyManagersAPIService) UpsertGatewayKeyManager(ctx context.Context, orgName string, gatewayID string, name string) ApiUpsertGatewayKeyManagerRequest {
-	return ApiUpsertGatewayKeyManagerRequest{
+func (a *GatewayIdentityProvidersAPIService) UpsertGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string) ApiUpsertGatewayIdentityProviderRequest {
+	return ApiUpsertGatewayIdentityProviderRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
@@ -518,21 +655,21 @@ func (a *GatewayKeyManagersAPIService) UpsertGatewayKeyManager(ctx context.Conte
 
 // Execute executes the request
 //
-//	@return KeyManager
-func (a *GatewayKeyManagersAPIService) UpsertGatewayKeyManagerExecute(r ApiUpsertGatewayKeyManagerRequest) (*KeyManager, *http.Response, error) {
+//	@return IdentityProvider
+func (a *GatewayIdentityProvidersAPIService) UpsertGatewayIdentityProviderExecute(r ApiUpsertGatewayIdentityProviderRequest) (*IdentityProvider, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *KeyManager
+		localVarReturnValue *IdentityProvider
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayKeyManagersAPIService.UpsertGatewayKeyManager")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.UpsertGatewayIdentityProvider")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/key-managers/{name}"
+	localVarPath := localBasePath + "/orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"gatewayID"+"}", url.PathEscape(parameterValueToString(r.gatewayID, "gatewayID")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"name"+"}", url.PathEscape(parameterValueToString(r.name, "name")), -1)
@@ -546,8 +683,8 @@ func (a *GatewayKeyManagersAPIService) UpsertGatewayKeyManagerExecute(r ApiUpser
 	if strlen(r.orgName) > 64 {
 		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
 	}
-	if r.upsertKeyManagerRequest == nil {
-		return localVarReturnValue, nil, reportError("upsertKeyManagerRequest is required and must be specified")
+	if r.upsertIdentityProviderRequest == nil {
+		return localVarReturnValue, nil, reportError("upsertIdentityProviderRequest is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -568,7 +705,7 @@ func (a *GatewayKeyManagersAPIService) UpsertGatewayKeyManagerExecute(r ApiUpser
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.upsertKeyManagerRequest
+	localVarPostBody = r.upsertIdentityProviderRequest
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
