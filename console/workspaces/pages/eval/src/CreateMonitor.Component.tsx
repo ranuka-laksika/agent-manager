@@ -17,14 +17,18 @@
  */
 
 import React, { useCallback, useMemo } from "react";
-import { generatePath, useNavigate, useParams } from "react-router-dom";
+import { generatePath, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   absoluteRouteMap,
   type CreateMonitorRequest,
 } from "@agent-management-platform/types";
-import { useCreateMonitor } from "@agent-management-platform/api-client";
+import { useCreateMonitor, useGetMonitor } from "@agent-management-platform/api-client";
+import { Alert, Skeleton, Stack } from "@wso2/oxygen-ui";
+import { PageLayout } from "@agent-management-platform/views";
+import { getErrorMessage } from "@agent-management-platform/shared-component";
 import { type CreateMonitorFormValues } from "./form/schema";
 import { MonitorFormWizard } from "./subComponents/MonitorFormWizard";
+import { slugifyMonitorName } from "./utils/monitorFormUtils";
 
 export const CreateMonitorComponent: React.FC = () => {
   const { agentId, orgId, projectId, envId } = useParams<{
@@ -34,6 +38,8 @@ export const CreateMonitorComponent: React.FC = () => {
     envId: string;
   }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const duplicateFrom = searchParams.get("duplicateFrom") ?? undefined;
 
   const {
     mutate: createMonitor,
@@ -45,14 +51,45 @@ export const CreateMonitorComponent: React.FC = () => {
     agentName: agentId,
   });
 
+  const {
+    data: sourceMonitor,
+    isLoading: isLoadingSource,
+    error: sourceError,
+  } = useGetMonitor({
+    monitorName: duplicateFrom ?? "",
+    orgName: orgId ?? "",
+    projName: projectId ?? "",
+    agentName: agentId ?? "",
+  });
+
   const defaultTimeRange = useMemo(() => {
     const end = new Date();
     const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
     return { start, end };
   }, []);
 
-  const initialValues = useMemo<CreateMonitorFormValues>(
-    () => ({
+  const initialValues = useMemo<CreateMonitorFormValues>(() => {
+    if (duplicateFrom && sourceMonitor) {
+      const displayName = `${sourceMonitor.displayName} (Copy)`;
+      const samplingRatePercent =
+        sourceMonitor.samplingRate !== undefined
+          ? Math.min(100, Math.max(0, Math.round(sourceMonitor.samplingRate * 100)))
+          : 25;
+      return {
+        displayName,
+        name: slugifyMonitorName(displayName),
+        description: sourceMonitor.description ?? "",
+        type: sourceMonitor.type,
+        traceStart: sourceMonitor.traceStart ? new Date(sourceMonitor.traceStart) : null,
+        traceEnd: sourceMonitor.traceEnd ? new Date(sourceMonitor.traceEnd) : null,
+        intervalMinutes: sourceMonitor.intervalMinutes ?? undefined,
+        samplingRate: samplingRatePercent,
+        evaluators: sourceMonitor.evaluators ?? [],
+        // llmProvider intentionally omitted — user must select/create a new provider
+      };
+    }
+
+    return {
       displayName: "",
       name: "",
       description: "",
@@ -62,9 +99,8 @@ export const CreateMonitorComponent: React.FC = () => {
       intervalMinutes: 60,
       samplingRate: 25,
       evaluators: [],
-    }),
-    [defaultTimeRange],
-  );
+    };
+  }, [duplicateFrom, sourceMonitor, defaultTimeRange]);
 
   const missingParamsMessage = useMemo(() => {
     if (!orgId) return "Organization is required to create a monitor.";
@@ -73,6 +109,7 @@ export const CreateMonitorComponent: React.FC = () => {
     if (!envId) return "Select an environment before creating a monitor.";
     return null;
   }, [agentId, orgId, projectId, envId]);
+
   const backHref = useMemo(() => {
     if (!orgId || !projectId || !agentId || !envId) {
       return "#";
@@ -115,9 +152,47 @@ export const CreateMonitorComponent: React.FC = () => {
     [agentId, backHref, createMonitor, envId, navigate, orgId, projectId],
   );
 
+  const title = duplicateFrom && sourceMonitor
+    ? `Duplicate "${sourceMonitor.displayName}"`
+    : "Create Monitor";
+
+  const description = duplicateFrom && sourceMonitor
+    ? `Pre-filled from "${sourceMonitor.displayName}". Make your changes and submit to create a new monitor.`
+    : undefined;
+
+  if (duplicateFrom && isLoadingSource) {
+    return (
+      <PageLayout
+        title="Create Monitor"
+        disableIcon
+        backLabel="Back to Monitors"
+        backHref={backHref}
+      >
+        <Stack spacing={3}>
+          <Skeleton variant="rounded" height={60} />
+          <Skeleton variant="rounded" height={360} />
+        </Stack>
+      </PageLayout>
+    );
+  }
+
+  if (duplicateFrom && sourceError) {
+    return (
+      <PageLayout
+        title="Create Monitor"
+        disableIcon
+        backLabel="Back to Monitors"
+        backHref={backHref}
+      >
+        <Alert severity="error">{getErrorMessage(sourceError)}</Alert>
+      </PageLayout>
+    );
+  }
+
   return (
     <MonitorFormWizard
-      title="Create Monitor"
+      title={title}
+      description={description}
       backHref={backHref}
       submitLabel="Create Monitor"
       initialValues={initialValues}
