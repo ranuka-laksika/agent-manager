@@ -17,10 +17,6 @@
 package models
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"encoding/json"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -65,63 +61,6 @@ type MCPProxyMapping struct {
 // TableName returns the table name for the MCPProxyMapping model.
 func (MCPProxyMapping) TableName() string {
 	return "mcp_proxy_mappings"
-}
-
-// AgentMCPMappingArtifactHandle returns the stable artifact handle used for a
-// mapping-specific gateway deployment. Repository writes and deployment
-// generation must derive the same value because deployments are keyed by this
-// artifact handle.
-func AgentMCPMappingArtifactHandle(projectName, agentID, name string) string {
-	raw, _ := json.Marshal([]string{projectName, agentID, name})
-	sum := sha1.Sum(raw)
-	suffix := hex.EncodeToString(sum[:])[:10]
-
-	base := slugifyMCPMappingPart("agent-mcp-" + projectName + "-" + agentID + "-" + name)
-	maxBaseLen := 240 - len(suffix) - 1
-	if len(base) > maxBaseLen {
-		base = strings.TrimRight(base[:maxBaseLen], "-")
-	}
-	if base == "" {
-		return "agent-mcp-mapping-" + suffix
-	}
-	return base + "-" + suffix
-}
-
-func slugifyMCPMappingPart(value string) string {
-	value = strings.TrimSpace(value)
-	out := make([]rune, 0, len(value))
-	lastDash := false
-	for _, r := range value {
-		isAlphaNum := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9')
-		if isAlphaNum {
-			if r >= 'A' && r <= 'Z' {
-				r += 'a' - 'A'
-			}
-			out = append(out, r)
-			lastDash = false
-			continue
-		}
-		if !lastDash {
-			out = append(out, '-')
-			lastDash = true
-		}
-	}
-	for len(out) > 0 && out[0] == '-' {
-		out = out[1:]
-	}
-	for len(out) > 0 && out[len(out)-1] == '-' {
-		out = out[:len(out)-1]
-	}
-	if len(out) == 0 {
-		return "agent-mcp-mapping"
-	}
-	if len(out) > 240 {
-		out = out[:240]
-		for len(out) > 0 && out[len(out)-1] == '-' {
-			out = out[:len(out)-1]
-		}
-	}
-	return string(out)
 }
 
 // MCPProxyConfig represents the MCP proxy configuration stored in JSON.

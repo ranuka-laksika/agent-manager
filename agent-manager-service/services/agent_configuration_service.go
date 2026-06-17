@@ -182,6 +182,14 @@ func scopedProxyIdentifier(projectName, agentName, configName, envName string) s
 	return fmt.Sprintf("%s-%s", prefix, hashSuffix)
 }
 
+// mcpMappingProxyName builds the artifact handle/name and deployed proxy name for an
+// agent-scoped MCP proxy mapping. It mirrors the LLM proxy naming scheme exactly:
+// "<scopedID>-proxy", where scopedID is scopedProxyIdentifier(project, agent, config, env).
+// Handle and name are identical, matching how LLM proxies derive both from the same value.
+func mcpMappingProxyName(projectName, agentID, configName, envName string) string {
+	return fmt.Sprintf("%s-proxy", scopedProxyIdentifier(projectName, agentID, configName, envName))
+}
+
 // buildProxyURL constructs the proxy base URL from a gateway and an optional context path.
 // For internal agents, it uses the in-cluster gateway runtime service name (ClusterIP)
 // so pods can reach the gateway without depending on external DNS.
@@ -316,7 +324,7 @@ func mcpMappingSecretLocation(config *models.AgentConfiguration, orgName, envNam
 		AgentName:       config.AgentID,
 		EnvironmentName: envName,
 		ConfigName:      config.Name,
-		EntityName:      scopedID,
+		EntityName:      fmt.Sprintf("%s-proxy", scopedID),
 		SecretKey:       secretmanagersvc.SecretKeyAPIKey,
 	}
 }
@@ -916,8 +924,8 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 			return nil, fmt.Errorf("invalid environment id %q: %w", envName, err)
 		}
 		sourceProxy := proxiesByEnv[envName]
-		handle := models.AgentMCPMappingArtifactHandle(projectName, agentID, fmt.Sprintf("%s-%s", config.Name, envName))
-		artifactName := agentMCPMappingArtifactName(config.Name, envName)
+		handle := mcpMappingProxyName(projectName, agentID, config.Name, envName)
+		artifactName := handle
 		sourceProxyVersion := sourceProxy.Version
 		if sourceProxy.Artifact != nil && sourceProxy.Artifact.Version != "" {
 			sourceProxyVersion = sourceProxy.Artifact.Version
@@ -993,7 +1001,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 				AgentName:       agentID,
 				EnvironmentName: env.Name,
 				ConfigName:      config.Name,
-				EntityName:      scopedID,
+				EntityName:      fmt.Sprintf("%s-proxy", scopedID),
 				SecretKey:       secretmanagersvc.SecretKeyAPIKey,
 			}
 			secretRefName, err = s.secretClient.CreateSecret(ctx, proxySecretLoc,
@@ -1829,8 +1837,8 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 			return nil, fmt.Errorf("invalid environment id %q: %w", envName, err)
 		}
 		sourceProxy := proxiesByEnv[envName]
-		handle := models.AgentMCPMappingArtifactHandle(projectName, agentName, fmt.Sprintf("%s-%s", existingConfig.Name, envName))
-		artifactName := agentMCPMappingArtifactName(existingConfig.Name, envName)
+		handle := mcpMappingProxyName(projectName, agentName, existingConfig.Name, envName)
+		artifactName := handle
 		sourceVersion := mcpProxyArtifactVersion(sourceProxy)
 
 		if mapping, ok := existingEnvMap[envName]; ok {
@@ -1910,7 +1918,7 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 				AgentName:       existingConfig.AgentID,
 				EnvironmentName: envName,
 				ConfigName:      existingConfig.Name,
-				EntityName:      scopedID,
+				EntityName:      fmt.Sprintf("%s-proxy", scopedID),
 				SecretKey:       secretmanagersvc.SecretKeyAPIKey,
 			}
 			secretRefName, err = s.secretClient.CreateSecret(ctx, proxySecretLoc,
@@ -2053,7 +2061,7 @@ func (s *agentConfigurationService) updateMCPConfigEnvironmentVariableNames(
 			s.logger.Warn("failed to resolve MCP gateway for env var rename", "environment", envName, "err", gwErr)
 			continue
 		}
-		handle := models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName))
+		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, envName, orgName, handle)
 		secretRefName, refErr := s.loadSecretRefForConfigEnv(ctx, config.UUID, mapping.EnvironmentUUID)
 		if refErr != nil {
@@ -2082,8 +2090,8 @@ func (s *agentConfigurationService) refreshAllMCPMappings(ctx context.Context, c
 		if envName == "" || mapping.MCPProxy == nil {
 			continue
 		}
-		handle := models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName))
-		artifactName := agentMCPMappingArtifactName(config.Name, envName)
+		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
+		artifactName := handle
 		version := mcpProxyArtifactVersion(mapping.MCPProxy)
 		if err := s.updateExistingMCPMapping(ctx, config, mapping, mapping.MCPProxy, envName, orgName, handle, artifactName, version, false); err != nil {
 			return err
@@ -2171,7 +2179,7 @@ func (s *agentConfigurationService) injectMCPMappingEnvVars(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	handle := models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName))
+	handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 	deployedProxy := buildAgentMCPConfigProxy(config, mapping, sourceProxy, envName, orgName, handle)
 	secretRefName, err := s.loadSecretRefForConfigEnv(ctx, config.UUID, mapping.EnvironmentUUID)
 	if err != nil {
@@ -2191,7 +2199,7 @@ func (s *agentConfigurationService) cleanupMCPMappingCredentials(ctx context.Con
 	if config == nil || mapping == nil || envName == "" {
 		return
 	}
-	handle := models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName))
+	handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 	scopedID := scopedProxyIdentifier(config.ProjectName, config.AgentID, config.Name, envName)
 	keyName := fmt.Sprintf("%s-key", scopedID)
 	if err := s.revokeAllMCPMappingAPIKeys(ctx, orgName, mapping.ArtifactUUID); err != nil {
@@ -2208,7 +2216,7 @@ func (s *agentConfigurationService) cleanupMCPMappingCredentials(ctx context.Con
 		AgentName:       config.AgentID,
 		EnvironmentName: envName,
 		ConfigName:      config.Name,
-		EntityName:      scopedID,
+		EntityName:      fmt.Sprintf("%s-proxy", scopedID),
 		SecretKey:       secretmanagersvc.SecretKeyAPIKey,
 	}
 	secretRefForDelete := secretRefName
@@ -2512,7 +2520,7 @@ func (s *agentConfigurationService) Update(ctx context.Context, configUUID uuid.
 								continue
 							}
 							deployedProxy := buildAgentMCPConfigProxy(existingConfig, mapping, mapping.MCPProxy, envName, orgName,
-								models.AgentMCPMappingArtifactHandle(existingConfig.ProjectName, existingConfig.AgentID, fmt.Sprintf("%s-%s", existingConfig.Name, envName)))
+								mcpMappingProxyName(existingConfig.ProjectName, existingConfig.AgentID, existingConfig.Name, envName))
 							secretRefName, refErr := s.loadSecretRefForConfigEnv(ctx, existingConfig.UUID, mapping.EnvironmentUUID)
 							if refErr != nil {
 								s.logger.Warn("Phase 1b: failed to load MCP SecretReference for re-injection", "environment", envName, "err", refErr)
@@ -3773,7 +3781,7 @@ func buildAgentMCPConfigProxy(
 	handle string,
 ) *models.MCPProxy {
 	context := agentMCPMappingContext(source.Configuration.Context, scopedProxyIdentifier(config.ProjectName, config.AgentID, config.Name, envName))
-	name := agentMCPMappingArtifactName(config.Name, envName)
+	name := handle
 	version := source.Version
 	if source.Artifact != nil && source.Artifact.Version != "" {
 		version = source.Artifact.Version
@@ -3812,10 +3820,6 @@ func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPPr
 		Status:             deployedProxy.Status,
 		Configuration:      deployedProxy.Configuration,
 	}
-}
-
-func agentMCPMappingArtifactName(configName, envName string) string {
-	return fmt.Sprintf("%s-%s", configName, envName)
 }
 
 // RedeployMCPMappingsForSourceProxy redeploys every agent-scoped MCP mapping artifact
@@ -3903,7 +3907,7 @@ func (s *agentConfigurationService) RedeployMCPMappingsForSourceProxy(ctx contex
 			continue
 		}
 
-		handle := models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName))
+		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 		derived := buildAgentMCPConfigProxy(config, mapping, source, envName, orgName, handle)
 		if err := s.reconcileMCPMappingCredentials(ctx, config, mapping, source, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
 			errs = append(errs, fmt.Errorf("mapping %s: reconcile credentials: %w", mapping.ArtifactUUID, err))
@@ -4406,7 +4410,7 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 			}
 			if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OrganizationName, mapping.EnvironmentUUID); err == nil {
 				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OrganizationName,
-					models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName)))
+					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
 				proxyInfo.URL = &url
 			}
@@ -4551,7 +4555,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 				)
 			} else if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OrganizationName, mapping.EnvironmentUUID); err == nil {
 				deployedProxy := buildAgentMCPConfigProxy(reloadedConfig, &mapping, mapping.MCPProxy, envName, config.OrganizationName,
-					models.AgentMCPMappingArtifactHandle(config.ProjectName, config.AgentID, fmt.Sprintf("%s-%s", config.Name, envName)))
+					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
 				proxyInfo.URL = &url
 			} else {
