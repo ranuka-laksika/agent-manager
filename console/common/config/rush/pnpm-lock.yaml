@@ -2270,6 +2270,9 @@ importers:
       '@agent-management-platform/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
+      '@agent-management-platform/auth':
+        specifier: workspace:*
+        version: link:../../libs/auth
       '@agent-management-platform/shared-component':
         specifier: workspace:*
         version: link:../../libs/shared-component

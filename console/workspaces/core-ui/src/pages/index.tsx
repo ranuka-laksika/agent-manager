@@ -26,7 +26,10 @@ import { metaData as agentSecurityMetadata } from "@agent-management-platform/ag
 import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMProviderComponent, AddMCPServerComponent, ViewMCPServerComponent } from "@agent-management-platform/configure-agent";
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
-import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
+import {
+  metaData as gatewaysMetadata,
+  identityProvidersMetaData,
+} from "@agent-management-platform/gateways";
 import { metaData as identitiesMetadata } from "@agent-management-platform/identities";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
@@ -97,6 +100,10 @@ export const LazyMCPProxiesOrg = mcpProxiesMetadata.levels!.organization as FC;
 
 // Gateways
 export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
+
+// Security → Identity Providers
+export const LazyIdentityProvidersOrg = identityProvidersMetaData.levels!
+  .organization as FC;
 
 // Identities
 export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
