@@ -59,7 +59,8 @@ func identityProviderListResponse(providers []spec.IdentityProvider) spec.Identi
 // ListIdentityProviders lists every identity provider across the org's gateways,
 // enriched with environment and gateway context (org-level Security table).
 func (c *gatewayController) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
-	log := logger.GetLogger(r.Context())
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
 	orgName := r.PathValue(utils.PathParamOrgName)
 
 	rows, err := c.gatewayService.ListIdentityProvidersByOrg(orgName)
@@ -69,15 +70,27 @@ func (c *gatewayController) ListIdentityProviders(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Environments live in OpenChoreo, not the AMS DB. Resolve the env UUID on each
+	// mapping to a display name via the OpenChoreo client (same source the gateways
+	// list uses). Best-effort: rows still render without an env name on failure.
+	envNames := make(map[string]string)
+	if envs, envErr := c.ocClient.ListEnvironments(ctx, orgName); envErr == nil {
+		for _, env := range envs {
+			envNames[env.UUID] = env.Name
+		}
+	} else {
+		log.Warn("ListIdentityProviders: failed to list environments", "error", envErr)
+	}
+
 	providers := make([]spec.IdentityProvider, 0, len(rows))
 	for _, row := range rows {
-		providers = append(providers, enrichSpecIdentityProvider(row))
+		providers = append(providers, enrichSpecIdentityProvider(row, envNames))
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, identityProviderListResponse(providers))
 }
 
 // enrichSpecIdentityProvider maps an org-wide row, attaching gateway/env context.
-func enrichSpecIdentityProvider(row repositories.IdentityProviderWithContext) spec.IdentityProvider {
+func enrichSpecIdentityProvider(row repositories.IdentityProviderWithContext, envNames map[string]string) spec.IdentityProvider {
 	out := toSpecIdentityProvider(row.GatewayIdentityProvider)
 	gatewayID := row.GatewayUUID.String()
 	out.GatewayId = &gatewayID
@@ -85,9 +98,10 @@ func enrichSpecIdentityProvider(row repositories.IdentityProviderWithContext) sp
 		name := row.GatewayName
 		out.GatewayName = &name
 	}
-	if row.EnvironmentName != "" {
-		env := row.EnvironmentName
-		out.EnvironmentName = &env
+	if row.EnvironmentUUID != "" {
+		if name := envNames[row.EnvironmentUUID]; name != "" {
+			out.EnvironmentName = &name
+		}
 	}
 	return out
 }
