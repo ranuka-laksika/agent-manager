@@ -182,7 +182,7 @@ func newScoresHandler() http.Handler {
 	mux.HandleFunc("GET "+base+"/scores/timeseries", ctrl.GetScoresTimeSeries)
 	mux.HandleFunc("GET "+agentBase+"/traces/{traceId}/scores", ctrl.GetTraceScores)
 
-	return mux
+	return NewContextInjectorMiddleware(mux)
 }
 
 // -----------------------------------------------------------------------------
@@ -494,7 +494,7 @@ func TestGetMonitorRunScores_NonExistentRun_Returns404(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet,
 		"/orgs/org1/projects/proj1/agents/agent1/monitors/mon1/runs/"+uuid.New().String()+"/scores", nil)
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	NewContextInjectorMiddleware(mux).ServeHTTP(w, req)
 
 	// Run not found (stubMonitorRepo.GetMonitorRunByID returns gorm.ErrRecordNotFound)
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -557,6 +557,7 @@ func TestGetTraceScores_EmptyTraceID(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet,
 		"/orgs/org1/projects/proj1/agents/agent1/traces//scores", nil)
 	req.SetPathValue("orgName", "org1")
+	req = SetupRequestContext(req, "org1")
 	req.SetPathValue("agentName", "agent1")
 	req.SetPathValue("traceId", "") // explicitly empty
 	w := httptest.NewRecorder()

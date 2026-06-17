@@ -19,27 +19,37 @@ package jwtassertion
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// NewMockMiddleware creates a mock JWT middleware for testing
+// NewMockMiddleware creates a mock JWT middleware for testing.
+// Automatically extracts org from the request path if it contains /orgs/{orgName}/
 func NewMockMiddleware(t *testing.T) Middleware {
 	t.Helper()
-
-	tokenClaims := &TokenClaims{
-		Scope: "scopes",
-		OuId:  "mock-org-id",
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
-		},
-	}
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
+
+			// Extract org from path if present
+			orgName := extractOrgFromPath(r.URL.Path)
+			if orgName == "" {
+				orgName = "mock-org"
+			}
+
+			// Create token claims with extracted org
+			tokenClaims := &TokenClaims{
+				Scope:    "test-scopes",
+				OuId:     "mock-org-id",
+				OuHandle: orgName, // Use extracted org as handle
+				RegisteredClaims: jwt.RegisteredClaims{
+					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+				},
+			}
 
 			// Set the context values that the middleware expects
 			ctx = context.WithValue(ctx, assertionTokenClaimsKey, tokenClaims)
@@ -50,4 +60,15 @@ func NewMockMiddleware(t *testing.T) Middleware {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// extractOrgFromPath extracts the org name from a path like /api/v1/orgs/{org}/...
+func extractOrgFromPath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if part == "orgs" && i+1 < len(parts) {
+			return parts[i+1]
+		}
+	}
+	return ""
 }

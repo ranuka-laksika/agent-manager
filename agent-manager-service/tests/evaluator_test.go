@@ -193,6 +193,7 @@ func TestListEvaluators_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -230,6 +231,7 @@ func TestListEvaluators_WithProviderFilter(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators?provider=deepeval", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -267,6 +269,7 @@ func TestListEvaluators_WithTagsFilter(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators?tags=deepeval,action", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -300,6 +303,7 @@ func TestListEvaluators_WithSearchFilter(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators?search=correctness", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -330,6 +334,7 @@ func TestListEvaluators_WithPagination(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators?limit=5&offset=10", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -365,6 +370,7 @@ func TestListEvaluators_LimitCappedAt100(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators?limit=200", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -389,6 +395,7 @@ func TestListEvaluators_ServiceError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	resp := httptest.NewRecorder()
 
 	controller.ListEvaluators(resp, req)
@@ -409,6 +416,7 @@ func TestGetEvaluator_Success(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/answer_relevancy", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	req.SetPathValue("evaluatorId", "answer_relevancy")
 	resp := httptest.NewRecorder()
 
@@ -441,6 +449,7 @@ func TestGetEvaluator_URLEncodedIdentifier(t *testing.T) {
 	// Request with URL-encoded identifier
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/deepeval%2Ftool-correctness", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	req.SetPathValue("evaluatorId", "deepeval%2Ftool-correctness")
 	resp := httptest.NewRecorder()
 
@@ -466,6 +475,7 @@ func TestGetEvaluator_NotFound(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/nonexistent", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	req.SetPathValue("evaluatorId", "nonexistent")
 	resp := httptest.NewRecorder()
 
@@ -482,6 +492,7 @@ func TestGetEvaluator_MissingEvaluatorId(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	// Don't set evaluatorId path value
 	resp := httptest.NewRecorder()
 
@@ -500,6 +511,7 @@ func TestGetEvaluator_ServiceError(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/answer_relevancy", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	req.SetPathValue("evaluatorId", "answer_relevancy")
 	resp := httptest.NewRecorder()
 
@@ -557,6 +569,7 @@ func TestGetEvaluator_ConfigSchemaConversion(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/test_evaluator", nil)
 	req.SetPathValue("orgName", "test-org")
+	req = SetupRequestContext(req, "test-org")
 	req.SetPathValue("evaluatorId", "test_evaluator")
 	resp := httptest.NewRecorder()
 

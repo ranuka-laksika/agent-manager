@@ -49,7 +49,8 @@ func NewResolverForbiddenError(msg string) *ResolverError {
 
 // RequireOrgMatch returns a middleware that:
 //  1. Validates token carries ouId (required for both cloud and on-prem).
-//  2. Injects ResolvedOrg into the request context for handlers to use.
+//  2. Validates path {orgName} parameter matches token's OuHandle.
+//  3. Injects ResolvedOrg into the request context for handlers to use.
 func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -58,8 +59,15 @@ func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFu
 				utils.WriteErrorResponse(w, http.StatusForbidden, "missing token claims")
 				return
 			}
-			if claims.OuId == "" {
+			if claims.OuId == "" || claims.OuHandle == "" {
 				utils.WriteErrorResponse(w, http.StatusForbidden, "missing ou identity in token")
+				return
+			}
+
+			// Validate path orgName matches token's OuHandle
+			pathOrg := r.PathValue(utils.PathParamOrgName)
+			if pathOrg != claims.OuHandle {
+				utils.WriteErrorResponse(w, http.StatusForbidden, "invalid organization access")
 				return
 			}
 
