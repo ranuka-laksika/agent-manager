@@ -45,8 +45,17 @@ set -euo pipefail
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
 : "${GATEWAY_ID:?GATEWAY_ID is required (gateway UUID)}"
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
-: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.15.0)}"
 : "${IDP_NAME:?IDP_NAME is required (identity provider name)}"
+
+# Chart reference for the gateway-extension release. Defaults to the published OCI
+# chart (CHART_VERSION required). For local development, point CHART_REF at the
+# chart directory, e.g.
+#   CHART_REF=deployments/helm-charts/wso2-amp-api-platform-gateway-extension
+# in which case CHART_VERSION is ignored.
+CHART_REF="${CHART_REF:-oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension}"
+case "$CHART_REF" in
+    oci://*) : "${CHART_VERSION:?CHART_VERSION is required for an OCI chart (e.g. CHART_VERSION=0.15.0)}" ;;
+esac
 
 ACTION="${ACTION:-upsert}"
 case "$ACTION" in
@@ -142,9 +151,15 @@ echo "${NEW_KM}" | jq '{apiGateway: {config: {policyConfigurations: {jwtauth_v1:
 # --- Step 3: Re-apply the gateway release (ConfigMap source of truth) ---
 echo ""
 echo "🌐 Applying gateway configuration for '${ENV_NAME}'..."
+# --version only applies to OCI/remote charts; a local chart path carries its own version.
+VERSION_ARG=""
+case "$CHART_REF" in
+    oci://*) VERSION_ARG="--version ${CHART_VERSION}" ;;
+esac
+# shellcheck disable=SC2086
 helm upgrade "${RELEASE_NAME}" \
-    "oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension" \
-    --version "${CHART_VERSION}" \
+    "${CHART_REF}" \
+    ${VERSION_ARG} \
     --namespace "${GATEWAY_NAMESPACE}" \
     --reuse-values \
     -f "${TMP_VALUES}"
