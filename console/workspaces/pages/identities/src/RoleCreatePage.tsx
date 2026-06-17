@@ -15,30 +15,39 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
+  Box,
   Button,
+  Collapse,
   Form,
-  FormControl,
-  FormLabel,
-  Stack,
   TextField,
 } from "@wso2/oxygen-ui";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateRole } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
+import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
+import { createRoleSchema, type CreateRoleFormValues } from "./forms/schemas";
 
 export const RoleCreatePage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
 
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [nameError, setNameError] = useState<string | undefined>();
+  const [formData, setFormData] = useState<CreateRoleFormValues>({
+    name: "",
+    description: "",
+  });
 
-  const { mutateAsync: createRole, isPending: isCreating, error: createError } = useCreateRole();
+  const { errors, validateField, validateForm, clearErrors, setFieldError } =
+    useFormValidation<CreateRoleFormValues>(createRoleSchema);
+  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
+    useState<typeof errors>({});
+
+  const { mutateAsync: createRole, isPending: isCreating, error: createError } =
+    useCreateRole();
 
   const rolesPath = orgId
     ? generatePath(
@@ -49,23 +58,43 @@ export const RoleCreatePage: React.FC = () => {
       )
     : "#";
 
-  const handleSubmit = async () => {
-    if (!name.trim()) {
-      setNameError("Name is required");
+  const handleFieldChange = useCallback(
+    (field: keyof CreateRoleFormValues, value: string) => {
+      const newData = { ...formData, [field]: value };
+      setFormData(newData);
+      checkDirty(newData);
+      setFieldError(field, validateField(field, value));
+    },
+    [formData, checkDirty, validateField, setFieldError],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm(formData)) {
+      setLastSubmittedValidationErrors(errors);
       return;
     }
-    setNameError(undefined);
+    setLastSubmittedValidationErrors({});
 
     try {
       await createRole({
         params: { orgName: orgId },
-        body: { name: name.trim(), description: description.trim() || undefined },
+        body: {
+          name: formData.name.trim(),
+          description: formData.description?.trim() || undefined,
+        },
       });
+      resetDirty();
+      clearErrors();
       navigate(rolesPath);
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }
-  };
+  }, [
+    formData, validateForm, errors, createRole, orgId,
+    resetDirty, clearErrors, navigate, rolesPath,
+  ]);
+
+  const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
     <PageLayout
@@ -74,59 +103,72 @@ export const RoleCreatePage: React.FC = () => {
       backLabel="Back to Roles"
       disableIcon
     >
-      <Stack spacing={3} sx={{ maxWidth: 700 }}>
+      <Box display="flex" flexDirection="column" gap={2}>
         {createError != null && (
           <Alert severity="error">
             {(createError as Error)?.message ?? "Failed to create role"}
           </Alert>
         )}
 
-        <Form.Section>
-          <Form.Header>Role Details</Form.Header>
-          <Form.Stack spacing={2}>
-            <FormControl fullWidth error={Boolean(nameError)}>
-              <FormLabel required>Name</FormLabel>
-              <TextField
-                fullWidth
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (nameError) setNameError(undefined);
-                }}
-                placeholder="admin"
-                autoComplete="off"
-                error={Boolean(nameError)}
-                helperText={nameError}
-              />
-            </FormControl>
+        <Form.Stack spacing={3}>
+          <Form.Section>
+            <Form.Subheader>Role Details</Form.Subheader>
+            <Form.Stack spacing={2}>
+              <Form.ElementWrapper label="Name" name="name">
+                <TextField
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                  placeholder="admin"
+                  autoComplete="off"
+                  error={!!errors.name}
+                  helperText={errors.name}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
 
-            <FormControl fullWidth>
-              <FormLabel>Description</FormLabel>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the role's purpose and permissions"
-              />
-            </FormControl>
-          </Form.Stack>
-        </Form.Section>
+              <Form.ElementWrapper label="Description (optional)" name="description">
+                <TextField
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => handleFieldChange("description", e.target.value)}
+                  placeholder="Describe the role's purpose and permissions"
+                  multiline
+                  minRows={2}
+                  maxRows={6}
+                  error={!!errors.description}
+                  helperText={errors.description}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
+            </Form.Stack>
+          </Form.Section>
+        </Form.Stack>
 
-        <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => navigate(rolesPath)} disabled={isCreating}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={isCreating || !name.trim()}
-          >
-            {isCreating ? "Creating..." : "Create Role"}
-          </Button>
-        </Stack>
-      </Stack>
+        <Box display="flex" flexDirection="column" gap={3}>
+          <Collapse in={submitErrors.length > 0} timeout="auto" unmountOnExit>
+            <Alert severity="error">
+              {submitErrors.map((error, index) => (
+                <Box key={index}>{error}</Box>
+              ))}
+            </Alert>
+          </Collapse>
+          <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            <Button variant="outlined" color="primary" onClick={() => navigate(rolesPath)}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Plus size={16} />}
+              onClick={handleSubmit}
+              disabled={isCreating || !formData.name.trim()}
+            >
+              Create Role
+            </Button>
+          </Box>
+        </Box>
+      </Box>
     </PageLayout>
   );
 };

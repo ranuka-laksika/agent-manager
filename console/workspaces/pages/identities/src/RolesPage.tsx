@@ -18,9 +18,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Box,
   Button,
-  CircularProgress,
   IconButton,
   ListingTable,
   Stack,
@@ -36,6 +34,7 @@ import {
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap, type ThunderRole } from "@agent-management-platform/types";
+import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
 export const RolesPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -83,16 +82,6 @@ export const RolesPage: React.FC = () => {
     });
   };
 
-  if (isLoading) {
-    return (
-      <PageLayout title="Roles" disableIcon>
-        <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
-        </Box>
-      </PageLayout>
-    );
-  }
-
   return (
     <PageLayout title="Roles" disableIcon>
       {error != null && (
@@ -112,7 +101,7 @@ export const RolesPage: React.FC = () => {
       </Stack>
 
       <ListingTable.Container>
-        {total === 0 ? (
+        {!isLoading && total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Shield size={64} />}
             title="No roles yet"
@@ -128,7 +117,8 @@ export const RolesPage: React.FC = () => {
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
-              {roles.map((role: ThunderRole) => (
+              {isLoading && <ListingSkeletonRows rows={rowsPerPage} />}
+              {!isLoading && roles.map((role: ThunderRole) => (
                 <ListingTable.Row key={role.id}>
                   <ListingTable.Cell>{role.name}</ListingTable.Cell>
                   <ListingTable.Cell>{role.description ?? "-"}</ListingTable.Cell>
@@ -153,7 +143,7 @@ export const RolesPage: React.FC = () => {
             </ListingTable.Body>
           </ListingTable>
         )}
-        {total > 0 && (
+        {!isLoading && total > 0 && (
           <TablePagination
             component="div"
             count={total}

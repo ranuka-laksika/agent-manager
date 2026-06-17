@@ -18,9 +18,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
-  Box,
   Button,
-  CircularProgress,
   IconButton,
   ListingTable,
   Stack,
@@ -36,6 +34,7 @@ import {
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
+import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
 export const GroupsPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -87,16 +86,6 @@ export const GroupsPage: React.FC = () => {
     });
   };
 
-  if (isLoading) {
-    return (
-      <PageLayout title="Groups" disableIcon>
-        <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
-        </Box>
-      </PageLayout>
-    );
-  }
-
   return (
     <PageLayout title="Groups" disableIcon>
       {error != null && (
@@ -116,7 +105,7 @@ export const GroupsPage: React.FC = () => {
       </Stack>
 
       <ListingTable.Container>
-        {total === 0 ? (
+        {!isLoading && total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Folder size={64} />}
             title="No groups yet"
@@ -132,7 +121,8 @@ export const GroupsPage: React.FC = () => {
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
-              {groups.map((group: ThunderGroup) => (
+              {isLoading && <ListingSkeletonRows rows={rowsPerPage} />}
+              {!isLoading && groups.map((group: ThunderGroup) => (
                 <ListingTable.Row key={group.id}>
                   <ListingTable.Cell>{group.name}</ListingTable.Cell>
                   <ListingTable.Cell>{group.description ?? "-"}</ListingTable.Cell>
@@ -155,7 +145,7 @@ export const GroupsPage: React.FC = () => {
             </ListingTable.Body>
           </ListingTable>
         )}
-        {total > 0 && (
+        {!isLoading && total > 0 && (
           <TablePagination
             component="div"
             count={total}

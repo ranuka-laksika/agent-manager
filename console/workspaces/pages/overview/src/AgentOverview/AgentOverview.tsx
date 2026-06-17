@@ -112,7 +112,7 @@ export function AgentOverview() {
                         onClick={() => setEditAgentDrawerOpen(true)}
                         disabled={!agent}
                     >
-                        Edit
+                        Edit Agent
                     </Button>
                 }
             >
