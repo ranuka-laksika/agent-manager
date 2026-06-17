@@ -2238,6 +2238,11 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	if err := validateOAuthSecurityConfig(apiCfg); err != nil {
 		return "", err
 	}
+	if targetEnv != nil {
+		if err := s.validateOAuthIssuersInEnvironment(targetEnv.UUID, apiCfg); err != nil {
+			return "", err
+		}
+	}
 	enableAutoInstrumentation := tracingCfg.EnableAutoInstrumentation
 	enableApiKeySecurity := apiCfg.EnableApiKeySecurity
 	if apiCfg.CORSAllowCredentials {
@@ -2577,6 +2582,29 @@ func validateOAuthSecurityConfig(cfg resolvedCORSConfig) error {
 	return nil
 }
 
+// validateOAuthIssuersInEnvironment rejects any OAuth issuer that is not one of
+// the environment's configured identity providers. Issuers are gateway-owned;
+// the agent can only reference providers that exist in its target environment.
+func (s *agentManagerService) validateOAuthIssuersInEnvironment(envUUID string, cfg resolvedCORSConfig) error {
+	if !cfg.EnableOAuthSecurity || envUUID == "" {
+		return nil
+	}
+	providers, err := s.gatewayRepo.ListIdentityProvidersByEnvironment(envUUID)
+	if err != nil {
+		return err
+	}
+	valid := make(map[string]bool, len(providers))
+	for _, p := range providers {
+		valid[p.Name] = true
+	}
+	for _, issuer := range cfg.OAuthIssuers {
+		if !valid[issuer] {
+			return fmt.Errorf("%w: identity provider %q is not configured for this environment", utils.ErrInvalidInput, issuer)
+		}
+	}
+	return nil
+}
+
 // buildPolicies builds the api-configuration trait policies from resolved config.
 // Returns a non-nil slice so the "no authentication" mode (no CORS, no auth)
 // marshals to an empty JSON array — the api-configuration trait rejects a null
@@ -2821,6 +2849,11 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		if targetEnvErr != nil {
 			return fmt.Errorf("failed to fetch target environment details: %w", targetEnvErr)
 		}
+		if targetEnv != nil {
+			if err := s.validateOAuthIssuersInEnvironment(targetEnv.UUID, apiCfg); err != nil {
+				return err
+			}
+		}
 
 		artifact, artifactErr := ensureAgentEnvAPIArtifact(s.db, s.artifactRepo, orgName, projectName, agentName, targetEnv.UUID)
 		if artifactErr != nil {
@@ -2916,6 +2949,11 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 	}
 	if err := validateOAuthSecurityConfig(apiCfg); err != nil {
 		return err
+	}
+	if targetEnv != nil {
+		if err := s.validateOAuthIssuersInEnvironment(targetEnv.UUID, apiCfg); err != nil {
+			return err
+		}
 	}
 	policies := buildPolicies(apiCfg)
 

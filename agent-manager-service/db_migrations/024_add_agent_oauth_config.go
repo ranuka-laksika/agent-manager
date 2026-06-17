@@ -33,6 +33,30 @@ var migration024 = migration{
 			ADD COLUMN IF NOT EXISTS oauth_header_name        TEXT    NOT NULL DEFAULT 'Authorization',
 			ADD COLUMN IF NOT EXISTS oauth_auth_header_prefix TEXT    NOT NULL DEFAULT 'Bearer';
 		`
-		return db.Exec(addOAuthConfig).Error
+		if err := db.Exec(addOAuthConfig).Error; err != nil {
+			return err
+		}
+
+		// gateway_identity_providers mirrors the gateway-side jwt-auth keymanagers
+		// (token issuers). The gateway ConfigMap remains the source of truth; this
+		// table is written by the gateway bootstrap (seed) and the management script.
+		createIdentityProviders := `
+		CREATE TABLE IF NOT EXISTS gateway_identity_providers (
+			uuid                 UUID         PRIMARY KEY,
+			gateway_uuid         UUID         NOT NULL REFERENCES gateways(uuid) ON DELETE CASCADE,
+			name                 TEXT         NOT NULL,
+			issuer               TEXT         NOT NULL DEFAULT '',
+			jwks_uri             TEXT         NOT NULL DEFAULT '',
+			description          TEXT         NOT NULL DEFAULT '',
+			type                 TEXT         NOT NULL DEFAULT 'custom',
+			jwks_skip_tls_verify BOOLEAN      NOT NULL DEFAULT false,
+			created_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
+			updated_at           TIMESTAMPTZ  NOT NULL DEFAULT now(),
+			UNIQUE (gateway_uuid, name)
+		);
+		CREATE INDEX IF NOT EXISTS idx_gateway_identity_providers_gateway_uuid
+			ON gateway_identity_providers (gateway_uuid);
+		`
+		return db.Exec(createIdentityProviders).Error
 	},
 }
