@@ -19,6 +19,7 @@
 import {
   useGetAgent,
   useGetAgentConfigurations,
+  useListEnvironmentIdentityProviders,
   useUpdateAgentDeploySettings,
 } from "@agent-management-platform/api-client";
 import {
@@ -51,7 +52,7 @@ import {
   DrawerWrapper,
   useSnackBar,
 } from "@agent-management-platform/views";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface EditSecurityConfigDrawerProps {
   open: boolean;
@@ -81,6 +82,18 @@ export function EditSecurityConfigDrawer({
   );
 
   const isApiAgent = agent?.agentType?.type === "agent-api";
+
+  // Issuer options are the environment's configured identity providers — agents
+  // can only reference providers that exist on the environment's gateway.
+  const { data: idpResp } = useListEnvironmentIdentityProviders({
+    orgName,
+    environmentId: open && isApiAgent ? environment : undefined,
+  });
+  const identityProviderOptions = useMemo(
+    () => (idpResp?.list ?? []).map((p) => p.name),
+    [idpResp],
+  );
+  const hasIdentityProviders = identityProviderOptions.length > 0;
 
   // ── State ─────────────────────────────────────────────────────────────────
   // Endpoint authentication mode — mutually exclusive by construction.
@@ -244,9 +257,19 @@ export function EditSecurityConfigDrawer({
                 <FormControl>
                   <RadioGroup
                     value={authMode}
-                    onChange={(_, value) =>
-                      setAuthMode(value as "none" | "apikey" | "oauth")
-                    }
+                    onChange={(_, value) => {
+                      const mode = value as "none" | "apikey" | "oauth";
+                      setAuthMode(mode);
+                      // Seed issuers from the environment's identity providers when
+                      // switching into OAuth with none selected yet.
+                      if (
+                        mode === "oauth" &&
+                        oauthIssuers.length === 0 &&
+                        hasIdentityProviders
+                      ) {
+                        setOauthIssuers(identityProviderOptions);
+                      }
+                    }}
                   >
                     <FormControlLabel
                       value="none"
@@ -260,8 +283,12 @@ export function EditSecurityConfigDrawer({
                     />
                     <FormControlLabel
                       value="oauth"
-                      control={<Radio disabled={isPending} />}
-                      label="OAuth"
+                      control={<Radio disabled={isPending || !hasIdentityProviders} />}
+                      label={
+                        hasIdentityProviders
+                          ? "OAuth"
+                          : "OAuth — configure an identity provider first"
+                      }
                     />
                   </RadioGroup>
                 </FormControl>
@@ -282,16 +309,15 @@ export function EditSecurityConfigDrawer({
                     <Alert severity="info">
                       Callers authenticate with a standard{" "}
                       <code>Authorization: Bearer &lt;token&gt;</code> header.
-                      Token validation key managers are configured gateway-side
-                      under <code>policy_configurations.jwtauth_v1</code>.
+                      Identity providers (token issuers) are managed under{" "}
+                      Security &rarr; Identity Providers and selected below.
                     </Alert>
 
                     <FormControl fullWidth>
-                      <FormLabel>Issuers</FormLabel>
+                      <FormLabel>Identity Providers</FormLabel>
                       <Autocomplete
                         multiple
-                        freeSolo
-                        options={[]}
+                        options={identityProviderOptions}
                         value={oauthIssuers}
                         onChange={(_, v) => setOauthIssuers(v as string[])}
                         disabled={isPending}
@@ -301,7 +327,15 @@ export function EditSecurityConfigDrawer({
                           ))
                         }
                         renderInput={(params) => (
-                          <TextField {...params} size="small" placeholder="Add issuer and press Enter" />
+                          <TextField
+                            {...params}
+                            size="small"
+                            placeholder={
+                              oauthIssuers.length === 0
+                                ? "Select identity providers"
+                                : ""
+                            }
+                          />
                         )}
                       />
                     </FormControl>
