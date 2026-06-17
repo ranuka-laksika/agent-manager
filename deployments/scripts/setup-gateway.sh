@@ -59,10 +59,12 @@ fi
 kubectl apply -f "${SCRIPT_DIR}/../values/otel-collector-rest-api.yaml"
 
 echo "⏳ Waiting for RestApi to be programmed..."
-if kubectl wait --for=condition=Programmed restapi/amp-otel-collector-tracing-rest-api  -n openchoreo-data-plane --timeout=120s; then
+if kubectl wait --for=condition=Programmed restapi/amp-otel-collector-tracing-rest-api -n openchoreo-data-plane --timeout=300s; then
     echo "✅ RestApi is programmed"
 else
-    echo "⚠️  RestApi did not become ready in time"
+    echo "❌ RestApi amp-otel-collector-tracing-rest-api did not become Programmed in time"
+    kubectl describe restapi/amp-otel-collector-tracing-rest-api -n openchoreo-data-plane || true
+    exit 1
 fi
 
 echo ""
