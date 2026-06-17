@@ -2235,6 +2235,9 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	if err := validateAuthExclusivity(apiCfg); err != nil {
 		return "", err
 	}
+	if err := validateOAuthSecurityConfig(apiCfg); err != nil {
+		return "", err
+	}
 	enableAutoInstrumentation := tracingCfg.EnableAutoInstrumentation
 	enableApiKeySecurity := apiCfg.EnableApiKeySecurity
 	if apiCfg.CORSAllowCredentials {
@@ -2531,15 +2534,10 @@ func resolveAPIConfig(existingConfig *models.AgentConfig, enableApiKeySecurity *
 }
 
 // oauthConfigFromAgentConfig builds the response OAuth config from a persisted
-// agent config row. Empty issuers reflect the configured default; empty header
-// fields fall back to the gateway-compatible defaults.
+// agent config row. Issuers are returned as persisted (no silent default); empty
+// header fields fall back to the gateway-compatible defaults.
 func oauthConfigFromAgentConfig(cfg *models.AgentConfig) *models.OAuthConfig {
 	issuers := cfg.OAuthIssuers
-	if len(issuers) == 0 {
-		if defaultIssuer := config.GetAgentWorkloadConfig().OAuth.DefaultIssuer; defaultIssuer != "" {
-			issuers = []string{defaultIssuer}
-		}
-	}
 	headerName := cfg.OAuthHeaderName
 	if headerName == "" {
 		headerName = models.DefaultOAuthHeaderName
@@ -2567,6 +2565,18 @@ func validateAuthExclusivity(cfg resolvedCORSConfig) error {
 	return nil
 }
 
+// validateOAuthSecurityConfig rejects an OAuth-enabled config with no issuers.
+// Issuers reference the environment's identity providers; there is no platform
+// default, so an empty list is a configuration error. (Membership of each issuer
+// in the environment's identity providers is validated separately where the
+// environment context is available.)
+func validateOAuthSecurityConfig(cfg resolvedCORSConfig) error {
+	if cfg.EnableOAuthSecurity && len(cfg.OAuthIssuers) == 0 {
+		return fmt.Errorf("%w: OAuth security requires at least one identity provider issuer", utils.ErrInvalidInput)
+	}
+	return nil
+}
+
 // buildPolicies builds the api-configuration trait policies from resolved config.
 // Returns a non-nil slice so the "no authentication" mode (no CORS, no auth)
 // marshals to an empty JSON array — the api-configuration trait rejects a null
@@ -2583,16 +2593,10 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 		policies = append(policies, client.APIKeyAuthPolicy())
 	}
 	if cfg.EnableOAuthSecurity {
-		issuers := cfg.OAuthIssuers
-		if len(issuers) == 0 {
-			// Empty issuers fall back to the configured default key manager at
-			// build time, so the default can change via config without rewriting DB rows.
-			if defaultIssuer := config.GetAgentWorkloadConfig().OAuth.DefaultIssuer; defaultIssuer != "" {
-				issuers = []string{defaultIssuer}
-			}
-		}
+		// Issuers are passed through as persisted — empty issuers are rejected by
+		// validateOAuthSecurityConfig before reaching here, so no default is invented.
 		policies = append(policies, client.OAuthPolicy(client.OAuthPolicyParams{
-			Issuers:          issuers,
+			Issuers:          cfg.OAuthIssuers,
 			Audiences:        cfg.OAuthAudiences,
 			RequiredScopes:   cfg.OAuthRequiredScopes,
 			RequiredClaims:   cfg.OAuthRequiredClaims,
@@ -2806,6 +2810,9 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		if err := validateAuthExclusivity(apiCfg); err != nil {
 			return err
 		}
+		if err := validateOAuthSecurityConfig(apiCfg); err != nil {
+			return err
+		}
 		policies := buildPolicies(apiCfg)
 
 		// Each environment must have its own unique artifact UUID so the gateway controller
@@ -2905,6 +2912,9 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 	tracingCfg := resolveTracingConfig(existingConfig, req.EnableAutoInstrumentation, false)
 	apiCfg := resolveAPIConfig(existingConfig, req.EnableApiKeySecurity, req.CorsConfig, req.EnableOAuthSecurity, req.OauthConfig, false)
 	if err := validateAuthExclusivity(apiCfg); err != nil {
+		return err
+	}
+	if err := validateOAuthSecurityConfig(apiCfg); err != nil {
 		return err
 	}
 	policies := buildPolicies(apiCfg)

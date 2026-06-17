@@ -69,10 +69,6 @@ func loadEnvs() {
 		AllowCredentials: r.readOptionalBool("AGENT_WORKLOAD_CORS_ALLOW_CREDENTIALS", false),
 	}
 
-	agentWorkloadConfig.OAuth = OAuthWorkloadConfig{
-		DefaultIssuer: r.readOptionalString("AGENT_WORKLOAD_OAUTH_DEFAULT_ISSUER", "ThunderKeyManager"),
-	}
-
 	// Logging configuration
 	config.LogLevel = r.readOptionalString("LOG_LEVEL", "INFO")
 

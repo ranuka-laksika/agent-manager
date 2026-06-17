@@ -227,7 +227,10 @@ func TestBuildPolicies_Modes(t *testing.T) {
 		}
 	})
 
-	t.Run("oauth empty issuers falls back to configured default", func(t *testing.T) {
+	t.Run("oauth empty issuers carries no default issuer", func(t *testing.T) {
+		// No silent fallback: the issuers slice is passed through as-is. Empty
+		// issuers are rejected upstream by validateOAuthSecurityConfig, so build
+		// time must not invent a default.
 		cfg := base
 		cfg.EnableOAuthSecurity = true
 		cfg.OAuthIssuers = nil
@@ -237,8 +240,40 @@ func TestBuildPolicies_Modes(t *testing.T) {
 			t.Fatalf("expected jwt-auth policy")
 		}
 		issuers, _ := policyParams(jwt)["issuers"].([]string)
-		if len(issuers) != 1 || issuers[0] != "ThunderKeyManager" {
-			t.Errorf("expected default issuer [ThunderKeyManager], got %v", issuers)
+		if len(issuers) != 0 {
+			t.Errorf("expected no issuers, got %v", issuers)
 		}
 	})
+}
+
+func TestValidateOAuthSecurityConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		oauth   bool
+		issuers []string
+		wantErr bool
+	}{
+		{"oauth off, no issuers", false, nil, false},
+		{"oauth on with issuer", true, []string{"ThunderKeyManager"}, false},
+		{"oauth on, empty issuers rejected", true, nil, true},
+		{"oauth on, empty slice rejected", true, []string{}, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateOAuthSecurityConfig(resolvedCORSConfig{
+				EnableOAuthSecurity: tc.oauth,
+				OAuthIssuers:        tc.issuers,
+			})
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				if !errors.Is(err, utils.ErrInvalidInput) {
+					t.Fatalf("expected ErrInvalidInput, got %v", err)
+				}
+			} else if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		})
+	}
 }
