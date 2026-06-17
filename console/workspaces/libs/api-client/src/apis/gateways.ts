@@ -21,8 +21,11 @@ import type {
   CreateGatewayRequest,
   DeleteGatewayPathParams,
   GetGatewayPathParams,
+  IdentityProviderListResponse,
+  ListEnvironmentIdentityProvidersPathParams,
   ListGatewaysPathParams,
   ListGatewaysQuery,
+  ListIdentityProvidersPathParams,
   GatewayListResponse,
   GatewayResponse,
   GatewayTokenListResponse,
@@ -242,4 +245,34 @@ export async function revokeGatewayToken(
     { token },
   );
   if (!res.ok && res.status !== 204) throw await res.json();
+}
+
+export async function listIdentityProviders(
+  params: ListIdentityProvidersPathParams,
+  getToken?: () => Promise<string>,
+): Promise<IdentityProviderListResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/identity-providers`, {
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function listEnvironmentIdentityProviders(
+  params: ListEnvironmentIdentityProvidersPathParams,
+  getToken?: () => Promise<string>,
+): Promise<IdentityProviderListResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const envId = encodeRequired(params.environmentId, "environmentId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/environments/${envId}/identity-providers`,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
 }

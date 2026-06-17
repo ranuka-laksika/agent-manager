@@ -26,8 +26,11 @@ import type {
   GatewayListResponse,
   GatewayResponse,
   GetGatewayPathParams,
+  IdentityProviderListResponse,
+  ListEnvironmentIdentityProvidersPathParams,
   ListGatewaysPathParams,
   ListGatewaysQuery,
+  ListIdentityProvidersPathParams,
   UpdateGatewayPathParams,
   UpdateGatewayRequest,
 } from "@agent-management-platform/types";
@@ -36,8 +39,10 @@ import {
   createGateway,
   deleteGateway,
   getGateway,
+  listEnvironmentIdentityProviders,
   listGatewayTokens,
   listGateways,
+  listIdentityProviders,
   removeGatewayFromEnvironment,
   revokeGatewayToken,
   rotateGatewayToken,
@@ -62,6 +67,28 @@ export function useGetGateway(params: GetGatewayPathParams) {
     queryKey: ["gateway", params],
     queryFn: () => getGateway(params, getToken),
     enabled: !!params.orgName && !!params.gatewayId,
+  });
+}
+
+export function useListIdentityProviders(
+  params: ListIdentityProvidersPathParams,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<IdentityProviderListResponse>({
+    queryKey: ["identity-providers", params],
+    queryFn: () => listIdentityProviders(params, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+export function useListEnvironmentIdentityProviders(
+  params: ListEnvironmentIdentityProvidersPathParams,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<IdentityProviderListResponse>({
+    queryKey: ["environment-identity-providers", params],
+    queryFn: () => listEnvironmentIdentityProviders(params, getToken),
+    enabled: !!params.orgName && !!params.environmentId,
   });
 }
 
