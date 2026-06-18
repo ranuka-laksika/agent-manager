@@ -43,14 +43,15 @@ SSH into the VM, get the installer, and run it with `sudo`:
 # on the VM
 git clone https://github.com/wso2/agent-manager.git
 cd agent-manager/deployments/vm
+git checkout tags/amp/v0.0.0-dev
 
 sudo ./install-vm.sh \
   --host <VM_PUBLIC_IP> \
-  --version <amp-release> \
+  --version 0.0.0-dev \
   --email you@example.com
 ```
 
-Pass `--host` the VM's **public** IPv4 address — a cloud VM usually can't read its own public IP (it's NAT'd behind the address you used to SSH in), so the installer needs it to build the `*.amp.<IP>.sslip.io` hostnames. Set `--version` to the Agent Manager release you want (an existing `amp/v*` [tag](https://github.com/wso2/agent-manager/tags), e.g. `0.16.0`).
+Pass `--host` the VM's **public** IPv4 address — a cloud VM usually can't read its own public IP (it's NAT'd behind the address you used to SSH in), so the installer needs it to build the `*.amp.<IP>.sslip.io` hostnames.
 
 The installer runs in two phases — bootstrap (Docker + tools + firewall) and the platform install + Caddy startup. Allow 8–15 minutes. It needs `sudo` because it installs Docker, opens the firewall, and creates the cluster.
 
@@ -59,7 +60,7 @@ The installer runs in two phases — bootstrap (Docker + tools + firewall) and t
 | Flag | Default | Purpose |
 |---|---|---|
 | `--host` | _(required)_ | The VM's public IPv4 address |
-| `--version` | _(required)_ | Agent Manager release to install (an `amp/v*` tag, e.g. `0.16.0`) |
+| `--version` | _(required)_ | Agent Manager release to install — use the same `amp/v*` tag you checked out above |
 | `--email` | _(none)_ | ACME contact for expiry notices |
 | `--no-external-gateways` | off | Drop the gateway control-plane endpoint if you won't connect external gateways |
 
@@ -192,6 +193,7 @@ Generate an annotated config template and edit it:
 # on the VM
 git clone https://github.com/wso2/agent-manager.git
 cd agent-manager/deployments/vm
+git checkout tags/amp/v0.0.0-dev
 
 ./install-advanced.sh --init > amp-config.env
 # edit amp-config.env
@@ -201,7 +203,7 @@ The config file is plain shell (sourced by the installer). The keys are:
 
 | Key | Required | Purpose |
 |---|---|---|
-| `AMP_VERSION` | yes | Agent Manager release to install (an `amp/v*` [tag](https://github.com/wso2/agent-manager/tags), e.g. `0.16.0`) |
+| `AMP_VERSION` | yes | Agent Manager release to install — use the same `amp/v*` [tag](https://github.com/wso2/agent-manager/tags) you checked out above (`0.0.0-dev`) |
 | `DOMAIN_BASE` | yes | Base domain; service hosts are derived as `<svc>.<DOMAIN_BASE>` |
 | `TLS_MODE` | yes | `letsencrypt`, `byoc`, or `upstream` |
 | `ACME_EMAIL` | letsencrypt | ACME contact for expiry notices |
