@@ -2082,10 +2082,8 @@ func APIKeyAuthPolicy() map[string]interface{} {
 // contract (configured under policy_configurations.jwtauth_v1) and are the only
 // place "jwt" wording survives — user-facing surfaces say "OAuth".
 const (
-	OAuthPolicyName              = "jwt-auth"
-	OAuthPolicyVersion           = "v1"
-	OAuthDefaultHeaderName       = "Authorization"
-	OAuthDefaultAuthHeaderPrefix = "Bearer"
+	OAuthPolicyName    = "jwt-auth"
+	OAuthPolicyVersion = "v1"
 )
 
 // OAuthPolicyParams holds the jwt-auth policy parameters resolved for an agent.
@@ -2102,7 +2100,9 @@ type OAuthPolicyParams struct {
 }
 
 // OAuthPolicy returns the policy map for OAuth (JWT) authentication. Empty
-// optional params are omitted so the gateway applies its own defaults.
+// issuers/claims are omitted; header name and prefix are passed through as
+// resolved by the caller, which guarantees non-empty gateway-compatible values
+// (see models.DefaultOAuthHeaderName / DefaultOAuthAuthHeaderPrefix).
 func OAuthPolicy(p OAuthPolicyParams) map[string]interface{} {
 	params := map[string]interface{}{}
 	if len(p.Issuers) > 0 {
@@ -2111,16 +2111,8 @@ func OAuthPolicy(p OAuthPolicyParams) map[string]interface{} {
 	if len(p.RequiredClaims) > 0 {
 		params["requiredClaims"] = p.RequiredClaims
 	}
-	headerName := p.HeaderName
-	if headerName == "" {
-		headerName = OAuthDefaultHeaderName
-	}
-	authHeaderPrefix := p.AuthHeaderPrefix
-	if authHeaderPrefix == "" {
-		authHeaderPrefix = OAuthDefaultAuthHeaderPrefix
-	}
-	params["headerName"] = headerName
-	params["authHeaderPrefix"] = authHeaderPrefix
+	params["headerName"] = p.HeaderName
+	params["authHeaderPrefix"] = p.AuthHeaderPrefix
 	params["forwardToken"] = p.ForwardToken
 	return map[string]interface{}{
 		"name":    OAuthPolicyName,
