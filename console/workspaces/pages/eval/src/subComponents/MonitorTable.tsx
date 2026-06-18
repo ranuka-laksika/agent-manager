@@ -33,6 +33,7 @@ import {
   Monitor,
   AlertTriangle,
   Edit,
+  Copy,
 } from "@wso2/oxygen-ui-icons-react";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -292,6 +293,24 @@ export function MonitorTable() {
                   >
                     <Edit size={16} />
                   </IconButton>
+                  <Tooltip title="Duplicate">
+                    <IconButton
+                      aria-label={`Duplicate monitor ${monitor.displayName}`}
+                      onClick={() =>
+                        navigate({
+                          pathname: generatePath(
+                            absoluteRouteMap.children.org.children.projects
+                              .children.agents.children.environment.children
+                              .evaluation.children.monitor.children.create.path,
+                            { agentId, orgId, projectId, envId },
+                          ),
+                          search: `?duplicateFrom=${encodeURIComponent(monitor.name)}`,
+                        })
+                      }
+                    >
+                      <Copy size={16} />
+                    </IconButton>
+                  </Tooltip>
                   <Tooltip title="Delete Monitor">
                     <IconButton
                       color="error"

@@ -25,7 +25,7 @@ import {
   type CreateMonitorFormValues,
 } from "../form/schema";
 import type { EvaluatorResponse } from "@agent-management-platform/types";
-import { CreateMonitorForm } from "./CreateMonitorForm";
+import { CreateMonitorForm, type EnvironmentOption } from "./CreateMonitorForm";
 import { SelectPresetMonitors } from "./SelectPresetMonitors";
 import { slugifyMonitorName } from "../utils/monitorFormUtils";
 import { useValidatedForm } from "../hooks/useValidatedForm";
@@ -42,6 +42,7 @@ interface MonitorFormWizardProps {
   missingParamsMessage?: string | null;
   backLabel?: string;
   isTypeEditable?: boolean;
+  environments?: EnvironmentOption[];
 }
 
 export function MonitorFormWizard({
@@ -56,6 +57,7 @@ export function MonitorFormWizard({
   missingParamsMessage,
   backLabel = "Back to Monitors",
   isTypeEditable = true,
+  environments = [],
 }: MonitorFormWizardProps) {
   const [page, setPage] = useState<1 | 2>(1);
   const [formData, setFormData] =
@@ -277,6 +279,7 @@ export function MonitorFormWizard({
             errors={errors}
             onFieldChange={handleFieldChange}
             isTypeEditable={isTypeEditable}
+            environments={environments}
           />
         )}
 
