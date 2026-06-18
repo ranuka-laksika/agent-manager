@@ -25,7 +25,7 @@ import {
   TextField,
 } from "@wso2/oxygen-ui";
 import { Plus } from "@wso2/oxygen-ui-icons-react";
-import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import { PageLayout, useFormValidation, useDirtyState, TextInput } from "@agent-management-platform/views";
 import { useNavigate, useParams, generatePath } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
@@ -147,9 +147,10 @@ export const UserAddPage: React.FC = () => {
               </Form.ElementWrapper>
 
               <Form.ElementWrapper label="Password" name="password">
-                <TextField
+                <TextInput
                   id="password"
                   type="password"
+                  showPasswordToggle
                   value={formData.password}
                   onChange={(e) => handleFieldChange("password", e.target.value)}
                   autoComplete="new-password"
