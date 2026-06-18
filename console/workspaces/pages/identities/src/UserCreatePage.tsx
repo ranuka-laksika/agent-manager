@@ -28,7 +28,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
+import { PageLayout, TextInput } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 
 export const UserCreatePage: React.FC = () => {
@@ -123,21 +123,20 @@ export const UserCreatePage: React.FC = () => {
               />
             </FormControl>
 
-            <FormControl fullWidth error={Boolean(errors.password)}>
-              <FormLabel required>Password</FormLabel>
-              <TextField
-                fullWidth
-                type="password"
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
-                }}
-                autoComplete="new-password"
-                error={Boolean(errors.password)}
-                helperText={errors.password}
-              />
-            </FormControl>
+            <TextInput
+              label="Password"
+              required
+              type="password"
+              showPasswordToggle
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+              }}
+              autoComplete="new-password"
+              error={Boolean(errors.password)}
+              helperText={errors.password}
+            />
           </Form.Stack>
         </Form.Section>
 

@@ -25,7 +25,7 @@ import {
   Tooltip,
   InputAdornment,
 } from '@wso2/oxygen-ui';
-import { Copy as ContentCopy } from '@wso2/oxygen-ui-icons-react';
+import { Copy as ContentCopy, Eye, EyeOff } from '@wso2/oxygen-ui-icons-react';
 import { useState } from 'react';
 
 export interface TextInputProps extends Omit<TextFieldProps, 'variant'> {
@@ -33,6 +33,7 @@ export interface TextInputProps extends Omit<TextFieldProps, 'variant'> {
   labelAction?: React.ReactNode;
   copyable?: boolean;
   copyTooltipText?: string;
+  showPasswordToggle?: boolean;
 }
 
 export const TextInput = ({
@@ -43,9 +44,12 @@ export const TextInput = ({
   value,
   slotProps,
   required,
+  showPasswordToggle = false,
+  type = 'text',
   ...props
 }: TextInputProps) => {
   const [copied, setCopied] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleCopy = async () => {
     if (typeof value === 'string' && value) {
@@ -66,7 +70,23 @@ export const TextInput = ({
     return copied ? 'Copied!' : 'Copy';
   };
 
-  const endAdornment = copyable && typeof value === 'string' && value ? (
+  const isPasswordField = type === 'password' && showPasswordToggle;
+  const displayType = isPasswordField && showPassword ? 'text' : type;
+
+  const endAdornment = isPasswordField ? (
+    <InputAdornment position="end">
+      <Tooltip title={showPassword ? 'Hide password' : 'Show password'}>
+        <IconButton
+          onClick={() => setShowPassword(!showPassword)}
+          edge="end"
+          size="small"
+          aria-label={showPassword ? 'Hide password' : 'Show password'}
+        >
+          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+        </IconButton>
+      </Tooltip>
+    </InputAdornment>
+  ) : copyable && typeof value === 'string' && value ? (
     <InputAdornment position="end">
       <Tooltip title={getCopyTooltipText()}>
         <IconButton
@@ -97,6 +117,7 @@ export const TextInput = ({
           minWidth: 100,
         }}
         variant="outlined"
+        type={displayType}
         value={value}
         slotProps={mergedSlotProps}
         required={required}
