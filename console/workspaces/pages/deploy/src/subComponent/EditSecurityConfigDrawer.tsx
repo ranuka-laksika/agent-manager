@@ -76,10 +76,7 @@ export function EditSecurityConfigDrawer({
   const { data: agent } = useGetAgent({ orgName, projName, agentName });
   // Mount the configurations query so its cache invalidates after we save —
   // /deploy-settings doesn't read this, but the page elsewhere does.
-  useGetAgentConfigurations(
-    { orgName, projName, agentName },
-    { environment },
-  );
+  useGetAgentConfigurations({ orgName, projName, agentName }, { environment });
 
   const isApiAgent = agent?.agentType?.type === "agent-api";
 
@@ -110,8 +107,20 @@ export function EditSecurityConfigDrawer({
   const [corsEnabled, setCorsEnabled] = useState(false);
   const [corsAllowAll, setCorsAllowAll] = useState(true);
   const [corsOrigins, setCorsOrigins] = useState<string[]>(["*"]);
-  const [corsMethods, setCorsMethods] = useState<string[]>(["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]);
-  const [corsHeaders, setCorsHeaders] = useState<string[]>(["authorization", "Content-Type", "Origin", "X-API-Key"]);
+  const [corsMethods, setCorsMethods] = useState<string[]>([
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+  ]);
+  const [corsHeaders, setCorsHeaders] = useState<string[]>([
+    "authorization",
+    "Content-Type",
+    "Origin",
+    "X-API-Key",
+  ]);
   const [corsAllowCredentials, setCorsAllowCredentials] = useState(false);
 
   // Seed CORS form from agent config when drawer opens. When no persisted
@@ -131,13 +140,15 @@ export function EditSecurityConfigDrawer({
     }
     if (cors.enabled !== undefined) setCorsEnabled(cors.enabled);
     if (cors.allowOrigin !== undefined) {
-      const isWildcard = cors.allowOrigin.length === 1 && cors.allowOrigin[0] === "*";
+      const isWildcard =
+        cors.allowOrigin.length === 1 && cors.allowOrigin[0] === "*";
       setCorsAllowAll(isWildcard);
       setCorsOrigins(cors.allowOrigin);
     }
     if (cors.allowMethods !== undefined) setCorsMethods(cors.allowMethods);
     if (cors.allowHeaders !== undefined) setCorsHeaders(cors.allowHeaders);
-    if (cors.allowCredentials !== undefined) setCorsAllowCredentials(cors.allowCredentials);
+    if (cors.allowCredentials !== undefined)
+      setCorsAllowCredentials(cors.allowCredentials);
   }, [open, agent?.configurations?.corsConfig]);
 
   // Seed Endpoint Authentication form from agent config when drawer opens.
@@ -172,7 +183,8 @@ export function EditSecurityConfigDrawer({
   const oauthInvalid =
     isApiAgent && authMode === "oauth" && oauthIssuers.length === 0;
 
-  const { mutate: updateDeploySettings, isPending } = useUpdateAgentDeploySettings();
+  const { mutate: updateDeploySettings, isPending } =
+    useUpdateAgentDeploySettings();
 
   const handleSave = useCallback(() => {
     updateDeploySettings(
@@ -193,8 +205,10 @@ export function EditSecurityConfigDrawer({
                 forwardToken: oauthForwardToken,
               },
             }),
-          ...(agent?.configurations?.enableAutoInstrumentation !== undefined && {
-            enableAutoInstrumentation: agent.configurations.enableAutoInstrumentation,
+          ...(agent?.configurations?.enableAutoInstrumentation !==
+            undefined && {
+            enableAutoInstrumentation:
+              agent.configurations.enableAutoInstrumentation,
           }),
           ...(isApiAgent && {
             corsConfig: {
@@ -202,7 +216,9 @@ export function EditSecurityConfigDrawer({
               allowOrigin: hasWildcardOrigin ? ["*"] : corsOrigins,
               allowMethods: corsMethods,
               allowHeaders: corsHeaders,
-              allowCredentials: hasWildcardOrigin ? false : corsAllowCredentials,
+              allowCredentials: hasWildcardOrigin
+                ? false
+                : corsAllowCredentials,
             },
           }),
         },
@@ -211,26 +227,45 @@ export function EditSecurityConfigDrawer({
         onSuccess: () => onClose(),
         onError: (error) => {
           const body = (error as { body?: { message?: string } })?.body;
-          pushSnackBar({ message: body?.message ?? "Failed to apply security configuration", type: "error" });
+          pushSnackBar({
+            message: body?.message ?? "Failed to apply security configuration",
+            type: "error",
+          });
         },
       },
     );
   }, [
-    environment, orgName, projName, agentName,
+    environment,
+    orgName,
+    projName,
+    agentName,
     agent?.configurations?.enableAutoInstrumentation,
-    authMode, oauthIssuers,
-    oauthHeaderName, oauthHeaderPrefix, oauthForwardToken,
-    corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
-    hasWildcardOrigin, isApiAgent,
-    updateDeploySettings, onClose, pushSnackBar,
+    authMode,
+    oauthIssuers,
+    oauthHeaderName,
+    oauthHeaderPrefix,
+    oauthForwardToken,
+    corsEnabled,
+    corsOrigins,
+    corsMethods,
+    corsHeaders,
+    corsAllowCredentials,
+    hasWildcardOrigin,
+    isApiAgent,
+    updateDeploySettings,
+    onClose,
+    pushSnackBar,
   ]);
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Shield size={24} />} title="Update Security Configuration" onClose={onClose} />
+      <DrawerHeader
+        icon={<Shield size={24} />}
+        title="Update Configurations"
+        onClose={onClose}
+      />
       <DrawerContent>
         <Form.Stack spacing={3}>
-
           {/* ── Endpoint Authentication ──────────────────────────────── */}
           {isApiAgent && (
             <Form.Section>
@@ -268,7 +303,9 @@ export function EditSecurityConfigDrawer({
                     />
                     <FormControlLabel
                       value="oauth"
-                      control={<Radio disabled={isPending || !hasIdentityProviders} />}
+                      control={
+                        <Radio disabled={isPending || !hasIdentityProviders} />
+                      }
                       label={
                         hasIdentityProviders
                           ? "OAuth"
@@ -292,19 +329,11 @@ export function EditSecurityConfigDrawer({
 
                 <Collapse in={authMode === "oauth"}>
                   <Form.Stack spacing={2} sx={{ mt: 1 }}>
-                    {hasIdentityProviders ? (
-                      <Alert severity="info">
-                        <Typography variant="caption">
-                          Callers send{" "}
-                          <code>Authorization: Bearer &lt;token&gt;</code>. Manage
-                          issuers under Security &rarr; Identity Providers.
-                        </Typography>
-                      </Alert>
-                    ) : (
+                    {!hasIdentityProviders && (
                       <Alert severity="warning">
                         <Typography variant="caption">
-                          No identity providers for this environment. Add one under
-                          Security &rarr; Identity Providers first.
+                          No identity providers for this environment. Add one
+                          under Security &rarr; Identity Providers first.
                         </Typography>
                       </Alert>
                     )}
@@ -319,7 +348,12 @@ export function EditSecurityConfigDrawer({
                         disabled={isPending || !hasIdentityProviders}
                         renderTags={(vals, getTagProps) =>
                           vals.map((opt, i) => (
-                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                            <Chip
+                              label={opt as string}
+                              size="small"
+                              {...getTagProps({ index: i })}
+                              key={opt as string}
+                            />
                           ))
                         }
                         renderInput={(params) => (
@@ -371,13 +405,19 @@ export function EditSecurityConfigDrawer({
                       control={
                         <Switch
                           checked={oauthForwardToken}
-                          onChange={(_, checked) => setOauthForwardToken(checked)}
+                          onChange={(_, checked) =>
+                            setOauthForwardToken(checked)
+                          }
                           disabled={isPending}
                         />
                       }
                       label="Forward token to upstream"
                     />
-                    <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: -1 }}
+                    >
                       Forward the token header to the upstream service after
                       validation. Disable to strip it before proxying.
                     </Typography>
@@ -392,7 +432,8 @@ export function EditSecurityConfigDrawer({
             <Form.Section>
               <Form.Header>CORS Configuration</Form.Header>
               <Form.Subheader>
-                Control which origins, methods, and headers may access this endpoint.
+                Control which origins, methods, and headers may access this
+                endpoint.
               </Form.Subheader>
               <Form.Stack spacing={1}>
                 <FormControlLabel
@@ -409,7 +450,13 @@ export function EditSecurityConfigDrawer({
                   <Accordion
                     disableGutters
                     elevation={0}
-                    sx={{ mt: 1, border: "1px solid", borderColor: "divider", borderRadius: 1, "&:before": { display: "none" } }}
+                    sx={{
+                      mt: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      "&:before": { display: "none" },
+                    }}
                   >
                     <AccordionSummary expandIcon={<ChevronDown size={16} />}>
                       <Typography variant="body2">Advanced</Typography>
@@ -427,7 +474,9 @@ export function EditSecurityConfigDrawer({
                                     setCorsAllowCredentials(false);
                                     setCorsOrigins(["*"]);
                                   } else {
-                                    setCorsOrigins((prev) => prev.filter((o) => o !== "*"));
+                                    setCorsOrigins((prev) =>
+                                      prev.filter((o) => o !== "*"),
+                                    );
                                   }
                                 }}
                                 disabled={isPending}
@@ -439,7 +488,9 @@ export function EditSecurityConfigDrawer({
                             control={
                               <Checkbox
                                 checked={corsAllowCredentials}
-                                onChange={(_, checked) => setCorsAllowCredentials(checked)}
+                                onChange={(_, checked) =>
+                                  setCorsAllowCredentials(checked)
+                                }
                                 disabled={isPending || hasWildcardOrigin}
                               />
                             }
@@ -457,11 +508,20 @@ export function EditSecurityConfigDrawer({
                               onChange={(_, v) => setCorsOrigins(v as string[])}
                               renderTags={(vals, getTagProps) =>
                                 vals.map((opt, i) => (
-                                  <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                  <Chip
+                                    label={opt as string}
+                                    size="small"
+                                    {...getTagProps({ index: i })}
+                                    key={opt as string}
+                                  />
                                 ))
                               }
                               renderInput={(params) => (
-                                <TextField {...params} size="small" placeholder="Add origin and press Enter" />
+                                <TextField
+                                  {...params}
+                                  size="small"
+                                  placeholder="Add origin and press Enter"
+                                />
                               )}
                             />
                           </FormControl>
@@ -476,11 +536,20 @@ export function EditSecurityConfigDrawer({
                             onChange={(_, v) => setCorsMethods(v as string[])}
                             renderTags={(vals, getTagProps) =>
                               vals.map((opt, i) => (
-                                <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                <Chip
+                                  label={opt as string}
+                                  size="small"
+                                  {...getTagProps({ index: i })}
+                                  key={opt as string}
+                                />
                               ))
                             }
                             renderInput={(params) => (
-                              <TextField {...params} size="small" placeholder="Add method and press Enter" />
+                              <TextField
+                                {...params}
+                                size="small"
+                                placeholder="Add method and press Enter"
+                              />
                             )}
                           />
                         </FormControl>
@@ -494,11 +563,20 @@ export function EditSecurityConfigDrawer({
                             onChange={(_, v) => setCorsHeaders(v as string[])}
                             renderTags={(vals, getTagProps) =>
                               vals.map((opt, i) => (
-                                <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                <Chip
+                                  label={opt as string}
+                                  size="small"
+                                  {...getTagProps({ index: i })}
+                                  key={opt as string}
+                                />
                               ))
                             }
                             renderInput={(params) => (
-                              <TextField {...params} size="small" placeholder="Add header and press Enter" />
+                              <TextField
+                                {...params}
+                                size="small"
+                                placeholder="Add header and press Enter"
+                              />
                             )}
                           />
                         </FormControl>

@@ -38,7 +38,7 @@ export const IdentityProvidersOrganization: React.FC = () => {
         element={
           <PageLayout
             title="Identity Providers"
-            description="Token issuers configured on your gateways. Agents reference these when securing endpoints with OAuth."
+            description="Token issuers configured on your gateways. Secure agent endpoints with OAuth."
             disableIcon
           >
             <IdentityProvidersTable />

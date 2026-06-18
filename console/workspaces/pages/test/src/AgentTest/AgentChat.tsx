@@ -218,8 +218,7 @@ export function AgentChat() {
     return (
       <Alert severity="info">
         <Typography variant="caption">
-          OAuth is enabled — test this endpoint out-of-band with an{" "}
-          <code>Authorization: Bearer &lt;token&gt;</code> header.
+          Testing is unavailable while OAuth is enabled. Test this endpoint out-of-band with a valid token.
         </Typography>
       </Alert>
     );
