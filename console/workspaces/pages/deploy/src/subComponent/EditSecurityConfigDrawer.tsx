@@ -37,15 +37,15 @@ import {
   Form,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   FormLabel,
-  IconButton,
   Radio,
   RadioGroup,
   Switch,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { ChevronDown, Plus, Shield, Trash2 } from "@wso2/oxygen-ui-icons-react";
+import { ChevronDown, Shield } from "@wso2/oxygen-ui-icons-react";
 import {
   DrawerContent,
   DrawerHeader,
@@ -102,14 +102,10 @@ export function EditSecurityConfigDrawer({
     "apikey",
   );
   const [oauthIssuers, setOauthIssuers] = useState<string[]>([]);
-  const [oauthAudiences, setOauthAudiences] = useState<string[]>([]);
-  const [oauthScopes, setOauthScopes] = useState<string[]>([]);
-  const [oauthClaims, setOauthClaims] = useState<
-    Array<{ key: string; value: string }>
-  >([]);
   const [oauthHeaderName, setOauthHeaderName] =
     useState<string>("Authorization");
   const [oauthHeaderPrefix, setOauthHeaderPrefix] = useState<string>("Bearer");
+  const [oauthForwardToken, setOauthForwardToken] = useState<boolean>(true);
 
   const [corsEnabled, setCorsEnabled] = useState(false);
   const [corsAllowAll, setCorsAllowAll] = useState(true);
@@ -160,18 +156,9 @@ export function EditSecurityConfigDrawer({
 
     const oauth = cfg?.oauthConfig;
     setOauthIssuers(oauth?.issuers ?? []);
-    setOauthAudiences(oauth?.audiences ?? []);
-    setOauthScopes(oauth?.requiredScopes ?? []);
-    setOauthClaims(
-      oauth?.requiredClaims
-        ? Object.entries(oauth.requiredClaims).map(([key, value]) => ({
-            key,
-            value: String(value ?? ""),
-          }))
-        : [],
-    );
     setOauthHeaderName(oauth?.headerName || "Authorization");
     setOauthHeaderPrefix(oauth?.authHeaderPrefix || "Bearer");
+    setOauthForwardToken(oauth?.forwardToken ?? true);
   }, [
     open,
     agent?.configurations?.enableApiKeySecurity,
@@ -180,6 +167,10 @@ export function EditSecurityConfigDrawer({
   ]);
 
   const hasWildcardOrigin = corsAllowAll || corsOrigins.includes("*");
+
+  // OAuth requires at least one identity provider (issuer). Block Apply otherwise.
+  const oauthInvalid =
+    isApiAgent && authMode === "oauth" && oauthIssuers.length === 0;
 
   const { mutate: updateDeploySettings, isPending } = useUpdateAgentDeploySettings();
 
@@ -197,15 +188,9 @@ export function EditSecurityConfigDrawer({
             authMode === "oauth" && {
               oauthConfig: {
                 issuers: oauthIssuers,
-                audiences: oauthAudiences,
-                requiredScopes: oauthScopes,
-                requiredClaims: Object.fromEntries(
-                  oauthClaims
-                    .filter((c) => c.key.trim())
-                    .map((c) => [c.key.trim(), c.value]),
-                ),
                 headerName: oauthHeaderName.trim() || "Authorization",
                 authHeaderPrefix: oauthHeaderPrefix.trim() || "Bearer",
+                forwardToken: oauthForwardToken,
               },
             }),
           ...(agent?.configurations?.enableAutoInstrumentation !== undefined && {
@@ -233,8 +218,8 @@ export function EditSecurityConfigDrawer({
   }, [
     environment, orgName, projName, agentName,
     agent?.configurations?.enableAutoInstrumentation,
-    authMode, oauthIssuers, oauthAudiences, oauthScopes, oauthClaims,
-    oauthHeaderName, oauthHeaderPrefix,
+    authMode, oauthIssuers,
+    oauthHeaderName, oauthHeaderPrefix, oauthForwardToken,
     corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
     hasWildcardOrigin, isApiAgent,
     updateDeploySettings, onClose, pushSnackBar,
@@ -294,35 +279,38 @@ export function EditSecurityConfigDrawer({
                 </FormControl>
 
                 <Collapse in={authMode === "apikey"}>
-                  <TextField
-                    label="Header"
-                    value="X-API-Key"
-                    size="small"
-                    fullWidth
-                    disabled
-                    sx={{ mt: 1 }}
-                  />
+                  <FormControl fullWidth sx={{ mt: 1 }}>
+                    <FormLabel>Header</FormLabel>
+                    <TextField
+                      value="X-API-Key"
+                      size="small"
+                      fullWidth
+                      disabled
+                    />
+                  </FormControl>
                 </Collapse>
 
                 <Collapse in={authMode === "oauth"}>
                   <Form.Stack spacing={2} sx={{ mt: 1 }}>
                     {hasIdentityProviders ? (
                       <Alert severity="info">
-                        Callers authenticate with a standard{" "}
-                        <code>Authorization: Bearer &lt;token&gt;</code> header.
-                        Identity providers (token issuers) are managed under{" "}
-                        Security &rarr; Identity Providers and selected below.
+                        <Typography variant="caption">
+                          Callers send{" "}
+                          <code>Authorization: Bearer &lt;token&gt;</code>. Manage
+                          issuers under Security &rarr; Identity Providers.
+                        </Typography>
                       </Alert>
                     ) : (
                       <Alert severity="warning">
-                        No identity providers are configured for this environment.
-                        Add one under Security &rarr; Identity Providers before
-                        securing this endpoint with OAuth.
+                        <Typography variant="caption">
+                          No identity providers for this environment. Add one under
+                          Security &rarr; Identity Providers first.
+                        </Typography>
                       </Alert>
                     )}
 
-                    <FormControl fullWidth>
-                      <FormLabel>Identity Providers</FormLabel>
+                    <FormControl fullWidth error={oauthInvalid}>
+                      <FormLabel required>Identity Providers</FormLabel>
                       <Autocomplete
                         multiple
                         options={identityProviderOptions}
@@ -338,6 +326,7 @@ export function EditSecurityConfigDrawer({
                           <TextField
                             {...params}
                             size="small"
+                            error={oauthInvalid}
                             placeholder={
                               oauthIssuers.length === 0
                                 ? "Select identity providers"
@@ -346,123 +335,52 @@ export function EditSecurityConfigDrawer({
                           />
                         )}
                       />
-                    </FormControl>
-
-                    <FormControl fullWidth>
-                      <FormLabel>Audiences</FormLabel>
-                      <Autocomplete
-                        multiple
-                        freeSolo
-                        options={[]}
-                        value={oauthAudiences}
-                        onChange={(_, v) => setOauthAudiences(v as string[])}
-                        disabled={isPending}
-                        renderTags={(vals, getTagProps) =>
-                          vals.map((opt, i) => (
-                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
-                          ))
-                        }
-                        renderInput={(params) => (
-                          <TextField {...params} size="small" placeholder="Add audience and press Enter" />
-                        )}
-                      />
-                    </FormControl>
-
-                    <FormControl fullWidth>
-                      <FormLabel>Required scopes</FormLabel>
-                      <Autocomplete
-                        multiple
-                        freeSolo
-                        options={[]}
-                        value={oauthScopes}
-                        onChange={(_, v) => setOauthScopes(v as string[])}
-                        disabled={isPending}
-                        renderTags={(vals, getTagProps) =>
-                          vals.map((opt, i) => (
-                            <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
-                          ))
-                        }
-                        renderInput={(params) => (
-                          <TextField {...params} size="small" placeholder="Add scope and press Enter" />
-                        )}
-                      />
-                    </FormControl>
-
-                    <FormControl fullWidth>
-                      <FormLabel>Required claims</FormLabel>
-                      <Form.Stack spacing={1}>
-                        {oauthClaims.map((claim, index) => (
-                          <Box key={index} display="flex" gap={1} alignItems="center">
-                            <TextField
-                              size="small"
-                              placeholder="Claim"
-                              value={claim.key}
-                              disabled={isPending}
-                              onChange={(e) =>
-                                setOauthClaims((prev) =>
-                                  prev.map((c, i) => (i === index ? { ...c, key: e.target.value } : c)),
-                                )
-                              }
-                            />
-                            <TextField
-                              size="small"
-                              placeholder="Value"
-                              value={claim.value}
-                              disabled={isPending}
-                              onChange={(e) =>
-                                setOauthClaims((prev) =>
-                                  prev.map((c, i) => (i === index ? { ...c, value: e.target.value } : c)),
-                                )
-                              }
-                            />
-                            <IconButton
-                              size="small"
-                              disabled={isPending}
-                              aria-label="Remove claim"
-                              onClick={() =>
-                                setOauthClaims((prev) => prev.filter((_, i) => i !== index))
-                              }
-                            >
-                              <Trash2 size={16} />
-                            </IconButton>
-                          </Box>
-                        ))}
-                        <Box>
-                          <Button
-                            variant="outlined"
-                            size="small"
-                            startIcon={<Plus size={16} />}
-                            disabled={isPending}
-                            onClick={() =>
-                              setOauthClaims((prev) => [...prev, { key: "", value: "" }])
-                            }
-                          >
-                            Add claim
-                          </Button>
-                        </Box>
-                      </Form.Stack>
+                      {oauthInvalid && (
+                        <FormHelperText>
+                          Select at least one identity provider.
+                        </FormHelperText>
+                      )}
                     </FormControl>
 
                     <Box display="flex" gap={2}>
-                      <TextField
-                        label="Header name"
-                        size="small"
-                        fullWidth
-                        value={oauthHeaderName}
-                        disabled={isPending}
-                        onChange={(e) => setOauthHeaderName(e.target.value)}
-                        placeholder="Authorization"
-                      />
-                      <TextField
-                        label="Auth header prefix"
-                        size="small"
-                        fullWidth
-                        value={oauthHeaderPrefix}
-                        disabled={isPending}
-                        onChange={(e) => setOauthHeaderPrefix(e.target.value)}
-                        placeholder="Bearer"
-                      />
+                      <FormControl fullWidth>
+                        <FormLabel>Header name</FormLabel>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          value={oauthHeaderName}
+                          disabled={isPending}
+                          onChange={(e) => setOauthHeaderName(e.target.value)}
+                          placeholder="Authorization"
+                        />
+                      </FormControl>
+                      <FormControl fullWidth>
+                        <FormLabel>Auth header prefix</FormLabel>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          value={oauthHeaderPrefix}
+                          disabled={isPending}
+                          onChange={(e) => setOauthHeaderPrefix(e.target.value)}
+                          placeholder="Bearer"
+                        />
+                      </FormControl>
                     </Box>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={oauthForwardToken}
+                          onChange={(_, checked) => setOauthForwardToken(checked)}
+                          disabled={isPending}
+                        />
+                      }
+                      label="Forward token to upstream"
+                    />
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                      Forward the token header to the upstream service after
+                      validation. Disable to strip it before proxying.
+                    </Typography>
                   </Form.Stack>
                 </Collapse>
               </Form.Stack>
@@ -600,7 +518,7 @@ export function EditSecurityConfigDrawer({
               variant="contained"
               color="primary"
               onClick={handleSave}
-              disabled={isPending}
+              disabled={isPending || oauthInvalid}
               startIcon={isPending ? <CircularProgress size={16} /> : undefined}
             >
               {isPending ? "Applying..." : "Apply"}
