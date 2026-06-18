@@ -28,6 +28,8 @@ import {
   MenuItem,
   Select,
   Stack,
+  Tab,
+  Tabs,
   TextField,
   Tooltip,
   Typography,
@@ -43,12 +45,22 @@ import {
   useListEnvironments,
   useListGateways,
 } from "@agent-management-platform/api-client";
+import {
+  getGatewayVersion,
+  getRawScriptUrl,
+  LOCAL_GATEWAY_EXTENSION_CHART_REF,
+} from "@agent-management-platform/shared-component";
 import type { IdentityProvider } from "@agent-management-platform/types";
 
-const SCRIPT_URL =
-  "https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/manage-identity-provider.sh";
-const GATEWAY_CHART_VERSION = "0.1.0";
+const SCRIPT_NAME = "manage-identity-provider.sh";
 const TOKEN_MASK = "•••••••••••••••";
+
+/**
+ * Quickstart runs against a local k3d cluster from a repo clone (local helm
+ * chart, no version pin); Kubernetes targets a real cluster with the OCI chart
+ * pinned to the released gateway version.
+ */
+type ScriptTarget = "quickstart" | "kubernetes";
 
 export type ManageIdentityProviderMode = "upsert" | "delete";
 
@@ -73,25 +85,44 @@ interface ScriptInputs {
   token: string;
 }
 
-function buildScript(i: ScriptInputs): string {
-  const lines = [
-    `curl -fsSL ${SCRIPT_URL} \\`,
+// Env vars shared by both targets, minus the leading indentation.
+function actionEnvLines(i: ScriptInputs): string[] {
+  return i.mode === "delete"
+    ? ["ACTION=delete \\"]
+    : [
+        `IDP_ISSUER=${i.issuer || "<issuer>"} \\`,
+        `IDP_JWKS_URI=${i.jwksUri || "<jwks-uri>"} \\`,
+        ...(i.skipTlsVerify ? ["IDP_SKIP_TLS_VERIFY=true \\"] : []),
+      ];
+}
+
+function buildScript(i: ScriptInputs, target: ScriptTarget): string {
+  if (target === "quickstart") {
+    // Repo clone + local helm chart: run the local script, no CHART_VERSION.
+    return [
+      `ORG_NAME=${i.orgId || "<org>"} \\`,
+      `ENV_NAME=${i.envName || "<env-name>"} \\`,
+      `GATEWAY_ID=${i.gatewayId || "<gateway-id>"} \\`,
+      `AGENT_MANAGER_TOKEN=${i.token} \\`,
+      `CHART_REF=${LOCAL_GATEWAY_EXTENSION_CHART_REF} \\`,
+      `IDP_NAME=${i.name || "<identity-provider-name>"} \\`,
+      ...actionEnvLines(i),
+      `bash deployments/scripts/${SCRIPT_NAME}`,
+    ].join("\n");
+  }
+
+  // Kubernetes: curl the pinned-tag script, OCI chart at the released version.
+  return [
+    `curl -fsSL ${getRawScriptUrl(SCRIPT_NAME)} \\`,
     `  | ORG_NAME=${i.orgId || "<org>"} \\`,
     `    ENV_NAME=${i.envName || "<env-name>"} \\`,
     `    GATEWAY_ID=${i.gatewayId || "<gateway-id>"} \\`,
     `    AGENT_MANAGER_TOKEN=${i.token} \\`,
-    `    CHART_VERSION=${GATEWAY_CHART_VERSION} \\`,
+    `    CHART_VERSION=${getGatewayVersion()} \\`,
     `    IDP_NAME=${i.name || "<identity-provider-name>"} \\`,
-    ...(i.mode === "delete"
-      ? ["    ACTION=delete \\"]
-      : [
-          `    IDP_ISSUER=${i.issuer || "<issuer>"} \\`,
-          `    IDP_JWKS_URI=${i.jwksUri || "<jwks-uri>"} \\`,
-          ...(i.skipTlsVerify ? ["    IDP_SKIP_TLS_VERIFY=true \\"] : []),
-        ]),
+    ...actionEnvLines(i).map((line) => `    ${line}`),
     "    bash",
-  ];
-  return lines.join("\n");
+  ].join("\n");
 }
 
 export function ManageIdentityProviderDialog({
@@ -110,6 +141,9 @@ export function ManageIdentityProviderDialog({
   const [issuer, setIssuer] = useState("");
   const [jwksUri, setJwksUri] = useState("");
   const [skipTlsVerify, setSkipTlsVerify] = useState(false);
+
+  const [tab, setTab] = useState(0);
+  const target: ScriptTarget = tab === 0 ? "quickstart" : "kubernetes";
 
   const [showToken, setShowToken] = useState(false);
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
@@ -185,17 +219,21 @@ export function ManageIdentityProviderDialog({
   const handleCopy = useCallback(async () => {
     try {
       const token = resolvedToken ?? (await getToken());
-      await navigator.clipboard.writeText(buildScript(scriptInputs(token)));
+      await navigator.clipboard.writeText(buildScript(scriptInputs(token), target));
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
       // silently fail
     }
-  }, [resolvedToken, getToken, scriptInputs]);
+  }, [resolvedToken, getToken, scriptInputs, target]);
 
   const displayScript = useMemo(
-    () => buildScript(scriptInputs(showToken && resolvedToken ? resolvedToken : TOKEN_MASK)),
-    [scriptInputs, showToken, resolvedToken],
+    () =>
+      buildScript(
+        scriptInputs(showToken && resolvedToken ? resolvedToken : TOKEN_MASK),
+        target,
+      ),
+    [scriptInputs, showToken, resolvedToken, target],
   );
 
   return (
@@ -213,6 +251,13 @@ export function ManageIdentityProviderDialog({
             <code>kubectl</code>, <code>helm</code>, and <code>jq</code> configured against your
             cluster.
           </Typography>
+
+          <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+            <Tabs value={tab} onChange={(_, v) => setTab(v as number)}>
+              <Tab label="Quick Start" />
+              <Tab label="Kubernetes" />
+            </Tabs>
+          </Box>
 
           <Stack spacing={2}>
             <FormControl fullWidth disabled={isDelete}>
@@ -303,7 +348,11 @@ export function ManageIdentityProviderDialog({
           </Stack>
 
           <Stack spacing={1}>
-            <Typography variant="body2">Run from the root of your repo clone:</Typography>
+            <Typography variant="body2">
+              {target === "quickstart"
+                ? "Run from the root of your repo clone:"
+                : "Run in a terminal configured against your cluster:"}
+            </Typography>
             <Box
               sx={{
                 position: "relative",
