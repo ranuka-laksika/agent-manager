@@ -22,10 +22,16 @@ import {
   absoluteRouteMap,
   type CreateMonitorRequest,
 } from "@agent-management-platform/types";
-import { useCreateMonitor, useGetMonitor } from "@agent-management-platform/api-client";
+import {
+  useCreateMonitor,
+  useGetMonitor,
+} from "@agent-management-platform/api-client";
 import { Alert, Skeleton, Stack } from "@wso2/oxygen-ui";
 import { PageLayout } from "@agent-management-platform/views";
-import { getErrorMessage } from "@agent-management-platform/shared-component";
+import {
+  getErrorMessage,
+  usePipelineEnvironments,
+} from "@agent-management-platform/shared-component";
 import { type CreateMonitorFormValues } from "./form/schema";
 import { MonitorFormWizard } from "./subComponents/MonitorFormWizard";
 import { slugifyMonitorName } from "./utils/monitorFormUtils";
@@ -62,6 +68,8 @@ export const CreateMonitorComponent: React.FC = () => {
     agentName: agentId ?? "",
   });
 
+  const environments = usePipelineEnvironments(orgId, projectId);
+
   const defaultTimeRange = useMemo(() => {
     const end = new Date();
     const start = new Date(end.getTime() - 24 * 60 * 60 * 1000);
@@ -79,6 +87,7 @@ export const CreateMonitorComponent: React.FC = () => {
         displayName,
         name: slugifyMonitorName(displayName),
         description: sourceMonitor.description ?? "",
+        environmentName: sourceMonitor.environmentName,
         type: sourceMonitor.type,
         traceStart: sourceMonitor.traceStart ? new Date(sourceMonitor.traceStart) : null,
         traceEnd: sourceMonitor.traceEnd ? new Date(sourceMonitor.traceEnd) : null,
@@ -93,6 +102,7 @@ export const CreateMonitorComponent: React.FC = () => {
       displayName: "",
       name: "",
       description: "",
+      environmentName: envId ?? "",
       type: "past",
       traceStart: defaultTimeRange.start,
       traceEnd: defaultTimeRange.end,
@@ -100,7 +110,7 @@ export const CreateMonitorComponent: React.FC = () => {
       samplingRate: 25,
       evaluators: [],
     };
-  }, [duplicateFrom, sourceMonitor, defaultTimeRange]);
+  }, [duplicateFrom, sourceMonitor, defaultTimeRange, envId]);
 
   const missingParamsMessage = useMemo(() => {
     if (!orgId) return "Organization is required to create a monitor.";
@@ -131,7 +141,7 @@ export const CreateMonitorComponent: React.FC = () => {
         name: values.name.trim(),
         displayName: values.displayName.trim(),
         description: values.description?.trim() || undefined,
-        environmentName: envId,
+        environmentName: values.environmentName,
         evaluators: values.evaluators,
         llmProvider: values.llmProvider,
         type: values.type,
@@ -145,11 +155,25 @@ export const CreateMonitorComponent: React.FC = () => {
 
       createMonitor(payload, {
         onSuccess: () => {
-          navigate(backHref);
+          // Land on the monitor list for whichever environment it was actually
+          // created in, which may differ from the page's originating envId.
+          navigate(
+            generatePath(
+              absoluteRouteMap.children.org.children.projects.children.agents
+                .children.environment.children.evaluation.children.monitor
+                .path,
+              {
+                orgId,
+                projectId,
+                agentId,
+                envId: values.environmentName,
+              },
+            ),
+          );
         },
       });
     },
-    [agentId, backHref, createMonitor, envId, navigate, orgId, projectId],
+    [agentId, createMonitor, envId, navigate, orgId, projectId],
   );
 
   const title = duplicateFrom && sourceMonitor
@@ -200,6 +224,7 @@ export const CreateMonitorComponent: React.FC = () => {
       isSubmitting={isPending}
       serverError={error}
       missingParamsMessage={missingParamsMessage}
+      environments={environments}
     />
   );
 };

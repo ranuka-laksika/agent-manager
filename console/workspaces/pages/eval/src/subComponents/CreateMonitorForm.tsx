@@ -21,6 +21,8 @@ import {
   Collapse,
   DatePickers,
   Form,
+  MenuItem,
+  Select,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -29,11 +31,17 @@ import type { MonitorType } from "@agent-management-platform/types";
 import type { CreateMonitorFormValues } from "../form/schema";
 import { getMonitorTypeFieldPatch } from "../utils/monitorFormUtils";
 
+export interface EnvironmentOption {
+  name: string;
+  displayName?: string;
+}
+
 interface CreateMonitorFormProps {
   formData: CreateMonitorFormValues;
   errors: Partial<Record<keyof CreateMonitorFormValues, string | undefined>>;
   onFieldChange: (field: keyof CreateMonitorFormValues, value: unknown) => void;
   isTypeEditable?: boolean;
+  environments?: EnvironmentOption[];
 }
 
 export function CreateMonitorForm({
@@ -41,6 +49,7 @@ export function CreateMonitorForm({
   errors,
   onFieldChange,
   isTypeEditable = true,
+  environments = [],
 }: CreateMonitorFormProps) {
   const handleTypeChange = (nextType: MonitorType) => {
     if (!isTypeEditable || formData.type === nextType) {
@@ -88,6 +97,30 @@ export function CreateMonitorForm({
             helperText={errors.description}
           />
         </Form.ElementWrapper>
+        {environments.length > 1 && (
+          <Form.ElementWrapper name="environmentName" label="Environment">
+            <Select
+              id="environmentName"
+              fullWidth
+              value={formData.environmentName ?? ""}
+              onChange={(event) =>
+                onFieldChange("environmentName", event.target.value)
+              }
+              error={!!errors.environmentName}
+            >
+              {environments.map((env) => (
+                <MenuItem key={env.name} value={env.name}>
+                  {env.displayName ?? env.name}
+                </MenuItem>
+              ))}
+            </Select>
+            {errors.environmentName && (
+              <Typography variant="caption" color="error">
+                {errors.environmentName}
+              </Typography>
+            )}
+          </Form.ElementWrapper>
+        )}
       </Form.Section>
       <Form.Section>
         <Form.Header>Data Collection</Form.Header>

@@ -98,6 +98,7 @@ export const EditMonitorComponent: React.FC = () => {
       displayName: monitorData.displayName ?? "",
       name: monitorData.name,
       description: "",
+      environmentName: monitorData.environmentName,
       type: monitorData.type,
       traceStart: toDate(monitorData.traceStart),
       traceEnd: toDate(monitorData.traceEnd),

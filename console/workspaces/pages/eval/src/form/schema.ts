@@ -53,6 +53,7 @@ export const createMonitorSchema = z
       .trim()
       .max(512, "Description cannot exceed 512 characters")
       .optional(),
+    environmentName: z.string().trim().min(1, "Environment is required"),
     type: z.enum(["past", "future"]) as z.ZodType<MonitorType>,
     traceStart: z.date().nullable().optional(),
     traceEnd: z.date().nullable().optional(),
