@@ -379,6 +379,42 @@ func TestDeleteEnvironment(t *testing.T) {
 		require.Len(t, ocClient.DeleteEnvironmentCalls(), 1)
 	})
 
+	t.Run("returns 409 when a deployment pipeline references the environment", func(t *testing.T) {
+		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
+			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
+		}
+		ocClient.ListDeploymentPipelinesFunc = func(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error) {
+			return []*models.DeploymentPipelineResponse{
+				{
+					Name:    "referencing-pipeline",
+					OrgName: namespaceName,
+					PromotionPaths: []models.PromotionPath{
+						{
+							SourceEnvironmentRef:  "development",
+							TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "production"}},
+						},
+					},
+				},
+			}, nil
+		}
+		deleteCalled := false
+		ocClient.DeleteEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) error {
+			deleteCalled = true
+			return nil
+		}
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+
+		url := fmt.Sprintf("/api/v1/orgs/%s/environments/development", testEnvOrgName)
+		req := httptest.NewRequest(http.MethodDelete, url, nil)
+		rr := httptest.NewRecorder()
+		app.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusConflict, rr.Code)
+		require.False(t, deleteCalled, "OpenChoreo delete should not be called when the environment is still referenced")
+		require.Empty(t, ocClient.DeleteEnvironmentCalls())
+	})
+
 	t.Run("returns 404 when deleting a missing environment", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
 		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {

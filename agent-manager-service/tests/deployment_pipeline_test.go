@@ -236,6 +236,30 @@ func TestDeleteDeploymentPipeline(t *testing.T) {
 		require.Equal(t, "my-pipeline", ocClient.DeleteOrgDeploymentPipelineCalls()[0].PipelineName)
 	})
 
+	t.Run("returns 409 when a project still references the pipeline", func(t *testing.T) {
+		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		ocClient.ListProjectsFunc = func(ctx context.Context, namespaceName string) ([]*models.ProjectResponse, error) {
+			return []*models.ProjectResponse{
+				{Name: "referencing-project", OrgName: namespaceName, DeploymentPipeline: "my-pipeline"},
+			}, nil
+		}
+		deleteCalled := false
+		ocClient.DeleteOrgDeploymentPipelineFunc = func(ctx context.Context, namespaceName, pipelineName string) error {
+			deleteCalled = true
+			return nil
+		}
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+
+		url := fmt.Sprintf("/api/v1/orgs/%s/deployment-pipelines/my-pipeline", testPipelineOrgName)
+		req := httptest.NewRequest(http.MethodDelete, url, nil)
+		rr := httptest.NewRecorder()
+		app.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusConflict, rr.Code)
+		require.False(t, deleteCalled, "OpenChoreo delete should not be called when the pipeline is still referenced")
+		require.Empty(t, ocClient.DeleteOrgDeploymentPipelineCalls())
+	})
+
 	t.Run("returns 500 when the delete fails in OpenChoreo", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
 		ocClient.DeleteOrgDeploymentPipelineFunc = func(ctx context.Context, namespaceName, pipelineName string) error {

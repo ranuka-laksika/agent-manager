@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -32,7 +31,6 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
-	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -398,13 +396,12 @@ func TestExecuteMonitorRun_LLMCredentials(t *testing.T) {
 	// Secret path comes from the persisted SecretReference remoteRef (not a computed KV path).
 	assert.Equal(t, expectedSecretPath, evalParams["llmProxySecretPath"], "llmProxySecretPath should be the SecretReference remoteRef key")
 
-	// Proxy URL is the cluster-internal gateway runtime Service URL + context path,
-	// not the gateway vhost. Monitor execution runs as an in-cluster workflow so it
-	// resolves the proxy via Service DNS instead of the externally-reachable vhost
-	// (see services/agent_configuration_service.go:buildProxyURL, isInternal=true).
-	gwRuntime := config.GetConfig().GatewayRuntime
-	expectedProxyURL := fmt.Sprintf("http://%s%s:%d%s", gw.Name, gwRuntime.HostSuffix, gwRuntime.Port, contextPath)
-	assert.Equal(t, expectedProxyURL, evalParams["llmApiBase"], "llmApiBase should be cluster-internal gateway runtime URL + proxy context path")
+	// Proxy URL is the gateway vhost + context path. buildProxyURL returns the gateway's
+	// vhost; in-cluster callers reach it via the CoreDNS *.gateway.localhost rewrite to the
+	// k3d host, and the gateway routes by vhost Host header into the per-env api-platform
+	// gateway (see services/agent_configuration_service.go:buildProxyURL).
+	expectedProxyURL := gw.Vhost + contextPath
+	assert.Equal(t, expectedProxyURL, evalParams["llmApiBase"], "llmApiBase should be the gateway vhost + proxy context path")
 }
 
 // TestExecuteMonitorRun_NilEvaluatorsReturnsError verifies that calling ExecuteMonitorRun
