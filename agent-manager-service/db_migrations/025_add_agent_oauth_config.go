@@ -27,11 +27,10 @@ var migration025 = migration{
 		ALTER TABLE agent_configs
 			ADD COLUMN IF NOT EXISTS enable_oauth_security    BOOLEAN NOT NULL DEFAULT false,
 			ADD COLUMN IF NOT EXISTS oauth_issuers            JSONB   NOT NULL DEFAULT '[]',
-			ADD COLUMN IF NOT EXISTS oauth_audiences          JSONB   NOT NULL DEFAULT '[]',
-			ADD COLUMN IF NOT EXISTS oauth_required_scopes    JSONB   NOT NULL DEFAULT '[]',
 			ADD COLUMN IF NOT EXISTS oauth_required_claims     JSONB   NOT NULL DEFAULT '{}',
 			ADD COLUMN IF NOT EXISTS oauth_header_name        TEXT    NOT NULL DEFAULT 'Authorization',
-			ADD COLUMN IF NOT EXISTS oauth_auth_header_prefix TEXT    NOT NULL DEFAULT 'Bearer';
+			ADD COLUMN IF NOT EXISTS oauth_auth_header_prefix TEXT    NOT NULL DEFAULT 'Bearer',
+			ADD COLUMN IF NOT EXISTS oauth_forward_token      BOOLEAN NOT NULL DEFAULT true;
 		`
 		if err := db.Exec(addOAuthConfig).Error; err != nil {
 			return err
