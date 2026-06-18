@@ -447,12 +447,9 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, orgName str
 		return utils.ErrLLMProviderNotFound
 	}
 
-	// Get all deployed gateways for this provider
-	providerUUID, err := uuid.Parse(providerID)
-	if err != nil {
-		slog.Error("LLMProviderService.Delete: invalid provider UUID", "providerID", providerID, "error", err)
-		return fmt.Errorf("invalid provider UUID: %w", err)
-	}
+	// Get all deployed gateways for this provider. providerID may be a handle, so
+	// use the UUID resolved above rather than re-parsing the raw identifier.
+	providerUUID := provider.UUID
 
 	gatewayIDs, err := deploymentService.deploymentRepo.GetDeployedGatewaysByProvider(providerUUID, orgName)
 	if err != nil {
@@ -514,7 +511,7 @@ func (s *LLMProviderService) Delete(ctx context.Context, providerID, orgName str
 
 	// Now delete the provider from database (cascade deletes mappings)
 	slog.Info("LLMProviderService.Delete: deleting provider from database", "orgName", orgName, "providerID", providerID)
-	if err := s.providerRepo.Delete(providerID, orgName); err != nil {
+	if err := s.providerRepo.Delete(provider.UUID.String(), orgName); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			slog.Warn("LLMProviderService.Delete: provider not found", "orgName", orgName, "providerID", providerID)
 			return utils.ErrLLMProviderNotFound

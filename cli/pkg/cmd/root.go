@@ -22,6 +22,7 @@ import (
 
 	"github.com/wso2/agent-manager/cli/pkg/cmd/agent"
 	amcontext "github.com/wso2/agent-manager/cli/pkg/cmd/context"
+	"github.com/wso2/agent-manager/cli/pkg/cmd/llmprovider"
 	"github.com/wso2/agent-manager/cli/pkg/cmd/project"
 	"github.com/wso2/agent-manager/cli/pkg/cmd/skills"
 	"github.com/wso2/agent-manager/cli/pkg/cmdutil"
@@ -45,6 +46,7 @@ func NewRootCmd(f *cmdutil.Factory) (*cobra.Command, error) {
 	cmd.AddCommand(NewLoginCmd(f))
 	cmd.AddCommand(agent.NewAgentCmd(f))
 	cmd.AddCommand(amcontext.NewContextCmd(f))
+	cmd.AddCommand(llmprovider.NewLLMProviderCmd(f))
 	cmd.AddCommand(project.NewProjectCmd(f))
 	cmd.AddCommand(NewVersionCmd())
 	cmd.AddCommand(skills.NewSkillsCmd(f))
