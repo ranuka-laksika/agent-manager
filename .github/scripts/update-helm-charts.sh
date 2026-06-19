@@ -26,6 +26,9 @@ done
 find ./deployments/helm-charts -name "values.yaml" -type f | while read -r values_file; do
   # Replace tag: "0.0.0-dev" with vTARGET_VERSION (all image tags must be vx.x.x format)
   sed -i.bak "s|tag: \"0\.0\.0-dev\"|tag: \"v$TARGET_VERSION\"|g" "$values_file"
+  # Replace ampVersion: "0.0.0-dev" with vTARGET_VERSION — pins the console's
+  # deployment-script git ref (amp/vX.Y.Z) to this release
+  sed -i.bak "s|ampVersion: \"0\.0\.0-dev\"|ampVersion: \"v$TARGET_VERSION\"|g" "$values_file"
   # Remove backup files
   rm -f "${values_file}.bak"
 done
