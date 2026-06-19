@@ -77,3 +77,57 @@ func TestValidatePathParam(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateEnvVarName(t *testing.T) {
+	tests := []struct {
+		name    string
+		label   string
+		value   string
+		wantErr bool
+		errMsg  string
+	}{
+		{name: "valid upper", label: "--url-env", value: "LLM_URL"},
+		{name: "valid leading underscore", label: "--url-env", value: "_PRIVATE"},
+		{name: "valid mixed case and digits", label: "--apikey-env", value: "Api_Key_2"},
+		{name: "empty string", label: "--url-env", value: "", wantErr: true, errMsg: "must not be empty"},
+		{name: "leading digit", label: "--url-env", value: "1VAR", wantErr: true, errMsg: "must match"},
+		{name: "hyphen", label: "--apikey-env", value: "LLM-KEY", wantErr: true, errMsg: "must match"},
+		{name: "space", label: "--url-env", value: "LLM URL", wantErr: true, errMsg: "must match"},
+		{name: "dot", label: "--url-env", value: "llm.url", wantErr: true, errMsg: "must match"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateEnvVarName(tt.label, tt.value)
+			if !tt.wantErr {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("expected error, got nil")
+			}
+
+			var flagErr *FlagError
+			if !errors.As(err, &flagErr) {
+				t.Fatalf("error is %T, want *FlagError", err)
+			}
+
+			var cliErr clierr.CLIError
+			if !errors.As(err, &cliErr) {
+				t.Fatalf("error does not unwrap to clierr.CLIError")
+			}
+			if cliErr.Code != clierr.InvalidFlag {
+				t.Errorf("code = %q, want %q", cliErr.Code, clierr.InvalidFlag)
+			}
+
+			if !strings.Contains(err.Error(), tt.label) {
+				t.Errorf("error %q does not contain label %q", err.Error(), tt.label)
+			}
+			if !strings.Contains(err.Error(), tt.errMsg) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.errMsg)
+			}
+		})
+	}
+}
