@@ -3642,6 +3642,16 @@ type OAuthConfig struct {
 	Issuers *[]string `json:"issuers,omitempty"`
 }
 
+// OidcDiscoveryResponse Issuer metadata resolved from an OpenID Connect discovery document, used to
+// auto-populate the Add Identity Provider dialog.
+type OidcDiscoveryResponse struct {
+	// Issuer The `issuer` value from the discovery document.
+	Issuer string `json:"issuer"`
+
+	// JwksUri The `jwks_uri` value from the discovery document.
+	JwksUri string `json:"jwksUri"`
+}
+
 // OrganizationListItem defines model for OrganizationListItem.
 type OrganizationListItem struct {
 	// CreatedAt Timestamp when the organization was created
@@ -4769,6 +4779,12 @@ type ListUsersParams struct {
 
 	// Limit Maximum number of results to return
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DiscoverOidcConfigurationParams defines parameters for DiscoverOidcConfiguration.
+type DiscoverOidcConfigurationParams struct {
+	// Url Issuer base URL or full .well-known/openid-configuration URL.
+	Url string `form:"url" json:"url"`
 }
 
 // ListLLMProviderTemplatesParams defines parameters for ListLLMProviderTemplates.

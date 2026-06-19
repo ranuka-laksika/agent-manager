@@ -329,6 +329,9 @@ type ClientInterface interface {
 	// ListIdentityProviders request
 	ListIdentityProviders(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DiscoverOidcConfiguration request
+	DiscoverOidcConfiguration(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListLLMProviderTemplates request
 	ListLLMProviderTemplates(ctx context.Context, orgName string, params *ListLLMProviderTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1707,6 +1710,18 @@ func (c *Client) UpdateUser(ctx context.Context, orgName string, userId string, 
 
 func (c *Client) ListIdentityProviders(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListIdentityProvidersRequest(c.Server, orgName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DiscoverOidcConfiguration(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDiscoverOidcConfigurationRequest(c.Server, orgName, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6572,6 +6587,58 @@ func NewListIdentityProvidersRequest(server string, orgName string) (*http.Reque
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDiscoverOidcConfigurationRequest generates requests for DiscoverOidcConfiguration
+func NewDiscoverOidcConfigurationRequest(server string, orgName string, params *DiscoverOidcConfigurationParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/identity-providers/discover", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "url", params.Url, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -12706,6 +12773,9 @@ type ClientWithResponsesInterface interface {
 	// ListIdentityProvidersWithResponse request
 	ListIdentityProvidersWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListIdentityProvidersResp, error)
 
+	// DiscoverOidcConfigurationWithResponse request
+	DiscoverOidcConfigurationWithResponse(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*DiscoverOidcConfigurationResp, error)
+
 	// ListLLMProviderTemplatesWithResponse request
 	ListLLMProviderTemplatesWithResponse(ctx context.Context, orgName string, params *ListLLMProviderTemplatesParams, reqEditors ...RequestEditorFn) (*ListLLMProviderTemplatesResp, error)
 
@@ -14721,6 +14791,31 @@ func (r ListIdentityProvidersResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListIdentityProvidersResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DiscoverOidcConfigurationResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OidcDiscoveryResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DiscoverOidcConfigurationResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DiscoverOidcConfigurationResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17823,6 +17918,15 @@ func (c *ClientWithResponses) ListIdentityProvidersWithResponse(ctx context.Cont
 		return nil, err
 	}
 	return ParseListIdentityProvidersResp(rsp)
+}
+
+// DiscoverOidcConfigurationWithResponse request returning *DiscoverOidcConfigurationResp
+func (c *ClientWithResponses) DiscoverOidcConfigurationWithResponse(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*DiscoverOidcConfigurationResp, error) {
+	rsp, err := c.DiscoverOidcConfiguration(ctx, orgName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDiscoverOidcConfigurationResp(rsp)
 }
 
 // ListLLMProviderTemplatesWithResponse request returning *ListLLMProviderTemplatesResp
@@ -22001,6 +22105,53 @@ func ParseListIdentityProvidersResp(rsp *http.Response) (*ListIdentityProvidersR
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDiscoverOidcConfigurationResp parses an HTTP response from a DiscoverOidcConfigurationWithResponse call
+func ParseDiscoverOidcConfigurationResp(rsp *http.Response) (*DiscoverOidcConfigurationResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DiscoverOidcConfigurationResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OidcDiscoveryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest ErrorResponse
