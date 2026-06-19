@@ -29,7 +29,6 @@ import {
   Skeleton,
   Chip,
   IconButton,
-  CircularProgress,
   ListingTable,
   TablePagination,
   DataGrid,
@@ -39,7 +38,6 @@ import {
 import {
   Plus as Add,
   Trash2 as DeleteOutlineOutlined,
-  RefreshCcw,
   User,
   Edit,
 } from "@wso2/oxygen-ui-icons-react";
@@ -139,7 +137,6 @@ export const AgentsList: React.FC = () => {
     isLoading,
     error,
     isRefetching,
-    refetch: refetchAgents,
   } = useListAgents({
     orgName: orgId,
     projName: projectId,
@@ -301,36 +298,17 @@ export const AgentsList: React.FC = () => {
           "Manage and monitor all your AI agents across environments"
         }
         isLoading={isPageLoading}
-        titleTail={
-          <Box
-            display="flex"
-            alignItems="center"
-            minWidth={32}
-            justifyContent="center"
-            gap={1}
+        actions={
+          <Button
+            variant="outlined"
+            color="primary"
+            size="small"
+            startIcon={<Edit size={16} />}
+            onClick={() => setEditProjectDrawerOpen(true)}
+            disabled={!project}
           >
-            <Tooltip title="Edit Project">
-              <IconButton
-                color="primary"
-                size="small"
-                onClick={() => setEditProjectDrawerOpen(true)}
-                disabled={!project}
-              >
-                <Edit size={18} />
-              </IconButton>
-            </Tooltip>
-            {isRefetching ? (
-              <CircularProgress size={18} color="primary" />
-            ) : (
-              <IconButton
-                size="small"
-                color="primary"
-                onClick={() => refetchAgents()}
-              >
-                <RefreshCcw size={18} />
-              </IconButton>
-            )}
-          </Box>
+            Edit Project
+          </Button>
         }
       >
         {isLoading ? (

@@ -32,7 +32,6 @@ import {
   Avatar,
   Box,
   Button,
-  CircularProgress,
   Divider,
   Form,
   formatRelativeTime,
@@ -46,7 +45,6 @@ import {
   GitBranch,
   Package,
   Plus,
-  RefreshCcw,
   Clock as TimerOutlined,
   Trash2 as TrashOutline,
 } from "@wso2/oxygen-ui-icons-react";
@@ -224,8 +222,6 @@ export function ProjectList() {
 
   const {
     data: projects,
-    isRefetching,
-    refetch: refetchProjects,
     isPending: isLoadingProjects,
   } = useListProjects({ orgName: orgId });
 
@@ -258,8 +254,6 @@ export function ProjectList() {
     [addConfirmation, deleteProject, orgId]
   );
 
-  const handleRefresh = useCallback(() => refetchProjects(), [refetchProjects]);
-
   const [search, setSearch] = useState("");
 
   const filteredProjects = useMemo(
@@ -272,19 +266,8 @@ export function ProjectList() {
 
   return (
     <PageLayout
-      title="Projects"
+      title="All Projects"
       disableIcon
-      titleTail={
-        <Box display="flex" alignItems="center" minWidth={32} justifyContent="center">
-          {isRefetching ? (
-            <CircularProgress size={18} color="primary" />
-          ) : (
-            <IconButton size="small" color="primary" onClick={handleRefresh}>
-              <RefreshCcw size={18} />
-            </IconButton>
-          )}
-        </Box>
-      }
     >
       <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <Box display="flex" gap={2}>

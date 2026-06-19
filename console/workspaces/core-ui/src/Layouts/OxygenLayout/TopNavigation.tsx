@@ -6,6 +6,7 @@ import {
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   Box,
+  ButtonBase,
   Chip,
   ComplexSelect,
   Header,
@@ -16,6 +17,7 @@ import {
   useTheme,
 } from "@wso2/oxygen-ui";
 import {
+  Building2,
   ChevronRight,
   Plus,
   X,
@@ -94,16 +96,16 @@ export function TopNavigation() {
       <Header.Switchers showDivider={false}>
         {organizations?.organizations && (
           <>
-            {selectedOrganization && (
+            {selectedOrganization && organizations.total > 1 && (
               <ComplexSelect
                 value={orgId}
                 size="small"
                 sx={{ minWidth: 180 }}
                 label="Organizations"
                 renderValue={() => (
-                    <ComplexSelect.MenuItem.Text
-                      primary={selectedOrganization?.displayName}
-                    />
+                  <ComplexSelect.MenuItem.Text
+                    primary={selectedOrganization?.displayName}
+                  />
                 )}
               >
                 {organizations.organizations.map((organization) => (
@@ -123,6 +125,30 @@ export function TopNavigation() {
                 ))}
               </ComplexSelect>
             )}
+            {selectedOrganization && organizations.total == 1 && (
+              <>
+                <ButtonBase
+                 aria-label="Go to organization"
+                 {...asLink(
+                      generatePath(absoluteRouteMap.children.org.path, {
+                        orgId: selectedOrganization.name,
+                      }) + (commonOrgPages ? `/${commonOrgPages}` : ""),
+                    )}
+
+                sx={{
+                  color: theme.vars?.palette.text.primary,
+                  border: `1px solid ${theme.vars?.palette.divider}`,
+                  p: theme.spacing(1.75, 1.75),
+                  borderRadius: theme.spacing(1),
+                  "&:hover": {
+                    border: `1px solid ${theme.vars?.palette.text.primary}`,
+                  },
+                }}>
+                  <Building2 size={22} />
+                </ButtonBase>
+              </>
+            )}
+
           </>
         )}
 
@@ -197,13 +223,17 @@ export function TopNavigation() {
                   onClick={(e) => setProjectAnchorEl(e.currentTarget)}
                   size="small"
                   sx={{
-                    transform: projectMenuOpen
-                      ? "rotate(90deg)"
-                      : "rotate(0deg)",
-                    transition: "transform 0.2s",
+                    "& .chevron-icon": {
+                      transform: projectMenuOpen ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                    },
+                    borderRadius: theme.spacing(1),
+                    color: theme.vars?.palette.text.primary,
+                    border: `1px solid ${theme.vars?.palette.divider}`,
+                    p: theme.spacing(1, 1),
                   }}
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={20} className="chevron-icon" />
                 </IconButton>
                 <Menu
                   anchorEl={projectAnchorEl}
@@ -219,7 +249,7 @@ export function TopNavigation() {
                       ),
                     )}
                   >
-                    <Plus size={20} style={{ marginRight: 8 }} />
+                    <Plus size={20} style={{ marginRight: theme.spacing(1) }} />
                     Create a Project
                   </MenuItem>
                   {projects.projects.map((project) => (
@@ -327,11 +357,17 @@ export function TopNavigation() {
                   onClick={(e) => setAgentAnchorEl(e.currentTarget)}
                   size="small"
                   sx={{
-                    transform: agentMenuOpen ? "rotate(90deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
+                    "& .chevron-icon": {
+                      transform: agentMenuOpen ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                    },
+                    borderRadius: theme.spacing(1),
+                    color: theme.vars?.palette.text.primary,
+                    border: `1px solid ${theme.vars?.palette.divider}`,
+                    p: theme.spacing(1, 1),
                   }}
                 >
-                  <ChevronRight size={20} />
+                  <ChevronRight size={20} className="chevron-icon" />
                 </IconButton>
                 <Menu
                   anchorEl={agentAnchorEl}
@@ -348,7 +384,7 @@ export function TopNavigation() {
                       ),
                     )}
                   >
-                    <Plus size={20} style={{ marginRight: 8 }} />
+                    <Plus size={20} style={{ marginRight: theme.spacing(1) }} />
                     Create an Agent
                   </MenuItem>
                   {agents.agents.map((agent) => (
