@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -195,6 +196,33 @@ func (c *gatewayController) ListEnvironmentIdentityProviders(w http.ResponseWrit
 		specProviders = append(specProviders, toSpecIdentityProvider(p))
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, identityProviderListResponse(specProviders))
+}
+
+// DiscoverOidcConfiguration fetches an OpenID Connect discovery document for the
+// URL in the `url` query parameter and returns the issuer and JWKS URI, used to
+// auto-populate the Add Identity Provider dialog. Manual entry remains available.
+func (c *gatewayController) DiscoverOidcConfiguration(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	rawURL := strings.TrimSpace(r.URL.Query().Get("url"))
+	if rawURL == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Query parameter 'url' is required")
+		return
+	}
+
+	issuer, jwksURI, err := c.gatewayService.DiscoverOIDC(ctx, rawURL)
+	if err != nil {
+		if errors.Is(err, utils.ErrInvalidURL) {
+			log.Warn("DiscoverOidcConfiguration: discovery failed", "error", err)
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Could not discover OIDC configuration from the provided URL")
+			return
+		}
+		log.Error("DiscoverOidcConfiguration: unexpected error", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to discover OIDC configuration")
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, spec.OidcDiscoveryResponse{Issuer: issuer, JwksUri: jwksURI})
 }
 
 func derefString(s *string) string {

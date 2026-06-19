@@ -65,6 +65,7 @@ type GatewayController interface {
 	UpsertGatewayIdentityProvider(w http.ResponseWriter, r *http.Request)
 	DeleteGatewayIdentityProvider(w http.ResponseWriter, r *http.Request)
 	ListEnvironmentIdentityProviders(w http.ResponseWriter, r *http.Request)
+	DiscoverOidcConfiguration(w http.ResponseWriter, r *http.Request)
 }
 
 type gatewayController struct {

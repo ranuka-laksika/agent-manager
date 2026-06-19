@@ -173,6 +173,164 @@ func (a *GatewayIdentityProvidersAPIService) DeleteGatewayIdentityProviderExecut
 	return localVarHTTPResponse, nil
 }
 
+type ApiDiscoverOidcConfigurationRequest struct {
+	ctx        context.Context
+	ApiService *GatewayIdentityProvidersAPIService
+	orgName    string
+	url        *string
+}
+
+// Issuer base URL or full .well-known/openid-configuration URL.
+func (r ApiDiscoverOidcConfigurationRequest) Url(url string) ApiDiscoverOidcConfigurationRequest {
+	r.url = &url
+	return r
+}
+
+func (r ApiDiscoverOidcConfigurationRequest) Execute() (*OidcDiscoveryResponse, *http.Response, error) {
+	return r.ApiService.DiscoverOidcConfigurationExecute(r)
+}
+
+/*
+DiscoverOidcConfiguration Discover OIDC issuer metadata from a URL
+
+Fetch the OpenID Connect discovery document for the given URL and return the
+issuer and JWKS URI. Accepts either an issuer base URL or a full
+`.well-known/openid-configuration` URL. Used to auto-populate the issuer and
+JWKS URI fields in the Add Identity Provider dialog; manual entry remains
+available. The backend fetches the document server-side over an SSRF-protected
+client, so it works regardless of browser CORS.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@return ApiDiscoverOidcConfigurationRequest
+*/
+func (a *GatewayIdentityProvidersAPIService) DiscoverOidcConfiguration(ctx context.Context, orgName string) ApiDiscoverOidcConfigurationRequest {
+	return ApiDiscoverOidcConfigurationRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return OidcDiscoveryResponse
+func (a *GatewayIdentityProvidersAPIService) DiscoverOidcConfigurationExecute(r ApiDiscoverOidcConfigurationRequest) (*OidcDiscoveryResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *OidcDiscoveryResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "GatewayIdentityProvidersAPIService.DiscoverOidcConfiguration")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/identity-providers/discover"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if strlen(r.orgName) < 1 {
+		return localVarReturnValue, nil, reportError("orgName must have at least 1 elements")
+	}
+	if strlen(r.orgName) > 64 {
+		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
+	}
+	if r.url == nil {
+		return localVarReturnValue, nil, reportError("url is required and must be specified")
+	}
+
+	parameterAddToHeaderOrQuery(localVarQueryParams, "url", r.url, "")
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiListEnvironmentIdentityProvidersRequest struct {
 	ctx           context.Context
 	ApiService    *GatewayIdentityProvidersAPIService

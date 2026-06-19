@@ -2764,6 +2764,63 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/identity-providers/discover:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: Discover OIDC issuer metadata from a URL
+      description: |
+        Fetch the OpenID Connect discovery document for the given URL and return the
+        issuer and JWKS URI. Accepts either an issuer base URL or a full
+        `.well-known/openid-configuration` URL. Used to auto-populate the issuer and
+        JWKS URI fields in the Add Identity Provider dialog; manual entry remains
+        available. The backend fetches the document server-side over an SSRF-protected
+        client, so it works regardless of browser CORS.
+      operationId: discoverOidcConfiguration
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: Issuer base URL or full .well-known/openid-configuration URL.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Discovered OIDC metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcDiscoveryResponse"
+        "400":
+          description: Invalid or unreachable URL, or malformed discovery document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/gateways/{gatewayID}/identity-providers:
     parameters:
       - name: orgName
@@ -11891,6 +11948,24 @@ components:
           description: List of identity providers
           items:
             $ref: "#/components/schemas/IdentityProvider"
+
+    OidcDiscoveryResponse:
+      type: object
+      description: |
+        Issuer metadata resolved from an OpenID Connect discovery document, used to
+        auto-populate the Add Identity Provider dialog.
+      required:
+        - issuer
+        - jwksUri
+      properties:
+        issuer:
+          type: string
+          description: The `issuer` value from the discovery document.
+          example: https://accounts.google.com
+        jwksUri:
+          type: string
+          description: The `jwks_uri` value from the discovery document.
+          example: https://www.googleapis.com/oauth2/v3/certs
 
     UpsertIdentityProviderRequest:
       type: object
