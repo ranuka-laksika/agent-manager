@@ -21,8 +21,8 @@ var _ MappedNullable = &OAuthConfig{}
 type OAuthConfig struct {
 	// Issuer names for token validation, referencing identity provider entries configured gateway-side. Must be non-empty when OAuth security is enabled, and every name must be one of the environment's configured identity providers.
 	Issuers []string `json:"issuers,omitempty"`
-	// Claims (key/value pairs) the token must contain.
-	RequiredClaims map[string]interface{} `json:"requiredClaims,omitempty"`
+	// Accepted token audiences (aud claim). Validation succeeds only when at least one configured audience is present in the token. Empty disables audience validation.
+	Audiences []string `json:"audiences,omitempty"`
 	// Request header carrying the token.
 	HeaderName *string `json:"headerName,omitempty"`
 	// Prefix before the token in the header value.
@@ -92,36 +92,36 @@ func (o *OAuthConfig) SetIssuers(v []string) {
 	o.Issuers = v
 }
 
-// GetRequiredClaims returns the RequiredClaims field value if set, zero value otherwise.
-func (o *OAuthConfig) GetRequiredClaims() map[string]interface{} {
-	if o == nil || IsNil(o.RequiredClaims) {
-		var ret map[string]interface{}
+// GetAudiences returns the Audiences field value if set, zero value otherwise.
+func (o *OAuthConfig) GetAudiences() []string {
+	if o == nil || IsNil(o.Audiences) {
+		var ret []string
 		return ret
 	}
-	return o.RequiredClaims
+	return o.Audiences
 }
 
-// GetRequiredClaimsOk returns a tuple with the RequiredClaims field value if set, nil otherwise
+// GetAudiencesOk returns a tuple with the Audiences field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *OAuthConfig) GetRequiredClaimsOk() (map[string]interface{}, bool) {
-	if o == nil || IsNil(o.RequiredClaims) {
-		return map[string]interface{}{}, false
+func (o *OAuthConfig) GetAudiencesOk() ([]string, bool) {
+	if o == nil || IsNil(o.Audiences) {
+		return nil, false
 	}
-	return o.RequiredClaims, true
+	return o.Audiences, true
 }
 
-// HasRequiredClaims returns a boolean if a field has been set.
-func (o *OAuthConfig) HasRequiredClaims() bool {
-	if o != nil && !IsNil(o.RequiredClaims) {
+// HasAudiences returns a boolean if a field has been set.
+func (o *OAuthConfig) HasAudiences() bool {
+	if o != nil && !IsNil(o.Audiences) {
 		return true
 	}
 
 	return false
 }
 
-// SetRequiredClaims gets a reference to the given map[string]interface{} and assigns it to the RequiredClaims field.
-func (o *OAuthConfig) SetRequiredClaims(v map[string]interface{}) {
-	o.RequiredClaims = v
+// SetAudiences gets a reference to the given []string and assigns it to the Audiences field.
+func (o *OAuthConfig) SetAudiences(v []string) {
+	o.Audiences = v
 }
 
 // GetHeaderName returns the HeaderName field value if set, zero value otherwise.
@@ -233,8 +233,8 @@ func (o OAuthConfig) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.Issuers) {
 		toSerialize["issuers"] = o.Issuers
 	}
-	if !IsNil(o.RequiredClaims) {
-		toSerialize["requiredClaims"] = o.RequiredClaims
+	if !IsNil(o.Audiences) {
+		toSerialize["audiences"] = o.Audiences
 	}
 	if !IsNil(o.HeaderName) {
 		toSerialize["headerName"] = o.HeaderName

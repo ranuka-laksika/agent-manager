@@ -2387,7 +2387,7 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 			CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
 			EnableOAuthSecurity:       apiCfg.EnableOAuthSecurity,
 			OAuthIssuers:              apiCfg.OAuthIssuers,
-			OAuthRequiredClaims:       apiCfg.OAuthRequiredClaims,
+			OAuthAudiences:            apiCfg.OAuthAudiences,
 			OAuthHeaderName:           apiCfg.OAuthHeaderName,
 			OAuthAuthHeaderPrefix:     apiCfg.OAuthAuthHeaderPrefix,
 			OAuthForwardToken:         apiCfg.OAuthForwardToken,
@@ -2419,7 +2419,7 @@ type resolvedCORSConfig struct {
 	// OAuth security (mutually exclusive with EnableApiKeySecurity).
 	EnableOAuthSecurity   bool
 	OAuthIssuers          []string
-	OAuthRequiredClaims   map[string]interface{}
+	OAuthAudiences        []string
 	OAuthHeaderName       string
 	OAuthAuthHeaderPrefix string
 	OAuthForwardToken     bool
@@ -2469,7 +2469,7 @@ func resolveAPIConfig(existingConfig *models.AgentConfig, enableApiKeySecurity *
 		resolved.CORSAllowCredentials = existingConfig.CORSAllowCredentials
 		resolved.EnableOAuthSecurity = existingConfig.EnableOAuthSecurity
 		resolved.OAuthIssuers = existingConfig.OAuthIssuers
-		resolved.OAuthRequiredClaims = existingConfig.OAuthRequiredClaims
+		resolved.OAuthAudiences = existingConfig.OAuthAudiences
 		resolved.OAuthForwardToken = existingConfig.OAuthForwardToken
 		if existingConfig.OAuthHeaderName != "" {
 			resolved.OAuthHeaderName = existingConfig.OAuthHeaderName
@@ -2507,8 +2507,8 @@ func resolveAPIConfig(existingConfig *models.AgentConfig, enableApiKeySecurity *
 		if oauthConfig.Issuers != nil {
 			resolved.OAuthIssuers = oauthConfig.Issuers
 		}
-		if oauthConfig.RequiredClaims != nil {
-			resolved.OAuthRequiredClaims = oauthConfig.RequiredClaims
+		if oauthConfig.Audiences != nil {
+			resolved.OAuthAudiences = oauthConfig.Audiences
 		}
 		if oauthConfig.HeaderName != nil && *oauthConfig.HeaderName != "" {
 			resolved.OAuthHeaderName = *oauthConfig.HeaderName
@@ -2548,7 +2548,7 @@ func oauthConfigFromAgentConfig(cfg *models.AgentConfig) *models.OAuthConfig {
 	}
 	return &models.OAuthConfig{
 		Issuers:          issuers,
-		RequiredClaims:   cfg.OAuthRequiredClaims,
+		Audiences:        cfg.OAuthAudiences,
 		HeaderName:       headerName,
 		AuthHeaderPrefix: authHeaderPrefix,
 		ForwardToken:     cfg.OAuthForwardToken,
@@ -2619,7 +2619,7 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 		// validateOAuthSecurityConfig before reaching here, so no default is invented.
 		policies = append(policies, client.OAuthPolicy(client.OAuthPolicyParams{
 			Issuers:          cfg.OAuthIssuers,
-			RequiredClaims:   cfg.OAuthRequiredClaims,
+			Audiences:        cfg.OAuthAudiences,
 			HeaderName:       cfg.OAuthHeaderName,
 			AuthHeaderPrefix: cfg.OAuthAuthHeaderPrefix,
 			ForwardToken:     cfg.OAuthForwardToken,
@@ -2881,7 +2881,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
 			EnableOAuthSecurity:       apiCfg.EnableOAuthSecurity,
 			OAuthIssuers:              apiCfg.OAuthIssuers,
-			OAuthRequiredClaims:       apiCfg.OAuthRequiredClaims,
+			OAuthAudiences:            apiCfg.OAuthAudiences,
 			OAuthHeaderName:           apiCfg.OAuthHeaderName,
 			OAuthAuthHeaderPrefix:     apiCfg.OAuthAuthHeaderPrefix,
 			OAuthForwardToken:         apiCfg.OAuthForwardToken,
@@ -2980,7 +2980,7 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		CORSAllowCredentials:      apiCfg.CORSAllowCredentials,
 		EnableOAuthSecurity:       apiCfg.EnableOAuthSecurity,
 		OAuthIssuers:              apiCfg.OAuthIssuers,
-		OAuthRequiredClaims:       apiCfg.OAuthRequiredClaims,
+		OAuthAudiences:            apiCfg.OAuthAudiences,
 		OAuthHeaderName:           apiCfg.OAuthHeaderName,
 		OAuthAuthHeaderPrefix:     apiCfg.OAuthAuthHeaderPrefix,
 		OAuthForwardToken:         apiCfg.OAuthForwardToken,

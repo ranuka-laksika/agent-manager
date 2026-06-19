@@ -98,7 +98,7 @@ func TestResolveAPIConfig_OAuthDefaults(t *testing.T) {
 func TestResolveAPIConfig_OAuthFromRequest(t *testing.T) {
 	cfg := resolveAPIConfig(nil, boolPtr(false), nil, boolPtr(true), &spec.OAuthConfig{
 		Issuers:          []string{"CustomKeyManager"},
-		RequiredClaims:   map[string]interface{}{"role": "admin"},
+		Audiences:        []string{"my-api"},
 		HeaderName:       strPtr("X-Token"),
 		AuthHeaderPrefix: strPtr("Token"),
 		ForwardToken:     boolPtr(false),
@@ -113,8 +113,8 @@ func TestResolveAPIConfig_OAuthFromRequest(t *testing.T) {
 	if len(cfg.OAuthIssuers) != 1 || cfg.OAuthIssuers[0] != "CustomKeyManager" {
 		t.Errorf("issuers not resolved from request: %v", cfg.OAuthIssuers)
 	}
-	if cfg.OAuthRequiredClaims["role"] != "admin" {
-		t.Errorf("claims not resolved: %v", cfg.OAuthRequiredClaims)
+	if len(cfg.OAuthAudiences) != 1 || cfg.OAuthAudiences[0] != "my-api" {
+		t.Errorf("audiences not resolved: %v", cfg.OAuthAudiences)
 	}
 	if cfg.OAuthHeaderName != "X-Token" || cfg.OAuthAuthHeaderPrefix != "Token" {
 		t.Errorf("header overrides not resolved: %q / %q", cfg.OAuthHeaderName, cfg.OAuthAuthHeaderPrefix)
@@ -198,11 +198,11 @@ func TestBuildPolicies_Modes(t *testing.T) {
 		}
 	})
 
-	t.Run("oauth with issuers and claims", func(t *testing.T) {
+	t.Run("oauth with issuers and audiences", func(t *testing.T) {
 		cfg := base
 		cfg.EnableOAuthSecurity = true
 		cfg.OAuthIssuers = []string{"MyKeyManager"}
-		cfg.OAuthRequiredClaims = map[string]interface{}{"role": "admin"}
+		cfg.OAuthAudiences = []string{"my-api"}
 		cfg.OAuthForwardToken = true
 		p := buildPolicies(cfg)
 		jwt := policyByName(p, "jwt-auth")
@@ -217,13 +217,14 @@ func TestBuildPolicies_Modes(t *testing.T) {
 		if len(issuers) != 1 || issuers[0] != "MyKeyManager" {
 			t.Errorf("expected issuers [MyKeyManager], got %v", params["issuers"])
 		}
-		if params["requiredClaims"] == nil {
-			t.Errorf("expected requiredClaims, got %v", params)
+		audiences, _ := params["audiences"].([]string)
+		if len(audiences) != 1 || audiences[0] != "my-api" {
+			t.Errorf("expected audiences [my-api], got %v", params["audiences"])
 		}
-		// audiences/requiredScopes are authorization params the gateway does not
-		// implement — they must never appear in the policy.
-		if params["audiences"] != nil || params["requiredScopes"] != nil {
-			t.Errorf("did not expect audiences/requiredScopes in params, got %v", params)
+		// requiredClaims/requiredScopes are authorization params deferred to a
+		// future authorization policy — they must never appear in jwt-auth.
+		if params["requiredClaims"] != nil || params["requiredScopes"] != nil {
+			t.Errorf("did not expect requiredClaims/requiredScopes in params, got %v", params)
 		}
 		if params["forwardToken"] != true {
 			t.Errorf("expected forwardToken true, got %v", params["forwardToken"])

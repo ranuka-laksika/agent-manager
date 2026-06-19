@@ -99,6 +99,7 @@ export function EditSecurityConfigDrawer({
     "apikey",
   );
   const [oauthIssuers, setOauthIssuers] = useState<string[]>([]);
+  const [oauthAudiences, setOauthAudiences] = useState<string[]>([]);
   const [oauthHeaderName, setOauthHeaderName] =
     useState<string>("Authorization");
   const [oauthHeaderPrefix, setOauthHeaderPrefix] = useState<string>("Bearer");
@@ -167,6 +168,7 @@ export function EditSecurityConfigDrawer({
 
     const oauth = cfg?.oauthConfig;
     setOauthIssuers(oauth?.issuers ?? []);
+    setOauthAudiences(oauth?.audiences ?? []);
     setOauthHeaderName(oauth?.headerName || "Authorization");
     setOauthHeaderPrefix(oauth?.authHeaderPrefix || "Bearer");
     setOauthForwardToken(oauth?.forwardToken ?? true);
@@ -200,6 +202,7 @@ export function EditSecurityConfigDrawer({
             authMode === "oauth" && {
               oauthConfig: {
                 issuers: oauthIssuers,
+                audiences: oauthAudiences,
                 headerName: oauthHeaderName.trim() || "Authorization",
                 authHeaderPrefix: oauthHeaderPrefix.trim() || "Bearer",
                 forwardToken: oauthForwardToken,
@@ -242,6 +245,7 @@ export function EditSecurityConfigDrawer({
     agent?.configurations?.enableAutoInstrumentation,
     authMode,
     oauthIssuers,
+    oauthAudiences,
     oauthHeaderName,
     oauthHeaderPrefix,
     oauthForwardToken,
@@ -374,6 +378,43 @@ export function EditSecurityConfigDrawer({
                           Select at least one identity provider.
                         </FormHelperText>
                       )}
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Audiences</FormLabel>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={[]}
+                        value={oauthAudiences}
+                        onChange={(_, v) => setOauthAudiences(v as string[])}
+                        disabled={isPending}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip
+                              label={opt as string}
+                              size="small"
+                              {...getTagProps({ index: i })}
+                              key={opt as string}
+                            />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            size="small"
+                            placeholder={
+                              oauthAudiences.length === 0
+                                ? "Add accepted audience (aud) values"
+                                : ""
+                            }
+                          />
+                        )}
+                      />
+                      <FormHelperText>
+                        Accepted token audiences (aud claim). Leave empty to
+                        disable audience validation.
+                      </FormHelperText>
                     </FormControl>
 
                     <Box display="flex" gap={2}>

@@ -8840,10 +8840,14 @@ components:
             Issuer names for token validation, referencing identity provider entries
             configured gateway-side. Must be non-empty when OAuth security is enabled,
             and every name must be one of the environment's configured identity providers.
-        requiredClaims:
-          type: object
-          additionalProperties: true
-          description: Claims (key/value pairs) the token must contain.
+        audiences:
+          type: array
+          items:
+            type: string
+          description: >-
+            Accepted token audiences (aud claim). Validation succeeds only when at
+            least one configured audience is present in the token. Empty disables
+            audience validation.
         headerName:
           type: string
           description: Request header carrying the token.

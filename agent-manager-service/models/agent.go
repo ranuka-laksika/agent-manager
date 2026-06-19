@@ -88,11 +88,11 @@ func IsSystemIdentityProvider(name string) bool {
 }
 
 type OAuthConfig struct {
-	Issuers          []string               `json:"issuers,omitempty"`
-	RequiredClaims   map[string]interface{} `json:"requiredClaims,omitempty"`
-	HeaderName       string                 `json:"headerName,omitempty"`
-	AuthHeaderPrefix string                 `json:"authHeaderPrefix,omitempty"`
-	ForwardToken     bool                   `json:"forwardToken"`
+	Issuers          []string `json:"issuers,omitempty"`
+	Audiences        []string `json:"audiences,omitempty"`
+	HeaderName       string   `json:"headerName,omitempty"`
+	AuthHeaderPrefix string   `json:"authHeaderPrefix,omitempty"`
+	ForwardToken     bool     `json:"forwardToken"`
 }
 
 type AgentType struct {

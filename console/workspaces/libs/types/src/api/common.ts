@@ -100,8 +100,8 @@ export interface CorsConfig {
 export interface OAuthConfig {
   /** Issuer names referencing gateway-side key manager entries. Empty uses the platform default. */
   issuers?: string[];
-  /** Claims (key/value pairs) the token must contain. */
-  requiredClaims?: Record<string, unknown>;
+  /** Accepted token audiences (aud claim). Empty disables audience validation. */
+  audiences?: string[];
   /** Request header carrying the token. Defaults to "Authorization". */
   headerName?: string;
   /** Prefix before the token in the header value. Defaults to "Bearer". */
