@@ -317,7 +317,8 @@ export function ManageIdentityProviderDialog({
                     </Button>
                   </Stack>
                   <Typography variant="caption" color="text.secondary">
-                    Auto-fills the issuer and JWKS URI from the provider's OpenID configuration.
+                    Auto-fills the issuer and JWKS URI from the provider&apos;s OpenID
+                    configuration.
                   </Typography>
                 </FormControl>
 
