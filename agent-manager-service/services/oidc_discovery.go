@@ -62,7 +62,7 @@ func (s *PlatformGatewayService) DiscoverOIDC(ctx context.Context, rawURL string
 		// Do not surface the raw error: it may leak internal probe results.
 		return "", "", fmt.Errorf("%w: could not reach the discovery endpoint", utils.ErrInvalidURL)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", "", fmt.Errorf("%w: discovery endpoint returned status %d", utils.ErrInvalidURL, resp.StatusCode)
