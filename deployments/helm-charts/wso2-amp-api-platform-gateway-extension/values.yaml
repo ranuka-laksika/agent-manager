@@ -200,6 +200,24 @@ apiGateway:
 bootstrap:
   enabled: true
   backoffLimit: 3
+  # Identity providers to mirror into Agent Manager (AMS) for this gateway.
+  #
+  # This list is the authoritative allowlist of IdPs the bootstrap job seeds via
+  # the AMS identity-provider API. It is intentionally decoupled from
+  # apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers: that list is the
+  # gateway runtime's JWT-validation config (and legitimately includes the internal
+  # 'agent-manager-service' keymanager), whereas this list is what AMS exposes in the
+  # Security UI and as agent OAuth issuer options. Only list user-visible providers
+  # here — omit any internal/reserved keymanagers (e.g. agent-manager-service).
+  #
+  # If this list is omitted entirely, the bootstrap job falls back to deriving IdPs
+  # from jwtauth_v1.keymanagers (skipping agent-manager-service) for backward
+  # compatibility. Each entry: { name, issuer, jwksUri, skipTlsVerify }.
+  identityProviders:
+    - name: ThunderKeyManager
+      issuer: http://thunder.amp.localhost:8080
+      jwksUri: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
+      skipTlsVerify: true
   # TTL after completion (seconds). 86400 = 1 day
   ttlSecondsAfterFinished: 86400
   resources:

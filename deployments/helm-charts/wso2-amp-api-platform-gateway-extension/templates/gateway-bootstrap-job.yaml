@@ -316,15 +316,29 @@ spec:
               fi
 
               # ----------------------------------------------------------------
-              # Step 6: Seed the identity provider mirror from the gateway's
-              # configured keymanagers. The gateway ConfigMap is the source of
-              # truth; this mirrors it into AMS for the Security UI and agent OAuth
-              # issuer options. The reserved internal provider is never mirrored.
+              # Step 6: Seed the identity provider mirror into AMS for the Security
+              # UI and agent OAuth issuer options.
+              #
+              # Source: bootstrap.identityProviders — the authoritative allowlist of
+              # IdPs to register. It is decoupled from jwtauth_v1.keymanagers (the
+              # gateway runtime's JWT-validation config, which includes the internal
+              # agent-manager-service keymanager), so no name-based filtering is
+              # needed here: only what is listed gets mirrored.
+              #
+              # Legacy fallback: if bootstrap.identityProviders is unset, derive the
+              # list from jwtauth_v1.keymanagers (skipping agent-manager-service) to
+              # preserve behavior for existing installs.
               # ----------------------------------------------------------------
               log_info "Seeding identity providers for gateway '${GATEWAY_ID}'..."
+              {{- if .Values.bootstrap.identityProviders }}
+              {{- range .Values.bootstrap.identityProviders }}
+              seed_identity_provider {{ .name | quote }} {{ .issuer | quote }} {{ .jwksUri | quote }} {{ .skipTlsVerify | default false }}
+              {{- end }}
+              {{- else }}
               {{- range .Values.apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers }}
               {{- if ne .name "agent-manager-service" }}
               seed_identity_provider {{ .name | quote }} {{ .issuer | quote }} {{ .jwks.remote.uri | quote }} {{ .jwks.remote.skipTlsVerify | default false }}
+              {{- end }}
               {{- end }}
               {{- end }}
 
