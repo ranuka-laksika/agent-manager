@@ -28,7 +28,7 @@ import (
 	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
 )
 
-var _ = Describe("Environment Lifecycle", Label("environment"), Ordered, func() {
+var _ = Describe("Environment: create and remove via the environment scripts", Label("environment"), Ordered, func() {
 	var (
 		envName      string
 		scriptParams *envops.ScriptParams
@@ -42,7 +42,7 @@ var _ = Describe("Environment Lifecycle", Label("environment"), Ordered, func() 
 		scriptParams.DisplayName = "E2E Env " + suffix
 	})
 
-	It("should create the environment via the add-environment script", func() {
+	It("creates an environment via the add-environment script", func() {
 		envops.AddEnvironment(scriptParams)
 
 		env := envops.GetEnvironment(Default, Client, Cfg.DefaultOrg, envName)
@@ -50,7 +50,7 @@ var _ = Describe("Environment Lifecycle", Label("environment"), Ordered, func() 
 		GinkgoWriter.Printf("Environment created: %s\n", envName)
 	})
 
-	It("should remove the environment via the remove-environment script", func() {
+	It("removes the environment via the remove-environment script", func() {
 		err := envops.RemoveEnvironment(scriptParams)
 		Expect(err).NotTo(HaveOccurred(), "remove-environment.sh failed for env %q", envName)
 		GinkgoWriter.Printf("Environment removed: %s\n", envName)

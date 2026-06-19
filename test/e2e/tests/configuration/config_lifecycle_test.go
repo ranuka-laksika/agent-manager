@@ -32,7 +32,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/deployment"
 )
 
-var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "single-env"), Ordered, func() {
+var _ = Describe("Agent configuration: update env vars, redeploy, and verify in a single environment", Label("configuration", "single-env"), Ordered, func() {
 	var (
 		sensitiveSecretRef string
 		lastDeployedBefore time.Time
@@ -74,7 +74,7 @@ var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "s
 		GinkgoWriter.Printf("config revert: restored original configuration (DATABASE_URL=http://localhost:5000, valid OPENAI_API_KEY)\n")
 	})
 
-	It("should have correct initial configurations", func() {
+	It("reports the agent's initial environment configuration", func() {
 		configs := configuration.GetAgentConfigurations(Default, Client,
 			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
 
@@ -93,7 +93,7 @@ var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "s
 		GinkgoWriter.Printf("Initial configurations verified; OPENAI_API_KEY secretRef=%s\n", sensitiveSecretRef)
 	})
 
-	It("should redeploy with updated configurations", func() {
+	It("redeploys the agent with updated environment variables", func() {
 		deps := deployment.GetDeploymentDetails(Default, Client,
 			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName)
 		dep, exists := deps[Cfg.DefaultEnv]
@@ -114,7 +114,7 @@ var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "s
 		GinkgoWriter.Printf("Redeployment triggered with updated configurations\n")
 	})
 
-	It("should become active after redeployment", func() {
+	It("becomes active after the configuration redeploy", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:       Cfg.DefaultOrg,
 			ProjectName:   SharedITHelpdeskAgent.ProjectName,
@@ -125,11 +125,11 @@ var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "s
 		})
 	})
 
-	It("should become ready after redeployment", func() {
+	It("becomes ready after the configuration redeploy", func() {
 		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv, 10*time.Minute)
 	})
 
-	It("should have updated non-secret configurations", func() {
+	It("reflects the updated non-secret configuration values", func() {
 		configs := configuration.GetAgentConfigurations(Default, Client,
 			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
 
@@ -141,7 +141,7 @@ var _ = Describe("Single-Env Configuration Lifecycle", Label("configuration", "s
 		}
 	})
 
-	It("should have error in runtime logs", func() {
+	It("surfaces the invalid-API-key error in the agent runtime logs", func() {
 		agentops.WaitForRuntimeLog(Client, &agentops.WaitForRuntimeLogParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: SharedITHelpdeskAgent.ProjectName,

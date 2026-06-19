@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors", "past-monitor"), func() {
+var _ = Describe("Past monitor with a built-in evaluator: run, log, score, and rerun", Ordered, Label("monitors", "past-monitor"), func() {
 	var (
 		suffix                string
 		traceStartTime        time.Time
@@ -70,7 +70,7 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Using built-in evaluator: %s\n", builtinEvalIdentifier)
 	})
 
-	It("should create a past monitor with built-in evaluator", func() {
+	It("creates a past-window monitor using a built-in evaluator", func() {
 		samplingRate := 1.0
 		mon := monitor.CreateMonitor(Default, Client, &monitor.CreateMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
@@ -97,7 +97,7 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor created: %s\n", mon.Name)
 	})
 
-	It("should have a completed run for the past monitor", func() {
+	It("completes the past monitor run", func() {
 		run := monitor.WaitForMonitorRun(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: SharedITHelpdeskAgent.ProjectName,
@@ -110,7 +110,7 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor run completed: %s\n", run.ID)
 	})
 
-	It("should have logs for the past monitor run", func() {
+	It("exposes logs for the past monitor run", func() {
 		runs := monitor.ListMonitorRuns(Default, Client, &monitor.ListMonitorRunsParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: SharedITHelpdeskAgent.ProjectName,
@@ -139,7 +139,7 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor run logs: %d entries\n", len(logs.Logs))
 	})
 
-	It("should have scores for the past monitor run", func() {
+	It("produces scores for the past monitor run", func() {
 		runs := monitor.ListMonitorRuns(Default, Client, &monitor.ListMonitorRunsParams{
 			OrgName:       Cfg.DefaultOrg,
 			ProjectName:   SharedITHelpdeskAgent.ProjectName,
@@ -161,7 +161,7 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor scores: %d evaluator summaries\n", len(completedRun.Scores))
 	})
 
-	It("should rerun the past monitor and succeed", func() {
+	It("reruns the past monitor successfully", func() {
 		Expect(pastMonitorRunID).NotTo(BeEmpty(), "past monitor run ID not captured")
 
 		rerun := monitor.RerunMonitor(Default, Client, &monitor.RerunMonitorParams{

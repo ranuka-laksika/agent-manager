@@ -40,7 +40,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
+var _ = Describe("Agent catalog: publish a kind, create an agent from it, deploy and promote", Label("catalog"), Ordered, func() {
 	var (
 		promotable    *framework.SharedPromotableITHelpdeskAgent
 		fromKindAgent string
@@ -66,7 +66,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 			promotable.AgentName, envName, projectName)
 	})
 
-	It("should publish the promotable agent as a kind", func() {
+	It("publishes a pre built  agent as a reusable catalog kind", func() {
 		if catalogops.KindExists(Client, Cfg.DefaultOrg, framework.E2ESharedKindName) {
 			GinkgoWriter.Printf("Kind already published, skipping: %s\n", framework.E2ESharedKindName)
 			return
@@ -98,7 +98,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Kind published: %s@%s\n", framework.E2ESharedKindName, framework.E2ESharedKindVersion)
 	})
 
-	It("should create an agent from the published kind", func() {
+	It("creates a new agent from the published kind", func() {
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -113,7 +113,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Agent from kind created: %s\n", fromKindAgent)
 	})
 
-	It("should deploy in the default environment", func() {
+	It("deploys the kind-based agent in the default environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -125,7 +125,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Agent from kind deployed and ready in %s\n", Cfg.DefaultEnv)
 	})
 
-	It("should invoke the agent in the default environment", func() {
+	It("returns a chat response from the kind-based agent in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, fromKindAgent, Cfg.DefaultEnv)
 		for _, ep := range endpoints {
@@ -149,7 +149,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		agentops.InvokeAgentEndpoint(fmt.Sprintf("%s/chat", endpointURL), invokeReq, apiKey)
 	})
 
-	It("should promote to the new environment", func() {
+	It("promotes the kind-based agent to the second environment", func() {
 		useSource := false
 		resp := agentops.PromoteAgent(Default, Client, Cfg.DefaultOrg, projectName, fromKindAgent,
 			framework.PromoteAgentRequest{
@@ -164,7 +164,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Agent promoted: %s -> %s\n", Cfg.DefaultEnv, envName)
 	})
 
-	It("should deploy in the new environment", func() {
+	It("deploys the kind-based agent in the second environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -176,7 +176,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Agent from kind deployed and ready in %s\n", envName)
 	})
 
-	It("should invoke the agent in the new environment", func() {
+	It("returns a chat response from the kind-based agent in the second environment", func() {
 		gwops.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, envName, 3*time.Minute)
 
 		endpoints := deployment.GetEndpoints(Default, Client,
@@ -202,7 +202,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		agentops.InvokeAgentEndpoint(fmt.Sprintf("%s/chat", endpointURL), invokeReq, apiKey)
 	})
 
-	It("should have traces in the default environment", func() {
+	It("captures traces for the default-environment invocation", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
 			Project:      projectName,
@@ -214,7 +214,7 @@ var _ = Describe("Agent Catalog Lifecycle", Label("catalog"), Ordered, func() {
 		GinkgoWriter.Printf("Traces in %s: %d found\n", Cfg.DefaultEnv, len(traces.Traces))
 	})
 
-	It("should have traces in the new environment", func() {
+	It("captures traces for the second-environment invocation", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
 			Project:      projectName,

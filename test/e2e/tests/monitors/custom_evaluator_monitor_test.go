@@ -32,7 +32,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past Monitor - Custom Evaluator", Ordered, Label("monitors", "custom-evaluator"), func() {
+var _ = Describe("Past monitor with a custom evaluator: create, run, and score", Ordered, Label("monitors", "custom-evaluator"), func() {
 	var (
 		suffix                string
 		traceStartTime        time.Time
@@ -57,7 +57,7 @@ var _ = Describe("Past Monitor - Custom Evaluator", Ordered, Label("monitors", "
 			traceStartTime.Format(time.RFC3339), traceEndTime.Format(time.RFC3339))
 	})
 
-	It("should create a custom evaluator", func() {
+	It("creates a custom evaluator", func() {
 		customEval := evaluator.CreateCustomEvaluator(Default, Client, &evaluator.CreateCustomEvaluatorParams{
 			OrgName:     Cfg.DefaultOrg,
 			Identifier:  customEvalIdentifier,
@@ -80,7 +80,7 @@ def evaluate(trace: Trace) -> EvalResult:
 		GinkgoWriter.Printf("Custom evaluator created: %s\n", customEval.Identifier)
 	})
 
-	It("should create a past monitor with custom evaluator", func() {
+	It("creates a past-window monitor using the custom evaluator", func() {
 		samplingRate := 1.0
 		mon := monitor.CreateMonitor(Default, Client, &monitor.CreateMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
@@ -107,7 +107,7 @@ def evaluate(trace: Trace) -> EvalResult:
 		GinkgoWriter.Printf("Custom past monitor created: %s\n", mon.Name)
 	})
 
-	It("should have a completed run", func() {
+	It("completes a monitor run", func() {
 		run := monitor.WaitForMonitorRun(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: SharedITHelpdeskAgent.ProjectName,
@@ -119,7 +119,7 @@ def evaluate(trace: Trace) -> EvalResult:
 		GinkgoWriter.Printf("Custom past monitor run completed: %s\n", run.ID)
 	})
 
-	It("should have scores from the custom evaluator", func() {
+	It("produces scores from the custom evaluator", func() {
 		runs := monitor.ListMonitorRuns(Default, Client, &monitor.ListMonitorRunsParams{
 			OrgName:       Cfg.DefaultOrg,
 			ProjectName:   SharedITHelpdeskAgent.ProjectName,

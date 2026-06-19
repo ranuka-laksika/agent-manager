@@ -36,7 +36,7 @@ import (
 	llmproviderop "github.com/wso2/agent-manager/test/e2e/operations/llmprovider"
 )
 
-var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider", "internal-agent"), Ordered, func() {
+var _ = Describe("Internal agent configured with a LLM provider", Label("llm-provider", "internal-agent"), Ordered, func() {
 	var (
 		agentName string
 		suffix    string
@@ -62,11 +62,11 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		)
 	})
 
-	It("should have a running AI gateway", func() {
+	It("finds an active AI gateway for the default environment", func() {
 		gatewayUUID = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 	})
 
-	It("should create an LLM provider using the OpenAI template", func() {
+	It("creates an OpenAI-backed LLM provider from the built-in template", func() {
 		By("Fetching the OpenAI template to get endpoint URL and auth config")
 		templates := llmproviderop.ListLLMProviderTemplates(Default, Client, Cfg.DefaultOrg)
 		var openaiTpl *framework.LLMProviderTemplateResponse
@@ -111,7 +111,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		GinkgoWriter.Printf("LLM provider: %s (UUID: %s)\n", providerID, prov.UUID)
 	})
 
-	It("should create an internal agent with model config", func() {
+	It("creates an internal agent wired to the LLM provider via model config", func() {
 		createReq.ModelConfig = []framework.ModelConfigRequest{
 			{
 				ProviderName: providerID,
@@ -131,7 +131,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		GinkgoWriter.Printf("Agent: %s (with modelConfig)\n", agentName)
 	})
 
-	It("should complete the build", func() {
+	It("builds the agent image to completion", func() {
 		build.WaitForBuildSuccess(Client, &build.WaitForBuildParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: framework.E2ESharedProjectName,
@@ -140,7 +140,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		})
 	})
 
-	It("should deploy the agent", func() {
+	It("deploys the agent to the default environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: framework.E2ESharedProjectName,
@@ -150,7 +150,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		})
 	})
 
-	It("should become ready", func() {
+	It("becomes ready and exposes an invocation endpoint", func() {
 		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName, Cfg.DefaultEnv, 10*time.Minute)
 
 		endpoints := deployment.GetEndpoints(Default, Client,
@@ -167,7 +167,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		GinkgoWriter.Printf("Agent ready: endpoint=%s\n", endpointURL)
 	})
 
-	It("should respond to invocation via LLM provider", func() {
+	It("returns a chat response routed through the LLM provider", func() {
 		// Create the API key in the same It as the invocation so its DeferCleanup
 		// revoke runs only after the invocation completes (keeps key count bounded).
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
@@ -183,7 +183,7 @@ var _ = Describe("Internal Agent with LLM Provider Config", Label("llm-provider"
 		agentops.InvokeAgentEndpoint(endpoint, invokeReq, apiKeyResp.ApiKey)
 	})
 
-	It("should have LLM provider env vars in configurations", func() {
+	It("verify the injected LLM provider URL and key into the agent configuration", func() {
 		By("Verifying configurations include LLM provider variables")
 		configs := configuration.GetAgentConfigurations(Default, Client,
 			Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName, Cfg.DefaultEnv)

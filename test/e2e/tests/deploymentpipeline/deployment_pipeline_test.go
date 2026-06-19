@@ -28,7 +28,7 @@ import (
 	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
 )
 
-var _ = Describe("Deployment Pipeline Lifecycle", Label("deployment-pipeline"), Ordered, func() {
+var _ = Describe("Deployment pipeline: with two environment promotion path, then delete", Label("deployment-pipeline"), Ordered, func() {
 	var (
 		stagingEnv   string
 		pipelineName string
@@ -54,7 +54,7 @@ var _ = Describe("Deployment Pipeline Lifecycle", Label("deployment-pipeline"), 
 		}
 	})
 
-	It("should create a deployment pipeline spanning two environments", func() {
+	It("creates a deployment pipeline spanning two environments", func() {
 		suffix := uuid.New().String()[:8]
 		req := framework.CreateDeploymentPipelineRequest{
 			DisplayName: "E2E Pipeline " + suffix,
@@ -74,7 +74,7 @@ var _ = Describe("Deployment Pipeline Lifecycle", Label("deployment-pipeline"), 
 		GinkgoWriter.Printf("Deployment pipeline created: %s (%s -> %s)\n", pipelineName, Cfg.DefaultEnv, stagingEnv)
 	})
 
-	It("should delete the deployment pipeline", func() {
+	It("deletes the deployment pipeline", func() {
 		dpops.Delete(Client, Cfg.DefaultOrg, pipelineName)
 		GinkgoWriter.Printf("Deployment pipeline deleted: %s\n", pipelineName)
 	})

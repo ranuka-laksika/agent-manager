@@ -44,7 +44,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Ordered, func() {
+var _ = Describe("Agent promotion: deploy in default env, promote to a second env, verify both", Label("agent", "promotion"), Ordered, func() {
 	const agentName = framework.SharedPromotableITHelpdeskAgentName
 
 	var (
@@ -64,7 +64,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Two-env infra ready: project=%s secondEnv=%s\n", projectName, secondEnv)
 	})
 
-	It("should create the two-env IT helpdesk agent", func() {
+	It("creates a IT-helpdesk agent to promote across environments", func() {
 		agentPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s", Cfg.DefaultOrg, projectName, agentName)
 		if framework.ResourceExists(Client, agentPath) {
 			GinkgoWriter.Printf("Agent already exists, reusing: %s\n", agentName)
@@ -86,7 +86,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Agent created: %s\n", agentName)
 	})
 
-	It("should complete the build", func() {
+	It("builds the agent image to completion", func() {
 		buildName = build.WaitForBuildSuccess(Client, &build.WaitForBuildParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -96,7 +96,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Build completed: %s\n", buildName)
 	})
 
-	It("should deploy to the default environment", func() {
+	It("deploys the agent to the default environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -108,7 +108,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Agent deployed and ready in %s\n", Cfg.DefaultEnv)
 	})
 
-	It("should serve traffic in the default environment", func() {
+	It("serves chat traffic in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
 		for _, ep := range endpoints {
@@ -132,7 +132,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		agentops.InvokeAgentEndpoint(fmt.Sprintf("%s/chat", endpointURL), invokeReq, apiKey)
 	})
 
-	It("should promote to the second environment", func() {
+	It("promotes the agent to the second environment", func() {
 		useSource := false
 		resp := agentops.PromoteAgent(Default, Client, Cfg.DefaultOrg, projectName, agentName,
 			framework.PromoteAgentRequest{
@@ -148,7 +148,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Agent promoted: %s -> %s\n", Cfg.DefaultEnv, secondEnv)
 	})
 
-	It("should deploy to the second environment", func() {
+	It("deploys the promoted agent in the second environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -160,7 +160,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Agent deployed and ready in %s\n", secondEnv)
 	})
 
-	It("should serve traffic in the second environment", func() {
+	It("serves chat traffic in the second environment after promotion", func() {
 		gwops.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, secondEnv, 3*time.Minute)
 
 		endpoints := deployment.GetEndpoints(Default, Client,
@@ -186,7 +186,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		agentops.InvokeAgentEndpoint(fmt.Sprintf("%s/chat", endpointURL), invokeReq, apiKey)
 	})
 
-	It("should have traces in the default environment", func() {
+	It("captures traces for the default-environment invocation", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
 			Project:      projectName,
@@ -198,7 +198,7 @@ var _ = Describe("Agent Promotion Lifecycle", Label("agent", "promotion"), Order
 		GinkgoWriter.Printf("Traces in %s: %d found\n", Cfg.DefaultEnv, len(traces.Traces))
 	})
 
-	It("should have traces in the second environment", func() {
+	It("captures traces for the second-environment invocation", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
 			Project:      projectName,

@@ -42,7 +42,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-provider", "two-env"), Ordered, func() {
+var _ = Describe("Internal agent configured with a LLM provider and promote across environments", Label("llm-provider", "two-env"), Ordered, func() {
 	var (
 		suffix      string
 		agentName   string
@@ -77,14 +77,14 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		invokeReq = framework.DefaultInvokeRequest()
 	})
 
-	It("should have a running AI gateway in both environments", func() {
+	It("finds active AI gateways in both environments", func() {
 		gatewayUUIDEnv1 = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 		gatewayUUIDEnv2 = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, secondEnv, 3*time.Minute)
 		Expect(gatewayUUIDEnv1).NotTo(BeEmpty())
 		Expect(gatewayUUIDEnv2).NotTo(BeEmpty())
 	})
 
-	It("should create an LLM provider on both environment gateways", func() {
+	It("creates an LLM provider deployed on both environment gateways", func() {
 		By("Fetching the OpenAI template to get endpoint URL and auth config")
 		templates := llmproviderop.ListLLMProviderTemplates(Default, Client, Cfg.DefaultOrg)
 		var openaiTpl *framework.LLMProviderTemplateResponse
@@ -127,7 +127,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("LLM provider on both gateways: %s (UUID: %s)\n", providerID, prov.UUID)
 	})
 
-	It("should create the agent in the two-env project", func() {
+	It("creates a IT-helpdesk agent to promote across environments", func() {
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -137,7 +137,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("Agent: %s (project=%s)\n", agentName, projectName)
 	})
 
-	It("should complete the build", func() {
+	It("builds the agent image to completion", func() {
 		build.WaitForBuildSuccess(Client, &build.WaitForBuildParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -146,7 +146,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		})
 	})
 
-	It("should deploy to the default environment", func() {
+	It("deploys the agent to the default environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -156,7 +156,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		})
 	})
 
-	It("should add an LLM provider model config covering both environments", func() {
+	It("attaches a model config covering both environments", func() {
 		configuration.CreateAgentModelConfig(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName,
 			framework.CreateAgentModelConfigRequest{
@@ -174,7 +174,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("Model config added for provider: %s\n", providerID)
 	})
 
-	It("should redeploy the default environment with USE_LLM_PROVIDER=true", func() {
+	It("redeploys the default environment with the LLM provider enabled", func() {
 		deps := deployment.GetDeploymentDetails(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName)
 		dep, exists := deps[Cfg.DefaultEnv]
@@ -194,7 +194,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("Default-env redeployment triggered with USE_LLM_PROVIDER=true\n")
 	})
 
-	It("should become active after the default redeploy", func() {
+	It("becomes active after the default-environment redeploy", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:       Cfg.DefaultOrg,
 			ProjectName:   projectName,
@@ -205,11 +205,11 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		})
 	})
 
-	It("should become ready after the default redeploy", func() {
+	It("becomes ready after the default-environment redeploy", func() {
 		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv, 10*time.Minute)
 	})
 
-	It("should respond via the LLM provider in the default environment", func() {
+	It("returns a chat response via the LLM provider in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
 		var endpointURL string
@@ -233,7 +233,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		agentops.InvokeAgentEndpoint(fmt.Sprintf("%s/chat", endpointURL), invokeReq, apiKeyResp.ApiKey)
 	})
 
-	It("should promote with the LLM provider to the second environment", func() {
+	It("promotes the agent with the LLM provider to the second environment", func() {
 		useSource := false
 		resp := agentops.PromoteAgent(Default, Client, Cfg.DefaultOrg, projectName, agentName,
 			framework.PromoteAgentRequest{
@@ -248,7 +248,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("Agent promoted with LLM provider: %s -> %s\n", Cfg.DefaultEnv, secondEnv)
 	})
 
-	It("should deploy with the LLM provider in the second environment", func() {
+	It("deploys the promoted agent with the LLM provider in the second environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -260,7 +260,7 @@ var _ = Describe("LLM Provider Post-Deploy and Promotion (two env)", Label("llm-
 		GinkgoWriter.Printf("Agent deployed with LLM provider in %s\n", secondEnv)
 	})
 
-	It("should serve traffic via the LLM provider in the second environment", func() {
+	It("returns a chat response via the LLM provider in the second environment", func() {
 
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, secondEnv)

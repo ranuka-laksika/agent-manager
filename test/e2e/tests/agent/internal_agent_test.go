@@ -38,7 +38,7 @@ import (
 	traceops "github.com/wso2/agent-manager/test/e2e/operations/trace"
 )
 
-var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent"), Ordered, func() {
+var _ = Describe("Internal chat agent: build → deploy → invoke → observe (single environment)", Label("agent", "internal-agent"), Ordered, func() {
 	const (
 		projectName = framework.E2ESharedProjectName
 		agentName   = framework.SharedITHelpdeskAgentName
@@ -49,7 +49,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		invokeReq   json.RawMessage
 	)
 
-	It("should create the IT helpdesk agent", func() {
+	It("creates an internal IT-helpdesk chat agent from its source repository", func() {
 		Expect(Cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set")
 
 		projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", Cfg.DefaultOrg, projectName)
@@ -71,7 +71,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 			ProjectName: projectName,
 			Request: framework.NewITHelpdeskAgentRequest(
 				agentName,
-				"Single-env IT helpdesk agent",
+				"Internal IT-helpdesk chat agent used by the single-environment agent lifecycle e2e tests",
 				map[string]string{
 					"OPENAI_API_KEY": Cfg.OpenAIAPIKey,
 					"DATABASE_URL":   "http://localhost:5000",
@@ -82,7 +82,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		GinkgoWriter.Printf("Agent created: %s\n", agentName)
 	})
 
-	It("should complete the build", func() {
+	It("builds the agent image to completion", func() {
 		buildName := build.WaitForBuildSuccess(Client, &build.WaitForBuildParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -92,7 +92,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		GinkgoWriter.Printf("Build completed: %s\n", buildName)
 	})
 
-	It("should deploy to the default environment", func() {
+	It("deploys the agent to the default environment", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,
@@ -103,7 +103,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		GinkgoWriter.Printf("Agent deployed: %s\n", agentName)
 	})
 
-	It("should become ready", func() {
+	It("becomes ready and exposes an invocation endpoint", func() {
 		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv, 10*time.Minute)
 
 		endpoints := deployment.GetEndpoints(Default, Client,
@@ -120,7 +120,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		GinkgoWriter.Printf("Agent ready: endpoint=%s\n", endpointURL)
 	})
 
-	It("should respond to invocation", func() {
+	It("returns a chat response when invoked", func() {
 		// Create the API key in the same It as the invocation so its DeferCleanup
 		// revoke runs only after the invocation completes (keeps key count bounded).
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
@@ -134,7 +134,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		agentops.InvokeAgentEndpoint(endpointURL+"/chat", invokeReq, apiKeyResp.ApiKey)
 	})
 
-	It("should have metrics available", func() {
+	It("exposes CPU and memory metrics for the running agent", func() {
 		metrics := agentops.GetMetrics(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
 		Expect(metrics.CPUUsage).NotTo(BeEmpty(), "expected CPU usage metrics")
@@ -142,7 +142,7 @@ var _ = Describe("Internal Chat Agent Lifecycle", Label("agent", "internal-agent
 		GinkgoWriter.Printf("CPU points: %d, Memory points: %d\n", len(metrics.CPUUsage), len(metrics.Memory))
 	})
 
-	It("should have traces available", func() {
+	It("captures a trace for the agent invocation", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
 			Project:      projectName,

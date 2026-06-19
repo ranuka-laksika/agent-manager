@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-judge"), func() {
+var _ = Describe("Past monitor with an LLM-judge evaluator: create, run, and score", Ordered, Label("monitors", "llm-judge"), func() {
 	var (
 		suffix              string
 		traceStartTime      time.Time
@@ -59,7 +59,7 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 			traceStartTime.Format(time.RFC3339), traceEndTime.Format(time.RFC3339))
 	})
 
-	It("should create an LLM provider for LLM-judge evaluator", func() {
+	It("creates an LLM provider for the LLM-judge evaluator", func() {
 		By("Waiting for an active AI gateway")
 		gatewayUUID := gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 
@@ -103,7 +103,7 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 		GinkgoWriter.Printf("LLM provider created: %s (UUID: %s)\n", llmProviderID, prov.UUID)
 	})
 
-	It("should create a past monitor with LLM-judge evaluator", func() {
+	It("creates a past-window monitor using the LLM-judge evaluator", func() {
 		samplingRate := 1.0
 		mon := monitor.CreateMonitor(Default, Client, &monitor.CreateMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
@@ -137,7 +137,7 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 		GinkgoWriter.Printf("LLM-judge monitor created: %s\n", mon.Name)
 	})
 
-	It("should have a completed run with scores", func() {
+	It("completes a monitor run and produces LLM-judge scores", func() {
 		run := monitor.WaitForMonitorRun(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: SharedITHelpdeskAgent.ProjectName,
