@@ -849,9 +849,13 @@ export const ViewLLMProviderComponent: React.FC = () => {
                 )?.uuid : undefined)
               }
               subtitle="Choose the catalog provider for this agent."
-              onSelect={(uuid) =>
-                setPendingProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }))
-              }
+              onSelect={(uuid) => {
+                if (!selectedEnvName) return;
+                setPendingProviderByEnv((prev) => ({
+                  ...prev,
+                  [selectedEnvName]: uuid,
+                }));
+              }}
             />
 
             {(() => {

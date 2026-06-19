@@ -40,9 +40,11 @@ import {
 } from "@agent-management-platform/types";
 import { MCPLogo } from "../components/MCPLogo";
 
-const STATUS_DISPLAY: Record<
-  NonNullable<MCPProxyListItem["status"]>,
-  { label: string; color: "success" | "warning" | "error" }
+const STATUS_DISPLAY: Partial<
+  Record<
+    NonNullable<MCPProxyListItem["status"]>,
+    { label: string; color: "success" | "warning" | "error" }
+  >
 > = {
   deployed: { label: "Deployed", color: "success" },
   pending: { label: "Pending", color: "warning" },
@@ -163,8 +165,8 @@ export function MCPProxyTable() {
                 <ListingTable.Cell>
                   {proxy.status ? (
                     <Chip
-                      label={STATUS_DISPLAY[proxy.status].label}
-                      color={STATUS_DISPLAY[proxy.status].color}
+                      label={STATUS_DISPLAY[proxy.status]?.label ?? proxy.status}
+                      color={STATUS_DISPLAY[proxy.status]?.color ?? "default"}
                       size="small"
                       variant="outlined"
                       sx={{ width: "fit-content" }}
