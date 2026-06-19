@@ -115,6 +115,19 @@ export interface IdentityProviderListResponse {
 
 export type ListIdentityProvidersPathParams = OrgPathParams;
 
+/** Issuer metadata resolved from an OpenID Connect discovery document. */
+export interface OidcDiscoveryResponse {
+  issuer: string;
+  jwksUri: string;
+}
+
+export type DiscoverOidcPathParams = OrgPathParams;
+
+export interface DiscoverOidcQuery {
+  /** Issuer base URL or full .well-known/openid-configuration URL. */
+  url: string;
+}
+
 export interface ListEnvironmentIdentityProvidersPathParams extends OrgPathParams {
   environmentId: string | undefined;
 }

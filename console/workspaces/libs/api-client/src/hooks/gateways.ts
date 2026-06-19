@@ -23,7 +23,10 @@ import type {
   CreateGatewayPathParams,
   CreateGatewayRequest,
   DeleteGatewayPathParams,
+  DiscoverOidcPathParams,
+  DiscoverOidcQuery,
   GatewayListResponse,
+  OidcDiscoveryResponse,
   GatewayResponse,
   GetGatewayPathParams,
   IdentityProviderListResponse,
@@ -38,6 +41,7 @@ import {
   assignGatewayToEnvironment,
   createGateway,
   deleteGateway,
+  discoverOidc,
   getGateway,
   listEnvironmentIdentityProviders,
   listGatewayTokens,
@@ -78,6 +82,20 @@ export function useListIdentityProviders(
     queryKey: ["identity-providers", params],
     queryFn: () => listIdentityProviders(params, getToken),
     enabled: !!params.orgName,
+  });
+}
+
+/**
+ * Resolves issuer + JWKS URI from an OIDC discovery URL to auto-fill the Add
+ * Identity Provider dialog. Triggered on demand (button click); notifications
+ * are suppressed so the dialog can surface success/failure inline.
+ */
+export function useDiscoverOidc(params: DiscoverOidcPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<OidcDiscoveryResponse, unknown, DiscoverOidcQuery>({
+    mutationFn: (query) => discoverOidc(params, query, getToken),
+    showSuccess: false,
+    showError: false,
   });
 }
 

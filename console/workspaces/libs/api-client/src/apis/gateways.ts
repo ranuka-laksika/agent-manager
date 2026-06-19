@@ -20,8 +20,11 @@ import type {
   CreateGatewayPathParams,
   CreateGatewayRequest,
   DeleteGatewayPathParams,
+  DiscoverOidcPathParams,
+  DiscoverOidcQuery,
   GetGatewayPathParams,
   IdentityProviderListResponse,
+  OidcDiscoveryResponse,
   ListEnvironmentIdentityProvidersPathParams,
   ListGatewaysPathParams,
   ListGatewaysQuery,
@@ -256,6 +259,22 @@ export async function listIdentityProviders(
 
   const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/identity-providers`, {
     token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function discoverOidc(
+  params: DiscoverOidcPathParams,
+  query: DiscoverOidcQuery,
+  getToken?: () => Promise<string>,
+): Promise<OidcDiscoveryResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/identity-providers/discover`, {
+    token,
+    searchParams: { url: query.url },
   });
   if (!res.ok) throw await res.json();
   return res.json();

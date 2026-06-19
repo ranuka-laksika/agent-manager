@@ -40,6 +40,7 @@ import {
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import {
+  useDiscoverOidc,
   useListEnvironments,
   useListGateways,
 } from "@agent-management-platform/api-client";
@@ -118,6 +119,12 @@ export function ManageIdentityProviderDialog({
   const [jwksUri, setJwksUri] = useState("");
   const [skipTlsVerify, setSkipTlsVerify] = useState(false);
 
+  // Optional OIDC discovery: paste an issuer / .well-known URL to auto-fill the
+  // issuer and JWKS URI below. Manual entry remains the primary path.
+  const [discoveryUrl, setDiscoveryUrl] = useState("");
+  const [discoveryError, setDiscoveryError] = useState<string | null>(null);
+  const discover = useDiscoverOidc({ orgName: orgId });
+
   const [showToken, setShowToken] = useState(false);
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -136,6 +143,8 @@ export function ManageIdentityProviderDialog({
     setShowToken(false);
     setResolvedToken(null);
     setCopied(false);
+    setDiscoveryUrl("");
+    setDiscoveryError(null);
     if (isDelete && provider) {
       setEnvName(provider.environmentName ?? "");
       setGatewayId(provider.gatewayId ?? "");
@@ -173,6 +182,21 @@ export function ManageIdentityProviderDialog({
       // silently fail
     }
   }, [showToken, getToken]);
+
+  const handleDiscover = useCallback(async () => {
+    const url = discoveryUrl.trim();
+    if (!url) return;
+    setDiscoveryError(null);
+    try {
+      const result = await discover.mutateAsync({ url });
+      setIssuer(result.issuer);
+      setJwksUri(result.jwksUri);
+    } catch {
+      setDiscoveryError(
+        "Could not discover OIDC configuration from that URL. Check the URL or enter the issuer and JWKS URI manually.",
+      );
+    }
+  }, [discoveryUrl, discover]);
 
   const scriptInputs = useCallback(
     (token: string): ScriptInputs => ({
@@ -274,6 +298,31 @@ export function ManageIdentityProviderDialog({
 
             {!isDelete && (
               <>
+                <FormControl fullWidth>
+                  <FormLabel>Discover from URL (optional)</FormLabel>
+                  <Stack direction="row" spacing={1}>
+                    <TextField
+                      size="small"
+                      fullWidth
+                      value={discoveryUrl}
+                      onChange={(e) => setDiscoveryUrl(e.target.value)}
+                      placeholder="https://idp.example.com (or .well-known URL)"
+                    />
+                    <Button
+                      variant="outlined"
+                      onClick={handleDiscover}
+                      disabled={!discoveryUrl.trim() || discover.isPending}
+                    >
+                      {discover.isPending ? "Fetching…" : "Fetch"}
+                    </Button>
+                  </Stack>
+                  <Typography variant="caption" color="text.secondary">
+                    Auto-fills the issuer and JWKS URI from the provider's OpenID configuration.
+                  </Typography>
+                </FormControl>
+
+                {discoveryError && <Alert severity="warning">{discoveryError}</Alert>}
+
                 <FormControl fullWidth>
                   <FormLabel required>Issuer</FormLabel>
                   <TextField
