@@ -313,3 +313,25 @@ jobs:
           name: e2e-test-logs
           path: test/e2e/e2e-output.log
           retention-days: 7
+
+  notify-google-chat:
+    name: Notify Google Chat
+    needs: [compute-version, e2e]
+    runs-on: ubuntu-latest
+    if: ${{ !cancelled() && needs.e2e.result == 'failure' }}
+    steps:
+      - name: Post failure alert
+        env:
+          GCHAT_WEBHOOK_URL: ${{ secrets.GCHAT_WEBHOOK_URL }}
+          DEV_VERSION: ${{ needs.compute-version.outputs.dev-version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "${GCHAT_WEBHOOK_URL}" ]; then
+            echo "::warning::GCHAT_WEBHOOK_URL secret is not set; skipping Chat notification."
+            exit 0
+          fi
+          curl -s -X POST "${GCHAT_WEBHOOK_URL}" \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"text\": \"*🔴 Nightly E2E failed* — \`${DEV_VERSION}\`\n<${RUN_URL}|View run>\"
+            }"
