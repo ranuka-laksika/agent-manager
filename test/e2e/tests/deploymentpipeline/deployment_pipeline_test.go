@@ -49,7 +49,10 @@ var _ = Describe("Deployment pipeline: with two environment promotion path, then
 
 	AfterAll(func() {
 		if scriptParams != nil {
-			_ = envops.RemoveEnvironment(scriptParams)
+			if err := envops.RemoveEnvironment(scriptParams); err != nil {
+				GinkgoWriter.Printf("WARNING: failed to remove environment %q: %v\n", stagingEnv, err)
+				return
+			}
 			GinkgoWriter.Printf("Staging environment removed: %s\n", stagingEnv)
 		}
 	})

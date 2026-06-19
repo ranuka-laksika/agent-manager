@@ -34,7 +34,7 @@ import (
 // E2EProjectPrefix) that were created more than 1 hour ago. It deletes all
 // agents within those projects first, then deletes the projects themselves.
 // This is intended to be called from BeforeSuite before any tests execute.
-const cutoff = 1 * time.Minute
+const cutoff = 1 * time.Hour
 
 func CleanupStaleE2EResources(client *framework.AMPClient, orgName string) {
 
@@ -158,8 +158,21 @@ func cleanupStaleCustomEvaluators(client *framework.AMPClient, orgName string) {
 			continue
 		}
 		delResp.Body.Close()
-		// A 409 means an active monitor still references it and its from current run; log and move on.
-		ginkgo.GinkgoWriter.Printf("stale cleanup: deleted custom evaluator %s (status %d)\n", e.Identifier, delResp.StatusCode)
+		logDeleteResult("custom evaluator", e.Identifier, delResp.StatusCode)
+	}
+}
+
+// logDeleteResult reports a stale-cleanup DELETE outcome without misreporting a
+// non-2xx response as a successful deletion: 204/404 are success, 409 means the
+// resource is still referenced (guard) and is skipped, anything else is a failure.
+func logDeleteResult(kind, name string, status int) {
+	switch status {
+	case http.StatusNoContent, http.StatusNotFound:
+		ginkgo.GinkgoWriter.Printf("stale cleanup: deleted %s %s (status %d)\n", kind, name, status)
+	case http.StatusConflict:
+		ginkgo.GinkgoWriter.Printf("stale cleanup: %s %s still in use (status %d), skipping\n", kind, name, status)
+	default:
+		ginkgo.GinkgoWriter.Printf("stale cleanup: delete %s %s returned status %d (not removed)\n", kind, name, status)
 	}
 }
 
@@ -210,8 +223,7 @@ func cleanupStaleDeploymentPipelines(client *framework.AMPClient, orgName string
 			continue
 		}
 		delResp.Body.Close()
-		// A 409 means a project still references it (guard); log and move on.
-		ginkgo.GinkgoWriter.Printf("stale cleanup: deleted deployment pipeline %s (status %d)\n", p.Name, delResp.StatusCode)
+		logDeleteResult("deployment pipeline", p.Name, delResp.StatusCode)
 	}
 }
 
@@ -261,7 +273,7 @@ func cleanupStaleLLMProviders(client *framework.AMPClient, orgName string) {
 			continue
 		}
 		delResp.Body.Close()
-		ginkgo.GinkgoWriter.Printf("stale cleanup: deleted LLM provider %s (status %d)\n", p.ID, delResp.StatusCode)
+		logDeleteResult("LLM provider", p.ID, delResp.StatusCode)
 	}
 }
 

@@ -128,12 +128,7 @@ var _ = Describe("Agent catalog: publish a kind, create an agent from it, deploy
 	It("returns a chat response from the kind-based agent in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, fromKindAgent, Cfg.DefaultEnv)
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL = deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
@@ -181,12 +176,7 @@ var _ = Describe("Agent catalog: publish a kind, create an agent from it, deploy
 
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, fromKindAgent, envName)
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL = deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL in new env should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,

@@ -48,6 +48,13 @@ func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName st
 		g.Expect(err).NotTo(HaveOccurred(), "list gateways request failed (%s)", scope)
 		defer resp.Body.Close()
 
+		// A 4xx is a client/config error (bad scope, auth, missing route) that
+		// will not resolve by waiting — fail fast instead of polling to timeout.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			lastDiag = fmt.Sprintf("%s | list gateways returned %d (non-retryable)", scope, resp.StatusCode)
+			StopTrying(fmt.Sprintf("list gateways returned %d (%s)", resp.StatusCode, scope)).Now()
+		}
+
 		gateways := framework.ExpectStatusAndDecode[framework.GatewayListResponse](g, resp, 200)
 
 		var found bool

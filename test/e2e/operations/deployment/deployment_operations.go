@@ -19,6 +19,7 @@ package deployment
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -114,4 +115,23 @@ func GetEndpoints(g Gomega, client *framework.AMPClient, orgName, projName, agen
 	framework.ExpectStatus(g, resp, 200)
 
 	return framework.DecodeBody[map[string]framework.EndpointConfiguration](g, resp)
+}
+
+// FirstEndpointURL returns the first non-empty endpoint URL using a deterministic
+// order (endpoint keys sorted ascending). Ranging over the endpoints map directly
+// is non-deterministic in Go, which can make invocation specs flaky and, worse,
+// pick a different endpoint across environments. Returns "" when no endpoint has a
+// URL, so callers always overwrite their target (no stale value from a prior env).
+func FirstEndpointURL(endpoints map[string]framework.EndpointConfiguration) string {
+	keys := make([]string, 0, len(endpoints))
+	for k := range endpoints {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if ep := endpoints[k]; ep.URL != "" {
+			return ep.URL
+		}
+	}
+	return ""
 }

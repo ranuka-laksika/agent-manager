@@ -212,13 +212,7 @@ var _ = Describe("Internal agent configured with a LLM provider and promote acro
 	It("returns a chat response via the LLM provider in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
-		var endpointURL string
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL := deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
@@ -264,13 +258,7 @@ var _ = Describe("Internal agent configured with a LLM provider and promote acro
 
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, secondEnv)
-		var endpointURL string
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL := deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL in second env should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,

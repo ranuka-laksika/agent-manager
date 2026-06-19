@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -14,6 +13,20 @@ import (
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
 )
+
+// httpStatusFromErr extracts the HTTP status code from an error produced by
+// ListTraces, which formats non-2xx responses as "status %d: <body>". Returns
+// (code, true) when a leading status code is present, (0, false) otherwise.
+func httpStatusFromErr(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+	var code int
+	if _, scanErr := fmt.Sscanf(err.Error(), "status %d:", &code); scanErr == nil {
+		return code, true
+	}
+	return 0, false
+}
 
 // ListTracesParams holds query parameters for listing traces.
 type ListTracesParams struct {
@@ -110,7 +123,9 @@ func WaitForTraces(client *framework.AMPClient, params *WaitForTracesParams) fra
 			lastDiag = fmt.Sprintf("%s | attempt %d | request error: %v", scope, attempt, err)
 			// A 4xx is a client/config error (bad scope, auth, missing route) that won't
 			// fix itself by waiting — fail fast with the full status+body from ListTraces.
-			if strings.Contains(err.Error(), "status 4") {
+			// ListTraces formats non-2xx as "status %d: <body>", so parse the code rather
+			// than substring-matching (a body containing "status 4" must not trip this).
+			if code, ok := httpStatusFromErr(err); ok && code >= 400 && code < 500 {
 				StopTrying(fmt.Sprintf("list traces request failed (%s): %v", scope, err)).Now()
 			}
 			ginkgo.GinkgoWriter.Printf("[traces] attempt %d (%s): request error: %v\n", attempt, scope, err)

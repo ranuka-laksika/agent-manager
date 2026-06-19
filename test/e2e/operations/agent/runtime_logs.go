@@ -63,7 +63,7 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 		attempt++
 		req := framework.LogFilterRequest{
 			EnvironmentName: params.Environment,
-			StartTime:       time.Now().Add(-600 * time.Minute).UTC().Format(time.RFC3339),
+			StartTime:       time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339),
 			EndTime:         time.Now().Add(1 * time.Minute).UTC().Format(time.RFC3339),
 			Limit:           100,
 			SortOrder:       "desc",

@@ -33,6 +33,9 @@ func AttachOnFailure(label string, get func() string) {
 		if !ginkgo.CurrentSpecReport().Failed() {
 			return
 		}
+		if get == nil {
+			return
+		}
 		if content := get(); content != "" {
 			ginkgo.AddReportEntry(label, content)
 		}

@@ -108,12 +108,7 @@ var _ = Describe("Internal chat agent: build → deploy → invoke → observe (
 
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL = deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL should not be empty")
 
 		invokeReq = framework.DefaultInvokeRequest()

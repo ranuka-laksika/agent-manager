@@ -78,18 +78,23 @@ var _ = Describe("Agent configuration: update env vars, redeploy, and verify in 
 		configs := configuration.GetAgentConfigurations(Default, Client,
 			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
 
+		var foundDB, foundOpenAI bool
 		for _, c := range configs.Configurations.Env {
 			if c.Key == "DATABASE_URL" {
+				foundDB = true
 				Expect(c.Value).To(Equal("http://localhost:5000"), "DATABASE_URL should have initial value")
 				Expect(c.IsSensitive).To(BeFalse(), "DATABASE_URL should not be sensitive")
 			}
 			if c.Key == "OPENAI_API_KEY" {
+				foundOpenAI = true
 				Expect(c.IsSensitive).To(BeTrue(), "OPENAI_API_KEY should be sensitive")
 				Expect(c.Value).To(BeEmpty(), "sensitive config value should be masked")
 				Expect(c.SecretRef).NotTo(BeEmpty(), "OPENAI_API_KEY should have a secretRef")
 				sensitiveSecretRef = c.SecretRef
 			}
 		}
+		Expect(foundDB).To(BeTrue(), "DATABASE_URL should exist in the initial configuration")
+		Expect(foundOpenAI).To(BeTrue(), "OPENAI_API_KEY should exist in the initial configuration")
 		GinkgoWriter.Printf("Initial configurations verified; OPENAI_API_KEY secretRef=%s\n", sensitiveSecretRef)
 	})
 
@@ -133,12 +138,15 @@ var _ = Describe("Agent configuration: update env vars, redeploy, and verify in 
 		configs := configuration.GetAgentConfigurations(Default, Client,
 			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
 
+		var foundDB bool
 		for _, c := range configs.Configurations.Env {
 			if c.Key == "DATABASE_URL" {
+				foundDB = true
 				Expect(c.Value).To(Equal("http://localhost:6000"),
 					"DATABASE_URL should have the updated value")
 			}
 		}
+		Expect(foundDB).To(BeTrue(), "DATABASE_URL should still exist after redeploy")
 	})
 
 	It("surfaces the invalid-API-key error in the agent runtime logs", func() {

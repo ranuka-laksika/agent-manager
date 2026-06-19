@@ -175,22 +175,40 @@ func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunPar
 		})
 
 		var found bool
+		var pending bool
+		var failedRun *framework.MonitorRunResponse
 		statuses := make([]string, 0, len(runs.Runs))
-		for _, run := range runs.Runs {
+		for i := range runs.Runs {
+			run := runs.Runs[i]
 			statuses = append(statuses, run.Status)
-			if run.Status == "failed" {
-				errMsg := ""
-				if run.ErrorMessage != nil {
-					errMsg = *run.ErrorMessage
-				}
-				lastDiag = fmt.Sprintf("%s | attempt %d | run %s failed: %s", scope, attempt, run.ID, errMsg)
-				StopTrying(fmt.Sprintf("monitor run %s failed (%s): %s", run.ID, scope, errMsg)).Now()
-			}
-			if run.Status == "success" {
+			switch run.Status {
+			case "success":
 				completedRun = run
 				found = true
+			case "failed":
+				if failedRun == nil {
+					failedRun = &runs.Runs[i]
+				}
+			default:
+				// pending / running / queued — still in progress.
+				pending = true
+			}
+			if found {
 				break
 			}
+		}
+
+		// Fail-fast only when a run failed and nothing succeeded or is still in
+		// progress. The run list may include historical runs in an unspecified
+		// order, so a single failed run must not abort while a newer run could
+		// still be progressing toward (or already at) success.
+		if !found && failedRun != nil && !pending {
+			errMsg := ""
+			if failedRun.ErrorMessage != nil {
+				errMsg = *failedRun.ErrorMessage
+			}
+			lastDiag = fmt.Sprintf("%s | attempt %d | run %s failed: %s", scope, attempt, failedRun.ID, errMsg)
+			StopTrying(fmt.Sprintf("monitor run %s failed (%s): %s", failedRun.ID, scope, errMsg)).Now()
 		}
 
 		lastDiag = fmt.Sprintf("%s | attempt %d | %d run(s) statuses=%v, no success yet", scope, attempt, len(runs.Runs), statuses)

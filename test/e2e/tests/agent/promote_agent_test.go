@@ -111,12 +111,7 @@ var _ = Describe("Agent promotion: deploy in default env, promote to a second en
 	It("serves chat traffic in the default environment", func() {
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, Cfg.DefaultEnv)
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL = deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
@@ -165,12 +160,7 @@ var _ = Describe("Agent promotion: deploy in default env, promote to a second en
 
 		endpoints := deployment.GetEndpoints(Default, Client,
 			Cfg.DefaultOrg, projectName, agentName, secondEnv)
-		for _, ep := range endpoints {
-			if ep.URL != "" {
-				endpointURL = ep.URL
-				break
-			}
-		}
+		endpointURL = deployment.FirstEndpointURL(endpoints)
 		Expect(endpointURL).NotTo(BeEmpty(), "agent endpoint URL in second env should not be empty")
 
 		apiKeyResp := agentops.CreateAgentAPIKey(Default, Client,
