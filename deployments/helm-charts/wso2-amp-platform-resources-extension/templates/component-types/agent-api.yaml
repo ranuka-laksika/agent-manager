@@ -51,7 +51,7 @@ spec:
               default: "100m"
             memory:
               type: string
-              default: "256Mi"
+              default: "512Mi"
         ResourceRequirements:
           type: object
           properties:
