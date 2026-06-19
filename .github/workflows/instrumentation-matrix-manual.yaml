@@ -233,7 +233,14 @@ jobs:
             | while read -r ns pod; do
                 echo "----- $ns/$pod -----"
                 kubectl describe pod -n "$ns" "$pod" 2>/dev/null | sed -n '/Events:/,$p' | tail -25
-                kubectl logs -n "$ns" "$pod" --all-containers --tail=80 2>/dev/null
+                echo "..... container statuses (lastState/exitCode/reason) ....."
+                kubectl get pod -n "$ns" "$pod" -o jsonpath='{range .status.containerStatuses[*]}{.name}{": restarts="}{.restartCount}{" state="}{.state}{" lastState="}{.lastState}{"\n"}{end}' 2>/dev/null
+                echo "..... resources (requests/limits) ....."
+                kubectl get pod -n "$ns" "$pod" -o jsonpath='{range .spec.containers[*]}{.name}{": "}{.resources}{"\n"}{end}' 2>/dev/null
+                echo "..... current logs (all containers) ....."
+                kubectl logs -n "$ns" "$pod" --all-containers --tail=120 2>/dev/null
+                echo "..... PREVIOUS main-container logs (the crash) ....."
+                kubectl logs -n "$ns" "$pod" -c main --previous --tail=120 2>/dev/null
               done
           echo "=== OpenChoreo / gateway CRD kinds present ==="
           mapfile -t KINDS < <(kubectl get crd -o name 2>/dev/null | grep -iE 'openchoreo|api-platform|wso2' | sed 's#.*/##')
