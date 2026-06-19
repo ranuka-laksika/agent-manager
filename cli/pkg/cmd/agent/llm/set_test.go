@@ -154,6 +154,36 @@ func Test_runSet_createCarriesEnvVars(t *testing.T) {
 	}
 }
 
+// Invalid env-var names must be rejected client-side, before any API call, so
+// the user gets early feedback instead of a server rejection. Empty routes mean
+// any HTTP request would 500 with NOT_STUBBED — reaching one is a test failure.
+func Test_runSet_rejectsInvalidEnvVarName(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		set     func(*SetOptions)
+		wantArg string
+	}{
+		{name: "url-env", set: func(o *SetOptions) { o.URLEnv = "1BAD" }, wantArg: "--url-env"},
+		{name: "apikey-env", set: func(o *SetOptions) { o.APIKeyEnv = "BAD-KEY" }, wantArg: "--apikey-env"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			io, out, _ := newTestIO(true)
+			client, cleanup := newClient(t, map[string]route{})
+			defer cleanup()
+
+			opts := newSetOpts(io, client)
+			opts.Env, opts.Provider = "dev", "openai"
+			tc.set(opts)
+			if err := runSet(context.Background(), opts); err == nil {
+				t.Fatalf("expected error for invalid %s", tc.wantArg)
+			}
+			if !strings.Contains(out.String(), tc.wantArg) {
+				t.Errorf("error output %q does not mention %s", out.String(), tc.wantArg)
+			}
+		})
+	}
+}
+
 func Test_runSet_createServerError(t *testing.T) {
 	io, out, _ := newTestIO(true)
 	client, cleanup := newClient(t, map[string]route{

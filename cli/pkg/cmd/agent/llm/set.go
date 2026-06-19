@@ -95,6 +95,16 @@ func runSet(ctx context.Context, o *SetOptions) error {
 	if err := cmdutil.ValidatePathParam("agent name", o.AgentName); err != nil {
 		return render.Error(o.IO, o.Scope, err)
 	}
+	if o.URLEnv != "" {
+		if err := cmdutil.ValidateEnvVarName("--url-env", o.URLEnv); err != nil {
+			return render.Error(o.IO, o.Scope, err)
+		}
+	}
+	if o.APIKeyEnv != "" {
+		if err := cmdutil.ValidateEnvVarName("--apikey-env", o.APIKeyEnv); err != nil {
+			return render.Error(o.IO, o.Scope, err)
+		}
+	}
 	client, err := o.Client(ctx)
 	if err != nil {
 		return render.Error(o.IO, o.Scope, err)
