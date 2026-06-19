@@ -42,10 +42,9 @@ import {
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useListDataPlanes } from "@agent-management-platform/api-client";
 import { globalConfig, type DataPlane } from "@agent-management-platform/types";
+import { getRawScriptUrl } from "@agent-management-platform/shared-component";
 import { createEnvironmentSchema, type CreateEnvironmentFormValues } from "../form/environmentSchema";
 
-const SCRIPT_URL =
-  "https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/add-environment.sh";
 const TOKEN_MASK = "•••••••••••••••";
 
 interface CreateEnvironmentDrawerProps {
@@ -87,7 +86,7 @@ function buildScript(
   const internalCp = globalConfig.agentManagerInternalCpHost?.trim();
 
   const lines = [
-    `curl -fsSL ${SCRIPT_URL} \\`,
+    `curl -fsSL ${getRawScriptUrl("add-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
     `    DISPLAY_NAME="${displayName || "<display-name>"}" \\`,
     `    AGENT_MANAGER_TOKEN=${token} \\`,
