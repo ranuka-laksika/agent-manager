@@ -34,13 +34,16 @@ import {
 } from "@wso2/oxygen-ui-icons-react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import { type AgentModelConfigListItem } from "@agent-management-platform/types";
+// This table is generic over an agent's configs (LLM, MCP, ...). The types lib
+// intentionally aliases the MCP list response to the model-config one, so the
+// item shape is genuinely shared; alias it to a neutral name for readability.
+import { type AgentModelConfigListItem as AgentConfigListItem } from "@agent-management-platform/types";
 import {
   ConfigTableEmptyState,
   ConfigTableSection,
 } from "./ConfigTableSection";
 
-const COLUMN_COUNT = 4;
+const COLUMN_COUNT = 3;
 const ROWS_PER_PAGE_OPTIONS = [10, 25, 50];
 
 /** Copy that distinguishes one agent-config listing (LLM, MCP, ...) from another. */
@@ -56,13 +59,13 @@ export interface AgentConfigTableLabels {
   searchEmptyDescription: string;
   removeTitle: string;
   removeTooltip: string;
-  removeConfirmation: (config: AgentModelConfigListItem) => string;
-  removeAriaLabel: (config: AgentModelConfigListItem) => string;
+  removeConfirmation: (config: AgentConfigListItem) => string;
+  removeAriaLabel: (config: AgentConfigListItem) => string;
 }
 
 interface AgentConfigTableSectionProps {
   /** Configs of a single type, sliced from the page's one model-config call. */
-  configs: AgentModelConfigListItem[];
+  configs: AgentConfigListItem[];
   isLoading: boolean;
   error: unknown;
   labels: AgentConfigTableLabels;
@@ -71,6 +74,8 @@ interface AgentConfigTableSectionProps {
   /** Builds the absolute path to a config's detail page. */
   getViewPath: (configId: string) => string;
   onRemove: (configId: string) => void;
+  /** Disables the row remove action while a delete is in flight. */
+  isRemoving?: boolean;
 }
 
 /**
@@ -86,6 +91,7 @@ export function AgentConfigTableSection({
   addPath,
   getViewPath,
   onRemove,
+  isRemoving = false,
 }: AgentConfigTableSectionProps) {
   const { orgId, projectId, agentId } = useParams<{
     orgId: string;
@@ -133,7 +139,7 @@ export function AgentConfigTableSection({
     setPage(0);
   };
 
-  const handleDelete = (config: AgentModelConfigListItem) => {
+  const handleDelete = (config: AgentConfigListItem) => {
     addConfirmation({
       title: labels.removeTitle,
       description: labels.removeConfirmation(config),
@@ -171,8 +177,7 @@ export function AgentConfigTableSection({
   const tableHeader = (
     <ListingTable.Head>
       <ListingTable.Row>
-        <ListingTable.Cell width="25%">Name</ListingTable.Cell>
-        <ListingTable.Cell width="45%">Description</ListingTable.Cell>
+        <ListingTable.Cell width="70%">Name</ListingTable.Cell>
         <ListingTable.Cell width="20%">Created</ListingTable.Cell>
         <ListingTable.Cell width="10%" align="right">
           Actions
@@ -223,6 +228,9 @@ export function AgentConfigTableSection({
     <ConfigTableSection
       title={labels.title}
       toolbar={toolbar}
+      // Keep the search/toolbar visible whenever the agent has configs of this
+      // type, so filtering down to zero results doesn't hide the search input.
+      showToolbar={configs.length > 0}
       tableHeader={tableHeader}
       isLoading={isLoading}
       hasRows={filteredConfigs.length > 0}
@@ -253,11 +261,6 @@ export function AgentConfigTableSection({
             <Typography variant="body2">{config.name}</Typography>
           </ListingTable.Cell>
           <ListingTable.Cell>
-            <Typography variant="body2" color="text.secondary">
-              {config.description ?? "—"}
-            </Typography>
-          </ListingTable.Cell>
-          <ListingTable.Cell>
             {config.createdAt
               ? formatDistanceToNow(new Date(config.createdAt), {
                   addSuffix: true,
@@ -269,6 +272,7 @@ export function AgentConfigTableSection({
               <IconButton
                 color="error"
                 size="small"
+                disabled={isRemoving}
                 onClick={(e: React.MouseEvent) => {
                   e.stopPropagation();
                   handleDelete(config);

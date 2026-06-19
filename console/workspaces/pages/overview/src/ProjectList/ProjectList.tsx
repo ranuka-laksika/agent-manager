@@ -201,7 +201,7 @@ function SkeletonCard() {
         pointerEvents: "none",
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+      <Box sx={{ display: "flex", alignItems: "flex-start", width: '100%', gap: 1.5 }}>
         <Skeleton variant="circular" width={44} height={44} />
         <Box sx={{ flex: 1 }}>
           <Skeleton variant="text" width="55%" height={22} sx={{ mb: 0.5 }} />
@@ -326,17 +326,17 @@ export function ProjectList() {
           {isLoadingProjects || isDeletingProject
             ? Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)
             : filteredProjects.map((project) => (
-                <ProjectCard
-                  key={project.name}
-                  project={project}
-                  pipeline={
-                    project.deploymentPipeline
-                      ? pipelineMap.get(project.deploymentPipeline)
-                      : undefined
-                  }
-                  handleDeleteProject={handleDeleteProject}
-                />
-              ))}
+              <ProjectCard
+                key={project.name}
+                project={project}
+                pipeline={
+                  project.deploymentPipeline
+                    ? pipelineMap.get(project.deploymentPipeline)
+                    : undefined
+                }
+                handleDeleteProject={handleDeleteProject}
+              />
+            ))}
         </Box>
       </Box>
     </PageLayout>

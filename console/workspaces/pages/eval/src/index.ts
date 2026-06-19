@@ -20,19 +20,19 @@ import { EvalMonitorsComponent } from "./EvalMonitors.Component";
 import { CreateMonitorComponent } from "./CreateMonitor.Component";
 import { ViewMonitorComponent } from "./ViewMonitor.Component";
 import { EditMonitorComponent } from "./EditMonitor.Component";
-import { EvalEvaluatorsComponent } from "./EvalEvaluators.Component";
-import { CreateEvaluatorComponent } from "./CreateEvaluator.Component";
-import { ViewEvaluatorComponent } from "./ViewEvaluator.Component";
-import { EditEvaluatorComponent } from "./EditEvaluator.Component";
+import { EvalEvaluatorsOrganization } from "./EvalEvaluators.Organization";
+import { CreateEvaluatorOrganization } from "./CreateEvaluator.Organization";
+import { ViewEvaluatorOrganization } from "./ViewEvaluator.Organization";
+import { EditEvaluatorOrganization } from "./EditEvaluator.Organization";
 
 import type { EvalPageMetadata } from '@agent-management-platform/types';
 import { MonitorCheck, Code } from "@wso2/oxygen-ui-icons-react";
 
 export const metaData: EvalPageMetadata = {
   pages: {
-    component: {
+    organization: {
       evalEvaluators: {
-        component: EvalEvaluatorsComponent,
+        component: EvalEvaluatorsOrganization,
         icon: Code,
         title: "Evaluators",
         description:
@@ -40,21 +40,21 @@ export const metaData: EvalPageMetadata = {
         path: "/eval/evaluators",
       },
       createEvaluator: {
-        component: CreateEvaluatorComponent,
+        component: CreateEvaluatorOrganization,
         icon: Code,
         title: "Create Evaluator",
         description: "Wizard for creating a custom evaluator.",
         path: "/eval/evaluators/create",
       },
       viewEvaluator: {
-        component: ViewEvaluatorComponent,
+        component: ViewEvaluatorOrganization,
         icon: Code,
         title: "View Evaluator",
         description: "Detail page for an evaluator.",
         path: "/eval/evaluators/view",
       },
       editEvaluator: {
-        component: EditEvaluatorComponent,
+        component: EditEvaluatorOrganization,
         icon: Code,
         title: "Edit Evaluator",
         description: "Edit an existing custom evaluator.",
@@ -95,10 +95,10 @@ export {
   CreateMonitorComponent,
   ViewMonitorComponent,
   EditMonitorComponent,
-  EvalEvaluatorsComponent,
-  CreateEvaluatorComponent,
-  ViewEvaluatorComponent,
-  EditEvaluatorComponent,
+  EvalEvaluatorsOrganization,
+  CreateEvaluatorOrganization,
+  ViewEvaluatorOrganization,
+  EditEvaluatorOrganization,
 };
 
 export default EvalMonitorsComponent;

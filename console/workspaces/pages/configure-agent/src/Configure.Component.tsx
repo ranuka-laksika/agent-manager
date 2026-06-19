@@ -93,8 +93,10 @@ export const ConfigureComponent: React.FC = () => {
     { orgName: orgId, projName: projectId, agentName: agentId },
     { limit: 1000, offset: 0 },
   );
-  const { mutate: deleteLLMConfig } = useDeleteAgentModelConfig();
-  const { mutate: deleteMCPConfig } = useDeleteAgentMCPConfig();
+  const { mutate: deleteLLMConfig, isPending: isRemovingLLM } =
+    useDeleteAgentModelConfig();
+  const { mutate: deleteMCPConfig, isPending: isRemovingMCP } =
+    useDeleteAgentMCPConfig();
 
   const llmConfigs = useMemo(() => llmData?.configs ?? [], [llmData]);
   const mcpConfigs = useMemo(() => mcpData?.configs ?? [], [mcpData]);
@@ -127,7 +129,7 @@ export const ConfigureComponent: React.FC = () => {
           orgId,
           projectId,
           agentId,
-          configId,
+          configId: encodeURIComponent(configId),
         })
       : "#";
   const getMcpViewPath = (configId: string) =>
@@ -149,6 +151,7 @@ export const ConfigureComponent: React.FC = () => {
         labels={llmLabels}
         addPath={llmAddPath}
         getViewPath={getLlmViewPath}
+        isRemoving={isRemovingLLM}
         onRemove={(configId) =>
           deleteLLMConfig({
             ...deleteParams,
@@ -164,6 +167,7 @@ export const ConfigureComponent: React.FC = () => {
         labels={mcpLabels}
         addPath={mcpAddPath}
         getViewPath={getMcpViewPath}
+        isRemoving={isRemovingMCP}
         onRemove={(configId) =>
           deleteMCPConfig({
             ...deleteParams,

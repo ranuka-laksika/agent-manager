@@ -47,7 +47,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, BookOpen, Pencil } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, BookOpen, Edit, Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useLocation, useNavigate, useParams } from "react-router-dom";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
@@ -60,6 +60,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { ProviderDisplay } from "./AddLLMProvider.Component";
 import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
+import { EmptyConfigCard } from "./Configure/subComponents/EmptyConfigCard";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
 
 function generateDisplayName(key: string): string {
@@ -423,55 +424,61 @@ export const ViewLLMProviderComponent: React.FC = () => {
       }
     > = {};
 
-    for (const [envName, mapping] of Object.entries(
-      config.envMappings ?? {},
-    )) {
-      const pConfig = mapping.configuration;
-      if (pConfig) {
-        // Resolve provider name: use pending selection if changed, else keep original
-        const pendingUuid = pendingProviderByEnv[envName];
-        const resolvedProviderName = pendingUuid
-          ? (providers.find((p) => p.uuid === pendingUuid)?.id ?? pConfig.providerName)
-          : pConfig.providerName;
+    // Cover both environments that already have a mapping and ones that only
+    // gained a provider in this session (newly selected for an empty env).
+    const editedEnvNames = new Set([
+      ...Object.keys(config.envMappings ?? {}),
+      ...Object.keys(pendingProviderByEnv),
+    ]);
 
-        const envGuardrails = guardrailsByEnv[envName];
-        if (envGuardrails !== undefined) {
-          // Environment was edited — build policies from edited guardrails
-          const envPolicies =
-            envGuardrails.length > 0
-              ? envGuardrails.map((g) => ({
-                name: g.name,
-                version: g.version,
-                paths: [
-                  {
-                    path: "/*",
-                    methods: ["*"],
-                    params: g.settings ?? {},
-                  },
-                ],
-              }))
-              : undefined;
-          envMappings[envName] = {
-            providerName: resolvedProviderName,
-            configuration: { policies: envPolicies },
-          };
-        } else {
-          // Environment not loaded — preserve original policies intact
-          envMappings[envName] = {
-            providerName: resolvedProviderName,
-            configuration: {
-              policies: pConfig.policies?.map((p) => ({
-                name: p.name,
-                version: p.version,
-                paths: p.paths.map((pp) => ({
-                  path: pp.path,
-                  methods: pp.methods,
-                  params: pp.params ?? {},
-                })),
+    for (const envName of editedEnvNames) {
+      const pConfig = config.envMappings?.[envName]?.configuration;
+      // Resolve provider name: use pending selection if changed, else keep original
+      const pendingUuid = pendingProviderByEnv[envName];
+      const resolvedProviderName = pendingUuid
+        ? (providers.find((p) => p.uuid === pendingUuid)?.id ?? pConfig?.providerName)
+        : pConfig?.providerName;
+
+      // Skip environments that have neither an existing nor a newly picked provider.
+      if (!resolvedProviderName) continue;
+
+      const envGuardrails = guardrailsByEnv[envName];
+      if (envGuardrails !== undefined) {
+        // Environment was edited — build policies from edited guardrails
+        const envPolicies =
+          envGuardrails.length > 0
+            ? envGuardrails.map((g) => ({
+              name: g.name,
+              version: g.version,
+              paths: [
+                {
+                  path: "/*",
+                  methods: ["*"],
+                  params: g.settings ?? {},
+                },
+              ],
+            }))
+            : undefined;
+        envMappings[envName] = {
+          providerName: resolvedProviderName,
+          configuration: { policies: envPolicies },
+        };
+      } else {
+        // Environment not loaded — preserve original policies intact
+        envMappings[envName] = {
+          providerName: resolvedProviderName,
+          configuration: {
+            policies: pConfig?.policies?.map((p) => ({
+              name: p.name,
+              version: p.version,
+              paths: p.paths.map((pp) => ({
+                path: pp.path,
+                methods: pp.methods,
+                params: pp.params ?? {},
               })),
-            },
-          };
-        }
+            })),
+          },
+        };
       }
     }
 
@@ -548,9 +555,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const apiKeyValue = providerConfig?.authInfo?.value;
 
-  const pageTitle = catalogProvider?.name
-    ?? providerConfig?.providerName
-    ?? config.name;
+  const pageTitle =
+    config.name || catalogProvider?.name || providerConfig?.providerName;
 
   const hasEmptyEnvVarName = (config.environmentVariables ?? []).some(
     (ev) => (envVarNames[ev.key] ?? ev.name).trim() === "",
@@ -804,7 +810,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
         )}
 
         <Form.Section>
-          <Form.Header>Service Provider</Form.Header>
+          <Form.Subheader>Service Provider</Form.Subheader>
           <Stack spacing={3}>
 
             {environments.length > 1 && (
@@ -817,7 +823,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
                 <Tabs
                   value={selectedEnvIndex}
                   onChange={(_, v: number) => setSelectedEnvIndex(v)}
-                  sx={{ mb: 2 }}
+                  sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
                 >
                   {environments.map((enTab, idx) => (
                     <Tab
@@ -843,13 +849,31 @@ export const ViewLLMProviderComponent: React.FC = () => {
                 )?.uuid : undefined)
               }
               subtitle="Choose the catalog provider for this agent."
-              onSelect={(uuid) =>
-                setPendingProviderByEnv((prev) => ({ ...prev, [selectedEnvName]: uuid }))
-              }
+              onSelect={(uuid) => {
+                if (!selectedEnvName) return;
+                setPendingProviderByEnv((prev) => ({
+                  ...prev,
+                  [selectedEnvName]: uuid,
+                }));
+              }}
             />
 
-            {providerConfig && (() => {
+            {(() => {
               const pendingUuid = pendingProviderByEnv[selectedEnvName];
+
+              // No provider configured for this environment and none picked yet
+              // — offer to add one instead of hiding the section entirely.
+              if (!providerConfig && !pendingUuid) {
+                return (
+                  <EmptyConfigCard
+                    message="No provider is configured for this environment yet."
+                    actionLabel="Select Provider"
+                    actionIcon={<Plus size={16} />}
+                    onAction={() => setProviderDrawerOpen(true)}
+                  />
+                );
+              }
+
               const displayProvider = pendingUuid
                 ? providers.find((p) => p.uuid === pendingUuid)
                 : null;
@@ -866,7 +890,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
                   : null);
 
               return (
-                <Card>
+                <Card variant="outlined">
                   <CardContent sx={{ position: "relative" }}>
                     <Tooltip title="Change provider" placement="top" arrow>
                       <IconButton
@@ -876,14 +900,14 @@ export const ViewLLMProviderComponent: React.FC = () => {
                         onClick={() => setProviderDrawerOpen(true)}
                         aria-label="Change provider"
                       >
-                        <Pencil size={16} />
+                        <Edit size={16} />
                       </IconButton>
                     </Tooltip>
                     <ProviderDisplay
                       provider={
                         displayCatalog
                           ? {
-                            name: displayCatalog.name ?? providerConfig.providerName ?? "",
+                            name: displayCatalog.name ?? providerConfig?.providerName ?? "",
                             template: displayCatalog.template,
                             version: displayCatalog.version,
                             deployments: displayCatalog.deployments,
@@ -891,7 +915,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
                             rateLimiting: displayCatalog.rateLimiting,
                             policies: displayCatalog.policies,
                           }
-                          : { name: providerConfig.providerName ?? "" }
+                          : { name: providerConfig?.providerName ?? "" }
                       }
                       isSelected={false}
                       hideCheckbox

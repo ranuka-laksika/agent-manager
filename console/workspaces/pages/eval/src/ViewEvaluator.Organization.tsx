@@ -599,7 +599,7 @@ interface EditValues {
 // Component
 // ---------------------------------------------------------------------------
 
-export const ViewEvaluatorComponent: React.FC = () => {
+export const ViewEvaluatorOrganization: React.FC = () => {
   const { orgId, evaluatorId } = useParams<{
     orgId: string;
     evaluatorId: string;

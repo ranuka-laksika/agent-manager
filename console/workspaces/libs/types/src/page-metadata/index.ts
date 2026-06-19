@@ -54,7 +54,7 @@ export interface EvalPageEntry {
  */
 export interface EvalPageMetadata {
   pages: {
-    component: Record<string, EvalPageEntry>;
+    organization: Record<string, EvalPageEntry>;
   };
 }
 
