@@ -83,6 +83,7 @@ const sidebars: SidebarsConfig = {
             'reference/cli/context',
             'reference/cli/project',
             'reference/cli/agent',
+            'reference/cli/llm-provider',
             'reference/cli/skills',
             'reference/cli/version',
           ],
