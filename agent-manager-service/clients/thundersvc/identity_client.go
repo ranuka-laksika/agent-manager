@@ -876,6 +876,35 @@ func (c *thunderClient) InviteUser(ctx context.Context, email string, ouID strin
 		return "", err
 	}
 
+	// flowStep holds only what we need from each intermediate response.
+	type inviteFlowStep struct {
+		ExecutionID    string `json:"executionId"`
+		ChallengeToken string `json:"challengeToken"`
+		Data           struct {
+			Actions []struct {
+				Ref string `json:"ref"`
+			} `json:"actions"`
+		} `json:"data"`
+	}
+	var flowStep inviteFlowStep
+
+	unmarshalStep := func(body []byte, label string) error {
+		flowStep = inviteFlowStep{}
+		if err := json.Unmarshal(body, &flowStep); err != nil {
+			return fmt.Errorf("thunder invite user %s decode: %w", label, err)
+		}
+		return nil
+	}
+
+	hasAction := func(ref string) bool {
+		for _, a := range flowStep.Data.Actions {
+			if a.Ref == ref {
+				return true
+			}
+		}
+		return false
+	}
+
 	// Step 1: start the onboarding flow.
 	body, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/flow/execute", token,
 		map[string]any{"flowType": "USER_ONBOARDING", "verbose": true})
