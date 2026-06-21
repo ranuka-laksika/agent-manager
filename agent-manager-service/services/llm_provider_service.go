@@ -59,14 +59,16 @@ type UpdateAndSyncResponse struct {
 
 // LLMProviderService handles LLM provider business logic
 type LLMProviderService struct {
-	db            *gorm.DB
-	providerRepo  repositories.LLMProviderRepository
-	templateRepo  repositories.LLMProviderTemplateRepository
-	templateStore *LLMTemplateStore
-	proxyRepo     repositories.LLMProxyRepository
-	artifactRepo  repositories.ArtifactRepository
-	encryptionKey []byte
-	gatewayRepo   repositories.GatewayRepository
+	db                 *gorm.DB
+	providerRepo       repositories.LLMProviderRepository
+	templateRepo       repositories.LLMProviderTemplateRepository
+	templateStore      *LLMTemplateStore
+	proxyRepo          repositories.LLMProxyRepository
+	artifactRepo       repositories.ArtifactRepository
+	encryptionKey      []byte
+	gatewayRepo        repositories.GatewayRepository
+	agentMappingRepo   repositories.EnvAgentModelMappingRepository
+	monitorMappingRepo repositories.MonitorLLMMappingRepository
 }
 
 // NewLLMProviderService creates a new LLM provider service
@@ -79,16 +81,20 @@ func NewLLMProviderService(
 	artifactRepo repositories.ArtifactRepository,
 	encryptionKey []byte,
 	gatewayRepo repositories.GatewayRepository,
+	agentMappingRepo repositories.EnvAgentModelMappingRepository,
+	monitorMappingRepo repositories.MonitorLLMMappingRepository,
 ) *LLMProviderService {
 	return &LLMProviderService{
-		db:            db,
-		providerRepo:  providerRepo,
-		templateRepo:  templateRepo,
-		templateStore: templateStore,
-		proxyRepo:     proxyRepo,
-		artifactRepo:  artifactRepo,
-		encryptionKey: encryptionKey,
-		gatewayRepo:   gatewayRepo,
+		db:                 db,
+		providerRepo:       providerRepo,
+		templateRepo:       templateRepo,
+		templateStore:      templateStore,
+		proxyRepo:          proxyRepo,
+		artifactRepo:       artifactRepo,
+		encryptionKey:      encryptionKey,
+		gatewayRepo:        gatewayRepo,
+		agentMappingRepo:   agentMappingRepo,
+		monitorMappingRepo: monitorMappingRepo,
 	}
 }
 
@@ -957,4 +963,73 @@ func (s *LLMProviderService) UpdateCatalogStatus(providerID, orgName string, inC
 
 	slog.Info("LLMProviderService.UpdateCatalogStatus: completed successfully", "providerID", providerID, "inCatalog", inCatalog)
 	return provider, nil
+}
+
+// LLMProviderConsumer describes a single agent or monitor that uses a proxy under this provider.
+type LLMProviderConsumer struct {
+	ProxyID      string
+	ProxyName    string
+	ProjectName  string
+	ConsumerType string // "agent" or "monitor"
+	ConsumerName string
+}
+
+// ListConsumers returns all agents and monitors consuming any proxy under the given provider.
+func (s *LLMProviderService) ListConsumers(ctx context.Context, providerID, orgName string) ([]LLMProviderConsumer, error) {
+	if providerID == "" || orgName == "" {
+		return nil, utils.ErrInvalidInput
+	}
+
+	provider, err := s.resolveProvider(providerID, orgName)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, utils.ErrLLMProviderNotFound
+		}
+		return nil, fmt.Errorf("resolveProvider: %w", err)
+	}
+
+	// Fetch all proxies for this provider (no pagination — consumers is a small set)
+	proxies, err := s.proxyRepo.ListByProvider(orgName, provider.UUID.String(), 1000, 0)
+	if err != nil {
+		return nil, fmt.Errorf("ListByProvider: %w", err)
+	}
+	if len(proxies) == 0 {
+		return nil, nil
+	}
+
+	proxyUUIDs := make([]uuid.UUID, len(proxies))
+	for i, p := range proxies {
+		proxyUUIDs[i] = p.UUID
+	}
+
+	agentConsumers, err := s.agentMappingRepo.ListAgentConsumersByProxyUUIDs(ctx, proxyUUIDs)
+	if err != nil {
+		return nil, fmt.Errorf("ListAgentConsumersByProxyUUIDs: %w", err)
+	}
+
+	monitorConsumers, err := s.monitorMappingRepo.ListMonitorConsumersByProxyUUIDs(ctx, proxyUUIDs)
+	if err != nil {
+		return nil, fmt.Errorf("ListMonitorConsumersByProxyUUIDs: %w", err)
+	}
+
+	consumers := make([]LLMProviderConsumer, 0, len(agentConsumers)+len(monitorConsumers))
+	for _, ac := range agentConsumers {
+		consumers = append(consumers, LLMProviderConsumer{
+			ProxyID:      ac.ProxyHandle,
+			ProxyName:    ac.ProxyName,
+			ProjectName:  ac.ProjectName,
+			ConsumerType: "agent",
+			ConsumerName: ac.AgentID,
+		})
+	}
+	for _, mc := range monitorConsumers {
+		consumers = append(consumers, LLMProviderConsumer{
+			ProxyID:      mc.ProxyHandle,
+			ProxyName:    mc.ProxyName,
+			ProjectName:  mc.ProjectName,
+			ConsumerType: "monitor",
+			ConsumerName: mc.MonitorName,
+		})
+	}
+	return consumers, nil
 }

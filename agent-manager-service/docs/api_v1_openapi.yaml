@@ -4381,6 +4381,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/llm-providers/{id}/consumers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+      - name: id
+        in: path
+        required: true
+        description: Provider UUID or handle
+        schema:
+          type: string
+
+    get:
+      tags:
+        - LLM Providers
+      summary: List consumers of an LLM provider
+      description: >
+        Returns a flat list of agents and monitors that consume any LLM proxy
+        pointing to this provider. Each item identifies the proxy, the project
+        it belongs to, and the agent or monitor that is using it.
+      operationId: listLLMProviderConsumers
+      responses:
+        "200":
+          description: Successfully retrieved consumer list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LLMProviderConsumerListResponse"
+        "400":
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Provider not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ============================================
   # LLM PROXY ENDPOINTS
   # ============================================
@@ -14406,3 +14462,46 @@ components:
           type: integer
           description: Maximum results returned
           example: 20
+
+    LLMProviderConsumerItem:
+      type: object
+      required:
+        - proxyId
+        - proxyName
+        - projectName
+        - consumerType
+        - consumerName
+      properties:
+        proxyId:
+          type: string
+          description: Handle/ID of the LLM proxy
+        proxyName:
+          type: string
+          description: Display name of the LLM proxy
+        projectName:
+          type: string
+          description: Name of the project the proxy belongs to
+        consumerType:
+          type: string
+          enum:
+            - agent
+            - monitor
+          description: Whether the consumer is an agent or a monitor
+        consumerName:
+          type: string
+          description: Name (handle) of the agent or monitor consuming the proxy
+
+    LLMProviderConsumerListResponse:
+      type: object
+      required:
+        - consumers
+        - total
+      properties:
+        consumers:
+          type: array
+          items:
+            $ref: "#/components/schemas/LLMProviderConsumerItem"
+        total:
+          type: integer
+          format: int32
+          description: Total number of consumers

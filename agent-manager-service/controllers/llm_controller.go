@@ -56,6 +56,9 @@ type LLMController interface {
 	GetLLMProxy(w http.ResponseWriter, r *http.Request)
 	UpdateLLMProxy(w http.ResponseWriter, r *http.Request)
 	DeleteLLMProxy(w http.ResponseWriter, r *http.Request)
+
+	// Consumer handlers
+	ListLLMProviderConsumers(w http.ResponseWriter, r *http.Request)
 }
 
 type llmController struct {
@@ -1011,6 +1014,47 @@ func (c *llmController) DeleteLLMProxy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteSuccessResponse(w, http.StatusNoContent, struct{}{})
+}
+
+// ListLLMProviderConsumers handles GET /orgs/{orgName}/llm-providers/{providerId}/consumers
+func (c *llmController) ListLLMProviderConsumers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	orgName := r.PathValue(utils.PathParamOrgName)
+	providerID := r.PathValue(utils.PathParamProviderId)
+
+	consumers, err := c.providerService.ListConsumers(ctx, providerID, orgName)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrLLMProviderNotFound):
+			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM provider not found")
+			return
+		case errors.Is(err, utils.ErrInvalidInput):
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid provider id")
+			return
+		default:
+			log.Error("ListLLMProviderConsumers: failed to list consumers", "orgName", orgName, "providerID", providerID, "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list provider consumers")
+			return
+		}
+	}
+
+	items := make([]spec.LLMProviderConsumerItem, len(consumers))
+	for i, c := range consumers {
+		items[i] = spec.LLMProviderConsumerItem{
+			ProxyId:      c.ProxyID,
+			ProxyName:    c.ProxyName,
+			ProjectName:  c.ProjectName,
+			ConsumerType: c.ConsumerType,
+			ConsumerName: c.ConsumerName,
+		}
+	}
+
+	resp := spec.LLMProviderConsumerListResponse{
+		Consumers: items,
+		Total:     int32(len(items)),
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }
 
 // UpdateLLMProviderCatalogStatus handles PUT /orgs/{orgName}/llm-providers/{id}/catalog

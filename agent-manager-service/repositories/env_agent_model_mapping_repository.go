@@ -25,6 +25,14 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
 
+// AgentConsumer holds the proxy and agent names needed to build a consumer list item.
+type AgentConsumer struct {
+	ProxyHandle string
+	ProxyName   string
+	ProjectName string
+	AgentID     string
+}
+
 // EnvAgentModelMappingRepository defines data access for environment mappings
 type EnvAgentModelMappingRepository interface {
 	// Create creates a new environment mapping (use within transaction)
@@ -35,6 +43,9 @@ type EnvAgentModelMappingRepository interface {
 
 	// ListByConfig retrieves all mappings for a configuration
 	ListByConfig(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentModelMapping, error)
+
+	// ListAgentConsumersByProxyUUIDs returns distinct agent consumers for the given proxy UUIDs.
+	ListAgentConsumersByProxyUUIDs(ctx context.Context, proxyUUIDs []uuid.UUID) ([]AgentConsumer, error)
 
 	// Update updates an existing mapping (use within transaction)
 	Update(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentModelMapping) error
@@ -89,4 +100,19 @@ func (r *envAgentModelMappingRepository) DeleteByConfig(ctx context.Context, tx 
 	return tx.WithContext(ctx).
 		Where("config_uuid = ?", configUUID).
 		Delete(&models.EnvAgentModelMapping{}).Error
+}
+
+func (r *envAgentModelMappingRepository) ListAgentConsumersByProxyUUIDs(ctx context.Context, proxyUUIDs []uuid.UUID) ([]AgentConsumer, error) {
+	if len(proxyUUIDs) == 0 {
+		return nil, nil
+	}
+	var results []AgentConsumer
+	err := r.db.WithContext(ctx).
+		Table("env_agent_model_mapping eam").
+		Select("DISTINCT a.handle AS proxy_handle, a.name AS proxy_name, ac.project_name, ac.agent_id").
+		Joins("JOIN artifacts a ON a.uuid = eam.llm_proxy_uuid").
+		Joins("JOIN agent_configurations ac ON ac.uuid = eam.config_uuid").
+		Where("eam.llm_proxy_uuid IN ?", proxyUUIDs).
+		Scan(&results).Error
+	return results, err
 }

@@ -36,6 +36,7 @@ func RegisterLLMRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMContro
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers", rbac.LLMProviderRead, ctrl.ListLLMProviders)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderRead, ctrl.GetLLMProvider)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/llm-proxies", rbac.LLMProxyRead, ctrl.ListLLMProxiesByProvider)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{providerId}/consumers", rbac.LLMProviderRead, ctrl.ListLLMProviderConsumers)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderUpdate, ctrl.UpdateLLMProvider)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{providerId}/catalog", rbac.LLMProviderUpdate, ctrl.UpdateLLMProviderCatalogStatus)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{providerId}", rbac.LLMProviderDelete, ctrl.DeleteLLMProvider)

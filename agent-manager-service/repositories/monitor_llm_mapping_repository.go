@@ -25,6 +25,14 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
 
+// MonitorConsumer holds the proxy and monitor names needed to build a consumer list item.
+type MonitorConsumer struct {
+	ProxyHandle string
+	ProxyName   string
+	ProjectName string
+	MonitorName string
+}
+
 // MonitorLLMMappingRepository defines data access for monitor-to-LLM-proxy mappings
 type MonitorLLMMappingRepository interface {
 	// Create creates a new monitor LLM mapping (use within transaction)
@@ -35,6 +43,9 @@ type MonitorLLMMappingRepository interface {
 
 	// ListByMonitorID retrieves all mappings for a monitor (with LLMProxy preloaded)
 	ListByMonitorID(ctx context.Context, monitorID uuid.UUID) ([]models.MonitorLLMMapping, error)
+
+	// ListMonitorConsumersByProxyUUIDs returns distinct monitor consumers for the given proxy UUIDs.
+	ListMonitorConsumersByProxyUUIDs(ctx context.Context, proxyUUIDs []uuid.UUID) ([]MonitorConsumer, error)
 
 	// DeleteByMonitorID deletes all mappings for a monitor (use within transaction)
 	DeleteByMonitorID(ctx context.Context, tx *gorm.DB, monitorID uuid.UUID) error
@@ -79,4 +90,19 @@ func (r *monitorLLMMappingRepository) DeleteByMonitorIDAndProxyUUID(ctx context.
 	return tx.WithContext(ctx).
 		Where("monitor_id = ? AND llm_proxy_uuid = ?", monitorID, proxyUUID).
 		Delete(&models.MonitorLLMMapping{}).Error
+}
+
+func (r *monitorLLMMappingRepository) ListMonitorConsumersByProxyUUIDs(ctx context.Context, proxyUUIDs []uuid.UUID) ([]MonitorConsumer, error) {
+	if len(proxyUUIDs) == 0 {
+		return nil, nil
+	}
+	var results []MonitorConsumer
+	err := r.db.WithContext(ctx).
+		Table("monitor_llm_mapping mlm").
+		Select("DISTINCT a.handle AS proxy_handle, a.name AS proxy_name, m.project_name, m.name AS monitor_name").
+		Joins("JOIN artifacts a ON a.uuid = mlm.llm_proxy_uuid").
+		Joins("JOIN monitors m ON m.id = mlm.monitor_id").
+		Where("mlm.llm_proxy_uuid IN ?", proxyUUIDs).
+		Scan(&results).Error
+	return results, err
 }
