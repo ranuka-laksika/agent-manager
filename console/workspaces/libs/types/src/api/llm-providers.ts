@@ -499,3 +499,24 @@ export interface LLMProxyAPIKeyPathParams extends LLMProxyPathParams {
 export type CreateLLMProxyAPIKeyPathParams = LLMProxyPathParams;
 export type RotateLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
 export type RevokeLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
+
+// -----------------------------------------------------------------------------
+// LLM provider consumers
+// -----------------------------------------------------------------------------
+
+export type LLMProviderConsumerType = "agent" | "monitor";
+
+export interface LLMProviderConsumerItem {
+  proxyId: string;
+  proxyName: string;
+  projectName: string;
+  consumerType: LLMProviderConsumerType;
+  consumerName: string;
+}
+
+export interface LLMProviderConsumerListResponse {
+  consumers: LLMProviderConsumerItem[];
+  total: number;
+}
+
+export type ListLLMProviderConsumersPathParams = LLMProviderPathParams;

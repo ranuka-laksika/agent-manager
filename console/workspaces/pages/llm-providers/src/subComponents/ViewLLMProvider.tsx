@@ -40,6 +40,7 @@ import {
 import { generatePath, useParams } from "react-router-dom";
 import { LLMProviderAccessControlTab } from "./LLMProviderAccessControlTab";
 import { LLMProviderConnectionTab } from "./LLMProviderConnectionTab";
+import { LLMProviderConsumersTab } from "./LLMProviderConsumersTab";
 import { LLMProviderGuardrailsTab } from "./LLMProviderGuardrailsTab";
 // import { LLMProviderModelsTab } from "./LLMProviderModelsTab";
 import { LLMProviderOverviewTab } from "./LLMProviderOverviewTab";
@@ -56,6 +57,7 @@ const TABS = [
   "Security",
   "Rate Limiting",
   "Guardrails",
+  "Consumers",
   // "Models",
 ] as const;
 
@@ -247,6 +249,14 @@ export const ViewLLMProvider: React.FC = () => {
                   providerError ? new Error(getErrorMessage(providerError)) : null}
                 onUpdate={updateProvider}
                 isUpdating={isUpdating}
+              />
+            </TabPanel>
+
+            {/* Consumers tab */}
+            <TabPanel value={tabIndex} index={6}>
+              <LLMProviderConsumersTab
+                orgName={orgId}
+                providerId={providerId}
               />
             </TabPanel>
 

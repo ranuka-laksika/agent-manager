@@ -41,12 +41,14 @@ import type {
   GetLLMProviderTemplatePathParams,
   GetLLMProxyPathParams,
   ListLLMDeploymentsPathParams,
+  ListLLMProviderConsumersPathParams,
   ListLLMProviderProxiesPathParams,
   ListLLMProviderTemplatesPathParams,
   ListLLMProvidersPathParams,
   ListLLMProxiesPathParams,
   LLMDeploymentListResponse,
   LLMDeploymentResponse,
+  LLMProviderConsumerListResponse,
   LLMProviderListResponse,
   LLMProviderResponse,
   LLMProviderTemplateListResponse,
@@ -88,6 +90,7 @@ import {
   getLLMProviderTemplate,
   getLLMProxy,
   listLLMDeployments,
+  listLLMProviderConsumers,
   listLLMProviderProxies,
   listLLMProviders,
   listLLMProviderTemplates,
@@ -431,6 +434,17 @@ export function useDeleteLLMDeployment() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-deployments"] });
     },
+  });
+}
+
+// Consumers
+
+export function useListLLMProviderConsumers(params: ListLLMProviderConsumersPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<LLMProviderConsumerListResponse>({
+    queryKey: ["llm-provider-consumers", params],
+    queryFn: () => listLLMProviderConsumers(params, getToken),
+    enabled: !!params.orgName && !!params.providerId,
   });
 }
 

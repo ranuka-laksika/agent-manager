@@ -38,12 +38,14 @@ import type {
   GetLLMProviderTemplatePathParams,
   GetLLMProxyPathParams,
   ListLLMDeploymentsPathParams,
+  ListLLMProviderConsumersPathParams,
   ListLLMProviderProxiesPathParams,
   ListLLMProviderTemplatesPathParams,
   ListLLMProvidersPathParams,
   ListLLMProxiesPathParams,
   LLMDeploymentListResponse,
   LLMDeploymentResponse,
+  LLMProviderConsumerListResponse,
   LLMProviderListResponse,
   LLMProviderResponse,
   LLMProviderTemplateListResponse,
@@ -644,4 +646,20 @@ export async function revokeLLMProxyAPIKey(
     { token },
   );
   if (!res.ok) throw await res.json();
+}
+
+export async function listLLMProviderConsumers(
+  params: ListLLMProviderConsumersPathParams,
+  getToken?: () => Promise<string>,
+): Promise<LLMProviderConsumerListResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const id = encodeRequired(params.providerId, "providerId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/llm-providers/${id}/consumers`,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
 }
