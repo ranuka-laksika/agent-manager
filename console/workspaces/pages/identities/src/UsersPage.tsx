@@ -18,12 +18,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Avatar,
   Button,
   IconButton,
   ListingTable,
   Stack,
   TablePagination,
   Tooltip,
+  Typography,
 } from "@wso2/oxygen-ui";
 import { Edit, Plus, Trash, Users } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -32,7 +34,7 @@ import {
   useListUsers,
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import { PageLayout } from "@agent-management-platform/views";
+import { FadeIn, PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap, type ThunderUser } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
@@ -42,6 +44,7 @@ export const UsersPage: React.FC = () => {
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   const { data, isLoading, error } = useListUsers(
     { orgName: orgId },
@@ -120,7 +123,7 @@ export const UsersPage: React.FC = () => {
         </Button>
       </Stack>
 
-      <ListingTable.Container>
+      <ListingTable.Container disablePaper>
         {!isLoading && total === 0 ? (
           <ListingTable.EmptyState
             illustration={<Users size={64} />}
@@ -128,36 +131,73 @@ export const UsersPage: React.FC = () => {
             description='Click "Add User" to create one or "Invite User" to invite someone.'
           />
         ) : (
-          <ListingTable>
+          <ListingTable variant="card">
             <ListingTable.Head>
               <ListingTable.Row>
                 <ListingTable.Cell>Username</ListingTable.Cell>
                 <ListingTable.Cell>User ID</ListingTable.Cell>
-                <ListingTable.Cell />
+                <ListingTable.Cell align="right" width="120px" />
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
               {isLoading && <ListingSkeletonRows rows={rowsPerPage} />}
-              {!isLoading && users.map((user: ThunderUser) => (
-                <ListingTable.Row key={user.id}>
-                  <ListingTable.Cell>{getAttr(user, "username")}</ListingTable.Cell>
-                  <ListingTable.Cell>{user.id}</ListingTable.Cell>
-                  <ListingTable.Cell align="right">
-                    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                      <Tooltip title="Edit user">
-                        <IconButton size="small" onClick={() => navigate(editUserPath(user.id))}>
-                          <Edit size={16} />
-                        </IconButton>
-                      </Tooltip>
-                      <Tooltip title="Delete user">
-                        <IconButton size="small" onClick={() => handleDelete(user)}>
-                          <Trash size={16} />
-                        </IconButton>
-                      </Tooltip>
+              {!isLoading && users.map((user: ThunderUser) => {
+                const username = getAttr(user, "username");
+                return (
+                <ListingTable.Row
+                  key={user.id}
+                  variant="card"
+                  hover
+                  onMouseEnter={() => setHoveredId(user.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                  onFocus={() => setHoveredId(user.id)}
+                  onBlur={() => setHoveredId(null)}
+                >
+                  <ListingTable.Cell>
+                    <Stack direction="row" alignItems="center" spacing={2}>
+                      <Avatar
+                        sx={{
+                          bgcolor: "primary.main",
+                          color: "primary.contrastText",
+                          fontSize: 16,
+                          height: 36,
+                          width: 36,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {username.charAt(0).toUpperCase() || "U"}
+                      </Avatar>
+                      <Typography variant="body2" fontWeight={500} noWrap>
+                        {username}
+                      </Typography>
                     </Stack>
                   </ListingTable.Cell>
+                  <ListingTable.Cell>
+                    <Typography variant="body2" color="text.secondary" noWrap>
+                      {user.id}
+                    </Typography>
+                  </ListingTable.Cell>
+                  <ListingTable.Cell align="right">
+                    {hoveredId === user.id && (
+                      <FadeIn>
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <Tooltip title="Edit user">
+                            <IconButton size="small" onClick={() => navigate(editUserPath(user.id))}>
+                              <Edit size={16} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Delete user">
+                            <IconButton size="small" color="error" onClick={() => handleDelete(user)}>
+                              <Trash size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </FadeIn>
+                    )}
+                  </ListingTable.Cell>
                 </ListingTable.Row>
-              ))}
+                );
+              })}
             </ListingTable.Body>
           </ListingTable>
         )}

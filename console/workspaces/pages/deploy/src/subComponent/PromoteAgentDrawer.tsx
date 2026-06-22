@@ -107,11 +107,10 @@ export function PromoteAgentDrawer({
 
   // Existing configuration of the selected destination environment. Keyed on the
   // target env, so selecting a different target refetches that env's config.
-  const { data: targetConfigs, isSuccess: isTargetConfigLoaded } =
-    useGetAgentConfigurations(
-      { orgName: orgId, projName: projectId, agentName: agentId },
-      { environment: formState.targetEnvironment },
-    );
+  const { data: targetConfigs } = useGetAgentConfigurations(
+    { orgName: orgId, projName: projectId, agentName: agentId },
+    { environment: formState.targetEnvironment },
+  );
 
   // Tracks which target env we've already pre-filled the editor for, so we fill
   // once per target rather than on every background refetch.
@@ -141,9 +140,9 @@ export function PromoteAgentDrawer({
   useEffect(() => {
     if (!open) return;
     const target = formState.targetEnvironment;
-    if (!target || filledForTarget === target || !isTargetConfigLoaded) return;
     const cfg = targetConfigs?.configurations;
-    const userEditableEnv = (cfg?.env ?? [])
+    if (!target || filledForTarget === target || !cfg) return;
+    const userEditableEnv = (cfg.env ?? [])
       .filter((e) => !e.isSystem)
       .map((e) => ({
         key: e.key,
@@ -154,16 +153,10 @@ export function PromoteAgentDrawer({
     setFormState((prev) => ({
       ...prev,
       env: userEditableEnv,
-      files: cfg?.files ?? [],
+      files: cfg.files ?? [],
     }));
     setFilledForTarget(target);
-  }, [
-    open,
-    formState.targetEnvironment,
-    isTargetConfigLoaded,
-    targetConfigs,
-    filledForTarget,
-  ]);
+  }, [open, formState.targetEnvironment, targetConfigs, filledForTarget]);
 
   const handleToggleUseSourceConfig = useCallback(
     (checked: boolean) => {
