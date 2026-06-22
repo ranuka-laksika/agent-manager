@@ -34,19 +34,17 @@ export const ListingSkeletonRows: React.FC<ListingSkeletonRowsProps> = ({
 }) => (
   <>
     {Array.from({ length: rows }).map((_, index) => (
-      <ListingTable.Row key={index}>
+      <ListingTable.Row key={index} variant="card">
         <ListingTable.Cell>
-          <Skeleton variant="text" width="50%" />
+          <Stack direction="row" alignItems="center" spacing={2}>
+            <Skeleton variant="circular" width={36} height={36} />
+            <Skeleton variant="text" width="40%" />
+          </Stack>
         </ListingTable.Cell>
         <ListingTable.Cell>
           <Skeleton variant="text" width="70%" />
         </ListingTable.Cell>
-        <ListingTable.Cell align="right">
-          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-            <Skeleton variant="circular" width={28} height={28} />
-            <Skeleton variant="circular" width={28} height={28} />
-          </Stack>
-        </ListingTable.Cell>
+        <ListingTable.Cell align="right" width="120px" />
       </ListingTable.Row>
     ))}
   </>

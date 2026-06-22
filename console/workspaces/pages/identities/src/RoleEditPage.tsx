@@ -25,7 +25,7 @@ import {
   Checkbox,
   Chip,
   CircularProgress,
-  Divider,
+  Form,
   IconButton,
   ListingTable,
   Stack,
@@ -59,8 +59,10 @@ import {
 
 type ActiveTab = "permissions" | "users" | "groups";
 
-const permLabel = (p: ThunderPermission) => p.actionName || p.name.split(":")[1] || p.name;
-const permGroup = (p: ThunderPermission) => p.resourceName || p.name.split(":")[0];
+const permLabel = (p: ThunderPermission) =>
+  p.actionName || p.name.split(":")[1] || p.name;
+const permGroup = (p: ThunderPermission) =>
+  p.resourceName || p.name.split(":")[0];
 
 type PermissionGroup = { resource: string; permissions: ThunderPermission[] };
 
@@ -98,15 +100,21 @@ export const RoleEditPage: React.FC = () => {
     roleId: roleId ?? "",
   });
   const isPermissionsReadOnly = roleData?.isReadOnly ?? false;
-  const { data: assignmentsData, isLoading: isLoadingAssignments } = useGetRoleAssignments({
+  const { data: assignmentsData, isLoading: isLoadingAssignments } =
+    useGetRoleAssignments({
+      orgName: orgId,
+      roleId: roleId ?? "",
+    });
+  const { data: allUsersData, isLoading: isLoadingUsers } = useAllUsers({
     orgName: orgId,
-    roleId: roleId ?? "",
   });
-  const { data: allUsersData, isLoading: isLoadingUsers } = useAllUsers({ orgName: orgId });
-  const { data: allGroupsData, isLoading: isLoadingGroups } = useAllGroups({ orgName: orgId });
-  const { data: catalogData, isLoading: isLoadingCatalog } = useListAMPPermissions({
+  const { data: allGroupsData, isLoading: isLoadingGroups } = useAllGroups({
     orgName: orgId,
   });
+  const { data: catalogData, isLoading: isLoadingCatalog } =
+    useListAMPPermissions({
+      orgName: orgId,
+    });
 
   const { mutateAsync: addAssignees } = useAddRoleAssignees();
   const { mutateAsync: removeAssignees } = useRemoveRoleAssignees();
@@ -127,8 +135,14 @@ export const RoleEditPage: React.FC = () => {
     [roleData],
   );
 
-  const allUsers: ThunderUser[] = useMemo(() => allUsersData?.users ?? [], [allUsersData]);
-  const allGroups: ThunderGroup[] = useMemo(() => allGroupsData?.groups ?? [], [allGroupsData]);
+  const allUsers: ThunderUser[] = useMemo(
+    () => allUsersData?.users ?? [],
+    [allUsersData],
+  );
+  const allGroups: ThunderGroup[] = useMemo(
+    () => allGroupsData?.groups ?? [],
+    [allGroupsData],
+  );
 
   const catalogPermissions: ThunderPermission[] = useMemo(
     () => catalogData?.permissions ?? [],
@@ -142,25 +156,33 @@ export const RoleEditPage: React.FC = () => {
 
   // --- Group tab delta tracking ---
   const [pendingGroupAdds, setPendingGroupAdds] = useState<ThunderGroup[]>([]);
-  const [removedGroupIds, setRemovedGroupIds] = useState<Set<string>>(new Set());
+  const [removedGroupIds, setRemovedGroupIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   // --- Permissions tab: full selected-state approach ---
-  const [selectedPermissions, setSelectedPermissions] = useState<ThunderPermission[]>([]);
+  const [selectedPermissions, setSelectedPermissions] = useState<
+    ThunderPermission[]
+  >([]);
   const hasEditedPermissions = useRef(false);
 
   // Initialise selectedPermissions from server data once (guard against refetch overwrites)
   useEffect(() => {
     if (!hasEditedPermissions.current && catalogPermissions.length > 0) {
       const nameSet = new Set(initialPermissions);
-      setSelectedPermissions(catalogPermissions.filter((p) => nameSet.has(p.name)));
+      setSelectedPermissions(
+        catalogPermissions.filter((p) => nameSet.has(p.name)),
+      );
     }
   }, [initialPermissions, catalogPermissions]);
 
   const rolesPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { roles: { path: string } } };
-        }).identities.children.roles.path,
+        (
+          absoluteRouteMap.children.org.children as unknown as {
+            identities: { children: { roles: { path: string } } };
+          }
+        ).identities.children.roles.path,
         { orgId },
       )
     : "#";
@@ -194,7 +216,10 @@ export const RoleEditPage: React.FC = () => {
     [allGroups, displayedGroupIds],
   );
 
-  const catalogGroups = useMemo(() => groupPermissions(catalogPermissions), [catalogPermissions]);
+  const catalogGroups = useMemo(
+    () => groupPermissions(catalogPermissions),
+    [catalogPermissions],
+  );
 
   const selectedNames = useMemo(
     () => new Set(selectedPermissions.map((p) => p.name)),
@@ -205,10 +230,17 @@ export const RoleEditPage: React.FC = () => {
     String(user.attributes?.["username"] ?? user.id ?? "");
 
   // --- User handlers ---
-  const handleAddUser = (_e: React.SyntheticEvent, value: ThunderUser | null) => {
+  const handleAddUser = (
+    _e: React.SyntheticEvent,
+    value: ThunderUser | null,
+  ) => {
     if (!value) return;
     if (removedUserIds.has(value.id)) {
-      setRemovedUserIds((prev) => { const n = new Set(prev); n.delete(value.id); return n; });
+      setRemovedUserIds((prev) => {
+        const n = new Set(prev);
+        n.delete(value.id);
+        return n;
+      });
     } else {
       setPendingUserAdds((prev) => [...prev, value]);
     }
@@ -223,10 +255,17 @@ export const RoleEditPage: React.FC = () => {
   };
 
   // --- Group handlers ---
-  const handleAddGroup = (_e: React.SyntheticEvent, value: ThunderGroup | null) => {
+  const handleAddGroup = (
+    _e: React.SyntheticEvent,
+    value: ThunderGroup | null,
+  ) => {
     if (!value) return;
     if (removedGroupIds.has(value.id)) {
-      setRemovedGroupIds((prev) => { const n = new Set(prev); n.delete(value.id); return n; });
+      setRemovedGroupIds((prev) => {
+        const n = new Set(prev);
+        n.delete(value.id);
+        return n;
+      });
     } else {
       setPendingGroupAdds((prev) => [...prev, value]);
     }
@@ -284,7 +323,11 @@ export const RoleEditPage: React.FC = () => {
       }
 
       // Permissions — diff selected vs initial (skip for predefined roles)
-      if (hasEditedPermissions.current && resourceServerId && !isPermissionsReadOnly) {
+      if (
+        hasEditedPermissions.current &&
+        resourceServerId &&
+        !isPermissionsReadOnly
+      ) {
         const currentSet = new Set(initialPermissions);
         const nextSet = new Set(selectedPermissions.map((p) => p.name));
         const toAdd = [...nextSet].filter((n) => !currentSet.has(n));
@@ -317,9 +360,15 @@ export const RoleEditPage: React.FC = () => {
   };
 
   const isLoading =
-    isLoadingRole || isLoadingAssignments || isLoadingUsers || isLoadingGroups || isLoadingCatalog;
+    isLoadingRole ||
+    isLoadingAssignments ||
+    isLoadingUsers ||
+    isLoadingGroups ||
+    isLoadingCatalog;
 
-  const pageTitle = roleData?.name ? `Edit Role: ${roleData.name}` : "Edit Role";
+  const pageTitle = roleData?.name
+    ? `Edit Role: ${roleData.name}`
+    : "Edit Role";
 
   if (isLoading) {
     return (
@@ -332,10 +381,17 @@ export const RoleEditPage: React.FC = () => {
   }
 
   return (
-    <PageLayout title={pageTitle} backHref={rolesPath} backLabel="Back to Roles" disableIcon>
-      <Stack spacing={3} sx={{ maxWidth: 800 }}>
+    <PageLayout
+      title={pageTitle}
+      backHref={rolesPath}
+      backLabel="Back to Roles"
+      disableIcon
+    >
+      <Stack spacing={3}>
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
-        {saveSuccess && <Alert severity="success">Role updated successfully.</Alert>}
+        {saveSuccess && (
+          <Alert severity="success">Role updated successfully.</Alert>
+        )}
 
         <Tabs
           value={activeTab}
@@ -348,170 +404,194 @@ export const RoleEditPage: React.FC = () => {
 
         {/* ── Permissions tab ── */}
         {activeTab === "permissions" && (
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>
-              Permissions
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
+          <Form.Section>
+            <Form.Header>Permissions</Form.Header>
+            <Typography variant="body2" color="text.secondary">
               {isPermissionsReadOnly
                 ? "Permissions for predefined roles cannot be modified."
                 : "Search and select permissions to assign to this role."}
             </Typography>
-            <Divider sx={{ mb: 2 }} />
 
-            {!isPermissionsReadOnly && (
-              <Autocomplete
-                multiple
-                disableCloseOnSelect
-                options={catalogPermissions}
-                value={selectedPermissions}
-                onChange={handlePermissionsChange}
-                getOptionLabel={(option) => permLabel(option as ThunderPermission)}
-                groupBy={(option) => permGroup(option as ThunderPermission)}
-                filterOptions={filterPermissions}
-                isOptionEqualToValue={(option, value) =>
-                  (option as ThunderPermission).name === (value as ThunderPermission).name
-                }
-                renderTags={() => null}
-                renderGroup={(params) => {
-                  const groupPerms = catalogPermissions.filter(
-                    (p) => permGroup(p) === params.group,
-                  );
-                  const allSelected = groupPerms.every((p) => selectedNames.has(p.name));
-                  const someSelected = groupPerms.some((p) => selectedNames.has(p.name));
-                  const handleGroupToggle = (e: React.MouseEvent) => {
-                    e.stopPropagation();
-                    hasEditedPermissions.current = true;
-                    if (allSelected) {
-                      setSelectedPermissions((prev) =>
-                        prev.filter((p) => permGroup(p) !== params.group),
-                      );
-                    } else {
-                      const toAdd = groupPerms.filter((p) => !selectedNames.has(p.name));
-                      setSelectedPermissions((prev) => [...prev, ...toAdd]);
+            <Box sx={{ mt: 1 }}>
+              {!isPermissionsReadOnly && (
+                <Form.ElementWrapper
+                  label="Add permissions"
+                  name="addPermissions"
+                >
+                  <Autocomplete
+                    id="addPermissions"
+                    multiple
+                    disableCloseOnSelect
+                    options={catalogPermissions}
+                    value={selectedPermissions}
+                    onChange={handlePermissionsChange}
+                    getOptionLabel={(option) =>
+                      permLabel(option as ThunderPermission)
                     }
-                  };
-                  return (
-                    <li key={params.key}>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          px: 1,
-                          py: 0.25,
-                          cursor: "pointer",
-                          userSelect: "none",
-                          "&:hover": { bgcolor: "action.hover" },
-                        }}
-                        onClick={handleGroupToggle}
-                      >
-                        <Checkbox
-                          checked={allSelected}
-                          indeterminate={someSelected && !allSelected}
-                          size="small"
-                          sx={{ mr: 0.5, p: 0.5 }}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={
-                            handleGroupToggle as unknown as React.ChangeEventHandler<
-                              HTMLInputElement
+                    groupBy={(option) => permGroup(option as ThunderPermission)}
+                    filterOptions={filterPermissions}
+                    isOptionEqualToValue={(option, value) =>
+                      (option as ThunderPermission).name ===
+                      (value as ThunderPermission).name
+                    }
+                    renderTags={() => null}
+                    renderGroup={(params) => {
+                      const groupPerms = catalogPermissions.filter(
+                        (p) => permGroup(p) === params.group,
+                      );
+                      const allSelected = groupPerms.every((p) =>
+                        selectedNames.has(p.name),
+                      );
+                      const someSelected = groupPerms.some((p) =>
+                        selectedNames.has(p.name),
+                      );
+                      const handleGroupToggle = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        hasEditedPermissions.current = true;
+                        if (allSelected) {
+                          setSelectedPermissions((prev) =>
+                            prev.filter((p) => permGroup(p) !== params.group),
+                          );
+                        } else {
+                          const toAdd = groupPerms.filter(
+                            (p) => !selectedNames.has(p.name),
+                          );
+                          setSelectedPermissions((prev) => [...prev, ...toAdd]);
+                        }
+                      };
+                      const handleGroupCheckboxChange =
+                        handleGroupToggle as unknown as React.ChangeEventHandler<HTMLInputElement>;
+                      return (
+                        <li key={params.key}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              px: 1,
+                              py: 0.25,
+                              cursor: "pointer",
+                              userSelect: "none",
+                              "&:hover": { bgcolor: "action.hover" },
+                            }}
+                            onClick={handleGroupToggle}
+                          >
+                            <Checkbox
+                              checked={allSelected}
+                              indeterminate={someSelected && !allSelected}
+                              size="small"
+                              sx={{ mr: 0.5, p: 0.5 }}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={handleGroupCheckboxChange}
+                            />
+                            <Typography
+                              variant="caption"
+                              fontWeight={700}
+                              sx={{
+                                textTransform: "uppercase",
+                                letterSpacing: 0.5,
+                              }}
                             >
-                          }
+                              {params.group}
+                            </Typography>
+                          </Box>
+                          <ul style={{ padding: 0 }}>{params.children}</ul>
+                        </li>
+                      );
+                    }}
+                    renderOption={(props, option, { selected }) => (
+                      <li {...props}>
+                        <Checkbox
+                          checked={selected}
+                          size="small"
+                          sx={{ mr: 1 }}
                         />
+                        {permLabel(option as ThunderPermission)}
+                      </li>
+                    )}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        placeholder="Search by resource or action..."
+                      />
+                    )}
+                    noOptionsText="No permissions available"
+                    sx={{ mb: 3 }}
+                  />
+                </Form.ElementWrapper>
+              )}
+
+              {selectedPermissions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No permissions assigned yet.
+                </Typography>
+              ) : (
+                <Stack spacing={2}>
+                  {catalogGroups
+                    .filter(({ permissions }) =>
+                      permissions.some((p) => selectedNames.has(p.name)),
+                    )
+                    .map(({ resource, permissions }) => (
+                      <Box key={resource}>
                         <Typography
                           variant="caption"
-                          fontWeight={700}
-                          sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
+                          fontWeight={600}
+                          color="text.secondary"
+                          sx={{
+                            textTransform: "uppercase",
+                            letterSpacing: 0.5,
+                          }}
                         >
-                          {params.group}
+                          {resource}
                         </Typography>
+                        <Stack direction="row" flexWrap="wrap" gap={1} mt={0.5}>
+                          {permissions
+                            .filter((p) => selectedNames.has(p.name))
+                            .map((p) => (
+                              <Chip
+                                key={p.name}
+                                label={permLabel(p)}
+                                size="small"
+                                onDelete={
+                                  !isPermissionsReadOnly
+                                    ? () => handleRemovePermission(p.name)
+                                    : undefined
+                                }
+                              />
+                            ))}
+                        </Stack>
                       </Box>
-                      <ul style={{ padding: 0 }}>{params.children}</ul>
-                    </li>
-                  );
-                }}
-                renderOption={(props, option, { selected }) => (
-                  <li {...props}>
-                    <Checkbox checked={selected} size="small" sx={{ mr: 1 }} />
-                    {permLabel(option as ThunderPermission)}
-                  </li>
-                )}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Add permissions"
-                    placeholder="Search by resource or action..."
-                  />
-                )}
-                noOptionsText="No permissions available"
-                sx={{ mb: 3 }}
-              />
-            )}
-
-            {selectedPermissions.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No permissions assigned yet.
-              </Typography>
-            ) : (
-              <Stack spacing={2}>
-                {catalogGroups
-                  .filter(({ permissions }) =>
-                    permissions.some((p) => selectedNames.has(p.name)),
-                  )
-                  .map(({ resource, permissions }) => (
-                    <Box key={resource}>
-                      <Typography
-                        variant="caption"
-                        fontWeight={600}
-                        color="text.secondary"
-                        sx={{ textTransform: "uppercase", letterSpacing: 0.5 }}
-                      >
-                        {resource}
-                      </Typography>
-                      <Stack direction="row" flexWrap="wrap" gap={1} mt={0.5}>
-                        {permissions
-                          .filter((p) => selectedNames.has(p.name))
-                          .map((p) => (
-                            <Chip
-                              key={p.name}
-                              label={permLabel(p)}
-                              size="small"
-                              onDelete={
-                                !isPermissionsReadOnly
-                                  ? () => handleRemovePermission(p.name)
-                                  : undefined
-                              }
-                            />
-                          ))}
-                      </Stack>
-                    </Box>
-                  ))}
-              </Stack>
-            )}
-          </Box>
+                    ))}
+                </Stack>
+              )}
+            </Box>
+          </Form.Section>
         )}
 
         {/* ── Users tab ── */}
         {activeTab === "users" && (
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>
-              Assigned Users
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
+          <Form.Section>
+            <Form.Header>Assigned Users</Form.Header>
+            <Typography variant="body2" color="text.secondary">
               Search and add users to this role.
             </Typography>
-            <Divider sx={{ mb: 2 }} />
 
-            <Autocomplete
-              options={availableUsers}
-              getOptionLabel={(option) => getUsername(option as ThunderUser)}
-              onChange={handleAddUser}
-              value={null}
-              renderInput={(params) => (
-                <TextField {...params} placeholder="Search users..." label="Add User" />
-              )}
-              noOptionsText="No users available"
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ mt: 1, mb: 2 }}>
+              <Form.ElementWrapper label="Add User" name="addUser">
+                <Autocomplete
+                  id="addUser"
+                  options={availableUsers}
+                  getOptionLabel={(option) =>
+                    getUsername(option as ThunderUser)
+                  }
+                  onChange={handleAddUser}
+                  value={null}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Search users..." />
+                  )}
+                  noOptionsText="No users available"
+                />
+              </Form.ElementWrapper>
+            </Box>
 
             {displayedUsers.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
@@ -530,7 +610,9 @@ export const RoleEditPage: React.FC = () => {
                   <ListingTable.Body>
                     {displayedUsers.map((user) => (
                       <ListingTable.Row key={user.id}>
-                        <ListingTable.Cell>{getUsername(user)}</ListingTable.Cell>
+                        <ListingTable.Cell>
+                          {getUsername(user)}
+                        </ListingTable.Cell>
                         <ListingTable.Cell>{user.id}</ListingTable.Cell>
                         <ListingTable.Cell align="right">
                           <Tooltip title="Remove from role">
@@ -548,31 +630,32 @@ export const RoleEditPage: React.FC = () => {
                 </ListingTable>
               </ListingTable.Container>
             )}
-          </Box>
+          </Form.Section>
         )}
 
         {/* ── Groups tab ── */}
         {activeTab === "groups" && (
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>
-              Assigned Groups
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
+          <Form.Section>
+            <Form.Header>Assigned Groups</Form.Header>
+            <Typography variant="body2" color="text.secondary">
               Search and add groups to this role.
             </Typography>
-            <Divider sx={{ mb: 2 }} />
 
-            <Autocomplete
-              options={availableGroups}
-              getOptionLabel={(option) => (option as ThunderGroup).name}
-              onChange={handleAddGroup}
-              value={null}
-              renderInput={(params) => (
-                <TextField {...params} placeholder="Search groups..." label="Add Group" />
-              )}
-              noOptionsText="No groups available"
-              sx={{ mb: 2 }}
-            />
+            <Box sx={{ mt: 1, mb: 2 }}>
+              <Form.ElementWrapper label="Add Group" name="addGroup">
+                <Autocomplete
+                  id="addGroup"
+                  options={availableGroups}
+                  getOptionLabel={(option) => (option as ThunderGroup).name}
+                  onChange={handleAddGroup}
+                  value={null}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Search groups..." />
+                  )}
+                  noOptionsText="No groups available"
+                />
+              </Form.ElementWrapper>
+            </Box>
 
             {displayedGroups.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
@@ -592,7 +675,9 @@ export const RoleEditPage: React.FC = () => {
                     {displayedGroups.map((group) => (
                       <ListingTable.Row key={group.id}>
                         <ListingTable.Cell>{group.name}</ListingTable.Cell>
-                        <ListingTable.Cell>{group.description ?? "-"}</ListingTable.Cell>
+                        <ListingTable.Cell>
+                          {group.description ?? "-"}
+                        </ListingTable.Cell>
                         <ListingTable.Cell align="right">
                           <Tooltip title="Remove from role">
                             <IconButton
@@ -609,15 +694,24 @@ export const RoleEditPage: React.FC = () => {
                 </ListingTable>
               </ListingTable.Container>
             )}
-          </Box>
+          </Form.Section>
         )}
 
+        {/* Action row lives below the cards; hidden on read-only Permissions. */}
         {!(isPermissionsReadOnly && activeTab === "permissions") && (
-          <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button variant="outlined" onClick={() => navigate(rolesPath)} disabled={isSaving}>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate(rolesPath)}
+              disabled={isSaving}
+            >
               Cancel
             </Button>
-            <Button variant="contained" onClick={handleSave} disabled={isSaving}>
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
           </Stack>

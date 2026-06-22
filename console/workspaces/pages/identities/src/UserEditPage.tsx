@@ -23,7 +23,7 @@ import {
   Button,
   Chip,
   CircularProgress,
-  Divider,
+  Form,
   Stack,
   Tab,
   Tabs,
@@ -40,7 +40,10 @@ import {
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
 import { PageLayout } from "@agent-management-platform/views";
-import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
+import {
+  absoluteRouteMap,
+  type ThunderGroup,
+} from "@agent-management-platform/types";
 
 type TabId = "groups" | "roles";
 
@@ -54,22 +57,29 @@ export const UserEditPage: React.FC = () => {
     userId: userId ?? "",
   });
 
-  const { data: userGroupsData, isLoading: isLoadingUserGroups } = useGetUserGroups({
-    orgName: orgId,
-    userId: userId ?? "",
-  });
+  const { data: userGroupsData, isLoading: isLoadingUserGroups } =
+    useGetUserGroups({
+      orgName: orgId,
+      userId: userId ?? "",
+    });
 
-  const { data: userRolesData, isLoading: isLoadingUserRoles } = useGetUserRoles({
-    orgName: orgId,
-    userId: userId ?? "",
-  });
+  const { data: userRolesData, isLoading: isLoadingUserRoles } =
+    useGetUserRoles({
+      orgName: orgId,
+      userId: userId ?? "",
+    });
 
-  const { data: allGroupsData, isLoading: isLoadingAllGroups } = useAllGroups({ orgName: orgId });
+  const { data: allGroupsData, isLoading: isLoadingAllGroups } = useAllGroups({
+    orgName: orgId,
+  });
 
   const { mutateAsync: addMembers } = useAddGroupMembers();
   const { mutateAsync: removeMembers } = useRemoveGroupMembers();
 
-  const allGroups: ThunderGroup[] = useMemo(() => allGroupsData?.groups ?? [], [allGroupsData]);
+  const allGroups: ThunderGroup[] = useMemo(
+    () => allGroupsData?.groups ?? [],
+    [allGroupsData],
+  );
   const initialGroups: ThunderGroup[] = useMemo(
     () => userGroupsData?.groups ?? [],
     [userGroupsData],
@@ -89,9 +99,11 @@ export const UserEditPage: React.FC = () => {
 
   const usersPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { users: { path: string } } };
-        }).identities.children.users.path,
+        (
+          absoluteRouteMap.children.org.children as unknown as {
+            identities: { children: { users: { path: string } } };
+          }
+        ).identities.children.users.path,
         { orgId },
       )
     : "#";
@@ -133,7 +145,10 @@ export const UserEditPage: React.FC = () => {
   };
 
   const isLoading =
-    isLoadingUser || isLoadingUserGroups || isLoadingAllGroups || isLoadingUserRoles;
+    isLoadingUser ||
+    isLoadingUserGroups ||
+    isLoadingAllGroups ||
+    isLoadingUserRoles;
 
   if (isLoading) {
     return (
@@ -154,9 +169,11 @@ export const UserEditPage: React.FC = () => {
       backLabel="Back to Users"
       disableIcon
     >
-      <Stack spacing={3} sx={{ maxWidth: 700 }}>
+      <Stack spacing={3}>
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
-        {saveSuccess && <Alert severity="success">User updated successfully.</Alert>}
+        {saveSuccess && (
+          <Alert severity="success">User updated successfully.</Alert>
+        )}
 
         <Tabs
           value={activeTab}
@@ -168,87 +185,98 @@ export const UserEditPage: React.FC = () => {
         </Tabs>
 
         {activeTab === "groups" && (
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>
-              Group Memberships
-            </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
+          <Form.Section>
+            <Form.Header>Group Memberships</Form.Header>
+            <Typography variant="body2" color="text.secondary">
               Search and select groups to assign this user to.
             </Typography>
-            <Divider sx={{ mb: 2 }} />
 
-            <Autocomplete
-              multiple
-              options={allGroups}
-              value={selectedGroups}
-              onChange={(_e, newValue) => {
-                hasEdited.current = true;
-                setSelectedGroups(newValue as ThunderGroup[]);
-              }}
-              getOptionLabel={(option) => (option as ThunderGroup).name}
-              isOptionEqualToValue={(option, value) =>
-                (option as ThunderGroup).id === (value as ThunderGroup).id
-              }
-              renderTags={() => null}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  placeholder="Search groups..."
-                  label="Groups"
+            <Form.Stack spacing={2} sx={{ mt: 1 }}>
+              <Form.ElementWrapper label="Groups" name="groups">
+                <Autocomplete
+                  id="groups"
+                  multiple
+                  options={allGroups}
+                  value={selectedGroups}
+                  onChange={(_e, newValue) => {
+                    hasEdited.current = true;
+                    setSelectedGroups(newValue as ThunderGroup[]);
+                  }}
+                  getOptionLabel={(option) => (option as ThunderGroup).name}
+                  isOptionEqualToValue={(option, value) =>
+                    (option as ThunderGroup).id === (value as ThunderGroup).id
+                  }
+                  renderTags={() => null}
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Search groups..." />
+                  )}
+                  noOptionsText="No groups found"
                 />
+              </Form.ElementWrapper>
+
+              {selectedGroups.length > 0 && (
+                <Stack direction="row" flexWrap="wrap" gap={1}>
+                  {selectedGroups.map((group) => (
+                    <Chip
+                      key={group.id}
+                      label={group.name}
+                      size="small"
+                      onDelete={() => {
+                        hasEdited.current = true;
+                        setSelectedGroups((prev) =>
+                          prev.filter((g) => g.id !== group.id),
+                        );
+                      }}
+                    />
+                  ))}
+                </Stack>
               )}
-              noOptionsText="No groups found"
-            />
-
-            {selectedGroups.length > 0 && (
-              <Stack direction="row" flexWrap="wrap" gap={1} mt={1.5}>
-                {selectedGroups.map((group) => (
-                  <Chip
-                    key={group.id}
-                    label={group.name}
-                    size="small"
-                    onDelete={() => {
-                      hasEdited.current = true;
-                      setSelectedGroups((prev) => prev.filter((g) => g.id !== group.id));
-                    }}
-                  />
-                ))}
-              </Stack>
-            )}
-
-            <Stack direction="row" spacing={1} justifyContent="flex-end" mt={3}>
-              <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isSaving}>
-                Cancel
-              </Button>
-              <Button variant="contained" onClick={handleSave} disabled={isSaving}>
-                {isSaving ? "Saving..." : "Save Changes"}
-              </Button>
-            </Stack>
-          </Box>
+            </Form.Stack>
+          </Form.Section>
         )}
 
         {activeTab === "roles" && (
-          <Box>
-            <Typography variant="subtitle1" fontWeight={600} mb={1}>
-              Assigned Roles
+          <Form.Section>
+            <Form.Header>Assigned Roles</Form.Header>
+            <Typography variant="body2" color="text.secondary">
+              Roles directly assigned to this user. To modify role assignments,
+              use the Roles page.
             </Typography>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Roles directly assigned to this user. To modify role assignments, use the Roles page.
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
 
-            {userRoles.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No roles assigned to this user.
-              </Typography>
-            ) : (
-              <Stack direction="row" flexWrap="wrap" gap={1}>
-                {userRoles.map((role) => (
-                  <Chip key={role.id} label={role.name} size="small" />
-                ))}
-              </Stack>
-            )}
-          </Box>
+            <Box sx={{ mt: 1 }}>
+              {userRoles.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No roles assigned to this user.
+                </Typography>
+              ) : (
+                <Stack direction="row" flexWrap="wrap" gap={1}>
+                  {userRoles.map((role) => (
+                    <Chip key={role.id} label={role.name} size="small" />
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          </Form.Section>
+        )}
+
+        {/* Action row lives below the cards; only the Groups tab is editable. */}
+        {activeTab === "groups" && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate(usersPath)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </Stack>
         )}
       </Stack>
     </PageLayout>
