@@ -82,7 +82,7 @@ export const CreateMonitorComponent: React.FC = () => {
       const samplingRatePercent =
         sourceMonitor.samplingRate !== undefined
           ? Math.min(100, Math.max(0, Math.round(sourceMonitor.samplingRate * 100)))
-          : 25;
+          : 100;
       return {
         displayName,
         name: slugifyMonitorName(displayName),
@@ -107,7 +107,7 @@ export const CreateMonitorComponent: React.FC = () => {
       traceStart: defaultTimeRange.start,
       traceEnd: defaultTimeRange.end,
       intervalMinutes: 60,
-      samplingRate: 25,
+      samplingRate: 100,
       evaluators: [],
     };
   }, [duplicateFrom, sourceMonitor, defaultTimeRange, envId]);
@@ -150,7 +150,7 @@ export const CreateMonitorComponent: React.FC = () => {
           ? values.traceStart.toISOString()
           : undefined,
         traceEnd: values.traceEnd ? values.traceEnd.toISOString() : undefined,
-        samplingRate: (values.samplingRate ?? 0) / 100,
+        samplingRate: (values.samplingRate ?? 100) / 100,
       };
 
       createMonitor(payload, {

@@ -84,9 +84,9 @@ export const createMonitorSchema = z
       .refine(
         (value) =>
           value === undefined ||
-          (Number.isInteger(value) && value >= 0 && value <= 100),
+          (Number.isInteger(value) && value > 0 && value <= 100),
         {
-          message: "Sampling rate must be between 0 and 100",
+          message: "Sampling rate must be between 1 and 100",
         },
       )
       .optional(),
