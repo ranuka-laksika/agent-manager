@@ -304,6 +304,11 @@ export const generatedRouteMap =  {
                               "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/evaluation/monitor/edit/:monitorId",
                               "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/evaluation/monitor/edit/:monitorId/*",
                               "children": {}
+                            },
+                            "compare": {
+                              "path": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/evaluation/monitor/compare/:monitorId",
+                              "wildPath": "/org/:orgId/project/:projectId/agents/:agentId/environment/:envId/evaluation/monitor/compare/:monitorId/*",
+                              "children": {}
                             }
                           }
                         }

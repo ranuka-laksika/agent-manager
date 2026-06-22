@@ -85,6 +85,8 @@ export const LazyEditMonitorComponent =
   evalMetadata.pages.organization.editMonitor.component as FC;
 export const LazyViewMonitorComponent =
   evalMetadata.pages.organization.viewMonitor.component as FC;
+export const LazyCompareMonitorComponent =
+  evalMetadata.pages.organization.compareMonitor.component as FC;
 
 // LLM Providers
 export const LazyLLMProvidersOrg = llmProvidersMetadata.levels!.organization as FC;

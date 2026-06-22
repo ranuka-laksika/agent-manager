@@ -16,14 +16,16 @@
  * under the License.
  */
 
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { formatTraceWindow, PageLayout } from "@agent-management-platform/views";
 import {
+  Button,
   Chip,
   CircularProgress,
   Grid,
   IconButton,
   InputAdornment,
+  Menu,
   MenuItem,
   Select,
   Skeleton,
@@ -31,11 +33,18 @@ import {
   Typography,
   useTheme,
 } from "@wso2/oxygen-ui";
-import { Clock, RefreshCcw, Timer } from "@wso2/oxygen-ui-icons-react";
+import {
+  ChevronDown,
+  Clock,
+  GitCompare,
+  RefreshCcw,
+  Timer,
+} from "@wso2/oxygen-ui-icons-react";
 import {
   generatePath,
   Route,
   Routes,
+  useNavigate,
   useParams,
   useSearchParams,
 } from "react-router-dom";
@@ -43,7 +52,6 @@ import {
   absoluteRouteMap,
   relativeRouteMap,
   type EvaluationLevel,
-  type EvaluatorScoreSummary,
   TraceListTimeRange,
 } from "@agent-management-platform/types";
 import AgentPerformanceCard, {
@@ -58,10 +66,16 @@ import ScoreBreakdownCard from "./subComponents/ScoreBreakdownCard";
 import {
   useGetMonitor,
   useGroupedScores,
+  useListMonitors,
   useMonitorScores,
 } from "@agent-management-platform/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import MonitorRunList from "./subComponents/MonitorRunList";
+import {
+  computeAverageScore,
+  computeLevelSummaries,
+  getMean,
+} from "./utils/monitorScoreUtils";
 
 const MONITOR_TIME_RANGE_OPTIONS = [
   { value: TraceListTimeRange.ONE_DAY, label: "Last 1 Day" },
@@ -70,19 +84,53 @@ const MONITOR_TIME_RANGE_OPTIONS = [
   { value: TraceListTimeRange.THIRTY_DAYS, label: "Last 30 Days" },
 ];
 
-/** Extract the numeric mean from an evaluator's aggregations map. */
-const getMean = (e: EvaluatorScoreSummary): number | null => {
-  const v = e.aggregations?.["mean"];
-  return typeof v === "number" ? v : null;
-};
-
 export const ViewMonitorComponent: React.FC = () => {
   const { orgId, projectId, agentId, envId, monitorId } = useParams();
   const theme = useTheme();
   const palette = theme.vars?.palette;
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // ── Compare button / monitor picker ───────────────────────────────────
+  const [compareAnchorEl, setCompareAnchorEl] =
+    useState<HTMLElement | null>(null);
+  const { data: compareCandidates } = useListMonitors(
+    { orgName: orgId ?? "", projName: projectId ?? "", agentName: agentId ?? "" },
+    { environmentName: envId },
+  );
+  const otherMonitors = useMemo(
+    () => (compareCandidates?.monitors ?? []).filter((m) => m.name !== monitorId),
+    [compareCandidates, monitorId],
+  );
+  const handleOpenCompareMenu = useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      setCompareAnchorEl(event.currentTarget);
+    },
+    [],
+  );
+  const handleCloseCompareMenu = useCallback(() => {
+    setCompareAnchorEl(null);
+  }, []);
+  const handleCompareWith = useCallback(
+    (targetMonitorName: string) => {
+      handleCloseCompareMenu();
+      if (!orgId || !projectId || !agentId || !envId || !monitorId) {
+        return;
+      }
+      navigate({
+        pathname: generatePath(
+          absoluteRouteMap.children.org.children.projects.children.agents
+            .children.environment.children.evaluation.children.monitor.children
+            .compare.path,
+          { orgId, projectId, agentId, envId, monitorId },
+        ),
+        search: `?with=${encodeURIComponent(targetMonitorName)}`,
+      });
+    },
+    [agentId, envId, handleCloseCompareMenu, monitorId, navigate, orgId, projectId],
+  );
 
   const timeRange = useMemo(
     () =>
@@ -156,32 +204,15 @@ export const ViewMonitorComponent: React.FC = () => {
   const hasLlmLevel = levelsPresent.has("llm");
 
   // ── EvaluationSummaryCard — per-level breakdown ───────────────────────────
-  const levelSummaries = useMemo<LevelSummary[]>(() => {
-    const levelOrder: EvaluationLevel[] = ["trace", "agent", "llm"];
-    return levelOrder
-      .filter((lvl) => levelsPresent.has(lvl))
-      .map((lvl) => {
-        const group = evaluators.filter((e) => e.level === lvl);
-        return {
-          level: lvl,
-          evaluatorCount: group.length,
-          uniqueCount: Math.max(...group.map((e) => e.count), 0),
-          totalEvaluations: group.reduce((s, e) => s + e.count, 0),
-          skippedCount: group.reduce((s, e) => s + e.skippedCount, 0),
-        };
-      });
-  }, [evaluators, levelsPresent]);
+  const levelSummaries = useMemo<LevelSummary[]>(
+    () => computeLevelSummaries(evaluators),
+    [evaluators],
+  );
 
-  const averageScore = useMemo(() => {
-    const means = evaluators
-      .map(getMean)
-      .filter((m): m is number => m !== null);
-    if (means.length === 0) {
-      return null;
-    }
-    const sum = means.reduce((acc, m) => acc + m, 0);
-    return sum / means.length;
-  }, [evaluators]);
+  const averageScore = useMemo(
+    () => computeAverageScore(evaluators),
+    [evaluators],
+  );
 
   // ── PerformanceByEvaluatorCard ───────────────────────────────────────────
   const evaluatorInfoList = useMemo(
@@ -420,6 +451,35 @@ export const ViewMonitorComponent: React.FC = () => {
                     ))}
                   </Select>
                 )}
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<GitCompare size={16} />}
+                  endIcon={<ChevronDown size={14} />}
+                  onClick={handleOpenCompareMenu}
+                >
+                  Compare
+                </Button>
+                <Menu
+                  anchorEl={compareAnchorEl}
+                  open={!!compareAnchorEl}
+                  onClose={handleCloseCompareMenu}
+                >
+                  {otherMonitors.length === 0 ? (
+                    <MenuItem disabled>
+                      No other monitors in this environment
+                    </MenuItem>
+                  ) : (
+                    otherMonitors.map((m) => (
+                      <MenuItem
+                        key={m.name}
+                        onClick={() => handleCompareWith(m.name)}
+                      >
+                        {m.displayName ?? m.name}
+                      </MenuItem>
+                    ))
+                  )}
+                </Menu>
                 <IconButton
                   size="small"
                   onClick={handleRefresh}

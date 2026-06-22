@@ -323,6 +323,11 @@ export const rootRouteMap: AppRoute = {
                                                             path: 'edit/:monitorId',
                                                             index: true,
                                                             children: {},
+                                                        },
+                                                        compare: {
+                                                            path: 'compare/:monitorId',
+                                                            index: true,
+                                                            children: {},
                                                         }
                                                     },
                                                 }
