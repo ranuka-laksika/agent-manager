@@ -56,6 +56,7 @@ import {
   LazyCreateMonitorComponent,
   LazyViewMonitorComponent,
   LazyEditMonitorComponent,
+  LazyProfilePage,
 } from "../pages";
 import { LoadingFallback } from "../components/LoadingFallback";
 import { relativeRouteMap } from "@agent-management-platform/types";
@@ -194,6 +195,14 @@ export function RootRouter() {
             </Protected>
           }
         >
+          <Route
+            path={relativeRouteMap.children.profile.path}
+            element={
+              <Suspense fallback={<LoadingFallback />}>
+                <LazyProfilePage />
+              </Suspense>
+            }
+          />
           <Route path={relativeRouteMap.children.org.path} element={<OrgGuard />}>
             <Route index element={<LazyOverviewOrg />} />
             {

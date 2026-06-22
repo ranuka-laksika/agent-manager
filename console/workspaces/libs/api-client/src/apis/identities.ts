@@ -403,6 +403,31 @@ export async function removeRoleAssignees(
   if (!res.ok) throw await res.json();
 }
 
+// --- User Profile & Credentials (Self) ---
+
+export async function updateUserProfile(
+  body: UpdateUserRequest,
+  getToken?: () => Promise<string>,
+): Promise<ThunderUser> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPUT(
+    `${orgBase("default")}/users/me`, body, { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function updateUserCredentials(
+  body: { attributes: { password: string } },
+  getToken?: () => Promise<string>,
+): Promise<void> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPOST(
+    `${orgBase("default")}/users/me/update-credentials`, body, { token },
+  );
+  if (!res.ok) throw await res.json();
+}
+
 // --- Permissions catalog ---
 
 export async function listAMPPermissions(

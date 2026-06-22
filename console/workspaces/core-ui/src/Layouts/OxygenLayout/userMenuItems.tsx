@@ -17,10 +17,15 @@
  */
 
 import { globalConfig } from "@agent-management-platform/types";
-import { LogOut } from "@wso2/oxygen-ui-icons-react";
+import { LogOut, Settings } from "@wso2/oxygen-ui-icons-react";
 
 
 export const createUserMenuItems = ({ logout }: { logout: () => Promise<void> }) => [
+    {
+        label: "Profile Settings",
+        href: "/profile",
+        icon: <Settings />,
+    },
     {
         label: "Logout",
         onClick:logout,
