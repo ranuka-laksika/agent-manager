@@ -339,6 +339,10 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate agent API key: %w", err)
 		}
+		apiKeySecretRef, apiKeySecretProperty, err := s.storeAgentAPIKey(ctx, orgName, projectName, req.Name, envName, apiKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store agent API key: %w", err)
+		}
 
 		// Always attach OTEL trait; patches are gated by instrumentationEnabled via 'where' on target,
 		// enabling per-environment control through traitEnvironmentConfigs.
@@ -362,7 +366,8 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 			TraitKind: client.TraitKindTrait,
 			TraitType: client.TraitEnvInjection,
 			Opts: []client.TraitOption{
-				client.WithAgentApiKey(apiKey),
+				client.WithAgentApiKeySecretRef(apiKeySecretRef),
+				client.WithAgentApiKeySecretProperty(apiKeySecretProperty),
 			},
 		})
 	} else if isAPIAgent && isDocker {
@@ -371,11 +376,16 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate agent API key: %w", err)
 		}
+		apiKeySecretRef, apiKeySecretProperty, err := s.storeAgentAPIKey(ctx, orgName, projectName, req.Name, envName, apiKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store agent API key: %w", err)
+		}
 		traits = append(traits, client.TraitRequest{
 			TraitKind: client.TraitKindTrait,
 			TraitType: client.TraitEnvInjection,
 			Opts: []client.TraitOption{
-				client.WithAgentApiKey(apiKey),
+				client.WithAgentApiKeySecretRef(apiKeySecretRef),
+				client.WithAgentApiKeySecretProperty(apiKeySecretProperty),
 			},
 		})
 	}
@@ -654,6 +664,55 @@ func (s *agentManagerService) generateAgentAPIKey(ctx context.Context, orgName, 
 
 	s.logger.Debug("Generated agent API key", "agentName", agentName)
 	return tokenResp.Token, nil
+}
+
+// agentAPIKeySecretLocation returns the KV store location for an agent's API key in a
+// given environment. The key is scoped per environment so each environment materializes
+// its own ExternalSecret via the env-injection trait.
+func agentAPIKeySecretLocation(orgName, projectName, agentName, envName string) secretmanagersvc.SecretLocation {
+	return secretmanagersvc.SecretLocation{
+		OrgName:         orgName,
+		ProjectName:     projectName,
+		EnvironmentName: envName,
+		AgentName:       agentName,
+		EntityName:      agentName + "-agent-api-key",
+	}
+}
+
+// storeAgentAPIKey stores the agent API key (JWT) in the secret store and returns the
+// remote reference (key/path + optional property) that the env-injection trait uses to
+// build its ExternalSecret. This keeps the raw key out of the control plane — only the
+// reference is ever passed to the trait.
+//
+// The reference is resolved from the SecretReference CR rather than computed locally:
+// CreateSecret returns the SecretReference name, and only the SecretReference knows the
+// provider's real remote reference. (For OpenBao that happens to be the KV path, but for
+// the Secret Manager API it is the provider's own reference — location.KVPath() is wrong
+// there, so we must read it back from the SecretReference.)
+func (s *agentManagerService) storeAgentAPIKey(ctx context.Context, orgName, projectName, agentName, envName, apiKey string) (key string, property string, err error) {
+	if s.secretMgmtClient == nil {
+		return "", "", fmt.Errorf("secret management is not initialized; cannot store agent API key")
+	}
+	location := agentAPIKeySecretLocation(orgName, projectName, agentName, envName)
+	secretRefName, err := s.secretMgmtClient.CreateSecret(ctx, location, map[string]string{
+		secretmanagersvc.SecretKeyAPIKey: apiKey,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to store agent API key in secret store: %w", err)
+	}
+
+	secretRef, err := s.ocClient.GetSecretReference(ctx, orgName, secretRefName)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to resolve agent API key secret reference %q: %w", secretRefName, err)
+	}
+	for _, ds := range secretRef.Data {
+		if ds.SecretKey == secretmanagersvc.SecretKeyAPIKey {
+			s.logger.Debug("Stored agent API key in secret store", "agentName", agentName, "environment", envName,
+				"secretRefName", secretRefName, "remoteKey", ds.RemoteRef.Key)
+			return ds.RemoteRef.Key, ds.RemoteRef.Property, nil
+		}
+	}
+	return "", "", fmt.Errorf("agent API key secret reference %q has no %q data source", secretRefName, secretmanagersvc.SecretKeyAPIKey)
 }
 
 func (s *agentManagerService) GetAgent(ctx context.Context, orgName string, projectName string, agentName string) (*models.AgentResponse, error) {
@@ -2859,11 +2918,17 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
 		if apiKeyErr != nil {
 			s.logger.Warn("Failed to generate agent API key for promotion", "agentName", agentName, "environment", req.TargetEnvironment, "error", apiKeyErr)
+		} else if apiKeySecretRef, apiKeySecretProperty, storeErr := s.storeAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment, apiKey); storeErr != nil {
+			s.logger.Warn("Failed to store agent API key for promotion", "agentName", agentName, "environment", req.TargetEnvironment, "error", storeErr)
 		} else {
 			envInjKey := agentName + "-" + string(client.TraitEnvInjection)
-			traitEnvConfigs[envInjKey] = map[string]interface{}{
-				"agentApiKey": apiKey,
+			envInjCfg := map[string]interface{}{
+				"agentApiKeySecretRef": apiKeySecretRef,
 			}
+			if apiKeySecretProperty != "" {
+				envInjCfg["agentApiKeySecretProperty"] = apiKeySecretProperty
+			}
+			traitEnvConfigs[envInjKey] = envInjCfg
 		}
 
 		// Persist config for the target environment

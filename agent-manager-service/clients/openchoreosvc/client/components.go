@@ -2037,10 +2037,22 @@ func WithUpstreamBasePath(basePath string) TraitOption {
 	}
 }
 
-// WithAgentApiKey sets the agent API key for OTEL and env-injection traits.
-func WithAgentApiKey(apiKey string) TraitOption {
+// WithAgentApiKeySecretRef sets the remote reference (key/path) of the agent API key for
+// the env-injection trait. The raw key value is stored in the secret store by the caller;
+// only this reference is passed to the trait so the secret never lands in the control plane.
+func WithAgentApiKeySecretRef(secretRef string) TraitOption {
 	return func(params map[string]interface{}) {
-		params["agentApiKey"] = apiKey
+		params["agentApiKeySecretRef"] = secretRef
+	}
+}
+
+// WithAgentApiKeySecretProperty sets the optional property within the remote secret that
+// holds the agent API key. Empty values are ignored so the trait omits the property.
+func WithAgentApiKeySecretProperty(property string) TraitOption {
+	return func(params map[string]interface{}) {
+		if property != "" {
+			params["agentApiKeySecretProperty"] = property
+		}
 	}
 }
 
@@ -2258,9 +2270,9 @@ func (c *openChoreoClient) buildEnvInjectionTraitParameters(opts ...TraitOption)
 	for _, opt := range opts {
 		opt(params)
 	}
-	agentApiKey, _ := params["agentApiKey"].(string)
-	if agentApiKey == "" {
-		return nil, fmt.Errorf("agent API key is required for env injection trait")
+	agentApiKeySecretRef, _ := params["agentApiKeySecretRef"].(string)
+	if agentApiKeySecretRef == "" {
+		return nil, fmt.Errorf("agent API key secret reference is required for env injection trait")
 	}
 
 	// otelEndpoint is no longer set here — the env-injection trait derives it from the
@@ -2268,7 +2280,10 @@ func (c *openChoreoClient) buildEnvInjectionTraitParameters(opts ...TraitOption)
 	// in-cluster Service. The trait still honours an explicit override via
 	// environmentConfigs.otelEndpoint / parameters.otelEndpoint when set.
 	result := map[string]interface{}{
-		"agentApiKey": agentApiKey,
+		"agentApiKeySecretRef": agentApiKeySecretRef,
+	}
+	if v, ok := params["agentApiKeySecretProperty"].(string); ok && v != "" {
+		result["agentApiKeySecretProperty"] = v
 	}
 	if v, ok := params["envInjectionEnabled"]; ok {
 		result["envInjectionEnabled"] = v
