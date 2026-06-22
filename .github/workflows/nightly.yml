@@ -223,6 +223,13 @@ jobs:
         run: |
           TAG="amp/v${DEV_VERSION}"
           COMMIT_SHA=$(git rev-parse HEAD)
+          # Delete existing tag if present locally or remotely (idempotent — safe to re-run same day)
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            git tag -d "$TAG"
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            git push origin --delete "refs/tags/$TAG"
+          fi
           git tag -a "$TAG" -m "Nightly dev build ${DEV_VERSION} from main at ${COMMIT_SHA:0:7}"
           git push origin "$TAG"
           echo "✅ Created tag $TAG at ${COMMIT_SHA:0:7}"
