@@ -186,6 +186,18 @@ jobs:
           path: ${{ matrix.chart.path }}/charts
           key: helm-charts-${{ hashFiles(format('{0}/Chart.lock', matrix.chart.path)) }}
 
+      - name: Patch chart image tags
+        env:
+          DEV_VERSION: ${{ needs.compute-version.outputs.dev-version }}
+        run: |
+          # Substitute 0.0.0-dev image tags with the dated nightly tag.
+          # Unlike release.yml (which prepends v), nightly images have no v prefix.
+          find ./deployments/helm-charts -name "values.yaml" -type f | while read -r f; do
+            sed -i.bak "s|tag: \"0\.0\.0-dev\"|tag: \"${DEV_VERSION}\"|g" "$f"
+            rm -f "${f}.bak"
+          done
+          echo "✅ Patched image tags to ${DEV_VERSION}"
+
       - name: Package and push ${{ matrix.chart.name }}
         if: hashFiles(matrix.chart.chart-file) != ''
         run: |
@@ -266,18 +278,6 @@ jobs:
           curl -fsSL -o /tmp/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
           echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
           sudo install /tmp/yq /usr/local/bin/yq
-
-      - name: Patch chart image tags
-        env:
-          DEV_VERSION: ${{ needs.compute-version.outputs.dev-version }}
-        run: |
-          # Substitute 0.0.0-dev image tags with the dated nightly tag.
-          # Unlike release.yml (which prepends v), nightly images have no v prefix.
-          find ./deployments/helm-charts -name "values.yaml" -type f | while read -r f; do
-            sed -i.bak "s|tag: \"0\.0\.0-dev\"|tag: \"${DEV_VERSION}\"|g" "$f"
-            rm -f "${f}.bak"
-          done
-          echo "✅ Patched image tags to ${DEV_VERSION}"
 
       - name: Install platform
         env:
