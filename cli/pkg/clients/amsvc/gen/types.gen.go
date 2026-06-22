@@ -4648,6 +4648,14 @@ type ListUsersParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// UpdateUserCredentialsJSONBody defines parameters for UpdateUserCredentials.
+type UpdateUserCredentialsJSONBody struct {
+	Attributes struct {
+		// Password New password
+		Password string `json:"password"`
+	} `json:"attributes"`
+}
+
 // ListLLMProviderTemplatesParams defines parameters for ListLLMProviderTemplates.
 type ListLLMProviderTemplatesParams struct {
 	// Limit Maximum number of results to return
@@ -4946,6 +4954,12 @@ type UpdateRoleJSONRequestBody = UpdateRoleRequest
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody = CreateUserRequest
+
+// UpdateUserProfileJSONRequestBody defines body for UpdateUserProfile for application/json ContentType.
+type UpdateUserProfileJSONRequestBody = UpdateUserRequest
+
+// UpdateUserCredentialsJSONRequestBody defines body for UpdateUserCredentials for application/json ContentType.
+type UpdateUserCredentialsJSONRequestBody UpdateUserCredentialsJSONBody
 
 // UpdateUserJSONRequestBody defines body for UpdateUser for application/json ContentType.
 type UpdateUserJSONRequestBody = UpdateUserRequest

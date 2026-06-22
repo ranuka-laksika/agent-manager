@@ -154,6 +154,9 @@ importers:
       '@agent-management-platform/overview':
         specifier: workspace:*
         version: link:../pages/overview
+      '@agent-management-platform/profile-settings':
+        specifier: workspace:*
+        version: link:../pages/profile-settings
       '@agent-management-platform/shared-component':
         specifier: workspace:*
         version: link:../libs/shared-component
