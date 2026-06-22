@@ -86,7 +86,7 @@ func (r *LLMProviderRepo) Create(tx *gorm.DB, p *models.LLMProvider, handle, nam
 
 	// Insert into llm_providers table
 	slog.Info("LLMProviderRepo.Create: inserting into llm_providers table", "handle", handle, "uuid", p.UUID)
-	if err := tx.Create(p).Error; err != nil {
+	if err := tx.Omit("status").Create(p).Error; err != nil {
 		slog.Error("LLMProviderRepo.Create: failed to insert provider", "handle", handle, "uuid", p.UUID, "error", err)
 		return err
 	}
@@ -205,7 +205,6 @@ func (r *LLMProviderRepo) Update(p *models.LLMProvider, providerID string, orgUU
 				"template_handle": p.TemplateHandle,
 				"openapi_spec":    p.OpenAPISpec,
 				"model_list":      p.ModelList,
-				"status":          p.Status,
 				"configuration":   p.Configuration,
 			})
 

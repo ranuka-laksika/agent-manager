@@ -139,13 +139,12 @@ func (s *LLMProviderService) Create(ctx context.Context, orgName, createdBy stri
 
 	// Set default values
 	provider.CreatedBy = createdBy
-	provider.Status = llmStatusPending
 	if provider.Configuration.Context == nil {
 		defaultContext := "/"
 		provider.Configuration.Context = &defaultContext
 	}
 
-	slog.Info("LLMProviderService.Create: set default values", "orgName", orgName, "handle", handle, "status", provider.Status, "context", *provider.Configuration.Context)
+	slog.Info("LLMProviderService.Create: set default values", "orgName", orgName, "handle", handle, "context", *provider.Configuration.Context)
 
 	// Serialize model providers to ModelList
 	if len(provider.ModelProviders) > 0 {

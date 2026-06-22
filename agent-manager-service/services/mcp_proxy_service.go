@@ -144,7 +144,6 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 	proxy := &models.MCPProxy{
 		Description: valueOrEmpty(req.Description),
 		CreatedBy:   createdBy,
-		Status:      "pending",
 		Configuration: models.MCPProxyConfig{
 			Name:         name,
 			Version:      version,
