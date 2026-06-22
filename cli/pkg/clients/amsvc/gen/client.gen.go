@@ -368,6 +368,9 @@ type ClientInterface interface {
 
 	UpdateLLMProviderCatalogStatus(ctx context.Context, orgName string, id string, body UpdateLLMProviderCatalogStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListLLMProviderConsumers request
+	ListLLMProviderConsumers(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetLLMProviderDeployments request
 	GetLLMProviderDeployments(ctx context.Context, orgName string, id string, params *GetLLMProviderDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1870,6 +1873,18 @@ func (c *Client) UpdateLLMProviderCatalogStatusWithBody(ctx context.Context, org
 
 func (c *Client) UpdateLLMProviderCatalogStatus(ctx context.Context, orgName string, id string, body UpdateLLMProviderCatalogStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLLMProviderCatalogStatusRequest(c.Server, orgName, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListLLMProviderConsumers(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLLMProviderConsumersRequest(c.Server, orgName, id)
 	if err != nil {
 		return nil, err
 	}
@@ -6991,6 +7006,47 @@ func NewUpdateLLMProviderCatalogStatusRequestWithBody(server string, orgName str
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListLLMProviderConsumersRequest generates requests for ListLLMProviderConsumers
+func NewListLLMProviderConsumersRequest(server string, orgName string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/llm-providers/%s/consumers", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -12431,6 +12487,9 @@ type ClientWithResponsesInterface interface {
 
 	UpdateLLMProviderCatalogStatusWithResponse(ctx context.Context, orgName string, id string, body UpdateLLMProviderCatalogStatusJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLLMProviderCatalogStatusResp, error)
 
+	// ListLLMProviderConsumersWithResponse request
+	ListLLMProviderConsumersWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProviderConsumersResp, error)
+
 	// GetLLMProviderDeploymentsWithResponse request
 	GetLLMProviderDeploymentsWithResponse(ctx context.Context, orgName string, id string, params *GetLLMProviderDeploymentsParams, reqEditors ...RequestEditorFn) (*GetLLMProviderDeploymentsResp, error)
 
@@ -14626,6 +14685,32 @@ func (r UpdateLLMProviderCatalogStatusResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateLLMProviderCatalogStatusResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListLLMProviderConsumersResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *LLMProviderConsumerListResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLLMProviderConsumersResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLLMProviderConsumersResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17496,6 +17581,15 @@ func (c *ClientWithResponses) UpdateLLMProviderCatalogStatusWithResponse(ctx con
 		return nil, err
 	}
 	return ParseUpdateLLMProviderCatalogStatusResp(rsp)
+}
+
+// ListLLMProviderConsumersWithResponse request returning *ListLLMProviderConsumersResp
+func (c *ClientWithResponses) ListLLMProviderConsumersWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProviderConsumersResp, error) {
+	rsp, err := c.ListLLMProviderConsumers(ctx, orgName, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLLMProviderConsumersResp(rsp)
 }
 
 // GetLLMProviderDeploymentsWithResponse request returning *GetLLMProviderDeploymentsResp
@@ -21974,6 +22068,60 @@ func ParseUpdateLLMProviderCatalogStatusResp(rsp *http.Response) (*UpdateLLMProv
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest LLMProviderResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLLMProviderConsumersResp parses an HTTP response from a ListLLMProviderConsumersWithResponse call
+func ParseListLLMProviderConsumersResp(rsp *http.Response) (*ListLLMProviderConsumersResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLLMProviderConsumersResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LLMProviderConsumerListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -621,6 +621,24 @@ func (e LLMAccessControlMode) Valid() bool {
 	}
 }
 
+// Defines values for LLMProviderConsumerItemConsumerType.
+const (
+	LLMProviderConsumerItemConsumerTypeAgent   LLMProviderConsumerItemConsumerType = "agent"
+	LLMProviderConsumerItemConsumerTypeMonitor LLMProviderConsumerItemConsumerType = "monitor"
+)
+
+// Valid indicates whether the value is a known member of the LLMProviderConsumerItemConsumerType enum.
+func (e LLMProviderConsumerItemConsumerType) Valid() bool {
+	switch e {
+	case LLMProviderConsumerItemConsumerTypeAgent:
+		return true
+	case LLMProviderConsumerItemConsumerTypeMonitor:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LLMProviderListItemStatus.
 const (
 	LLMProviderListItemStatusDeployed LLMProviderListItemStatus = "deployed"
@@ -1028,16 +1046,16 @@ func (e GetMonitorScoresParamsLevel) Valid() bool {
 
 // Defines values for GetGroupedScoresParamsLevel.
 const (
-	GetGroupedScoresParamsLevelAgent GetGroupedScoresParamsLevel = "agent"
-	GetGroupedScoresParamsLevelLlm   GetGroupedScoresParamsLevel = "llm"
+	Agent GetGroupedScoresParamsLevel = "agent"
+	Llm   GetGroupedScoresParamsLevel = "llm"
 )
 
 // Valid indicates whether the value is a known member of the GetGroupedScoresParamsLevel enum.
 func (e GetGroupedScoresParamsLevel) Valid() bool {
 	switch e {
-	case GetGroupedScoresParamsLevelAgent:
+	case Agent:
 		return true
-	case GetGroupedScoresParamsLevelLlm:
+	case Llm:
 		return true
 	default:
 		return false
@@ -2951,6 +2969,35 @@ type LLMPolicyPath struct {
 
 	// Path Path pattern
 	Path string `json:"path"`
+}
+
+// LLMProviderConsumerItem defines model for LLMProviderConsumerItem.
+type LLMProviderConsumerItem struct {
+	// ConsumerName Name (handle) of the agent or monitor consuming the proxy
+	ConsumerName string `json:"consumerName"`
+
+	// ConsumerType Whether the consumer is an agent or a monitor
+	ConsumerType LLMProviderConsumerItemConsumerType `json:"consumerType"`
+
+	// ProjectName Name of the project the proxy belongs to
+	ProjectName string `json:"projectName"`
+
+	// ProxyId Handle/ID of the LLM proxy
+	ProxyId string `json:"proxyId"`
+
+	// ProxyName Display name of the LLM proxy
+	ProxyName string `json:"proxyName"`
+}
+
+// LLMProviderConsumerItemConsumerType Whether the consumer is an agent or a monitor
+type LLMProviderConsumerItemConsumerType string
+
+// LLMProviderConsumerListResponse defines model for LLMProviderConsumerListResponse.
+type LLMProviderConsumerListResponse struct {
+	Consumers []LLMProviderConsumerItem `json:"consumers"`
+
+	// Total Total number of consumers
+	Total int32 `json:"total"`
 }
 
 // LLMProviderListItem defines model for LLMProviderListItem.
