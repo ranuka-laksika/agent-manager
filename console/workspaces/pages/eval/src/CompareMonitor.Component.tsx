@@ -71,6 +71,14 @@ const MONITOR_TIME_RANGE_OPTIONS = [
   { value: TraceListTimeRange.THIRTY_DAYS, label: "Last 30 Days" },
 ];
 
+/** Guard a raw query-param value before treating it as a TraceListTimeRange. */
+function isValidTimeRange(value: string | null): value is TraceListTimeRange {
+  return (
+    value !== null &&
+    (Object.values(TraceListTimeRange) as string[]).includes(value)
+  );
+}
+
 interface CompareRadarPoint extends RadarDataPoint {
   source: number | null;
   target: number | null;
@@ -147,18 +155,14 @@ export const CompareMonitorComponent: React.FC = () => {
   const theme = useTheme();
   const palette = theme.vars?.palette;
 
-  const sourceTimeRange = useMemo(
-    () =>
-      (searchParams.get("sourceTimeRange") as TraceListTimeRange) ||
-      TraceListTimeRange.SEVEN_DAYS,
-    [searchParams],
-  );
-  const targetTimeRange = useMemo(
-    () =>
-      (searchParams.get("targetTimeRange") as TraceListTimeRange) ||
-      TraceListTimeRange.SEVEN_DAYS,
-    [searchParams],
-  );
+  const sourceTimeRange = useMemo(() => {
+    const raw = searchParams.get("sourceTimeRange");
+    return isValidTimeRange(raw) ? raw : TraceListTimeRange.SEVEN_DAYS;
+  }, [searchParams]);
+  const targetTimeRange = useMemo(() => {
+    const raw = searchParams.get("targetTimeRange");
+    return isValidTimeRange(raw) ? raw : TraceListTimeRange.SEVEN_DAYS;
+  }, [searchParams]);
 
   const handleSourceTimeRangeChange = (value: TraceListTimeRange) => {
     const next = new URLSearchParams(searchParams);
@@ -286,9 +290,9 @@ export const CompareMonitorComponent: React.FC = () => {
 
   const sourceColor = palette?.primary.main ?? "#3f8cff";
   // theme.palette.secondary is a neutral grey in this design system (not a
-  // visible accent), so use a fixed, high-contrast color for the comparison
-  // series instead — same approach as the fixed level colors in levelConfig.ts.
-  const targetColor = "#f59e0b";
+  // visible accent), so use the warning token (amber) as the high-contrast
+  // comparison series, falling back to a fixed hex if the token is unavailable.
+  const targetColor = palette?.warning?.main ?? "#f59e0b";
 
   // ── Union radar dataset: every evaluator either monitor has ──────────────
   const radarChartData = useMemo<CompareRadarPoint[]>(() => {
@@ -307,8 +311,12 @@ export const CompareMonitorComponent: React.FC = () => {
       const b = byNameTarget.get(name);
       const meanA = a ? getMean(a) : undefined;
       const meanB = b ? getMean(b) : undefined;
-      const sourceValue = a ? (meanA ?? 0) * 100 : null;
-      const targetValue = b ? (meanB ?? 0) * 100 : null;
+      // Keep null (not 0) when an evaluator is absent or fully skipped, so the
+      // radar bridges the axis (connectNulls) instead of plotting a misleading
+      // 0 score. The _isNoData* flags below still distinguish "absent" from
+      // "all skipped" for the tooltip.
+      const sourceValue = meanA != null ? meanA * 100 : null;
+      const targetValue = meanB != null ? meanB * 100 : null;
       const level: EvaluationLevel = (a ?? b)?.level ?? "trace";
 
       return {
@@ -518,7 +526,10 @@ export const CompareMonitorComponent: React.FC = () => {
                         scored: dataPoint._scoredCountTarget,
                         total: dataPoint._totalCountTarget,
                       },
-                    ].filter((row) => row.value !== null);
+                      // Keep a row when the monitor has the evaluator: either it has
+                      // a score (value set) or it ran but fully skipped (isNoData).
+                      // Drop only evaluators the monitor doesn't have at all.
+                    ].filter((row) => row.value !== null || row.isNoData);
 
                     return (
                       <Card variant="outlined">

@@ -23,7 +23,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from amp_evaluation.trace.fetcher import TraceFetcher, sample_traces
+from amp_evaluation.trace.fetcher import TraceFetcher, sample_traces, _parse_timestamp
 
 
 def _raw_trace(trace_id: str, start_time: str) -> dict:
@@ -53,6 +53,32 @@ def _mock_response(traces: List[dict], total_count: int) -> MagicMock:
     resp.raise_for_status.return_value = None
     resp.json.return_value = {"traces": traces, "totalCount": total_count, "truncated": False}
     return resp
+
+
+def _api_simulator(all_traces: List[dict], resolution_us: int = 1):
+    """Faithfully simulate /traces/export as a `requests.get` side_effect.
+
+    Filters `startTime` to [cursor, end] using parsed datetimes (like a real
+    time-based store), sorts ascending, and caps at `limit`. `resolution_us`
+    truncates both trace timestamps and the cursor before comparing, so
+    `resolution_us=1000` models a millisecond-resolution store (used to prove the
+    self-correcting cursor step escapes a rounded-away increment).
+    """
+
+    def _bucket(dt):
+        epoch_us = int(dt.timestamp() * 1_000_000)
+        return (epoch_us // resolution_us) * resolution_us
+
+    ordered = sorted(all_traces, key=lambda t: _parse_timestamp(t["startTime"]))
+
+    def _get(url, params=None, headers=None, timeout=None, **kwargs):
+        cursor = _bucket(_parse_timestamp(params["startTime"]))
+        end = _bucket(_parse_timestamp(params["endTime"]))
+        limit = int(params["limit"])
+        matching = [t for t in ordered if cursor <= _bucket(_parse_timestamp(t["startTime"])) <= end]
+        return _mock_response(matching[:limit], total_count=len(matching))
+
+    return _get
 
 
 class TestFetchTracesPagination:
@@ -91,21 +117,76 @@ class TestFetchTracesPagination:
         assert mock_get.call_count == 1
 
     def test_dedupes_traces_tied_at_page_boundary(self):
-        """If multiple traces share the exact boundary startTime, the next page's
-        re-query (from that same startTime) may re-return them. They must not be
-        yielded twice, and a page that returns nothing new must stop iteration."""
+        """A startTime tie that exactly fills the page (and is the whole window) is
+        yielded once each and terminates — no duplicates, no loop."""
         fetcher = _make_fetcher()
+        tie = "2026-01-01T00:00:00Z"
+        traces = [_raw_trace("t0", tie), _raw_trace("t1", tie)]
 
-        tie_time = "2026-01-01T00:00:00Z"
-        page1 = [_raw_trace("t0", tie_time), _raw_trace("t1", tie_time)]
-        # Re-querying from tie_time returns the same two traces again (no new ones).
-        page2 = [_raw_trace("t0", tie_time), _raw_trace("t1", tie_time)]
-
-        with patch("requests.get", side_effect=[_mock_response(page1, 2), _mock_response(page2, 2)]) as mock_get:
-            result = list(fetcher.fetch_traces(start_time="s", end_time="e", page_size=2))
+        with patch("requests.get", side_effect=_api_simulator(traces)):
+            result = list(
+                fetcher.fetch_traces(
+                    start_time="2026-01-01T00:00:00Z",
+                    end_time="2026-02-01T00:00:00Z",
+                    page_size=2,
+                )
+            )
 
         assert [t.traceId for t in result] == ["t0", "t1"]
-        assert mock_get.call_count == 2
+
+    def test_tie_exceeding_page_size_skips_only_tail(self):
+        """When more than page_size traces share one startTime, the cursor steps past
+        it: the unseen tail at that timestamp is dropped, but every later trace is
+        still returned (no silent truncation of the rest) and it terminates."""
+        fetcher = _make_fetcher()
+        t2 = "2026-01-01T00:00:02.000000Z"
+        t3 = "2026-01-01T00:00:03.000000Z"
+        traces = [_raw_trace(f"a{i}", t2) for i in range(5)] + [_raw_trace(f"b{i}", t3) for i in range(2)]
+
+        with patch("requests.get", side_effect=_api_simulator(traces, resolution_us=1)):
+            result = list(
+                fetcher.fetch_traces(
+                    start_time="2026-01-01T00:00:00Z",
+                    end_time="2026-02-01T00:00:00Z",
+                    page_size=2,
+                )
+            )
+
+        ids = [t.traceId for t in result]
+        # First page_size of the tie are seen; the rest of the T2 tail (a2,a3,a4) are
+        # skipped; both T3 traces are preserved.
+        assert ids == ["a0", "a1", "b0", "b1"]
+
+    def test_coarse_store_step_grows_and_terminates(self):
+        """If the store resolves time at millisecond granularity, a 1µs step rounds
+        back to the tie; the step must grow until it advances — and terminate."""
+        fetcher = _make_fetcher()
+        # Three traces within the same millisecond bucket (sub-ms apart) + one later.
+        traces = [
+            _raw_trace("a0", "2026-01-01T00:00:02.000100Z"),
+            _raw_trace("a1", "2026-01-01T00:00:02.000200Z"),
+            _raw_trace("a2", "2026-01-01T00:00:02.000300Z"),
+            _raw_trace("b0", "2026-01-01T00:00:05.000000Z"),
+        ]
+
+        with patch("requests.get", side_effect=_api_simulator(traces, resolution_us=1000)):
+            result = list(
+                fetcher.fetch_traces(
+                    start_time="2026-01-01T00:00:00Z",
+                    end_time="2026-02-01T00:00:00Z",
+                    page_size=2,
+                )
+            )
+
+        ids = [t.traceId for t in result]
+        # a0,a1 seen (first page of the ms-tie); a2 is the dropped tail; b0 preserved.
+        assert "b0" in ids  # did not silently truncate everything after the tie
+        assert ids == ["a0", "a1", "b0"]
+
+    def test_page_size_must_be_positive(self):
+        fetcher = _make_fetcher()
+        with pytest.raises(ValueError):
+            list(fetcher.fetch_traces(start_time="s", end_time="e", page_size=0))
 
     def test_max_traces_stops_early(self):
         fetcher = _make_fetcher()

@@ -32,7 +32,7 @@ Named with OTEL prefix to avoid collision with evaluation models
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any, Callable, Iterable, Iterator, Tuple
 
 from amp_evaluation.trace.models import ToolDefinition
@@ -86,6 +86,11 @@ def _parse_timestamp(raw_timestamp: Any) -> Optional[datetime]:
 
     logger.warning(f"Could not parse timestamp: {raw_timestamp!r}")
     return None
+
+
+def _format_iso_z(dt: datetime) -> str:
+    """Serialise a datetime as a UTC ISO-8601 string with a trailing 'Z'."""
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ============================================================================
@@ -494,6 +499,9 @@ class TraceFetcher:
             Trace objects with OTEL/AMP attributes, in ascending startTime order
         """
         page_size = page_size if page_size is not None else self.page_size
+        if page_size <= 0:
+            raise ValueError("page_size must be a positive integer")
+
         seen_ids: set = set()
         cursor_start = start_time
         yielded = 0
@@ -504,21 +512,74 @@ class TraceFetcher:
                 return
 
             new_traces = [t for t in page if t.traceId not in seen_ids]
+
             if not new_traces:
-                # Entire page already seen: a startTime tie spans more than one page.
-                return
+                # No new traces at this cursor. A SHORT page means the window is
+                # genuinely exhausted. A FULL page of entirely-already-seen traces
+                # means the cursor is stalled on a cluster of traces the store can't
+                # advance past (more traces share one stored time than fit in a page).
+                if len(page) < page_size:
+                    return
+
+                next_cursor = self._step_past_stall(page[-1].startTime, end_time, page_size, seen_ids)
+                if next_cursor is None:
+                    return  # nothing resolvable after the stall — stop (never loop)
+                # Stepping forward skips any still-unseen traces sharing the stalled
+                # timestamp; surface it so the (intentional) loss is observable.
+                logger.warning(
+                    "More than page_size (%d) traces share the stored time around %s; "
+                    "stepping the cursor past it — remaining traces at that time are skipped.",
+                    page_size,
+                    page[-1].startTime,
+                )
+                cursor_start = next_cursor
+                continue
 
             for trace in new_traces:
+                if max_traces is not None and yielded >= max_traces:
+                    return
                 seen_ids.add(trace.traceId)
                 yield trace
                 yielded += 1
-                if max_traces is not None and yielded >= max_traces:
-                    return
 
             if len(page) < page_size:
                 return
 
             cursor_start = page[-1].startTime
+
+    def _step_past_stall(self, stalled_ts: str, end_time: str, page_size: int, seen_ids: set) -> Optional[str]:
+        """
+        Return a cursor that advances past a stalled timestamp — the case where a full
+        page is entirely already-seen traces because more traces share one stored time
+        than fit in `page_size`.
+
+        The export API's time filter/sort is delegated to an external store whose
+        resolution is unknown, so a fixed increment could be rounded back to the same
+        time and loop. Instead, grow the step (1µs, 10µs, … geometric) until a fetch at
+        the stepped cursor surfaces at least one unseen trace. Returns that cursor, or
+        None if nothing resolvable remains (window exhausted, unparseable, or step
+        capped) so the caller stops rather than looping. Note: Python datetime is
+        microsecond-resolution, so traces distinct only at sub-microsecond precision
+        collapse into the stall and are skipped along with it.
+        """
+        base = _parse_timestamp(stalled_ts)
+        if base is None:
+            return None
+        end_dt = _parse_timestamp(end_time)
+
+        step_us = 1
+        for _ in range(15):  # 1µs grown ×10 each time spans well past any real window
+            candidate_dt = base + timedelta(microseconds=step_us)
+            if end_dt is not None and candidate_dt > end_dt:
+                return None
+            candidate = _format_iso_z(candidate_dt)
+            page, _ = self._fetch_page(candidate, end_time, limit=page_size, sort_order="asc")
+            if not page:
+                return None
+            if any(t.traceId not in seen_ids for t in page):
+                return candidate  # the cursor advanced far enough to surface new traces
+            step_us *= 10  # store rounded the step away — grow it and retry
+        return None
 
     def fetch_trace_by_id(self, trace_id: str) -> Optional[OTELTrace]:
         """

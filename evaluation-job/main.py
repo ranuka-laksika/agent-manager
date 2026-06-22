@@ -140,6 +140,12 @@ def configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     logging.getLogger(__name__).setLevel(level)
 
+    # The openai/anthropic SDKs (used internally by any_llm) log retry attempts at
+    # INFO via their own package loggers, not through evaluation-job's logger above.
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("anthropic").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for monitor execution."""
@@ -188,7 +194,7 @@ def parse_args() -> argparse.Namespace:
         "--sampling-rate",
         type=float,
         default=1.0,
-        help="Sampling rate for traces (0.0-1.0), default: 1.0",
+        help="Sampling rate for traces (> 0 and <= 1), default: 1.0",
     )
 
     parser.add_argument(

@@ -81,7 +81,7 @@ export const CreateMonitorComponent: React.FC = () => {
       const displayName = `${sourceMonitor.displayName} (Copy)`;
       const samplingRatePercent =
         sourceMonitor.samplingRate !== undefined
-          ? Math.min(100, Math.max(0, Math.round(sourceMonitor.samplingRate * 100)))
+          ? Math.min(100, Math.max(1, Math.round(sourceMonitor.samplingRate * 100)))
           : 100;
       return {
         displayName,
