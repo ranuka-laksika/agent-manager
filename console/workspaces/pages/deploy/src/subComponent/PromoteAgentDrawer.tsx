@@ -95,11 +95,6 @@ export function PromoteAgentDrawer({
     [environments],
   );
 
-  const { data: sourceConfigs } = useGetAgentConfigurations(
-    { orgName: orgId, projName: projectId, agentName: agentId },
-    { environment: sourceEnvironment.name },
-  );
-
   const { mutateAsync: promoteAgent, isPending, error, reset: resetMutation } = usePromoteAgent();
 
   const targetEnvOptions = useMemo(() => {
@@ -110,32 +105,65 @@ export function PromoteAgentDrawer({
     return path?.targetEnvironmentRefs ?? [];
   }, [pipeline, sourceEnvironment.name]);
 
-  // Initialize form state once per drawer-open cycle so background refetches of
-  // sourceConfigs/targetEnvOptions don't wipe in-progress user edits.
-  const [didInitOnOpen, setDidInitOnOpen] = useState(false);
+  // Existing configuration of the selected destination environment. Keyed on the
+  // target env, so selecting a different target refetches that env's config.
+  const { data: targetConfigs, isSuccess: isTargetConfigLoaded } =
+    useGetAgentConfigurations(
+      { orgName: orgId, projName: projectId, agentName: agentId },
+      { environment: formState.targetEnvironment },
+    );
 
+  // Tracks which target env we've already pre-filled the editor for, so we fill
+  // once per target rather than on every background refetch.
+  const [filledForTarget, setFilledForTarget] = useState<string | null>(null);
+
+  // Pick a default target environment when the drawer opens, and clear state on close.
   useEffect(() => {
     if (!open) {
-      setDidInitOnOpen(false);
+      setFilledForTarget(null);
+      setFormState(DEFAULT_STATE);
+      resetMutation();
       return;
     }
-    if (didInitOnOpen) return;
-    // Pre-fill the editor with the source env's user-managed keys (isSystem=false),
-    // values blank. System-managed entries are platform-injected and not editable.
-    // Sensitivity is carried over so the row's "sensitive" badge matches the source,
-    // but secretRef is dropped — the user is providing a new value for this env.
-    const userEditableEnv =
-      (sourceConfigs?.configurations?.env ?? [])
-        .filter((e) => !e.isSystem)
-        .map((e) => ({ key: e.key, value: "", isSensitive: e.isSensitive }));
-    setFormState({
-      ...DEFAULT_STATE,
-      targetEnvironment: targetEnvOptions[0]?.name ?? "",
+    setFormState((prev) =>
+      prev.targetEnvironment
+        ? prev
+        : { ...prev, targetEnvironment: targetEnvOptions[0]?.name ?? "" },
+    );
+  }, [open, targetEnvOptions, resetMutation]);
+
+  // Pre-fill the editor with the destination environment's existing config so the
+  // user edits from its previous values rather than starting blank. Only the
+  // user-managed keys (isSystem=false) are editable; system entries are
+  // platform-injected. We fill once per target (tracked by filledForTarget) so a
+  // background refetch of the same target doesn't clobber in-progress edits, but
+  // switching to a different target re-fills from that env's config.
+  useEffect(() => {
+    if (!open) return;
+    const target = formState.targetEnvironment;
+    if (!target || filledForTarget === target || !isTargetConfigLoaded) return;
+    const cfg = targetConfigs?.configurations;
+    const userEditableEnv = (cfg?.env ?? [])
+      .filter((e) => !e.isSystem)
+      .map((e) => ({
+        key: e.key,
+        value: e.value ?? "",
+        isSensitive: e.isSensitive,
+        secretRef: e.secretRef,
+      }));
+    setFormState((prev) => ({
+      ...prev,
       env: userEditableEnv,
-    });
-    resetMutation();
-    setDidInitOnOpen(true);
-  }, [open, didInitOnOpen, resetMutation, targetEnvOptions, sourceConfigs]);
+      files: cfg?.files ?? [],
+    }));
+    setFilledForTarget(target);
+  }, [
+    open,
+    formState.targetEnvironment,
+    isTargetConfigLoaded,
+    targetConfigs,
+    filledForTarget,
+  ]);
 
   const handleToggleUseSourceConfig = useCallback(
     (checked: boolean) => {
