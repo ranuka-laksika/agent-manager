@@ -205,7 +205,6 @@ func ConvertSpecToModelLLMProvider(req *spec.CreateLLMProviderRequest, orgName s
 		TemplateHandle: req.Template,
 		Description:    ptrToString(req.Description),
 		OpenAPISpec:    ptrToString(req.Openapi),
-		Status:         "ACTIVE",
 		Configuration:  ConvertSpecToModelLLMProviderConfigFromRequest(req),
 	}
 
