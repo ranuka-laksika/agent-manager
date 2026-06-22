@@ -82,8 +82,8 @@ type EnvironmentVariable struct {
 }
 
 type Configurations struct {
-	Env                        []EnvironmentVariable `json:"env,omitempty"`
-	EnableAutoInstrumentation  *bool                 `json:"enableAutoInstrumentation,omitempty"`
+	Env                       []EnvironmentVariable `json:"env,omitempty"`
+	EnableAutoInstrumentation *bool                 `json:"enableAutoInstrumentation,omitempty"`
 }
 
 type InputInterfaceSchema struct {
@@ -91,9 +91,9 @@ type InputInterfaceSchema struct {
 }
 
 type InputInterface struct {
-	Type     string               `json:"type"`
-	Port     int                  `json:"port,omitempty"`
-	BasePath string               `json:"basePath,omitempty"`
+	Type     string                `json:"type"`
+	Port     int                   `json:"port,omitempty"`
+	BasePath string                `json:"basePath,omitempty"`
 	Schema   *InputInterfaceSchema `json:"schema,omitempty"`
 }
 
@@ -108,7 +108,7 @@ type DockerConfig struct {
 }
 
 type BuildConfig struct {
-	Type      string          `json:"type"`
+	Type      string           `json:"type"`
 	Buildpack *BuildpackConfig `json:"buildpack,omitempty"`
 	Docker    *DockerConfig    `json:"docker,omitempty"`
 }
@@ -167,7 +167,7 @@ type CreateAgentRequest struct {
 	Configurations *Configurations      `json:"configurations,omitempty"`
 	RuntimeConfigs *RuntimeConfigs      `json:"runtimeConfigs,omitempty"`
 	InputInterface *InputInterface      `json:"inputInterface,omitempty"`
-	ModelConfig    []ModelConfigRequest  `json:"modelConfig,omitempty"`
+	ModelConfig    []ModelConfigRequest `json:"modelConfig,omitempty"`
 }
 
 type UpdateAgentRequest struct {
@@ -447,7 +447,7 @@ type LLMProviderTemplateMetadataAuth struct {
 }
 
 type LLMProviderTemplateMetadata struct {
-	EndpointURL string                          `json:"endpointUrl,omitempty"`
+	EndpointURL string                           `json:"endpointUrl,omitempty"`
 	Auth        *LLMProviderTemplateMetadataAuth `json:"auth,omitempty"`
 }
 
@@ -478,7 +478,7 @@ type SecurityAPIKey struct {
 }
 
 type SecurityConfig struct {
-	Enabled bool           `json:"enabled"`
+	Enabled bool            `json:"enabled"`
 	APIKey  *SecurityAPIKey `json:"apiKey,omitempty"`
 }
 
@@ -611,25 +611,25 @@ type MonitorLLMProviderRef struct {
 }
 
 type CreateMonitorRequest struct {
-	Name            string                  `json:"name"`
-	DisplayName     string                  `json:"displayName"`
-	Description     string                  `json:"description,omitempty"`
-	EnvironmentName string                  `json:"environmentName"`
-	Evaluators      []MonitorEvaluator      `json:"evaluators"`
-	Type            string                  `json:"type"`
-	LLMProvider     *MonitorLLMProviderRef  `json:"llmProvider,omitempty"`
-	IntervalMinutes int                     `json:"intervalMinutes,omitempty"`
-	SamplingRate    *float64                `json:"samplingRate,omitempty"`
-	TraceStart      *time.Time              `json:"traceStart,omitempty"`
-	TraceEnd        *time.Time              `json:"traceEnd,omitempty"`
+	Name            string                 `json:"name"`
+	DisplayName     string                 `json:"displayName"`
+	Description     string                 `json:"description,omitempty"`
+	EnvironmentName string                 `json:"environmentName"`
+	Evaluators      []MonitorEvaluator     `json:"evaluators"`
+	Type            string                 `json:"type"`
+	LLMProvider     *MonitorLLMProviderRef `json:"llmProvider,omitempty"`
+	IntervalMinutes int                    `json:"intervalMinutes,omitempty"`
+	SamplingRate    *float64               `json:"samplingRate,omitempty"`
+	TraceStart      *time.Time             `json:"traceStart,omitempty"`
+	TraceEnd        *time.Time             `json:"traceEnd,omitempty"`
 }
 
 type UpdateMonitorRequest struct {
-	DisplayName     string                  `json:"displayName,omitempty"`
-	Evaluators      []MonitorEvaluator      `json:"evaluators,omitempty"`
-	LLMProvider     *MonitorLLMProviderRef  `json:"llmProvider,omitempty"`
-	IntervalMinutes int                     `json:"intervalMinutes,omitempty"`
-	SamplingRate    *float64                `json:"samplingRate,omitempty"`
+	DisplayName     string                 `json:"displayName,omitempty"`
+	Evaluators      []MonitorEvaluator     `json:"evaluators,omitempty"`
+	LLMProvider     *MonitorLLMProviderRef `json:"llmProvider,omitempty"`
+	IntervalMinutes int                    `json:"intervalMinutes,omitempty"`
+	SamplingRate    *float64               `json:"samplingRate,omitempty"`
 }
 
 type MonitorResponse struct {
@@ -810,11 +810,11 @@ type SpanSummaryListResponse struct {
 // ---------------------------------------------------------------------------
 
 type BuildOverview struct {
-	BuildName  string     `json:"buildName"`
-	Status     *string    `json:"status,omitempty"`
-	ImageID    *string    `json:"imageId,omitempty"`
-	StartedAt  time.Time  `json:"startedAt"`
-	EndedAt    *time.Time `json:"endedAt,omitempty"`
+	BuildName string     `json:"buildName"`
+	Status    *string    `json:"status,omitempty"`
+	ImageID   *string    `json:"imageId,omitempty"`
+	StartedAt time.Time  `json:"startedAt"`
+	EndedAt   *time.Time `json:"endedAt,omitempty"`
 }
 
 type BuildsListResponse struct {
@@ -858,9 +858,9 @@ type BuildDetailsResponse struct {
 // ---------------------------------------------------------------------------
 
 type DeployAgentRequest struct {
-	ImageID                  string              `json:"imageId"`
-	Env                      []EnvironmentVariable `json:"env,omitempty"`
-	EnableAutoInstrumentation *bool               `json:"enableAutoInstrumentation,omitempty"`
+	ImageID                   string                `json:"imageId"`
+	Env                       []EnvironmentVariable `json:"env,omitempty"`
+	EnableAutoInstrumentation *bool                 `json:"enableAutoInstrumentation,omitempty"`
 }
 
 type DeployAgentResponse struct {
@@ -948,4 +948,42 @@ type MetricsResponse struct {
 	Memory         []MetricDataPoint `json:"memory"`
 	MemoryRequests []MetricDataPoint `json:"memoryRequests"`
 	MemoryLimits   []MetricDataPoint `json:"memoryLimits"`
+}
+
+// --- Deployment pipeline & promotion ---
+
+// TargetEnvironmentRef references a target environment within a promotion path.
+type TargetEnvironmentRef struct {
+	Name string `json:"name"`
+}
+
+// PromotionPath defines a source environment and the environments it can promote to.
+type PromotionPath struct {
+	SourceEnvironmentRef  string                 `json:"sourceEnvironmentRef"`
+	TargetEnvironmentRefs []TargetEnvironmentRef `json:"targetEnvironmentRefs"`
+}
+
+// CreateDeploymentPipelineRequest is the body for creating an org deployment pipeline.
+type CreateDeploymentPipelineRequest struct {
+	DisplayName    string          `json:"displayName"`
+	Description    *string         `json:"description,omitempty"`
+	ProjectName    *string         `json:"projectName,omitempty"`
+	PromotionPaths []PromotionPath `json:"promotionPaths"`
+}
+
+// PromoteAgentRequest is the body for promoting an agent from one environment to another.
+type PromoteAgentRequest struct {
+	SourceEnvironment         string                `json:"sourceEnvironment"`
+	TargetEnvironment         string                `json:"targetEnvironment"`
+	UseConfigFromSourceEnv    *bool                 `json:"useConfigFromSourceEnv,omitempty"`
+	Env                       []EnvironmentVariable `json:"env,omitempty"`
+	EnableAutoInstrumentation *bool                 `json:"enableAutoInstrumentation,omitempty"`
+}
+
+// PromoteAgentResponse is the 202 body returned by the promote endpoint.
+type PromoteAgentResponse struct {
+	AgentName         string `json:"agentName"`
+	ProjectName       string `json:"projectName"`
+	SourceEnvironment string `json:"sourceEnvironment"`
+	TargetEnvironment string `json:"targetEnvironment"`
 }

@@ -1,8 +1,8 @@
 # CoreDNS custom config for k3d clusters
-# Rewrites *.openchoreo.localhost, *.amp.localhost, *.agentmanager.localhost and
-# *.am-gateway.localhost hostnames to host.k3d.internal so pods can reach services
-# exposed via the k3d load balancer (including agent endpoints fronted by the
-# data-plane gateway).
+# Rewrites *.openchoreo.localhost, *.amp.localhost, *.agentmanager.localhost,
+# *.am-gateway.localhost and *.gateway.localhost hostnames to host.k3d.internal so
+# pods can reach services exposed via the k3d load balancer (including agent
+# endpoints and the AI gateway / LLM proxy vhost fronted by the data-plane gateway).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -36,6 +36,17 @@ data:
   amgateway.override: |
     rewrite stop {
       name regex (.+\.)?am-gateway\.localhost host.k3d.internal
+      answer auto
+    }
+  # AI gateway / LLM proxy vhost advertised on the data-plane gateway. The LLM
+  # provider URL injected into agent pods uses "<env>-<org>.gateway.localhost"
+  # (gateway.Vhost); without this rewrite in-cluster lookups fall through to
+  # loopback (127.0.0.1) and the agent's calls to the LLM gateway are refused.
+  # Routing to host.k3d.internal preserves the vhost Host header so Envoy routes
+  # the request correctly (an in-cluster Service DNS name would not).
+  gateway.override: |
+    rewrite stop {
+      name regex (.+\.)?gateway\.localhost host.k3d.internal
       answer auto
     }
   # The dev gateway chart + setup-gateway.sh reach agent-manager via

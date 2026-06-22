@@ -89,6 +89,18 @@ amctl agent create payments \
   --env LOG_LEVEL=info \
   --env-secret STRIPE_KEY=sk_test_xxx \
   --env-from-secret OPENAI_API_KEY=shared-openai
+
+# Wire the agent to a registered LLM provider, with custom env var names
+amctl agent create chatbot \
+  --display-name "Chatbot" \
+  --subtype chat-api \
+  --repo-url https://github.com/acme/chatbot \
+  --build-type buildpack \
+  --language python \
+  --language-version 3.12 \
+  --llm-provider prod-openai \
+  --llm-url-env OPENAI_BASE_URL \
+  --llm-api-key-env OPENAI_API_KEY
 ```
 
 ### Options
@@ -118,6 +130,21 @@ amctl agent create payments \
 | `--llm-provider` | string | (none) | Handle of a configured LLM provider to attach (internal only). |
 | `--llm-url-env` | string | (none) | Env var name for the provider URL (default: auto-generated). |
 | `--llm-api-key-env` | string | (none) | Env var name for the provider API key (default: auto-generated). |
+
+### Attaching an LLM provider
+
+`--llm-provider` binds a configured organization-level [LLM provider](./llm-provider.mdx) to the agent at creation time. This is supported only for `internal` (platform-managed) provisioning.
+
+Pass the **handle** of a provider you created with [`amctl llm-provider create`](./llm-provider.mdx#amctl-llm-provider-create) — use [`amctl llm-provider list`](./llm-provider.mdx#amctl-llm-provider-list) to see the handles in your org. The platform routes the agent's LLM calls through the AI Gateway and injects two environment variables into the running agent:
+
+| Variable | Holds | Default name | Override with |
+|----------|-------|--------------|---------------|
+| `url` | Gateway endpoint URL for the provider | auto-generated from the template (e.g. `OPENAI_URL`) | `--llm-url-env` |
+| `apikey` | Client API key for the provider | auto-generated from the template (e.g. `OPENAI_API_KEY`) | `--llm-api-key-env` |
+
+`--llm-url-env` and `--llm-api-key-env` only take effect alongside `--llm-provider`; setting either without it is rejected. The provider credential is never exposed to agent code directly — only these injected variables are available at runtime.
+
+The same binding can be expressed in a YAML manifest (`amctl agent create -f`) via the `modelConfig` block; run `amctl agent create --template` to print the scaffold. For the console-based workflow and the equivalent setup for external agents, see [Configure LLM Providers for an Agent](../../tutorials/configure-agent-llm-configuration.mdx).
 
 ---
 
@@ -502,5 +529,6 @@ amctl agent trace support-bot 7c8f...e1 --span a2b3...c4
 ## See Also
 
 - [`amctl project`](./project.mdx) — manage projects that own agents
+- [`amctl llm-provider`](./llm-provider.mdx) — create and manage the LLM providers attached with `--llm-provider`
 - [`amctl context link`](./context.mdx#amctl-context-link) — link the current directory to an agent
 - [Observe your first agent](../../tutorials/observe-first-agent.mdx)

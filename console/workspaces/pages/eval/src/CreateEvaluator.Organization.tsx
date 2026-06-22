@@ -30,7 +30,7 @@ import {
 } from "./subComponents/EvaluatorForm";
 import { SectionErrorBoundary } from "./subComponents/SectionErrorBoundary";
 
-export const CreateEvaluatorComponent: React.FC = () => {
+export const CreateEvaluatorOrganization: React.FC = () => {
   const { orgId } = useParams<{
     orgId: string;
   }>();

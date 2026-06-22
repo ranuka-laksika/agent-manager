@@ -114,6 +114,9 @@ func handleCommonErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 	case errors.Is(err, utils.ErrProjectHasAssociatedAgents):
 		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
 			"Project has associated agents", err.Error(), utils.ErrCodeConflict)
+	case errors.Is(err, utils.ErrDeploymentPipelineInUse):
+		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
+			"Deployment pipeline is referenced by one or more projects", err.Error(), utils.ErrCodeConflict)
 	case errors.Is(err, utils.ErrSecretPathConflict):
 		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
 			"Secret path conflict", err.Error(), utils.ErrCodeConflict)

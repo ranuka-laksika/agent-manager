@@ -236,9 +236,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.component.evalMonitors.title,
+            label: evalMetadata.pages.organization.evalMonitors.title,
             type: "item",
-            icon: <evalMetadata.pages.component.evalMonitors.icon size={20} />,
+            icon: <evalMetadata.pages.organization.evalMonitors.icon size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor.wildPath,
@@ -402,9 +402,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.component.evalMonitors.title,
+            label: evalMetadata.pages.organization.evalMonitors.title,
             type: "item",
-            icon: <evalMetadata.pages.component.evalMonitors.icon size={20} />,
+            icon: <evalMetadata.pages.organization.evalMonitors.icon size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor.wildPath,
@@ -604,9 +604,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.component.evalMonitors.title,
+            label: evalMetadata.pages.organization.evalMonitors.title,
             type: "item",
-            icon: <evalMetadata.pages.component.evalMonitors.icon size={20} />,
+            icon: <evalMetadata.pages.organization.evalMonitors.icon size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor.wildPath,
@@ -729,9 +729,9 @@ export function useNavigationItems(): Array<
               icon: <EvaluationOutline />,
               items: [
                 {
-                  label: evalMetadata.pages.component.evalEvaluators.title,
+                  label: evalMetadata.pages.organization.evalEvaluators.title,
                   type: "item" as const,
-                  icon: <evalMetadata.pages.component.evalEvaluators.icon size={20} />,
+                  icon: <evalMetadata.pages.organization.evalEvaluators.icon size={20} />,
                   isActive: !!matchPath(evaluatorsOrgRoute.wildPath, pathname),
                   href: generatePath(evaluatorsOrgRoute.path, { orgId }),
                 },

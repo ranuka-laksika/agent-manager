@@ -30,6 +30,13 @@ import (
 // E2EProjectPrefix is the naming prefix for all e2e test projects.
 const E2EProjectPrefix = "e2e-test-"
 
+// E2EEnvPrefix is the naming prefix for all e2e test environments. It is kept
+// short because environment names are length-constrained: the gateway Service
+// name "api-platform-<org>-<env>-gateway-gateway-runtime" must stay within
+// Kubernetes' 63-char metadata limit. The stale-resource sweep uses this prefix
+// to identify (and tear down) environments left behind by tests.
+const E2EEnvPrefix = "e2e-"
+
 // E2ESharedProjectName is the project name used by the shared internal chat agent.
 const E2ESharedProjectName = "e2e-test-shared"
 

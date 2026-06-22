@@ -25,7 +25,6 @@ import React, {
 import {
   PageLayout,
   SelectionDrawer,
-  SelectionIndicator,
   TextInput,
 } from "@agent-management-platform/views";
 import {
@@ -41,20 +40,21 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, Link, ServerCog } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Edit, Link, ServerCog } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   absoluteRouteMap,
   type AgentMCPConfigResponse,
-  type MCPProxyListItem,
 } from "@agent-management-platform/types";
 import {
   useCreateAgentMCPConfig,
   useGetAgent,
   useListAgentMCPConfigs,
-  useListEnvironments,
   useListMCPProxies,
 } from "@agent-management-platform/api-client";
+import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
+import { ConfigNameSection } from "./Configure/subComponents/ConfigNameSection";
+import { MCPServerDisplay } from "./Configure/subComponents/MCPServerDisplay";
 import {
   ENV_VAR_KEYS,
   generateEnvVarNames,
@@ -66,41 +66,6 @@ const ENV_VAR_DESCRIPTIONS: Record<EnvVarKey, string> = {
   url: "Base URL of the MCP server endpoint",
   apikey: "API key for authenticating with the MCP server endpoint",
 };
-
-function MCPServerDisplay({
-  server,
-  isSelected,
-}: {
-  server: MCPProxyListItem | null;
-  isSelected: boolean;
-}) {
-  if (!server) return null;
-  return (
-    <Stack direction="row" spacing={2} flexGrow={1} alignItems="center">
-      <SelectionIndicator selected={isSelected} />
-      <Stack spacing={0.25} flexGrow={1}>
-        <Typography variant="h6">{server.name}</Typography>
-        {server.description && (
-          <Typography variant="body2" color="text.secondary">
-            {server.description}
-          </Typography>
-        )}
-        <Stack direction="row" spacing={2}>
-          {server.context && (
-            <Typography variant="caption" color="text.secondary">
-              Context: {server.context}
-            </Typography>
-          )}
-          {server.version && (
-            <Typography variant="caption" color="text.secondary">
-              Version: {server.version}
-            </Typography>
-          )}
-        </Stack>
-      </Stack>
-    </Stack>
-  );
-}
 
 export const AddMCPServerComponent: React.FC = () => {
   const { orgId, projectId, agentId } = useParams<{
@@ -119,6 +84,10 @@ export const AddMCPServerComponent: React.FC = () => {
   );
   const envVarNamesEditedRef = useRef(false);
   const [serverDrawerOpen, setServerDrawerOpen] = useState(false);
+  // Config name: auto-populated from the selected server, but editable — when
+  // environments use different servers there is no single obvious default.
+  const [configName, setConfigName] = useState("");
+  const configNameEditedRef = useRef(false);
 
   const backHref =
     orgId && projectId && agentId
@@ -136,8 +105,8 @@ export const AddMCPServerComponent: React.FC = () => {
   });
   const isExternal = agent?.provisioning?.type === "external";
 
-  const { data: environments = [], isLoading: isLoadingEnvironments } =
-    useListEnvironments({ orgName: orgId });
+  const { environments, isLoading: isLoadingEnvironments } =
+    usePipelineEnvironmentsState(orgId, projectId);
 
   const { data: proxiesData, isLoading: isLoadingProxies } = useListMCPProxies(
     { orgName: orgId },
@@ -172,6 +141,27 @@ export const AddMCPServerComponent: React.FC = () => {
     setEnvVarNames(generateEnvVarNames(primaryServerId));
   }, [primaryServerId]);
 
+  // Suggested config name: a unique name derived from the display name of the
+  // first environment that has a server (what the user sees on the card),
+  // falling back to its id. Used both to auto-populate the field and as the
+  // save-time fallback, so the rule lives in one place.
+  const suggestedConfigName = useMemo(() => {
+    const firstServerId = environments
+      .map((env) => serverByEnv[env.name])
+      .find(Boolean);
+    if (!firstServerId) return "";
+    const basis =
+      servers.find((s) => s.id === firstServerId)?.name ?? firstServerId;
+    const existingNames = (existingConfigsList?.configs ?? []).map((c) => c.name);
+    return generateUniqueConfigName(basis, "mcp", existingNames);
+  }, [environments, serverByEnv, servers, existingConfigsList]);
+
+  // Auto-populate the config name until the user renames it.
+  useEffect(() => {
+    if (configNameEditedRef.current) return;
+    setConfigName(suggestedConfigName);
+  }, [suggestedConfigName]);
+
   const createConfig = useCreateAgentMCPConfig();
 
   const handleSave = useCallback(() => {
@@ -182,13 +172,11 @@ export const AddMCPServerComponent: React.FC = () => {
       { proxyId?: string; configuration: Record<string, never> }
     > = {};
     let hasAtLeastOneServer = false;
-    let resolvedProxyId = "";
 
     for (const env of environments) {
       const proxyId = serverByEnv[env.name] ?? null;
       if (!proxyId) continue;
       hasAtLeastOneServer = true;
-      if (!resolvedProxyId) resolvedProxyId = proxyId;
       envMappings[env.name] = {
         proxyId,
         configuration: {},
@@ -204,14 +192,9 @@ export const AddMCPServerComponent: React.FC = () => {
         })).filter((envVar) => envVar.name.length > 0)
       : [];
 
-    const existingNames = (existingConfigsList?.configs ?? []).map(
-      (config) => config.name,
-    );
-    const name = generateUniqueConfigName(
-      resolvedProxyId,
-      "mcp",
-      existingNames,
-    );
+    // Prefer the (auto-populated, user-editable) config name; fall back to the
+    // suggested name if the field was cleared.
+    const name = configName.trim() || suggestedConfigName;
     const body = {
       name,
       type: "mcp" as const,
@@ -265,13 +248,34 @@ export const AddMCPServerComponent: React.FC = () => {
     serverByEnv,
     isExternal,
     envVarNames,
-    existingConfigsList,
+    configName,
+    suggestedConfigName,
     createConfig,
     navigate,
   ]);
 
   const hasAnyServer = environments.some((env) => !!serverByEnv[env.name]);
   const isPending = createConfig.isPending;
+
+  // Hold off rendering until the pipeline environments resolve, otherwise the
+  // env tabs briefly show all org environments before collapsing to the
+  // pipeline subset.
+  if (isLoadingEnvironments) {
+    return (
+      <PageLayout
+        title="Add MCP Configuration"
+        backHref={backHref}
+        disableIcon
+        backLabel="Back to Configure"
+      >
+        <Stack spacing={2}>
+          <Skeleton variant="rounded" height={56} />
+          <Skeleton variant="rounded" height={56} />
+          <Skeleton variant="rounded" height={120} />
+        </Stack>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout
@@ -296,8 +300,8 @@ export const AddMCPServerComponent: React.FC = () => {
         ) : null}
 
         <Form.Section>
-          <Form.Header>MCP Server</Form.Header>
-          {environments.length > 1 && !isLoadingEnvironments && (
+          <Form.Subheader>MCP Server</Form.Subheader>
+          {environments.length > 1 && (
             <>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
                 Select which MCP server to use in each environment.
@@ -305,7 +309,7 @@ export const AddMCPServerComponent: React.FC = () => {
               <Tabs
                 value={selectedEnvIndex}
                 onChange={(_, value: number) => setSelectedEnvIndex(value)}
-                sx={{ mb: 2 }}
+                sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
               >
                 {environments.map((env, index) => {
                   const hasServer = !!serverByEnv[env.name];
@@ -352,9 +356,27 @@ export const AddMCPServerComponent: React.FC = () => {
               onClick={() => setServerDrawerOpen(true)}
               selected
               aria-label={`Selected: ${selectedServer.name}. Click to change.`}
+              sx={{ position: "relative" }}
             >
+              <Tooltip title="Change MCP server" placement="top" arrow>
+                <Box
+                  sx={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    display: "inline-flex",
+                    color: "text.secondary",
+                  }}
+                >
+                  <Edit size={16} />
+                </Box>
+              </Tooltip>
               <Form.CardContent>
-                <MCPServerDisplay server={selectedServer} isSelected />
+                <MCPServerDisplay
+                  server={selectedServer}
+                  isSelected={false}
+                  hideCheckbox
+                />
               </Form.CardContent>
             </Form.CardButton>
           ) : (
@@ -460,9 +482,21 @@ export const AddMCPServerComponent: React.FC = () => {
           />
         </Form.Section>
 
+        {hasAnyServer && (
+          <ConfigNameSection
+            value={configName}
+            onChange={(value) => {
+              configNameEditedRef.current = true;
+              setConfigName(value);
+            }}
+            description="A name for this MCP configuration."
+            placeholder="my-mcp-configuration"
+          />
+        )}
+
         {hasAnyServer && !isExternal && (
           <Form.Section>
-            <Form.Header>Environment Variable Names</Form.Header>
+            <Form.Subheader>Environment Variable Names</Form.Subheader>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               These names are shared across all environments. The platform
               injects the MCP server URL and API key values at runtime per
@@ -515,13 +549,6 @@ export const AddMCPServerComponent: React.FC = () => {
             </ListingTable.Container>
           </Form.Section>
         )}
-
-        {isLoadingEnvironments ? (
-          <Stack spacing={1}>
-            <Skeleton variant="rounded" height={32} />
-            <Skeleton variant="rounded" height={32} />
-          </Stack>
-        ) : null}
 
         <Box sx={{ display: "flex", gap: 1 }}>
           <Button variant="outlined" onClick={() => navigate(backHref)}>

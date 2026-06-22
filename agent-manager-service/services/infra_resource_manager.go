@@ -376,6 +376,24 @@ func (s *infraResourceManager) UpdateOrgDeploymentPipeline(ctx context.Context, 
 func (s *infraResourceManager) DeleteOrgDeploymentPipeline(ctx context.Context, orgName string, pipelineName string) error {
 	s.logger.Info("Deleting deployment pipeline", "orgName", orgName, "pipelineName", pipelineName)
 
+	// Block deletion if any project still references this deployment pipeline.
+	s.logger.Debug("Checking for projects referencing the deployment pipeline", "orgName", orgName, "pipelineName", pipelineName)
+	projects, err := s.ocClient.ListProjects(ctx, orgName)
+	if err != nil {
+		s.logger.Error("Failed to list projects while checking deployment pipeline references", "orgName", orgName, "pipelineName", pipelineName, "error", err)
+		return fmt.Errorf("failed to verify deployment pipeline references: %w", err)
+	}
+	var referencingProjects []string
+	for _, project := range projects {
+		if project != nil && project.DeploymentPipeline == pipelineName {
+			referencingProjects = append(referencingProjects, project.Name)
+		}
+	}
+	if len(referencingProjects) > 0 {
+		s.logger.Warn("Cannot delete deployment pipeline referenced by projects", "orgName", orgName, "pipelineName", pipelineName, "projects", referencingProjects)
+		return fmt.Errorf("%w: %v", utils.ErrDeploymentPipelineInUse, referencingProjects)
+	}
+
 	if err := s.ocClient.DeleteOrgDeploymentPipeline(ctx, orgName, pipelineName); err != nil {
 		s.logger.Error("Failed to delete deployment pipeline", "orgName", orgName, "pipelineName", pipelineName, "error", err)
 		return fmt.Errorf("failed to delete deployment pipeline: %w", err)

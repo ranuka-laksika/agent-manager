@@ -32,6 +32,34 @@ type tokenResponse struct {
 	ExpiresIn   int    `json:"expires_in"`
 }
 
+// ampScopes is the full set of RBAC scopes the e2e suite requests for its
+// client_credentials token. Thunder only includes scopes in a client_credentials
+// token that are EXPLICITLY requested (it returns requested ∩ allowed), so when
+// RBAC_ENABLED=true on Agent Manager, omitting these yields an unscoped token and
+// every guarded route returns 403. This list mirrors the Permission constants in
+// agent-manager-service/rbac/permissions.go; the IDP grants only the ones the
+// client app is actually allowed, so requesting the superset is safe.
+const ampScopes = "agent-kind:create agent-kind:delete agent-kind:read agent-kind:update " +
+	"agent:api-key-manage agent:build agent:create agent:delete agent:deploy-non-production " +
+	"agent:deploy-production agent:promote agent:read agent:rollback agent:suspend " +
+	"agent:token-manage agent:update catalog:read data-plane:read " +
+	"deployment-pipeline:create deployment-pipeline:delete deployment-pipeline:read deployment-pipeline:update " +
+	"environment:create environment:delete environment:read environment:update " +
+	"evaluator:create evaluator:delete evaluator:read evaluator:update " +
+	"gateway:create gateway:delete gateway:read gateway:token-manage gateway:update " +
+	"git-secret:create git-secret:delete git-secret:read " +
+	"group:create group:delete group:read group:update " +
+	"llm-provider-template:create llm-provider-template:delete llm-provider-template:read llm-provider-template:update " +
+	"llm-provider:api-key-manage llm-provider:configure-guardrail llm-provider:connect llm-provider:create " +
+	"llm-provider:delete llm-provider:deploy llm-provider:read llm-provider:update " +
+	"llm-proxy:api-key-manage llm-proxy:create llm-proxy:delete llm-proxy:deploy llm-proxy:read llm-proxy:update " +
+	"mcp-server:configure-guardrail mcp-server:connect mcp-server:create mcp-server:delete mcp-server:read mcp-server:update " +
+	"monitor:create monitor:delete monitor:execute monitor:read monitor:score-publish monitor:score-read monitor:update " +
+	"observability:guardrail-metric observability:infra-metric observability:org-dashboard observability:project-dashboard " +
+	"org:assign-role org:invite-member org:manage-idp org:manage-service-account org:modify-settings org:remove-member org:view " +
+	"project:create project:delete project:read project:update repository:read " +
+	"role:create role:delete role:read role:update"
+
 // FetchToken obtains an OAuth2 access token from the Thunder IDP using the
 // client_credentials grant type. It retries on transient errors.
 func FetchToken(cfg *Config) (string, error) {
@@ -60,6 +88,10 @@ func FetchToken(cfg *Config) (string, error) {
 func fetchTokenOnce(cfg *Config) (string, error) {
 	form := url.Values{
 		"grant_type": {"client_credentials"},
+		// Request the scopes explicitly — Thunder only embeds requested scopes in
+		// a client_credentials token (returns requested ∩ allowed). Without this
+		// the token is unscoped and RBAC-guarded routes return 403.
+		"scope": {ampScopes},
 	}
 
 	req, err := http.NewRequest(http.MethodPost, cfg.IDPTokenURL, strings.NewReader(form.Encode()))

@@ -27,6 +27,7 @@ import (
 	"github.com/onsi/ginkgo/v2"
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
+	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
 )
 
 // CleanupStaleE2EResources finds and deletes e2e projects (with the
@@ -104,6 +105,67 @@ func CleanupStaleE2EResources(client *framework.AMPClient, orgName string) {
 				proj.Name, delResp.StatusCode)
 			break
 		}
+	}
+
+	cleanupStaleEnvironments(client, orgName)
+}
+
+// cleanupStaleEnvironments finds environments with the E2EEnvPrefix that were
+// created more than 1 hour ago and tears them down via remove-environment.sh
+// (which uninstalls the gateway helm release and deletes the environment).
+// The default environment is never touched. Failures are logged, not fatal,
+// so a single bad teardown doesn't abort the suite.
+func cleanupStaleEnvironments(client *framework.AMPClient, orgName string) {
+	cutoff := time.Now().Add(-1 * time.Hour)
+	defaultEnv := client.Cfg().DefaultEnv
+
+	path := fmt.Sprintf("/api/v1/orgs/%s/environments", orgName)
+	resp, err := client.Get(path)
+	if err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to list environments: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: list environments returned %d, skipping\n", resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to read environments response: %v\n", err)
+		return
+	}
+
+	var environments framework.EnvironmentListResponse
+	if err := json.Unmarshal(body, &environments); err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to decode environments: %v\n", err)
+		return
+	}
+
+	for _, env := range environments {
+		if !strings.HasPrefix(env.Name, framework.E2EEnvPrefix) {
+			continue
+		}
+		// Never remove the default environment, even if it somehow matches.
+		if env.Name == defaultEnv {
+			continue
+		}
+		if env.CreatedAt.After(cutoff) {
+			continue
+		}
+
+		ginkgo.GinkgoWriter.Printf("stale cleanup: removing stale environment %q (created %s)\n",
+			env.Name, env.CreatedAt.Format(time.RFC3339))
+
+		params := envops.FromClient(client)
+		params.EnvName = env.Name
+		if err := envops.RemoveEnvironment(params); err != nil {
+			ginkgo.GinkgoWriter.Printf("stale cleanup: remove-environment.sh failed for %q: %v\n", env.Name, err)
+			continue
+		}
+		ginkgo.GinkgoWriter.Printf("stale cleanup: removed environment %q\n", env.Name)
 	}
 }
 

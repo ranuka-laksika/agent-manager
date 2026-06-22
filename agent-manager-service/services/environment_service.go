@@ -241,6 +241,24 @@ func (s *environmentService) DeleteEnvironment(ctx context.Context, orgName stri
 		return fmt.Errorf("invalid environment UUID: %w", parseErr)
 	}
 
+	// Block deletion if any deployment pipeline still references this environment in its
+	// promotion paths (either as a source or a target environment).
+	pipelines, err := s.ocClient.ListDeploymentPipelines(ctx, orgName)
+	if err != nil {
+		s.logger.Error("Failed to list deployment pipelines while checking environment references", "orgName", orgName, "envID", envID, "error", err)
+		return fmt.Errorf("failed to verify environment references: %w", err)
+	}
+	var referencingPipelines []string
+	for _, pipeline := range pipelines {
+		if pipeline != nil && pipelineReferencesEnvironment(pipeline, env.Name) {
+			referencingPipelines = append(referencingPipelines, pipeline.Name)
+		}
+	}
+	if len(referencingPipelines) > 0 {
+		s.logger.Warn("Cannot delete environment referenced by deployment pipelines", "orgName", orgName, "envID", envID, "pipelines", referencingPipelines)
+		return fmt.Errorf("%w: %v", utils.ErrEnvironmentInUse, referencingPipelines)
+	}
+
 	// Delete in OpenChoreo first. If OC refuses (release bindings still exist, etc.) we surface
 	// that error without having touched local state. A not-found from OC after UUID resolution
 	// is treated as idempotent so we still clean up local gateway↔env mappings.
@@ -327,6 +345,22 @@ func (s *environmentService) GetEnvironmentGateways(ctx context.Context, orgName
 	}
 
 	return responses, nil
+}
+
+// pipelineReferencesEnvironment reports whether any promotion path in the pipeline
+// references the given environment name, either as the source or as a target.
+func pipelineReferencesEnvironment(pipeline *models.DeploymentPipelineResponse, envName string) bool {
+	for _, path := range pipeline.PromotionPaths {
+		if path.SourceEnvironmentRef == envName {
+			return true
+		}
+		for _, target := range path.TargetEnvironmentRefs {
+			if target.Name == envName {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // -----------------------------------------------------------------------------

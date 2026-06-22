@@ -264,7 +264,7 @@ func (s *agentTokenManagerService) GenerateToken(ctx context.Context, req Genera
 	// Determine which environment to use
 	environmentName := req.Environment
 	if environmentName == "" {
-		environmentName = s.config.DefaultEnvironment
+		return nil, fmt.Errorf("environment name cannot be empty")
 	}
 
 	// Fetch environment UID from OpenChoreo

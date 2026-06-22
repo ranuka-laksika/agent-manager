@@ -68,8 +68,14 @@ export function ConfigTableEmptyState({
 interface ConfigTableSectionProps {
   /** Section heading rendered above the table. */
   title: string;
-  /** Toolbar (search + actions); only rendered when there are rows to show. */
+  /** Toolbar (search + actions). */
   toolbar: ReactNode;
+  /**
+   * Whether to render the toolbar. Keep it visible whenever there is data to
+   * search — even when the current filter matches nothing — so the search input
+   * never disappears out from under the user.
+   */
+  showToolbar: boolean;
   tableHeader: ReactNode;
   isLoading: boolean;
   /** Whether the filtered list has at least one row. */
@@ -85,13 +91,16 @@ interface ConfigTableSectionProps {
 /**
  * Shared shell for an agent configuration listing (LLM providers, MCP servers,
  * ...). Keeps the toolbar, loading skeleton, table header and empty-state
- * handling consistent across sections. When the list is empty the toolbar is
- * hidden so the empty state — including any primary action — is centered in the
- * box.
+ * handling consistent across sections. The caller controls toolbar visibility
+ * via {@link ConfigTableSectionProps.showToolbar}: it stays visible while there
+ * is data to search so a zero-result filter can't hide the search input, and is
+ * hidden only when the list is genuinely empty (so the empty state — including
+ * any primary action — is centered in the box).
  */
 export function ConfigTableSection({
   title,
   toolbar,
+  showToolbar,
   tableHeader,
   isLoading,
   hasRows,
@@ -103,7 +112,7 @@ export function ConfigTableSection({
     <Stack spacing={2}>
       <Typography variant="h6">{title}</Typography>
       <ListingTable.Container>
-        {hasRows && toolbar}
+        {showToolbar && toolbar}
         {isLoading ? (
           <Stack spacing={1} sx={{ m: 2 }}>
             {Array.from({ length: 3 }).map((_, i) => (

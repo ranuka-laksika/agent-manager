@@ -136,6 +136,9 @@ func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 		CreateProjectFunc: func(ctx context.Context, namespaceName string, req client.CreateProjectRequest) error {
 			return nil
 		},
+		ListProjectsFunc: func(ctx context.Context, namespaceName string) ([]*models.ProjectResponse, error) {
+			return []*models.ProjectResponse{}, nil
+		},
 		DeployFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string, req client.DeployRequest) error {
 			return nil
 		},

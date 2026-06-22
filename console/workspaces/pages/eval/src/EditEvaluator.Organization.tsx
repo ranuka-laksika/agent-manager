@@ -24,7 +24,7 @@ import { absoluteRouteMap } from "@agent-management-platform/types";
  * Redirect legacy /edit routes to the unified view page.
  * Editing is now handled inline on the ViewEvaluator page.
  */
-export const EditEvaluatorComponent: React.FC = () => {
+export const EditEvaluatorOrganization: React.FC = () => {
   const { orgId, evaluatorId } = useParams<{
     orgId: string;
     evaluatorId: string;

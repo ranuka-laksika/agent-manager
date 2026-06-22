@@ -2689,31 +2689,13 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, tracingCfg.EnableAutoInstrumentation)
 
-		// Only generate API key on first promotion to this environment. On subsequent
-		// promotions the agentApiKey is already set on the release binding's
-		// traitEnvironmentConfigs. otelEndpoint is no longer written here — the
-		// env-injection trait derives it from the apiGatewayName convention.
-		// Use the typed not-found sentinel so a transient DB error doesn't get misread as
-		// "first promotion" (which would needlessly mint a new API key).
-		_, targetConfigErr := s.agentConfigRepo.Get(orgName, projectName, agentName, req.TargetEnvironment)
-		isFirstPromotion := errors.Is(targetConfigErr, repositories.ErrAgentConfigNotFound)
-		if targetConfigErr != nil && !isFirstPromotion {
-			s.logger.Warn("Failed to read target env agent config; skipping first-promotion bootstrap",
-				"agentName", agentName, "environment", req.TargetEnvironment, "error", targetConfigErr)
-		}
-		if isFirstPromotion {
+		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
+		if apiKeyErr != nil {
+			s.logger.Warn("Failed to generate agent API key for promotion", "agentName", agentName, "environment", req.TargetEnvironment, "error", apiKeyErr)
+		} else {
 			envInjKey := agentName + "-" + string(client.TraitEnvInjection)
-			envInjCfg := map[string]interface{}{}
-
-			apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
-			if apiKeyErr != nil {
-				s.logger.Warn("Failed to generate agent API key for promotion", "agentName", agentName, "error", apiKeyErr)
-			} else {
-				envInjCfg["agentApiKey"] = apiKey
-			}
-
-			if len(envInjCfg) > 0 {
-				traitEnvConfigs[envInjKey] = envInjCfg
+			traitEnvConfigs[envInjKey] = map[string]interface{}{
+				"agentApiKey": apiKey,
 			}
 		}
 

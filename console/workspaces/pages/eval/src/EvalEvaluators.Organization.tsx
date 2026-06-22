@@ -32,10 +32,15 @@ import {
   Alert,
   Box,
   Button,
+  Checkbox,
   Chip,
   Form,
+  InputAdornment,
   ListingTable,
+  ListItemText,
+  MenuItem,
   SearchBar,
+  Select,
   Skeleton,
   Snackbar,
   Stack,
@@ -47,6 +52,7 @@ import {
   Edit as EditIcon,
   Plus,
   CircleIcon,
+  Filter,
   Search as SearchIcon,
   Trash,
 } from "@wso2/oxygen-ui-icons-react";
@@ -62,13 +68,15 @@ import {
 import debounce from "lodash/debounce";
 import { SectionErrorBoundary } from "./subComponents/SectionErrorBoundary";
 
-type SourceFilter = "all" | "builtin" | "custom";
+type EvaluatorSource = "builtin" | "custom";
 
-const sourceFilterOptions: { label: string; value: SourceFilter }[] = [
-  { label: "All", value: "all" },
+const sourceFilterOptions: { label: string; value: EvaluatorSource }[] = [
   { label: "Built-in", value: "builtin" },
   { label: "Custom", value: "custom" },
 ];
+
+const sourceLabel = (value: EvaluatorSource) =>
+  sourceFilterOptions.find((option) => option.value === value)?.label ?? value;
 
 function getSourceLabel(evaluator: EvaluatorResponse): string {
   return evaluator.isBuiltin ? "Built-in" : "Custom";
@@ -87,13 +95,13 @@ function getSourceColor(
   return evaluator.isBuiltin ? "default" : "info";
 }
 
-export const EvalEvaluatorsComponent: React.FC = () => {
+export const EvalEvaluatorsOrganization: React.FC = () => {
   const { orgId } = useParams<{
     orgId: string;
   }>();
   const navigate = useNavigate();
 
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all");
+  const [selectedSources, setSelectedSources] = useState<EvaluatorSource[]>([]);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
@@ -109,7 +117,9 @@ export const EvalEvaluatorsComponent: React.FC = () => {
       limit: rowsPerPage,
       offset: page * rowsPerPage,
       search: debouncedSearch.trim() || undefined,
-      source: sourceFilter === "all" ? undefined : sourceFilter,
+      // The API takes a single source; a multi-select of both (or none) means
+      // "no filter", and exactly one selection narrows to that source.
+      source: selectedSources.length === 1 ? selectedSources[0] : undefined,
     },
   );
 
@@ -129,7 +139,7 @@ export const EvalEvaluatorsComponent: React.FC = () => {
       debounce((value: string) => {
         setDebouncedSearch(value);
         setPage(0);
-      }, 300),
+      }, 1000),
     [],
   );
 
@@ -174,34 +184,50 @@ export const EvalEvaluatorsComponent: React.FC = () => {
             flexWrap="wrap"
             useFlexGap
           >
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              {sourceFilterOptions.map((option) => (
-                <Chip
-                  key={option.value}
-                  label={option.label}
-                  variant={
-                    sourceFilter === option.value ? "filled" : "outlined"
-                  }
-                  color={sourceFilter === option.value ? "primary" : "default"}
-                  onClick={() => {
-                    setSourceFilter(option.value);
-                    setPage(0);
-                  }}
-                />
-              ))}
-            </Stack>
             <Box flexGrow={1}>
               <SearchBar
                 placeholder="Search evaluators"
                 size="small"
+                fullWidth
                 value={search}
                 onChange={(event) => {
                   setSearch(event.target.value);
                   debouncedSetSearch(event.target.value);
                 }}
-                disabled={isLoading}
               />
             </Box>
+            <Select
+              size="small"
+              variant="outlined"
+              multiple
+              value={selectedSources}
+              onChange={(event) => {
+                setSelectedSources(event.target.value as EvaluatorSource[]);
+                setPage(0);
+              }}
+              displayEmpty
+              renderValue={(selected) =>
+                (selected as EvaluatorSource[]).length === 0
+                  ? sourceFilterOptions.map((option) => sourceLabel(option.value)).join(", ")
+                  : (selected as EvaluatorSource[]).map(sourceLabel).join(", ")
+              }
+              startAdornment={
+                <InputAdornment position="start">
+                  <Filter size={16} />
+                </InputAdornment>
+              }
+              sx={{ minWidth: 180 }}
+            >
+              {sourceFilterOptions.map((option) => (
+                <MenuItem key={option.value} value={option.value}>
+                  <Checkbox
+                    checked={selectedSources.includes(option.value)}
+                    size="small"
+                  />
+                  <ListItemText primary={option.label} />
+                </MenuItem>
+              ))}
+            </Select>
             <Button
               variant="contained"
               component={Link}
@@ -477,4 +503,4 @@ export const EvalEvaluatorsComponent: React.FC = () => {
   );
 };
 
-export default EvalEvaluatorsComponent;
+export default EvalEvaluatorsOrganization;

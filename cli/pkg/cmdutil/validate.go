@@ -16,7 +16,15 @@
 
 package cmdutil
 
-import "strings"
+import (
+	"regexp"
+	"strings"
+)
+
+// envVarNameRE matches a POSIX-style environment variable name: a leading
+// letter or underscore followed by letters, digits, or underscores. It mirrors
+// the server's constraint and the env-key rule in `agent create`.
+var envVarNameRE = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // ValidatePathParam checks that value is safe to embed in a URL path segment.
 // label describes the parameter for error messages (e.g. "agent name").
@@ -26,6 +34,20 @@ func ValidatePathParam(label, value string) error {
 	}
 	if strings.Contains(value, "/") {
 		return FlagErrorf("%s must not contain '/'", label)
+	}
+	return nil
+}
+
+// ValidateEnvVarName checks that value is a well-formed environment variable
+// name (matches envVarNameRE). label describes the parameter for error
+// messages (e.g. "--url-env"). Validating client-side gives the user early
+// feedback instead of surfacing the rejection from the server.
+func ValidateEnvVarName(label, value string) error {
+	if value == "" {
+		return FlagErrorf("%s must not be empty", label)
+	}
+	if !envVarNameRE.MatchString(value) {
+		return FlagErrorf("%s %q must match [A-Za-z_][A-Za-z0-9_]*", label, value)
 	}
 	return nil
 }

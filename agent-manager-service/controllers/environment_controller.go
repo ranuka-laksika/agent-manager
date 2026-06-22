@@ -58,6 +58,8 @@ func handleEnvironmentErrors(w http.ResponseWriter, err error, fallbackMsg strin
 		utils.WriteErrorResponse(w, http.StatusConflict, "Environment already exists")
 	case errors.Is(err, utils.ErrEnvironmentHasGateways):
 		utils.WriteErrorResponse(w, http.StatusConflict, "Environment has associated gateways")
+	case errors.Is(err, utils.ErrEnvironmentInUse):
+		utils.WriteErrorResponse(w, http.StatusConflict, "Environment is referenced by one or more deployment pipelines")
 	case errors.Is(err, utils.ErrInvalidInput):
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid input")
 	default:

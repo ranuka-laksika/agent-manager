@@ -29,7 +29,6 @@ import {
   Box,
   Button,
   Chip,
-  Divider,
   Form,
   ListingTable,
   Skeleton,
@@ -43,13 +42,11 @@ import {
   AlertTriangle,
   Check,
   Circle,
-  Coins,
-  Hash,
+  Edit,
   Info,
   Link,
   Search,
   ServerCog,
-  Zap,
 } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -69,11 +66,13 @@ import {
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
 import {
+  getErrorMessage,
   PolicyListSection,
   type PolicySelection as GuardrailSelection,
-  usePipelineEnvironments,
+  usePipelineEnvironmentsState,
 } from "@agent-management-platform/shared-component";
 import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
+import { ConfigNameSection } from "./Configure/subComponents/ConfigNameSection";
 import {
   ENV_VAR_KEYS,
   generateEnvVarNames,
@@ -123,7 +122,7 @@ const RateLimitDisplay: React.FC<{
     return (
       <Typography variant="caption" color="text.secondary">
         Rate Limiting:{" "}
-        <Typography component="span" variant="body2" color="text.disabled">
+        <Typography component="span" variant="caption" color="text.disabled">
           Not configured
         </Typography>
       </Typography>
@@ -144,7 +143,7 @@ const RateLimitDisplay: React.FC<{
     return (
       <Typography variant="caption" color="text.secondary">
         Rate Limiting:{" "}
-        <Typography component="span" variant="body2" color="text.disabled">
+        <Typography component="span" variant="caption" color="text.disabled">
           Configured (disabled)
         </Typography>
       </Typography>
@@ -156,14 +155,13 @@ const RateLimitDisplay: React.FC<{
   // Org-wide whenever we fall back to provider-level limits (no per-consumer numeric overrides)
   const isOrgWide = !consumerHasLimits;
 
-  const limits: { icon: React.ReactNode; label: string; value: string }[] = [];
+  const limits: { label: string; value: string }[] = [];
   if (limitScope?.request) {
     const w = formatResetWindow(
       limitScope.request.resetDuration,
       limitScope.request.resetUnit,
     );
     limits.push({
-      icon: <Zap size={12} />,
       label: "Requests",
       value: `${limitScope.request.limit.toLocaleString()}${w ? `/${w}` : ""}`,
     });
@@ -174,7 +172,6 @@ const RateLimitDisplay: React.FC<{
       limitScope.token.resetUnit,
     );
     limits.push({
-      icon: <Hash size={12} />,
       label: "Tokens",
       value: `${limitScope.token.limit.toLocaleString()}${w ? `/${w}` : ""}`,
     });
@@ -185,61 +182,51 @@ const RateLimitDisplay: React.FC<{
       limitScope.cost.resetUnit,
     );
     limits.push({
-      icon: <Coins size={12} />,
       label: "Budget",
       value: `${formatCost(limitScope.cost.limit)}${w ? `/${w}` : ""}`,
     });
   }
 
   return (
-    <Stack spacing={0.5}>
-      <Stack direction="row" spacing={0.5} alignItems="center">
-        <Typography variant="caption" color="text.secondary">
-          {isOrgWide ? "Your Quota (org-wide limit):" : "Your Quota:"}
-        </Typography>
-        {isOrgWide && (
-          <Tooltip
-            title="No per-consumer limit is configured. The org-wide provider limit applies to all consumers."
-            placement="top"
-            arrow
+    <Stack
+      direction="row"
+      spacing={0.5}
+      alignItems="center"
+      flexWrap="wrap"
+      useFlexGap
+    >
+      <Typography variant="caption" color="text.secondary">
+        {isOrgWide ? "Your Quota (org-wide limit):" : "Your Quota:"}
+      </Typography>
+      {isOrgWide && (
+        <Tooltip
+          title="No per-consumer limit is configured. The org-wide provider limit applies to all consumers."
+          placement="top"
+          arrow
+        >
+          <Box
+            component="span"
+            sx={{
+              display: "inline-flex",
+              alignItems: "center",
+              color: "text.secondary",
+              cursor: "default",
+            }}
           >
-            <Box
-              component="span"
-              sx={{
-                display: "inline-flex",
-                alignItems: "center",
-                color: "text.secondary",
-                cursor: "default",
-              }}
-            >
-              <Info size={12} />
-            </Box>
-          </Tooltip>
-        )}
-      </Stack>
+            <Info size={12} />
+          </Box>
+        </Tooltip>
+      )}
       {limits.length > 0 ? (
-        <Stack direction="row" spacing={0.75} flexWrap="wrap">
-          {limits.map(({ icon, label, value }) => (
-            <Chip
-              key={label}
-              icon={
-                <Box
-                  component="span"
-                  sx={{ display: "inline-flex", alignItems: "center", pl: 0.5 }}
-                >
-                  {icon}
-                </Box>
-              }
-              label={`${label}: ${value}`}
-              size="small"
-              variant="outlined"
-              color={isOrgWide ? "default" : "primary"}
-              sx={{ fontVariantNumeric: "tabular-nums" }}
-            />
-          ))}
-        </Stack>
+        <Typography
+          variant="caption"
+          color={isOrgWide ? "text.secondary" : "text.primary"}
+          sx={{ fontVariantNumeric: "tabular-nums" }}
+        >
+          {limits.map((l) => `${l.label}: ${l.value}`).join(" · ")}
+        </Typography>
       ) : (
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="caption" color="text.secondary">
           Enabled (no numeric limits set)
         </Typography>
       )}
@@ -268,56 +255,71 @@ export const ProviderDisplay: React.FC<{
   fallbackLabel = "Select provider",
   hideCheckbox,
 }) => {
-  const latest = getLatestDeployment(provider?.deployments);
-  return (
-    <Stack direction="row" spacing={2} flexGrow={1} alignItems="center">
-      {!hideCheckbox && (
-        <Avatar
-          sx={{
-            height: 32,
-            width: 32,
-            backgroundColor: isSelected ? "primary.main" : "secondary.main",
-            color: isSelected ? "common.white" : "text.secondary",
-          }}
-        >
-          {isSelected ? <Check size={16} /> : <Circle size={16} />}
-        </Avatar>
-      )}
-      {hideCheckbox && (
-        <Avatar
-          src={templateInfo?.logoUrl}
-          sx={{ height: 40, width: 40, backgroundColor: "action.selected" }}
-        >
-          <ServerCog size={20} />
-        </Avatar>
-      )}
+    const latest = getLatestDeployment(provider?.deployments);
+    const avatarSize = hideCheckbox ? 36 : 32;
+    return (
+      <Stack direction="row" spacing={2} flexGrow={1} alignItems="flex-start">
+        {!hideCheckbox && (
+          <Avatar
+            sx={{
+              height: avatarSize,
+              width: avatarSize,
+              backgroundColor: isSelected ? "primary.main" : "secondary.main",
+              color: isSelected ? "common.white" : "text.secondary",
+            }}
+          >
+            {isSelected ? <Check size={16} /> : <Circle size={16} />}
+          </Avatar>
+        )}
+        {hideCheckbox && (
+          <Avatar
+            src={templateInfo?.logoUrl}
+            sx={{ height: avatarSize, width: avatarSize, backgroundColor: "action.selected" }}
+          >
+            <ServerCog size={16} />
+          </Avatar>
+        )}
 
-      <Stack spacing={0.25} flexGrow={1}>
-        <Stack spacing={0.25}>
-          <Stack direction="row" spacing={0.25} alignItems="center">
-            <Typography variant="h6">
-              {provider?.name ?? fallbackLabel} &nbsp;
+        <Stack spacing={0.5} flexGrow={1} sx={{ minWidth: 0 }}>
+          {/* Title + provider template */}
+          <Stack
+            direction="row"
+            spacing={0.75}
+            alignItems="center"
+            flexWrap="wrap"
+            useFlexGap
+            sx={{ minHeight: avatarSize }}
+          >
+            <Typography variant="h4">
+              {provider?.name ?? fallbackLabel}
             </Typography>
             {provider?.template && (
               <Tooltip title="Service Provider template" placement="top" arrow>
-                <Chip
-                  label={templateInfo?.displayName ?? provider.template}
-                  size="small"
-                  variant="outlined"
-                  icon={
-                    templateInfo?.logoUrl ? (
-                      <Box
-                        component="img"
-                        src={templateInfo.logoUrl}
-                        alt={templateInfo.displayName}
-                        sx={{ width: 14, height: 14, borderRadius: "100%" }}
-                      />
-                    ) : undefined
-                  }
-                />
+                {hideCheckbox ?
+                  (<Typography variant="caption" color="text.disabled">
+                    | {templateInfo?.displayName ?? provider.template}
+                  </Typography>) :
+                  (<Chip
+                    label={templateInfo?.displayName ?? provider.template}
+                    size="small"
+                    variant="outlined"
+                    icon={
+                      templateInfo?.logoUrl ? (
+                        <Box
+                          component="img"
+                          src={templateInfo.logoUrl}
+                          alt={templateInfo.displayName}
+                          sx={{ width: 14, height: 14, borderRadius: "100%" }}
+                        />
+                      ) : undefined
+                    }
+                  />)}
+
+
               </Tooltip>
             )}
           </Stack>
+
           {latest?.deployedAt && (
             <Typography variant="caption" color="text.secondary">
               Deployed{" "}
@@ -326,54 +328,34 @@ export const ProviderDisplay: React.FC<{
               })}
             </Typography>
           )}
-        </Stack>
-        <Divider orientation="vertical" />
 
-        <Stack direction="column" spacing={0.5}>
           <RateLimitDisplay rateLimiting={provider?.rateLimiting} />
-          <Stack>
-            <Typography variant="caption" color="text.secondary">
-              Guardrails:{" "}
-              <Typography
-                component="span"
-                variant="body2"
-                color={
-                  provider?.policies?.length ? "text.primary" : "text.disabled"
-                }
+
+          {/* Guardrails — plain inline text (full list shown on hover) */}
+          <Typography variant="caption" color="text.secondary">
+            Guardrails:{" "}
+            {provider?.policies?.length ? (
+              <Tooltip
+                title={provider.policies.join(", ")}
+                placement="top"
+                arrow
               >
-                {provider?.policies?.length ? (
-                  <Stack
-                    direction="row"
-                    spacing={0.25}
-                    flexWrap="wrap"
-                    alignItems="center"
-                  >
-                    {provider.policies.slice(0, 3).map((p) => (
-                      <Chip key={p} label={p} size="small" variant="outlined" />
-                    ))}
-                    {provider.policies.length > 3 && (
-                      <Tooltip
-                        title={provider.policies.join(", ")}
-                        placement="top"
-                        arrow
-                      >
-                        <Typography variant="caption" color="text.secondary">
-                          {` +${provider.policies.length - 3} more..`}
-                        </Typography>
-                      </Tooltip>
-                    )}
-                  </Stack>
-                ) : (
-                  "None"
-                )}
+                <Typography component="span" variant="caption" color="text.primary">
+                  {provider.policies.slice(0, 3).join(", ")}
+                  {provider.policies.length > 3 &&
+                    ` +${provider.policies.length - 3} more`}
+                </Typography>
+              </Tooltip>
+            ) : (
+              <Typography component="span" variant="caption" color="text.disabled">
+                None
               </Typography>
-            </Typography>
-          </Stack>
+            )}
+          </Typography>
         </Stack>
       </Stack>
-    </Stack>
-  );
-};
+    );
+  };
 
 export const AddLLMProviderComponent: React.FC = () => {
   const { orgId, projectId, agentId, configId } = useParams<{
@@ -386,7 +368,13 @@ export const AddLLMProviderComponent: React.FC = () => {
   const isEditMode = !!configId;
 
   const [selectedEnvIndex, setSelectedEnvIndex] = useState(0);
-  type SelectedProvider = { uuid: string; id: string; template?: string };
+  type SelectedProvider = {
+    uuid: string;
+    id: string;
+    template?: string;
+    /** Catalog provider display name, used to seed the config name. */
+    name?: string;
+  };
   const [providerByEnv, setProviderByEnv] = useState<
     Record<string, SelectedProvider | null>
   >({});
@@ -399,14 +387,18 @@ export const AddLLMProviderComponent: React.FC = () => {
   // Track whether the user has manually edited env var names
   const envVarNamesEditedRef = useRef(false);
   const [providerDrawerOpen, setProviderDrawerOpen] = useState(false);
+  // Config name: auto-populated from the selected provider, but editable — when
+  // environments use different providers there is no single obvious default.
+  const [configName, setConfigName] = useState("");
+  const configNameEditedRef = useRef(false);
 
   const backHref =
     orgId && projectId && agentId
       ? generatePath(
-          absoluteRouteMap.children.org.children.projects.children.agents
-            .children.configure.path,
-          { orgId, projectId, agentId },
-        )
+        absoluteRouteMap.children.org.children.projects.children.agents
+          .children.configure.path,
+        { orgId, projectId, agentId },
+      )
       : "#";
 
   const { data: agent } = useGetAgent({
@@ -416,7 +408,8 @@ export const AddLLMProviderComponent: React.FC = () => {
   });
   const isExternal = agent?.provisioning?.type === "external";
 
-  const environments = usePipelineEnvironments(orgId, projectId);
+  const { environments, isLoading: isLoadingEnvironments } =
+    usePipelineEnvironmentsState(orgId, projectId);
   const { data: existingConfigsList } = useListAgentModelConfigs({
     orgName: orgId,
     projName: projectId,
@@ -513,6 +506,13 @@ export const AddLLMProviderComponent: React.FC = () => {
       setEnvVarNames(names);
       envVarNamesEditedRef.current = true;
     }
+
+    // Populate the config name from the existing config (and treat it as
+    // user-set so it isn't overwritten by the auto-name effect).
+    if (existingConfig.name) {
+      setConfigName(existingConfig.name);
+      configNameEditedRef.current = true;
+    }
   }, [existingConfig, isEditMode]);
 
   // Auto-generate env var names from the selected provider's template in create mode
@@ -526,6 +526,30 @@ export const AddLLMProviderComponent: React.FC = () => {
     if (isEditMode || envVarNamesEditedRef.current) return;
     setEnvVarNames(generateEnvVarNames(primaryTemplate));
   }, [primaryTemplate, isEditMode]);
+
+  // Suggested config name: a unique name derived from the display name of the
+  // first environment that has a provider (what the user sees on the card),
+  // falling back to the template/handle. Used both to auto-populate the field
+  // and as the save-time fallback, so the rule lives in one place.
+  const suggestedConfigName = useMemo(() => {
+    const firstWithProvider = environments
+      .map((env) => providerByEnv[env.name])
+      .find(Boolean);
+    const basis =
+      firstWithProvider?.name ??
+      firstWithProvider?.template ??
+      firstWithProvider?.id ??
+      "";
+    if (!basis) return "";
+    const existingNames = (existingConfigsList?.configs ?? []).map((c) => c.name);
+    return generateUniqueConfigName(basis, "llm", existingNames);
+  }, [environments, providerByEnv, existingConfigsList]);
+
+  // Auto-populate the config name until the user renames it.
+  useEffect(() => {
+    if (isEditMode || configNameEditedRef.current) return;
+    setConfigName(suggestedConfigName);
+  }, [suggestedConfigName, isEditMode]);
 
   const selectedEnvName = useMemo(
     () => environments[selectedEnvIndex]?.name ?? "",
@@ -591,15 +615,12 @@ export const AddLLMProviderComponent: React.FC = () => {
       }
     > = {};
     let hasAtLeastOneProvider = false;
-    let resolvedTemplate = "";
 
     for (const env of environments) {
       const entry = providerByEnv[env.name];
       if (!entry) continue;
 
       hasAtLeastOneProvider = true;
-      if (!resolvedTemplate)
-        resolvedTemplate = entry.template ?? entry.id ?? "";
 
       const envGuardrails = guardrailsByEnv[env.name] ?? [];
       const envPolicies = envGuardrails.map((g) => ({
@@ -625,21 +646,20 @@ export const AddLLMProviderComponent: React.FC = () => {
 
     const environmentVariables = !isExternal
       ? ENV_VAR_KEYS.map((key) => ({
-          key,
-          name: (envVarNames[key] ?? "").trim(),
-        })).filter((ev) => ev.name.length > 0)
+        key,
+        name: (envVarNames[key] ?? "").trim(),
+      })).filter((ev) => ev.name.length > 0)
       : [];
 
-    // In create mode, auto-generate a name from the provider template
-    const existingNames = (existingConfigsList?.configs ?? []).map(
-      (c) => c.name,
-    );
-    const autoName = isEditMode
-      ? (existingConfig?.name ?? resolvedTemplate)
-      : generateUniqueConfigName(resolvedTemplate, "llm", existingNames);
+    // Prefer the (auto-populated, user-editable) config name; fall back to the
+    // suggested name if the field was cleared.
+    const fallbackName = isEditMode
+      ? (existingConfig?.name ?? suggestedConfigName)
+      : suggestedConfigName;
+    const finalName = configName.trim() || fallbackName;
 
     const body = {
-      name: autoName,
+      name: finalName,
       envMappings,
       environmentVariables:
         environmentVariables.length > 0 ? environmentVariables : undefined,
@@ -705,6 +725,7 @@ export const AddLLMProviderComponent: React.FC = () => {
     environments,
     guardrailsByEnv,
     envVarNames,
+    configName,
     isExternal,
     orgId,
     projectId,
@@ -712,7 +733,7 @@ export const AddLLMProviderComponent: React.FC = () => {
     configId,
     isEditMode,
     existingConfig,
-    existingConfigsList,
+    suggestedConfigName,
     createConfig,
     updateConfig,
     navigate,
@@ -742,10 +763,13 @@ export const AddLLMProviderComponent: React.FC = () => {
     updateConfig.reset();
   }, [createConfig, updateConfig]);
 
-  if (isEditMode && isLoadingConfig) {
+  // Hold off rendering until the pipeline environments resolve (and, in edit
+  // mode, the existing config). Otherwise the env tabs briefly show all org
+  // environments before collapsing to the pipeline subset.
+  if (isLoadingEnvironments || (isEditMode && isLoadingConfig)) {
     return (
       <PageLayout
-        title="Edit LLM Configuration"
+        title={isEditMode ? "Edit LLM Configuration" : "Add LLM Configuration"}
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -788,33 +812,26 @@ export const AddLLMProviderComponent: React.FC = () => {
             icon={<AlertTriangle size={18} />}
             onClose={resetMutation}
           >
-            {String(
-              mutationError instanceof Error
-                ? mutationError.message
-                : isEditMode
-                  ? "Failed to update model config. Please try again."
-                  : "Failed to create model config. Please try again.",
-            )}
+            {getErrorMessage(mutationError) ||
+              (isEditMode
+                ? "Failed to update model config. Please try again."
+                : "Failed to create model config. Please try again.")}
           </Alert>
         ) : null}
         <Form.Section>
-          <Form.Header>Service Provider</Form.Header>
+          <Form.Subheader>LLM Service Provider</Form.Subheader>
           {environments.length > 1 && (
             <>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Select which catalog provider to use in each environment.
+                Select which LLM Service provider to use in each environment.
               </Typography>
               <Tabs
                 value={selectedEnvIndex}
                 onChange={(_, v: number) => setSelectedEnvIndex(v)}
-                sx={{ mb: 2 }}
+                sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
               >
                 {environments.map((env, idx) => {
-                  const hasProvider =
-                    !!providerByEnv[env.name] ||
-                    (isEditMode &&
-                      !!existingConfig?.envMappings?.[env.name]?.configuration
-                        ?.providerName);
+                  const hasProvider = hasProviderForEnv(env.name);
                   return (
                     <Tab
                       key={env.name}
@@ -863,11 +880,26 @@ export const AddLLMProviderComponent: React.FC = () => {
                   onClick={() => setProviderDrawerOpen(true)}
                   selected
                   aria-label={`Selected: ${fullProvider?.name ?? "Unknown"}. Click to change.`}
+                  sx={{ position: "relative" }}
                 >
+                  <Tooltip title="Change provider" placement="top" arrow>
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        display: "inline-flex",
+                        color: "text.secondary",
+                      }}
+                    >
+                      <Edit size={16} />
+                    </Box>
+                  </Tooltip>
                   <Form.CardContent>
                     <ProviderDisplay
                       provider={fullProvider}
-                      isSelected
+                      isSelected={false}
+                      hideCheckbox
                       templateInfo={templateMap.get(
                         fullProvider?.template ?? "",
                       )}
@@ -950,6 +982,7 @@ export const AddLLMProviderComponent: React.FC = () => {
                   uuid,
                   id: picked.id,
                   template: picked.template,
+                  name: picked.name,
                 },
               }));
             }}
@@ -978,9 +1011,21 @@ export const AddLLMProviderComponent: React.FC = () => {
           )}
         </Form.Section>
 
+        {hasAnyProvider && (
+          <ConfigNameSection
+            value={configName}
+            onChange={(value) => {
+              configNameEditedRef.current = true;
+              setConfigName(value);
+            }}
+            description="A name for this LLM configuration."
+            placeholder="my-llm-configuration"
+          />
+        )}
+
         {hasAnyProvider && !isExternal && (
           <Form.Section>
-            <Form.Header>Environment Variable Names</Form.Header>
+            <Form.Subheader>Environment Variable Names</Form.Subheader>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               These names are shared across all environments. The platform
               injects the actual URL and API key values at runtime per

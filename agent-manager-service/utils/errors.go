@@ -79,6 +79,7 @@ var (
 	ErrOrganizationAlreadyExists      = errors.New("organization already exists")
 	ErrProjectAlreadyExists           = errors.New("project already exists")
 	ErrDeploymentPipelineNotFound     = errors.New("deployment pipeline not found")
+	ErrDeploymentPipelineInUse        = errors.New("deployment pipeline is referenced by one or more projects")
 	ErrDeploymentInProgress           = errors.New("a deployment is already in progress")
 	ErrProjectHasAssociatedAgents     = errors.New("project has associated agents")
 	ErrMonitorNotFound                = errors.New("monitor not found")
@@ -113,6 +114,7 @@ var (
 	ErrInvalidGatewayConfig     = errors.New("invalid gateway configuration")
 	ErrEnvironmentAlreadyExists = errors.New("environment already exists")
 	ErrEnvironmentHasGateways   = errors.New("environment has associated gateways")
+	ErrEnvironmentInUse         = errors.New("environment is referenced by one or more deployment pipelines")
 
 	// LLM Provider-related errors
 	ErrProviderNotFound        = errors.New("provider not found")

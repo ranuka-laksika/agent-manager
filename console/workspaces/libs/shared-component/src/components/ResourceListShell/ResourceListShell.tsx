@@ -139,10 +139,9 @@ export const ResourceListShell: React.FC<ResourceListShellProps> = ({
     </Stack>
   );
 
-  if (error) {
-    return (
-      <Stack spacing={1}>
-        {resolvedToolbar}
+  const renderBody = () => {
+    if (error) {
+      return (
         <ListingTable.Container>
           <Alert
             severity="error"
@@ -154,25 +153,19 @@ export const ResourceListShell: React.FC<ResourceListShellProps> = ({
               : "Failed to load. Please try again."}
           </Alert>
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  if (isLoading) {
-    return (
-      <Stack spacing={1}>
-        {resolvedToolbar}
+    if (isLoading) {
+      return (
         <ListingTable.Container disablePaper>
           {loadingPlaceholder ?? <DefaultLoadingRows />}
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  if (isEmpty) {
-    return (
-      <Stack spacing={1}>
-        {resolvedToolbar}
+    if (isEmpty) {
+      return (
         <ListingTable.Container>
           <ListingTable.EmptyState
             illustration={emptyState.illustration}
@@ -180,19 +173,16 @@ export const ResourceListShell: React.FC<ResourceListShellProps> = ({
             description={emptyState.description}
           />
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  if (isSearchEmpty) {
-    const empty = searchEmptyState ?? {
-      illustration: <Search size={64} />,
-      title: "No results match your search",
-      description: "Try a different keyword or clear the search filter.",
-    };
-    return (
-      <Stack spacing={1}>
-        {resolvedToolbar}
+    if (isSearchEmpty) {
+      const empty = searchEmptyState ?? {
+        illustration: <Search size={64} />,
+        title: "No results match your search",
+        description: "Try a different keyword or clear the search filter.",
+      };
+      return (
         <ListingTable.Container>
           <ListingTable.EmptyState
             illustration={empty.illustration}
@@ -200,15 +190,20 @@ export const ResourceListShell: React.FC<ResourceListShellProps> = ({
             description={empty.description}
           />
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
+    return (
+      <ListingTable.Container disablePaper>
+        <Stack pt={4}>{children}</Stack>
+      </ListingTable.Container>
+    );
+  };
   return (
-    <ListingTable.Container disablePaper>
+    <Stack spacing={1}>
       {resolvedToolbar}
-      <Stack pt={4}>{children}</Stack>
-    </ListingTable.Container>
+      {renderBody()}
+    </Stack>
   );
 };
 

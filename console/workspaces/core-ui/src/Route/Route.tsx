@@ -48,10 +48,10 @@ import {
   LazyTracesComponent,
   LazyLogsComponent,
   LazyMetricsComponent,
-  LazyEvalEvaluatorsComponent,
-  LazyCreateEvaluatorComponent,
-  LazyViewEvaluatorComponent,
-  LazyEditEvaluatorComponent,
+  LazyEvalEvaluatorsOrg,
+  LazyCreateEvaluatorOrg,
+  LazyViewEvaluatorOrg,
+  LazyEditEvaluatorOrg,
   LazyEvalMonitorsComponent,
   LazyCreateMonitorComponent,
   LazyViewMonitorComponent,
@@ -260,7 +260,7 @@ export function RootRouter() {
               path={
                 relativeRouteMap.children.org.children.evaluators.path
               }
-              element={<LazyEvalEvaluatorsComponent />}
+              element={<LazyEvalEvaluatorsOrg />}
             />
             <Route
               path={
@@ -268,7 +268,7 @@ export function RootRouter() {
                 "/" +
                 relativeRouteMap.children.org.children.evaluators.children.create.path
               }
-              element={<LazyCreateEvaluatorComponent />}
+              element={<LazyCreateEvaluatorOrg />}
             />
             <Route
               path={
@@ -276,7 +276,7 @@ export function RootRouter() {
                 "/" +
                 relativeRouteMap.children.org.children.evaluators.children.edit.path
               }
-              element={<LazyEditEvaluatorComponent />}
+              element={<LazyEditEvaluatorOrg />}
             />
             <Route
               path={
@@ -284,7 +284,7 @@ export function RootRouter() {
                 "/" +
                 relativeRouteMap.children.org.children.evaluators.children.view.path
               }
-              element={<LazyViewEvaluatorComponent />}
+              element={<LazyViewEvaluatorOrg />}
             />
             <Route
               path={

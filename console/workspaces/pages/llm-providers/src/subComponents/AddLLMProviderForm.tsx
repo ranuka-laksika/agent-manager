@@ -25,16 +25,14 @@ import {
   CardContent,
   Collapse,
   Form,
-  FormControl,
-  FormLabel,
   IconButton,
+  InputAdornment,
   Skeleton,
-  Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Brain, Pencil } from "@wso2/oxygen-ui-icons-react";
+import { Brain, Eye, EyeOff, Lock, Unlock } from "@wso2/oxygen-ui-icons-react";
 import {
   addLLMProviderSchema,
   type AddLLMProviderFormValues,
@@ -112,6 +110,10 @@ const INITIAL_FORM_VALUES: AddLLMProviderFormValues = {
   gatewayIds: [],
 };
 
+// Provider template cards keep a minimum width so names never truncate; the grid
+// fits as many columns as the container allows and reflows responsively.
+const TEMPLATE_GRID_COLUMNS = "repeat(auto-fill, minmax(min(100%, 240px), 1fr))";
+
 export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
   templates,
   isLoadingTemplates,
@@ -164,6 +166,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
 
   const [guardrails, setGuardrails] = useState<GuardrailSelection[]>([]);
   const [endpointEditable, setEndpointEditable] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   const handleAddGuardrail = useCallback((guardrail: GuardrailSelection) => {
     setGuardrails((prev) => {
@@ -306,7 +309,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
   }, [lastSubmittedValidationErrors]);
 
   return (
-    <Stack spacing={3}>
+    <Form.Stack spacing={3}>
       {missingParamsMessage && (
         <Typography color="error" variant="body2">
           {missingParamsMessage}
@@ -314,43 +317,47 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
       )}
       {/* Template selector */}
       <Form.Section>
-        <Form.Header>Basic Details</Form.Header>
+        <Form.Subheader>Basic Details</Form.Subheader>
         <Form.Stack spacing={2}>
           <Form.Stack
             direction={{ xs: "column", md: "row" }}
             spacing={2}
             useFlexGap
           >
-            <FormControl sx={{ flex: 2 }} error={Boolean(errors.displayName)}>
-              <FormLabel required>Name</FormLabel>
-              <TextField
-                fullWidth
-                value={formData.displayName}
-                onChange={(e) =>
-                  handleFieldChange("displayName", e.target.value)
-                }
-                placeholder="Production OpenAI Provider"
-                error={Boolean(errors.displayName)}
-                helperText={errors.displayName}
-              />
-            </FormControl>
+            <Box sx={{ flex: 2 }}>
+              <Form.ElementWrapper label="Name" name="displayName">
+                <TextField
+                  id="displayName"
+                  fullWidth
+                  value={formData.displayName}
+                  onChange={(e) =>
+                    handleFieldChange("displayName", e.target.value)
+                  }
+                  placeholder="Production OpenAI Provider"
+                  error={Boolean(errors.displayName)}
+                  helperText={errors.displayName}
+                />
+              </Form.ElementWrapper>
+            </Box>
 
-            <FormControl sx={{ flex: 1 }} error={Boolean(errors.version)}>
-              <FormLabel required>Version</FormLabel>
-              <TextField
-                fullWidth
-                value={formData.version}
-                onChange={(e) => handleFieldChange("version", e.target.value)}
-                placeholder="v1.0"
-                error={Boolean(errors.version)}
-                helperText={errors.version}
-              />
-            </FormControl>
+            <Box sx={{ flex: 1 }}>
+              <Form.ElementWrapper label="Version" name="version">
+                <TextField
+                  id="version"
+                  fullWidth
+                  value={formData.version}
+                  onChange={(e) => handleFieldChange("version", e.target.value)}
+                  placeholder="v1.0"
+                  error={Boolean(errors.version)}
+                  helperText={errors.version}
+                />
+              </Form.ElementWrapper>
+            </Box>
           </Form.Stack>
 
-          <FormControl fullWidth error={Boolean(errors.description)}>
-            <FormLabel>Short description</FormLabel>
+          <Form.ElementWrapper label="Description (optional)" name="description">
             <TextField
+              id="description"
               fullWidth
               multiline
               rows={2}
@@ -360,11 +367,11 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
               error={Boolean(errors.description)}
               helperText={errors.description}
             />
-          </FormControl>
+          </Form.ElementWrapper>
 
-          <FormControl fullWidth error={Boolean(errors.context)}>
-            <FormLabel>Context path</FormLabel>
+          <Form.ElementWrapper label="Context path (optional)" name="context">
             <TextField
+              id="context"
               fullWidth
               value={formData.context ?? ""}
               onChange={(e) => handleFieldChange("context", e.target.value)}
@@ -375,7 +382,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
                 "API context path (must start with /, no trailing slash)"
               }
             />
-          </FormControl>
+          </Form.ElementWrapper>
         </Form.Stack>
       </Form.Section>
 
@@ -386,13 +393,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
             sx={{
               display: "grid",
               gap: 1.5,
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(3, 1fr)",
-                md: "repeat(4, 1fr)",
-                lg: "repeat(4, 1fr)",
-                xl: "repeat(6, 1fr)",
-              },
+              gridTemplateColumns: TEMPLATE_GRID_COLUMNS,
             }}
           >
             {Array.from({ length: 8 }).map((_, i) => (
@@ -403,22 +404,15 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
       )}
 
       <Form.Section>
-        <Form.Header>Provider Template</Form.Header>
-        <FormControl fullWidth>
-          <Box
-            sx={{
-              mt: 1.5,
-              display: "grid",
-              gap: 1.5,
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(3, 1fr)",
-                md: "repeat(4, 1fr)",
-                lg: "repeat(4, 1fr)",
-                xl: "repeat(6, 1fr)",
-              },
-            }}
-          >
+        <Form.Subheader>Provider Template</Form.Subheader>
+        <Box
+          sx={{
+            mt: 1.5,
+            display: "grid",
+            gap: 1.5,
+            gridTemplateColumns: TEMPLATE_GRID_COLUMNS,
+          }}
+        >
             {sortedTemplates.map((template) => {
               const isSelected = formData.templateId === template.id;
               return (
@@ -474,49 +468,92 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
                 No provider templates available for this organization.
               </Typography>
             )}
-          </Box>
-        </FormControl>
+        </Box>
       </Form.Section>
       <Collapse in={!!formData.templateId}>
         <Form.Section>
-          <Form.Header>Runtime Configuration</Form.Header>
+          <Form.Subheader>Runtime Configuration</Form.Subheader>
           <Form.Stack spacing={2}>
-            <FormControl fullWidth error={Boolean(errors.upstreamUrl)}>
-              <Stack direction="row" alignItems="center" spacing={0.5}>
-                <FormLabel required={requiresUpstream}>Endpoint URL</FormLabel>
-                {hasTemplateUrl && (
-                  <Tooltip title={endpointEditable ? "Lock endpoint" : "Override endpoint"}>
-                    <IconButton size="small" onClick={() => setEndpointEditable(v => !v)}>
-                      <Pencil size={14} />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              </Stack>
+            <Form.ElementWrapper label="Endpoint URL" name="upstreamUrl">
               <TextField
+                id="upstreamUrl"
                 fullWidth
                 value={formData.upstreamUrl ?? ""}
                 onChange={(e) => handleFieldChange("upstreamUrl", e.target.value)}
                 placeholder="https://api.openai.com/v1"
                 error={Boolean(errors.upstreamUrl)}
                 helperText={errors.upstreamUrl}
-                disabled={hasTemplateUrl && !endpointEditable}
+                // Template-provided endpoints are locked (read-only) until the
+                // user opts to override them via the adornment toggle.
+                slotProps={{
+                  input: {
+                    readOnly: hasTemplateUrl && !endpointEditable,
+                    endAdornment: hasTemplateUrl ? (
+                      <InputAdornment position="end">
+                        <Tooltip
+                          title={
+                            endpointEditable
+                              ? "Lock endpoint"
+                              : "Unlock to override endpoint"
+                          }
+                        >
+                          <IconButton
+                            size="small"
+                            onClick={() => setEndpointEditable((v) => !v)}
+                          >
+                            {endpointEditable ? (
+                              <Unlock size={14} />
+                            ) : (
+                              <Lock size={14} />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ) : undefined,
+                  },
+                }}
               />
-            </FormControl>
+            </Form.ElementWrapper>
 
-            <FormControl fullWidth error={Boolean(errors.apiKey)}>
-              <FormLabel required={requiresApiKey}>
-                API key / Credential
-              </FormLabel>
+            <Form.ElementWrapper
+              label="API key / Credential"
+              name="apiKey"
+            >
               <TextField
+                id="apiKey"
                 fullWidth
-                type="password"
+                type={showApiKey ? "text" : "password"}
                 value={formData.apiKey}
                 onChange={(e) => handleFieldChange("apiKey", e.target.value)}
                 placeholder="Enter your API key"
                 error={Boolean(errors.apiKey)}
                 helperText={errors.apiKey}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <Tooltip title={showApiKey ? "Hide" : "Show"}>
+                          <IconButton
+                            size="small"
+                            edge="end"
+                            aria-label={
+                              showApiKey ? "Hide API key" : "Show API key"
+                            }
+                            onClick={() => setShowApiKey((v) => !v)}
+                          >
+                            {showApiKey ? (
+                              <EyeOff size={16} />
+                            ) : (
+                              <Eye size={16} />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      </InputAdornment>
+                    ),
+                  },
+                }}
               />
-            </FormControl>
+            </Form.ElementWrapper>
           </Form.Stack>
         </Form.Section>
       </Collapse>
@@ -545,11 +582,10 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
       </Collapse>
       <Collapse in={!!formData.templateId}>
         <Form.Section>
-          <Form.Header>Deployment Configuration</Form.Header>
-          <FormControl fullWidth error={Boolean(errors.gatewayIds)}>
-            <FormLabel>Gateway</FormLabel>
+          <Form.Subheader>Deployment Configuration</Form.Subheader>
+          <Form.ElementWrapper label="Gateway" name="gatewayIds">
             {isLoadingGateways ? (
-              <Skeleton variant="rounded" height={40} sx={{ mt: 0.5 }} />
+              <Skeleton variant="rounded" height={40} />
             ) : (
               <Autocomplete
                 multiple
@@ -572,17 +608,12 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
                     {...params}
                     placeholder="Select gateway(s)"
                     error={Boolean(errors.gatewayIds)}
+                    helperText={errors.gatewayIds}
                   />
                 )}
-                sx={{ mt: 0.5 }}
               />
             )}
-            {errors.gatewayIds && (
-              <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
-                {errors.gatewayIds}
-              </Typography>
-            )}
-          </FormControl>
+          </Form.ElementWrapper>
         </Form.Section>
       </Collapse>
       {errorMessage && (
@@ -623,7 +654,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
           {isSubmitting ? "Creating..." : "Add provider"}
         </Button>
       </Box>
-    </Stack>
+    </Form.Stack>
   );
 };
 

@@ -94,13 +94,45 @@ export function orderPipelineEnvironments(
  * environments, project and pipelines for the given org/project and returns the
  * pipeline-scoped, promotion-ordered environment list.
  */
-export function usePipelineEnvironments(orgId?: string, projectId?: string): Environment[] {
-    const { data: environments } = useListEnvironments({ orgName: orgId });
-    const { data: project } = useGetProject({ orgName: orgId, projName: projectId });
-    const { data: pipelinesData } = useListDeploymentPipelines({ orgName: orgId });
+export interface PipelineEnvironmentsState {
+    /** Pipeline-scoped, promotion-ordered environments. */
+    environments: Environment[];
+    /** True while any of the underlying environment/project/pipeline queries are still loading. */
+    isLoading: boolean;
+}
 
-    return useMemo(
+/**
+ * Like {@link usePipelineEnvironments} but also reports whether the underlying
+ * environments/project/pipeline queries are still loading. Callers should hold
+ * off rendering the environment list until {@link PipelineEnvironmentsState.isLoading}
+ * is false: while the project/pipeline are still resolving, the pipeline scope
+ * is unknown and the list falls back to *all* org environments, which would
+ * otherwise flash before collapsing to the pipeline subset.
+ */
+export function usePipelineEnvironmentsState(
+    orgId?: string,
+    projectId?: string,
+): PipelineEnvironmentsState {
+    const { data: environments, isLoading: isLoadingEnvironments } =
+        useListEnvironments({ orgName: orgId });
+    const { data: project, isLoading: isLoadingProject } = useGetProject({
+        orgName: orgId,
+        projName: projectId,
+    });
+    const { data: pipelinesData, isLoading: isLoadingPipelines } =
+        useListDeploymentPipelines({ orgName: orgId });
+
+    const ordered = useMemo(
         () => orderPipelineEnvironments(environments, pipelinesData, project),
         [environments, pipelinesData, project],
     );
+
+    return {
+        environments: ordered,
+        isLoading: isLoadingEnvironments || isLoadingProject || isLoadingPipelines,
+    };
+}
+
+export function usePipelineEnvironments(orgId?: string, projectId?: string): Environment[] {
+    return usePipelineEnvironmentsState(orgId, projectId).environments;
 }

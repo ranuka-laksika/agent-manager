@@ -32,12 +32,18 @@ type AMPClient struct {
 	cfg        *Config
 }
 
-// NewAMPClient creates a new API client. It fetches an OAuth2 token from Thunder IDP
-// and configures the HTTP client for use throughout the test suite.
+// NewAMPClient creates a new API client. It uses cfg.APIToken when set (an
+// override for environments where the client_credentials service account can't
+// obtain scoped tokens); otherwise it fetches a scoped OAuth2 token from Thunder
+// IDP via the client_credentials grant.
 func NewAMPClient(cfg *Config) (*AMPClient, error) {
-	token, err := FetchToken(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("fetch auth token: %w", err)
+	token := cfg.APIToken
+	if token == "" {
+		var err error
+		token, err = FetchToken(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("fetch auth token: %w", err)
+		}
 	}
 
 	return &AMPClient{
@@ -51,6 +57,12 @@ func NewAMPClient(cfg *Config) (*AMPClient, error) {
 // Cfg returns the test configuration.
 func (c *AMPClient) Cfg() *Config {
 	return c.cfg
+}
+
+// Token returns the bearer token the client authenticates with. Used to pass
+// through to shell scripts (e.g. add-environment.sh) that call the API directly.
+func (c *AMPClient) Token() string {
+	return c.token
 }
 
 // Do sends an HTTP request to the AMP API. If body is non-nil it is marshaled to JSON.
