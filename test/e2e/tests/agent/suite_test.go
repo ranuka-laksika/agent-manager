@@ -14,6 +14,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
+// Package agent holds e2e tests for the agent lifecycle domain. It is the
+// canonical builder of the shared IT helpdesk agents: internal_agent_test.go
+// builds the single-env agent and promote_agent_test.go builds the
+// two-env agent, both as explicit lifecycle test steps. The
+// configuration, llmprovider, monitors and traces domains reuse those agents
+// by name via the idempotent helpers in the testsetup package.
+
 package agent
 
 import (
@@ -23,7 +30,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
-	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
 // Client is the shared API client used by all agent tests.
@@ -31,9 +37,6 @@ var Client *framework.AMPClient
 
 // Cfg is the shared test configuration.
 var Cfg *framework.Config
-
-// Shared is the shared internal chat agent provisioned once in BeforeSuite.
-var Shared *framework.SharedAgent
 
 func TestAgent(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -53,7 +56,4 @@ var _ = BeforeSuite(func() {
 
 	By("Verifying default organization")
 	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
-
-	By("Setting up shared internal chat agent")
-	Shared = testsetup.SetupSharedAgent(Client, Cfg)
 })

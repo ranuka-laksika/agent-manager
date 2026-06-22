@@ -58,6 +58,8 @@ func (r *AgentConfigRepo) Upsert(config *models.AgentConfig) error {
 	originsJSON, _ := json.Marshal(config.CORSAllowOrigins)
 	methodsJSON, _ := json.Marshal(config.CORSAllowMethods)
 	headersJSON, _ := json.Marshal(config.CORSAllowHeaders)
+	oauthIssuersJSON, _ := json.Marshal(config.OAuthIssuers)
+	oauthAudiencesJSON, _ := json.Marshal(config.OAuthAudiences)
 
 	// Use Select("*") to force GORM to include all fields including boolean false values
 	// Without this, GORM skips "zero value" fields like false booleans during Create
@@ -72,6 +74,12 @@ func (r *AgentConfigRepo) Upsert(config *models.AgentConfig) error {
 			"cors_allow_methods":          clause.Expr{SQL: "?::jsonb", Vars: []interface{}{string(methodsJSON)}},
 			"cors_allow_headers":          clause.Expr{SQL: "?::jsonb", Vars: []interface{}{string(headersJSON)}},
 			"cors_allow_credentials":      config.CORSAllowCredentials,
+			"enable_oauth_security":       config.EnableOAuthSecurity,
+			"oauth_issuers":               clause.Expr{SQL: "?::jsonb", Vars: []interface{}{string(oauthIssuersJSON)}},
+			"oauth_audiences":             clause.Expr{SQL: "?::jsonb", Vars: []interface{}{string(oauthAudiencesJSON)}},
+			"oauth_header_name":           config.OAuthHeaderName,
+			"oauth_auth_header_prefix":    config.OAuthAuthHeaderPrefix,
+			"oauth_forward_token":         config.OAuthForwardToken,
 			"updated_at":                  clause.Expr{SQL: "NOW()"},
 		}),
 	}).Create(config).Error

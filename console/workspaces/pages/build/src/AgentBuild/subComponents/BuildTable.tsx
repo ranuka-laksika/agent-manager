@@ -277,14 +277,7 @@ export function BuildTable() {
                           { orgId, projectId, agentId },
                         )}?deployPanel=open&selectedBuild=${row.id}`}
                         size="small"
-                        startIcon={
-                          row.status === "Running" ||
-                          row.status === "Pending" ? (
-                            <CircularProgress color="inherit" size={14} />
-                          ) : (
-                            <Rocket size={16} />
-                          )
-                        }
+                        startIcon={<Rocket size={16} />}
                       >
                         {row.status === "Running" || row.status === "Pending"
                           ? "Building"

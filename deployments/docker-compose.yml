@@ -67,7 +67,7 @@ services:
       - AMP_VERSION=v0.8.0
       - OPEN_CHOREO_BASE_URL=http://api.openchoreo.localhost:8195
       # OpenBao/Vault Secret Management Configuration
-      # NOTE: Run ./deployments/scripts/port-forward.sh to forward OpenBao from k3d cluster
+      # NOTE: Run ./deployments/setup/port-forward.sh to forward OpenBao from k3d cluster
       # Uses the default OpenBao that comes with OpenChoreo for both user and system secrets
       - SECRET_MANAGER_PROVIDER=openbao
       - OPENBAO_URL=http://host.docker.internal:8200
@@ -135,6 +135,9 @@ services:
       - OBS_API_BASE_URL=http://localhost:9098
       - GATEWAY_CONTROL_PLANE_URL=http://localhost:9243
       - GATEWAY_VERSION=v0.11.0
+      # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z).
+      # Keep in sync with the agent-manager-service AMP_VERSION above.
+      - AMP_VERSION=v0.16.0
       - INSTRUMENTATION_URL=http://localhost:22893/otel
       # Cluster-internal URLs the gateway uses to reach Agent Manager — piped
       # into the add-environment.sh command rendered by the Create Environment

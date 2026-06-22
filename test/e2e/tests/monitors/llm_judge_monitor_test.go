@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-judge"), func() {
+var _ = Describe("Past monitor with an LLM-judge evaluator: create, run, and score", Ordered, Label("monitors", "llm-judge"), func() {
 	var (
 		suffix              string
 		traceStartTime      time.Time
@@ -43,25 +43,25 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 	)
 
 	BeforeAll(func() {
-		Expect(Shared).NotTo(BeNil(), "shared agent must be available")
+		Expect(SharedITHelpdeskAgent).NotTo(BeNil(), "shared agent must be available")
 		Expect(Cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set")
 
 		suffix = uuid.New().String()[:8]
-		llmJudgeMonitorName = "e2e-test-mon-monitor-" + suffix
-		llmProviderID = "e2e-test-mon-provider-" + suffix
+		llmJudgeMonitorName = framework.E2EMonitorPrefix + suffix
+		llmProviderID = framework.E2ELLMProviderPrefix + suffix
 
 		By("Invoking shared agent to generate traces")
 		traceStartTime = time.Now().Add(-10 * time.Minute)
-		endpointURL := Shared.EndpointURL + "/chat"
-		agentops.InvokeAgentEndpoint(endpointURL, Shared.InvokeReq, Shared.APIKey)
+		endpointURL := SharedITHelpdeskAgent.EndpointURL + "/chat"
+		agentops.InvokeAgentEndpoint(endpointURL, SharedITHelpdeskAgent.InvokeReq, SharedITHelpdeskAgent.APIKey)
 		traceEndTime = time.Now()
 		GinkgoWriter.Printf("Invocation completed, trace window: %s to %s\n",
 			traceStartTime.Format(time.RFC3339), traceEndTime.Format(time.RFC3339))
 	})
 
-	It("should create an LLM provider for LLM-judge evaluator", func() {
+	It("creates an LLM provider for the LLM-judge evaluator", func() {
 		By("Waiting for an active AI gateway")
-		gatewayUUID := gateway.WaitForActiveAIGateway(Client, Cfg.DefaultOrg, "api-platform-default-default", 3*time.Minute)
+		gatewayUUID := gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 
 		By("Fetching the OpenAI template")
 		templates := llmprovider.ListLLMProviderTemplates(Default, Client, Cfg.DefaultOrg)
@@ -103,12 +103,12 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 		GinkgoWriter.Printf("LLM provider created: %s (UUID: %s)\n", llmProviderID, prov.UUID)
 	})
 
-	It("should create a past monitor with LLM-judge evaluator", func() {
+	It("creates a past-window monitor using the LLM-judge evaluator", func() {
 		samplingRate := 1.0
 		mon := monitor.CreateMonitor(Default, Client, &monitor.CreateMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			Request: framework.CreateMonitorRequest{
 				Name:            llmJudgeMonitorName,
 				DisplayName:     "E2E LLM Judge Monitor",
@@ -137,11 +137,11 @@ var _ = Describe("Past Monitor - LLM Judge", Ordered, Label("monitors", "llm-jud
 		GinkgoWriter.Printf("LLM-judge monitor created: %s\n", mon.Name)
 	})
 
-	It("should have a completed run with scores", func() {
+	It("completes a monitor run and produces LLM-judge scores", func() {
 		run := monitor.WaitForMonitorRun(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: llmJudgeMonitorName,
 			Timeout:     10 * time.Minute,
 		})

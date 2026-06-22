@@ -22,3 +22,4 @@ export * from './utils/usePipelineEnvironments';
 export * from './utils/policyParameterEditor';
 export * from './utils/format';
 export * from './utils/url';
+export * from './utils/gatewayScripts';

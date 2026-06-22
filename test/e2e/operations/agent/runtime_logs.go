@@ -51,8 +51,16 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 	path := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/runtime-logs",
 		params.OrgName, params.ProjectName, params.AgentName)
 
+	scope := fmt.Sprintf("org=%s project=%s agent=%s env=%s search=%q",
+		params.OrgName, params.ProjectName, params.AgentName, params.Environment, params.SearchText)
+
+	var lastDiag string
+	framework.AttachOnFailure("runtime-log: last poll result", func() string { return lastDiag })
+
 	var result framework.LogEntry
+	attempt := 0
 	Eventually(func(g Gomega) {
+		attempt++
 		req := framework.LogFilterRequest{
 			EnvironmentName: params.Environment,
 			StartTime:       time.Now().Add(-10 * time.Minute).UTC().Format(time.RFC3339),
@@ -62,11 +70,12 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 		}
 
 		resp, err := client.Post(path, req)
-		g.Expect(err).NotTo(HaveOccurred(), "runtime logs request failed")
+		g.Expect(err).NotTo(HaveOccurred(), "runtime logs request failed (%s)", scope)
 		defer resp.Body.Close()
 
 		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
-			StopTrying(fmt.Sprintf("runtime logs returned %d", resp.StatusCode)).Now()
+			lastDiag = fmt.Sprintf("%s | attempt %d | runtime-logs returned %d (non-retryable)", scope, attempt, resp.StatusCode)
+			StopTrying(fmt.Sprintf("runtime logs returned %d (%s)", resp.StatusCode, scope)).Now()
 		}
 		logs := framework.ExpectStatusAndDecode[framework.LogsResponse](g, resp, http.StatusOK)
 		found := false
@@ -78,7 +87,11 @@ func WaitForRuntimeLog(client *framework.AMPClient, params *WaitForRuntimeLogPar
 				break
 			}
 		}
-		g.Expect(found).To(BeTrue(), "log line %q not found yet", params.SearchText)
+		lastDiag = fmt.Sprintf("%s | attempt %d | 200 OK, %d log line(s) returned, search text not present",
+			scope, attempt, len(logs.Logs))
+		g.Expect(found).To(BeTrue(),
+			"log line %q not found yet for %s — agent is %d log lines deep; if it never appears the runtime "+
+				"may not be logging it, or logs are not being ingested for this environment", params.SearchText, scope, len(logs.Logs))
 	}).WithTimeout(timeout).WithPolling(15 * time.Second).Should(Succeed())
 
 	return result

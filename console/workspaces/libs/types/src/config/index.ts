@@ -28,6 +28,11 @@ export interface AppConfig {
   gatewayControlPlaneUrl?: string;
   /** Gateway version used in setup commands (default: v0.9.0). */
   gatewayVersion?: string;
+  /**
+   * Agent Manager release version (e.g. v0.15.0); pins the deployment-script
+   * git tag (amp/vX.Y.Z).
+   */
+  ampVersion?: string;
   disableAuth: boolean;
   /** When false, nav items are shown regardless of token scopes (mirrors RBAC_ENABLED). */
   rbacEnabled: boolean;

@@ -18,11 +18,11 @@
 
 import { Sidebar } from "@wso2/oxygen-ui";
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export interface NavigationItem {
   label: string;
   icon?: ReactNode;
-  onClick?: () => void;
   href?: string;
   isActive?: boolean;
   type: 'item';
@@ -39,7 +39,22 @@ interface LeftNavigationProps {
   activeItem: string;
   mainItems: NavigationItem[];
   groupedItems: NavigationSection[];
-  onNavigationClick: (itemKey: string) => void;
+}
+
+// Render each item as a real anchor (`<a>`) so clicking opens the link —
+// enabling middle-click / open-in-new-tab and proper link semantics, rather
+// than navigating from the Sidebar's onSelect callback.
+function renderItem(item: NavigationItem) {
+  return (
+    <Sidebar.Item
+      id={item.label}
+      key={item.label}
+      link={item.href ? <Link to={item.href} /> : undefined}
+    >
+      <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
+      <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
+    </Sidebar.Item>
+  );
 }
 
 export function LeftNavigation({
@@ -47,33 +62,15 @@ export function LeftNavigation({
   activeItem,
   mainItems,
   groupedItems,
-  onNavigationClick,
 }: LeftNavigationProps) {
   return (
-    <Sidebar
-      collapsed={collapsed}
-      activeItem={activeItem}
-      onSelect={onNavigationClick}
-      width={280}
-    >
+    <Sidebar collapsed={collapsed} activeItem={activeItem} width={280}>
       <Sidebar.Nav>
-        <Sidebar.Category>
-          {mainItems.map((item) => (
-            <Sidebar.Item id={item.label} key={item.label}>
-              <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
-              <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
-            </Sidebar.Item>
-          ))}
-        </Sidebar.Category>
+        <Sidebar.Category>{mainItems.map(renderItem)}</Sidebar.Category>
         {groupedItems.map((group) => (
           <Sidebar.Category key={group.title}>
             <Sidebar.CategoryLabel>{group.title}</Sidebar.CategoryLabel>
-            {group.items.map((item) => (
-              <Sidebar.Item id={item.label} key={item.label}>
-                <Sidebar.ItemIcon>{item.icon}</Sidebar.ItemIcon>
-                <Sidebar.ItemLabel>{item.label}</Sidebar.ItemLabel>
-              </Sidebar.Item>
-            ))}
+            {group.items.map(renderItem)}
           </Sidebar.Category>
         ))}
       </Sidebar.Nav>

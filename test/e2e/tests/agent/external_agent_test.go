@@ -25,22 +25,29 @@ import (
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
 	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
+	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("External Agent Lifecycle", Label("agent", "external-agent"), Ordered, func() {
+var _ = Describe("External agent: registration and token issuance", Label("agent", "external-agent"), Ordered, func() {
 	var (
 		agentName string
 		createReq framework.CreateAgentRequest
 	)
 
 	BeforeAll(func() {
+		// The shared project is normally created by the internal/promote agent
+		// suites as lifecycle steps. This suite only creates its own agent there,
+		// so ensure the project exists to avoid an order-dependent failure when
+		// this suite runs first.
+		testsetup.EnsureProject(Client, Cfg, framework.E2ESharedProjectName, "E2E Shared Project", "Shared project for e2e tests")
+
 		suffix := uuid.New().String()[:8]
 		agentName = "e2e-test-agent-" + suffix
 
-		createReq = framework.NewExternalAgentRequest(agentName, "External agent for e2e agent lifecycle test")
+		createReq = framework.NewExternalAgentRequest(agentName, "Externa agent registered by the external-agent lifecycle e2e tests")
 	})
 
-	It("should create an external agent", func() {
+	It("registers an external agent that points at an already-hosted agent", func() {
 		By("Creating external agent in shared project")
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
@@ -51,7 +58,7 @@ var _ = Describe("External Agent Lifecycle", Label("agent", "external-agent"), O
 		GinkgoWriter.Printf("Agent: %s (type: %s/%s)\n", agentName, ag.AgentType.Type, ag.AgentType.SubType)
 	})
 
-	It("should generate a token for the external agent", func() {
+	It("issues an api token for trace publishing for an external agent", func() {
 		By("Generating agent token")
 		tokenResp := agentops.GenerateAgentToken(Default, Client, Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName, Cfg.DefaultEnv, "1h")
 		Expect(tokenResp.Token).NotTo(BeEmpty(), "expected non-empty agent token")

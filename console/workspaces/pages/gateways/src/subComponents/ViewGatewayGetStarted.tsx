@@ -32,20 +32,10 @@ import {
 } from "@wso2/oxygen-ui";
 import { Copy, Computer, Server, Cloud } from "@wso2/oxygen-ui-icons-react";
 import { globalConfig } from "@agent-management-platform/types";
-
-const DEFAULT_GATEWAY_VERSION = "v0.9.0";
-
-function getGatewayVersion(): string {
-  return globalConfig.gatewayVersion?.trim() || DEFAULT_GATEWAY_VERSION;
-}
+import { getGatewayVersionHelm } from "@agent-management-platform/shared-component";
 
 function getGatewayEnvFile(): string {
   return `wso2apip-ai-gateway-${getGatewayVersionHelm()}/configs/keys.env`;
-}
-
-function getGatewayVersionHelm(): string {
-  const v = getGatewayVersion();
-  return v.startsWith("v") ? v.slice(1) : v;
 }
 
 const DEFAULT_GATEWAY_CONTROL_PLANE_URL = "http://localhost:9243";

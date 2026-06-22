@@ -50,7 +50,11 @@ import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
-import { gatewaysMetadata } from "@agent-management-platform/gateways";
+import {
+  gatewaysMetadata,
+  identityProvidersMetadata,
+  securityMetadata,
+} from "@agent-management-platform/gateways";
 import { identitiesMetadata } from "@agent-management-platform/identities";
 import {
   metaData as deploymentPipelinesMetadata,
@@ -159,6 +163,16 @@ export function useNavigationItems(): Array<
     >
   ).environments;
   const evaluatorsOrgRoute = absoluteRouteMap.children.org.children.evaluators;
+  const securityOrgRoute = (
+    absoluteRouteMap.children.org.children as unknown as Record<
+      string,
+      {
+        path: string;
+        wildPath: string;
+        children: Record<string, { path: string; wildPath: string }>;
+      }
+    >
+  ).security;
 
   if (isLoadingAgent || (isLoadingEnvironments && agentId)) {
     return [];
@@ -734,6 +748,27 @@ export function useNavigationItems(): Array<
                   icon: <evalMetadata.pages.organization.evalEvaluators.icon size={20} />,
                   isActive: !!matchPath(evaluatorsOrgRoute.wildPath, pathname),
                   href: generatePath(evaluatorsOrgRoute.path, { orgId }),
+                },
+              ],
+            },
+          ]
+        : []),
+      ...(navVisibility.infrastructure
+        ? [
+            {
+              title: securityMetadata.title,
+              type: "section" as const,
+              icon: <securityMetadata.icon size={20} />,
+              items: [
+                {
+                  label: identityProvidersMetadata.title,
+                  type: "item" as const,
+                  icon: <identityProvidersMetadata.icon size={20} />,
+                  href: generatePath(securityOrgRoute.children.identityProviders.path, { orgId }),
+                  isActive: !!matchPath(
+                    securityOrgRoute.children.identityProviders.wildPath,
+                    pathname,
+                  ),
                 },
               ],
             },

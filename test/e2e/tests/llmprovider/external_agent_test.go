@@ -37,7 +37,7 @@ import (
 	llmproviderop "github.com/wso2/agent-manager/test/e2e/operations/llmprovider"
 )
 
-var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-provider", "external-agent"), Ordered, func() {
+var _ = Describe("External agent configured with a LLM provider with guardrails", Label("llm-provider", "external-agent"), Ordered, func() {
 	var (
 		agentName string
 		suffix    string
@@ -55,17 +55,17 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 
 	BeforeAll(func() {
 		suffix = uuid.New().String()[:8]
-		agentName = "e2e-test-agent-" + suffix
-		providerID = "e2e-test-llmprov-provider-" + suffix
+		agentName = framework.E2EAgentPrefix + suffix
+		providerID = framework.E2ELLMProviderPrefix + suffix
 
 		createReq = framework.NewExternalAgentRequest(agentName, "External agent for e2e LLM provider guardrails test")
 	})
 
-	It("should have a running AI gateway", func() {
-		gatewayUUID = gateway.WaitForActiveAIGateway(Client, Cfg.DefaultOrg, "api-platform-default-default", 3*time.Minute)
+	It("finds an active AI gateway for the default environment", func() {
+		gatewayUUID = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 	})
 
-	It("should create an LLM provider using the OpenAI template", func() {
+	It("creates an OpenAI-backed LLM provider from the built-in template", func() {
 		By("Fetching the OpenAI template to get endpoint URL and auth config")
 		templates := llmproviderop.ListLLMProviderTemplates(Default, Client, Cfg.DefaultOrg)
 		var openaiTpl *framework.LLMProviderTemplateResponse
@@ -123,7 +123,7 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 		GinkgoWriter.Printf("LLM provider created and deployed: %s (UUID: %s, gateway: %s)\n", providerID, providerUUID, gatewayUUID)
 	})
 
-	It("should create an external agent", func() {
+	It("registers an external agent", func() {
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: framework.E2ESharedProjectName,
@@ -136,7 +136,7 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 		GinkgoWriter.Printf("External agent: %s\n", agentName)
 	})
 
-	It("should create a model config and extract proxy credentials", func() {
+	It("creates a model config and returns the LLM proxy credentials", func() {
 		By("Creating model config — this auto-creates the LLM proxy and returns credentials")
 		config := configuration.CreateAgentModelConfig(Default, Client,
 			Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName,
@@ -173,7 +173,7 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 			envMapping.Configuration.AuthInfo.Name)
 	})
 
-	It("should invoke the proxy endpoint successfully", func() {
+	It("invokes the LLM proxy endpoint successfully", func() {
 		Expect(proxyURL).NotTo(BeEmpty(), "proxy URL must be set")
 		Expect(proxyAPIKey).NotTo(BeEmpty(), "proxy API key must be set")
 
@@ -208,7 +208,7 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 		}).WithTimeout(2 * time.Minute).WithPolling(5 * time.Second).Should(Succeed())
 	})
 
-	It("should update model config with content-length guardrail", func() {
+	It("adds a content-length guardrail to the model config", func() {
 		Expect(modelConfigID).NotTo(BeEmpty(), "model config ID must be set")
 
 		configuration.UpdateAgentModelConfig(Default, Client,
@@ -244,7 +244,7 @@ var _ = Describe("LLM Provider with External Agent and Guardrails", Label("llm-p
 		GinkgoWriter.Printf("Model config updated with content-length-guardrail (maxBytes: 10)\n")
 	})
 
-	It("should block request exceeding content length guardrail", func() {
+	It("blocks a request that exceeds the content-length guardrail", func() {
 		Expect(proxyURL).NotTo(BeEmpty())
 		Expect(proxyAPIKey).NotTo(BeEmpty())
 

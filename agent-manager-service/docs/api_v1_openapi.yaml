@@ -2721,6 +2721,328 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/identity-providers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: List all identity providers in an organization
+      description: |
+        Retrieve every identity provider (token issuer) mirrored across all gateways
+        in the organization. Each entry is enriched with the environment and gateway
+        it is registered to, for the org-level Security → Identity Providers table.
+        The reserved internal provider used for platform trace ingestion is never
+        included.
+      operationId: listIdentityProviders
+      responses:
+        "200":
+          description: List of identity providers in the organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProviderListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/identity-providers/discover:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: Discover OIDC issuer metadata from a URL
+      description: |
+        Fetch the OpenID Connect discovery document for the given URL and return the
+        issuer and JWKS URI. Accepts either an issuer base URL or a full
+        `.well-known/openid-configuration` URL. Used to auto-populate the issuer and
+        JWKS URI fields in the Add Identity Provider dialog; manual entry remains
+        available. The backend fetches the document server-side over an SSRF-protected
+        client, so it works regardless of browser CORS.
+      operationId: discoverOidcConfiguration
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: Issuer base URL or full .well-known/openid-configuration URL.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Discovered OIDC metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OidcDiscoveryResponse"
+        "400":
+          description: Invalid or unreachable URL, or malformed discovery document
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/gateways/{gatewayID}/identity-providers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: gatewayID
+        in: path
+        required: true
+        description: Gateway UUID or name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: List gateway identity providers
+      description: |
+        Retrieve the JWT identity providers (token issuers) configured for a gateway.
+
+        Identity providers are owned by the gateway's runtime configuration; this list
+        mirrors that configuration and is used to populate the issuer options when
+        applying OAuth security to an agent endpoint. The reserved internal identity
+        provider used for platform trace ingestion is never included.
+      operationId: listGatewayIdentityProviders
+      responses:
+        "200":
+          description: List of gateway identity providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProviderListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: gatewayID
+        in: path
+        required: true
+        description: Gateway UUID or name
+        schema:
+          type: string
+      - name: name
+        in: path
+        required: true
+        description: Unique identity provider name within the gateway
+        schema:
+          type: string
+
+    put:
+      tags:
+        - Gateway Identity Providers
+      summary: Upsert a gateway identity provider
+      description: |
+        Create or update an identity provider in the gateway's AMS mirror.
+
+        This endpoint only updates the mirror used by the console and agent OAuth
+        configuration. The gateway runtime configuration (ConfigMap) is the source
+        of truth and must be patched separately via the manage-identity-provider
+        script. The console renders that command rather than calling this endpoint
+        directly.
+      operationId: upsertGatewayIdentityProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertIdentityProviderRequest"
+      responses:
+        "200":
+          description: Identity provider upserted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProvider"
+        "400":
+          description: Bad request - invalid parameters or reserved name
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Gateway Identity Providers
+      summary: Delete a gateway identity provider
+      description: |
+        Remove an identity provider from the gateway's AMS mirror. As with upsert, the
+        gateway runtime configuration must be patched separately. System identity
+        providers (e.g. ThunderKeyManager) cannot be deleted.
+      operationId: deleteGatewayIdentityProvider
+      responses:
+        "204":
+          description: Identity provider deleted successfully
+        "400":
+          description: Bad request - reserved or system provider cannot be deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Gateway or identity provider not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{environmentId}/identity-providers:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: environmentId
+        in: path
+        required: true
+        description: Environment UUID or name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Gateway Identity Providers
+      summary: List identity providers available in an environment
+      description: |
+        Retrieve the union of identity providers configured on the gateways mapped to
+        an environment. These are the issuer options offered when applying OAuth
+        security to an agent endpoint in this environment. The reserved internal
+        identity provider used for platform trace ingestion is never included.
+      operationId: listEnvironmentIdentityProviders
+      responses:
+        "200":
+          description: List of identity providers available in the environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IdentityProviderListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/data-planes:
     get:
       summary: List all data planes in an organization
@@ -8560,6 +8882,45 @@ components:
           description: Whether credentials are allowed. Cannot be true when allowOrigin contains "*"
           default: false
 
+    OAuthConfig:
+      type: object
+      description: >-
+        OAuth security configuration for the agent endpoint. Callers
+        authenticate with a standard Authorization Bearer token validated by the
+        gateway.
+      properties:
+        issuers:
+          type: array
+          items:
+            type: string
+          description: >-
+            Issuer names for token validation, referencing identity provider entries
+            configured gateway-side. Must be non-empty when OAuth security is enabled,
+            and every name must be one of the environment's configured identity providers.
+        audiences:
+          type: array
+          items:
+            type: string
+          description: >-
+            Accepted token audiences (aud claim). Validation succeeds only when at
+            least one configured audience is present in the token. Empty disables
+            audience validation.
+        headerName:
+          type: string
+          description: Request header carrying the token.
+          default: Authorization
+        authHeaderPrefix:
+          type: string
+          description: Prefix before the token in the header value.
+          default: Bearer
+        forwardToken:
+          type: boolean
+          description: >-
+            When true, the original token header is forwarded to the upstream
+            service after successful validation. When false, it is stripped
+            before the request is proxied.
+          default: true
+
     AgentResourceConfigsResponse:
       type: object
       properties:
@@ -8911,6 +9272,14 @@ components:
           $ref: "#/components/schemas/CORSConfig"
           nullable: true
           description: CORS configuration for the agent endpoint. Omit to keep existing settings.
+        enableOAuthSecurity:
+          type: boolean
+          description: Enable OAuth security for the agent endpoint. Mutually exclusive with enableApiKeySecurity.
+          default: false
+        oauthConfig:
+          $ref: "#/components/schemas/OAuthConfig"
+          nullable: true
+          description: OAuth configuration for the agent endpoint. Omit to keep existing settings.
       required:
         - imageId
 
@@ -8988,6 +9357,14 @@ components:
           $ref: "#/components/schemas/CORSConfig"
           nullable: true
           description: Current CORS configuration for the agent endpoint
+        enableOAuthSecurity:
+          type: boolean
+          description: Enable OAuth security for the agent endpoint. Mutually exclusive with enableApiKeySecurity.
+          default: false
+        oauthConfig:
+          $ref: "#/components/schemas/OAuthConfig"
+          nullable: true
+          description: Current OAuth configuration for the agent endpoint
     EnvironmentVariable:
       type: object
       required:
@@ -11263,6 +11640,12 @@ components:
         corsConfig:
           description: CORS configuration for the agent endpoint in this environment. Omit to keep the current value.
           $ref: "#/components/schemas/CORSConfig"
+        enableOAuthSecurity:
+          type: boolean
+          description: Enable OAuth security for the agent endpoint in this environment. Mutually exclusive with enableApiKeySecurity. Omit to keep the current value.
+        oauthConfig:
+          description: OAuth configuration for the agent endpoint in this environment. Omit to keep the current value.
+          $ref: "#/components/schemas/OAuthConfig"
 
     PromoteAgentRequest:
       type: object
@@ -11304,6 +11687,11 @@ components:
           description: Enable API key security for the agent endpoint in the target environment
         corsConfig:
           $ref: "#/components/schemas/CORSConfig"
+        enableOAuthSecurity:
+          type: boolean
+          description: Enable OAuth security for the agent endpoint in the target environment. Mutually exclusive with enableApiKeySecurity.
+        oauthConfig:
+          $ref: "#/components/schemas/OAuthConfig"
 
     PromoteAgentResponse:
       type: object
@@ -11493,6 +11881,112 @@ components:
           description: List of token metadata
           items:
             $ref: "#/components/schemas/GatewayTokenInfo"
+
+    IdentityProvider:
+      type: object
+      description: |
+        A JWT identity provider (token issuer) configured on a gateway. Mirrors a
+        gateway-side jwt-auth `system.keyManagers` entry. Only the fields needed to
+        identify an issuer and validate its tokens are surfaced.
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Unique identity provider name within the gateway (referenced as an issuer).
+          example: ThunderKeyManager
+        issuer:
+          type: string
+          description: Expected `iss` claim value for tokens validated by this identity provider.
+          example: http://thunder.amp.localhost:8080
+        jwksUri:
+          type: string
+          description: Remote JWKS endpoint used to fetch signing keys.
+          example: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
+        skipTlsVerify:
+          type: boolean
+          description: Skip TLS verification when fetching the JWKS endpoint (testing/trusted internal only).
+          default: false
+          example: true
+        description:
+          type: string
+          description: Optional human-readable description (mirror-only).
+        type:
+          type: string
+          description: |
+            Provenance of the identity provider. `system` providers (e.g.
+            ThunderKeyManager) are seeded with the platform and cannot be deleted;
+            `custom` providers are added by operators via the management script.
+          enum:
+            - system
+            - custom
+          default: custom
+          example: system
+        environmentName:
+          type: string
+          description: Environment this provider's gateway is mapped to (read-only, set on org-wide listing).
+          example: production
+        gatewayId:
+          type: string
+          description: UUID of the gateway this provider is registered to (read-only, set on org-wide listing).
+        gatewayName:
+          type: string
+          description: Name of the gateway this provider is registered to (read-only, set on org-wide listing).
+
+    IdentityProviderListResponse:
+      type: object
+      required:
+        - count
+        - list
+      properties:
+        count:
+          type: integer
+          description: Number of identity providers in this response
+          example: 1
+        list:
+          type: array
+          description: List of identity providers
+          items:
+            $ref: "#/components/schemas/IdentityProvider"
+
+    OidcDiscoveryResponse:
+      type: object
+      description: |
+        Issuer metadata resolved from an OpenID Connect discovery document, used to
+        auto-populate the Add Identity Provider dialog.
+      required:
+        - issuer
+        - jwksUri
+      properties:
+        issuer:
+          type: string
+          description: The `issuer` value from the discovery document.
+          example: https://accounts.google.com
+        jwksUri:
+          type: string
+          description: The `jwks_uri` value from the discovery document.
+          example: https://www.googleapis.com/oauth2/v3/certs
+
+    UpsertIdentityProviderRequest:
+      type: object
+      description: Request body for creating or updating a gateway identity provider (name is taken from the path).
+      properties:
+        issuer:
+          type: string
+          description: Expected `iss` claim value for tokens validated by this identity provider.
+          example: http://thunder.amp.localhost:8080
+        jwksUri:
+          type: string
+          description: Remote JWKS endpoint used to fetch signing keys.
+          example: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
+        skipTlsVerify:
+          type: boolean
+          description: Skip TLS verification when fetching the JWKS endpoint.
+          default: false
+          example: true
+        description:
+          type: string
+          description: Optional human-readable description (mirror-only).
 
     CreateGatewayRequest:
       type: object

@@ -74,13 +74,17 @@ export function AgentChat() {
     agentName: agentId,
   });
   const securityEnabled = agent?.configurations?.enableApiKeySecurity ?? true;
+  const oauthOnly = !!(
+    agent?.configurations?.enableOAuthSecurity &&
+    !agent?.configurations?.enableApiKeySecurity
+  );
   const {
     data: testKey,
     isLoading: isLoadingTestKey,
     error: testKeyError,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
-    { enabled: securityEnabled },
+    { enabled: securityEnabled && !oauthOnly },
   );
   const endpointOptions = useMemo(() => {
     return Object.entries(endpoints ?? {}).map(([key, value]) => ({
@@ -100,7 +104,7 @@ export function AgentChat() {
   }, [messages]);
 
   const handleSendMessage = async () => {
-    if (!message.trim() || isLoading) return;
+    if (!message.trim() || isLoading || oauthOnly) return;
     if (securityEnabled && !testKey?.apiKey) {
       setError("API key security is enabled, but a test API key is not available yet.");
       return;
@@ -203,11 +207,23 @@ export function AgentChat() {
   };
 
   const inputDisabled =
+    oauthOnly ||
     isLoading ||
     isEndpointsLoading ||
     isLoadingTestKey ||
     (securityEnabled && !testKey?.apiKey);
   const sendDisabled = inputDisabled || !message.trim();
+
+  if (oauthOnly) {
+    return (
+      <Alert severity="info">
+        <Typography variant="caption">
+          Testing is unavailable while OAuth is enabled. Test this endpoint out-of-band with a
+          valid token.
+        </Typography>
+      </Alert>
+    );
+  }
 
   if (messages.length === 0) {
     return (

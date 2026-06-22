@@ -19,12 +19,15 @@ package deployment
 import (
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
+	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
 )
 
 // WaitForDeploymentParams holds parameters for waiting on a deployment.
@@ -40,6 +43,22 @@ type WaitForDeploymentParams struct {
 	// This prevents falsely passing when a previous deployment is still
 	// "active" and the new one hasn't started yet.
 	DeployedAfter time.Time
+}
+
+// WaitForReadiness verifies that the agent's runtime is up and serving in the
+// given environment.
+//
+// Temporarily hack added to verify that agent is up and running, replace this
+// with readiness probe check once its available.
+func WaitForReadiness(client *framework.AMPClient, orgName, projName, agentName, envName string, timeout time.Duration) {
+	agentops.WaitForRuntimeLog(client, &agentops.WaitForRuntimeLogParams{
+		OrgName:     orgName,
+		ProjectName: projName,
+		AgentName:   agentName,
+		Environment: envName,
+		SearchText:  "Uvicorn running on",
+		Timeout:     timeout,
+	})
 }
 
 // WaitForDeployed polls the deployments API until the agent is "active" in
@@ -68,6 +87,13 @@ func WaitForDeployed(client *framework.AMPClient, params *WaitForDeploymentParam
 		g.Expect(exists).To(BeTrue(), "environment %q not found in deployments", params.Environment)
 
 		ginkgo.GinkgoWriter.Printf("Deployment status: %s, lastDeployed: %s\n", dep.Status, dep.LastDeployed.Format(time.RFC3339))
+
+		// Fail fast on a terminal failure status rather than polling until timeout.
+		switch strings.ToLower(dep.Status) {
+		case "error", "failed":
+			StopTrying(fmt.Sprintf("deployment for env %q is in terminal %q state", params.Environment, dep.Status)).Now()
+		}
+
 		g.Expect(dep.Status).To(Equal("active"), "deployment not yet active")
 
 		if !params.DeployedAfter.IsZero() {
@@ -89,4 +115,23 @@ func GetEndpoints(g Gomega, client *framework.AMPClient, orgName, projName, agen
 	framework.ExpectStatus(g, resp, 200)
 
 	return framework.DecodeBody[map[string]framework.EndpointConfiguration](g, resp)
+}
+
+// FirstEndpointURL returns the first non-empty endpoint URL using a deterministic
+// order (endpoint keys sorted ascending). Ranging over the endpoints map directly
+// is non-deterministic in Go, which can make invocation specs flaky and, worse,
+// pick a different endpoint across environments. Returns "" when no endpoint has a
+// URL, so callers always overwrite their target (no stale value from a prior env).
+func FirstEndpointURL(endpoints map[string]framework.EndpointConfiguration) string {
+	keys := make([]string, 0, len(endpoints))
+	for k := range endpoints {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if ep := endpoints[k]; ep.URL != "" {
+			return ep.URL
+		}
+	}
+	return ""
 }

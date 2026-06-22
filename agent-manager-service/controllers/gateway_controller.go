@@ -58,6 +58,14 @@ type GatewayController interface {
 	RotateGatewayToken(w http.ResponseWriter, r *http.Request)
 	RevokeGatewayToken(w http.ResponseWriter, r *http.Request)
 	GetGatewayStatus(w http.ResponseWriter, r *http.Request)
+
+	// Identity provider handlers
+	ListIdentityProviders(w http.ResponseWriter, r *http.Request)
+	ListGatewayIdentityProviders(w http.ResponseWriter, r *http.Request)
+	UpsertGatewayIdentityProvider(w http.ResponseWriter, r *http.Request)
+	DeleteGatewayIdentityProvider(w http.ResponseWriter, r *http.Request)
+	ListEnvironmentIdentityProviders(w http.ResponseWriter, r *http.Request)
+	DiscoverOidcConfiguration(w http.ResponseWriter, r *http.Request)
 }
 
 type gatewayController struct {

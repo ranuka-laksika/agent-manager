@@ -18,23 +18,24 @@ package framework
 
 import "encoding/json"
 
-// NewCreateProjectRequest returns a project creation request with default values.
-func NewCreateProjectRequest(name, displayName, description string) CreateProjectRequest {
+// NewCreateProjectRequest returns a project creation request bound to the given
+// deployment pipeline.
+func NewCreateProjectRequest(name, displayName, description, deploymentPipeline string) CreateProjectRequest {
 	return CreateProjectRequest{
 		Name:               name,
 		DisplayName:        displayName,
 		Description:        &description,
-		DeploymentPipeline: "default",
+		DeploymentPipeline: deploymentPipeline,
 	}
 }
 
-// NewInternalChatAgentRequest returns a request for creating an internal chat agent
-// with build config, environment variables, and input interface pre-configured.
-// Keys "TAVILY_API_KEY" and "OPENAI_API_KEY" are automatically marked as sensitive.
-func NewInternalChatAgentRequest(name, description string, envVars map[string]string) CreateAgentRequest {
+// NewITHelpdeskAgentRequest returns a request for creating the IT helpdesk agent
+// from /samples/it-helpdesk-agent. The agent is expected to run with USE_LLM_PROVIDER=true,
+// with LLM_PROVIDER_URL and LLM_PROVIDER_KEY injected via a model config rather than
+// passed directly as env vars.
+func NewITHelpdeskAgentRequest(name, description string, envVars map[string]string) CreateAgentRequest {
 	autoInstr := true
 	sensitiveKeys := map[string]bool{
-		"TAVILY_API_KEY": true,
 		"OPENAI_API_KEY": true,
 	}
 
@@ -56,7 +57,7 @@ func NewInternalChatAgentRequest(name, description string, envVars map[string]st
 			Repository: &Repository{
 				URL:     "https://github.com/wso2/agent-manager",
 				Branch:  "main",
-				AppPath: "/samples/customer-support-agent",
+				AppPath: "/samples/it-helpdesk-agent",
 			},
 		},
 		AgentType: AgentType{
@@ -93,6 +94,42 @@ func NewExternalAgentRequest(name, description string) CreateAgentRequest {
 		AgentType: AgentType{
 			Type:    "external-agent-api",
 			SubType: "custom-api",
+		},
+	}
+}
+
+// NewAgentFromKindRequest returns a request to create an agent from a published
+// catalog kind. The agent reuses the kind's pre-built image, so no build step
+// is required. Runtime configuration (e.g. OPENAI_API_KEY) must be supplied via
+// envVars; sensitive keys are automatically marked as such.
+func NewAgentFromKindRequest(name, kindName, kindVersion string, envVars map[string]string) CreateAgentRequest {
+	autoInstr := true
+	sensitiveKeys := map[string]bool{
+		"OPENAI_API_KEY": true,
+	}
+
+	var env []EnvironmentVariable
+	for key, val := range envVars {
+		env = append(env, EnvironmentVariable{
+			Key:         key,
+			Value:       val,
+			IsSensitive: sensitiveKeys[key],
+		})
+	}
+
+	return CreateAgentRequest{
+		Name:        name,
+		DisplayName: name,
+		Provisioning: Provisioning{
+			Type: "internal",
+			AgentKind: &AgentKindRef{
+				Name:    kindName,
+				Version: kindVersion,
+			},
+		},
+		Configurations: &Configurations{
+			Env:                       env,
+			EnableAutoInstrumentation: &autoInstr,
 		},
 	}
 }

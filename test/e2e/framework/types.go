@@ -64,9 +64,15 @@ type Repository struct {
 	AppPath string `json:"appPath,omitempty"`
 }
 
+type AgentKindRef struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
 type Provisioning struct {
-	Type       string      `json:"type"`
-	Repository *Repository `json:"repository,omitempty"`
+	Type       string        `json:"type"`
+	Repository *Repository   `json:"repository,omitempty"`
+	AgentKind  *AgentKindRef `json:"agentKind,omitempty"`
 }
 
 type AgentType struct {
@@ -194,6 +200,34 @@ type AgentListResponse struct {
 	Offset int             `json:"offset"`
 }
 
+// ---------------------------------------------------------------------------
+// Agent Catalog / Kinds
+// ---------------------------------------------------------------------------
+
+// KindConfigSchemaEntry defines a single runtime configuration parameter
+// exposed by a published agent kind.
+type KindConfigSchemaEntry struct {
+	Name         string  `json:"name"`
+	IsSecret     bool    `json:"isSecret"`
+	IsMandatory  bool    `json:"isMandatory"`
+	DefaultValue *string `json:"defaultValue"`
+}
+
+type PublishKindRequest struct {
+	KindName        string                  `json:"kindName"`
+	KindDisplayName string                  `json:"kindDisplayName"`
+	KindDescription string                  `json:"kindDescription,omitempty"`
+	Version         string                  `json:"version"`
+	BuildName       string                  `json:"buildName"`
+	ConfigSchema    []KindConfigSchemaEntry `json:"configSchema,omitempty"`
+}
+
+type PublishKindResponse struct {
+	KindName    string `json:"kindName"`
+	Version     string `json:"version"`
+	Description string `json:"description,omitempty"`
+}
+
 type TokenRequest struct {
 	ExpiresIn string `json:"expires_in,omitempty"`
 }
@@ -299,17 +333,25 @@ type UpdateGatewayRequest struct {
 }
 
 type GatewayResponse struct {
-	UUID             string    `json:"uuid"`
-	OrganizationName string    `json:"organizationName"`
-	Name             string    `json:"name"`
-	DisplayName      string    `json:"displayName"`
-	GatewayType      string    `json:"gatewayType"`
-	Vhost            string    `json:"vhost"`
-	Region           string    `json:"region,omitempty"`
-	IsCritical       bool      `json:"isCritical"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	UUID             string          `json:"uuid"`
+	OrganizationName string          `json:"organizationName"`
+	Name             string          `json:"name"`
+	DisplayName      string          `json:"displayName"`
+	GatewayType      string          `json:"gatewayType"`
+	Vhost            string          `json:"vhost"`
+	Region           string          `json:"region,omitempty"`
+	IsCritical       bool            `json:"isCritical"`
+	Status           string          `json:"status"`
+	Environments     []GatewayEnvRef `json:"environments,omitempty"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	UpdatedAt        time.Time       `json:"updatedAt"`
+}
+
+// GatewayEnvRef is an environment associated with a gateway, as returned in the
+// gateways list response.
+type GatewayEnvRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 type GatewayListResponse struct {
@@ -381,20 +423,19 @@ type DeploymentPipelineListResponse struct {
 }
 
 // ---------------------------------------------------------------------------
-// Catalog
+// Catalog / Agent Kinds
 // ---------------------------------------------------------------------------
 
-type CatalogResource struct {
-	Name        string `json:"name"`
-	DisplayName string `json:"displayName"`
-	Kind        string `json:"kind"`
+// AgentKindListItem is one entry in the /agent-kinds list response. The /agent-kinds
+// endpoint is the source of truth for published kinds, so kind-existence checks query this.
+type AgentKindListItem struct {
+	Name          string `json:"name"`
+	LatestVersion string `json:"latestVersion"`
 }
 
-type CatalogListResponse struct {
-	Resources []CatalogResource `json:"resources"`
-	Total     int               `json:"total"`
-	Limit     int               `json:"limit"`
-	Offset    int               `json:"offset"`
+type AgentKindListResponse struct {
+	Kinds []AgentKindListItem `json:"kinds"`
+	Total int                 `json:"total"`
 }
 
 // ---------------------------------------------------------------------------
@@ -697,14 +738,29 @@ type ConfigurationItem struct {
 	Key         string `json:"key"`
 	Value       string `json:"value,omitempty"`
 	IsSensitive bool   `json:"isSensitive"`
+	IsSystem    bool   `json:"isSystem"`
 	SecretRef   string `json:"secretRef,omitempty"`
+}
+
+type ConfigurationFile struct {
+	Key         string `json:"key,omitempty"`
+	MountPath   string `json:"mountPath,omitempty"`
+	IsSensitive bool   `json:"isSensitive,omitempty"`
+	SecretRef   string `json:"secretRef,omitempty"`
+}
+
+// AgentConfigurations mirrors the API's "configurations" object, which groups
+// environment variables and file mounts separately (not a flat list).
+type AgentConfigurations struct {
+	Env   []ConfigurationItem `json:"env"`
+	Files []ConfigurationFile `json:"files"`
 }
 
 type ConfigurationResponse struct {
 	ProjectName    string              `json:"projectName"`
 	AgentName      string              `json:"agentName"`
 	Environment    string              `json:"environment"`
-	Configurations []ConfigurationItem `json:"configurations"`
+	Configurations AgentConfigurations `json:"configurations"`
 }
 
 type ResourceRequests struct {

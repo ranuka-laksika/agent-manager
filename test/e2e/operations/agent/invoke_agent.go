@@ -53,7 +53,14 @@ func InvokeAgentEndpoint(endpointURL string, body any, apiKey string) string {
 			StopTrying(fmt.Sprintf("read response body: %v", readErr)).Now()
 		}
 
-		if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusBadGateway || resp.StatusCode == http.StatusUnauthorized {
+		// Transient while a gateway warms up: 502/503 (no healthy upstream yet) and
+		// 504 (upstream timeout during cold start). Retry rather than fail hard.
+		// 401/403 are also transient here:
+		if resp.StatusCode == http.StatusServiceUnavailable ||
+			resp.StatusCode == http.StatusBadGateway ||
+			resp.StatusCode == http.StatusGatewayTimeout ||
+			resp.StatusCode == http.StatusUnauthorized ||
+			resp.StatusCode == http.StatusForbidden {
 			g.Expect(resp.StatusCode).To(Equal(http.StatusOK), "agent endpoint returned %d, retrying", resp.StatusCode)
 			return
 		}
@@ -68,7 +75,7 @@ func InvokeAgentEndpoint(endpointURL string, body any, apiKey string) string {
 		}
 
 		ginkgo.GinkgoWriter.Printf("Agent invocation response (%d bytes): %.200s\n", len(result), result)
-	}).WithTimeout(3 * time.Minute).WithPolling(5 * time.Second).Should(Succeed())
+	}).WithTimeout(3 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
 
 	return result
 }

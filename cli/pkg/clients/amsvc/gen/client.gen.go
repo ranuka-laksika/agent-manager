@@ -182,6 +182,9 @@ type ClientInterface interface {
 	// GetEnvironmentGateways request
 	GetEnvironmentGateways(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListEnvironmentIdentityProviders request
+	ListEnvironmentIdentityProviders(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEvaluators request
 	ListEvaluators(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -234,6 +237,17 @@ type ClientInterface interface {
 
 	// CheckGatewayHealth request
 	CheckGatewayHealth(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListGatewayIdentityProviders request
+	ListGatewayIdentityProviders(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteGatewayIdentityProvider request
+	DeleteGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpsertGatewayIdentityProviderWithBody request with any body
+	UpsertGatewayIdentityProviderWithBody(ctx context.Context, orgName string, gatewayID string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpsertGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string, body UpsertGatewayIdentityProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListGatewayTokens request
 	ListGatewayTokens(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -311,6 +325,12 @@ type ClientInterface interface {
 	UpdateUserWithBody(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateUser(ctx context.Context, orgName string, userId string, body UpdateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListIdentityProviders request
+	ListIdentityProviders(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DiscoverOidcConfiguration request
+	DiscoverOidcConfiguration(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListLLMProviderTemplates request
 	ListLLMProviderTemplates(ctx context.Context, orgName string, params *ListLLMProviderTemplatesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1064,6 +1084,18 @@ func (c *Client) GetEnvironmentGateways(ctx context.Context, orgName string, env
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListEnvironmentIdentityProviders(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListEnvironmentIdentityProvidersRequest(c.Server, orgName, environmentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) ListEvaluators(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListEvaluatorsRequest(c.Server, orgName)
 	if err != nil {
@@ -1282,6 +1314,54 @@ func (c *Client) AssignGatewayToEnvironment(ctx context.Context, orgName string,
 
 func (c *Client) CheckGatewayHealth(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCheckGatewayHealthRequest(c.Server, orgName, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListGatewayIdentityProviders(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListGatewayIdentityProvidersRequest(c.Server, orgName, gatewayID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteGatewayIdentityProviderRequest(c.Server, orgName, gatewayID, name)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpsertGatewayIdentityProviderWithBody(ctx context.Context, orgName string, gatewayID string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpsertGatewayIdentityProviderRequestWithBody(c.Server, orgName, gatewayID, name, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpsertGatewayIdentityProvider(ctx context.Context, orgName string, gatewayID string, name string, body UpsertGatewayIdentityProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpsertGatewayIdentityProviderRequest(c.Server, orgName, gatewayID, name, body)
 	if err != nil {
 		return nil, err
 	}
@@ -1618,6 +1698,30 @@ func (c *Client) UpdateUserWithBody(ctx context.Context, orgName string, userId 
 
 func (c *Client) UpdateUser(ctx context.Context, orgName string, userId string, body UpdateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateUserRequest(c.Server, orgName, userId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListIdentityProviders(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListIdentityProvidersRequest(c.Server, orgName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DiscoverOidcConfiguration(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDiscoverOidcConfigurationRequest(c.Server, orgName, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4474,6 +4578,47 @@ func NewGetEnvironmentGatewaysRequest(server string, orgName string, envID strin
 	return req, nil
 }
 
+// NewListEnvironmentIdentityProvidersRequest generates requests for ListEnvironmentIdentityProviders
+func NewListEnvironmentIdentityProvidersRequest(server string, orgName string, environmentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "environmentId", environmentId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/environments/%s/identity-providers", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewListEvaluatorsRequest generates requests for ListEvaluators
 func NewListEvaluatorsRequest(server string, orgName string) (*http.Request, error) {
 	var err error
@@ -5209,6 +5354,156 @@ func NewCheckGatewayHealthRequest(server string, orgName string, gatewayID strin
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewListGatewayIdentityProvidersRequest generates requests for ListGatewayIdentityProviders
+func NewListGatewayIdentityProvidersRequest(server string, orgName string, gatewayID string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gatewayID", gatewayID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/gateways/%s/identity-providers", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteGatewayIdentityProviderRequest generates requests for DeleteGatewayIdentityProvider
+func NewDeleteGatewayIdentityProviderRequest(server string, orgName string, gatewayID string, name string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gatewayID", gatewayID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/gateways/%s/identity-providers/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpsertGatewayIdentityProviderRequest calls the generic UpsertGatewayIdentityProvider builder with application/json body
+func NewUpsertGatewayIdentityProviderRequest(server string, orgName string, gatewayID string, name string, body UpsertGatewayIdentityProviderJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpsertGatewayIdentityProviderRequestWithBody(server, orgName, gatewayID, name, "application/json", bodyReader)
+}
+
+// NewUpsertGatewayIdentityProviderRequestWithBody generates requests for UpsertGatewayIdentityProvider with any type of body
+func NewUpsertGatewayIdentityProviderRequestWithBody(server string, orgName string, gatewayID string, name string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "gatewayID", gatewayID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "name", name, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/gateways/%s/identity-providers/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -6264,6 +6559,92 @@ func NewUpdateUserRequestWithBody(server string, orgName string, userId string, 
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListIdentityProvidersRequest generates requests for ListIdentityProviders
+func NewListIdentityProvidersRequest(server string, orgName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/identity-providers", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDiscoverOidcConfigurationRequest generates requests for DiscoverOidcConfiguration
+func NewDiscoverOidcConfigurationRequest(server string, orgName string, params *DiscoverOidcConfigurationParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/identity-providers/discover", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "url", params.Url, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
+				}
+			}
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -12245,6 +12626,9 @@ type ClientWithResponsesInterface interface {
 	// GetEnvironmentGatewaysWithResponse request
 	GetEnvironmentGatewaysWithResponse(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*GetEnvironmentGatewaysResp, error)
 
+	// ListEnvironmentIdentityProvidersWithResponse request
+	ListEnvironmentIdentityProvidersWithResponse(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*ListEnvironmentIdentityProvidersResp, error)
+
 	// ListEvaluatorsWithResponse request
 	ListEvaluatorsWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListEvaluatorsResp, error)
 
@@ -12297,6 +12681,17 @@ type ClientWithResponsesInterface interface {
 
 	// CheckGatewayHealthWithResponse request
 	CheckGatewayHealthWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*CheckGatewayHealthResp, error)
+
+	// ListGatewayIdentityProvidersWithResponse request
+	ListGatewayIdentityProvidersWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*ListGatewayIdentityProvidersResp, error)
+
+	// DeleteGatewayIdentityProviderWithResponse request
+	DeleteGatewayIdentityProviderWithResponse(ctx context.Context, orgName string, gatewayID string, name string, reqEditors ...RequestEditorFn) (*DeleteGatewayIdentityProviderResp, error)
+
+	// UpsertGatewayIdentityProviderWithBodyWithResponse request with any body
+	UpsertGatewayIdentityProviderWithBodyWithResponse(ctx context.Context, orgName string, gatewayID string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertGatewayIdentityProviderResp, error)
+
+	UpsertGatewayIdentityProviderWithResponse(ctx context.Context, orgName string, gatewayID string, name string, body UpsertGatewayIdentityProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertGatewayIdentityProviderResp, error)
 
 	// ListGatewayTokensWithResponse request
 	ListGatewayTokensWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*ListGatewayTokensResp, error)
@@ -12374,6 +12769,12 @@ type ClientWithResponsesInterface interface {
 	UpdateUserWithBodyWithResponse(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserResp, error)
 
 	UpdateUserWithResponse(ctx context.Context, orgName string, userId string, body UpdateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserResp, error)
+
+	// ListIdentityProvidersWithResponse request
+	ListIdentityProvidersWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListIdentityProvidersResp, error)
+
+	// DiscoverOidcConfigurationWithResponse request
+	DiscoverOidcConfigurationWithResponse(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*DiscoverOidcConfigurationResp, error)
 
 	// ListLLMProviderTemplatesWithResponse request
 	ListLLMProviderTemplatesWithResponse(ctx context.Context, orgName string, params *ListLLMProviderTemplatesParams, reqEditors ...RequestEditorFn) (*ListLLMProviderTemplatesResp, error)
@@ -13369,6 +13770,31 @@ func (r GetEnvironmentGatewaysResp) StatusCode() int {
 	return 0
 }
 
+type ListEnvironmentIdentityProvidersResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *IdentityProviderListResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListEnvironmentIdentityProvidersResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListEnvironmentIdentityProvidersResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type ListEvaluatorsResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -13742,6 +14168,82 @@ func (r CheckGatewayHealthResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CheckGatewayHealthResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListGatewayIdentityProvidersResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *IdentityProviderListResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListGatewayIdentityProvidersResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListGatewayIdentityProvidersResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteGatewayIdentityProviderResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteGatewayIdentityProviderResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteGatewayIdentityProviderResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpsertGatewayIdentityProviderResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *IdentityProvider
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpsertGatewayIdentityProviderResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpsertGatewayIdentityProviderResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -14265,6 +14767,55 @@ func (r UpdateUserResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateUserResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListIdentityProvidersResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *IdentityProviderListResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListIdentityProvidersResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListIdentityProvidersResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DiscoverOidcConfigurationResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *OidcDiscoveryResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DiscoverOidcConfigurationResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DiscoverOidcConfigurationResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -16904,6 +17455,15 @@ func (c *ClientWithResponses) GetEnvironmentGatewaysWithResponse(ctx context.Con
 	return ParseGetEnvironmentGatewaysResp(rsp)
 }
 
+// ListEnvironmentIdentityProvidersWithResponse request returning *ListEnvironmentIdentityProvidersResp
+func (c *ClientWithResponses) ListEnvironmentIdentityProvidersWithResponse(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*ListEnvironmentIdentityProvidersResp, error) {
+	rsp, err := c.ListEnvironmentIdentityProviders(ctx, orgName, environmentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListEnvironmentIdentityProvidersResp(rsp)
+}
+
 // ListEvaluatorsWithResponse request returning *ListEvaluatorsResp
 func (c *ClientWithResponses) ListEvaluatorsWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListEvaluatorsResp, error) {
 	rsp, err := c.ListEvaluators(ctx, orgName, reqEditors...)
@@ -17069,6 +17629,41 @@ func (c *ClientWithResponses) CheckGatewayHealthWithResponse(ctx context.Context
 		return nil, err
 	}
 	return ParseCheckGatewayHealthResp(rsp)
+}
+
+// ListGatewayIdentityProvidersWithResponse request returning *ListGatewayIdentityProvidersResp
+func (c *ClientWithResponses) ListGatewayIdentityProvidersWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*ListGatewayIdentityProvidersResp, error) {
+	rsp, err := c.ListGatewayIdentityProviders(ctx, orgName, gatewayID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListGatewayIdentityProvidersResp(rsp)
+}
+
+// DeleteGatewayIdentityProviderWithResponse request returning *DeleteGatewayIdentityProviderResp
+func (c *ClientWithResponses) DeleteGatewayIdentityProviderWithResponse(ctx context.Context, orgName string, gatewayID string, name string, reqEditors ...RequestEditorFn) (*DeleteGatewayIdentityProviderResp, error) {
+	rsp, err := c.DeleteGatewayIdentityProvider(ctx, orgName, gatewayID, name, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteGatewayIdentityProviderResp(rsp)
+}
+
+// UpsertGatewayIdentityProviderWithBodyWithResponse request with arbitrary body returning *UpsertGatewayIdentityProviderResp
+func (c *ClientWithResponses) UpsertGatewayIdentityProviderWithBodyWithResponse(ctx context.Context, orgName string, gatewayID string, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpsertGatewayIdentityProviderResp, error) {
+	rsp, err := c.UpsertGatewayIdentityProviderWithBody(ctx, orgName, gatewayID, name, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpsertGatewayIdentityProviderResp(rsp)
+}
+
+func (c *ClientWithResponses) UpsertGatewayIdentityProviderWithResponse(ctx context.Context, orgName string, gatewayID string, name string, body UpsertGatewayIdentityProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*UpsertGatewayIdentityProviderResp, error) {
+	rsp, err := c.UpsertGatewayIdentityProvider(ctx, orgName, gatewayID, name, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpsertGatewayIdentityProviderResp(rsp)
 }
 
 // ListGatewayTokensWithResponse request returning *ListGatewayTokensResp
@@ -17314,6 +17909,24 @@ func (c *ClientWithResponses) UpdateUserWithResponse(ctx context.Context, orgNam
 		return nil, err
 	}
 	return ParseUpdateUserResp(rsp)
+}
+
+// ListIdentityProvidersWithResponse request returning *ListIdentityProvidersResp
+func (c *ClientWithResponses) ListIdentityProvidersWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListIdentityProvidersResp, error) {
+	rsp, err := c.ListIdentityProviders(ctx, orgName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListIdentityProvidersResp(rsp)
+}
+
+// DiscoverOidcConfigurationWithResponse request returning *DiscoverOidcConfigurationResp
+func (c *ClientWithResponses) DiscoverOidcConfigurationWithResponse(ctx context.Context, orgName string, params *DiscoverOidcConfigurationParams, reqEditors ...RequestEditorFn) (*DiscoverOidcConfigurationResp, error) {
+	rsp, err := c.DiscoverOidcConfiguration(ctx, orgName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDiscoverOidcConfigurationResp(rsp)
 }
 
 // ListLLMProviderTemplatesWithResponse request returning *ListLLMProviderTemplatesResp
@@ -19583,6 +20196,53 @@ func ParseGetEnvironmentGatewaysResp(rsp *http.Response) (*GetEnvironmentGateway
 	return response, nil
 }
 
+// ParseListEnvironmentIdentityProvidersResp parses an HTTP response from a ListEnvironmentIdentityProvidersWithResponse call
+func ParseListEnvironmentIdentityProvidersResp(rsp *http.Response) (*ListEnvironmentIdentityProvidersResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListEnvironmentIdentityProvidersResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IdentityProviderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseListEvaluatorsResp parses an HTTP response from a ListEvaluatorsWithResponse call
 func ParseListEvaluatorsResp(rsp *http.Response) (*ListEvaluatorsResp, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -20266,6 +20926,154 @@ func ParseCheckGatewayHealthResp(rsp *http.Response) (*CheckGatewayHealthResp, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest HealthStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListGatewayIdentityProvidersResp parses an HTTP response from a ListGatewayIdentityProvidersWithResponse call
+func ParseListGatewayIdentityProvidersResp(rsp *http.Response) (*ListGatewayIdentityProvidersResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListGatewayIdentityProvidersResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IdentityProviderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteGatewayIdentityProviderResp parses an HTTP response from a DeleteGatewayIdentityProviderWithResponse call
+func ParseDeleteGatewayIdentityProviderResp(rsp *http.Response) (*DeleteGatewayIdentityProviderResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteGatewayIdentityProviderResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpsertGatewayIdentityProviderResp parses an HTTP response from a UpsertGatewayIdentityProviderWithResponse call
+func ParseUpsertGatewayIdentityProviderResp(rsp *http.Response) (*UpsertGatewayIdentityProviderResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpsertGatewayIdentityProviderResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IdentityProvider
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -21264,6 +22072,93 @@ func ParseUpdateUserResp(rsp *http.Response) (*UpdateUserResp, error) {
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListIdentityProvidersResp parses an HTTP response from a ListIdentityProvidersWithResponse call
+func ParseListIdentityProvidersResp(rsp *http.Response) (*ListIdentityProvidersResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListIdentityProvidersResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest IdentityProviderListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDiscoverOidcConfigurationResp parses an HTTP response from a DiscoverOidcConfigurationWithResponse call
+func ParseDiscoverOidcConfigurationResp(rsp *http.Response) (*DiscoverOidcConfigurationResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DiscoverOidcConfigurationResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest OidcDiscoveryResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse

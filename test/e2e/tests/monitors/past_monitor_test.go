@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors", "past-monitor"), func() {
+var _ = Describe("Past monitor with a built-in evaluator: run, log, score, and rerun", Ordered, Label("monitors", "past-monitor"), func() {
 	var (
 		suffix                string
 		traceStartTime        time.Time
@@ -44,15 +44,15 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 	)
 
 	BeforeAll(func() {
-		Expect(Shared).NotTo(BeNil(), "shared agent must be available")
+		Expect(SharedITHelpdeskAgent).NotTo(BeNil(), "shared agent must be available")
 
 		suffix = uuid.New().String()[:8]
-		pastMonitorName = "e2e-test-mon-monitor-" + suffix
+		pastMonitorName = framework.E2EMonitorPrefix + suffix
 
 		By("Invoking shared agent to generate traces")
 		traceStartTime = time.Now().Add(-10 * time.Minute)
-		endpointURL := Shared.EndpointURL + "/chat"
-		agentops.InvokeAgentEndpoint(endpointURL, Shared.InvokeReq, Shared.APIKey)
+		endpointURL := SharedITHelpdeskAgent.EndpointURL + "/chat"
+		agentops.InvokeAgentEndpoint(endpointURL, SharedITHelpdeskAgent.InvokeReq, SharedITHelpdeskAgent.APIKey)
 		traceEndTime = time.Now()
 		GinkgoWriter.Printf("Invocation completed, trace window: %s to %s\n",
 			traceStartTime.Format(time.RFC3339), traceEndTime.Format(time.RFC3339))
@@ -70,12 +70,12 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Using built-in evaluator: %s\n", builtinEvalIdentifier)
 	})
 
-	It("should create a past monitor with built-in evaluator", func() {
+	It("creates a past-window monitor using a built-in evaluator", func() {
 		samplingRate := 1.0
 		mon := monitor.CreateMonitor(Default, Client, &monitor.CreateMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			Request: framework.CreateMonitorRequest{
 				Name:            pastMonitorName,
 				DisplayName:     "E2E Past Monitor",
@@ -97,11 +97,11 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor created: %s\n", mon.Name)
 	})
 
-	It("should have a completed run for the past monitor", func() {
+	It("completes the past monitor run", func() {
 		run := monitor.WaitForMonitorRun(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: pastMonitorName,
 			Timeout:     10 * time.Minute,
 		})
@@ -110,11 +110,11 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor run completed: %s\n", run.ID)
 	})
 
-	It("should have logs for the past monitor run", func() {
+	It("exposes logs for the past monitor run", func() {
 		runs := monitor.ListMonitorRuns(Default, Client, &monitor.ListMonitorRunsParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: pastMonitorName,
 		})
 		Expect(runs.Runs).NotTo(BeEmpty())
@@ -130,8 +130,8 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 
 		logs := monitor.GetMonitorRunLogs(Default, Client, &monitor.GetMonitorRunLogsParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: pastMonitorName,
 			RunID:       completedRunID,
 		})
@@ -139,11 +139,11 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor run logs: %d entries\n", len(logs.Logs))
 	})
 
-	It("should have scores for the past monitor run", func() {
+	It("produces scores for the past monitor run", func() {
 		runs := monitor.ListMonitorRuns(Default, Client, &monitor.ListMonitorRunsParams{
 			OrgName:       Cfg.DefaultOrg,
-			ProjectName:   Shared.ProjectName,
-			AgentName:     Shared.AgentName,
+			ProjectName:   SharedITHelpdeskAgent.ProjectName,
+			AgentName:     SharedITHelpdeskAgent.AgentName,
 			MonitorName:   pastMonitorName,
 			IncludeScores: true,
 		})
@@ -161,13 +161,13 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 		GinkgoWriter.Printf("Past monitor scores: %d evaluator summaries\n", len(completedRun.Scores))
 	})
 
-	It("should rerun the past monitor and succeed", func() {
+	It("reruns the past monitor successfully", func() {
 		Expect(pastMonitorRunID).NotTo(BeEmpty(), "past monitor run ID not captured")
 
 		rerun := monitor.RerunMonitor(Default, Client, &monitor.RerunMonitorParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: pastMonitorName,
 			RunID:       pastMonitorRunID,
 		})
@@ -175,8 +175,8 @@ var _ = Describe("Past Monitor - Built-in Evaluator", Ordered, Label("monitors",
 
 		runs := monitor.WaitForMonitorRunCount(Client, &monitor.WaitForMonitorRunParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: Shared.ProjectName,
-			AgentName:   Shared.AgentName,
+			ProjectName: SharedITHelpdeskAgent.ProjectName,
+			AgentName:   SharedITHelpdeskAgent.AgentName,
 			MonitorName: pastMonitorName,
 			Timeout:     10 * time.Minute,
 		}, 2)

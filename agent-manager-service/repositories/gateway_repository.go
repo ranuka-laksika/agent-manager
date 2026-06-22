@@ -21,10 +21,21 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
+
+// IdentityProviderWithContext is an identity provider mirror row enriched with the
+// gateway and environment it is registered to, for the org-wide listing.
+// EnvironmentUUID is the OpenChoreo environment id from gateway_environment_mappings;
+// there is no local environments table, so the env name is resolved separately.
+type IdentityProviderWithContext struct {
+	models.GatewayIdentityProvider
+	GatewayName     string `gorm:"column:gateway_name"`
+	EnvironmentUUID string `gorm:"column:environment_uuid"`
+}
 
 // GatewayFilterOptions defines filtering options for gateway queries
 type GatewayFilterOptions struct {
@@ -73,6 +84,13 @@ type GatewayRepository interface {
 	GetEnvironmentMappingsByGatewayIDs(gatewayIDs []string) (map[string][]models.GatewayEnvironmentMapping, error)
 	GetEnvironmentMappingsByEnvironmentID(environmentID string) ([]models.GatewayEnvironmentMapping, error)
 	EnvironmentMappingExists(gatewayID, environmentID string) (bool, error)
+
+	// Identity provider mirror operations
+	UpsertIdentityProvider(provider *models.GatewayIdentityProvider) error
+	DeleteIdentityProvider(gatewayID, name string) error
+	ListIdentityProvidersByGateway(gatewayID string) ([]models.GatewayIdentityProvider, error)
+	ListIdentityProvidersByEnvironment(environmentID string) ([]models.GatewayIdentityProvider, error)
+	ListIdentityProvidersByOrg(orgName string) ([]IdentityProviderWithContext, error)
 }
 
 // GatewayRepo implements GatewayRepository using GORM
@@ -444,4 +462,86 @@ func (r *GatewayRepo) EnvironmentMappingExists(gatewayID, environmentID string) 
 		return false, err
 	}
 	return count > 0, nil
+}
+
+// UpsertIdentityProvider creates or updates an identity provider mirror row,
+// keyed by (gateway_uuid, name). The reserved internal provider is never mirrored.
+func (r *GatewayRepo) UpsertIdentityProvider(provider *models.GatewayIdentityProvider) error {
+	if provider.Name == models.ReservedIdentityProviderName {
+		return utils.ErrInvalidInput
+	}
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "gateway_uuid"}, {Name: "name"}},
+		DoUpdates: clause.AssignmentColumns([]string{"issuer", "jwks_uri", "description", "type", "jwks_skip_tls_verify", "updated_at"}),
+	}).Create(provider).Error
+}
+
+// DeleteIdentityProvider removes an identity provider mirror row by gateway and
+// name. System providers (and the reserved internal provider) cannot be deleted.
+func (r *GatewayRepo) DeleteIdentityProvider(gatewayID, name string) error {
+	if name == models.ReservedIdentityProviderName || models.IsSystemIdentityProvider(name) {
+		return utils.ErrInvalidInput
+	}
+	var existing models.GatewayIdentityProvider
+	err := r.db.Where("gateway_uuid = ? AND name = ?", gatewayID, name).First(&existing).Error
+	if err != nil {
+		return err
+	}
+	if existing.Type == models.IdentityProviderTypeSystem {
+		return utils.ErrInvalidInput
+	}
+	return r.db.Where("gateway_uuid = ? AND name = ?", gatewayID, name).
+		Delete(&models.GatewayIdentityProvider{}).Error
+}
+
+// ListIdentityProvidersByGateway returns the identity providers mirrored for a
+// gateway, excluding the reserved internal provider.
+func (r *GatewayRepo) ListIdentityProvidersByGateway(gatewayID string) ([]models.GatewayIdentityProvider, error) {
+	var providers []models.GatewayIdentityProvider
+	err := r.db.Where("gateway_uuid = ? AND name <> ?", gatewayID, models.ReservedIdentityProviderName).
+		Order("name ASC").
+		Find(&providers).Error
+	return providers, err
+}
+
+// ListIdentityProvidersByEnvironment returns the union (deduped by name) of
+// identity providers configured on the gateways mapped to an environment,
+// excluding the reserved internal provider.
+func (r *GatewayRepo) ListIdentityProvidersByEnvironment(environmentID string) ([]models.GatewayIdentityProvider, error) {
+	var rows []models.GatewayIdentityProvider
+	err := r.db.
+		Joins("JOIN gateway_environment_mappings ON gateway_environment_mappings.gateway_uuid = gateway_identity_providers.gateway_uuid").
+		Where("gateway_environment_mappings.environment_uuid = ? AND gateway_identity_providers.name <> ?", environmentID, models.ReservedIdentityProviderName).
+		Order("gateway_identity_providers.name ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	// Dedup by name — the same provider may exist on multiple gateways in the env.
+	seen := make(map[string]bool)
+	deduped := make([]models.GatewayIdentityProvider, 0, len(rows))
+	for _, row := range rows {
+		if seen[row.Name] {
+			continue
+		}
+		seen[row.Name] = true
+		deduped = append(deduped, row)
+	}
+	return deduped, nil
+}
+
+// ListIdentityProvidersByOrg returns every identity provider mirrored across the
+// organization's gateways, enriched with gateway + environment context. The
+// reserved internal provider is excluded. A provider whose gateway maps to
+// multiple environments appears once per environment.
+func (r *GatewayRepo) ListIdentityProvidersByOrg(orgName string) ([]IdentityProviderWithContext, error) {
+	var results []IdentityProviderWithContext
+	err := r.db.Table("gateway_identity_providers").
+		Select("gateway_identity_providers.*, gateways.name AS gateway_name, gateway_environment_mappings.environment_uuid::text AS environment_uuid").
+		Joins("JOIN gateways ON gateways.uuid = gateway_identity_providers.gateway_uuid").
+		Joins("LEFT JOIN gateway_environment_mappings ON gateway_environment_mappings.gateway_uuid = gateway_identity_providers.gateway_uuid").
+		Where("gateways.organization_name = ? AND gateway_identity_providers.name <> ?", orgName, models.ReservedIdentityProviderName).
+		Order("gateway_identity_providers.name ASC").
+		Scan(&results).Error
+	return results, err
 }

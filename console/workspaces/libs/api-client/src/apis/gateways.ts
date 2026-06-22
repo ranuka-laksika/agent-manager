@@ -20,9 +20,15 @@ import type {
   CreateGatewayPathParams,
   CreateGatewayRequest,
   DeleteGatewayPathParams,
+  DiscoverOidcPathParams,
+  DiscoverOidcQuery,
   GetGatewayPathParams,
+  IdentityProviderListResponse,
+  OidcDiscoveryResponse,
+  ListEnvironmentIdentityProvidersPathParams,
   ListGatewaysPathParams,
   ListGatewaysQuery,
+  ListIdentityProvidersPathParams,
   GatewayListResponse,
   GatewayResponse,
   GatewayTokenListResponse,
@@ -242,4 +248,50 @@ export async function revokeGatewayToken(
     { token },
   );
   if (!res.ok && res.status !== 204) throw await res.json();
+}
+
+export async function listIdentityProviders(
+  params: ListIdentityProvidersPathParams,
+  getToken?: () => Promise<string>,
+): Promise<IdentityProviderListResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/identity-providers`, {
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function discoverOidc(
+  params: DiscoverOidcPathParams,
+  query: DiscoverOidcQuery,
+  getToken?: () => Promise<string>,
+): Promise<OidcDiscoveryResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/identity-providers/discover`, {
+    token,
+    searchParams: { url: query.url },
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function listEnvironmentIdentityProviders(
+  params: ListEnvironmentIdentityProvidersPathParams,
+  getToken?: () => Promise<string>,
+): Promise<IdentityProviderListResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const envId = encodeRequired(params.environmentId, "environmentId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/environments/${envId}/identity-providers`,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
 }

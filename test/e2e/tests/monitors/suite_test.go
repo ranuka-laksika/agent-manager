@@ -27,9 +27,9 @@ import (
 )
 
 var (
-	Client *framework.AMPClient
-	Cfg    *framework.Config
-	Shared *framework.SharedAgent
+	Client                *framework.AMPClient
+	Cfg                   *framework.Config
+	SharedITHelpdeskAgent *framework.SharedITHelpdeskAgent
 )
 
 func TestMonitors(t *testing.T) {
@@ -44,5 +44,5 @@ var _ = BeforeSuite(func() {
 	Client, err = framework.NewAMPClient(Cfg)
 	Expect(err).NotTo(HaveOccurred())
 	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
-	Shared = testsetup.SetupSharedAgent(Client, Cfg)
+	SharedITHelpdeskAgent = testsetup.SetupSharedITHelpdeskAgent(Client, Cfg)
 })

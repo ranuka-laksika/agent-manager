@@ -79,7 +79,7 @@ func (r *MCPProxyRepo) Create(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 		return fmt.Errorf("failed to create artifact: %w", err)
 	}
 
-	if err := tx.WithContext(ctx).Create(p).Error; err != nil {
+	if err := tx.WithContext(ctx).Omit("status").Create(p).Error; err != nil {
 		return err
 	}
 	return nil
@@ -95,7 +95,6 @@ func (r *MCPProxyRepo) Update(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 		Where("uuid = ?", p.UUID).
 		Updates(map[string]interface{}{
 			"description":   p.Description,
-			"status":        p.Status,
 			"configuration": p.Configuration,
 		})
 	if result.Error != nil {

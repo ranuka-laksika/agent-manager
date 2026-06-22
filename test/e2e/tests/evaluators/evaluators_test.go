@@ -27,7 +27,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/evaluator"
 )
 
-var _ = Describe("Evaluators", Ordered, Label("evaluators"), func() {
+var _ = Describe("Evaluators: list built-ins and create a custom code evaluator", Ordered, Label("evaluators"), func() {
 	var (
 		builtinEvalIdentifier string
 		customEvalIdentifier  string
@@ -37,7 +37,7 @@ var _ = Describe("Evaluators", Ordered, Label("evaluators"), func() {
 		customEvalIdentifier = "e2e-test-eval-evaluator-" + uuid.New().String()[:8]
 	})
 
-	It("should list evaluators and find built-in ones", func() {
+	It("lists evaluators including the built-in ones", func() {
 		evals := evaluator.ListEvaluators(Default, Client, Cfg.DefaultOrg)
 		Expect(evals.Evaluators).NotTo(BeEmpty(), "expected at least one evaluator")
 
@@ -51,7 +51,7 @@ var _ = Describe("Evaluators", Ordered, Label("evaluators"), func() {
 		GinkgoWriter.Printf("Found built-in evaluator: %s\n", builtinEvalIdentifier)
 	})
 
-	It("should create a custom code evaluator", func() {
+	It("creates a custom code evaluator", func() {
 		customEval := evaluator.CreateCustomEvaluator(Default, Client, &evaluator.CreateCustomEvaluatorParams{
 			OrgName:     Cfg.DefaultOrg,
 			Identifier:  customEvalIdentifier,

@@ -75,6 +75,35 @@ func (t *GatewayToken) Revoke() {
 	t.RevokedAt = &now
 }
 
+// Identity provider provenance. System providers are seeded with the platform
+// (e.g. ThunderKeyManager) and cannot be deleted; custom providers are added by
+// operators via the management script.
+const (
+	IdentityProviderTypeSystem = "system"
+	IdentityProviderTypeCustom = "custom"
+)
+
+// GatewayIdentityProvider mirrors a gateway-side jwt-auth keymanagers (token
+// issuer) entry. The gateway ConfigMap is the source of truth; this row is a
+// read mirror written by the gateway bootstrap and the management script.
+type GatewayIdentityProvider struct {
+	UUID              uuid.UUID `gorm:"column:uuid;primaryKey" json:"-"`
+	GatewayUUID       uuid.UUID `gorm:"column:gateway_uuid" json:"-"`
+	Name              string    `gorm:"column:name" json:"name"`
+	Issuer            string    `gorm:"column:issuer" json:"issuer"`
+	JWKSUri           string    `gorm:"column:jwks_uri" json:"jwksUri"`
+	Description       string    `gorm:"column:description" json:"description,omitempty"`
+	Type              string    `gorm:"column:type" json:"type"`
+	JWKSSkipTLSVerify bool      `gorm:"column:jwks_skip_tls_verify" json:"skipTlsVerify"`
+	CreatedAt         time.Time `gorm:"column:created_at" json:"-"`
+	UpdatedAt         time.Time `gorm:"column:updated_at" json:"-"`
+}
+
+// TableName returns the table name for the GatewayIdentityProvider model
+func (GatewayIdentityProvider) TableName() string {
+	return "gateway_identity_providers"
+}
+
 // APIGatewayWithDetails represents a gateway with its association and deployment details for an API
 type APIGatewayWithDetails struct {
 	// Gateway information

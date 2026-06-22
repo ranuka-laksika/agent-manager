@@ -66,6 +66,6 @@ runs:
         # Expose AMP API (9000) + traces-observer (9098). Bind 0.0.0.0 so the
         # agent-manager container can reach the forwards via the bridge gateway
         # (a 127.0.0.1-only forward is unreachable from inside the container).
-        (cd deployments/scripts && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --platform --background)
+        (cd deployments/setup && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --platform --background)
         make setup-gateway
-        (cd deployments/scripts && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --background)
+        (cd deployments/setup && PORT_FORWARD_ADDRESS=0.0.0.0 ./port-forward.sh --background)

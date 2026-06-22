@@ -19,12 +19,14 @@
 import {
   useGetAgent,
   useGetAgentConfigurations,
+  useListEnvironmentIdentityProviders,
   useUpdateAgentDeploySettings,
 } from "@agent-management-platform/api-client";
 import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
+  Alert,
   Autocomplete,
   Box,
   Button,
@@ -35,7 +37,10 @@ import {
   Form,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   FormLabel,
+  Radio,
+  RadioGroup,
   Switch,
   TextField,
   Typography,
@@ -47,7 +52,7 @@ import {
   DrawerWrapper,
   useSnackBar,
 } from "@agent-management-platform/views";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export interface EditSecurityConfigDrawerProps {
   open: boolean;
@@ -71,19 +76,52 @@ export function EditSecurityConfigDrawer({
   const { data: agent } = useGetAgent({ orgName, projName, agentName });
   // Mount the configurations query so its cache invalidates after we save —
   // /deploy-settings doesn't read this, but the page elsewhere does.
-  useGetAgentConfigurations(
-    { orgName, projName, agentName },
-    { environment },
-  );
+  useGetAgentConfigurations({ orgName, projName, agentName }, { environment });
 
   const isApiAgent = agent?.agentType?.type === "agent-api";
 
+  // Issuer options are the environment's configured identity providers — agents
+  // can only reference providers that exist on the environment's gateway.
+  const { data: idpResp } = useListEnvironmentIdentityProviders({
+    orgName,
+    environmentId: open && isApiAgent ? environment : undefined,
+  });
+  const identityProviderOptions = useMemo(
+    () => (idpResp?.list ?? []).map((p) => p.name),
+    [idpResp],
+  );
+  const hasIdentityProviders = identityProviderOptions.length > 0;
+
   // ── State ─────────────────────────────────────────────────────────────────
+  // Endpoint authentication mode — mutually exclusive by construction.
+  // Maps to two backend booleans: apikey -> enableApiKeySecurity, oauth -> enableOAuthSecurity.
+  const [authMode, setAuthMode] = useState<"none" | "apikey" | "oauth">(
+    "apikey",
+  );
+  const [oauthIssuers, setOauthIssuers] = useState<string[]>([]);
+  const [oauthAudiences, setOauthAudiences] = useState<string[]>([]);
+  const [oauthHeaderName, setOauthHeaderName] =
+    useState<string>("Authorization");
+  const [oauthHeaderPrefix, setOauthHeaderPrefix] = useState<string>("Bearer");
+  const [oauthForwardToken, setOauthForwardToken] = useState<boolean>(true);
+
   const [corsEnabled, setCorsEnabled] = useState(false);
   const [corsAllowAll, setCorsAllowAll] = useState(true);
   const [corsOrigins, setCorsOrigins] = useState<string[]>(["*"]);
-  const [corsMethods, setCorsMethods] = useState<string[]>(["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]);
-  const [corsHeaders, setCorsHeaders] = useState<string[]>(["authorization", "Content-Type", "Origin", "X-API-Key"]);
+  const [corsMethods, setCorsMethods] = useState<string[]>([
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "PATCH",
+    "OPTIONS",
+  ]);
+  const [corsHeaders, setCorsHeaders] = useState<string[]>([
+    "authorization",
+    "Content-Type",
+    "Origin",
+    "X-API-Key",
+  ]);
   const [corsAllowCredentials, setCorsAllowCredentials] = useState(false);
 
   // Seed CORS form from agent config when drawer opens. When no persisted
@@ -103,18 +141,52 @@ export function EditSecurityConfigDrawer({
     }
     if (cors.enabled !== undefined) setCorsEnabled(cors.enabled);
     if (cors.allowOrigin !== undefined) {
-      const isWildcard = cors.allowOrigin.length === 1 && cors.allowOrigin[0] === "*";
+      const isWildcard =
+        cors.allowOrigin.length === 1 && cors.allowOrigin[0] === "*";
       setCorsAllowAll(isWildcard);
       setCorsOrigins(cors.allowOrigin);
     }
     if (cors.allowMethods !== undefined) setCorsMethods(cors.allowMethods);
     if (cors.allowHeaders !== undefined) setCorsHeaders(cors.allowHeaders);
-    if (cors.allowCredentials !== undefined) setCorsAllowCredentials(cors.allowCredentials);
+    if (cors.allowCredentials !== undefined)
+      setCorsAllowCredentials(cors.allowCredentials);
   }, [open, agent?.configurations?.corsConfig]);
+
+  // Seed Endpoint Authentication form from agent config when drawer opens.
+  useEffect(() => {
+    if (!open) return;
+    const cfg = agent?.configurations;
+    if (cfg?.enableOAuthSecurity) {
+      setAuthMode("oauth");
+    } else if (cfg?.enableApiKeySecurity) {
+      setAuthMode("apikey");
+    } else if (cfg?.enableApiKeySecurity === false) {
+      setAuthMode("none");
+    } else {
+      setAuthMode("apikey");
+    }
+
+    const oauth = cfg?.oauthConfig;
+    setOauthIssuers(oauth?.issuers ?? []);
+    setOauthAudiences(oauth?.audiences ?? []);
+    setOauthHeaderName(oauth?.headerName || "Authorization");
+    setOauthHeaderPrefix(oauth?.authHeaderPrefix || "Bearer");
+    setOauthForwardToken(oauth?.forwardToken ?? true);
+  }, [
+    open,
+    agent?.configurations?.enableApiKeySecurity,
+    agent?.configurations?.enableOAuthSecurity,
+    agent?.configurations?.oauthConfig,
+  ]);
 
   const hasWildcardOrigin = corsAllowAll || corsOrigins.includes("*");
 
-  const { mutate: updateDeploySettings, isPending } = useUpdateAgentDeploySettings();
+  // OAuth requires at least one identity provider (issuer). Block Apply otherwise.
+  const oauthInvalid =
+    isApiAgent && authMode === "oauth" && oauthIssuers.length === 0;
+
+  const { mutate: updateDeploySettings, isPending } =
+    useUpdateAgentDeploySettings();
 
   const handleSave = useCallback(() => {
     updateDeploySettings(
@@ -122,11 +194,24 @@ export function EditSecurityConfigDrawer({
         params: { orgName, projName, agentName },
         body: {
           environmentName: environment,
-          ...(agent?.configurations?.enableApiKeySecurity !== undefined && {
-            enableApiKeySecurity: agent.configurations.enableApiKeySecurity,
+          ...(isApiAgent && {
+            enableApiKeySecurity: authMode === "apikey",
+            enableOAuthSecurity: authMode === "oauth",
           }),
-          ...(agent?.configurations?.enableAutoInstrumentation !== undefined && {
-            enableAutoInstrumentation: agent.configurations.enableAutoInstrumentation,
+          ...(isApiAgent &&
+            authMode === "oauth" && {
+              oauthConfig: {
+                issuers: oauthIssuers,
+                audiences: oauthAudiences,
+                headerName: oauthHeaderName.trim() || "Authorization",
+                authHeaderPrefix: oauthHeaderPrefix.trim() || "Bearer",
+                forwardToken: oauthForwardToken,
+              },
+            }),
+          ...(agent?.configurations?.enableAutoInstrumentation !==
+            undefined && {
+            enableAutoInstrumentation:
+              agent.configurations.enableAutoInstrumentation,
           }),
           ...(isApiAgent && {
             corsConfig: {
@@ -134,7 +219,9 @@ export function EditSecurityConfigDrawer({
               allowOrigin: hasWildcardOrigin ? ["*"] : corsOrigins,
               allowMethods: corsMethods,
               allowHeaders: corsHeaders,
-              allowCredentials: hasWildcardOrigin ? false : corsAllowCredentials,
+              allowCredentials: hasWildcardOrigin
+                ? false
+                : corsAllowCredentials,
             },
           }),
         },
@@ -143,31 +230,251 @@ export function EditSecurityConfigDrawer({
         onSuccess: () => onClose(),
         onError: (error) => {
           const body = (error as { body?: { message?: string } })?.body;
-          pushSnackBar({ message: body?.message ?? "Failed to apply security configuration", type: "error" });
+          pushSnackBar({
+            message: body?.message ?? "Failed to apply security configuration",
+            type: "error",
+          });
         },
       },
     );
   }, [
-    environment, orgName, projName, agentName,
-    agent?.configurations?.enableApiKeySecurity,
+    environment,
+    orgName,
+    projName,
+    agentName,
     agent?.configurations?.enableAutoInstrumentation,
-    corsEnabled, corsOrigins, corsMethods, corsHeaders, corsAllowCredentials,
-    hasWildcardOrigin, isApiAgent,
-    updateDeploySettings, onClose, pushSnackBar,
+    authMode,
+    oauthIssuers,
+    oauthAudiences,
+    oauthHeaderName,
+    oauthHeaderPrefix,
+    oauthForwardToken,
+    corsEnabled,
+    corsOrigins,
+    corsMethods,
+    corsHeaders,
+    corsAllowCredentials,
+    hasWildcardOrigin,
+    isApiAgent,
+    updateDeploySettings,
+    onClose,
+    pushSnackBar,
   ]);
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Shield size={24} />} title="Update CORS Configuration" onClose={onClose} />
+      <DrawerHeader
+        icon={<Shield size={24} />}
+        title="Update Configurations"
+        onClose={onClose}
+      />
       <DrawerContent>
         <Form.Stack spacing={3}>
+          {/* ── Endpoint Authentication ──────────────────────────────── */}
+          {isApiAgent && (
+            <Form.Section>
+              <Form.Header>Endpoint Authentication</Form.Header>
+              <Form.Subheader>
+                Choose how callers authenticate against this agent endpoint.
+              </Form.Subheader>
+              <Form.Stack spacing={1}>
+                <FormControl>
+                  <RadioGroup
+                    value={authMode}
+                    onChange={(_, value) => {
+                      const mode = value as "none" | "apikey" | "oauth";
+                      setAuthMode(mode);
+                      // Seed issuers from the environment's identity providers when
+                      // switching into OAuth with none selected yet.
+                      if (
+                        mode === "oauth" &&
+                        oauthIssuers.length === 0 &&
+                        hasIdentityProviders
+                      ) {
+                        setOauthIssuers(identityProviderOptions);
+                      }
+                    }}
+                  >
+                    <FormControlLabel
+                      value="none"
+                      control={<Radio disabled={isPending} />}
+                      label="No authentication"
+                    />
+                    <FormControlLabel
+                      value="apikey"
+                      control={<Radio disabled={isPending} />}
+                      label="API key"
+                    />
+                    <FormControlLabel
+                      value="oauth"
+                      control={
+                        <Radio disabled={isPending || !hasIdentityProviders} />
+                      }
+                      label={
+                        hasIdentityProviders
+                          ? "OAuth"
+                          : "OAuth — configure an identity provider first"
+                      }
+                    />
+                  </RadioGroup>
+                </FormControl>
+
+                <Collapse in={authMode === "apikey"}>
+                  <FormControl fullWidth sx={{ mt: 1 }}>
+                    <FormLabel>Header</FormLabel>
+                    <TextField
+                      value="X-API-Key"
+                      size="small"
+                      fullWidth
+                      disabled
+                    />
+                  </FormControl>
+                </Collapse>
+
+                <Collapse in={authMode === "oauth"}>
+                  <Form.Stack spacing={2} sx={{ mt: 1 }}>
+                    {!hasIdentityProviders && (
+                      <Alert severity="warning">
+                        <Typography variant="caption">
+                          No identity providers for this environment. Add one
+                          under Security &rarr; Identity Providers first.
+                        </Typography>
+                      </Alert>
+                    )}
+
+                    <FormControl fullWidth error={oauthInvalid}>
+                      <FormLabel required>Identity Providers</FormLabel>
+                      <Autocomplete
+                        multiple
+                        options={identityProviderOptions}
+                        value={oauthIssuers}
+                        onChange={(_, v) => setOauthIssuers(v as string[])}
+                        disabled={isPending || !hasIdentityProviders}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip
+                              label={opt as string}
+                              size="small"
+                              {...getTagProps({ index: i })}
+                              key={opt as string}
+                            />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            size="small"
+                            error={oauthInvalid}
+                            placeholder={
+                              oauthIssuers.length === 0
+                                ? "Select identity providers"
+                                : ""
+                            }
+                          />
+                        )}
+                      />
+                      {oauthInvalid && (
+                        <FormHelperText>
+                          Select at least one identity provider.
+                        </FormHelperText>
+                      )}
+                    </FormControl>
+
+                    <FormControl fullWidth>
+                      <FormLabel>Audiences</FormLabel>
+                      <Autocomplete
+                        multiple
+                        freeSolo
+                        options={[]}
+                        value={oauthAudiences}
+                        onChange={(_, v) => setOauthAudiences(v as string[])}
+                        disabled={isPending}
+                        renderTags={(vals, getTagProps) =>
+                          vals.map((opt, i) => (
+                            <Chip
+                              label={opt as string}
+                              size="small"
+                              {...getTagProps({ index: i })}
+                              key={opt as string}
+                            />
+                          ))
+                        }
+                        renderInput={(params) => (
+                          <TextField
+                            {...params}
+                            size="small"
+                            placeholder={
+                              oauthAudiences.length === 0
+                                ? "Add accepted audience (aud) values"
+                                : ""
+                            }
+                          />
+                        )}
+                      />
+                      <FormHelperText>
+                        Accepted token audiences (aud claim). Leave empty to
+                        disable audience validation.
+                      </FormHelperText>
+                    </FormControl>
+
+                    <Box display="flex" gap={2}>
+                      <FormControl fullWidth>
+                        <FormLabel>Header name</FormLabel>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          value={oauthHeaderName}
+                          disabled={isPending}
+                          onChange={(e) => setOauthHeaderName(e.target.value)}
+                          placeholder="Authorization"
+                        />
+                      </FormControl>
+                      <FormControl fullWidth>
+                        <FormLabel>Auth header prefix</FormLabel>
+                        <TextField
+                          size="small"
+                          fullWidth
+                          value={oauthHeaderPrefix}
+                          disabled={isPending}
+                          onChange={(e) => setOauthHeaderPrefix(e.target.value)}
+                          placeholder="Bearer"
+                        />
+                      </FormControl>
+                    </Box>
+
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={oauthForwardToken}
+                          onChange={(_, checked) =>
+                            setOauthForwardToken(checked)
+                          }
+                          disabled={isPending}
+                        />
+                      }
+                      label="Forward token to upstream"
+                    />
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ mt: -1 }}
+                    >
+                      Forward the token header to the upstream service after
+                      validation. Disable to strip it before proxying.
+                    </Typography>
+                  </Form.Stack>
+                </Collapse>
+              </Form.Stack>
+            </Form.Section>
+          )}
 
           {/* ── CORS ─────────────────────────────────────────────────── */}
           {isApiAgent && (
             <Form.Section>
               <Form.Header>CORS Configuration</Form.Header>
               <Form.Subheader>
-                Control which origins, methods, and headers may access this endpoint.
+                Control which origins, methods, and headers may access this
+                endpoint.
               </Form.Subheader>
               <Form.Stack spacing={1}>
                 <FormControlLabel
@@ -184,7 +491,13 @@ export function EditSecurityConfigDrawer({
                   <Accordion
                     disableGutters
                     elevation={0}
-                    sx={{ mt: 1, border: "1px solid", borderColor: "divider", borderRadius: 1, "&:before": { display: "none" } }}
+                    sx={{
+                      mt: 1,
+                      border: "1px solid",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      "&:before": { display: "none" },
+                    }}
                   >
                     <AccordionSummary expandIcon={<ChevronDown size={16} />}>
                       <Typography variant="body2">Advanced</Typography>
@@ -202,7 +515,9 @@ export function EditSecurityConfigDrawer({
                                     setCorsAllowCredentials(false);
                                     setCorsOrigins(["*"]);
                                   } else {
-                                    setCorsOrigins((prev) => prev.filter((o) => o !== "*"));
+                                    setCorsOrigins((prev) =>
+                                      prev.filter((o) => o !== "*"),
+                                    );
                                   }
                                 }}
                                 disabled={isPending}
@@ -214,7 +529,9 @@ export function EditSecurityConfigDrawer({
                             control={
                               <Checkbox
                                 checked={corsAllowCredentials}
-                                onChange={(_, checked) => setCorsAllowCredentials(checked)}
+                                onChange={(_, checked) =>
+                                  setCorsAllowCredentials(checked)
+                                }
                                 disabled={isPending || hasWildcardOrigin}
                               />
                             }
@@ -232,11 +549,20 @@ export function EditSecurityConfigDrawer({
                               onChange={(_, v) => setCorsOrigins(v as string[])}
                               renderTags={(vals, getTagProps) =>
                                 vals.map((opt, i) => (
-                                  <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                  <Chip
+                                    label={opt as string}
+                                    size="small"
+                                    {...getTagProps({ index: i })}
+                                    key={opt as string}
+                                  />
                                 ))
                               }
                               renderInput={(params) => (
-                                <TextField {...params} size="small" placeholder="Add origin and press Enter" />
+                                <TextField
+                                  {...params}
+                                  size="small"
+                                  placeholder="Add origin and press Enter"
+                                />
                               )}
                             />
                           </FormControl>
@@ -251,11 +577,20 @@ export function EditSecurityConfigDrawer({
                             onChange={(_, v) => setCorsMethods(v as string[])}
                             renderTags={(vals, getTagProps) =>
                               vals.map((opt, i) => (
-                                <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                <Chip
+                                  label={opt as string}
+                                  size="small"
+                                  {...getTagProps({ index: i })}
+                                  key={opt as string}
+                                />
                               ))
                             }
                             renderInput={(params) => (
-                              <TextField {...params} size="small" placeholder="Add method and press Enter" />
+                              <TextField
+                                {...params}
+                                size="small"
+                                placeholder="Add method and press Enter"
+                              />
                             )}
                           />
                         </FormControl>
@@ -269,11 +604,20 @@ export function EditSecurityConfigDrawer({
                             onChange={(_, v) => setCorsHeaders(v as string[])}
                             renderTags={(vals, getTagProps) =>
                               vals.map((opt, i) => (
-                                <Chip label={opt as string} size="small" {...getTagProps({ index: i })} key={opt as string} />
+                                <Chip
+                                  label={opt as string}
+                                  size="small"
+                                  {...getTagProps({ index: i })}
+                                  key={opt as string}
+                                />
                               ))
                             }
                             renderInput={(params) => (
-                              <TextField {...params} size="small" placeholder="Add header and press Enter" />
+                              <TextField
+                                {...params}
+                                size="small"
+                                placeholder="Add header and press Enter"
+                              />
                             )}
                           />
                         </FormControl>
@@ -293,7 +637,7 @@ export function EditSecurityConfigDrawer({
               variant="contained"
               color="primary"
               onClick={handleSave}
-              disabled={isPending}
+              disabled={isPending || oauthInvalid}
               startIcon={isPending ? <CircularProgress size={16} /> : undefined}
             >
               {isPending ? "Applying..." : "Apply"}

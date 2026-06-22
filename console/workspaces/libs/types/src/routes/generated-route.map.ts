@@ -32,6 +32,17 @@ export const generatedRouteMap =  {
             }
           }
         },
+        "security": {
+          "path": "/org/:orgId/security",
+          "wildPath": "/org/:orgId/security/*",
+          "children": {
+            "identityProviders": {
+              "path": "/org/:orgId/security/identity-providers",
+              "wildPath": "/org/:orgId/security/identity-providers/*",
+              "children": {}
+            }
+          }
+        },
         "llmProviders": {
           "path": "/org/:orgId/llm-providers",
           "wildPath": "/org/:orgId/llm-providers/*",

@@ -91,6 +91,47 @@ export type GetGatewayPathParams = GatewayPathParams;
 export type UpdateGatewayPathParams = GatewayPathParams;
 export type DeleteGatewayPathParams = GatewayPathParams;
 
+export type IdentityProviderType = "system" | "custom";
+
+export interface IdentityProvider {
+  name: string;
+  issuer?: string;
+  jwksUri?: string;
+  skipTlsVerify?: boolean;
+  description?: string;
+  /** "system" providers (e.g. ThunderKeyManager) cannot be deleted. */
+  type?: IdentityProviderType;
+  /** Set on org-wide listing: the environment this provider's gateway is mapped to. */
+  environmentName?: string;
+  /** Set on org-wide listing: the gateway this provider is registered to. */
+  gatewayId?: string;
+  gatewayName?: string;
+}
+
+export interface IdentityProviderListResponse {
+  count: number;
+  list: IdentityProvider[];
+}
+
+export type ListIdentityProvidersPathParams = OrgPathParams;
+
+/** Issuer metadata resolved from an OpenID Connect discovery document. */
+export interface OidcDiscoveryResponse {
+  issuer: string;
+  jwksUri: string;
+}
+
+export type DiscoverOidcPathParams = OrgPathParams;
+
+export interface DiscoverOidcQuery {
+  /** Issuer base URL or full .well-known/openid-configuration URL. */
+  url: string;
+}
+
+export interface ListEnvironmentIdentityProvidersPathParams extends OrgPathParams {
+  environmentId: string | undefined;
+}
+
 export interface GatewayTokenInfo {
   id: string;
   status: "active" | "revoked";

@@ -13,7 +13,7 @@ export function useActiveOrgPage() {
 
     return useMemo(() => {
         if (
-            page !== "projects" &&
+            page !== "project" &&
             page !== relativeRouteMap.children.org.children.projects.path &&
             page !== relativeRouteMap.children.org.children.newProject.path
         ) {

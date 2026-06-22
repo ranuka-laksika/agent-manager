@@ -40,6 +40,7 @@ window.__RUNTIME_CONFIG__ = {
   obsApiBaseUrl: 'http://localhost:9098',
   gatewayControlPlaneUrl: 'http://localhost:9243',
   gatewayVersion: 'v0.11.0',
+  ampVersion: 'v0.16.0',
   instrumentationUrl: 'http://localhost:22893/otel',
   agentManagerInternalBaseUrl: 'http://host.docker.internal:9000',
   agentManagerInternalCpHost: 'host.docker.internal:9243',

@@ -42,6 +42,14 @@ type AgentConfig struct {
 	CORSAllowMethods       []string  `gorm:"column:cors_allow_methods;type:jsonb;serializer:json;not null;default:'[\"GET\",\"POST\",\"PUT\",\"DELETE\",\"PATCH\",\"OPTIONS\"]'"`
 	CORSAllowHeaders       []string  `gorm:"column:cors_allow_headers;type:jsonb;serializer:json;not null;default:'[\"authorization\",\"Content-Type\",\"Origin\",\"X-API-Key\"]'"`
 	CORSAllowCredentials   bool      `gorm:"column:cors_allow_credentials;not null;default:false"`
+	// OAuth security. EnableApiKeySecurity and EnableOAuthSecurity are mutually
+	// exclusive — enforced at the service layer before persistence.
+	EnableOAuthSecurity   bool     `gorm:"column:enable_oauth_security;not null;default:false"`
+	OAuthIssuers          []string `gorm:"column:oauth_issuers;type:jsonb;serializer:json;not null;default:'[]'"`
+	OAuthAudiences        []string `gorm:"column:oauth_audiences;type:jsonb;serializer:json;not null;default:'[]'"`
+	OAuthHeaderName       string   `gorm:"column:oauth_header_name;not null;default:'Authorization'"`
+	OAuthAuthHeaderPrefix string   `gorm:"column:oauth_auth_header_prefix;not null;default:'Bearer'"`
+	OAuthForwardToken     bool     `gorm:"column:oauth_forward_token;not null;default:true"`
 }
 
 func (AgentConfig) TableName() string { return "agent_configs" }

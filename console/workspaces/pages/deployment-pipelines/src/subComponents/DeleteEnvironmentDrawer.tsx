@@ -32,10 +32,9 @@ import {
   DrawerWrapper,
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
+import { getRawScriptUrl } from "@agent-management-platform/shared-component";
 import type { Environment } from "@agent-management-platform/types";
 
-const SCRIPT_URL =
-  "https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/remove-environment.sh";
 const TOKEN_MASK = "•••••••••••••••";
 
 interface DeleteEnvironmentDrawerProps {
@@ -52,7 +51,7 @@ function buildScript(name: string, token: string): string {
   // is left to the script's default so the gateway release name matches what
   // add-environment.sh installed.
   const lines = [
-    `curl -fsSL ${SCRIPT_URL} \\`,
+    `curl -fsSL ${getRawScriptUrl("remove-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
     `    AGENT_MANAGER_TOKEN=${token} \\`,
     "    bash",

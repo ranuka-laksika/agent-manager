@@ -188,6 +188,41 @@ spec:
                 esac
               }
 
+              # http_put URL content-type body authorization — prints body; exits 1 with error log on non-2xx
+              http_put() {
+                _url="$1"; _ct="$2"; _body="$3"; _auth="${4:-}"
+                _tmpfile=$(mktemp)
+                _status=$(curl -s --max-time 30 --retry 3 --retry-delay 5 \
+                  -X PUT -H "Content-Type: ${_ct}" \
+                  -H "Authorization: ${_auth}" \
+                  -d "$_body" \
+                  -o "$_tmpfile" -w "%{http_code}" "$_url")
+                _body=$(cat "$_tmpfile"); rm -f "$_tmpfile"
+                case "$_status" in
+                  2*) echo "$_body" ;;
+                  *)  log_error "PUT ${_url} failed with HTTP ${_status}: ${_body}"; return 1 ;;
+                esac
+              }
+
+              # seed_identity_provider name issuer jwksUri skipTlsVerify — mirrors a
+              # gateway keymanager into the AMS identity-provider table (idempotent
+              # upsert). Non-fatal: a failure logs and continues so a transient sync
+              # issue does not block gateway bootstrap. type=system is derived by the
+              # API from the well-known provider name.
+              seed_identity_provider() {
+                _ip_name="$1"; _ip_issuer="$2"; _ip_jwks="$3"; _ip_skip="$4"
+                log_info "Seeding identity provider '${_ip_name}'..."
+                if http_put \
+                    "${AMP_API_URL}/orgs/${ORG_NAME}/gateways/${GATEWAY_ID}/identity-providers/${_ip_name}" \
+                    "application/json" \
+                    '{"issuer":"'"${_ip_issuer}"'","jwksUri":"'"${_ip_jwks}"'","skipTlsVerify":'"${_ip_skip}"'}' \
+                    "Bearer ${ACCESS_TOKEN}" >/dev/null; then
+                  log_info "Identity provider '${_ip_name}' seeded."
+                else
+                  log_error "Failed to seed identity provider '${_ip_name}' (continuing)."
+                fi
+              }
+
               # ----------------------------------------------------------------
               # Step 1: Wait for Agent Manager API to be healthy
               # ----------------------------------------------------------------
@@ -281,7 +316,34 @@ spec:
               fi
 
               # ----------------------------------------------------------------
-              # Step 6: Generate a gateway registration token
+              # Step 6: Seed the identity provider mirror into AMS for the Security
+              # UI and agent OAuth issuer options.
+              #
+              # Source: bootstrap.identityProviders — the authoritative allowlist of
+              # IdPs to register. It is decoupled from jwtauth_v1.keymanagers (the
+              # gateway runtime's JWT-validation config, which includes the internal
+              # agent-manager-service keymanager), so no name-based filtering is
+              # needed here: only what is listed gets mirrored.
+              #
+              # Legacy fallback: if bootstrap.identityProviders is unset, derive the
+              # list from jwtauth_v1.keymanagers (skipping agent-manager-service) to
+              # preserve behavior for existing installs.
+              # ----------------------------------------------------------------
+              log_info "Seeding identity providers for gateway '${GATEWAY_ID}'..."
+              {{- if .Values.bootstrap.identityProviders }}
+              {{- range .Values.bootstrap.identityProviders }}
+              seed_identity_provider {{ .name | quote }} {{ .issuer | quote }} {{ .jwksUri | quote }} {{ .skipTlsVerify | default false }}
+              {{- end }}
+              {{- else }}
+              {{- range .Values.apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers }}
+              {{- if ne .name "agent-manager-service" }}
+              seed_identity_provider {{ .name | quote }} {{ .issuer | quote }} {{ .jwks.remote.uri | quote }} {{ .jwks.remote.skipTlsVerify | default false }}
+              {{- end }}
+              {{- end }}
+              {{- end }}
+
+              # ----------------------------------------------------------------
+              # Step 7: Generate a gateway registration token
               # Skip rotation if the Secret already exists to avoid invalidating
               # a running gateway-controller.
               # ----------------------------------------------------------------
@@ -309,7 +371,7 @@ spec:
               fi
 
               # ----------------------------------------------------------------
-              # Step 7: Store the token in a Secret in the gateway namespace.
+              # Step 8: Store the token in a Secret in the gateway namespace.
               # The APIGateway CR references this via spec.controlPlane.tokenSecretRef.
               # The gateway-operator injects it into the gateway-controller as
               # APIP_GW_GATEWAY_REGISTRATION_TOKEN.

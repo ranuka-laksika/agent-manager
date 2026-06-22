@@ -40,6 +40,7 @@ window.__RUNTIME_CONFIG__ = {
   obsApiBaseUrl: '$OBS_API_BASE_URL',
   gatewayControlPlaneUrl: '$GATEWAY_CONTROL_PLANE_URL',
   gatewayVersion: '$GATEWAY_VERSION',
+  ampVersion: '$AMP_VERSION',
   instrumentationUrl: '$INSTRUMENTATION_URL',
   agentManagerInternalBaseUrl: '$AGENT_MANAGER_INTERNAL_BASE_URL',
   agentManagerInternalCpHost: '$AGENT_MANAGER_INTERNAL_CP_HOST',

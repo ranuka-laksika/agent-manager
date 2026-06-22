@@ -14,6 +14,12 @@
 // specific language governing permissions and limitations
 // under the License.
 
+// Package llmprovider holds e2e tests for the LLM provider domain: configuring
+// a provider post-deploy on the shared single-env and two-env
+// IT helpdesk agents, and a from-creation flow (Build C). The shared
+// agents are reused rather than rebuilt; a single OpenAI-backed LLM provider is
+// provisioned once for the post-deploy tests.
+
 package llmprovider
 
 import (
@@ -30,6 +36,16 @@ var Client *framework.AMPClient
 
 // Cfg is the shared test configuration.
 var Cfg *framework.Config
+
+// SharedITHelpdeskAgent is the shared single-environment IT helpdesk agent.
+var SharedITHelpdeskAgent *framework.SharedITHelpdeskAgent
+
+// SharedPromotableITHelpdeskAgent is the shared two-environment IT helpdesk agent.
+var SharedPromotableITHelpdeskAgent *framework.SharedPromotableITHelpdeskAgent
+
+// LLMProviderID is an OpenAI-backed LLM provider, provisioned once on the
+// default AI gateway and used by the post-deploy tests on the shared IT helpdesk agent and the shared promotable IT helpdesk agent.
+var LLMProviderID string
 
 func TestLLMProvider(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -49,4 +65,5 @@ var _ = BeforeSuite(func() {
 
 	By("Verifying default organization")
 	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
+
 })

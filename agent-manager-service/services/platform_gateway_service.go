@@ -732,6 +732,90 @@ func (s *PlatformGatewayService) UpdateGatewayActiveStatus(gatewayID string, isA
 	return s.gatewayRepo.UpdateActiveStatus(gatewayID, isActive)
 }
 
+// resolveGatewayUUID resolves a gateway identifier (UUID or name) to its UUID,
+// scoped to the organization.
+func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, orgName string) (string, error) {
+	if gw, err := s.gatewayRepo.GetByNameAndOrgID(gatewayID, orgName); err == nil {
+		return gw.UUID.String(), nil
+	}
+	gw, err := s.gatewayRepo.GetByUUID(gatewayID)
+	if err != nil {
+		return "", utils.ErrGatewayNotFound
+	}
+	if gw.OrganizationName != orgName {
+		return "", utils.ErrGatewayNotFound
+	}
+	return gw.UUID.String(), nil
+}
+
+// UpsertIdentityProvider creates or updates an identity provider mirror row for a
+// gateway. System provenance is derived from the well-known provider names.
+func (s *PlatformGatewayService) UpsertIdentityProvider(gatewayID, orgName, name, issuer, jwksURI, description string, skipTLS bool) (*models.GatewayIdentityProvider, error) {
+	if name == models.ReservedIdentityProviderName {
+		return nil, utils.ErrInvalidInput
+	}
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+	if err != nil {
+		return nil, err
+	}
+	gwUUID, err := uuid.Parse(gwUUIDStr)
+	if err != nil {
+		return nil, utils.ErrGatewayNotFound
+	}
+	providerType := models.IdentityProviderTypeCustom
+	if models.IsSystemIdentityProvider(name) {
+		providerType = models.IdentityProviderTypeSystem
+	}
+	now := time.Now()
+	provider := &models.GatewayIdentityProvider{
+		UUID:              uuid.New(),
+		GatewayUUID:       gwUUID,
+		Name:              name,
+		Issuer:            issuer,
+		JWKSUri:           jwksURI,
+		Description:       description,
+		Type:              providerType,
+		JWKSSkipTLSVerify: skipTLS,
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}
+	if err := s.gatewayRepo.UpsertIdentityProvider(provider); err != nil {
+		return nil, err
+	}
+	return provider, nil
+}
+
+// DeleteIdentityProvider removes an identity provider mirror row for a gateway.
+// System providers cannot be deleted (enforced in the repository).
+func (s *PlatformGatewayService) DeleteIdentityProvider(gatewayID, orgName, name string) error {
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+	if err != nil {
+		return err
+	}
+	return s.gatewayRepo.DeleteIdentityProvider(gwUUIDStr, name)
+}
+
+// ListIdentityProvidersByGateway lists the identity providers mirrored for a gateway.
+func (s *PlatformGatewayService) ListIdentityProvidersByGateway(gatewayID, orgName string) ([]models.GatewayIdentityProvider, error) {
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+	if err != nil {
+		return nil, err
+	}
+	return s.gatewayRepo.ListIdentityProvidersByGateway(gwUUIDStr)
+}
+
+// ListIdentityProvidersByEnvironment lists the identity providers available in an
+// environment (union over the environment's gateways).
+func (s *PlatformGatewayService) ListIdentityProvidersByEnvironment(environmentID string) ([]models.GatewayIdentityProvider, error) {
+	return s.gatewayRepo.ListIdentityProvidersByEnvironment(environmentID)
+}
+
+// ListIdentityProvidersByOrg lists every identity provider across the org's
+// gateways, enriched with gateway + environment context.
+func (s *PlatformGatewayService) ListIdentityProvidersByOrg(orgName string) ([]repositories.IdentityProviderWithContext, error) {
+	return s.gatewayRepo.ListIdentityProvidersByOrg(orgName)
+}
+
 // AssignGatewayToEnvironment creates a mapping between a gateway and an environment
 func (s *PlatformGatewayService) AssignGatewayToEnvironment(gatewayID, environmentID string) error {
 	// Parse UUIDs

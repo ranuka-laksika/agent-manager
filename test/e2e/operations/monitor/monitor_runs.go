@@ -100,8 +100,16 @@ func WaitForMonitorRunCount(client *framework.AMPClient, params *WaitForMonitorR
 		timeout = 10 * time.Minute
 	}
 
+	scope := fmt.Sprintf("org=%s project=%s agent=%s monitor=%s need>=%d success",
+		params.OrgName, params.ProjectName, params.AgentName, params.MonitorName, minSuccessCount)
+
+	var lastDiag string
+	framework.AttachOnFailure("monitor-runs: last poll result", func() string { return lastDiag })
+
 	var successRuns []framework.MonitorRunResponse
+	attempt := 0
 	Eventually(func(g Gomega) {
+		attempt++
 		runs := ListMonitorRuns(g, client, &ListMonitorRunsParams{
 			OrgName:       params.OrgName,
 			ProjectName:   params.ProjectName,
@@ -111,16 +119,21 @@ func WaitForMonitorRunCount(client *framework.AMPClient, params *WaitForMonitorR
 		})
 
 		successRuns = nil
+		statuses := make([]string, 0, len(runs.Runs))
 		for _, run := range runs.Runs {
+			statuses = append(statuses, run.Status)
 			if run.Status == "success" {
 				successRuns = append(successRuns, run)
 			}
 		}
 
+		lastDiag = fmt.Sprintf("%s | attempt %d | %d run(s) statuses=%v, %d success",
+			scope, attempt, len(runs.Runs), statuses, len(successRuns))
 		if len(successRuns) < minSuccessCount && len(runs.Runs) > 0 {
-			ginkgo.GinkgoWriter.Printf("Monitor runs: %d, successful: %d (need %d)\n", len(runs.Runs), len(successRuns), minSuccessCount)
+			ginkgo.GinkgoWriter.Printf("Monitor runs: %d, successful: %d (need %d), statuses=%v\n", len(runs.Runs), len(successRuns), minSuccessCount, statuses)
 		}
-		g.Expect(len(successRuns)).To(BeNumerically(">=", minSuccessCount), "not enough successful runs yet")
+		g.Expect(len(successRuns)).To(BeNumerically(">=", minSuccessCount),
+			"not enough successful runs yet for %s (have %d run(s), statuses=%v)", scope, len(runs.Runs), statuses)
 	}).WithTimeout(timeout).WithPolling(15 * time.Second).Should(Succeed())
 
 	return successRuns
@@ -143,8 +156,16 @@ func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunPar
 		timeout = 10 * time.Minute
 	}
 
+	scope := fmt.Sprintf("org=%s project=%s agent=%s monitor=%s",
+		params.OrgName, params.ProjectName, params.AgentName, params.MonitorName)
+
+	var lastDiag string
+	framework.AttachOnFailure("monitor-run: last poll result", func() string { return lastDiag })
+
 	var completedRun framework.MonitorRunResponse
+	attempt := 0
 	Eventually(func(g Gomega) {
+		attempt++
 		runs := ListMonitorRuns(g, client, &ListMonitorRunsParams{
 			OrgName:       params.OrgName,
 			ProjectName:   params.ProjectName,
@@ -154,25 +175,47 @@ func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunPar
 		})
 
 		var found bool
-		for _, run := range runs.Runs {
-			if run.Status == "failed" {
-				errMsg := ""
-				if run.ErrorMessage != nil {
-					errMsg = *run.ErrorMessage
-				}
-				StopTrying(fmt.Sprintf("monitor run %s failed: %s", run.ID, errMsg)).Now()
-			}
-			if run.Status == "success" {
+		var pending bool
+		var failedRun *framework.MonitorRunResponse
+		statuses := make([]string, 0, len(runs.Runs))
+		for i := range runs.Runs {
+			run := runs.Runs[i]
+			statuses = append(statuses, run.Status)
+			switch run.Status {
+			case "success":
 				completedRun = run
 				found = true
+			case "failed":
+				if failedRun == nil {
+					failedRun = &runs.Runs[i]
+				}
+			default:
+				// pending / running / queued — still in progress.
+				pending = true
+			}
+			if found {
 				break
 			}
 		}
 
-		if !found && len(runs.Runs) > 0 {
-			ginkgo.GinkgoWriter.Printf("Monitor runs: %d, latest status: %s\n", len(runs.Runs), runs.Runs[0].Status)
+		// Fail-fast only when a run failed and nothing succeeded or is still in
+		// progress. The run list may include historical runs in an unspecified
+		// order, so a single failed run must not abort while a newer run could
+		// still be progressing toward (or already at) success.
+		if !found && failedRun != nil && !pending {
+			errMsg := ""
+			if failedRun.ErrorMessage != nil {
+				errMsg = *failedRun.ErrorMessage
+			}
+			lastDiag = fmt.Sprintf("%s | attempt %d | run %s failed: %s", scope, attempt, failedRun.ID, errMsg)
+			StopTrying(fmt.Sprintf("monitor run %s failed (%s): %s", failedRun.ID, scope, errMsg)).Now()
 		}
-		g.Expect(found).To(BeTrue(), "no completed monitor run found yet")
+
+		lastDiag = fmt.Sprintf("%s | attempt %d | %d run(s) statuses=%v, no success yet", scope, attempt, len(runs.Runs), statuses)
+		if !found && len(runs.Runs) > 0 {
+			ginkgo.GinkgoWriter.Printf("Monitor runs: %d, statuses=%v\n", len(runs.Runs), statuses)
+		}
+		g.Expect(found).To(BeTrue(), "no successful monitor run found yet for %s (%d run(s), statuses=%v)", scope, len(runs.Runs), statuses)
 	}).WithTimeout(timeout).WithPolling(15 * time.Second).Should(Succeed())
 
 	return completedRun

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { type AgentPathParams, type CorsConfig, type EnvironmentVariable, type FileMount, type EndpointSchema, type OrgProjPathParams, type PaginationMeta, type ListQuery } from './common';
+import { type AgentPathParams, type CorsConfig, type OAuthConfig, type EnvironmentVariable, type FileMount, type EndpointSchema, type OrgProjPathParams, type PaginationMeta, type ListQuery } from './common';
 
 // Requests
 export interface DeployAgentRequest {
@@ -26,14 +26,18 @@ export interface DeployAgentRequest {
   enableAutoInstrumentation?: boolean;
   instrumentationVersion?: string;
   enableApiKeySecurity?: boolean;
+  enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
+  oauthConfig?: OAuthConfig;
 }
 
 export interface UpdateAgentDeploySettingsRequest {
   environmentName: string;
   enableAutoInstrumentation?: boolean;
   enableApiKeySecurity?: boolean;
+  enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
+  oauthConfig?: OAuthConfig;
 }
 
 export type UpdateAgentDeploySettingsPathParams = AgentPathParams;
@@ -198,7 +202,9 @@ export interface PromoteAgentRequest {
   files?: FileMount[];
   enableAutoInstrumentation?: boolean;
   enableApiKeySecurity?: boolean;
+  enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
+  oauthConfig?: OAuthConfig;
 }
 
 export interface PromoteAgentResponse {

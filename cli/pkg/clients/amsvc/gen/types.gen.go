@@ -603,6 +603,24 @@ func (e HealthStatusResponseStatus) Valid() bool {
 	}
 }
 
+// Defines values for IdentityProviderType.
+const (
+	Custom IdentityProviderType = "custom"
+	System IdentityProviderType = "system"
+)
+
+// Valid indicates whether the value is a known member of the IdentityProviderType enum.
+func (e IdentityProviderType) Valid() bool {
+	switch e {
+	case Custom:
+		return true
+	case System:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for LLMAccessControlMode.
 const (
 	AllowAll LLMAccessControlMode = "allow_all"
@@ -1758,6 +1776,9 @@ type Configurations struct {
 	// EnableAutoInstrumentation Enable automatic OTEL instrumentation for the agent
 	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
 
+	// EnableOAuthSecurity Enable OAuth security for the agent endpoint. Mutually exclusive with enableApiKeySecurity.
+	EnableOAuthSecurity *bool `json:"enableOAuthSecurity,omitempty"`
+
 	// Env Environment variables
 	Env *[]EnvironmentVariable `json:"env,omitempty"`
 
@@ -1771,6 +1792,9 @@ type Configurations struct {
 	// default. Must be one of the versions supported by the deployment;
 	// unknown values are rejected.
 	InstrumentationVersion *string `json:"instrumentationVersion,omitempty"`
+
+	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
+	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 // CostRateLimit defines model for CostRateLimit.
@@ -2161,6 +2185,9 @@ type DeployAgentRequest struct {
 	// EnableAutoInstrumentation Enable auto instrumentation for observability
 	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
 
+	// EnableOAuthSecurity Enable OAuth security for the agent endpoint. Mutually exclusive with enableApiKeySecurity.
+	EnableOAuthSecurity *bool `json:"enableOAuthSecurity,omitempty"`
+
 	// Env Environment variables
 	Env *[]EnvironmentVariable `json:"env,omitempty"`
 
@@ -2169,6 +2196,9 @@ type DeployAgentRequest struct {
 
 	// ImageId Container image ID to deploy
 	ImageId string `json:"imageId"`
+
+	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
+	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 // DeploymentDetailsResponse defines model for DeploymentDetailsResponse.
@@ -2838,6 +2868,54 @@ type HealthStatusResponse struct {
 
 // HealthStatusResponseStatus Health check result status
 type HealthStatusResponseStatus string
+
+// IdentityProvider A JWT identity provider (token issuer) configured on a gateway. Mirrors a
+// gateway-side jwt-auth `system.keyManagers` entry. Only the fields needed to
+// identify an issuer and validate its tokens are surfaced.
+type IdentityProvider struct {
+	// Description Optional human-readable description (mirror-only).
+	Description *string `json:"description,omitempty"`
+
+	// EnvironmentName Environment this provider's gateway is mapped to (read-only, set on org-wide listing).
+	EnvironmentName *string `json:"environmentName,omitempty"`
+
+	// GatewayId UUID of the gateway this provider is registered to (read-only, set on org-wide listing).
+	GatewayId *string `json:"gatewayId,omitempty"`
+
+	// GatewayName Name of the gateway this provider is registered to (read-only, set on org-wide listing).
+	GatewayName *string `json:"gatewayName,omitempty"`
+
+	// Issuer Expected `iss` claim value for tokens validated by this identity provider.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// JwksUri Remote JWKS endpoint used to fetch signing keys.
+	JwksUri *string `json:"jwksUri,omitempty"`
+
+	// Name Unique identity provider name within the gateway (referenced as an issuer).
+	Name string `json:"name"`
+
+	// SkipTlsVerify Skip TLS verification when fetching the JWKS endpoint (testing/trusted internal only).
+	SkipTlsVerify *bool `json:"skipTlsVerify,omitempty"`
+
+	// Type Provenance of the identity provider. `system` providers (e.g.
+	// ThunderKeyManager) are seeded with the platform and cannot be deleted;
+	// `custom` providers are added by operators via the management script.
+	Type *IdentityProviderType `json:"type,omitempty"`
+}
+
+// IdentityProviderType Provenance of the identity provider. `system` providers (e.g.
+// ThunderKeyManager) are seeded with the platform and cannot be deleted;
+// `custom` providers are added by operators via the management script.
+type IdentityProviderType string
+
+// IdentityProviderListResponse defines model for IdentityProviderListResponse.
+type IdentityProviderListResponse struct {
+	// Count Number of identity providers in this response
+	Count int `json:"count"`
+
+	// List List of identity providers
+	List []IdentityProvider `json:"list"`
+}
 
 // InputInterface Endpoint configurations
 type InputInterface struct {
@@ -3546,6 +3624,34 @@ type MonitorScoresResponse struct {
 	TimeRange   TimeRange `json:"timeRange"`
 }
 
+// OAuthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
+type OAuthConfig struct {
+	// Audiences Accepted token audiences (aud claim). Validation succeeds only when at least one configured audience is present in the token. Empty disables audience validation.
+	Audiences *[]string `json:"audiences,omitempty"`
+
+	// AuthHeaderPrefix Prefix before the token in the header value.
+	AuthHeaderPrefix *string `json:"authHeaderPrefix,omitempty"`
+
+	// ForwardToken When true, the original token header is forwarded to the upstream service after successful validation. When false, it is stripped before the request is proxied.
+	ForwardToken *bool `json:"forwardToken,omitempty"`
+
+	// HeaderName Request header carrying the token.
+	HeaderName *string `json:"headerName,omitempty"`
+
+	// Issuers Issuer names for token validation, referencing identity provider entries configured gateway-side. Must be non-empty when OAuth security is enabled, and every name must be one of the environment's configured identity providers.
+	Issuers *[]string `json:"issuers,omitempty"`
+}
+
+// OidcDiscoveryResponse Issuer metadata resolved from an OpenID Connect discovery document, used to
+// auto-populate the Add Identity Provider dialog.
+type OidcDiscoveryResponse struct {
+	// Issuer The `issuer` value from the discovery document.
+	Issuer string `json:"issuer"`
+
+	// JwksUri The `jwks_uri` value from the discovery document.
+	JwksUri string `json:"jwksUri"`
+}
+
 // OrganizationListItem defines model for OrganizationListItem.
 type OrganizationListItem struct {
 	// CreatedAt Timestamp when the organization was created
@@ -3659,11 +3765,17 @@ type PromoteAgentRequest struct {
 	// EnableAutoInstrumentation Enable auto instrumentation for observability in the target environment
 	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
 
+	// EnableOAuthSecurity Enable OAuth security for the agent endpoint in the target environment. Mutually exclusive with enableApiKeySecurity.
+	EnableOAuthSecurity *bool `json:"enableOAuthSecurity,omitempty"`
+
 	// Env Environment-specific environment variables for the target environment.
 	Env *[]EnvironmentVariable `json:"env,omitempty"`
 
 	// Files Environment-specific file mounts for the target environment.
 	Files *[]FileMount `json:"files,omitempty"`
+
+	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
+	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 
 	// SourceEnvironment Source environment to promote from
 	SourceEnvironment string `json:"sourceEnvironment"`
@@ -4225,8 +4337,14 @@ type UpdateAgentDeploySettingsRequest struct {
 	// EnableAutoInstrumentation Enable auto instrumentation for observability in this environment. Omit to keep the current value.
 	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
 
+	// EnableOAuthSecurity Enable OAuth security for the agent endpoint in this environment. Mutually exclusive with enableApiKeySecurity. Omit to keep the current value.
+	EnableOAuthSecurity *bool `json:"enableOAuthSecurity,omitempty"`
+
 	// EnvironmentName Name of the environment whose deploy settings to update.
 	EnvironmentName string `json:"environmentName"`
+
+	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
+	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 // UpdateAgentKindRequest defines model for UpdateAgentKindRequest.
@@ -4477,6 +4595,21 @@ type UpdateUserRequest struct {
 	Attributes *map[string]string `json:"attributes,omitempty"`
 }
 
+// UpsertIdentityProviderRequest Request body for creating or updating a gateway identity provider (name is taken from the path).
+type UpsertIdentityProviderRequest struct {
+	// Description Optional human-readable description (mirror-only).
+	Description *string `json:"description,omitempty"`
+
+	// Issuer Expected `iss` claim value for tokens validated by this identity provider.
+	Issuer *string `json:"issuer,omitempty"`
+
+	// JwksUri Remote JWKS endpoint used to fetch signing keys.
+	JwksUri *string `json:"jwksUri,omitempty"`
+
+	// SkipTlsVerify Skip TLS verification when fetching the JWKS endpoint.
+	SkipTlsVerify *bool `json:"skipTlsVerify,omitempty"`
+}
+
 // UpstreamAuth defines model for UpstreamAuth.
 type UpstreamAuth struct {
 	// Header Authentication header name
@@ -4646,6 +4779,12 @@ type ListUsersParams struct {
 
 	// Limit Maximum number of results to return
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DiscoverOidcConfigurationParams defines parameters for DiscoverOidcConfiguration.
+type DiscoverOidcConfigurationParams struct {
+	// Url Issuer base URL or full .well-known/openid-configuration URL.
+	Url string `form:"url" json:"url"`
 }
 
 // ListLLMProviderTemplatesParams defines parameters for ListLLMProviderTemplates.
@@ -4928,6 +5067,9 @@ type RegisterGatewayJSONRequestBody = CreateGatewayRequest
 
 // UpdateGatewayJSONRequestBody defines body for UpdateGateway for application/json ContentType.
 type UpdateGatewayJSONRequestBody = UpdateGatewayRequest
+
+// UpsertGatewayIdentityProviderJSONRequestBody defines body for UpsertGatewayIdentityProvider for application/json ContentType.
+type UpsertGatewayIdentityProviderJSONRequestBody = UpsertIdentityProviderRequest
 
 // CreateGitSecretJSONRequestBody defines body for CreateGitSecret for application/json ContentType.
 type CreateGitSecretJSONRequestBody = CreateGitSecretRequest

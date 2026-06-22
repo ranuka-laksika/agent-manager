@@ -26,34 +26,58 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/framework"
 )
 
-// WaitForActiveAIGateway polls the gateways API until an active AI gateway
-// with the given name is found. Returns the gateway UUID.
-func WaitForActiveAIGateway(client *framework.AMPClient, orgName, gatewayName string, timeout time.Duration) string {
+// WaitForActiveGatewayForEnv polls the gateways API until the gateway associated
+// with the given environment reports status ACTIVE. A freshly created environment's
+// gateway takes time to program its routes/auth, so callers should gate any
+// invocation through that environment on this readiness check. Returns the
+// gateway UUID.
+func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName string, timeout time.Duration) string {
 	if timeout == 0 {
 		timeout = 3 * time.Minute
 	}
 
 	path := fmt.Sprintf("/api/v1/orgs/%s/gateways", orgName)
+	scope := fmt.Sprintf("org=%s env=%s", orgName, envName)
+
+	var lastDiag string
+	framework.AttachOnFailure("env-gateway: last poll result", func() string { return lastDiag })
 
 	var gatewayUUID string
 	Eventually(func(g Gomega) {
 		resp, err := client.Get(path)
-		g.Expect(err).NotTo(HaveOccurred(), "list gateways request failed")
+		g.Expect(err).NotTo(HaveOccurred(), "list gateways request failed (%s)", scope)
 		defer resp.Body.Close()
+
+		// A 4xx is a client/config error (bad scope, auth, missing route) that
+		// will not resolve by waiting — fail fast instead of polling to timeout.
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			lastDiag = fmt.Sprintf("%s | list gateways returned %d (non-retryable)", scope, resp.StatusCode)
+			StopTrying(fmt.Sprintf("list gateways returned %d (%s)", resp.StatusCode, scope)).Now()
+		}
 
 		gateways := framework.ExpectStatusAndDecode[framework.GatewayListResponse](g, resp, 200)
 
 		var found bool
 		for _, gw := range gateways.Gateways {
-			if gw.Name == gatewayName && gw.GatewayType == "regular" {
-				ginkgo.GinkgoWriter.Printf("AI Gateway: %s (UUID: %s, status: %s)\n", gw.Name, gw.UUID, gw.Status)
-				g.Expect(gw.Status).To(Equal("ACTIVE"), "AI gateway exists but is not ACTIVE yet")
-				gatewayUUID = gw.UUID
-				found = true
+			for _, env := range gw.Environments {
+				if env.Name == envName {
+					lastDiag = fmt.Sprintf("%s | gateway=%s status=%s", scope, gw.Name, gw.Status)
+					ginkgo.GinkgoWriter.Printf("Gateway for env %q: %s (UUID: %s, status: %s)\n",
+						envName, gw.Name, gw.UUID, gw.Status)
+					g.Expect(gw.Status).To(Equal("ACTIVE"), "gateway %q for env %q exists but is not ACTIVE yet (status=%s)", gw.Name, envName, gw.Status)
+					gatewayUUID = gw.UUID
+					found = true
+					break
+				}
+			}
+			if found {
 				break
 			}
 		}
-		g.Expect(found).To(BeTrue(), "AI gateway %q not found", gatewayName)
+		if !found {
+			lastDiag = fmt.Sprintf("%s | no gateway mapped to env among %d gateway(s)", scope, len(gateways.Gateways))
+		}
+		g.Expect(found).To(BeTrue(), "no gateway found for environment %q among %d gateway(s)", envName, len(gateways.Gateways))
 	}).WithTimeout(timeout).WithPolling(10 * time.Second).Should(Succeed())
 
 	return gatewayUUID

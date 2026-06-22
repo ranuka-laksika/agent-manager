@@ -30,6 +30,9 @@ type DeployAgentRequest struct {
 	// Enable API key security for the agent endpoint
 	EnableApiKeySecurity *bool       `json:"enableApiKeySecurity,omitempty"`
 	CorsConfig           *CORSConfig `json:"corsConfig,omitempty"`
+	// Enable OAuth security for the agent endpoint. Mutually exclusive with enableApiKeySecurity.
+	EnableOAuthSecurity *bool        `json:"enableOAuthSecurity,omitempty"`
+	OauthConfig         *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 // NewDeployAgentRequest instantiates a new DeployAgentRequest object
@@ -43,6 +46,8 @@ func NewDeployAgentRequest(imageId string) *DeployAgentRequest {
 	this.EnableAutoInstrumentation = &enableAutoInstrumentation
 	var enableApiKeySecurity bool = true
 	this.EnableApiKeySecurity = &enableApiKeySecurity
+	var enableOAuthSecurity bool = false
+	this.EnableOAuthSecurity = &enableOAuthSecurity
 	return &this
 }
 
@@ -55,6 +60,8 @@ func NewDeployAgentRequestWithDefaults() *DeployAgentRequest {
 	this.EnableAutoInstrumentation = &enableAutoInstrumentation
 	var enableApiKeySecurity bool = true
 	this.EnableApiKeySecurity = &enableApiKeySecurity
+	var enableOAuthSecurity bool = false
+	this.EnableOAuthSecurity = &enableOAuthSecurity
 	return &this
 }
 
@@ -242,6 +249,70 @@ func (o *DeployAgentRequest) SetCorsConfig(v CORSConfig) {
 	o.CorsConfig = &v
 }
 
+// GetEnableOAuthSecurity returns the EnableOAuthSecurity field value if set, zero value otherwise.
+func (o *DeployAgentRequest) GetEnableOAuthSecurity() bool {
+	if o == nil || IsNil(o.EnableOAuthSecurity) {
+		var ret bool
+		return ret
+	}
+	return *o.EnableOAuthSecurity
+}
+
+// GetEnableOAuthSecurityOk returns a tuple with the EnableOAuthSecurity field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DeployAgentRequest) GetEnableOAuthSecurityOk() (*bool, bool) {
+	if o == nil || IsNil(o.EnableOAuthSecurity) {
+		return nil, false
+	}
+	return o.EnableOAuthSecurity, true
+}
+
+// HasEnableOAuthSecurity returns a boolean if a field has been set.
+func (o *DeployAgentRequest) HasEnableOAuthSecurity() bool {
+	if o != nil && !IsNil(o.EnableOAuthSecurity) {
+		return true
+	}
+
+	return false
+}
+
+// SetEnableOAuthSecurity gets a reference to the given bool and assigns it to the EnableOAuthSecurity field.
+func (o *DeployAgentRequest) SetEnableOAuthSecurity(v bool) {
+	o.EnableOAuthSecurity = &v
+}
+
+// GetOauthConfig returns the OauthConfig field value if set, zero value otherwise.
+func (o *DeployAgentRequest) GetOauthConfig() OAuthConfig {
+	if o == nil || IsNil(o.OauthConfig) {
+		var ret OAuthConfig
+		return ret
+	}
+	return *o.OauthConfig
+}
+
+// GetOauthConfigOk returns a tuple with the OauthConfig field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DeployAgentRequest) GetOauthConfigOk() (*OAuthConfig, bool) {
+	if o == nil || IsNil(o.OauthConfig) {
+		return nil, false
+	}
+	return o.OauthConfig, true
+}
+
+// HasOauthConfig returns a boolean if a field has been set.
+func (o *DeployAgentRequest) HasOauthConfig() bool {
+	if o != nil && !IsNil(o.OauthConfig) {
+		return true
+	}
+
+	return false
+}
+
+// SetOauthConfig gets a reference to the given OAuthConfig and assigns it to the OauthConfig field.
+func (o *DeployAgentRequest) SetOauthConfig(v OAuthConfig) {
+	o.OauthConfig = &v
+}
+
 func (o DeployAgentRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -267,6 +338,12 @@ func (o DeployAgentRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.CorsConfig) {
 		toSerialize["corsConfig"] = o.CorsConfig
+	}
+	if !IsNil(o.EnableOAuthSecurity) {
+		toSerialize["enableOAuthSecurity"] = o.EnableOAuthSecurity
+	}
+	if !IsNil(o.OauthConfig) {
+		toSerialize["oauthConfig"] = o.OauthConfig
 	}
 	return toSerialize, nil
 }

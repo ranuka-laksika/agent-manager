@@ -2078,6 +2078,51 @@ func APIKeyAuthPolicy() map[string]interface{} {
 	}
 }
 
+// OAuth (jwt-auth) policy contract. These literals are the gateway policy's
+// contract (configured under policy_configurations.jwtauth_v1) and are the only
+// place "jwt" wording survives — user-facing surfaces say "OAuth".
+const (
+	OAuthPolicyName    = "jwt-auth"
+	OAuthPolicyVersion = "v1"
+)
+
+// OAuthPolicyParams holds the jwt-auth policy parameters resolved for an agent.
+// The policy is authentication-only: it validates the token issuer, signature,
+// expiry and (optionally) the audience (aud) claim — audience restriction is token
+// validation (confused-deputy defense), not authorization. Authorization params
+// (scopes, required claims) are not supported and are deferred to a future policy.
+type OAuthPolicyParams struct {
+	Issuers          []string
+	Audiences        []string
+	HeaderName       string
+	AuthHeaderPrefix string
+	// ForwardToken controls whether the validated token header is forwarded to
+	// the upstream service (true) or stripped before proxying (false).
+	ForwardToken bool
+}
+
+// OAuthPolicy returns the policy map for OAuth (JWT) authentication. Empty
+// issuers/claims are omitted; header name and prefix are passed through as
+// resolved by the caller, which guarantees non-empty gateway-compatible values
+// (see models.DefaultOAuthHeaderName / DefaultOAuthAuthHeaderPrefix).
+func OAuthPolicy(p OAuthPolicyParams) map[string]interface{} {
+	params := map[string]interface{}{}
+	if len(p.Issuers) > 0 {
+		params["issuers"] = p.Issuers
+	}
+	if len(p.Audiences) > 0 {
+		params["audiences"] = p.Audiences
+	}
+	params["headerName"] = p.HeaderName
+	params["authHeaderPrefix"] = p.AuthHeaderPrefix
+	params["forwardToken"] = p.ForwardToken
+	return map[string]interface{}{
+		"name":    OAuthPolicyName,
+		"version": OAuthPolicyVersion,
+		"params":  params,
+	}
+}
+
 // CORSPolicy returns a CORS policy map with the given allowed origins, methods, headers, and credentials flag.
 func CORSPolicy(allowedOrigins, allowedMethods, allowedHeaders []string, allowCredentials bool) map[string]interface{} {
 	return map[string]interface{}{

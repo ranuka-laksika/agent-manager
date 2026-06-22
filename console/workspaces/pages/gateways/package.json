@@ -51,6 +51,7 @@
     "@wso2/oxygen-ui-icons-react": "0.10.1",
     "@agent-management-platform/views": "workspace:*",
     "@agent-management-platform/api-client": "workspace:*",
+    "@agent-management-platform/auth": "workspace:*",
     "@agent-management-platform/types": "workspace:*",
     "@agent-management-platform/shared-component": "workspace:*",
     "zod": "4.3.6"

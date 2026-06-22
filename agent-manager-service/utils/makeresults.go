@@ -125,6 +125,7 @@ func convertToConfigurations(configs *models.Configurations) *spec.Configuration
 	result := &spec.Configurations{
 		EnableAutoInstrumentation: configs.EnableAutoInstrumentation,
 		EnableApiKeySecurity:      configs.EnableApiKeySecurity,
+		EnableOAuthSecurity:       configs.EnableOAuthSecurity,
 	}
 	if configs.CorsConfig != nil {
 		corsConfig := spec.CORSConfig{
@@ -135,6 +136,16 @@ func convertToConfigurations(configs *models.Configurations) *spec.Configuration
 			AllowCredentials: configs.CorsConfig.AllowCredentials,
 		}
 		result.CorsConfig = &corsConfig
+	}
+	if configs.OAuthConfig != nil {
+		oauthConfig := spec.OAuthConfig{
+			Issuers:          configs.OAuthConfig.Issuers,
+			Audiences:        configs.OAuthConfig.Audiences,
+			HeaderName:       &configs.OAuthConfig.HeaderName,
+			AuthHeaderPrefix: &configs.OAuthConfig.AuthHeaderPrefix,
+			ForwardToken:     &configs.OAuthConfig.ForwardToken,
+		}
+		result.OauthConfig = &oauthConfig
 	}
 	return result
 }

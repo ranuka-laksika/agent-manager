@@ -31,20 +31,22 @@ func TestE2E(t *testing.T) {
 	RunSpecs(t, "AMP E2E Root Suite")
 }
 
-// BeforeSuite runs cleanup of stale e2e resources. All actual tests are in subdirectories.
-var _ = BeforeSuite(func() {
-	cfg := framework.LoadConfig()
 
-	By("Waiting for API readiness")
-	framework.WaitForAPIReady(cfg)
+var _ = Describe("Stale E2E resource cleanup", Label("cleanup"), func() {
+	It("removes stale e2e resources left by prior runs", func() {
+		cfg := framework.LoadConfig()
 
-	By("Creating API client")
-	client, err := framework.NewAMPClient(cfg)
-	Expect(err).NotTo(HaveOccurred(), "failed to create API client")
+		By("Waiting for API readiness")
+		framework.WaitForAPIReady(cfg)
 
-	By("Verifying default organization")
-	framework.VerifyDefaultOrg(client, cfg.DefaultOrg)
+		By("Creating API client")
+		client, err := framework.NewAMPClient(cfg)
+		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 
-	By("Cleaning up stale e2e resources")
-	testsetup.CleanupStaleE2EResources(client, cfg.DefaultOrg)
+		By("Verifying default organization")
+		framework.VerifyDefaultOrg(client, cfg.DefaultOrg)
+
+		By("Cleaning up stale e2e resources")
+		testsetup.CleanupStaleE2EResources(client, cfg.DefaultOrg)
+	})
 })

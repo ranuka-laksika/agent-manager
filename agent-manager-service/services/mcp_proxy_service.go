@@ -25,12 +25,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
-	"net/netip"
-	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -40,6 +36,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
+	"github.com/wso2/agent-manager/agent-manager-service/utils/ssrf"
 )
 
 const (
@@ -62,34 +59,6 @@ var excludedMCPProxyPolicyListNames = map[string]struct{}{
 	"mcp-auth":     {},
 	"mcp-authz":    {},
 	"mcp-rewrite":  {},
-}
-
-var blockedMCPServerIPPrefixes = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"),
-	netip.MustParsePrefix("10.0.0.0/8"),
-	netip.MustParsePrefix("100.64.0.0/10"),
-	netip.MustParsePrefix("127.0.0.0/8"),
-	netip.MustParsePrefix("169.254.0.0/16"),
-	netip.MustParsePrefix("172.16.0.0/12"),
-	netip.MustParsePrefix("192.0.0.0/24"),
-	netip.MustParsePrefix("192.0.2.0/24"),
-	netip.MustParsePrefix("192.168.0.0/16"),
-	netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("198.51.100.0/24"),
-	netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("224.0.0.0/4"),
-	netip.MustParsePrefix("240.0.0.0/4"),
-	netip.MustParsePrefix("::/128"),
-	netip.MustParsePrefix("::1/128"),
-	netip.MustParsePrefix("64:ff9b::/96"),
-	netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("100::/64"),
-	netip.MustParsePrefix("2001:2::/48"),
-	netip.MustParsePrefix("2001:db8::/32"),
-	netip.MustParsePrefix("2002::/16"),
-	netip.MustParsePrefix("fc00::/7"),
-	netip.MustParsePrefix("fe80::/10"),
-	netip.MustParsePrefix("ff00::/8"),
 }
 
 // MCPProxyService handles MCP proxy operations.
@@ -130,7 +99,7 @@ func NewMCPProxyService(
 			gatewayService: gatewayEventsService,
 			apiKeyRepo:     apiKeyRepo,
 		},
-		client:        newMCPHTTPClient(),
+		client:        ssrf.NewClient(mcpRequestTimeout),
 		logger:        logger,
 		encryptionKey: encryptionKey,
 	}
@@ -175,7 +144,6 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 	proxy := &models.MCPProxy{
 		Description: valueOrEmpty(req.Description),
 		CreatedBy:   createdBy,
-		Status:      "pending",
 		Configuration: models.MCPProxyConfig{
 			Name:         name,
 			Version:      version,
@@ -640,7 +608,7 @@ func (s *MCPProxyService) FetchServerInfo(ctx context.Context, req *models.MCPSe
 	}
 
 	endpointURL := strings.TrimSpace(*req.URL)
-	if err := validateMCPServerURL(ctx, endpointURL); err != nil {
+	if err := ssrf.ValidateURL(ctx, endpointURL); err != nil {
 		return nil, fmt.Errorf("%w: %w", utils.ErrInvalidURL, err)
 	}
 
@@ -852,39 +820,13 @@ func convertModelMCPProxyToListItem(proxy *models.MCPProxy) models.MCPProxyListI
 	}
 }
 
-func validateMCPServerURL(ctx context.Context, rawURL string) error {
-	parsedURL, err := url.ParseRequestURI(rawURL)
-	if err != nil {
-		return err
-	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("url must use http or https")
-	}
-	if parsedURL.User != nil {
-		return fmt.Errorf("url must not include user information")
-	}
-	if parsedURL.Host == "" || parsedURL.Hostname() == "" {
-		return fmt.Errorf("url host is required")
-	}
-	if parsedURL.Port() != "" {
-		port, err := strconv.Atoi(parsedURL.Port())
-		if err != nil || port < 1 || port > 65535 {
-			return fmt.Errorf("url port is invalid")
-		}
-	}
-	if err := validateMCPServerHost(ctx, parsedURL.Hostname()); err != nil {
-		return err
-	}
-	return nil
-}
-
 func validateMCPProxyUpstreamURLs(ctx context.Context, upstream models.UpstreamConfig) error {
 	if upstream.Main != nil {
 		mainURL := strings.TrimSpace(upstream.Main.URL)
 		if mainURL == "" {
 			return fmt.Errorf("main upstream url is required")
 		}
-		if err := validateMCPServerURL(ctx, mainURL); err != nil {
+		if err := ssrf.ValidateURL(ctx, mainURL); err != nil {
 			return fmt.Errorf("main upstream url: %w", err)
 		}
 	}
@@ -893,129 +835,11 @@ func validateMCPProxyUpstreamURLs(ctx context.Context, upstream models.UpstreamC
 		if sandboxURL == "" {
 			return nil
 		}
-		if err := validateMCPServerURL(ctx, sandboxURL); err != nil {
+		if err := ssrf.ValidateURL(ctx, sandboxURL); err != nil {
 			return fmt.Errorf("sandbox upstream url: %w", err)
 		}
 	}
 	return nil
-}
-
-func validateMCPServerHost(ctx context.Context, host string) error {
-	_, err := resolvePublicMCPServerIPs(ctx, host)
-	return err
-}
-
-func resolvePublicMCPServerIPs(ctx context.Context, host string) ([]netip.Addr, error) {
-	host = strings.TrimSpace(strings.TrimSuffix(host, "."))
-	if host == "" {
-		return nil, fmt.Errorf("url host is required")
-	}
-	if strings.Contains(host, "%") {
-		return nil, fmt.Errorf("url host must not include an IPv6 zone identifier")
-	}
-	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
-		return nil, fmt.Errorf("url host must not resolve to localhost")
-	}
-	if ip, err := netip.ParseAddr(host); err == nil {
-		if ip.Is4In6() {
-			ip = ip.Unmap()
-		}
-		if !isPublicMCPServerIP(ip) {
-			return nil, fmt.Errorf("url host resolves to a non-public IP address")
-		}
-		return []netip.Addr{ip}, nil
-	}
-
-	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-	if err != nil {
-		return nil, fmt.Errorf("url host could not be resolved: %w", err)
-	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("url host could not be resolved")
-	}
-	publicIPs := make([]netip.Addr, 0, len(ips))
-	for _, ip := range ips {
-		if ip.Is4In6() {
-			ip = ip.Unmap()
-		}
-		if !isPublicMCPServerIP(ip) {
-			return nil, fmt.Errorf("url host resolves to a non-public IP address")
-		}
-		publicIPs = append(publicIPs, ip)
-	}
-	return publicIPs, nil
-}
-
-func isPublicMCPServerIP(ip netip.Addr) bool {
-	if ip.Is4In6() {
-		ip = ip.Unmap()
-	}
-	if !ip.IsValid() || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return false
-	}
-	for _, prefix := range blockedMCPServerIPPrefixes {
-		if prefix.Contains(ip) {
-			return false
-		}
-	}
-	return true
-}
-
-func newMCPHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.Proxy = nil
-	dialer := &mcpServerDialer{dialer: &net.Dialer{Timeout: mcpRequestTimeout}}
-	transport.DialContext = dialer.DialContext
-
-	return &http.Client{
-		Timeout:   mcpRequestTimeout,
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return errors.New("stopped after 10 redirects")
-			}
-			if err := validateMCPServerURL(req.Context(), req.URL.String()); err != nil {
-				return fmt.Errorf("%w: %w", utils.ErrInvalidURL, err)
-			}
-			return nil
-		},
-	}
-}
-
-type mcpServerDialer struct {
-	dialer *net.Dialer
-}
-
-func (d *mcpServerDialer) DialContext(ctx context.Context, network string, address string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-	ips, err := resolvePublicMCPServerIPs(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrInvalidURL, err)
-	}
-
-	var firstErr error
-	for _, ip := range ips {
-		if network == "tcp4" && !ip.Is4() {
-			continue
-		}
-		if network == "tcp6" && !ip.Is6() {
-			continue
-		}
-		conn, err := d.dialer.DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
-		if err == nil {
-			return conn, nil
-		}
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-	if firstErr != nil {
-		return nil, firstErr
-	}
-	return nil, fmt.Errorf("url host has no public IP addresses for network %s", network)
 }
 
 func (s *MCPProxyService) fetchMCPServerInfo(ctx context.Context, endpointURL string, headerName string, headerValue string) (*models.MCPServerInfoFetchResponse, error) {

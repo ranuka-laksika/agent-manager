@@ -31,7 +31,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/project"
 )
 
-var _ = Describe("Project Deletion Conflict", Label("project", "deletion-conflict"), Ordered, func() {
+var _ = Describe("Project deletion: blocked while an agent exists, allowed once empty", Label("project", "deletion-conflict"), Ordered, func() {
 	var (
 		projName  string
 		agentName string
@@ -43,13 +43,13 @@ var _ = Describe("Project Deletion Conflict", Label("project", "deletion-conflic
 	BeforeAll(func() {
 		suffix := uuid.New().String()[:8]
 		projName = framework.E2EProjectPrefix + suffix
-		agentName = "e2e-test-agent-" + suffix
+		agentName = framework.E2EAgentPrefix + suffix
 
-		createProjReq = framework.NewCreateProjectRequest(projName, "E2E Deletion Conflict Project", "Project for testing deletion conflict scenarios")
+		createProjReq = framework.NewCreateProjectRequest(projName, "E2E Deletion Conflict Project", "Project for testing deletion conflict scenarios", "default")
 		createReq = framework.NewExternalAgentRequest(agentName, "External agent for e2e project deletion conflict test")
 	})
 
-	It("should create a project", func() {
+	It("creates a project", func() {
 		By("Creating e2e project")
 		proj := project.CreateProject(Default, Client, &project.CreateProjectParams{
 			OrgName: Cfg.DefaultOrg,
@@ -60,7 +60,7 @@ var _ = Describe("Project Deletion Conflict", Label("project", "deletion-conflic
 		GinkgoWriter.Printf("Project: %s\n", projName)
 	})
 
-	It("should create an external agent in the project", func() {
+	It("creates an external agent in the project", func() {
 		By("Creating external agent")
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
@@ -73,19 +73,19 @@ var _ = Describe("Project Deletion Conflict", Label("project", "deletion-conflic
 		GinkgoWriter.Printf("Agent: %s\n", agentName)
 	})
 
-	It("should fail to delete project with active agent (409 Conflict)", func() {
+	It("rejects deleting a project that still has an agent (409 Conflict)", func() {
 		By("Attempting to delete project with agent")
 		errResp := project.DeleteProjectExpectConflict(Default, Client, Cfg.DefaultOrg, projName)
 		GinkgoWriter.Printf("Conflict error: %s\n", errResp.Message)
 	})
 
-	It("should delete the agent", func() {
+	It("deletes the agent", func() {
 		By("Deleting the agent")
 		agentops.DeleteAgent(Default, Client, Cfg.DefaultOrg, projName, agentName)
 		GinkgoWriter.Printf("Deleted agent: %s\n", agentName)
 	})
 
-	It("should successfully delete the empty project", func() {
+	It("deletes the now-empty project", func() {
 		By("Deleting the project after agent removal (with retry for async cleanup)")
 		Eventually(func(g Gomega) {
 			project.DeleteProject(g, Client, Cfg.DefaultOrg, projName)

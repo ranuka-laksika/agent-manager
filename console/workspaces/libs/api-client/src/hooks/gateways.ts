@@ -23,11 +23,17 @@ import type {
   CreateGatewayPathParams,
   CreateGatewayRequest,
   DeleteGatewayPathParams,
+  DiscoverOidcPathParams,
+  DiscoverOidcQuery,
   GatewayListResponse,
+  OidcDiscoveryResponse,
   GatewayResponse,
   GetGatewayPathParams,
+  IdentityProviderListResponse,
+  ListEnvironmentIdentityProvidersPathParams,
   ListGatewaysPathParams,
   ListGatewaysQuery,
+  ListIdentityProvidersPathParams,
   UpdateGatewayPathParams,
   UpdateGatewayRequest,
 } from "@agent-management-platform/types";
@@ -35,9 +41,12 @@ import {
   assignGatewayToEnvironment,
   createGateway,
   deleteGateway,
+  discoverOidc,
   getGateway,
+  listEnvironmentIdentityProviders,
   listGatewayTokens,
   listGateways,
+  listIdentityProviders,
   removeGatewayFromEnvironment,
   revokeGatewayToken,
   rotateGatewayToken,
@@ -62,6 +71,42 @@ export function useGetGateway(params: GetGatewayPathParams) {
     queryKey: ["gateway", params],
     queryFn: () => getGateway(params, getToken),
     enabled: !!params.orgName && !!params.gatewayId,
+  });
+}
+
+export function useListIdentityProviders(
+  params: ListIdentityProvidersPathParams,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<IdentityProviderListResponse>({
+    queryKey: ["identity-providers", params],
+    queryFn: () => listIdentityProviders(params, getToken),
+    enabled: !!params.orgName,
+  });
+}
+
+/**
+ * Resolves issuer + JWKS URI from an OIDC discovery URL to auto-fill the Add
+ * Identity Provider dialog. Triggered on demand (button click); notifications
+ * are suppressed so the dialog can surface success/failure inline.
+ */
+export function useDiscoverOidc(params: DiscoverOidcPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiMutation<OidcDiscoveryResponse, unknown, DiscoverOidcQuery>({
+    mutationFn: (query) => discoverOidc(params, query, getToken),
+    showSuccess: false,
+    showError: false,
+  });
+}
+
+export function useListEnvironmentIdentityProviders(
+  params: ListEnvironmentIdentityProvidersPathParams,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<IdentityProviderListResponse>({
+    queryKey: ["environment-identity-providers", params],
+    queryFn: () => listEnvironmentIdentityProviders(params, getToken),
+    enabled: !!params.orgName && !!params.environmentId,
   });
 }
 

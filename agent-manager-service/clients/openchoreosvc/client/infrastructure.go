@@ -323,12 +323,17 @@ func (c *openChoreoClient) ListEnvironments(ctx context.Context, namespaceName s
 // -----------------------------------------------------------------------------
 
 func (c *openChoreoClient) GetProjectDeploymentPipeline(ctx context.Context, namespaceName, projectName string) (*models.DeploymentPipelineResponse, error) {
-	// First get the project to find the deployment pipeline reference
+	// First get the project to find the deployment pipeline reference.
+	// A 404 here means the *project* is missing, not the pipeline — surface that
+	// distinctly so callers don't mislabel a missing project as a missing pipeline.
 	projectResp, err := c.ocClient.GetProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project: %w", err)
 	}
 	if projectResp.StatusCode() != http.StatusOK {
+		if projectResp.StatusCode() == http.StatusNotFound {
+			return nil, fmt.Errorf("%w: %s", utils.ErrProjectNotFound, projectName)
+		}
 		return nil, handleErrorResponse(projectResp.StatusCode(), ErrorResponses{
 			JSON401: projectResp.JSON401,
 			JSON403: projectResp.JSON403,

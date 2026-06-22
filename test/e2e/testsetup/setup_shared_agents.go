@@ -1,0 +1,267 @@
+// Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+package testsetup
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/wso2/agent-manager/test/e2e/framework"
+	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
+	"github.com/wso2/agent-manager/test/e2e/operations/build"
+	"github.com/wso2/agent-manager/test/e2e/operations/deployment"
+	dpops "github.com/wso2/agent-manager/test/e2e/operations/deploymentpipeline"
+	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
+	"github.com/wso2/agent-manager/test/e2e/operations/project"
+)
+
+// SetupSharedITHelpdeskAgent provisions an IT helpdesk agent deployed in a
+// single environment using a direct OpenAI key. It is idempotent and intended
+// to be called from each consuming suite's BeforeSuite: the first call builds
+// and deploys the agent; subsequent calls (in this or other suites) find it
+// already active and reuse it, so the build happens exactly once.
+//
+// The returned SharedITHelpdeskAgent's EndpointURL/APIKey are freshly resolved
+// on every call so each suite gets a usable invocation handle.
+func SetupSharedITHelpdeskAgent(client *framework.AMPClient, cfg *framework.Config) *framework.SharedITHelpdeskAgent {
+	Expect(cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set for the single-env IT helpdesk agent")
+
+	agent := &framework.SharedITHelpdeskAgent{
+		ProjectName: framework.E2ESharedProjectName,
+		AgentName:   framework.SharedITHelpdeskAgentName,
+	}
+
+	EnsureProject(client, cfg, agent.ProjectName, "E2E Shared Project", "Shared project for e2e tests")
+	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName,
+		"Single-env IT helpdesk agent shared across agent/configuration/llmprovider domains")
+
+	resolveEndpointAndKey(client, cfg, agent.ProjectName, agent.AgentName, cfg.DefaultEnv,
+		&agent.EndpointURL, &agent.APIKey)
+	agent.InvokeReq = framework.DefaultInvokeRequest()
+
+	ginkgo.GinkgoWriter.Printf("Shared IT helpdesk agent ready: project=%s agent=%s endpoint=%s\n",
+		agent.ProjectName, agent.AgentName, agent.EndpointURL)
+	return agent
+}
+
+// SetupSharedPromotableITHelpdeskAgent provisions the shared promotable IT
+// helpdesk agent: it ensures a second environment and a deployment pipeline
+// exist, builds the agent, and deploys it to the default environment. It is
+// idempotent — the first caller builds/deploys; subsequent callers reuse the
+// active agent.
+//
+// Kind publishing and promotion to the second environment are performed by the
+// consuming tests (the agent domain's promotion suite), not here; this setup
+// only establishes the shared, default-environment baseline.
+func SetupSharedPromotableITHelpdeskAgent(client *framework.AMPClient, cfg *framework.Config) *framework.SharedPromotableITHelpdeskAgent {
+	Expect(cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set for the promotable IT helpdesk agent")
+
+	agent := &framework.SharedPromotableITHelpdeskAgent{
+		AgentName: framework.SharedPromotableITHelpdeskAgentName,
+	}
+	agent.ProjectName, agent.SecondEnv = EnsurePromotableInfra(client, cfg)
+	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName,
+		"Promotable IT helpdesk agent shared across agent/configuration/llmprovider domains")
+
+	resolveEndpointAndKey(client, cfg, agent.ProjectName, agent.AgentName, cfg.DefaultEnv,
+		&agent.EndpointURL, &agent.APIKey)
+	agent.InvokeReq = framework.DefaultInvokeRequest()
+
+	ginkgo.GinkgoWriter.Printf("Shared promotable IT helpdesk agent ready: project=%s agent=%s secondEnv=%s endpoint=%s\n",
+		agent.ProjectName, agent.AgentName, agent.SecondEnv, agent.EndpointURL)
+	return agent
+}
+
+// ensureSharedAgentReady makes the named IT helpdesk agent active in the default
+// environment, idempotently, and returns its build name. It distinguishes the
+// states a shared agent can be in:
+//
+//   - active                  → reuse as-is (no build/deploy).
+//   - missing                 → create it (which triggers build + deploy).
+//   - terminal error/failed   → self-heal: delete and recreate, restoring a
+//     clean state instead of failing on every reuse for the lifetime of a
+//     wedged agent.
+//   - in progress (any other) → wait for the in-flight build/deploy to finish.
+//
+// After create/recreate/in-progress it waits for build success, an active
+// deployment, and runtime readiness.
+func ensureSharedAgentReady(client *framework.AMPClient, cfg *framework.Config, projName, agentName, description string) string {
+	agentPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s", cfg.DefaultOrg, projName, agentName)
+	createReq := framework.NewITHelpdeskAgentRequest(agentName, description, map[string]string{
+		"OPENAI_API_KEY": cfg.OpenAIAPIKey,
+		"DATABASE_URL":   "http://localhost:5000",
+	})
+
+	status := deployment.DeploymentStatus(client, cfg.DefaultOrg, projName, agentName, cfg.DefaultEnv)
+	switch {
+	case status == "active":
+		ginkgo.GinkgoWriter.Printf("Agent %q already active in %s, reusing\n", agentName, cfg.DefaultEnv)
+		return ""
+
+	case isTerminalDeploymentError(status):
+		ginkgo.By(fmt.Sprintf("Agent %q is in terminal %q state; deleting and recreating", agentName, status))
+		agentops.DeleteAgent(Default, client, cfg.DefaultOrg, projName, agentName)
+		Eventually(func() bool {
+			return !framework.ResourceExists(client, agentPath)
+		}).WithTimeout(3*time.Minute).WithPolling(5*time.Second).Should(BeTrue(),
+			"agent %q was not deleted in time", agentName)
+		ginkgo.By(fmt.Sprintf("Recreating agent %q", agentName))
+		agentops.CreateAgent(Default, client, &agentops.CreateAgentParams{
+			OrgName: cfg.DefaultOrg, ProjectName: projName, Request: createReq,
+		})
+
+	case !framework.ResourceExists(client, agentPath):
+		ginkgo.By(fmt.Sprintf("Creating agent %q", agentName))
+		agentops.CreateAgent(Default, client, &agentops.CreateAgentParams{
+			OrgName: cfg.DefaultOrg, ProjectName: projName, Request: createReq,
+		})
+
+	default:
+		ginkgo.GinkgoWriter.Printf("Agent %q exists but is not active yet (status=%q); waiting\n", agentName, status)
+	}
+
+	ginkgo.By(fmt.Sprintf("Waiting for agent %q build", agentName))
+	buildName := build.WaitForBuildSuccess(client, &build.WaitForBuildParams{
+		OrgName:     cfg.DefaultOrg,
+		ProjectName: projName,
+		AgentName:   agentName,
+		Timeout:     20 * time.Minute,
+	})
+
+	ginkgo.By(fmt.Sprintf("Waiting for agent %q deployment", agentName))
+	deployment.WaitForDeployed(client, &deployment.WaitForDeploymentParams{
+		OrgName:     cfg.DefaultOrg,
+		ProjectName: projName,
+		AgentName:   agentName,
+		Environment: cfg.DefaultEnv,
+		Timeout:     5 * time.Minute,
+	})
+
+	ginkgo.By(fmt.Sprintf("Waiting for agent %q readiness", agentName))
+	deployment.WaitForReadiness(client, cfg.DefaultOrg, projName, agentName, cfg.DefaultEnv, 10*time.Minute)
+
+	return buildName
+}
+
+// isTerminalDeploymentError reports whether a deployment status represents a
+// terminal failure (as opposed to a transient in-progress state).
+func isTerminalDeploymentError(status string) bool {
+	switch strings.ToLower(status) {
+	case "error", "failed":
+		return true
+	}
+	return false
+}
+
+// EnsurePromotableInfra idempotently provisions the shared infrastructure for
+// the promotable IT helpdesk agent: the promotion-target environment and a
+// project with a default→secondEnv deployment pipeline. It returns the project
+// name and second environment name. It is safe to call from a test's BeforeAll
+// (when that test owns the promotable agent's lifecycle) or from
+// SetupSharedPromotableITHelpdeskAgent (when a reusing domain just needs the
+// agent to exist).
+func EnsurePromotableInfra(client *framework.AMPClient, cfg *framework.Config) (projName, secondEnv string) {
+	projName = framework.SharedPromotableITHelpdeskProjectName
+	secondEnv = framework.E2ESharedSecondEnv
+	ensureSecondEnvironment(client, cfg, secondEnv)
+	ensurePromotableProject(client, cfg, projName, secondEnv)
+	return projName, secondEnv
+}
+
+// EnsureProject creates the named project if it does not already exist.
+func EnsureProject(client *framework.AMPClient, cfg *framework.Config, name, displayName, description string) {
+	projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", cfg.DefaultOrg, name)
+	if framework.ResourceExists(client, projPath) {
+		return
+	}
+	ginkgo.By(fmt.Sprintf("Creating project %q", name))
+	project.CreateProject(Default, client, &project.CreateProjectParams{
+		OrgName: cfg.DefaultOrg,
+		Request: framework.NewCreateProjectRequest(name, displayName, description, "default"),
+	})
+}
+
+// ensureSecondEnvironment provisions the shared promotion-target environment via
+// the add-environment script if it does not already exist.
+func ensureSecondEnvironment(client *framework.AMPClient, cfg *framework.Config, envName string) {
+	envPath := fmt.Sprintf("/api/v1/orgs/%s/environments/%s", cfg.DefaultOrg, envName)
+	if framework.ResourceExists(client, envPath) {
+		ginkgo.GinkgoWriter.Printf("Shared second environment already exists: %s\n", envName)
+		return
+	}
+	ginkgo.By(fmt.Sprintf("Creating shared second environment %q", envName))
+	scriptParams := envops.FromClient(client)
+	scriptParams.EnvName = envName
+	scriptParams.DisplayName = "E2E Shared Staging"
+	envops.AddEnvironment(scriptParams)
+}
+
+// ensurePromotableProject creates the promotable project (with a
+// default→secondEnv promotion pipeline) if it does not already exist.
+func ensurePromotableProject(client *framework.AMPClient, cfg *framework.Config, projName, secondEnv string) {
+	projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", cfg.DefaultOrg, projName)
+	if framework.ResourceExists(client, projPath) {
+		return
+	}
+
+	ginkgo.By("Creating promotion deployment pipeline")
+	pipeline := dpops.Create(Default, client, cfg.DefaultOrg,
+		framework.CreateDeploymentPipelineRequest{
+			DisplayName: "E2E Shared Promotion Pipeline",
+			PromotionPaths: []framework.PromotionPath{
+				{
+					SourceEnvironmentRef: cfg.DefaultEnv,
+					TargetEnvironmentRefs: []framework.TargetEnvironmentRef{
+						{Name: secondEnv},
+					},
+				},
+			},
+		})
+
+	ginkgo.By(fmt.Sprintf("Creating promotable project %q", projName))
+	projReq := framework.NewCreateProjectRequest(projName, "E2E Promotable Project", "Shared promotable project for e2e tests", pipeline.Name)
+	project.CreateProject(Default, client, &project.CreateProjectParams{
+		OrgName: cfg.DefaultOrg,
+		Request: projReq,
+	})
+}
+
+// resolveEndpointAndKey fetches the agent's endpoint URL in the given
+// environment and mints a fresh API key, storing them via the provided pointers.
+func resolveEndpointAndKey(client *framework.AMPClient, cfg *framework.Config, projName, agentName, env string, endpointURL, apiKey *string) {
+	endpoints := deployment.GetEndpoints(Default, client, cfg.DefaultOrg, projName, agentName, env)
+	for _, ep := range endpoints {
+		if ep.URL != "" {
+			*endpointURL = ep.URL
+			break
+		}
+	}
+	Expect(*endpointURL).NotTo(BeEmpty(), "agent %q endpoint URL in env %q should not be empty", agentName, env)
+
+	apiKeyResp := agentops.CreateAgentAPIKey(Default, client,
+		cfg.DefaultOrg, projName, agentName, env,
+		framework.CreateAgentAPIKeyRequest{
+			DisplayName: "e2e-shared-key",
+			ExpiresAt:   time.Now().Add(24 * time.Hour).Format(time.RFC3339),
+		})
+	*apiKey = apiKeyResp.ApiKey
+	Expect(*apiKey).NotTo(BeEmpty(), "agent %q API key in env %q should not be empty", agentName, env)
+}

@@ -9,7 +9,22 @@ import (
 )
 
 // CreateLLMProvider creates an LLM provider at the org level.
+//
+// If the caller leaves Security/AccessControl unset, they default to the same values
+// the console sends (API-key security enabled + allow-all access). These are required
+// for the provider to deploy with its routes on the gateway — without them the
+// provider deploys with zero routes and the proxy that fronts it returns 404.
 func CreateLLMProvider(g Gomega, client *framework.AMPClient, orgName string, req framework.CreateLLMProviderRequest) framework.LLMProviderResponse {
+	if req.Security == nil {
+		req.Security = &framework.SecurityConfig{
+			Enabled: true,
+			APIKey:  &framework.SecurityAPIKey{Enabled: true, Key: "X-API-Key", In: "header"},
+		}
+	}
+	if req.AccessControl == nil {
+		req.AccessControl = &framework.LLMAccessControl{Mode: "allow_all", Exceptions: []string{}}
+	}
+
 	path := fmt.Sprintf("/api/v1/orgs/%s/llm-providers", orgName)
 
 	resp, err := client.Post(path, req)

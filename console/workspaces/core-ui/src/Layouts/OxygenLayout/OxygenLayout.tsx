@@ -40,14 +40,6 @@ const getFlattenedItems = (
 ) => {
   return [...mainItems, ...groupedItems.flatMap((item) => item.items)];
 };
-const getNavItemByKey = (
-  mainItems: NavigationItem[],
-  groupedItems: NavigationSection[],
-  key: string,
-) => {
-  const flattenedItems = getFlattenedItems(mainItems, groupedItems);
-  return flattenedItems.find((item) => item.label === key);
-};
 
 export function OxygenLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -90,13 +82,6 @@ export function OxygenLayout() {
     await logout();
   };
 
-  const handleNavigationClick = (itemKey: string) => {
-    const item = getNavItemByKey(mainItems, groupedItems, itemKey);
-    if (item?.href) {
-      navigate(item.href);
-    }
-  };
-
   return (
     <AppShell>
       <AppShell.Navbar>
@@ -107,7 +92,7 @@ export function OxygenLayout() {
           />
           <Header.Brand onClick={() => navigate(homePath)}>
             <Header.BrandLogo>
-              <Logo  />
+              <Logo width={192}/>
               {externalLogoComponentModules?.map((module) => (
                 <div key={module.moduleName}>
                   <module.component />
@@ -148,7 +133,6 @@ export function OxygenLayout() {
           activeItem={activeItem}
           mainItems={mainItems}
           groupedItems={groupedItems}
-          onNavigationClick={handleNavigationClick}
         />
       </AppShell.Sidebar>
 

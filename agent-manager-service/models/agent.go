@@ -41,11 +41,13 @@ type AgentResponse struct {
 
 // Configurations contains runtime configurations for an agent
 type Configurations struct {
-	EnableAutoInstrumentation *bool       `json:"enableAutoInstrumentation,omitempty"`
-	InstrumentationVersion    *string     `json:"instrumentationVersion,omitempty"`
-	Env                       []EnvVars   `json:"env,omitempty"`
-	EnableApiKeySecurity      *bool       `json:"enableApiKeySecurity,omitempty"`
-	CorsConfig                *CorsConfig `json:"corsConfig,omitempty"`
+	EnableAutoInstrumentation *bool        `json:"enableAutoInstrumentation,omitempty"`
+	InstrumentationVersion    *string      `json:"instrumentationVersion,omitempty"`
+	Env                       []EnvVars    `json:"env,omitempty"`
+	EnableApiKeySecurity      *bool        `json:"enableApiKeySecurity,omitempty"`
+	CorsConfig                *CorsConfig  `json:"corsConfig,omitempty"`
+	EnableOAuthSecurity       *bool        `json:"enableOAuthSecurity,omitempty"`
+	OAuthConfig               *OAuthConfig `json:"oauthConfig,omitempty"`
 }
 
 type CorsConfig struct {
@@ -54,6 +56,43 @@ type CorsConfig struct {
 	AllowMethods     []string `json:"allowMethods,omitempty"`
 	AllowHeaders     []string `json:"allowHeaders,omitempty"`
 	AllowCredentials *bool    `json:"allowCredentials,omitempty"`
+}
+
+// Default OAuth header values used when a config omits them. They mirror the
+// gateway jwt-auth policy defaults so callers send a standard
+// `Authorization: Bearer <token>` header.
+const (
+	DefaultOAuthHeaderName       = "Authorization"
+	DefaultOAuthAuthHeaderPrefix = "Bearer"
+	// DefaultOAuthForwardToken mirrors the gateway jwt-auth policy default: the
+	// validated token header is forwarded to the upstream service unless disabled.
+	DefaultOAuthForwardToken = true
+)
+
+// ReservedIdentityProviderName is the gateway identity provider used internally
+// for platform trace ingestion auth. It lives in the gateway runtime config but
+// is hidden from users: never mirrored into AMS, never shown in the UI, and never
+// offered as an agent OAuth issuer.
+const ReservedIdentityProviderName = "agent-manager-service"
+
+// SystemIdentityProviderNames are the well-known identity providers seeded with
+// the platform. They are mirrored with type=system and cannot be deleted.
+var SystemIdentityProviderNames = map[string]bool{
+	"ThunderKeyManager": true,
+}
+
+// IsSystemIdentityProvider reports whether the given identity provider name is a
+// platform-seeded system provider.
+func IsSystemIdentityProvider(name string) bool {
+	return SystemIdentityProviderNames[name]
+}
+
+type OAuthConfig struct {
+	Issuers          []string `json:"issuers,omitempty"`
+	Audiences        []string `json:"audiences,omitempty"`
+	HeaderName       string   `json:"headerName,omitempty"`
+	AuthHeaderPrefix string   `json:"authHeaderPrefix,omitempty"`
+	ForwardToken     bool     `json:"forwardToken"`
 }
 
 type AgentType struct {

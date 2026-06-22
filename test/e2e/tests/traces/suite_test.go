@@ -27,9 +27,9 @@ import (
 )
 
 var (
-	Client *framework.AMPClient
-	Cfg    *framework.Config
-	Shared *framework.SharedAgent
+	Client                *framework.AMPClient
+	Cfg                   *framework.Config
+	SharedITHelpdeskAgent *framework.SharedITHelpdeskAgent
 )
 
 func TestTraces(t *testing.T) {
@@ -51,6 +51,6 @@ var _ = BeforeSuite(func() {
 	By("Verifying default organization")
 	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
 
-	By("Setting up shared internal chat agent")
-	Shared = testsetup.SetupSharedAgent(Client, Cfg)
+	By("Reusing shared single-env IT helpdesk agent")
+	SharedITHelpdeskAgent = testsetup.SetupSharedITHelpdeskAgent(Client, Cfg)
 })

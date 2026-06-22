@@ -18,7 +18,6 @@ package framework
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -30,6 +29,13 @@ import (
 // E2EProjectPrefix is the naming prefix for all e2e test projects.
 const E2EProjectPrefix = "e2e-test-"
 
+// E2EAgentPrefix is the naming prefix for all e2e test projects.
+const E2EAgentPrefix = "e2e-test-agent-"
+
+const E2ELLMProviderPrefix = "e2e-test-llm-provider-"
+
+const E2EMonitorPrefix = "e2e-test-mon-monitor-"
+
 // E2EEnvPrefix is the naming prefix for all e2e test environments. It is kept
 // short because environment names are length-constrained: the gateway Service
 // name "api-platform-<org>-<env>-gateway-gateway-runtime" must stay within
@@ -40,15 +46,59 @@ const E2EEnvPrefix = "e2e-"
 // E2ESharedProjectName is the project name used by the shared internal chat agent.
 const E2ESharedProjectName = "e2e-test-shared"
 
-// SharedAgentName is the agent name used by the shared internal chat agent.
-const SharedAgentName = "e2e-test-shared-chat"
+// SharedITHelpdeskAgentName is the fixed name of the single-environment IT
+// helpdesk agent. It is built once and shared, by name, across the
+// agent (lifecycle), configuration (config lifecycle) and llmprovider
+// (post-deploy) domains. It lives in E2ESharedProjectName and uses a direct
+// OpenAI key.
+const SharedITHelpdeskAgentName = "e2e-it-helpdesk"
 
-// SharedAgent holds details of the shared internal chat agent that is
+// SharedPromotableITHelpdeskProjectName is the fixed project that hosts the two-env IT
+// helpdesk agent. A dedicated project is used because it owns a
+// custom two-environment deployment pipeline.
+const SharedPromotableITHelpdeskProjectName = "e2e-test-2env"
+
+// SharedPromotableITHelpdeskAgentName is the fixed name of the two-environment IT
+// helpdesk agent. It is built once and shared, by name, across the
+// agent (promotion), configuration (config on promoted) and llmprovider
+// (post-deploy + promotion) domains, and is the source of the published kind
+// consumed by the catalog domain.
+const SharedPromotableITHelpdeskAgentName = "e2e-it-helpdesk-2env"
+
+// E2ESharedSecondEnv is the fixed promotion-target environment for the shared promotable IT helpdesk agent. It
+// carries the E2EEnvPrefix so the stale-resource sweep tears it down between
+// runs, and is kept short to respect the gateway Service name length limit.
+const E2ESharedSecondEnv = E2EEnvPrefix + "shared-stg"
+
+// E2ESharedKindName is the fixed kind name published by the promotion tests and
+// consumed by the catalog tests. Using a stable name avoids needing cross-suite
+// coordination of a randomly-generated kind name.
+const E2ESharedKindName = "e2e-it-helpdesk-kind"
+
+// E2ESharedKindVersion is the version used when publishing the shared kind.
+const E2ESharedKindVersion = "1.0.0"
+
+// SharedITHelpdeskAgent holds details of the shared internal chat agent that is
 // provisioned once in BeforeSuite and reused by multiple test suites.
-type SharedAgent struct {
+type SharedITHelpdeskAgent struct {
 	ProjectName string          `json:"projectName"`
 	AgentName   string          `json:"agentName"`
 	BuildName   string          `json:"buildName"`
+	EndpointURL string          `json:"endpointURL"`
+	APIKey      string          `json:"apiKey"`
+	InvokeReq   json.RawMessage `json:"invokeReq"`
+}
+
+// SharedPromotableITHelpdeskAgent holds details of the shared two-environment IT helpdesk agent
+// . It is provisioned once (built, deployed to the default
+// environment, and published as a kind) and reused by name across the agent,
+// configuration and llmprovider domains. EndpointURL/APIKey refer to the
+// default environment.
+type SharedPromotableITHelpdeskAgent struct {
+	ProjectName string          `json:"projectName"`
+	AgentName   string          `json:"agentName"`
+	BuildName   string          `json:"buildName"`
+	SecondEnv   string          `json:"secondEnv"`
 	EndpointURL string          `json:"endpointURL"`
 	APIKey      string          `json:"apiKey"`
 	InvokeReq   json.RawMessage `json:"invokeReq"`
@@ -100,25 +150,4 @@ func ResourceExists(client *AMPClient, path string) bool {
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
-}
-
-// IsAgentDeployed checks if the agent is deployed and active in the given environment.
-func IsAgentDeployed(client *AMPClient, cfg *Config, projName, agentName string) bool {
-	path := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/deployments",
-		cfg.DefaultOrg, projName, agentName)
-	resp, err := client.Get(path)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-
-	deploymentsMap := DecodeBody[map[string]DeploymentDetailsResponse](Default, resp)
-	dep, exists := deploymentsMap[cfg.DefaultEnv]
-	if !exists {
-		return false
-	}
-	return dep.Status == "active"
 }

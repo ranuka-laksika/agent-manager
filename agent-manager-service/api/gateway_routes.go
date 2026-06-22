@@ -36,4 +36,12 @@ func RegisterGatewayRoutes(rr *middleware.RouteRegistrar, ctrl controllers.Gatew
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/gateways/{gatewayID}/tokens", rbac.GatewayTokenManage, ctrl.RotateGatewayToken)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}/tokens/{tokenID}", rbac.GatewayTokenManage, ctrl.RevokeGatewayToken)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/status", rbac.GatewayRead, ctrl.GetGatewayStatus)
+
+	// Identity providers (token issuers mirrored from the gateway runtime config)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identity-providers", rbac.GatewayRead, ctrl.ListIdentityProviders)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/identity-providers/discover", rbac.GatewayUpdate, ctrl.DiscoverOidcConfiguration)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/gateways/{gatewayID}/identity-providers", rbac.GatewayRead, ctrl.ListGatewayIdentityProviders)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}", rbac.GatewayUpdate, ctrl.UpsertGatewayIdentityProvider)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/gateways/{gatewayID}/identity-providers/{name}", rbac.GatewayUpdate, ctrl.DeleteGatewayIdentityProvider)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{environmentId}/identity-providers", rbac.GatewayRead, ctrl.ListEnvironmentIdentityProviders)
 }

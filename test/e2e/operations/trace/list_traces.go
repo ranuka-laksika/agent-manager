@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -14,6 +13,20 @@ import (
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
 )
+
+// httpStatusFromErr extracts the HTTP status code from an error produced by
+// ListTraces, which formats non-2xx responses as "status %d: <body>". Returns
+// (code, true) when a leading status code is present, (0, false) otherwise.
+func httpStatusFromErr(err error) (int, bool) {
+	if err == nil {
+		return 0, false
+	}
+	var code int
+	if _, scanErr := fmt.Sscanf(err.Error(), "status %d:", &code); scanErr == nil {
+		return code, true
+	}
+	return 0, false
+}
 
 // ListTracesParams holds query parameters for listing traces.
 type ListTracesParams struct {
@@ -85,8 +98,17 @@ func WaitForTraces(client *framework.AMPClient, params *WaitForTracesParams) fra
 	startTime := time.Now().Add(-5 * time.Minute).UTC().Format(time.RFC3339)
 	endTime := time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339)
 
+	// scope describes exactly what we queried so a failure message is self-explanatory.
+	scope := fmt.Sprintf("org=%s project=%s agent=%s env=%s window=%s..%s",
+		params.Organization, params.Project, params.Agent, params.Environment, startTime, endTime)
+
+	var lastDiag string
+	framework.AttachOnFailure("traces: last query result", func() string { return lastDiag })
+
 	var result framework.TraceOverviewListResponse
+	attempt := 0
 	Eventually(func(g Gomega) {
+		attempt++
 		var err error
 		result, err = ListTraces(client, &ListTracesParams{
 			Organization: params.Organization,
@@ -98,13 +120,24 @@ func WaitForTraces(client *framework.AMPClient, params *WaitForTracesParams) fra
 			Limit:        10,
 		})
 		if err != nil {
-			if strings.Contains(err.Error(), "status 4") {
-				StopTrying(fmt.Sprintf("list traces failed: %v", err)).Now()
+			lastDiag = fmt.Sprintf("%s | attempt %d | request error: %v", scope, attempt, err)
+			// A 4xx is a client/config error (bad scope, auth, missing route) that won't
+			// fix itself by waiting — fail fast with the full status+body from ListTraces.
+			// ListTraces formats non-2xx as "status %d: <body>", so parse the code rather
+			// than substring-matching (a body containing "status 4" must not trip this).
+			if code, ok := httpStatusFromErr(err); ok && code >= 400 && code < 500 {
+				StopTrying(fmt.Sprintf("list traces request failed (%s): %v", scope, err)).Now()
 			}
-			ginkgo.GinkgoWriter.Printf("Traces not available yet: %v\n", err)
+			ginkgo.GinkgoWriter.Printf("[traces] attempt %d (%s): request error: %v\n", attempt, scope, err)
+		} else {
+			lastDiag = fmt.Sprintf("%s | attempt %d | 200 OK, %d trace(s)", scope, attempt, len(result.Traces))
+			ginkgo.GinkgoWriter.Printf("[traces] attempt %d (%s): 200 OK, %d trace(s)\n", attempt, scope, len(result.Traces))
 		}
-		g.Expect(err).NotTo(HaveOccurred(), "list traces failed")
-		g.Expect(result.Traces).NotTo(BeEmpty(), "no traces found yet")
+		g.Expect(err).NotTo(HaveOccurred(), "list traces request failed (%s)", scope)
+		g.Expect(result.Traces).NotTo(BeEmpty(),
+			"observer returned 200 with 0 traces for %s — the agent may be invoked successfully but its "+
+				"spans attributed to a different environment_uid (check the agent token's environment_uid "+
+				"and the per-env OTEL ingest route)", scope)
 	}).WithTimeout(timeout).WithPolling(10 * time.Second).Should(Succeed())
 
 	return result

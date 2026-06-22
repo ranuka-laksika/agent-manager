@@ -29,21 +29,21 @@ import (
 	traceops "github.com/wso2/agent-manager/test/e2e/operations/trace"
 )
 
-var _ = Describe("Traces", Ordered, Label("traces"), func() {
+var _ = Describe("Tracing: invoke an agent and verify trace capture and export", Ordered, Label("traces"), func() {
 	BeforeAll(func() {
-		Expect(Shared).NotTo(BeNil(), "shared agent must be available")
+		Expect(SharedITHelpdeskAgent).NotTo(BeNil(), "shared agent must be available")
 	})
 
-	It("should respond to invocation", func() {
-		endpointURL := Shared.EndpointURL + "/chat"
-		agentops.InvokeAgentEndpoint(endpointURL, Shared.InvokeReq, Shared.APIKey)
+	It("returns a chat response when the agent is invoked", func() {
+		endpointURL := SharedITHelpdeskAgent.EndpointURL + "/chat"
+		agentops.InvokeAgentEndpoint(endpointURL, SharedITHelpdeskAgent.InvokeReq, SharedITHelpdeskAgent.APIKey)
 	})
 
-	It("should have traces available", func() {
+	It("makes the invocation trace available via the API", func() {
 		traces := traceops.WaitForTraces(Client, &traceops.WaitForTracesParams{
 			Organization: Cfg.DefaultOrg,
-			Project:      Shared.ProjectName,
-			Agent:        Shared.AgentName,
+			Project:      SharedITHelpdeskAgent.ProjectName,
+			Agent:        SharedITHelpdeskAgent.AgentName,
 			Environment:  Cfg.DefaultEnv,
 			Timeout:      2 * time.Minute,
 		})
@@ -51,13 +51,13 @@ var _ = Describe("Traces", Ordered, Label("traces"), func() {
 		GinkgoWriter.Printf("Traces found: %d\n", len(traces.Traces))
 	})
 
-	It("should export traces successfully", func() {
+	It("exports the captured traces successfully", func() {
 		var exportedBody []byte
 		Eventually(func(g Gomega) {
 			exportedBody = traceops.ExportTraces(g, Client, &traceops.ExportTracesParams{
 				Organization: Cfg.DefaultOrg,
-				Project:      Shared.ProjectName,
-				Agent:        Shared.AgentName,
+				Project:      SharedITHelpdeskAgent.ProjectName,
+				Agent:        SharedITHelpdeskAgent.AgentName,
 				Environment:  Cfg.DefaultEnv,
 				Limit:        10,
 				SortOrder:    "desc",
