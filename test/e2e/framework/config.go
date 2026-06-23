@@ -28,11 +28,6 @@ type Config struct {
 	IDPTokenURL     string
 	IDPClientID     string
 	IDPClientSecret string
-	// APIToken, when set (AMP_API_TOKEN), is used as the bearer token directly
-	// instead of fetching one via client_credentials. Useful when the
-	// client_credentials service account isn't granted RBAC scopes on the target
-	// deployment — paste a scoped token (e.g. from the console) to run the suite.
-	APIToken         string
 	DefaultOrg       string
 	DefaultProject   string
 	DefaultEnv       string
@@ -50,7 +45,6 @@ func LoadConfig() *Config {
 		IDPTokenURL:      envOrDefault("IDP_TOKEN_URL", "http://thunder.amp.localhost:8080/oauth2/token"),
 		IDPClientID:      envOrDefault("IDP_CLIENT_ID", "amp-api-client"),
 		IDPClientSecret:  envOrDefault("IDP_CLIENT_SECRET", "amp-api-client-secret"),
-		APIToken:         envOrDefault("AMP_API_TOKEN", ""),
 		DefaultOrg:       envOrDefault("DEFAULT_ORG", "default"),
 		DefaultProject:   envOrDefault("DEFAULT_PROJECT", "default"),
 		DefaultEnv:       envOrDefault("DEFAULT_ENV", "default"),
