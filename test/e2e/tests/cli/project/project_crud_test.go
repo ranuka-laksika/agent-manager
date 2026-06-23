@@ -27,7 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
-	cliproject "github.com/wso2/agent-manager/test/e2e/operations/cli"
+	cliproject "github.com/wso2/agent-manager/test/e2e/operations/cli/project"
 )
 
 var _ = Describe("amctl project CRUD", Label("cli", "project"), Ordered, func() {
