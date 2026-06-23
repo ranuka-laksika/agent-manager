@@ -31,7 +31,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/project"
 )
 
-var _ = Describe("Project deletion: blocked while an agent exists, allowed once empty", Label("project", "deletion-conflict"), Ordered, func() {
+var _ = Describe("Project management:", Label("project", "deletion-conflict"), Ordered, func() {
 	var (
 		projName  string
 		agentName string

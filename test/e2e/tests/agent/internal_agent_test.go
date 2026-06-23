@@ -38,7 +38,7 @@ import (
 	traceops "github.com/wso2/agent-manager/test/e2e/operations/trace"
 )
 
-var _ = Describe("Internal chat agent: build → deploy → invoke → observe (single environment)", Label("agent", "internal-agent"), Ordered, func() {
+var _ = Describe("Internal chat agent in default environment:", Label("agent", "internal-agent"), Ordered, func() {
 	const (
 		projectName = framework.E2ESharedProjectName
 		agentName   = framework.SharedITHelpdeskAgentName

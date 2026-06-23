@@ -37,7 +37,7 @@ import (
 	llmproviderop "github.com/wso2/agent-manager/test/e2e/operations/llmprovider"
 )
 
-var _ = Describe("External agent configured with a LLM provider with guardrails", Label("llm-provider", "external-agent"), Ordered, func() {
+var _ = Describe("LLM provider configured for an external agent:", Label("llm-provider", "external-agent"), Ordered, func() {
 	var (
 		agentName string
 		suffix    string

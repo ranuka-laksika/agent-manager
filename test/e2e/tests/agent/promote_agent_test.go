@@ -44,7 +44,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("Agent promotion: deploy in default env, promote to a second env, verify both", Label("agent", "promotion"), Ordered, func() {
+var _ = Describe("Internal chat agent promotion across environments:", Label("agent", "promotion"), Ordered, func() {
 	const agentName = framework.SharedPromotableITHelpdeskAgentName
 
 	var (

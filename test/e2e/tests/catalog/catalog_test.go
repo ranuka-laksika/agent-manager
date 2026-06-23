@@ -40,7 +40,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("Agent catalog: publish a kind, create an agent from it, deploy and promote", Label("catalog"), Ordered, func() {
+var _ = Describe("Agent catalog:", Label("catalog"), Ordered, func() {
 	var (
 		promotable    *framework.SharedPromotableITHelpdeskAgent
 		fromKindAgent string

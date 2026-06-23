@@ -32,7 +32,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/deployment"
 )
 
-var _ = Describe("Agent configuration: update env vars, redeploy, and verify in a single environment", Label("configuration", "single-env"), Ordered, func() {
+var _ = Describe("Agent runtime configurations:", Label("configuration", "single-env"), Ordered, func() {
 	var (
 		sensitiveSecretRef string
 		lastDeployedBefore time.Time

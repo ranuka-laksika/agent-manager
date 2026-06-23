@@ -32,18 +32,12 @@ type AMPClient struct {
 	cfg        *Config
 }
 
-// NewAMPClient creates a new API client. It uses cfg.APIToken when set (an
-// override for environments where the client_credentials service account can't
-// obtain scoped tokens); otherwise it fetches a scoped OAuth2 token from Thunder
-// IDP via the client_credentials grant.
+// NewAMPClient creates a new API client. It fetches a scoped OAuth2 token from
+// Thunder IDP via the client_credentials grant.
 func NewAMPClient(cfg *Config) (*AMPClient, error) {
-	token := cfg.APIToken
-	if token == "" {
-		var err error
-		token, err = FetchToken(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("fetch auth token: %w", err)
-		}
+	token, err := FetchToken(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("fetch auth token: %w", err)
 	}
 
 	return &AMPClient{

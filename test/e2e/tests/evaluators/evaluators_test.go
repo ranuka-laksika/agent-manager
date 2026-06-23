@@ -27,7 +27,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/evaluator"
 )
 
-var _ = Describe("Evaluators: list built-ins and create a custom code evaluator", Ordered, Label("evaluators"), func() {
+var _ = Describe("Evaluators:", Ordered, Label("evaluators"), func() {
 	var (
 		builtinEvalIdentifier string
 		customEvalIdentifier  string

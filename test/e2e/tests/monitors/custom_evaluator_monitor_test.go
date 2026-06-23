@@ -32,7 +32,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past monitor with a custom evaluator: create, run, and score", Ordered, Label("monitors", "custom-evaluator"), func() {
+var _ = Describe("Past monitor with a custom evaluator:", Ordered, Label("monitors", "custom-evaluator"), func() {
 	var (
 		suffix                string
 		traceStartTime        time.Time

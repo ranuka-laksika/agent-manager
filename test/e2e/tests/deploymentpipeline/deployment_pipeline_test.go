@@ -28,7 +28,7 @@ import (
 	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
 )
 
-var _ = Describe("Deployment pipeline: with two environment promotion path, then delete", Label("deployment-pipeline"), Ordered, func() {
+var _ = Describe("Deployment pipeline management:", Label("deployment-pipeline"), Ordered, func() {
 	var (
 		stagingEnv   string
 		pipelineName string

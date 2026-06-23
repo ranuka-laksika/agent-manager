@@ -28,7 +28,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("External agent: registration and token issuance", Label("agent", "external-agent"), Ordered, func() {
+var _ = Describe("External agent:", Label("agent", "external-agent"), Ordered, func() {
 	var (
 		agentName string
 		createReq framework.CreateAgentRequest

@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past monitor with a built-in evaluator: run, log, score, and rerun", Ordered, Label("monitors", "past-monitor"), func() {
+var _ = Describe("Past monitor with a built-in evaluator:", Ordered, Label("monitors", "past-monitor"), func() {
 	var (
 		suffix                string
 		traceStartTime        time.Time

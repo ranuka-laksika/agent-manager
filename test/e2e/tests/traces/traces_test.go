@@ -29,7 +29,7 @@ import (
 	traceops "github.com/wso2/agent-manager/test/e2e/operations/trace"
 )
 
-var _ = Describe("Tracing: invoke an agent and verify trace capture and export", Ordered, Label("traces"), func() {
+var _ = Describe("Basic tracing functionality:", Ordered, Label("traces"), func() {
 	BeforeAll(func() {
 		Expect(SharedITHelpdeskAgent).NotTo(BeNil(), "shared agent must be available")
 	})

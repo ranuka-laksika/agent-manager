@@ -299,7 +299,7 @@ e2e-test:
 	@echo "Running E2E tests..."
 	@cd test/e2e && set -a && [ -f .env ] && . ./.env; set +a && \
 		go run github.com/onsi/ginkgo/v2/ginkgo -v --procs=1 --timeout 30m --poll-progress-after=600s \
-		--junit-report=e2e-report.xml --output-dir=. \
+		--keep-going --junit-report=e2e-report.xml --output-dir=. \
 		$(if $(FOCUS),--focus="$(FOCUS)") $(if $(SUITE),./tests/$(SUITE)/,./tests/...)
 
 

@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Future monitor: schedule, generate traces, run, and delete", Ordered, Label("monitors", "future-monitor"), func() {
+var _ = Describe("Future monitor:", Ordered, Label("monitors", "future-monitor"), func() {
 	var (
 		suffix                string
 		builtinEvalIdentifier string

@@ -28,7 +28,7 @@ import (
 	envops "github.com/wso2/agent-manager/test/e2e/operations/environment"
 )
 
-var _ = Describe("Environment: create and remove via the environment scripts", Label("environment"), Ordered, func() {
+var _ = Describe("Environment management:", Label("environment"), Ordered, func() {
 	var (
 		envName      string
 		scriptParams *envops.ScriptParams

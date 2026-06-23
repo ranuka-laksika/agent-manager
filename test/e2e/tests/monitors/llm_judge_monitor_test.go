@@ -33,7 +33,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/operations/monitor"
 )
 
-var _ = Describe("Past monitor with an LLM-judge evaluator: create, run, and score", Ordered, Label("monitors", "llm-judge"), func() {
+var _ = Describe("Past monitor with an LLM-judge evaluator:", Ordered, Label("monitors", "llm-judge"), func() {
 	var (
 		suffix              string
 		traceStartTime      time.Time
