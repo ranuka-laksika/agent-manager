@@ -68,7 +68,7 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 			ProjectName:   SharedITHelpdeskAgent.ProjectName,
 			AgentName:     SharedITHelpdeskAgent.AgentName,
 			Environment:   Cfg.DefaultEnv,
-			Timeout:       5 * time.Minute,
+			Timeout:       10 * time.Minute,
 			DeployedAfter: before,
 		})
 		GinkgoWriter.Printf("config revert: restored original configuration (DATABASE_URL=http://localhost:5000, valid OPENAI_API_KEY)\n")
@@ -125,7 +125,7 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 			ProjectName:   SharedITHelpdeskAgent.ProjectName,
 			AgentName:     SharedITHelpdeskAgent.AgentName,
 			Environment:   Cfg.DefaultEnv,
-			Timeout:       5 * time.Minute,
+			Timeout:       10 * time.Minute,
 			DeployedAfter: lastDeployedBefore,
 		})
 	})

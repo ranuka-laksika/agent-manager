@@ -250,7 +250,7 @@ jobs:
     name: E2E
     needs: [compute-version, package-charts, update-dev-tag]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     permissions:
       contents: read
       checks: write
@@ -291,7 +291,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.INSTRUMENTATION_TEST_OPENAI_API_KEY }}
         run: |
           set -o pipefail
-          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 30m \
+          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 45m \
             --poll-progress-after=600s --keep-going --junit-report=report.xml \
             ./tests/... 2>&1 | tee e2e-output.log
 

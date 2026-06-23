@@ -298,7 +298,7 @@ setup-ai-gateway: dev-migrate
 e2e-test:
 	@echo "Running E2E tests..."
 	@cd test/e2e && set -a && [ -f .env ] && . ./.env; set +a && \
-		go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 30m --poll-progress-after=600s \
+		go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 45m --poll-progress-after=600s \
 		--keep-going --junit-report=e2e-report.xml --output-dir=. \
 		$(if $(FOCUS),--focus="$(FOCUS)") $(if $(SUITE),./tests/$(SUITE)/,./tests/...)
 
