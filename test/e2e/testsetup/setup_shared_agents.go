@@ -43,22 +43,30 @@ import (
 // The returned SharedITHelpdeskAgent's EndpointURL/APIKey are freshly resolved
 // on every call so each suite gets a usable invocation handle.
 func SetupSharedITHelpdeskAgent(client *framework.AMPClient, cfg *framework.Config) *framework.SharedITHelpdeskAgent {
-	Expect(cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set for the single-env IT helpdesk agent")
+	return SetupITHelpdeskAgent(client, cfg, framework.SharedITHelpdeskAgentName,
+		"Single-env IT helpdesk agent shared across agent/configuration/llmprovider domains")
+}
+
+// SetupITHelpdeskAgent provisions (idempotently) an IT helpdesk agent with the
+// given name in the shared project and returns a usable invocation handle. The
+// shared agent uses a well-known name; suites that mutate an agent's config (and
+// must not poison the shared one) pass their own dedicated name instead.
+func SetupITHelpdeskAgent(client *framework.AMPClient, cfg *framework.Config, agentName, description string) *framework.SharedITHelpdeskAgent {
+	Expect(cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set for the IT helpdesk agent")
 
 	agent := &framework.SharedITHelpdeskAgent{
 		ProjectName: framework.E2ESharedProjectName,
-		AgentName:   framework.SharedITHelpdeskAgentName,
+		AgentName:   agentName,
 	}
 
 	EnsureProject(client, cfg, agent.ProjectName, "E2E Shared Project", "Shared project for e2e tests")
-	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName,
-		"Single-env IT helpdesk agent shared across agent/configuration/llmprovider domains")
+	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName, description)
 
 	resolveEndpointAndKey(client, cfg, agent.ProjectName, agent.AgentName, cfg.DefaultEnv,
 		&agent.EndpointURL, &agent.APIKey)
 	agent.InvokeReq = framework.DefaultInvokeRequest()
 
-	ginkgo.GinkgoWriter.Printf("Shared IT helpdesk agent ready: project=%s agent=%s endpoint=%s\n",
+	ginkgo.GinkgoWriter.Printf("IT helpdesk agent ready: project=%s agent=%s endpoint=%s\n",
 		agent.ProjectName, agent.AgentName, agent.EndpointURL)
 	return agent
 }
@@ -81,7 +89,23 @@ func SynchronizedSharedITHelpdeskAgent(
 	client **framework.AMPClient,
 	agent **framework.SharedITHelpdeskAgent,
 ) (func() []byte, func([]byte)) {
-	provision := func() []byte {
+	return SynchronizedITHelpdeskAgent(SetupSharedITHelpdeskAgent, cfg, client, agent)
+}
+
+// SynchronizedITHelpdeskAgent builds the two SynchronizedBeforeSuite phase
+// functions around a provisioner that runs once on process #1. Phase 1 sets up a
+// client, calls provision, and returns the resulting agent as JSON; phase 2 runs
+// on every process to build that process's own client and decode the handle into
+// the provided pointers. Use it directly with a custom provisioner (e.g. a
+// suite-private agent name); SynchronizedSharedITHelpdeskAgent wraps it for the
+// shared agent.
+func SynchronizedITHelpdeskAgent(
+	provision func(*framework.AMPClient, *framework.Config) *framework.SharedITHelpdeskAgent,
+	cfg **framework.Config,
+	client **framework.AMPClient,
+	agent **framework.SharedITHelpdeskAgent,
+) (func() []byte, func([]byte)) {
+	phase1 := func() []byte {
 		c := framework.LoadConfig()
 		ginkgo.By("Waiting for API readiness")
 		framework.WaitForAPIReady(c)
@@ -90,24 +114,23 @@ func SynchronizedSharedITHelpdeskAgent(
 		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 		ginkgo.By("Verifying default organization")
 		framework.VerifyDefaultOrg(cl, c.DefaultOrg)
-		ginkgo.By("Provisioning shared single-env IT helpdesk agent")
-		data, err := json.Marshal(SetupSharedITHelpdeskAgent(cl, c))
-		Expect(err).NotTo(HaveOccurred(), "failed to marshal shared agent")
+		data, err := json.Marshal(provision(cl, c))
+		Expect(err).NotTo(HaveOccurred(), "failed to marshal agent")
 		return data
 	}
 
-	distribute := func(data []byte) {
+	phase2 := func(data []byte) {
 		*cfg = framework.LoadConfig()
 		framework.WaitForAPIReady(*cfg)
 		cl, err := framework.NewAMPClient(*cfg)
 		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 		*client = cl
 		a := &framework.SharedITHelpdeskAgent{}
-		Expect(json.Unmarshal(data, a)).To(Succeed(), "failed to decode shared agent")
+		Expect(json.Unmarshal(data, a)).To(Succeed(), "failed to decode agent")
 		*agent = a
 	}
 
-	return provision, distribute
+	return phase1, phase2
 }
 
 // SetupSharedPromotableITHelpdeskAgent provisions the shared promotable IT
@@ -227,7 +250,7 @@ func isTerminalDeploymentError(status string) bool {
 // SetupSharedPromotableITHelpdeskAgent (when a reusing domain just needs the
 // agent to exist).
 func EnsurePromotableInfra(client *framework.AMPClient, cfg *framework.Config) (projName, secondEnv string) {
-	projName = framework.SharedPromotableITHelpdeskProjectName
+	projName = framework.E2ESharedProjectWithMultiEnvDepPipeline
 	secondEnv = framework.E2ESharedSecondEnv
 	ensureSecondEnvironment(client, cfg, secondEnv)
 	ensurePromotableProject(client, cfg, projName, secondEnv)

@@ -61,6 +61,11 @@ var _ = Describe("LLM provider configured for an external agent:", Label("llm-pr
 		createReq = framework.NewExternalAgentRequest(agentName, "External agent for e2e LLM provider guardrails test")
 	})
 
+	// This agent is single-use; delete it so it doesn't accumulate.
+	AfterAll(func() {
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName)
+	})
+
 	It("finds an active AI gateway for the default environment", func() {
 		gatewayUUID = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 	})

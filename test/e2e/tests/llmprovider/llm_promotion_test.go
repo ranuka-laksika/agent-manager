@@ -77,6 +77,12 @@ var _ = Describe("LLM provider configured across environments:", Label("llm-prov
 		invokeReq = framework.DefaultInvokeRequest()
 	})
 
+	// This agent is single-use; delete it so its workload pods (default + second
+	// environment) are freed.
+	AfterAll(func() {
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, projectName, agentName)
+	})
+
 	It("finds active AI gateways in both environments", func() {
 		gatewayUUIDEnv1 = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 		gatewayUUIDEnv2 = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, secondEnv, 3*time.Minute)

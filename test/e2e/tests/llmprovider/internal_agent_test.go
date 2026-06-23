@@ -62,6 +62,11 @@ var _ = Describe("LLM provider configured for an internal agent:", Label("llm-pr
 		)
 	})
 
+	// This agent is single-use; delete it so its workload pod is freed.
+	AfterAll(func() {
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName)
+	})
+
 	It("finds an active AI gateway for the default environment", func() {
 		gatewayUUID = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 	})

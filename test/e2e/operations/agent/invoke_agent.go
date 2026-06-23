@@ -29,10 +29,23 @@ import (
 )
 
 // InvokeAgentEndpoint sends a POST request with the given body to an absolute
-// endpoint URL and returns the raw response body as a string.
-// It retries on transient errors (503, 502, connection errors) using Eventually.
-// The apiKey is sent as an X-API-Key header for authentication.
-func InvokeAgentEndpoint(endpointURL string, body any, apiKey string) string {
+// endpoint URL and returns the raw response body as a string. The apiKey is sent
+// as an X-API-Key header. It always retries past transient gateway warmup
+// (502/503/504 and 401/403) using Eventually.
+//
+// The optional requireOK controls what counts as success once the request
+// reaches the runtime; it defaults to true when omitted:
+//   - true (default): the response must be 200 with a non-empty body (a real chat
+//     result); any other status fails the spec. Use for normal invocations.
+//   - false: any non-transient status is accepted and its body returned. Use to
+//     provoke runtime behaviour (e.g. a failing LLM call) where the response is
+//     expected to be an error rather than a chat completion.
+func InvokeAgentEndpoint(endpointURL string, body any, apiKey string, requireOK ...bool) string {
+	required := true
+	if len(requireOK) > 0 {
+		required = requireOK[0]
+	}
+
 	data, err := json.Marshal(body)
 	Expect(err).NotTo(HaveOccurred(), "marshal agent invocation body")
 
@@ -65,16 +78,20 @@ func InvokeAgentEndpoint(endpointURL string, body any, apiKey string) string {
 			return
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			StopTrying(fmt.Sprintf("agent invocation returned status %d: %s", resp.StatusCode, string(respBody))).Now()
-		}
-
 		result = string(respBody)
-		if result == "" {
-			StopTrying("agent invocation returned empty response").Now()
+
+		// Any other status means the request reached the runtime. When required is
+		// false that's all we need; otherwise it must be a 200 with a non-empty body.
+		if required {
+			if resp.StatusCode != http.StatusOK {
+				StopTrying(fmt.Sprintf("agent invocation returned status %d: %s", resp.StatusCode, string(respBody))).Now()
+			}
+			if result == "" {
+				StopTrying("agent invocation returned empty response").Now()
+			}
 		}
 
-		ginkgo.GinkgoWriter.Printf("Agent invocation response (%d bytes): %.200s\n", len(result), result)
+		ginkgo.GinkgoWriter.Printf("Agent invocation response (status %d, %d bytes): %.200s\n", resp.StatusCode, len(result), result)
 	}).WithTimeout(3 * time.Minute).WithPolling(10 * time.Second).Should(Succeed())
 
 	return result

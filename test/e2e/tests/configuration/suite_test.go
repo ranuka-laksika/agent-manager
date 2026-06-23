@@ -16,14 +16,17 @@
 
 // Package configuration holds e2e tests for the agent configuration domain:
 // redeploying with modified environment variables, verifying non-secret config
-// changes, and detecting invalid secrets. It reuses the shared single-env IT
-// helpdesk agent rather than building its own.
+// changes, and detecting invalid secrets. These tests deliberately break the
+// agent's config (a bad OPENAI_API_KEY) and redeploy, so the suite builds its
+// OWN dedicated, disposable agent rather than reusing the shared one — a wedged
+// config redeploy must not poison a fixture other suites depend on.
 
 package configuration
 
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -37,16 +40,24 @@ var Client *framework.AMPClient
 // Cfg is the shared test configuration.
 var Cfg *framework.Config
 
-// SharedITHelpdeskAgent is the shared single-environment IT helpdesk agent.
-var SharedITHelpdeskAgent *framework.SharedITHelpdeskAgent
+// ConfigAgent is this suite's own disposable IT helpdesk agent. It is uniquely
+// named per run so a broken/wedged config never affects other suites.
+var ConfigAgent *framework.SharedITHelpdeskAgent
 
 func TestConfiguration(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Configuration Suite")
 }
 
-// Under `ginkgo -p` the shared agent is provisioned once (on a single process)
-// and decoded by every process; see testsetup.SynchronizedSharedITHelpdeskAgent.
+// The dedicated agent is provisioned once (on a single process) and decoded by
+// every process; see testsetup.SynchronizedITHelpdeskAgent.
 var _ = SynchronizedBeforeSuite(
-	testsetup.SynchronizedSharedITHelpdeskAgent(&Cfg, &Client, &SharedITHelpdeskAgent),
+	testsetup.SynchronizedITHelpdeskAgent(
+		func(client *framework.AMPClient, cfg *framework.Config) *framework.SharedITHelpdeskAgent {
+			name := framework.E2EAgentPrefix + uuid.New().String()[:8]
+			return testsetup.SetupITHelpdeskAgent(client, cfg, name,
+				"Dedicated, disposable IT helpdesk agent for the configuration suite")
+		},
+		&Cfg, &Client, &ConfigAgent,
+	),
 )

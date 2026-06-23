@@ -41,6 +41,11 @@ var _ = Describe("External agent:", Label("agent", "external-agent"), Ordered, f
 		createReq = framework.NewExternalAgentRequest(agentName, "Externa agent registered by the external-agent lifecycle e2e tests")
 	})
 
+	// This agent is single-use; delete it so it doesn't accumulate.
+	AfterAll(func() {
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, framework.E2ESharedProjectName, agentName)
+	})
+
 	It("registers an external agent that points at an already-hosted agent", func() {
 		By("Creating external agent in shared project")
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{

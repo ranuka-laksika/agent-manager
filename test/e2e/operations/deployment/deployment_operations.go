@@ -67,7 +67,7 @@ func WaitForReadiness(client *framework.AMPClient, orgName, projName, agentName,
 func WaitForDeployed(client *framework.AMPClient, params *WaitForDeploymentParams) {
 	timeout := params.Timeout
 	if timeout == 0 {
-		timeout = 10 * time.Minute
+		timeout = 5 * time.Minute
 	}
 
 	path := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/deployments",

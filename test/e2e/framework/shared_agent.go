@@ -26,44 +26,21 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// E2EProjectPrefix is the naming prefix for all e2e test projects.
+// E2EPrefix list for naming resources.
 const E2EProjectPrefix = "e2e-test-"
-
-// E2EAgentPrefix is the naming prefix for all e2e test projects.
 const E2EAgentPrefix = "e2e-test-agent-"
-
 const E2ELLMProviderPrefix = "e2e-test-llm-provider-"
-
 const E2EMonitorPrefix = "e2e-test-mon-monitor-"
 
 // E2EEnvPrefix is the naming prefix for all e2e test environments. It is kept
-// short because environment names are length-constrained: the gateway Service
-// name "api-platform-<org>-<env>-gateway-gateway-runtime" must stay within
-// Kubernetes' 63-char metadata limit. The stale-resource sweep uses this prefix
-// to identify (and tear down) environments left behind by tests.
+// short because environment names are length-constrained:
 const E2EEnvPrefix = "e2e-"
 
-// E2ESharedProjectName is the project name used by the shared internal chat agent.
+// Shared Projects and Agent
 const E2ESharedProjectName = "e2e-test-shared"
-
-// SharedITHelpdeskAgentName is the fixed name of the single-environment IT
-// helpdesk agent. It is built once and shared, by name, across the
-// agent (lifecycle), configuration (config lifecycle) and llmprovider
-// (post-deploy) domains. It lives in E2ESharedProjectName and uses a direct
-// OpenAI key.
 const SharedITHelpdeskAgentName = "e2e-it-helpdesk"
-
-// SharedPromotableITHelpdeskProjectName is the fixed project that hosts the two-env IT
-// helpdesk agent. A dedicated project is used because it owns a
-// custom two-environment deployment pipeline.
-const SharedPromotableITHelpdeskProjectName = "e2e-test-2env"
-
-// SharedPromotableITHelpdeskAgentName is the fixed name of the two-environment IT
-// helpdesk agent. It is built once and shared, by name, across the
-// agent (promotion), configuration (config on promoted) and llmprovider
-// (post-deploy + promotion) domains, and is the source of the published kind
-// consumed by the catalog domain.
-const SharedPromotableITHelpdeskAgentName = "e2e-it-helpdesk-2env"
+const E2ESharedProjectWithMultiEnvDepPipeline  = "e2e-test-multi-"
+const SharedPromotableITHelpdeskAgentName = "e2e-it-helpdesk-multi"
 
 // E2ESharedSecondEnv is the fixed promotion-target environment for the shared promotable IT helpdesk agent. It
 // carries the E2EEnvPrefix so the stale-resource sweep tears it down between

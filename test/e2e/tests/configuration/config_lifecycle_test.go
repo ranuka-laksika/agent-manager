@@ -14,8 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Validates configuration updates on the shared single-environment IT helpdesk
-// agent: redeployment with modified env vars, verification of
+// Validates configuration updates on a dedicated, disposable single-environment
+// IT helpdesk agent: redeployment with modified env vars, verification of
 // non-secret config changes, and detection of an invalid API key.
 
 package configuration
@@ -23,6 +23,7 @@ package configuration
 import (
 	"time"
 
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -38,45 +39,15 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 		lastDeployedBefore time.Time
 	)
 
-	// These tests mutate the shared agent's config (invalid OPENAI_API_KEY and a
-	// changed DATABASE_URL). Restore the original configuration after the container
-	// runs — pass or fail — so other suites that reuse this shared agent aren't left
-	// with a broken key. AfterAll always runs once all Its in the Ordered container
-	// finish, including when one fails.
+	// The dedicated agent is single-use; delete it so its workload pod is freed.
+	// No config restore is needed since nothing else reuses this agent.
 	AfterAll(func() {
-		deps := deployment.GetDeploymentDetails(Default, Client,
-			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName)
-		dep, exists := deps[Cfg.DefaultEnv]
-		if !exists || dep.ImageID == "" {
-			GinkgoWriter.Printf("config revert: no deployment found, nothing to restore\n")
-			return
-		}
-		before := dep.LastDeployed
-
-		autoInstr := true
-		deployment.DeployAgent(Default, Client, Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName,
-			framework.DeployAgentRequest{
-				ImageID: dep.ImageID,
-				Env: []framework.EnvironmentVariable{
-					{Key: "OPENAI_API_KEY", Value: Cfg.OpenAIAPIKey, IsSensitive: true},
-					{Key: "DATABASE_URL", Value: "http://localhost:5000", IsSensitive: false},
-				},
-				EnableAutoInstrumentation: &autoInstr,
-			})
-		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
-			OrgName:       Cfg.DefaultOrg,
-			ProjectName:   SharedITHelpdeskAgent.ProjectName,
-			AgentName:     SharedITHelpdeskAgent.AgentName,
-			Environment:   Cfg.DefaultEnv,
-			Timeout:       10 * time.Minute,
-			DeployedAfter: before,
-		})
-		GinkgoWriter.Printf("config revert: restored original configuration (DATABASE_URL=http://localhost:5000, valid OPENAI_API_KEY)\n")
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName)
 	})
 
 	It("reports the agent's initial environment configuration", func() {
 		configs := configuration.GetAgentConfigurations(Default, Client,
-			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
+			Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName, Cfg.DefaultEnv)
 
 		var foundDB, foundOpenAI bool
 		for _, c := range configs.Configurations.Env {
@@ -100,18 +71,18 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 
 	It("redeploys the agent with updated environment variables", func() {
 		deps := deployment.GetDeploymentDetails(Default, Client,
-			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName)
+			Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName)
 		dep, exists := deps[Cfg.DefaultEnv]
 		Expect(exists).To(BeTrue(), "deployment should exist for default environment")
 		Expect(dep.ImageID).NotTo(BeEmpty(), "imageId should not be empty")
 		lastDeployedBefore = dep.LastDeployed
 
 		autoInstr := true
-		deployment.DeployAgent(Default, Client, Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName,
+		deployment.DeployAgent(Default, Client, Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName,
 			framework.DeployAgentRequest{
 				ImageID: dep.ImageID,
 				Env: []framework.EnvironmentVariable{
-					{Key: "OPENAI_API_KEY", Value: "sk-invalid-key-for-e2e-test", IsSensitive: true},
+					{Key: "OPENAI_API_KEY", Value: "sk-invalid-key-for-e2e-test-" + uuid.New().String()[:8], IsSensitive: true},
 					{Key: "DATABASE_URL", Value: "http://localhost:6000", IsSensitive: false},
 				},
 				EnableAutoInstrumentation: &autoInstr,
@@ -122,21 +93,21 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 	It("becomes active after the configuration redeploy", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:       Cfg.DefaultOrg,
-			ProjectName:   SharedITHelpdeskAgent.ProjectName,
-			AgentName:     SharedITHelpdeskAgent.AgentName,
+			ProjectName:   ConfigAgent.ProjectName,
+			AgentName:     ConfigAgent.AgentName,
 			Environment:   Cfg.DefaultEnv,
-			Timeout:       10 * time.Minute,
+			Timeout:       5 * time.Minute,
 			DeployedAfter: lastDeployedBefore,
 		})
 	})
 
 	It("becomes ready after the configuration redeploy", func() {
-		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv, 10*time.Minute)
+		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName, Cfg.DefaultEnv, 10*time.Minute)
 	})
 
 	It("reflects the updated non-secret configuration values", func() {
 		configs := configuration.GetAgentConfigurations(Default, Client,
-			Cfg.DefaultOrg, SharedITHelpdeskAgent.ProjectName, SharedITHelpdeskAgent.AgentName, Cfg.DefaultEnv)
+			Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName, Cfg.DefaultEnv)
 
 		var foundDB bool
 		for _, c := range configs.Configurations.Env {
@@ -150,10 +121,20 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 	})
 
 	It("surfaces the invalid-API-key error in the agent runtime logs", func() {
+		By("Invoking the agent so the runtime attempts a LLM call")
+		// requireOK=false: the invocation is expected to error (invalid key); we only
+		// need it to reach the runtime so the failure is logged.
+		agentops.InvokeAgentEndpoint(
+			ConfigAgent.EndpointURL+"/chat",
+			ConfigAgent.InvokeReq,
+			ConfigAgent.APIKey,
+			false)
+
+		By("Waiting for the invalid-API-key error in the runtime logs")
 		agentops.WaitForRuntimeLog(Client, &agentops.WaitForRuntimeLogParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: SharedITHelpdeskAgent.ProjectName,
-			AgentName:   SharedITHelpdeskAgent.AgentName,
+			ProjectName: ConfigAgent.ProjectName,
+			AgentName:   ConfigAgent.AgentName,
 			Environment: Cfg.DefaultEnv,
 			SearchText:  "Incorrect API key provided",
 			Timeout:     10 * time.Minute,

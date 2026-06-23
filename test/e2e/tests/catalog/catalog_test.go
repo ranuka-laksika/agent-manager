@@ -66,6 +66,12 @@ var _ = Describe("Agent catalog:", Label("catalog"), Ordered, func() {
 			promotableAgent.AgentName, envName, projectName)
 	})
 
+	// The from-kind agent is single-use; delete it so its workload pods (default +
+	// second environment) are freed. The shared promotable agent is left intact.
+	AfterAll(func() {
+		agentops.DeleteAgentBestEffort(Client, Cfg.DefaultOrg, projectName, fromKindAgent)
+	})
+
 	It("publishes a pre built  agent as a reusable catalog kind", func() {
 		if catalogops.KindExists(Client, Cfg.DefaultOrg, framework.E2ESharedKindName) {
 			GinkgoWriter.Printf("Kind already published, skipping: %s\n", framework.E2ESharedKindName)
