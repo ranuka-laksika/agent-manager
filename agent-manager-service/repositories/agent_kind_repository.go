@@ -209,7 +209,6 @@ func (r *agentKindRepo) ListVersions(ctx context.Context, kindID uuid.UUID) ([]m
 	return versions, result.Error
 }
 
-
 func (r *agentKindRepo) DeleteVersion(ctx context.Context, kindID uuid.UUID, versionTag string) error {
 	result := r.db.WithContext(ctx).
 		Where("agent_kind_id = ? AND version = ?", kindID, versionTag).
