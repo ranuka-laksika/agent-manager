@@ -56,7 +56,7 @@ func LoadConfig() *Config {
 		DefaultEnv:       envOrDefault("DEFAULT_ENV", "default"),
 		ReadinessTimeout: envDurationOrDefault("READINESS_TIMEOUT", 5*time.Minute),
 		TavilyAPIKey:     envOrDefault("TAVILY_API_KEY", ""),
-		OpenAIAPIKey:     envOrDefault("INSTRUMENTATION_TEST_OPENAI_API_KEY", ""),
+		OpenAIAPIKey:     envOrDefault("OPENAI_API_KEY", ""),
 	}
 }
 
