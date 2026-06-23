@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,24 @@ import (
 
 // clientFn is the lazy client accessor shape every command's Options expects.
 type clientFn = func(context.Context) (*amsvc.ClientWithResponses, error)
+
+func unreachableClient(context.Context) (*amsvc.ClientWithResponses, error) {
+	return nil, errors.New("client should not be constructed")
+}
+
+type fakePrompter struct {
+	confirmDeletionErr error
+	confirmDeletionArg string
+	calls              int
+}
+
+func (p *fakePrompter) ConfirmDeletion(required string) error {
+	p.calls++
+	p.confirmDeletionArg = required
+	return p.confirmDeletionErr
+}
+
+func (p *fakePrompter) Confirm(prompt string) (bool, error) { return false, nil }
 
 // route describes one stubbed HTTP response keyed by "METHOD /path".
 type route struct {

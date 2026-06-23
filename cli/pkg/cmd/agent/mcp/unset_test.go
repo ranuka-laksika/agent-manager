@@ -18,6 +18,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -28,20 +29,32 @@ import (
 )
 
 func newUnsetOpts(io *iostreams.IOStreams, client clientFn) *UnsetOptions {
-	return &UnsetOptions{IO: io, Client: client, Scope: baseScope(), Org: "acme", Proj: "triage", AgentName: "order-bot", Name: "primary"}
+	return &UnsetOptions{
+		IO: io, Prompter: &fakePrompter{}, Client: client, Scope: baseScope(),
+		Org: "acme", Proj: "triage", AgentName: "order-bot", Name: "primary",
+	}
 }
 
 func Test_runUnset_deletesWholeConfig(t *testing.T) {
 	io, _, errOut := newTestIO(false)
 	io.SetTerminal(true, true, true)
+	prompter := &fakePrompter{}
 	client, cleanup := newClient(t, map[string]route{
 		listPath:                      okJSON(listResponse(mcpItem("primary", getUUID))),
 		configPath("DELETE", getUUID): {status: http.StatusNoContent},
 	})
 	defer cleanup()
 
-	if err := runUnset(context.Background(), newUnsetOpts(io, client)); err != nil {
+	opts := newUnsetOpts(io, client)
+	opts.Prompter = prompter
+	if err := runUnset(context.Background(), opts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if prompter.calls != 1 {
+		t.Errorf("prompter calls = %d, want 1", prompter.calls)
+	}
+	if prompter.confirmDeletionArg != "primary" {
+		t.Errorf("confirmation arg = %q, want primary", prompter.confirmDeletionArg)
 	}
 	if !strings.Contains(errOut.String(), "deleted") {
 		t.Errorf("expected 'deleted' confirmation, got %q", errOut.String())
@@ -56,12 +69,70 @@ func Test_runUnset_deleteJSON(t *testing.T) {
 	})
 	defer cleanup()
 
-	if err := runUnset(context.Background(), newUnsetOpts(io, client)); err != nil {
+	opts := newUnsetOpts(io, client)
+	opts.Yes = true
+	if err := runUnset(context.Background(), opts); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	data := decodeEnvelope(t, out.String())["data"].(map[string]any)
 	if data["deleted"] != true {
 		t.Errorf("data.deleted = %v, want true", data["deleted"])
+	}
+}
+
+func Test_runUnset_deleteYesSkipsPrompt(t *testing.T) {
+	io, _, _ := newTestIO(false)
+	prompter := &fakePrompter{}
+	client, cleanup := newClient(t, map[string]route{
+		listPath:                      okJSON(listResponse(mcpItem("primary", getUUID))),
+		configPath("DELETE", getUUID): {status: http.StatusNoContent},
+	})
+	defer cleanup()
+
+	opts := newUnsetOpts(io, client)
+	opts.Prompter = prompter
+	opts.Yes = true
+	if err := runUnset(context.Background(), opts); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if prompter.calls != 0 {
+		t.Errorf("prompter calls = %d, want 0 with --yes", prompter.calls)
+	}
+}
+
+func Test_runUnset_deleteNonTTYWithoutYes(t *testing.T) {
+	io, out, _ := newTestIO(true)
+	called := false
+	client := func(context.Context) (*amsvc.ClientWithResponses, error) {
+		called = true
+		return nil, errors.New("client should not be constructed")
+	}
+
+	if err := runUnset(context.Background(), newUnsetOpts(io, client)); err == nil {
+		t.Fatal("expected error for non-TTY without --yes")
+	}
+	if called {
+		t.Fatal("client should not be constructed before confirmation")
+	}
+	errBody := decodeEnvelope(t, out.String())["error"].(map[string]any)
+	if errBody["code"] != clierr.ConfirmationRequired {
+		t.Fatalf("code = %v, want %s", errBody["code"], clierr.ConfirmationRequired)
+	}
+}
+
+func Test_runUnset_deleteConfirmationMismatch(t *testing.T) {
+	io, out, _ := newTestIO(true)
+	io.SetTerminal(true, true, true)
+	prompter := &fakePrompter{confirmDeletionErr: errors.New("confirmation mismatch")}
+	opts := newUnsetOpts(io, unreachableClient)
+	opts.Prompter = prompter
+
+	if err := runUnset(context.Background(), opts); err == nil {
+		t.Fatal("expected error from confirmation mismatch")
+	}
+	errBody := decodeEnvelope(t, out.String())["error"].(map[string]any)
+	if errBody["code"] != clierr.ConfirmationRequired {
+		t.Fatalf("code = %v, want %s", errBody["code"], clierr.ConfirmationRequired)
 	}
 }
 
@@ -142,7 +213,9 @@ func Test_runUnset_nameNotFound(t *testing.T) {
 	})
 	defer cleanup()
 
-	if err := runUnset(context.Background(), newUnsetOpts(io, client)); err == nil {
+	opts := newUnsetOpts(io, client)
+	opts.Yes = true
+	if err := runUnset(context.Background(), opts); err == nil {
 		t.Fatal("expected error")
 	}
 	if code := decodeEnvelope(t, out.String())["error"].(map[string]any)["code"]; code != clierr.NotFound {
@@ -158,7 +231,9 @@ func Test_runUnset_deleteServerError(t *testing.T) {
 	})
 	defer cleanup()
 
-	if err := runUnset(context.Background(), newUnsetOpts(io, client)); err == nil {
+	opts := newUnsetOpts(io, client)
+	opts.Yes = true
+	if err := runUnset(context.Background(), opts); err == nil {
 		t.Fatal("expected error")
 	}
 	if status := decodeEnvelope(t, out.String())["error"].(map[string]any)["status"]; status.(float64) != 404 {
