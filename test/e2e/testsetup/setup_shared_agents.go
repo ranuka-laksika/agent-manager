@@ -302,7 +302,7 @@ func ensurePromotableProject(client *framework.AMPClient, cfg *framework.Config,
 	}
 
 	ginkgo.By("Creating promotion deployment pipeline")
-	pipeline := dpops.Create(Default, client, cfg.DefaultOrg,
+	pipeline := dpops.CreateOrGet(Default, client, cfg.DefaultOrg,
 		framework.CreateDeploymentPipelineRequest{
 			DisplayName: "E2E Shared Promotion Pipeline",
 			PromotionPaths: []framework.PromotionPath{
