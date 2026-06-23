@@ -23,6 +23,7 @@ import {
   Form,
   MenuItem,
   Select,
+  Slider,
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -30,6 +31,8 @@ import { History, Timer } from "@wso2/oxygen-ui-icons-react";
 import type { MonitorType } from "@agent-management-platform/types";
 import type { CreateMonitorFormValues } from "../form/schema";
 import { getMonitorTypeFieldPatch } from "../utils/monitorFormUtils";
+
+const SAMPLING_RATE_MARKS = [{ value: 100, label: "100%" }];
 
 export interface EnvironmentOption {
   name: string;
@@ -244,6 +247,31 @@ export function CreateMonitorForm({
             </Form.ElementWrapper>
           </Collapse>
         </Form.Stack>
+        <Form.ElementWrapper name="samplingRate" label="Sampling Rate (%)">
+          <Form.Stack spacing={0.5} maxWidth={320}>
+            <Slider
+              value={formData.samplingRate ?? 100}
+              min={1}
+              max={100}
+              step={1}
+              marks={SAMPLING_RATE_MARKS}
+              valueLabelDisplay="auto"
+              onChange={(_, sliderValue) =>
+                onFieldChange(
+                  "samplingRate",
+                  Array.isArray(sliderValue) ? sliderValue[0] : sliderValue,
+                )
+              }
+            />
+            <Typography
+              variant="caption"
+              color={errors.samplingRate ? "error" : "text.secondary"}
+            >
+              {errors.samplingRate ??
+                "Percentage of matching traces to evaluate"}
+            </Typography>
+          </Form.Stack>
+        </Form.ElementWrapper>
       </Form.Section>
     </Form.Stack>
   );

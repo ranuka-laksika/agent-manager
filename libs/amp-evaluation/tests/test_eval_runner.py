@@ -177,6 +177,93 @@ class TestMonitorValidation:
 
 
 # ============================================================================
+# TESTS: Monitor fetch -> sample -> evaluate pipeline (lazy, via trace_fetcher)
+# ============================================================================
+
+
+class _FakeFetcher:
+    """Stands in for a TraceFetcher: records the call args and yields lazily,
+    like the real generator-based TraceFetcher.fetch_traces does."""
+
+    def __init__(self, otel_traces):
+        self._otel_traces = otel_traces
+        self.calls = []
+
+    def fetch_traces(self, start_time, end_time):
+        self.calls.append((start_time, end_time))
+        return iter(self._otel_traces)
+
+
+@pytest.fixture
+def otel_traces():
+    """Raw OTELTrace objects (pre-parse), as a fetcher would return them."""
+    loader = TraceLoader(file_path=str(FIXTURES_DIR / "sample_traces.json"))
+    return loader.load_traces()
+
+
+class TestMonitorFetchAndSamplePipeline:
+    """Monitor.run() should fetch via the configured fetcher, optionally sample,
+    then parse/evaluate lazily -- without requiring an explicit `traces=` list."""
+
+    def test_fetches_via_time_range_and_evaluates_all(self, otel_traces):
+        evaluated_ids = []
+
+        @evaluator(name="record_trace_id")
+        def record_trace_id(trace: Trace) -> EvalResult:
+            evaluated_ids.append(trace.trace_id)
+            return EvalResult(score=1.0)
+
+        fetcher = _FakeFetcher(otel_traces)
+        runner = Monitor(evaluators=[record_trace_id], trace_fetcher=fetcher)
+
+        result = runner.run(start_time="2026-02-01T00:00:00Z", end_time="2026-02-10T00:00:00Z")
+
+        assert fetcher.calls == [("2026-02-01T00:00:00Z", "2026-02-10T00:00:00Z")]
+        assert result.traces_evaluated == len(otel_traces)
+        assert sorted(evaluated_ids) == sorted(t.traceId for t in otel_traces)
+
+    def test_sample_rate_filters_traces_before_evaluation(self, otel_traces):
+        from amp_evaluation.trace.fetcher import sample_traces as deterministic_sample
+
+        expected_ids = {t.traceId for t in deterministic_sample(otel_traces, sample_rate=0.5)}
+        # Sanity: the fixture set is small, so make sure the sample isn't trivially
+        # "all" or "none" -- otherwise this test wouldn't actually exercise filtering.
+        assert 0 < len(expected_ids) < len(otel_traces)
+
+        evaluated_ids = []
+
+        @evaluator(name="record_trace_id")
+        def record_trace_id(trace: Trace) -> EvalResult:
+            evaluated_ids.append(trace.trace_id)
+            return EvalResult(score=1.0)
+
+        fetcher = _FakeFetcher(otel_traces)
+        runner = Monitor(evaluators=[record_trace_id], trace_fetcher=fetcher)
+
+        result = runner.run(start_time="s", end_time="e", sample_rate=0.5)
+
+        assert set(evaluated_ids) == expected_ids
+        assert result.traces_evaluated == len(expected_ids)
+
+    def test_explicit_traces_param_bypasses_fetcher_and_sampling(self, sample_traces):
+        evaluated_ids = []
+
+        @evaluator(name="record_trace_id")
+        def record_trace_id(trace: Trace) -> EvalResult:
+            evaluated_ids.append(trace.trace_id)
+            return EvalResult(score=1.0)
+
+        fetcher = _FakeFetcher(otel_traces=[])
+        runner = Monitor(evaluators=[record_trace_id], trace_fetcher=fetcher)
+
+        result = runner.run(traces=sample_traces, sample_rate=0.1)
+
+        assert fetcher.calls == []  # fetcher never invoked
+        assert result.traces_evaluated == len(sample_traces)
+        assert sorted(evaluated_ids) == sorted(t.trace_id for t in sample_traces)
+
+
+# ============================================================================
 # REGRESSION TESTS: Bugs found during code review
 # ============================================================================
 

@@ -20,6 +20,7 @@ import { EvalMonitorsComponent } from "./EvalMonitors.Component";
 import { CreateMonitorComponent } from "./CreateMonitor.Component";
 import { ViewMonitorComponent } from "./ViewMonitor.Component";
 import { EditMonitorComponent } from "./EditMonitor.Component";
+import { CompareMonitorComponent } from "./CompareMonitor.Component";
 import { EvalEvaluatorsOrganization } from "./EvalEvaluators.Organization";
 import { CreateEvaluatorOrganization } from "./CreateEvaluator.Organization";
 import { ViewEvaluatorOrganization } from "./ViewEvaluator.Organization";
@@ -87,6 +88,12 @@ export const metaData: EvalPageMetadata = {
         title: "Edit Monitor",
         description: "Wizard for editing an existing eval monitor.",
       },
+      compareMonitor: {
+        component: CompareMonitorComponent,
+        icon: MonitorCheck,
+        title: "Compare Monitors",
+        description: "Side-by-side comparison of two eval monitors.",
+      },
     },
   },
 };
@@ -95,6 +102,7 @@ export {
   CreateMonitorComponent,
   ViewMonitorComponent,
   EditMonitorComponent,
+  CompareMonitorComponent,
   EvalEvaluatorsOrganization,
   CreateEvaluatorOrganization,
   ViewEvaluatorOrganization,

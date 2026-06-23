@@ -44,11 +44,13 @@ export interface LevelSummary {
 interface EvaluationSummaryCardProps {
   levels: LevelSummary[];
   averageScore: number | null;
+  title?: string;
 }
 
 const EvaluationSummaryCard: React.FC<EvaluationSummaryCardProps> = ({
   levels,
   averageScore,
+  title = "Evaluation Summary",
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -61,7 +63,7 @@ const EvaluationSummaryCard: React.FC<EvaluationSummaryCardProps> = ({
   return (
     <Card variant="outlined">
       <CardContent>
-        <Typography variant="subtitle1">Evaluation Summary</Typography>
+        <Typography variant="subtitle1">{title}</Typography>
         {levels.length === 0 ? (
           <Box
             display="flex"

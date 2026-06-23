@@ -57,6 +57,7 @@ import {
   LazyCreateMonitorComponent,
   LazyViewMonitorComponent,
   LazyEditMonitorComponent,
+  LazyCompareMonitorComponent,
 } from "../pages";
 import { LoadingFallback } from "../components/LoadingFallback";
 import { relativeRouteMap } from "@agent-management-platform/types";
@@ -554,6 +555,10 @@ export function RootRouter() {
                   <Route
                     path={monitorBase + "/" + monitorRoutes.children.edit.path}
                     element={<LazyEditMonitorComponent />}
+                  />
+                  <Route
+                    path={monitorBase + "/" + monitorRoutes.children.compare.path}
+                    element={<LazyCompareMonitorComponent />}
                   />
                   <Route
                     path={monitorBase + "/" + monitorRoutes.children.view.path + "/*"}

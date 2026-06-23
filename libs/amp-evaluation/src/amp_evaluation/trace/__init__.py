@@ -13,6 +13,7 @@ Public API:
     ...     parse_trace_for_evaluation,          # Parser
     ...     parse_traces_for_evaluation,
     ...     TraceFetcher, TraceLoader,           # Fetch traces from platform or files
+    ...     sample_traces,                       # Deterministic client-side sampling
     ... )
 """
 
@@ -56,7 +57,7 @@ from .parser import (
 )
 
 # Fetcher
-from .fetcher import TraceFetcher, TraceLoader
+from .fetcher import TraceFetcher, TraceLoader, sample_traces
 
 
 __all__ = [
@@ -95,4 +96,5 @@ __all__ = [
     # Fetchers
     "TraceFetcher",
     "TraceLoader",
+    "sample_traces",
 ]

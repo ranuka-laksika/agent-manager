@@ -32,11 +32,12 @@ Named with OTEL prefix to avoid collision with evaluation models
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import List, Optional, Dict, Any, Callable
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Dict, Any, Callable, Iterable, Iterator, Tuple
 
 from amp_evaluation.trace.models import ToolDefinition
 from pathlib import Path
+import hashlib
 import json
 import logging
 import requests
@@ -85,6 +86,11 @@ def _parse_timestamp(raw_timestamp: Any) -> Optional[datetime]:
 
     logger.warning(f"Could not parse timestamp: {raw_timestamp!r}")
     return None
+
+
+def _format_iso_z(dt: datetime) -> str:
+    """Serialise a datetime as a UTC ISO-8601 string with a trailing 'Z'."""
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 # ============================================================================
@@ -385,6 +391,7 @@ class TraceFetcher:
         environment: str,
         token_provider: Optional[Callable[[], str]] = None,
         timeout: int = 30,
+        page_size: int = 10,
     ):
         """
         Initialize trace fetcher.
@@ -397,6 +404,8 @@ class TraceFetcher:
             environment: Environment name (required)
             token_provider: Callable that returns a JWT token for authentication (required)
             timeout: Request timeout in seconds
+            page_size: Default max traces per /traces/export page (memory-bound; API
+                allows up to 1000). Override per-call via fetch_traces(page_size=...).
         """
         if not base_url:
             raise ValueError("base_url is required")
@@ -418,24 +427,23 @@ class TraceFetcher:
         self.environment = environment
         self.token_provider = token_provider
         self.timeout = timeout
+        self.page_size = page_size
 
     def _get_auth_headers(self) -> Dict[str, str]:
         """Get authorization headers with a fresh JWT token."""
         token = self.token_provider()
         return {"Authorization": f"Bearer {token}"}
 
-    def fetch_traces(self, start_time: str, end_time: str) -> List[OTELTrace]:
+    def _fetch_page(
+        self, start_time: str, end_time: str, limit: int, sort_order: str = "asc"
+    ) -> Tuple[List[OTELTrace], int]:
         """
-        Fetch traces from the trace service using /traces/export endpoint.
-
-        Args:
-            start_time: Start time in ISO 8601 format (e.g., "2025-12-16T06:58:02.433Z")
-            end_time: End time in ISO 8601 format
+        Fetch a single page from /traces/export.
 
         Returns:
-            List of Trace objects with OTEL/AMP attributes
+            Tuple of (traces in this page, totalCount reported by the API for the
+            full start_time..end_time range).
         """
-
         try:
             headers = self._get_auth_headers()
             response = requests.get(
@@ -447,6 +455,8 @@ class TraceFetcher:
                     "project": self.project,
                     "agent": self.agent,
                     "environment": self.environment,
+                    "limit": str(limit),
+                    "sortOrder": sort_order,
                 },
                 headers=headers,
                 timeout=self.timeout,
@@ -454,13 +464,122 @@ class TraceFetcher:
             response.raise_for_status()
             data = response.json()
 
-            # Parse TraceExportResponse
             traces_data = data.get("traces", [])
-            return [_parse_trace(t) for t in traces_data]
+            return [_parse_trace(t) for t in traces_data], data.get("totalCount", len(traces_data))
 
         except requests.exceptions.RequestException as e:
             logger.error("Failed to fetch traces: %s", _safe_request_error(e))
             raise
+
+    def fetch_traces(
+        self,
+        start_time: str,
+        end_time: str,
+        page_size: Optional[int] = None,
+        max_traces: Optional[int] = None,
+    ) -> Iterator[OTELTrace]:
+        """
+        Fetch traces from the trace service using /traces/export endpoint.
+
+        /traces/export caps each response at `page_size` traces (API allows up to 1000)
+        and has no cursor, so this walks the time window in ascending order, re-querying
+        from the last seen trace's startTime until the range is exhausted. Traces are
+        yielded lazily as each page comes in, so at most `page_size` parsed trace objects
+        (each with nested spans/payloads) are held in memory at once — keep this small
+        rather than maxing it out at 1000.
+
+        Args:
+            start_time: Start time in ISO 8601 format (e.g., "2025-12-16T06:58:02.433Z")
+            end_time: End time in ISO 8601 format
+            page_size: Max traces to request per page (memory-bound; API allows up to
+                1000). Defaults to the page_size set on this fetcher instance.
+            max_traces: Optional cap on the total number of traces to yield
+
+        Yields:
+            Trace objects with OTEL/AMP attributes, in ascending startTime order
+        """
+        page_size = page_size if page_size is not None else self.page_size
+        if page_size <= 0:
+            raise ValueError("page_size must be a positive integer")
+
+        seen_ids: set = set()
+        cursor_start = start_time
+        yielded = 0
+
+        while True:
+            page, _total_count = self._fetch_page(cursor_start, end_time, limit=page_size, sort_order="asc")
+            if not page:
+                return
+
+            new_traces = [t for t in page if t.traceId not in seen_ids]
+
+            if not new_traces:
+                # No new traces at this cursor. A SHORT page means the window is
+                # genuinely exhausted. A FULL page of entirely-already-seen traces
+                # means the cursor is stalled on a cluster of traces the store can't
+                # advance past (more traces share one stored time than fit in a page).
+                if len(page) < page_size:
+                    return
+
+                next_cursor = self._step_past_stall(page[-1].startTime, end_time, page_size, seen_ids)
+                if next_cursor is None:
+                    return  # nothing resolvable after the stall — stop (never loop)
+                # Stepping forward skips any still-unseen traces sharing the stalled
+                # timestamp; surface it so the (intentional) loss is observable.
+                logger.warning(
+                    "More than page_size (%d) traces share the stored time around %s; "
+                    "stepping the cursor past it — remaining traces at that time are skipped.",
+                    page_size,
+                    page[-1].startTime,
+                )
+                cursor_start = next_cursor
+                continue
+
+            for trace in new_traces:
+                if max_traces is not None and yielded >= max_traces:
+                    return
+                seen_ids.add(trace.traceId)
+                yield trace
+                yielded += 1
+
+            if len(page) < page_size:
+                return
+
+            cursor_start = page[-1].startTime
+
+    def _step_past_stall(self, stalled_ts: str, end_time: str, page_size: int, seen_ids: set) -> Optional[str]:
+        """
+        Return a cursor that advances past a stalled timestamp — the case where a full
+        page is entirely already-seen traces because more traces share one stored time
+        than fit in `page_size`.
+
+        The export API's time filter/sort is delegated to an external store whose
+        resolution is unknown, so a fixed increment could be rounded back to the same
+        time and loop. Instead, grow the step (1µs, 10µs, … geometric) until a fetch at
+        the stepped cursor surfaces at least one unseen trace. Returns that cursor, or
+        None if nothing resolvable remains (window exhausted, unparseable, or step
+        capped) so the caller stops rather than looping. Note: Python datetime is
+        microsecond-resolution, so traces distinct only at sub-microsecond precision
+        collapse into the stall and are skipped along with it.
+        """
+        base = _parse_timestamp(stalled_ts)
+        if base is None:
+            return None
+        end_dt = _parse_timestamp(end_time)
+
+        step_us = 1
+        for _ in range(15):  # 1µs grown ×10 each time spans well past any real window
+            candidate_dt = base + timedelta(microseconds=step_us)
+            if end_dt is not None and candidate_dt > end_dt:
+                return None
+            candidate = _format_iso_z(candidate_dt)
+            page, _ = self._fetch_page(candidate, end_time, limit=page_size, sort_order="asc")
+            if not page:
+                return None
+            if any(t.traceId not in seen_ids for t in page):
+                return candidate  # the cursor advanced far enough to surface new traces
+            step_us *= 10  # store rounded the step away — grow it and retry
+        return None
 
     def fetch_trace_by_id(self, trace_id: str) -> Optional[OTELTrace]:
         """
@@ -530,6 +649,31 @@ class TraceFetcher:
             return response.status_code == 200
         except Exception:
             return False
+
+
+# ============================================================================
+# Sampling
+# ============================================================================
+
+
+def sample_traces(traces: Iterable[OTELTrace], sample_rate: float) -> Iterator[OTELTrace]:
+    """
+    Deterministically sample traces by hashing traceId, so the same trace is always
+    included or excluded for a given sample_rate regardless of fetch order or page
+    boundaries. Composes with any iterable (fetched lazily or already in memory).
+
+    Args:
+        traces: Traces to sample from
+        sample_rate: Fraction to keep, in (0, 1]
+    """
+    if not 0 < sample_rate <= 1:
+        raise ValueError(f"sample_rate must be in (0, 1], got {sample_rate}")
+
+    threshold = int(sample_rate * 10_000)
+    for trace in traces:
+        digest = hashlib.sha256(trace.traceId.encode()).hexdigest()
+        if int(digest, 16) % 10_000 < threshold:
+            yield trace
 
 
 # ============================================================================
