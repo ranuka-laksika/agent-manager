@@ -24,7 +24,6 @@ import {
   Button,
   Checkbox,
   Chip,
-  CircularProgress,
   Form,
   IconButton,
   ListingTable,
@@ -56,6 +55,7 @@ import {
   type ThunderGroup,
   type ThunderPermission,
 } from "@agent-management-platform/types";
+import { EditFormSkeleton } from "./components/EditFormSkeleton";
 
 type ActiveTab = "permissions" | "users" | "groups";
 
@@ -65,6 +65,8 @@ const permGroup = (p: ThunderPermission) =>
   p.resourceName || p.name.split(":")[0];
 
 type PermissionGroup = { resource: string; permissions: ThunderPermission[] };
+
+type CheckboxChangeHandler = React.ChangeEventHandler<HTMLInputElement>;
 
 const groupPermissions = (perms: ThunderPermission[]): PermissionGroup[] => {
   const map = new Map<string, ThunderPermission[]>();
@@ -366,16 +368,35 @@ export const RoleEditPage: React.FC = () => {
     isLoadingGroups ||
     isLoadingCatalog;
 
-  const pageTitle = roleData?.name
-    ? `Edit Role: ${roleData.name}`
-    : "Edit Role";
+  const pageTitle = roleData?.name ?? "Edit Role";
+
+  // Surface the action row only when something differs from what's saved —
+  // any pending user/group add or removal, or a changed permission selection.
+  const permissionsDirty = useMemo(() => {
+    if (isPermissionsReadOnly) return false;
+    const initial = new Set(initialPermissions);
+    return (
+      initial.size !== selectedPermissions.length ||
+      selectedPermissions.some((p) => !initial.has(p.name))
+    );
+  }, [isPermissionsReadOnly, initialPermissions, selectedPermissions]);
+
+  const isDirty =
+    permissionsDirty ||
+    pendingUserAdds.length > 0 ||
+    removedUserIds.size > 0 ||
+    pendingGroupAdds.length > 0 ||
+    removedGroupIds.size > 0;
 
   if (isLoading) {
     return (
-      <PageLayout title="Edit Role" disableIcon>
-        <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
-        </Box>
+      <PageLayout
+        isLoading
+        disableIcon
+        backHref={rolesPath}
+        backLabel="Back to Roles"
+      >
+        <EditFormSkeleton tabs={3} />
       </PageLayout>
     );
   }
@@ -383,6 +404,7 @@ export const RoleEditPage: React.FC = () => {
   return (
     <PageLayout
       title={pageTitle}
+      description={roleData?.description ?? undefined}
       backHref={rolesPath}
       backLabel="Back to Roles"
       disableIcon
@@ -393,312 +415,325 @@ export const RoleEditPage: React.FC = () => {
           <Alert severity="success">Role updated successfully.</Alert>
         )}
 
-        <Tabs
-          value={activeTab}
-          onChange={(_e, v) => setActiveTab(v as ActiveTab)}
-        >
-          <Tab label="Permissions" value="permissions" />
-          <Tab label="Users" value="users" />
-          <Tab label="Groups" value="groups" />
-        </Tabs>
+        <Form.Section>
+          <Tabs
+            value={activeTab}
+            onChange={(_e, v) => setActiveTab(v as ActiveTab)}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab label="Permissions" value="permissions" />
+            <Tab label="Users" value="users" />
+            <Tab label="Groups" value="groups" />
+          </Tabs>
 
-        {/* ── Permissions tab ── */}
-        {activeTab === "permissions" && (
-          <Form.Section>
-            <Form.Header>Permissions</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              {isPermissionsReadOnly
-                ? "Permissions for predefined roles cannot be modified."
-                : "Search and select permissions to assign to this role."}
-            </Typography>
+          {/* ── Permissions tab ── */}
+          {activeTab === "permissions" && (
+            <>
+              <Form.Header>Permissions</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                {isPermissionsReadOnly
+                  ? "Permissions for predefined roles cannot be modified."
+                  : "Search and select permissions to assign to this role."}
+              </Typography>
 
-            <Box sx={{ mt: 1 }}>
-              {!isPermissionsReadOnly && (
-                <Form.ElementWrapper
-                  label="Add permissions"
-                  name="addPermissions"
-                >
-                  <Autocomplete
-                    id="addPermissions"
-                    multiple
-                    disableCloseOnSelect
-                    options={catalogPermissions}
-                    value={selectedPermissions}
-                    onChange={handlePermissionsChange}
-                    getOptionLabel={(option) =>
-                      permLabel(option as ThunderPermission)
-                    }
-                    groupBy={(option) => permGroup(option as ThunderPermission)}
-                    filterOptions={filterPermissions}
-                    isOptionEqualToValue={(option, value) =>
-                      (option as ThunderPermission).name ===
-                      (value as ThunderPermission).name
-                    }
-                    renderTags={() => null}
-                    renderGroup={(params) => {
-                      const groupPerms = catalogPermissions.filter(
-                        (p) => permGroup(p) === params.group,
-                      );
-                      const allSelected = groupPerms.every((p) =>
-                        selectedNames.has(p.name),
-                      );
-                      const someSelected = groupPerms.some((p) =>
-                        selectedNames.has(p.name),
-                      );
-                      const handleGroupToggle = (e: React.MouseEvent) => {
-                        e.stopPropagation();
-                        hasEditedPermissions.current = true;
-                        if (allSelected) {
-                          setSelectedPermissions((prev) =>
-                            prev.filter((p) => permGroup(p) !== params.group),
-                          );
-                        } else {
-                          const toAdd = groupPerms.filter(
-                            (p) => !selectedNames.has(p.name),
-                          );
-                          setSelectedPermissions((prev) => [...prev, ...toAdd]);
-                        }
-                      };
-                      const handleGroupCheckboxChange =
-                        handleGroupToggle as unknown as React.ChangeEventHandler<HTMLInputElement>;
-                      return (
-                        <li key={params.key}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              alignItems: "center",
-                              px: 1,
-                              py: 0.25,
-                              cursor: "pointer",
-                              userSelect: "none",
-                              "&:hover": { bgcolor: "action.hover" },
-                            }}
-                            onClick={handleGroupToggle}
-                          >
-                            <Checkbox
-                              checked={allSelected}
-                              indeterminate={someSelected && !allSelected}
-                              size="small"
-                              sx={{ mr: 0.5, p: 0.5 }}
-                              onClick={(e) => e.stopPropagation()}
-                              onChange={handleGroupCheckboxChange}
-                            />
-                            <Typography
-                              variant="caption"
-                              fontWeight={700}
+              <Box sx={{ mt: 1 }}>
+                {!isPermissionsReadOnly && (
+                  <Form.ElementWrapper
+                    label="Add permissions"
+                    name="addPermissions"
+                  >
+                    <Autocomplete
+                      id="addPermissions"
+                      multiple
+                      disableCloseOnSelect
+                      options={catalogPermissions}
+                      value={selectedPermissions}
+                      onChange={handlePermissionsChange}
+                      getOptionLabel={(option) =>
+                        permLabel(option as ThunderPermission)
+                      }
+                      groupBy={(option) =>
+                        permGroup(option as ThunderPermission)
+                      }
+                      filterOptions={filterPermissions}
+                      isOptionEqualToValue={(option, value) =>
+                        (option as ThunderPermission).name ===
+                        (value as ThunderPermission).name
+                      }
+                      renderTags={() => null}
+                      renderGroup={(params) => {
+                        const groupPerms = catalogPermissions.filter(
+                          (p) => permGroup(p) === params.group,
+                        );
+                        const allSelected = groupPerms.every((p) =>
+                          selectedNames.has(p.name),
+                        );
+                        const someSelected = groupPerms.some((p) =>
+                          selectedNames.has(p.name),
+                        );
+                        const handleGroupToggle = (e: React.MouseEvent) => {
+                          e.stopPropagation();
+                          hasEditedPermissions.current = true;
+                          if (allSelected) {
+                            setSelectedPermissions((prev) =>
+                              prev.filter((p) => permGroup(p) !== params.group),
+                            );
+                          } else {
+                            const toAdd = groupPerms.filter(
+                              (p) => !selectedNames.has(p.name),
+                            );
+                            setSelectedPermissions((prev) => [
+                              ...prev,
+                              ...toAdd,
+                            ]);
+                          }
+                        };
+                        const handleGroupCheckboxChange =
+                          handleGroupToggle as unknown as CheckboxChangeHandler;
+                        return (
+                          <li key={params.key}>
+                            <Box
                               sx={{
-                                textTransform: "uppercase",
-                                letterSpacing: 0.5,
+                                display: "flex",
+                                alignItems: "center",
+                                px: 1,
+                                py: 0.25,
+                                cursor: "pointer",
+                                userSelect: "none",
+                                "&:hover": { bgcolor: "action.hover" },
                               }}
+                              onClick={handleGroupToggle}
                             >
-                              {params.group}
-                            </Typography>
-                          </Box>
-                          <ul style={{ padding: 0 }}>{params.children}</ul>
+                              <Checkbox
+                                checked={allSelected}
+                                indeterminate={someSelected && !allSelected}
+                                size="small"
+                                sx={{ mr: 0.5, p: 0.5 }}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={handleGroupCheckboxChange}
+                              />
+                              <Typography
+                                variant="caption"
+                                fontWeight={700}
+                                sx={{
+                                  textTransform: "uppercase",
+                                  letterSpacing: 0.5,
+                                }}
+                              >
+                                {params.group}
+                              </Typography>
+                            </Box>
+                            <ul style={{ padding: 0 }}>{params.children}</ul>
+                          </li>
+                        );
+                      }}
+                      renderOption={(props, option, { selected }) => (
+                        <li {...props}>
+                          <Checkbox
+                            checked={selected}
+                            size="small"
+                            sx={{ mr: 1 }}
+                          />
+                          {permLabel(option as ThunderPermission)}
                         </li>
-                      );
-                    }}
-                    renderOption={(props, option, { selected }) => (
-                      <li {...props}>
-                        <Checkbox
-                          checked={selected}
-                          size="small"
-                          sx={{ mr: 1 }}
+                      )}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          placeholder="Search by resource or action..."
                         />
-                        {permLabel(option as ThunderPermission)}
-                      </li>
-                    )}
+                      )}
+                      noOptionsText="No permissions available"
+                      sx={{ mb: 3 }}
+                    />
+                  </Form.ElementWrapper>
+                )}
+
+                {selectedPermissions.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No permissions assigned yet.
+                  </Typography>
+                ) : (
+                  <Stack spacing={2}>
+                    {catalogGroups
+                      .filter(({ permissions }) =>
+                        permissions.some((p) => selectedNames.has(p.name)),
+                      )
+                      .map(({ resource, permissions }) => (
+                        <Box key={resource}>
+                          <Typography
+                            variant="caption"
+                            fontWeight={600}
+                            color="text.secondary"
+                            sx={{
+                              textTransform: "uppercase",
+                              letterSpacing: 0.5,
+                            }}
+                          >
+                            {resource}
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            flexWrap="wrap"
+                            gap={1}
+                            mt={0.5}
+                          >
+                            {permissions
+                              .filter((p) => selectedNames.has(p.name))
+                              .map((p) => (
+                                <Chip
+                                  key={p.name}
+                                  label={permLabel(p)}
+                                  size="small"
+                                  onDelete={
+                                    !isPermissionsReadOnly
+                                      ? () => handleRemovePermission(p.name)
+                                      : undefined
+                                  }
+                                />
+                              ))}
+                          </Stack>
+                        </Box>
+                      ))}
+                  </Stack>
+                )}
+              </Box>
+            </>
+          )}
+
+          {/* ── Users tab ── */}
+          {activeTab === "users" && (
+            <>
+              <Form.Header>Assigned Users</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Search and add users to this role.
+              </Typography>
+
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Form.ElementWrapper label="Add User" name="addUser">
+                  <Autocomplete
+                    id="addUser"
+                    options={availableUsers}
+                    getOptionLabel={(option) =>
+                      getUsername(option as ThunderUser)
+                    }
+                    onChange={handleAddUser}
+                    value={null}
                     renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        placeholder="Search by resource or action..."
-                      />
+                      <TextField {...params} placeholder="Search users..." />
                     )}
-                    noOptionsText="No permissions available"
-                    sx={{ mb: 3 }}
+                    noOptionsText="No users available"
                   />
                 </Form.ElementWrapper>
-              )}
+              </Box>
 
-              {selectedPermissions.length === 0 ? (
+              {displayedUsers.length === 0 ? (
                 <Typography variant="body2" color="text.secondary">
-                  No permissions assigned yet.
+                  No users assigned yet. Search and add users above.
                 </Typography>
               ) : (
-                <Stack spacing={2}>
-                  {catalogGroups
-                    .filter(({ permissions }) =>
-                      permissions.some((p) => selectedNames.has(p.name)),
-                    )
-                    .map(({ resource, permissions }) => (
-                      <Box key={resource}>
-                        <Typography
-                          variant="caption"
-                          fontWeight={600}
-                          color="text.secondary"
-                          sx={{
-                            textTransform: "uppercase",
-                            letterSpacing: 0.5,
-                          }}
-                        >
-                          {resource}
-                        </Typography>
-                        <Stack direction="row" flexWrap="wrap" gap={1} mt={0.5}>
-                          {permissions
-                            .filter((p) => selectedNames.has(p.name))
-                            .map((p) => (
-                              <Chip
-                                key={p.name}
-                                label={permLabel(p)}
+                <ListingTable.Container>
+                  <ListingTable>
+                    <ListingTable.Head>
+                      <ListingTable.Row>
+                        <ListingTable.Cell>Username</ListingTable.Cell>
+                        <ListingTable.Cell>User ID</ListingTable.Cell>
+                        <ListingTable.Cell />
+                      </ListingTable.Row>
+                    </ListingTable.Head>
+                    <ListingTable.Body>
+                      {displayedUsers.map((user) => (
+                        <ListingTable.Row key={user.id}>
+                          <ListingTable.Cell>
+                            {getUsername(user)}
+                          </ListingTable.Cell>
+                          <ListingTable.Cell>{user.id}</ListingTable.Cell>
+                          <ListingTable.Cell align="right">
+                            <Tooltip title="Remove from role">
+                              <IconButton
                                 size="small"
-                                onDelete={
-                                  !isPermissionsReadOnly
-                                    ? () => handleRemovePermission(p.name)
-                                    : undefined
-                                }
-                              />
-                            ))}
-                        </Stack>
-                      </Box>
-                    ))}
-                </Stack>
+                                onClick={() => handleRemoveUser(user.id)}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </ListingTable.Cell>
+                        </ListingTable.Row>
+                      ))}
+                    </ListingTable.Body>
+                  </ListingTable>
+                </ListingTable.Container>
               )}
-            </Box>
-          </Form.Section>
-        )}
+            </>
+          )}
 
-        {/* ── Users tab ── */}
-        {activeTab === "users" && (
-          <Form.Section>
-            <Form.Header>Assigned Users</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Search and add users to this role.
-            </Typography>
-
-            <Box sx={{ mt: 1, mb: 2 }}>
-              <Form.ElementWrapper label="Add User" name="addUser">
-                <Autocomplete
-                  id="addUser"
-                  options={availableUsers}
-                  getOptionLabel={(option) =>
-                    getUsername(option as ThunderUser)
-                  }
-                  onChange={handleAddUser}
-                  value={null}
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder="Search users..." />
-                  )}
-                  noOptionsText="No users available"
-                />
-              </Form.ElementWrapper>
-            </Box>
-
-            {displayedUsers.length === 0 ? (
+          {/* ── Groups tab ── */}
+          {activeTab === "groups" && (
+            <>
+              <Form.Header>Assigned Groups</Form.Header>
               <Typography variant="body2" color="text.secondary">
-                No users assigned yet. Search and add users above.
+                Search and add groups to this role.
               </Typography>
-            ) : (
-              <ListingTable.Container>
-                <ListingTable>
-                  <ListingTable.Head>
-                    <ListingTable.Row>
-                      <ListingTable.Cell>Username</ListingTable.Cell>
-                      <ListingTable.Cell>User ID</ListingTable.Cell>
-                      <ListingTable.Cell />
-                    </ListingTable.Row>
-                  </ListingTable.Head>
-                  <ListingTable.Body>
-                    {displayedUsers.map((user) => (
-                      <ListingTable.Row key={user.id}>
-                        <ListingTable.Cell>
-                          {getUsername(user)}
-                        </ListingTable.Cell>
-                        <ListingTable.Cell>{user.id}</ListingTable.Cell>
-                        <ListingTable.Cell align="right">
-                          <Tooltip title="Remove from role">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveUser(user.id)}
-                            >
-                              <Trash size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </ListingTable.Cell>
+
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Form.ElementWrapper label="Add Group" name="addGroup">
+                  <Autocomplete
+                    id="addGroup"
+                    options={availableGroups}
+                    getOptionLabel={(option) => (option as ThunderGroup).name}
+                    onChange={handleAddGroup}
+                    value={null}
+                    renderInput={(params) => (
+                      <TextField {...params} placeholder="Search groups..." />
+                    )}
+                    noOptionsText="No groups available"
+                  />
+                </Form.ElementWrapper>
+              </Box>
+
+              {displayedGroups.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No groups assigned yet. Search and add groups above.
+                </Typography>
+              ) : (
+                <ListingTable.Container>
+                  <ListingTable>
+                    <ListingTable.Head>
+                      <ListingTable.Row>
+                        <ListingTable.Cell>Name</ListingTable.Cell>
+                        <ListingTable.Cell>Description</ListingTable.Cell>
+                        <ListingTable.Cell />
                       </ListingTable.Row>
-                    ))}
-                  </ListingTable.Body>
-                </ListingTable>
-              </ListingTable.Container>
-            )}
-          </Form.Section>
-        )}
+                    </ListingTable.Head>
+                    <ListingTable.Body>
+                      {displayedGroups.map((group) => (
+                        <ListingTable.Row key={group.id}>
+                          <ListingTable.Cell>{group.name}</ListingTable.Cell>
+                          <ListingTable.Cell>
+                            {group.description ?? "-"}
+                          </ListingTable.Cell>
+                          <ListingTable.Cell align="right">
+                            <Tooltip title="Remove from role">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveGroup(group.id)}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </ListingTable.Cell>
+                        </ListingTable.Row>
+                      ))}
+                    </ListingTable.Body>
+                  </ListingTable>
+                </ListingTable.Container>
+              )}
+            </>
+          )}
+        </Form.Section>
 
-        {/* ── Groups tab ── */}
-        {activeTab === "groups" && (
-          <Form.Section>
-            <Form.Header>Assigned Groups</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Search and add groups to this role.
-            </Typography>
-
-            <Box sx={{ mt: 1, mb: 2 }}>
-              <Form.ElementWrapper label="Add Group" name="addGroup">
-                <Autocomplete
-                  id="addGroup"
-                  options={availableGroups}
-                  getOptionLabel={(option) => (option as ThunderGroup).name}
-                  onChange={handleAddGroup}
-                  value={null}
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder="Search groups..." />
-                  )}
-                  noOptionsText="No groups available"
-                />
-              </Form.ElementWrapper>
-            </Box>
-
-            {displayedGroups.length === 0 ? (
-              <Typography variant="body2" color="text.secondary">
-                No groups assigned yet. Search and add groups above.
-              </Typography>
-            ) : (
-              <ListingTable.Container>
-                <ListingTable>
-                  <ListingTable.Head>
-                    <ListingTable.Row>
-                      <ListingTable.Cell>Name</ListingTable.Cell>
-                      <ListingTable.Cell>Description</ListingTable.Cell>
-                      <ListingTable.Cell />
-                    </ListingTable.Row>
-                  </ListingTable.Head>
-                  <ListingTable.Body>
-                    {displayedGroups.map((group) => (
-                      <ListingTable.Row key={group.id}>
-                        <ListingTable.Cell>{group.name}</ListingTable.Cell>
-                        <ListingTable.Cell>
-                          {group.description ?? "-"}
-                        </ListingTable.Cell>
-                        <ListingTable.Cell align="right">
-                          <Tooltip title="Remove from role">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveGroup(group.id)}
-                            >
-                              <Trash size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </ListingTable.Cell>
-                      </ListingTable.Row>
-                    ))}
-                  </ListingTable.Body>
-                </ListingTable>
-              </ListingTable.Container>
-            )}
-          </Form.Section>
-        )}
-
-        {/* Action row lives below the cards; hidden on read-only Permissions. */}
-        {!(isPermissionsReadOnly && activeTab === "permissions") && (
+        {/* Action row shows below the card only when there are unsaved changes. */}
+        {isDirty && (
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"

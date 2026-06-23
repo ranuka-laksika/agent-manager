@@ -16,7 +16,13 @@
  */
 
 import React from "react";
-import { Navigate, Route, Routes, useParams, generatePath } from "react-router-dom";
+import {
+  Navigate,
+  Route,
+  Routes,
+  useParams,
+  generatePath,
+} from "react-router-dom";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { UsersPage } from "./UsersPage";
 import { UserInvitePage } from "./UserInvitePage";
@@ -31,9 +37,11 @@ import { GroupEditPage } from "./GroupEditPage";
 
 export const IdentitiesOrganization: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
-  const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
-    identities: { children: { users: { path: string } } };
-  }).identities;
+  const identitiesRoute = (
+    absoluteRouteMap.children.org.children as unknown as {
+      identities: { children: { users: { path: string } } };
+    }
+  ).identities;
 
   return (
     <Routes>
@@ -48,13 +56,13 @@ export const IdentitiesOrganization: React.FC = () => {
       />
       <Route path="users/invite" element={<UserInvitePage />} />
       <Route path="users/add" element={<UserAddPage />} />
-      <Route path="users/:userId/edit" element={<UserEditPage />} />
+      <Route path="users/:userId" element={<UserEditPage />} />
       <Route path="users/*" element={<UsersPage />} />
       <Route path="roles/create" element={<RoleCreatePage />} />
-      <Route path="roles/:roleId/edit" element={<RoleEditPage />} />
+      <Route path="roles/:roleId" element={<RoleEditPage />} />
       <Route path="roles/*" element={<RolesPage />} />
       <Route path="groups/create" element={<GroupCreatePage />} />
-      <Route path="groups/:groupId/edit" element={<GroupEditPage />} />
+      <Route path="groups/:groupId" element={<GroupEditPage />} />
       <Route path="groups/*" element={<GroupsPage />} />
       <Route
         path="*"

@@ -27,7 +27,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit, Plus, Trash, Users } from "@wso2/oxygen-ui-icons-react";
+import { Plus, Trash, Users } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteUser,
@@ -84,7 +84,7 @@ export const UsersPage: React.FC = () => {
 
   const editUserPath = (userId: string) =>
     orgId
-      ? generatePath(identitiesRoute.children.users.path + "/:userId/edit", {
+      ? generatePath(identitiesRoute.children.users.path + "/:userId", {
           orgId,
           userId,
         })
@@ -157,6 +157,8 @@ export const UsersPage: React.FC = () => {
                       key={user.id}
                       variant="card"
                       hover
+                      clickable
+                      onClick={() => navigate(editUserPath(user.id))}
                       onMouseEnter={() => setHoveredId(user.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       onFocus={() => setHoveredId(user.id)}
@@ -206,21 +208,14 @@ export const UsersPage: React.FC = () => {
                               spacing={0.5}
                               justifyContent="flex-end"
                             >
-                              <Tooltip title="Edit user">
-                                <IconButton
-                                  size="small"
-                                  onClick={() =>
-                                    navigate(editUserPath(user.id))
-                                  }
-                                >
-                                  <Edit size={16} />
-                                </IconButton>
-                              </Tooltip>
                               <Tooltip title="Delete user">
                                 <IconButton
                                   size="small"
                                   color="error"
-                                  onClick={() => handleDelete(user)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(user);
+                                  }}
                                 >
                                   <Trash size={16} />
                                 </IconButton>

@@ -22,7 +22,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   Form,
   Stack,
   Tab,
@@ -44,6 +43,7 @@ import {
   absoluteRouteMap,
   type ThunderGroup,
 } from "@agent-management-platform/types";
+import { EditFormSkeleton } from "./components/EditFormSkeleton";
 
 type TabId = "groups" | "roles";
 
@@ -96,6 +96,16 @@ export const UserEditPage: React.FC = () => {
       setSelectedGroups(initialGroups);
     }
   }, [initialGroups]);
+
+  // Only surface the action row once the group selection actually differs from
+  // what's saved (add-then-remove resolves back to not-dirty).
+  const isGroupsDirty = useMemo(() => {
+    const initial = new Set(initialGroups.map((g) => g.id));
+    return (
+      initial.size !== selectedGroups.length ||
+      selectedGroups.some((g) => !initial.has(g.id))
+    );
+  }, [initialGroups, selectedGroups]);
 
   const usersPath = orgId
     ? generatePath(
@@ -152,10 +162,13 @@ export const UserEditPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <PageLayout title="Edit User" disableIcon>
-        <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
-        </Box>
+      <PageLayout
+        isLoading
+        disableIcon
+        backHref={usersPath}
+        backLabel="Back to Users"
+      >
+        <EditFormSkeleton tabs={2} />
       </PageLayout>
     );
   }
@@ -164,7 +177,7 @@ export const UserEditPage: React.FC = () => {
 
   return (
     <PageLayout
-      title={`Edit User: ${username}`}
+      title={username || "Edit User"}
       backHref={usersPath}
       backLabel="Back to Users"
       disableIcon
@@ -175,92 +188,94 @@ export const UserEditPage: React.FC = () => {
           <Alert severity="success">User updated successfully.</Alert>
         )}
 
-        <Tabs
-          value={activeTab}
-          onChange={(_e, newValue) => setActiveTab(newValue as TabId)}
-          sx={{ borderBottom: 1, borderColor: "divider" }}
-        >
-          <Tab label="Groups" value="groups" />
-          <Tab label="Roles" value="roles" />
-        </Tabs>
+        <Form.Section>
+          <Tabs
+            value={activeTab}
+            onChange={(_e, newValue) => setActiveTab(newValue as TabId)}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab label="Groups" value="groups" />
+            <Tab label="Roles" value="roles" />
+          </Tabs>
 
-        {activeTab === "groups" && (
-          <Form.Section>
-            <Form.Header>Group Memberships</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Search and select groups to assign this user to.
-            </Typography>
+          {activeTab === "groups" && (
+            <>
+              <Form.Header>Group Memberships</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Search and select groups to assign this user to.
+              </Typography>
 
-            <Form.Stack spacing={2} sx={{ mt: 1 }}>
-              <Form.ElementWrapper label="Groups" name="groups">
-                <Autocomplete
-                  id="groups"
-                  multiple
-                  options={allGroups}
-                  value={selectedGroups}
-                  onChange={(_e, newValue) => {
-                    hasEdited.current = true;
-                    setSelectedGroups(newValue as ThunderGroup[]);
-                  }}
-                  getOptionLabel={(option) => (option as ThunderGroup).name}
-                  isOptionEqualToValue={(option, value) =>
-                    (option as ThunderGroup).id === (value as ThunderGroup).id
-                  }
-                  renderTags={() => null}
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder="Search groups..." />
-                  )}
-                  noOptionsText="No groups found"
-                />
-              </Form.ElementWrapper>
+              <Form.Stack spacing={2} sx={{ mt: 1 }}>
+                <Form.ElementWrapper label="Groups" name="groups">
+                  <Autocomplete
+                    id="groups"
+                    multiple
+                    options={allGroups}
+                    value={selectedGroups}
+                    onChange={(_e, newValue) => {
+                      hasEdited.current = true;
+                      setSelectedGroups(newValue as ThunderGroup[]);
+                    }}
+                    getOptionLabel={(option) => (option as ThunderGroup).name}
+                    isOptionEqualToValue={(option, value) =>
+                      (option as ThunderGroup).id === (value as ThunderGroup).id
+                    }
+                    renderTags={() => null}
+                    renderInput={(params) => (
+                      <TextField {...params} placeholder="Search groups..." />
+                    )}
+                    noOptionsText="No groups found"
+                  />
+                </Form.ElementWrapper>
 
-              {selectedGroups.length > 0 && (
-                <Stack direction="row" flexWrap="wrap" gap={1}>
-                  {selectedGroups.map((group) => (
-                    <Chip
-                      key={group.id}
-                      label={group.name}
-                      size="small"
-                      onDelete={() => {
-                        hasEdited.current = true;
-                        setSelectedGroups((prev) =>
-                          prev.filter((g) => g.id !== group.id),
-                        );
-                      }}
-                    />
-                  ))}
-                </Stack>
-              )}
-            </Form.Stack>
-          </Form.Section>
-        )}
+                {selectedGroups.length > 0 && (
+                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                    {selectedGroups.map((group) => (
+                      <Chip
+                        key={group.id}
+                        label={group.name}
+                        size="small"
+                        onDelete={() => {
+                          hasEdited.current = true;
+                          setSelectedGroups((prev) =>
+                            prev.filter((g) => g.id !== group.id),
+                          );
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                )}
+              </Form.Stack>
+            </>
+          )}
 
-        {activeTab === "roles" && (
-          <Form.Section>
-            <Form.Header>Assigned Roles</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Roles directly assigned to this user. To modify role assignments,
-              use the Roles page.
-            </Typography>
+          {activeTab === "roles" && (
+            <>
+              <Form.Header>Assigned Roles</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Roles directly assigned to this user. To modify role
+                assignments, use the Roles page.
+              </Typography>
 
-            <Box sx={{ mt: 1 }}>
-              {userRoles.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No roles assigned to this user.
-                </Typography>
-              ) : (
-                <Stack direction="row" flexWrap="wrap" gap={1}>
-                  {userRoles.map((role) => (
-                    <Chip key={role.id} label={role.name} size="small" />
-                  ))}
-                </Stack>
-              )}
-            </Box>
-          </Form.Section>
-        )}
+              <Box sx={{ mt: 1 }}>
+                {userRoles.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No roles assigned to this user.
+                  </Typography>
+                ) : (
+                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                    {userRoles.map((role) => (
+                      <Chip key={role.id} label={role.name} size="small" />
+                    ))}
+                  </Stack>
+                )}
+              </Box>
+            </>
+          )}
+        </Form.Section>
 
-        {/* Action row lives below the cards; only the Groups tab is editable. */}
-        {activeTab === "groups" && (
+        {/* Action row shows only on the editable Groups tab once there are changes. */}
+        {activeTab === "groups" && isGroupsDirty && (
           <Stack direction="row" spacing={1}>
             <Button
               variant="outlined"

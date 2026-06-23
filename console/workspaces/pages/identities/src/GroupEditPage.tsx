@@ -50,6 +50,7 @@ import {
   type ThunderUser,
   type ThunderRole,
 } from "@agent-management-platform/types";
+import { EditFormSkeleton } from "./components/EditFormSkeleton";
 
 type ActiveTab = "users" | "roles";
 
@@ -203,23 +204,28 @@ export const GroupEditPage: React.FC = () => {
     isLoadingAllMemberIds ||
     isLoadingUsers;
 
-  const pageTitle = groupData?.name
-    ? `Edit Group: ${groupData.name}`
-    : "Edit Group";
+  const pageTitle = groupData?.name ?? "Edit Group";
 
   if (isLoading) {
     return (
-      <PageLayout title="Edit Group" disableIcon>
-        <Box display="flex" justifyContent="center" mt={4}>
-          <CircularProgress />
-        </Box>
+      <PageLayout
+        isLoading
+        disableIcon
+        backHref={groupsPath}
+        backLabel="Back to Groups"
+      >
+        <EditFormSkeleton tabs={2} />
       </PageLayout>
     );
   }
 
+  // Show the action row only when there are unsaved member changes.
+  const isDirty = pendingAdds.length > 0 || removedIds.size > 0;
+
   return (
     <PageLayout
       title={pageTitle}
+      description={groupData?.description ?? undefined}
       backHref={groupsPath}
       backLabel="Back to Groups"
       disableIcon
@@ -230,45 +236,86 @@ export const GroupEditPage: React.FC = () => {
           <Alert severity="success">Group updated successfully.</Alert>
         )}
 
-        <Tabs
-          value={activeTab}
-          onChange={(_e, v) => setActiveTab(v as ActiveTab)}
-        >
-          <Tab label="Users" value="users" />
-          <Tab label="Roles" value="roles" />
-        </Tabs>
+        <Form.Section>
+          <Tabs
+            value={activeTab}
+            onChange={(_e, v) => setActiveTab(v as ActiveTab)}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab label="Users" value="users" />
+            <Tab label="Roles" value="roles" />
+          </Tabs>
 
-        {/* ── Users tab ── */}
-        {activeTab === "users" && (
-          <Form.Section>
-            <Form.Header>Users</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Search and add users to this group.
-            </Typography>
+          {/* ── Users tab ── */}
+          {activeTab === "users" && (
+            <>
+              <Form.Header>Users</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Search and add users to this group.
+              </Typography>
 
-            <Box sx={{ mt: 1 }}>
-              <Form.ElementWrapper label="Add User" name="addUser">
-                <Autocomplete
-                  id="addUser"
-                  options={availableUsers}
-                  getOptionLabel={(option) =>
-                    getUsername(option as ThunderUser)
-                  }
-                  onChange={handleAddUser}
-                  value={null}
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder="Search users..." />
-                  )}
-                  noOptionsText="No users available"
-                />
-              </Form.ElementWrapper>
-            </Box>
+              <Box sx={{ mt: 1 }}>
+                <Form.ElementWrapper label="Add User" name="addUser">
+                  <Autocomplete
+                    id="addUser"
+                    options={availableUsers}
+                    getOptionLabel={(option) =>
+                      getUsername(option as ThunderUser)
+                    }
+                    onChange={handleAddUser}
+                    value={null}
+                    renderInput={(params) => (
+                      <TextField {...params} placeholder="Search users..." />
+                    )}
+                    noOptionsText="No users available"
+                  />
+                </Form.ElementWrapper>
+              </Box>
 
-            {pendingAdds.length > 0 && (
-              <Box mb={2}>
-                <Typography variant="body2" fontWeight={500} mb={1}>
-                  Pending additions (unsaved)
+              {pendingAdds.length > 0 && (
+                <Box mb={2}>
+                  <Typography variant="body2" fontWeight={500} mb={1}>
+                    Pending additions (unsaved)
+                  </Typography>
+                  <ListingTable.Container>
+                    <ListingTable>
+                      <ListingTable.Head>
+                        <ListingTable.Row>
+                          <ListingTable.Cell>Username</ListingTable.Cell>
+                          <ListingTable.Cell>User ID</ListingTable.Cell>
+                          <ListingTable.Cell />
+                        </ListingTable.Row>
+                      </ListingTable.Head>
+                      <ListingTable.Body>
+                        {pendingAdds.map((user) => (
+                          <ListingTable.Row key={user.id}>
+                            <ListingTable.Cell>
+                              {getUsername(user)}
+                            </ListingTable.Cell>
+                            <ListingTable.Cell>{user.id}</ListingTable.Cell>
+                            <ListingTable.Cell align="right">
+                              <Tooltip title="Remove from group">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => handleRemoveUser(user.id)}
+                                >
+                                  <Trash size={16} />
+                                </IconButton>
+                              </Tooltip>
+                            </ListingTable.Cell>
+                          </ListingTable.Row>
+                        ))}
+                      </ListingTable.Body>
+                    </ListingTable>
+                  </ListingTable.Container>
+                </Box>
+              )}
+
+              {membersTotal === 0 && pendingAdds.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No members yet. Search and add users above.
                 </Typography>
+              ) : membersTotal > 0 ? (
                 <ListingTable.Container>
                   <ListingTable>
                     <ListingTable.Head>
@@ -279,7 +326,7 @@ export const GroupEditPage: React.FC = () => {
                       </ListingTable.Row>
                     </ListingTable.Head>
                     <ListingTable.Body>
-                      {pendingAdds.map((user) => (
+                      {pageMembers.map((user) => (
                         <ListingTable.Row key={user.id}>
                           <ListingTable.Cell>
                             {getUsername(user)}
@@ -299,118 +346,80 @@ export const GroupEditPage: React.FC = () => {
                       ))}
                     </ListingTable.Body>
                   </ListingTable>
+                  <TablePagination
+                    component="div"
+                    count={membersTotal}
+                    page={membersPage}
+                    rowsPerPage={membersRowsPerPage}
+                    onPageChange={(_e, newPage) => setMembersPage(newPage)}
+                    onRowsPerPageChange={(e) => {
+                      setMembersRowsPerPage(parseInt(e.target.value, 10));
+                      setMembersPage(0);
+                    }}
+                    rowsPerPageOptions={[5, 10, 25, 50]}
+                  />
                 </ListingTable.Container>
-              </Box>
-            )}
+              ) : null}
+            </>
+          )}
 
-            {membersTotal === 0 && pendingAdds.length === 0 ? (
+          {/* ── Roles tab ── */}
+          {activeTab === "roles" && (
+            <>
+              <Form.Header>Assigned Roles</Form.Header>
               <Typography variant="body2" color="text.secondary">
-                No members yet. Search and add users above.
+                Roles currently assigned to this group. Manage role assignments
+                from the Roles page.
               </Typography>
-            ) : membersTotal > 0 ? (
-              <ListingTable.Container>
-                <ListingTable>
-                  <ListingTable.Head>
-                    <ListingTable.Row>
-                      <ListingTable.Cell>Username</ListingTable.Cell>
-                      <ListingTable.Cell>User ID</ListingTable.Cell>
-                      <ListingTable.Cell />
-                    </ListingTable.Row>
-                  </ListingTable.Head>
-                  <ListingTable.Body>
-                    {pageMembers.map((user) => (
-                      <ListingTable.Row key={user.id}>
-                        <ListingTable.Cell>
-                          {getUsername(user)}
-                        </ListingTable.Cell>
-                        <ListingTable.Cell>{user.id}</ListingTable.Cell>
-                        <ListingTable.Cell align="right">
-                          <Tooltip title="Remove from group">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveUser(user.id)}
-                            >
-                              <Trash size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </ListingTable.Cell>
-                      </ListingTable.Row>
-                    ))}
-                  </ListingTable.Body>
-                </ListingTable>
-                <TablePagination
-                  component="div"
-                  count={membersTotal}
-                  page={membersPage}
-                  rowsPerPage={membersRowsPerPage}
-                  onPageChange={(_e, newPage) => setMembersPage(newPage)}
-                  onRowsPerPageChange={(e) => {
-                    setMembersRowsPerPage(parseInt(e.target.value, 10));
-                    setMembersPage(0);
-                  }}
-                  rowsPerPageOptions={[5, 10, 25, 50]}
-                />
-              </ListingTable.Container>
-            ) : null}
-          </Form.Section>
-        )}
 
-        {/* ── Roles tab ── */}
-        {activeTab === "roles" && (
-          <Form.Section>
-            <Form.Header>Assigned Roles</Form.Header>
-            <Typography variant="body2" color="text.secondary">
-              Roles currently assigned to this group. Manage role assignments
-              from the Roles page.
-            </Typography>
-
-            <Box sx={{ mt: 1 }}>
-              {isLoadingRoles ? (
-                <CircularProgress size={20} />
-              ) : isRolesError ? (
-                <Typography variant="body2" color="error">
-                  Failed to load roles. Please try again.
-                </Typography>
-              ) : roles.length === 0 ? (
-                <Typography variant="body2" color="text.secondary">
-                  No roles assigned to this group.
-                </Typography>
-              ) : (
-                <ListingTable.Container>
-                  <ListingTable>
-                    <ListingTable.Head>
-                      <ListingTable.Row>
-                        <ListingTable.Cell>Name</ListingTable.Cell>
-                        <ListingTable.Cell>Description</ListingTable.Cell>
-                      </ListingTable.Row>
-                    </ListingTable.Head>
-                    <ListingTable.Body>
-                      {roles.map((role) => (
-                        <ListingTable.Row key={role.id}>
-                          <ListingTable.Cell>{role.name}</ListingTable.Cell>
-                          <ListingTable.Cell>
-                            {role.description ?? "-"}
-                          </ListingTable.Cell>
+              <Box sx={{ mt: 1 }}>
+                {isLoadingRoles ? (
+                  <CircularProgress size={20} />
+                ) : isRolesError ? (
+                  <Typography variant="body2" color="error">
+                    Failed to load roles. Please try again.
+                  </Typography>
+                ) : roles.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No roles assigned to this group.
+                  </Typography>
+                ) : (
+                  <ListingTable.Container>
+                    <ListingTable>
+                      <ListingTable.Head>
+                        <ListingTable.Row>
+                          <ListingTable.Cell>Name</ListingTable.Cell>
+                          <ListingTable.Cell>Description</ListingTable.Cell>
                         </ListingTable.Row>
-                      ))}
-                    </ListingTable.Body>
-                  </ListingTable>
-                </ListingTable.Container>
-              )}
-            </Box>
-          </Form.Section>
-        )}
+                      </ListingTable.Head>
+                      <ListingTable.Body>
+                        {roles.map((role) => (
+                          <ListingTable.Row key={role.id}>
+                            <ListingTable.Cell>{role.name}</ListingTable.Cell>
+                            <ListingTable.Cell>
+                              {role.description ?? "-"}
+                            </ListingTable.Cell>
+                          </ListingTable.Row>
+                        ))}
+                      </ListingTable.Body>
+                    </ListingTable>
+                  </ListingTable.Container>
+                )}
+              </Box>
+            </>
+          )}
+        </Form.Section>
 
-        {/* Action row lives below the cards; Save only on the editable Users tab. */}
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            onClick={() => navigate(groupsPath)}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-          {activeTab === "users" && (
+        {/* Action row shows below the card only when there are unsaved changes. */}
+        {isDirty && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate(groupsPath)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
             <Button
               variant="contained"
               onClick={handleSave}
@@ -418,8 +427,8 @@ export const GroupEditPage: React.FC = () => {
             >
               {isSaving ? "Saving..." : "Save Changes"}
             </Button>
-          )}
-        </Stack>
+          </Stack>
+        )}
       </Stack>
     </PageLayout>
   );

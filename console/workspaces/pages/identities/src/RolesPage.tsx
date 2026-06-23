@@ -27,7 +27,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit, Plus, Shield, Trash } from "@wso2/oxygen-ui-icons-react";
+import { Plus, Shield, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteRole,
@@ -79,9 +79,7 @@ export const RolesPage: React.FC = () => {
     : "#";
 
   const editRolePath = (roleId: string) =>
-    orgId
-      ? generatePath(rolesBasePath + "/:roleId/edit", { orgId, roleId })
-      : "#";
+    orgId ? generatePath(rolesBasePath + "/:roleId", { orgId, roleId }) : "#";
 
   const handleDelete = (role: ThunderRole) => {
     addConfirmation({
@@ -136,6 +134,8 @@ export const RolesPage: React.FC = () => {
                     key={role.id}
                     variant="card"
                     hover
+                    clickable
+                    onClick={() => navigate(editRolePath(role.id))}
                     onMouseEnter={() => setHoveredId(role.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     onFocus={() => setHoveredId(role.id)}
@@ -181,20 +181,15 @@ export const RolesPage: React.FC = () => {
                             spacing={0.5}
                             justifyContent="flex-end"
                           >
-                            <Tooltip title="Edit role">
-                              <IconButton
-                                size="small"
-                                onClick={() => navigate(editRolePath(role.id))}
-                              >
-                                <Edit size={16} />
-                              </IconButton>
-                            </Tooltip>
                             {!role.isReadOnly && (
                               <Tooltip title="Delete role">
                                 <IconButton
                                   size="small"
                                   color="error"
-                                  onClick={() => handleDelete(role)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(role);
+                                  }}
                                 >
                                   <Trash size={16} />
                                 </IconButton>

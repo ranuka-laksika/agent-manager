@@ -27,7 +27,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Edit, Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
+import { Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteGroup,
@@ -80,7 +80,7 @@ export const GroupsPage: React.FC = () => {
 
   const editGroupPath = (groupId: string) =>
     orgId
-      ? generatePath(identitiesRoute.children.groups.path + "/:groupId/edit", {
+      ? generatePath(identitiesRoute.children.groups.path + "/:groupId", {
           orgId,
           groupId,
         })
@@ -139,6 +139,8 @@ export const GroupsPage: React.FC = () => {
                     key={group.id}
                     variant="card"
                     hover
+                    clickable
+                    onClick={() => navigate(editGroupPath(group.id))}
                     onMouseEnter={() => setHoveredId(group.id)}
                     onMouseLeave={() => setHoveredId(null)}
                     onFocus={() => setHoveredId(group.id)}
@@ -184,21 +186,14 @@ export const GroupsPage: React.FC = () => {
                             spacing={0.5}
                             justifyContent="flex-end"
                           >
-                            <Tooltip title="Edit group">
-                              <IconButton
-                                size="small"
-                                onClick={() =>
-                                  navigate(editGroupPath(group.id))
-                                }
-                              >
-                                <Edit size={16} />
-                              </IconButton>
-                            </Tooltip>
                             <Tooltip title="Delete group">
                               <IconButton
                                 size="small"
                                 color="error"
-                                onClick={() => handleDelete(group)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(group);
+                                }}
                               >
                                 <Trash size={16} />
                               </IconButton>
