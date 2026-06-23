@@ -21,6 +21,21 @@ func CreateAgentModelConfig(g Gomega, client *framework.AMPClient, orgName, proj
 	return framework.DecodeBody[framework.AgentModelConfigResponse](g, resp)
 }
 
+// CreateAgentMCPConfig attaches an MCP proxy to an agent via the dedicated
+// mcp-configs endpoint. The server forces the config type to "mcp", so the
+// request's env mappings should reference an MCP proxy via MCPProxyName.
+func CreateAgentMCPConfig(g Gomega, client *framework.AMPClient, orgName, projName, agentName string, req framework.CreateAgentModelConfigRequest) framework.AgentModelConfigResponse {
+	basePath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/mcp-configs",
+		orgName, projName, agentName)
+
+	resp, err := client.Post(basePath, req)
+	g.Expect(err).NotTo(HaveOccurred(), "create agent MCP config request failed")
+	defer resp.Body.Close()
+	framework.ExpectStatus(g, resp, 201)
+
+	return framework.DecodeBody[framework.AgentModelConfigResponse](g, resp)
+}
+
 // ListAgentModelConfigs returns all model configurations for an agent.
 func ListAgentModelConfigs(g Gomega, client *framework.AMPClient, orgName, projName, agentName string) framework.AgentModelConfigListResponse {
 	path := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/model-configs",
