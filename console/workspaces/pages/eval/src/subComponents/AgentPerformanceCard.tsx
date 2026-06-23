@@ -39,6 +39,12 @@ export interface RadarDefinition {
   fill?: string;
   fillOpacity?: number;
   strokeWidth?: number;
+  /**
+   * When true, axes where this radar's dataKey is null/undefined are bridged
+   * with a straight line instead of dipping to zero. Used to overlay radars
+   * for two monitors that don't share the exact same evaluator set.
+   */
+  connectNulls?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   dot?: boolean | React.ReactElement | ((props: any) => React.ReactNode);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -52,16 +58,28 @@ export interface RadarDataPoint {
   _scoredCount: number;
   _totalCount: number;
   _level: EvaluationLevel;
+  // Additional series (e.g. a second monitor's score) can be attached under
+  // their own dataKey; consumers index into RadarDataPoint dynamically.
+  [key: string]: unknown;
 }
+
+export type RadarTooltipContent = (props: {
+  active?: boolean;
+  payload?: Array<{ value?: number; payload?: RadarDataPoint }>;
+}) => React.ReactNode;
 
 interface AgentPerformanceCardProps {
   radarChartData: RadarDataPoint[];
   radars: RadarDefinition[];
+  title?: string;
+  renderTooltipContent?: RadarTooltipContent;
 }
 
 const AgentPerformanceCard: React.FC<AgentPerformanceCardProps> = ({
   radarChartData,
   radars,
+  title = "Agent Performance",
+  renderTooltipContent,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === "dark";
@@ -76,7 +94,7 @@ const AgentPerformanceCard: React.FC<AgentPerformanceCardProps> = ({
           justifyContent="space-between"
           alignItems="center"
         >
-          <Typography variant="subtitle1">Agent Performance</Typography>
+          <Typography variant="subtitle1">{title}</Typography>
         </Stack>
         {radarChartData.length === 0 ? (
           <Box
@@ -112,13 +130,15 @@ const AgentPerformanceCard: React.FC<AgentPerformanceCardProps> = ({
           >
             <ChartTooltip
               cursor={false}
-              content={({
-                active,
-                payload,
-              }: {
-                active?: boolean;
-                payload?: Array<{ value?: number; payload?: RadarDataPoint }>;
-              }) => {
+              content={
+                renderTooltipContent ??
+                (({
+                  active,
+                  payload,
+                }: {
+                  active?: boolean;
+                  payload?: Array<{ value?: number; payload?: RadarDataPoint }>;
+                }) => {
                 if (!active || !payload?.length) return null;
                 const point = payload[0];
                 const dataPoint = point.payload;
@@ -169,7 +189,8 @@ const AgentPerformanceCard: React.FC<AgentPerformanceCardProps> = ({
                     </CardContent>
                   </Card>
                 );
-              }}
+                })
+              }
             />
           </RadarChart>
         )}

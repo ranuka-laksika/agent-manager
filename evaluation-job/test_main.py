@@ -36,6 +36,7 @@ from main import (
     validate_time_format,
     publish_scores,
     OAuth2TokenManager,
+    TRACE_FETCH_PAGE_SIZE,
     _eval_template,
     _load_custom_code_evaluator,
 )
@@ -834,7 +835,7 @@ class TestMainIntegration:
                     "IDP_CLIENT_SECRET": "test-secret",
                 },
             ),
-            patch("main.TraceFetcher"),
+            patch("main.TraceFetcher") as mock_trace_fetcher,
             patch("main.Monitor", return_value=mock_monitor_instance),
             pytest.raises(SystemExit) as exc_info,
         ):
@@ -854,6 +855,96 @@ class TestMainIntegration:
 
         # publish_scores was called
         mock_publish.assert_called_once()
+
+        # sampling_rate default (1.0) is forwarded to Monitor.run()
+        mock_monitor_instance.run.assert_called_once_with(
+            start_time="2026-01-15T10:00:00Z",
+            end_time="2026-01-15T11:00:00Z",
+            sample_rate=1.0,
+        )
+
+        # page_size is set on the TraceFetcher via the in-code constant, not a CLI flag
+        assert mock_trace_fetcher.call_args.kwargs["page_size"] == TRACE_FETCH_PAGE_SIZE
+
+    @patch("main.publish_scores", return_value=True)
+    @patch("main.builtin")
+    def test_custom_sampling_rate_forwarded_to_monitor_run(self, mock_builtin, mock_publish):
+        """A non-default --sampling-rate is forwarded to Monitor.run()."""
+        from main import main
+
+        mock_run_result = MagicMock()
+        mock_run_result.traces_evaluated = 5
+        mock_run_result.duration_seconds = 2.5
+        mock_run_result.success = True
+        mock_run_result.errors = []
+        mock_run_result.scores = {
+            "Latency": _make_evaluator_summary("Latency", "trace", [], {"mean": 0.9}),
+        }
+
+        mock_monitor_instance = MagicMock()
+        mock_monitor_instance.run.return_value = mock_run_result
+
+        evaluators = [
+            {
+                "identifier": "latency_performance",
+                "displayName": "Latency",
+                "config": {"level": "trace"},
+            }
+        ]
+        argv = self._make_argv(evaluators) + ["--sampling-rate", "0.3"]
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.dict(
+                "os.environ",
+                {
+                    "IDP_TOKEN_URL": "http://thunder:8090/oauth2/token",
+                    "IDP_CLIENT_ID": "test-client",
+                    "IDP_CLIENT_SECRET": "test-secret",
+                },
+            ),
+            patch("main.TraceFetcher"),
+            patch("main.Monitor", return_value=mock_monitor_instance),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 0
+        mock_monitor_instance.run.assert_called_once_with(
+            start_time="2026-01-15T10:00:00Z",
+            end_time="2026-01-15T11:00:00Z",
+            sample_rate=0.3,
+        )
+
+    @pytest.mark.parametrize("bad_rate", ["0", "1.5", "-0.2"])
+    def test_out_of_range_sampling_rate_exits(self, bad_rate):
+        """Should exit with code 1 when --sampling-rate is outside (0, 1]."""
+        from main import main
+
+        evaluators = [
+            {
+                "identifier": "latency_performance",
+                "displayName": "Latency",
+                "config": {"level": "trace"},
+            }
+        ]
+        argv = self._make_argv(evaluators) + ["--sampling-rate", bad_rate]
+
+        with (
+            patch.object(sys, "argv", argv),
+            patch.dict(
+                "os.environ",
+                {
+                    "IDP_TOKEN_URL": "http://thunder:8090/oauth2/token",
+                    "IDP_CLIENT_ID": "test-client",
+                    "IDP_CLIENT_SECRET": "test-secret",
+                },
+            ),
+            pytest.raises(SystemExit) as exc_info,
+        ):
+            main()
+
+        assert exc_info.value.code == 1
 
     def test_missing_idp_credentials_exits(self):
         """Should exit with code 1 when IDP credentials are not set."""

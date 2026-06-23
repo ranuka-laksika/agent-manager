@@ -10,15 +10,18 @@ spec:
     openAPIV3Schema:
       type: object
       properties:
-        agentApiKey:
+        agentApiKeySecretRef:
           type: string
-          description: "API key for authenticating with the agent service"
+          description: "Remote-store reference (ExternalSecret remoteRef key) of the agent API key. The raw key is never passed to the trait — only this reference."
+        agentApiKeySecretProperty:
+          type: string
+          description: "Optional property within the remote secret that holds the agent API key (ExternalSecret remoteRef property)."
         envInjectionEnabled:
           type: boolean
           default: true
           description: "Enable or disable env injection instrumentation"
       required:
-        - agentApiKey
+        - agentApiKeySecretRef
 
   environmentConfigs:
     openAPIV3Schema:
@@ -27,23 +30,39 @@ spec:
         envInjectionEnabled:
           type: boolean
           description: "Enable or disable env injection instrumentation for this environment"
-        agentApiKey:
+        agentApiKeySecretRef:
           type: string
-          description: "Environment-specific API key for authenticating with the agent service"
+          description: "Environment-specific remote-store reference of the agent API key (ExternalSecret remoteRef key)."
+        agentApiKeySecretProperty:
+          type: string
+          description: "Environment-specific property within the remote secret that holds the agent API key (ExternalSecret remoteRef property)."
 
-  # Always create the Secret — patches always run regardless of includeWhen,
-  # so the Secret must always exist to satisfy the AMP_AGENT_API_KEY secretKeyRef.
+  # Always create the ExternalSecret — patches always run regardless of includeWhen,
+  # so the materialized Secret must always exist to satisfy the AMP_AGENT_API_KEY secretKeyRef.
+  # The agent API key value lives in the KV store; here we only reference it by its KV path
+  # (agentApiKeySecretRef), so the raw key is never persisted in the control plane.
   creates:
     - template:
-        apiVersion: v1
-        kind: Secret
+        apiVersion: external-secrets.io/v1
+        kind: ExternalSecret
         metadata:
           name: ${metadata.name}-agent-api-key
           namespace: ${metadata.namespace}
-        type: Opaque
-        stringData:
-          api-key: |
-             ${has(environmentConfigs.agentApiKey) ? environmentConfigs.agentApiKey : parameters.agentApiKey}
+        spec:
+          refreshInterval: 15s
+          secretStoreRef:
+            name: ${dataplane.secretStore}
+            kind: ClusterSecretStore
+          target:
+            name: ${metadata.name}-agent-api-key
+            creationPolicy: Owner
+          data:
+            - secretKey: api-key
+              remoteRef:
+                key: |-
+                  ${has(environmentConfigs.agentApiKeySecretRef) ? environmentConfigs.agentApiKeySecretRef : parameters.agentApiKeySecretRef}
+                property: |-
+                  ${has(environmentConfigs.agentApiKeySecretProperty) ? environmentConfigs.agentApiKeySecretProperty : (has(parameters.agentApiKeySecretProperty) ? parameters.agentApiKeySecretProperty : oc_omit())}
 
   # Patches to inject AMP_OTEL_ENDPOINT and AMP_AGENT_API_KEY.
   # This is the sole injector for these vars across all agent types

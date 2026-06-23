@@ -41,6 +41,11 @@ Remove an identity provider from the gateway's AMS mirror. As with upsert, the
 gateway runtime configuration must be patched separately. System identity
 providers (e.g. ThunderKeyManager) cannot be deleted.
 
+Sharp edge: deleting only the mirror row leaves the issuer trusted by the
+gateway at runtime, and re-adding it elsewhere can mask the divergence. Use
+the manage-identity-provider script (ACTION=delete) so the mirror and the
+gateway runtime stay in sync.
+
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
 	@param gatewayID Gateway UUID or name
@@ -794,6 +799,12 @@ configuration. The gateway runtime configuration (ConfigMap) is the source
 of truth and must be patched separately via the manage-identity-provider
 script. The console renders that command rather than calling this endpoint
 directly.
+
+Sharp edge: writing to the mirror without also patching the gateway runtime
+makes the two diverge. Agent OAuth deploy-time validation only checks the
+mirror, so an agent referencing a mirror-only issuer will deploy successfully
+while the gateway rejects every token at runtime. Use the
+manage-identity-provider script to keep them in sync.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle

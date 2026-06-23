@@ -37,13 +37,13 @@ Both runners require evaluators to be passed directly:
     result = monitor.run()
 """
 
-from typing import List, Dict, Literal, Optional, Any, Union, TYPE_CHECKING
+from typing import List, Dict, Iterable, Literal, Optional, Any, Union, TYPE_CHECKING
 from dataclasses import dataclass, field
 from datetime import datetime
 from abc import ABC, abstractmethod
 import logging
 
-from .trace import Trace, parse_trace_for_evaluation, TraceFetcher, TraceLoader
+from .trace import Trace, parse_trace_for_evaluation, TraceFetcher, TraceLoader, sample_traces
 from .trace.fetcher import OTELTrace, _safe_request_error
 from .evaluators.base import BaseEvaluator, validate_unique_evaluator_names
 from .evaluators.params import EvalMode
@@ -277,7 +277,7 @@ class BaseRunner(ABC):
 
         return self._fetcher_instance
 
-    def _fetch_traces(self, start_time: str, end_time: str) -> List[OTELTrace]:
+    def _fetch_traces(self, start_time: str, end_time: str) -> Iterable[OTELTrace]:
         """Unified interface to fetch traces."""
         fetcher = self._get_fetcher()
 
@@ -334,11 +334,11 @@ class BaseRunner(ABC):
 
     def _evaluate_traces(
         self,
-        traces: List[Trace],
+        traces: Iterable[Trace],
         tasks: Optional[Dict[str, Task]] = None,
         trial_info: Optional[Dict[str, str]] = None,
     ) -> RunResult:
-        """Internal method to evaluate a list of traces."""
+        """Internal method to evaluate traces from a (possibly lazy) iterable."""
         from .dataset import generate_id
 
         run_id = generate_id("run")
@@ -356,20 +356,31 @@ class BaseRunner(ABC):
         )
 
         scores_by_evaluator: Dict[str, List[EvaluatorScore]] = {e.name: [] for e in self._evaluators}
-        total_traces = len(traces)
         evaluator_names = [e.name for e in self._evaluators]
         logger.info(
-            "Starting evaluation: %d trace(s) x %d evaluator(s) %s",
-            total_traces,
+            "Starting evaluation: %d evaluator(s) %s",
             len(self._evaluators),
             evaluator_names,
         )
 
-        for idx, trace in enumerate(traces, 1):
+        trace_iter = iter(traces)
+        idx = 0
+        while True:
+            try:
+                trace = next(trace_iter)
+            except StopIteration:
+                break
+            except Exception as e:
+                error_msg = f"Error fetching/parsing trace: {e}"
+                result.errors.append(error_msg)
+                logger.error(error_msg)
+                break
+
+            idx += 1
             task = tasks.get(trace.trace_id) if tasks else None
             trial_id = trial_info.get(trace.trace_id) if trial_info else None
 
-            logger.info("Evaluating trace %d/%d trace_id=%s", idx, total_traces, trace.trace_id)
+            logger.info("Evaluating trace %d trace_id=%s", idx, trace.trace_id)
 
             try:
                 trace_scores = self.evaluate_trace(trace, task, trial_id=trial_id)
@@ -664,9 +675,11 @@ class Experiment(BaseRunner):
 
             expected_count = len(dataset.tasks) * self.trials_per_task
 
-            fetched_traces = self._fetch_traces(
-                start_time=fetch_start.isoformat(),
-                end_time=fetch_end.isoformat(),
+            fetched_traces = list(
+                self._fetch_traces(
+                    start_time=fetch_start.isoformat(),
+                    end_time=fetch_end.isoformat(),
+                )
             )
 
             logger.info(f"Fetched {len(fetched_traces)} traces from trace service (expected: {expected_count})")
@@ -756,43 +769,33 @@ class Monitor(BaseRunner):
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         traces: Optional[List[Trace]] = None,
+        sample_rate: Optional[float] = None,
         **kwargs: Any,
     ) -> RunResult:
         """
         Run monitor evaluation.
 
         Provide traces directly OR specify time range to fetch.
+
+        Args:
+            sample_rate: Optional fraction (0, 1] of fetched traces to evaluate,
+                deterministically sampled by traceId. Ignored if `traces` is provided.
         """
-        eval_traces: List[Trace] = []
 
-        if traces:
-            eval_traces = traces
-        else:
-            try:
-                fetched = self._fetch_traces(
-                    start_time=start_time or "",
-                    end_time=end_time or "",
-                )
-                for trace in fetched:
-                    try:
-                        eval_traces.append(parse_trace_for_evaluation(trace))
-                    except Exception as parse_error:
-                        logger.error(f"Error parsing trace: {parse_error}")
-                        continue
+        def _iter_parsed_traces() -> Iterable[Trace]:
+            fetched = self._fetch_traces(
+                start_time=start_time or "",
+                end_time=end_time or "",
+            )
+            if sample_rate is not None:
+                fetched = sample_traces(fetched, sample_rate)
+            for otel_trace in fetched:
+                try:
+                    yield parse_trace_for_evaluation(otel_trace)
+                except Exception as parse_error:
+                    logger.error(f"Error parsing trace: {parse_error}")
 
-            except Exception as e:
-                error_msg = f"Failed to fetch traces: {_safe_request_error(e)}"
-                logger.error(error_msg, exc_info=True)
-
-                from .dataset import generate_id
-
-                return RunResult(
-                    run_id=generate_id("run"),
-                    eval_mode=EvalMode.MONITOR,
-                    started_at=datetime.now(),
-                    completed_at=datetime.now(),
-                    errors=[error_msg],
-                )
+        eval_traces: Iterable[Trace] = traces if traces else _iter_parsed_traces()
 
         run_result = self._evaluate_traces(
             traces=eval_traces,

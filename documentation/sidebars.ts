@@ -102,6 +102,8 @@ const sidebars: SidebarsConfig = {
         'tutorials/register-llm-service-provider',
         'tutorials/register-mcp-proxy',
         'tutorials/secure-agent-endpoints-with-api-keys',
+        'tutorials/configure-identity-providers',
+        'tutorials/secure-agent-endpoints-with-oauth',
         'tutorials/configure-cors-for-agent-endpoints',
         'tutorials/configure-agent-llm-configuration',
         'tutorials/configure-agent-mcp-proxies'

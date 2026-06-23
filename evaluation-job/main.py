@@ -55,6 +55,11 @@ logger = logging.getLogger(__name__)
 PUBLISH_MAX_RETRIES = 3
 PUBLISH_INITIAL_BACKOFF = 2  # seconds
 
+# Max traces per /traces/export page. Kept small and deliberate -- each page is fully
+# parsed into memory at once, so this bounds peak memory regardless of how many traces
+# match the monitor's time window. Not exposed as a CLI flag; tune this constant directly.
+TRACE_FETCH_PAGE_SIZE = 10
+
 
 class OAuth2TokenManager:
     """Manages OAuth2 client_credentials tokens with caching."""
@@ -135,6 +140,12 @@ def configure_logging() -> None:
     logging.basicConfig(level=logging.INFO, handlers=[handler])
     logging.getLogger(__name__).setLevel(level)
 
+    # The openai/anthropic SDKs (used internally by any_llm) log retry attempts at
+    # INFO via their own package loggers, not through evaluation-job's logger above.
+    logging.getLogger("openai").setLevel(logging.WARNING)
+    logging.getLogger("anthropic").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
 
 def parse_args() -> argparse.Namespace:
     """Parse command-line arguments for monitor execution."""
@@ -183,7 +194,7 @@ def parse_args() -> argparse.Namespace:
         "--sampling-rate",
         type=float,
         default=1.0,
-        help="Sampling rate for traces (0.0-1.0), default: 1.0",
+        help="Sampling rate for traces (> 0 and <= 1), default: 1.0",
     )
 
     parser.add_argument(
@@ -529,7 +540,7 @@ def main() -> None:
         logger.info("Configured LLM client to route through OpenAI-compatible gateway at %s", llm_api_base)
 
     logger.info(
-        "Starting monitor evaluation monitor=%s organization=%s project=%s agent=%s env=%s time_range=%s..%s sampling=%.1f",
+        "Starting monitor evaluation monitor=%s organization=%s project=%s agent=%s env=%s time_range=%s..%s sampling=%.2f",
         args.monitor_name,
         args.organization,
         args.project,
@@ -552,6 +563,13 @@ def main() -> None:
         logger.error(
             "Invalid time format for --trace-end: %s. Expected ISO 8601 format",
             args.trace_end,
+        )
+        sys.exit(1)
+
+    if not 0 < args.sampling_rate <= 1:
+        logger.error(
+            "Invalid --sampling-rate: %s. Expected a value in (0, 1]",
+            args.sampling_rate,
         )
         sys.exit(1)
 
@@ -646,6 +664,7 @@ def main() -> None:
             agent=args.agent,
             environment=args.environment,
             token_provider=token_manager.get_token,
+            page_size=TRACE_FETCH_PAGE_SIZE,
         )
 
         monitor = Monitor(
@@ -654,7 +673,11 @@ def main() -> None:
         )
 
         # Run evaluation
-        result = monitor.run(start_time=args.trace_start, end_time=args.trace_end)
+        result = monitor.run(
+            start_time=args.trace_start,
+            end_time=args.trace_end,
+            sample_rate=args.sampling_rate,
+        )
 
         # Fail if there were errors (e.g. trace fetching failed)
         if result.errors:

@@ -68,6 +68,7 @@ func TestCreateAgent(t *testing.T) {
 
 		testClients := wiring.TestClients{
 			OpenChoreoClient: openChoreoClient,
+			SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),
 		}
 
 		app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
@@ -145,6 +146,7 @@ func TestCreateAgent(t *testing.T) {
 		openChoreoClient := apitestutils.CreateMockOpenChoreoClient()
 		testClients := wiring.TestClients{
 			OpenChoreoClient: openChoreoClient,
+			SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),
 		}
 
 		app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
@@ -238,6 +240,7 @@ func TestCreateAgent(t *testing.T) {
 
 		testClients := wiring.TestClients{
 			OpenChoreoClient: openChoreoClient,
+			SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),
 		}
 
 		app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
@@ -341,6 +344,7 @@ func TestCreateAgent(t *testing.T) {
 
 		testClients := wiring.TestClients{
 			OpenChoreoClient: openChoreoClient,
+			SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),
 		}
 
 		app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
@@ -956,6 +960,7 @@ func TestCreateAgent(t *testing.T) {
 			openChoreoClient := tt.setupMock()
 			testClients := wiring.TestClients{
 				OpenChoreoClient: openChoreoClient,
+				SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),
 			}
 
 			app := apitestutils.MakeAppClientWithDeps(t, testClients, tt.authMiddleware)

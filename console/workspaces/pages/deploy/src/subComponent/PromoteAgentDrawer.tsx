@@ -86,7 +86,10 @@ export function PromoteAgentDrawer({
 }: PromoteAgentDrawerProps) {
   const [formState, setFormState] = useState<PromoteFormState>(DEFAULT_STATE);
 
-  const { data: pipeline } = useGetDeploymentPipeline({ orgName: orgId, projName: projectId });
+  const { data: pipeline } = useGetDeploymentPipeline({
+    orgName: orgId,
+    projName: projectId,
+  });
   const { data: environments } = useListEnvironments({ orgName: orgId });
 
   const envDisplayName = useCallback(
@@ -95,7 +98,12 @@ export function PromoteAgentDrawer({
     [environments],
   );
 
-  const { mutateAsync: promoteAgent, isPending, error, reset: resetMutation } = usePromoteAgent();
+  const {
+    mutateAsync: promoteAgent,
+    isPending,
+    error,
+    reset: resetMutation,
+  } = usePromoteAgent();
 
   const targetEnvOptions = useMemo(() => {
     if (!pipeline) return [];
@@ -107,7 +115,7 @@ export function PromoteAgentDrawer({
 
   // Existing configuration of the selected destination environment. Keyed on the
   // target env, so selecting a different target refetches that env's config.
-  const { data: targetConfigs, isSuccess: isTargetConfigLoaded } =
+  const { data: targetConfigs, isSuccess: targetConfigLoaded } =
     useGetAgentConfigurations(
       { orgName: orgId, projName: projectId, agentName: agentId },
       { environment: formState.targetEnvironment },
@@ -135,13 +143,15 @@ export function PromoteAgentDrawer({
   // Pre-fill the editor with the destination environment's existing config so the
   // user edits from its previous values rather than starting blank. Only the
   // user-managed keys (isSystem=false) are editable; system entries are
-  // platform-injected. We fill once per target (tracked by filledForTarget) so a
-  // background refetch of the same target doesn't clobber in-progress edits, but
-  // switching to a different target re-fills from that env's config.
+  // platform-injected. We wait for the target's query to settle (targetConfigLoaded)
+  // before filling, so switching to a target with no config clears the previous
+  // target's values to empty rather than leaving them stale. We fill once per
+  // target (tracked by filledForTarget) so a background refetch of the same target
+  // doesn't clobber in-progress edits.
   useEffect(() => {
     if (!open) return;
     const target = formState.targetEnvironment;
-    if (!target || filledForTarget === target || !isTargetConfigLoaded) return;
+    if (!target || filledForTarget === target || !targetConfigLoaded) return;
     const cfg = targetConfigs?.configurations;
     const userEditableEnv = (cfg?.env ?? [])
       .filter((e) => !e.isSystem)
@@ -160,23 +170,24 @@ export function PromoteAgentDrawer({
   }, [
     open,
     formState.targetEnvironment,
-    isTargetConfigLoaded,
+    targetConfigLoaded,
     targetConfigs,
     filledForTarget,
   ]);
 
-  const handleToggleUseSourceConfig = useCallback(
-    (checked: boolean) => {
-      setFormState((prev) => ({ ...prev, useConfigFromSourceEnv: checked }));
-    },
-    [],
-  );
+  const handleToggleUseSourceConfig = useCallback((checked: boolean) => {
+    setFormState((prev) => ({ ...prev, useConfigFromSourceEnv: checked }));
+  }, []);
 
   // secretRef is intentionally preserved while editing so cancelling an edit can
   // restore the original masked secret. Submit decides whether to send the new
   // value or fall back to secretRef (see handleSubmit).
   const handleEnvChange = useCallback(
-    (index: number, field: "key" | "value" | "isSensitive", value: string | boolean) => {
+    (
+      index: number,
+      field: "key" | "value" | "isSensitive",
+      value: string | boolean,
+    ) => {
       setFormState((prev) => ({
         ...prev,
         env: prev.env.map((item, i) =>
@@ -212,7 +223,9 @@ export function PromoteAgentDrawer({
     (index: number, field: "key" | "mountPath" | "value", value: string) => {
       setFormState((prev) => ({
         ...prev,
-        files: prev.files.map((f, i) => (i === index ? { ...f, [field]: value } : f)),
+        files: prev.files.map((f, i) =>
+          i === index ? { ...f, [field]: value } : f,
+        ),
       }));
     },
     [],
@@ -245,7 +258,11 @@ export function PromoteAgentDrawer({
                     .map(({ key, value, isSensitive, secretRef }) =>
                       // Preserve the secret reference for secrets the user did not edit.
                       isSensitive && secretRef && !value
-                        ? ({ key, isSensitive, secretRef } as EnvironmentVariable)
+                        ? ({
+                            key,
+                            isSensitive,
+                            secretRef,
+                          } as EnvironmentVariable)
                         : { key, value, isSensitive },
                     ),
                   files: formState.files,
@@ -257,11 +274,20 @@ export function PromoteAgentDrawer({
         // handled by error
       }
     },
-    [formState, promoteAgent, orgId, projectId, agentId, sourceEnvironment.name, onClose],
+    [
+      formState,
+      promoteAgent,
+      orgId,
+      projectId,
+      agentId,
+      sourceEnvironment.name,
+      onClose,
+    ],
   );
 
   const errorMessage = useMemo(
-    () => (error ? (error as Error)?.message ?? "Failed to promote agent" : null),
+    () =>
+      error ? ((error as Error)?.message ?? "Failed to promote agent") : null,
     [error],
   );
 
@@ -323,22 +349,31 @@ export function PromoteAgentDrawer({
                   control={
                     <Switch
                       checked={formState.useConfigFromSourceEnv}
-                      onChange={(e) => handleToggleUseSourceConfig(e.target.checked)}
+                      onChange={(e) =>
+                        handleToggleUseSourceConfig(e.target.checked)
+                      }
                       disabled={isPending}
                     />
                   }
                   label={
                     <Stack>
-                      <Typography variant="body2">Use config from source environment</Typography>
+                      <Typography variant="body2">
+                        Use config from source environment
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         Inherit environment variables and file mounts from{" "}
-                        {sourceEnvironment.displayName ?? sourceEnvironment.name}
+                        {sourceEnvironment.displayName ??
+                          sourceEnvironment.name}
                       </Typography>
                     </Stack>
                   }
                 />
 
-                <Collapse in={!formState.useConfigFromSourceEnv} timeout="auto" unmountOnExit>
+                <Collapse
+                  in={!formState.useConfigFromSourceEnv}
+                  timeout="auto"
+                  unmountOnExit
+                >
                   <Stack spacing={2}>
                     <Card variant="outlined">
                       <CardContent>
@@ -348,7 +383,9 @@ export function PromoteAgentDrawer({
                             justifyContent="space-between"
                             alignItems="center"
                           >
-                            <Typography variant="h6">Environment Variables</Typography>
+                            <Typography variant="h6">
+                              Environment Variables
+                            </Typography>
                             <Button
                               size="small"
                               variant="outlined"
@@ -361,7 +398,8 @@ export function PromoteAgentDrawer({
                           </Stack>
                           {formState.env.length === 0 ? (
                             <Typography variant="body2" color="text.secondary">
-                              No environment variables. Click Add to define them.
+                              No environment variables. Click Add to define
+                              them.
                             </Typography>
                           ) : (
                             <Stack spacing={1}>
@@ -372,9 +410,15 @@ export function PromoteAgentDrawer({
                                   keyValue={item.key}
                                   valueValue={item.value}
                                   isSensitive={item.isSensitive ?? false}
-                                  isExistingSecret={!!(item.secretRef && item.isSensitive)}
-                                  onKeyChange={(v) => handleEnvChange(index, "key", v)}
-                                  onValueChange={(v) => handleEnvChange(index, "value", v)}
+                                  isExistingSecret={
+                                    !!(item.secretRef && item.isSensitive)
+                                  }
+                                  onKeyChange={(v) =>
+                                    handleEnvChange(index, "key", v)
+                                  }
+                                  onValueChange={(v) =>
+                                    handleEnvChange(index, "value", v)
+                                  }
                                   onSensitiveChange={(v) =>
                                     handleEnvChange(index, "isSensitive", v)
                                   }
@@ -419,9 +463,15 @@ export function PromoteAgentDrawer({
                                   keyValue={file.key}
                                   mountPathValue={file.mountPath}
                                   contentValue={file.value}
-                                  onKeyChange={(v) => handleFileChange(index, "key", v)}
-                                  onMountPathChange={(v) => handleFileChange(index, "mountPath", v)}
-                                  onContentChange={(v) => handleFileChange(index, "value", v)}
+                                  onKeyChange={(v) =>
+                                    handleFileChange(index, "key", v)
+                                  }
+                                  onMountPathChange={(v) =>
+                                    handleFileChange(index, "mountPath", v)
+                                  }
+                                  onContentChange={(v) =>
+                                    handleFileChange(index, "value", v)
+                                  }
                                   onRemove={() => handleRemoveFile(index)}
                                 />
                               ))}
@@ -430,14 +480,18 @@ export function PromoteAgentDrawer({
                         </Stack>
                       </CardContent>
                     </Card>
-
                   </Stack>
                 </Collapse>
               </Form.Stack>
             </Form.Section>
 
             <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
-              <Button variant="outlined" color="inherit" onClick={onClose} disabled={isPending}>
+              <Button
+                variant="outlined"
+                color="inherit"
+                onClick={onClose}
+                disabled={isPending}
+              >
                 Cancel
               </Button>
               <Button

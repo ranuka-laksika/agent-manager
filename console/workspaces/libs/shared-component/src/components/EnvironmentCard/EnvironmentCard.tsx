@@ -49,7 +49,6 @@ import {
   PauseCircle,
   Play,
   Tag,
-  Wrench,
 } from "@wso2/oxygen-ui-icons-react";
 import { NoDataFound, TextInput } from "@agent-management-platform/views";
 import { formatDistanceToNow } from "date-fns";
@@ -205,8 +204,8 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
 
   const latestKindVersion = kindVersions?.length
     ? [...kindVersions].sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      )[0]
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )[0]
     : undefined;
 
   const isKindOutdated =
@@ -311,8 +310,8 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             )}
             {(currentDeployment?.status === DeploymentStatus.ERROR ||
               currentDeployment?.status === DeploymentStatus.FAILED) && (
-              <EnvStatus status={currentDeployment.status as DeploymentStatus} />
-            )}
+                <EnvStatus status={currentDeployment.status as DeploymentStatus} />
+              )}
             {currentDeployment?.status === DeploymentStatus.SUSPENDED && (
               <EnvStatus status={DeploymentStatus.SUSPENDED} />
             )}
@@ -375,7 +374,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                   : "No successful build found. Build the agent before deploying."
               }
               action={
-                hasSuccessfulBuild ? (
+                hasSuccessfulBuild && (
                   <Button
                     startIcon={<RocketLaunchOutlined size={16} />}
                     variant="outlined"
@@ -389,20 +388,6 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                   >
                     {isFirstEnvironment ? "Go to Deployment" : "Promote"}
                   </Button>
-                ) : (
-                  <Button
-                    startIcon={<Wrench size={16} />}
-                    variant="outlined"
-                    component={Link}
-                    to={generatePath(
-                      absoluteRouteMap.children.org.children.projects.children
-                        .agents.children.build.path,
-                      { orgId, projectId, agentId }
-                    )}
-                    size="small"
-                  >
-                    Go to Build
-                  </Button>
                 )
               }
             />
@@ -412,27 +397,27 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
           )}
           {(currentDeployment.status === DeploymentStatus.ERROR ||
             currentDeployment.status === DeploymentStatus.FAILED) && (
-            <Alert
-              severity="error"
-              sx={{ width: "100%" }}
-              action={
-                <Button
-                  component={Link}
-                  to={generatePath(
-                    absoluteRouteMap.children.org.children.projects.children
-                      .agents.children.deployment.path,
-                    { orgId, projectId, agentId }
-                  )}
-                  color="inherit"
-                  size="small"
-                >
-                  View Deployment
-                </Button>
-              }
-            >
-              Deployment failed. Check the deployment page for more details.
-            </Alert>
-          )}
+              <Alert
+                severity="error"
+                sx={{ width: "100%" }}
+                action={
+                  <Button
+                    component={Link}
+                    to={generatePath(
+                      absoluteRouteMap.children.org.children.projects.children
+                        .agents.children.deployment.path,
+                      { orgId, projectId, agentId }
+                    )}
+                    color="inherit"
+                    size="small"
+                  >
+                    View Deployment
+                  </Button>
+                }
+              >
+                Deployment failed. Check the deployment page for more details.
+              </Alert>
+            )}
           {currentDeployment.status === DeploymentStatus.SUSPENDED && (
             <NoDataFound
               disableBackground
