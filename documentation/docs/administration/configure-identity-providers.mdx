@@ -5,7 +5,7 @@ sidebar_position: 7
 # Configure Identity Providers
 
 Identity providers are the token issuers your gateway trusts. When an agent endpoint is secured
-with [OAuth](./secure-agent-endpoints-with-oauth.mdx), the gateway validates incoming JWTs
+with [OAuth](../tutorials/secure-agent-endpoints-with-oauth.mdx), the gateway validates incoming JWTs
 against the identity providers configured on it. Each agent then chooses which of those
 providers it accepts.
 
@@ -89,4 +89,4 @@ deploy successfully while the gateway rejects every token at runtime.
 - A provider name is unique within a gateway.
 - `ThunderKeyManager` is the bundled default identity provider.
 - After adding a provider, secure an agent with it by following
-  [Secure Agent Endpoints with OAuth](./secure-agent-endpoints-with-oauth.mdx).
+  [Secure Agent Endpoints with OAuth](../tutorials/secure-agent-endpoints-with-oauth.mdx).

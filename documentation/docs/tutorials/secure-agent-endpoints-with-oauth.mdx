@@ -6,7 +6,7 @@ sidebar_position: 8
 
 OAuth security protects platform-hosted API agent endpoints at the gateway. When enabled,
 callers must send a valid JWT, by default in the `Authorization: Bearer <token>` header. The
-gateway validates the token against the [identity providers](./configure-identity-providers.mdx)
+gateway validates the token against the [identity providers](../administration/configure-identity-providers.mdx)
 you select for the agent.
 
 OAuth and [API key security](./secure-agent-endpoints-with-api-keys.mdx) are mutually exclusive —
@@ -15,7 +15,7 @@ an agent uses one or the other, not both.
 ## Prerequisites
 
 - A platform-hosted API agent created in a project.
-- At least one [identity provider configured](./configure-identity-providers.mdx) on the
+- At least one [identity provider configured](../administration/configure-identity-providers.mdx) on the
   environment's gateway.
 
 ## Step 1: Enable OAuth During Deployment
@@ -73,5 +73,5 @@ key security cannot be active at the same time.
 
 - OAuth security applies to platform-hosted API agents.
 - Accepted issuers and audiences come from the
-  [identity providers configured on the gateway](./configure-identity-providers.mdx).
+  [identity providers configured on the gateway](../administration/configure-identity-providers.mdx).
 - An agent uses one authentication method at a time — OAuth or API key, not both.
