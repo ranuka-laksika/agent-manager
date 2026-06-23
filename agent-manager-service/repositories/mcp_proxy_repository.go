@@ -32,6 +32,7 @@ import (
 )
 
 // MCPProxyRepository defines the interface for MCP proxy persistence.
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/mcp_proxy_repository_mock.go . MCPProxyRepository:MCPProxyRepositoryMock
 type MCPProxyRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, p *models.MCPProxy, handle, name, version, orgUUID string) error

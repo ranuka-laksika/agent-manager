@@ -38,6 +38,7 @@ type llmProviderTemplateConfig struct {
 }
 
 // LLMProviderTemplateRepository defines the interface for LLM provider template persistence
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/llm_provider_template_repository_mock.go . LLMProviderTemplateRepository:LLMProviderTemplateRepositoryMock
 type LLMProviderTemplateRepository interface {
 	Create(t *models.LLMProviderTemplate) error

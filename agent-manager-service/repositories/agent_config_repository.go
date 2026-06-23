@@ -30,6 +30,7 @@ import (
 var ErrAgentConfigNotFound = errors.New("agent config not found")
 
 // AgentConfigRepository defines the interface for agent configuration operations
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/agent_config_repository_mock.go . AgentConfigRepository:AgentConfigRepositoryMock
 type AgentConfigRepository interface {
 	// Upsert creates or updates an agent config for a specific environment

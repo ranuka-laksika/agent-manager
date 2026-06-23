@@ -228,6 +228,9 @@ func TestAgentKindService_AddVersion_Gates(t *testing.T) {
 			return nil, gorm.ErrRecordNotFound // version slot is free
 		}
 		oc := &clientmocks.OpenChoreoClientMock{
+			GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+				return &models.AgentResponse{Name: "src-agent"}, nil // source component exists
+			},
 			GetBuildFunc: func(_ context.Context, _, _, _, _ string) (*models.BuildDetailsResponse, error) {
 				return buildWithImage(""), nil // build incomplete
 			},
@@ -248,6 +251,9 @@ func TestAgentKindService_AddVersion_Gates(t *testing.T) {
 			return &models.AgentKindVersion{Version: "v1"}, nil // dup image
 		}
 		oc := &clientmocks.OpenChoreoClientMock{
+			GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+				return &models.AgentResponse{Name: "src-agent"}, nil
+			},
 			GetBuildFunc: func(_ context.Context, _, _, _, _ string) (*models.BuildDetailsResponse, error) {
 				return buildWithImage("sha256:abc"), nil
 			},
@@ -276,6 +282,9 @@ func TestAgentKindService_AddVersion_Gates(t *testing.T) {
 			return nil
 		}
 		oc := &clientmocks.OpenChoreoClientMock{
+			GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+				return &models.AgentResponse{Name: "src-agent"}, nil
+			},
 			GetBuildFunc: func(_ context.Context, _, _, _, _ string) (*models.BuildDetailsResponse, error) {
 				return buildWithImage("sha256:abc"), nil
 			},

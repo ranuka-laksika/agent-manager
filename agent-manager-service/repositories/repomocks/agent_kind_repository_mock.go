@@ -29,6 +29,9 @@ import (
 //			DeleteVersionFunc: func(ctx context.Context, kindID uuid.UUID, versionTag string) error {
 //				panic("mock out the DeleteVersion method")
 //			},
+//			ExistsBySourceAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) (bool, error) {
+//				panic("mock out the ExistsBySourceAgent method")
+//			},
 //			FindVersionByImageIDInOrgFunc: func(ctx context.Context, orgName string, imageID string) (*models.AgentKindVersion, error) {
 //				panic("mock out the FindVersionByImageIDInOrg method")
 //			},
@@ -68,6 +71,9 @@ type AgentKindRepositoryMock struct {
 
 	// DeleteVersionFunc mocks the DeleteVersion method.
 	DeleteVersionFunc func(ctx context.Context, kindID uuid.UUID, versionTag string) error
+
+	// ExistsBySourceAgentFunc mocks the ExistsBySourceAgent method.
+	ExistsBySourceAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) (bool, error)
 
 	// FindVersionByImageIDInOrgFunc mocks the FindVersionByImageIDInOrg method.
 	FindVersionByImageIDInOrgFunc func(ctx context.Context, orgName string, imageID string) (*models.AgentKindVersion, error)
@@ -123,6 +129,17 @@ type AgentKindRepositoryMock struct {
 			KindID uuid.UUID
 			// VersionTag is the versionTag argument value.
 			VersionTag string
+		}
+		// ExistsBySourceAgent holds details about calls to the ExistsBySourceAgent method.
+		ExistsBySourceAgent []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// OrgName is the orgName argument value.
+			OrgName string
+			// ProjectName is the projectName argument value.
+			ProjectName string
+			// AgentName is the agentName argument value.
+			AgentName string
 		}
 		// FindVersionByImageIDInOrg holds details about calls to the FindVersionByImageIDInOrg method.
 		FindVersionByImageIDInOrg []struct {
@@ -190,6 +207,7 @@ type AgentKindRepositoryMock struct {
 	lockCreateVersion             sync.RWMutex
 	lockDeleteKind                sync.RWMutex
 	lockDeleteVersion             sync.RWMutex
+	lockExistsBySourceAgent       sync.RWMutex
 	lockFindVersionByImageIDInOrg sync.RWMutex
 	lockGetKind                   sync.RWMutex
 	lockGetVersion                sync.RWMutex
@@ -348,6 +366,50 @@ func (mock *AgentKindRepositoryMock) DeleteVersionCalls() []struct {
 	mock.lockDeleteVersion.RLock()
 	calls = mock.calls.DeleteVersion
 	mock.lockDeleteVersion.RUnlock()
+	return calls
+}
+
+// ExistsBySourceAgent calls ExistsBySourceAgentFunc.
+func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, orgName string, projectName string, agentName string) (bool, error) {
+	if mock.ExistsBySourceAgentFunc == nil {
+		panic("AgentKindRepositoryMock.ExistsBySourceAgentFunc: method is nil but AgentKindRepository.ExistsBySourceAgent was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		OrgName     string
+		ProjectName string
+		AgentName   string
+	}{
+		Ctx:         ctx,
+		OrgName:     orgName,
+		ProjectName: projectName,
+		AgentName:   agentName,
+	}
+	mock.lockExistsBySourceAgent.Lock()
+	mock.calls.ExistsBySourceAgent = append(mock.calls.ExistsBySourceAgent, callInfo)
+	mock.lockExistsBySourceAgent.Unlock()
+	return mock.ExistsBySourceAgentFunc(ctx, orgName, projectName, agentName)
+}
+
+// ExistsBySourceAgentCalls gets all the calls that were made to ExistsBySourceAgent.
+// Check the length with:
+//
+//	len(mockedAgentKindRepository.ExistsBySourceAgentCalls())
+func (mock *AgentKindRepositoryMock) ExistsBySourceAgentCalls() []struct {
+	Ctx         context.Context
+	OrgName     string
+	ProjectName string
+	AgentName   string
+} {
+	var calls []struct {
+		Ctx         context.Context
+		OrgName     string
+		ProjectName string
+		AgentName   string
+	}
+	mock.lockExistsBySourceAgent.RLock()
+	calls = mock.calls.ExistsBySourceAgent
+	mock.lockExistsBySourceAgent.RUnlock()
 	return calls
 }
 

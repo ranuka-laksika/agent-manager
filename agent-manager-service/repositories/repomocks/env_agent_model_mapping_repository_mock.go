@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"gorm.io/gorm"
 )
 
@@ -29,6 +30,9 @@ import (
 //			},
 //			GetByConfigAndEnvFunc: func(ctx context.Context, configUUID uuid.UUID, envUUID uuid.UUID) (*models.EnvAgentModelMapping, error) {
 //				panic("mock out the GetByConfigAndEnv method")
+//			},
+//			ListAgentConsumersByProxyUUIDsFunc: func(ctx context.Context, proxyUUIDs []uuid.UUID) ([]repositories.AgentConsumer, error) {
+//				panic("mock out the ListAgentConsumersByProxyUUIDs method")
 //			},
 //			ListByConfigFunc: func(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentModelMapping, error) {
 //				panic("mock out the ListByConfig method")
@@ -54,6 +58,9 @@ type EnvAgentModelMappingRepositoryMock struct {
 
 	// GetByConfigAndEnvFunc mocks the GetByConfigAndEnv method.
 	GetByConfigAndEnvFunc func(ctx context.Context, configUUID uuid.UUID, envUUID uuid.UUID) (*models.EnvAgentModelMapping, error)
+
+	// ListAgentConsumersByProxyUUIDsFunc mocks the ListAgentConsumersByProxyUUIDs method.
+	ListAgentConsumersByProxyUUIDsFunc func(ctx context.Context, proxyUUIDs []uuid.UUID) ([]repositories.AgentConsumer, error)
 
 	// ListByConfigFunc mocks the ListByConfig method.
 	ListByConfigFunc func(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentModelMapping, error)
@@ -99,6 +106,13 @@ type EnvAgentModelMappingRepositoryMock struct {
 			// EnvUUID is the envUUID argument value.
 			EnvUUID uuid.UUID
 		}
+		// ListAgentConsumersByProxyUUIDs holds details about calls to the ListAgentConsumersByProxyUUIDs method.
+		ListAgentConsumersByProxyUUIDs []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ProxyUUIDs is the proxyUUIDs argument value.
+			ProxyUUIDs []uuid.UUID
+		}
 		// ListByConfig holds details about calls to the ListByConfig method.
 		ListByConfig []struct {
 			// Ctx is the ctx argument value.
@@ -116,12 +130,13 @@ type EnvAgentModelMappingRepositoryMock struct {
 			Mapping *models.EnvAgentModelMapping
 		}
 	}
-	lockCreate            sync.RWMutex
-	lockDelete            sync.RWMutex
-	lockDeleteByConfig    sync.RWMutex
-	lockGetByConfigAndEnv sync.RWMutex
-	lockListByConfig      sync.RWMutex
-	lockUpdate            sync.RWMutex
+	lockCreate                         sync.RWMutex
+	lockDelete                         sync.RWMutex
+	lockDeleteByConfig                 sync.RWMutex
+	lockGetByConfigAndEnv              sync.RWMutex
+	lockListAgentConsumersByProxyUUIDs sync.RWMutex
+	lockListByConfig                   sync.RWMutex
+	lockUpdate                         sync.RWMutex
 }
 
 // Create calls CreateFunc.
@@ -281,6 +296,42 @@ func (mock *EnvAgentModelMappingRepositoryMock) GetByConfigAndEnvCalls() []struc
 	mock.lockGetByConfigAndEnv.RLock()
 	calls = mock.calls.GetByConfigAndEnv
 	mock.lockGetByConfigAndEnv.RUnlock()
+	return calls
+}
+
+// ListAgentConsumersByProxyUUIDs calls ListAgentConsumersByProxyUUIDsFunc.
+func (mock *EnvAgentModelMappingRepositoryMock) ListAgentConsumersByProxyUUIDs(ctx context.Context, proxyUUIDs []uuid.UUID) ([]repositories.AgentConsumer, error) {
+	if mock.ListAgentConsumersByProxyUUIDsFunc == nil {
+		panic("EnvAgentModelMappingRepositoryMock.ListAgentConsumersByProxyUUIDsFunc: method is nil but EnvAgentModelMappingRepository.ListAgentConsumersByProxyUUIDs was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		ProxyUUIDs []uuid.UUID
+	}{
+		Ctx:        ctx,
+		ProxyUUIDs: proxyUUIDs,
+	}
+	mock.lockListAgentConsumersByProxyUUIDs.Lock()
+	mock.calls.ListAgentConsumersByProxyUUIDs = append(mock.calls.ListAgentConsumersByProxyUUIDs, callInfo)
+	mock.lockListAgentConsumersByProxyUUIDs.Unlock()
+	return mock.ListAgentConsumersByProxyUUIDsFunc(ctx, proxyUUIDs)
+}
+
+// ListAgentConsumersByProxyUUIDsCalls gets all the calls that were made to ListAgentConsumersByProxyUUIDs.
+// Check the length with:
+//
+//	len(mockedEnvAgentModelMappingRepository.ListAgentConsumersByProxyUUIDsCalls())
+func (mock *EnvAgentModelMappingRepositoryMock) ListAgentConsumersByProxyUUIDsCalls() []struct {
+	Ctx        context.Context
+	ProxyUUIDs []uuid.UUID
+} {
+	var calls []struct {
+		Ctx        context.Context
+		ProxyUUIDs []uuid.UUID
+	}
+	mock.lockListAgentConsumersByProxyUUIDs.RLock()
+	calls = mock.calls.ListAgentConsumersByProxyUUIDs
+	mock.lockListAgentConsumersByProxyUUIDs.RUnlock()
 	return calls
 }
 

@@ -34,6 +34,7 @@ type MonitorConsumer struct {
 }
 
 // MonitorLLMMappingRepository defines data access for monitor-to-LLM-proxy mappings
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/monitor_llm_mapping_repository_mock.go . MonitorLLMMappingRepository:MonitorLLMMappingRepositoryMock
 type MonitorLLMMappingRepository interface {
 	// Create creates a new monitor LLM mapping (use within transaction)

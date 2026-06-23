@@ -31,6 +31,7 @@ import (
 )
 
 // DeploymentRepository defines the interface for deployment data operations
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/deployment_repository_mock.go . DeploymentRepository:DeploymentRepositoryMock
 type DeploymentRepository interface {
 	// Deployment artifact methods (immutable deployments)

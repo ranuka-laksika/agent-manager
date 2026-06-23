@@ -26,6 +26,7 @@ import (
 )
 
 // MonitorRepository defines the interface for monitor and monitor run data access
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/monitor_repository_mock.go . MonitorRepository:MonitorRepositoryMock
 type MonitorRepository interface {
 	// Transaction support

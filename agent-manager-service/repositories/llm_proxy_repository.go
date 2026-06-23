@@ -27,6 +27,7 @@ import (
 )
 
 // LLMProxyRepository defines the interface for LLM proxy persistence
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/llm_proxy_repository_mock.go . LLMProxyRepository:LLMProxyRepositoryMock
 type LLMProxyRepository interface {
 	Create(p *models.LLMProxy, handle, name, version string, orgName string) error

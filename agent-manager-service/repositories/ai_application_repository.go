@@ -26,6 +26,7 @@ import (
 )
 
 // AIApplicationRepository defines the interface for AI application persistence.
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/ai_application_repository_mock.go . AIApplicationRepository:AIApplicationRepositoryMock
 type AIApplicationRepository interface {
 	// Create inserts an AIApplication row. Uses ON CONFLICT DO NOTHING so it is safe to

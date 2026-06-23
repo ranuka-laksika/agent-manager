@@ -28,6 +28,7 @@ import (
 )
 
 // AgentEnvConfigVariableRepository defines data access for environment variables
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/agent_env_config_variable_repository_mock.go . AgentEnvConfigVariableRepository:AgentEnvConfigVariableRepositoryMock
 type AgentEnvConfigVariableRepository interface {
 	// CreateBatch creates multiple variables (use within transaction)

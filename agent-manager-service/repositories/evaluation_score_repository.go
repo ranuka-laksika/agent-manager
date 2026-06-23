@@ -29,6 +29,7 @@ import (
 )
 
 // ScoreRepository defines the interface for score data access
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/evaluation_score_repository_mock.go . ScoreRepository:ScoreRepositoryMock
 type ScoreRepository interface {
 	// Transaction support

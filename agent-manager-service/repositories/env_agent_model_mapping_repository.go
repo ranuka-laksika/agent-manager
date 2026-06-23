@@ -34,6 +34,7 @@ type AgentConsumer struct {
 }
 
 // EnvAgentModelMappingRepository defines data access for environment mappings
+//
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/env_agent_model_mapping_repository_mock.go . EnvAgentModelMappingRepository:EnvAgentModelMappingRepositoryMock
 type EnvAgentModelMappingRepository interface {
 	// Create creates a new environment mapping (use within transaction)
