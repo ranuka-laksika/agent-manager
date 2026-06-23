@@ -48,7 +48,10 @@ import {
   getGatewayVersion,
   getRawScriptUrl,
 } from "@agent-management-platform/shared-component";
-import type { IdentityProvider } from "@agent-management-platform/types";
+import type {
+  GatewayEnvironmentResponse,
+  IdentityProvider,
+} from "@agent-management-platform/types";
 
 const SCRIPT_NAME = "manage-identity-provider.sh";
 const TOKEN_MASK = "•••••••••••••••";
@@ -62,6 +65,16 @@ interface ManageIdentityProviderDialogProps {
   mode: ManageIdentityProviderMode;
   /** For delete, the provider row to remove (name + gateway + environment prefilled). */
   provider?: IdentityProvider | null;
+  /**
+   * When opened from a specific gateway, the gateway is fixed: the gateway picker
+   * is hidden and the environment choices are constrained to this gateway's
+   * environments (auto-selected when there is only one).
+   */
+  lockedGateway?: {
+    uuid: string;
+    name: string;
+    environments: GatewayEnvironmentResponse[];
+  } | null;
 }
 
 interface ScriptInputs {
@@ -108,8 +121,10 @@ export function ManageIdentityProviderDialog({
   orgId,
   mode,
   provider,
+  lockedGateway,
 }: ManageIdentityProviderDialogProps) {
   const isDelete = mode === "delete";
+  const isGatewayLocked = !!lockedGateway;
   const { getToken } = useAuthHooks();
 
   const [envName, setEnvName] = useState("");
@@ -130,12 +145,22 @@ export function ManageIdentityProviderDialog({
   const [copied, setCopied] = useState(false);
 
   const { data: environments } = useListEnvironments({ orgName: orgId });
-  // Gateways belonging to the selected environment populate the gateway picker.
+  // Gateways belonging to the selected environment populate the gateway picker
+  // (only used when no gateway is locked in).
   const { data: gatewaysResp } = useListGateways(
     { orgName: orgId },
     envName ? { environment: envName } : undefined,
   );
   const gateways = useMemo(() => gatewaysResp?.gateways ?? [], [gatewaysResp]);
+
+  // Environment choices: scoped to the locked gateway when present, otherwise
+  // every environment in the org.
+  const envOptions = useMemo<
+    Array<{ name: string; displayName?: string }>
+  >(
+    () => (lockedGateway ? lockedGateway.environments : (environments ?? [])),
+    [lockedGateway, environments],
+  );
 
   // Reset form when the dialog opens, seeding from the provider for delete.
   useEffect(() => {
@@ -153,20 +178,26 @@ export function ManageIdentityProviderDialog({
       setJwksUri(provider.jwksUri ?? "");
       setSkipTlsVerify(provider.skipTlsVerify ?? false);
     } else {
-      setEnvName("");
-      setGatewayId("");
+      // Lock the gateway and auto-select its environment when there is only one.
+      setEnvName(
+        lockedGateway && lockedGateway.environments.length === 1
+          ? lockedGateway.environments[0].name
+          : "",
+      );
+      setGatewayId(lockedGateway?.uuid ?? "");
       setName("");
       setIssuer("");
       setJwksUri("");
       setSkipTlsVerify(false);
     }
-  }, [open, isDelete, provider]);
+  }, [open, isDelete, provider, lockedGateway]);
 
-  // Clear the gateway selection when the environment changes (upsert flow).
+  // Clear the gateway selection when the environment changes (upsert flow only —
+  // a locked gateway stays fixed regardless of environment).
   useEffect(() => {
-    if (isDelete) return;
+    if (isDelete || lockedGateway) return;
     setGatewayId("");
-  }, [envName, isDelete]);
+  }, [envName, isDelete, lockedGateway]);
 
   const handleToggleToken = useCallback(async () => {
     if (showToken) {
@@ -255,11 +286,11 @@ export function ManageIdentityProviderDialog({
                 onChange={(e) => setEnvName(e.target.value as string)}
                 renderValue={(v) => {
                   if (!v) return "Select an environment";
-                  const env = (environments ?? []).find((en) => en.name === v);
+                  const env = envOptions.find((en) => en.name === v);
                   return env?.displayName || env?.name || (v as string);
                 }}
               >
-                {(environments ?? []).map((env) => (
+                {envOptions.map((env) => (
                   <MenuItem key={env.name} value={env.name}>
                     {env.displayName || env.name}
                   </MenuItem>
@@ -269,23 +300,33 @@ export function ManageIdentityProviderDialog({
 
             <FormControl fullWidth disabled={isDelete || !envName}>
               <FormLabel required>Gateway</FormLabel>
-              <Select
-                size="small"
-                value={gatewayId}
-                displayEmpty
-                onChange={(e) => setGatewayId(e.target.value as string)}
-                renderValue={(v) => {
-                  if (!v) return "Select a gateway";
-                  const gw = gateways.find((g) => g.uuid === v);
-                  return gw?.displayName || gw?.name || (v as string);
-                }}
-              >
-                {gateways.map((gw) => (
-                  <MenuItem key={gw.uuid} value={gw.uuid}>
-                    {gw.displayName || gw.name}
-                  </MenuItem>
-                ))}
-              </Select>
+              {isGatewayLocked ? (
+                <TextField
+                  size="small"
+                  fullWidth
+                  value={lockedGateway?.name ?? ""}
+                  slotProps={{ input: { readOnly: true } }}
+                  disabled
+                />
+              ) : (
+                <Select
+                  size="small"
+                  value={gatewayId}
+                  displayEmpty
+                  onChange={(e) => setGatewayId(e.target.value as string)}
+                  renderValue={(v) => {
+                    if (!v) return "Select a gateway";
+                    const gw = gateways.find((g) => g.uuid === v);
+                    return gw?.displayName || gw?.name || (v as string);
+                  }}
+                >
+                  {gateways.map((gw) => (
+                    <MenuItem key={gw.uuid} value={gw.uuid}>
+                      {gw.displayName || gw.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              )}
             </FormControl>
 
             <FormControl fullWidth disabled={isDelete}>

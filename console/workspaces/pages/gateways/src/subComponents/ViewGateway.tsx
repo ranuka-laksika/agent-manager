@@ -44,6 +44,7 @@ import {
   type GatewayTokenInfo,
 } from "@agent-management-platform/types";
 import { PageLayout } from "@agent-management-platform/views";
+import { GatewayIdentityProvidersCard } from "./GatewayIdentityProvidersCard";
 import { ViewGatewayGetStarted } from "./ViewGatewayGetStarted";
 
 export const ViewGateway: React.FC = () => {
@@ -288,6 +289,13 @@ export const ViewGateway: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+
+            <GatewayIdentityProvidersCard
+              orgId={orgId ?? ""}
+              gatewayId={gateway.uuid}
+              gatewayName={gateway.displayName || gateway.name}
+              environments={gateway.environments ?? []}
+            />
 
             <ViewGatewayGetStarted
               isConfigured={isConfigured}
