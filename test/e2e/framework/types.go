@@ -127,7 +127,10 @@ type RuntimeConfigs struct {
 }
 
 type EnvModelConfigRequest struct {
-	ProviderName  string                 `json:"providerName"`
+	// ProviderName references an LLM provider (type "llm"); MCPProxyName references
+	// an MCP proxy (type "mcp"). Exactly one is set depending on the config type.
+	ProviderName  string                 `json:"providerName,omitempty"`
+	MCPProxyName  string                 `json:"mcpProxyName,omitempty"`
 	Configuration map[string]interface{} `json:"configuration,omitempty"`
 }
 
@@ -602,6 +605,87 @@ type LLMProxyListResponse struct {
 	Total   int                `json:"total"`
 	Limit   int                `json:"limit"`
 	Offset  int                `json:"offset"`
+}
+
+// ---------------------------------------------------------------------------
+// MCP Proxy
+// ---------------------------------------------------------------------------
+
+// MCPPolicy is a policy attached to an MCP proxy. Unlike LLMPolicy it carries a
+// flat params map rather than per-path entries.
+type MCPPolicy struct {
+	Name               string         `json:"name"`
+	Version            string         `json:"version"`
+	DisplayName        string         `json:"displayName,omitempty"`
+	ExecutionCondition *string        `json:"executionCondition,omitempty"`
+	Params             map[string]any `json:"params,omitempty"`
+}
+
+// MCPProxyCapabilities holds the capabilities discovered from the upstream MCP server.
+type MCPProxyCapabilities struct {
+	Tools     []map[string]any `json:"tools,omitempty"`
+	Prompts   []map[string]any `json:"prompts,omitempty"`
+	Resources []map[string]any `json:"resources,omitempty"`
+}
+
+type CreateMCPProxyRequest struct {
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	Version        string                `json:"version"`
+	Description    *string               `json:"description,omitempty"`
+	Context        *string               `json:"context,omitempty"`
+	Vhost          *string               `json:"vhost,omitempty"`
+	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
+	Upstream       UpstreamConfig        `json:"upstream"`
+	Policies       []MCPPolicy           `json:"policies,omitempty"`
+	Capabilities   *MCPProxyCapabilities `json:"capabilities,omitempty"`
+	Security       *SecurityConfig       `json:"security,omitempty"`
+	Gateways       []string              `json:"gateways,omitempty"`
+}
+
+type MCPProxyResponse struct {
+	ID             string                `json:"id"`
+	Name           string                `json:"name"`
+	Version        string                `json:"version"`
+	Description    *string               `json:"description,omitempty"`
+	Context        *string               `json:"context,omitempty"`
+	Vhost          *string               `json:"vhost,omitempty"`
+	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
+	InCatalog      bool                  `json:"inCatalog"`
+	Gateways       []string              `json:"gateways,omitempty"`
+	Upstream       UpstreamConfig        `json:"upstream"`
+	Policies       []MCPPolicy           `json:"policies,omitempty"`
+	Capabilities   *MCPProxyCapabilities `json:"capabilities,omitempty"`
+	Security       *SecurityConfig       `json:"security,omitempty"`
+	CreatedBy      *string               `json:"createdBy,omitempty"`
+	CreatedAt      *time.Time            `json:"createdAt,omitempty"`
+}
+
+type MCPProxyListItem struct {
+	ID      *string `json:"id,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Version *string `json:"version,omitempty"`
+	Status  *string `json:"status,omitempty"`
+}
+
+// MCPProxyListResponse mirrors the org-scoped list payload ({count, list}).
+type MCPProxyListResponse struct {
+	Count int                `json:"count"`
+	List  []MCPProxyListItem `json:"list"`
+}
+
+// MCPServerInfoFetchRequest is the body for the discover/fetch-server-info endpoint.
+type MCPServerInfoFetchRequest struct {
+	URL  string        `json:"url"`
+	Auth *UpstreamAuth `json:"auth,omitempty"`
+}
+
+// MCPServerInfoFetchResponse is the capabilities payload returned by discovery.
+type MCPServerInfoFetchResponse struct {
+	ServerInfo map[string]any   `json:"serverInfo,omitempty"`
+	Tools      []map[string]any `json:"tools,omitempty"`
+	Prompts    []map[string]any `json:"prompts,omitempty"`
+	Resources  []map[string]any `json:"resources,omitempty"`
 }
 
 // ---------------------------------------------------------------------------
