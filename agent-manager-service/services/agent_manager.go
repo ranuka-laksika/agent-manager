@@ -1974,6 +1974,25 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 		isExternalAgent = agentComp.Provisioning.Type == string(utils.ExternalAgent)
 	}
 
+	// Recheck immediately before the actual delete call (the commit point) rather
+	// than relying solely on the check above. This is a deliberate, narrow
+	// mitigation for the gap between that check and this call — not a full fix:
+	// a kind could in theory still be published in the moment between this
+	// recheck and DeleteComponent below. Closing that completely would mean
+	// holding a DB transaction open across the OpenChoreo/secret-manager calls
+	// above, which is a worse trade than the (now millisecond-scale, two-admins-
+	// racing-the-same-agent) risk it would prevent. publishVersion independently
+	// verifies the source agent still exists before ever creating a kind, which
+	// is what actually closes the common (non-racing) case of this gap.
+	isKindSource, err = s.agentKindService.HasKindsSourcedFrom(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to recheck agent kinds sourced from agent", "agentName", agentName, "error", err)
+		return err
+	}
+	if isKindSource {
+		return utils.ErrAgentIsKindSource
+	}
+
 	// Step 5: Delete agent component in OpenChoreo — this is the commit point.
 	// LLM config cleanup happens after a confirmed DeleteComponent so a transient OC
 	// failure leaves the system fully intact and the delete can be retried cleanly.

@@ -186,4 +186,5 @@ var (
 	ErrBuildNotComplete          = errors.New("build must be completed before publishing as a kind")
 	ErrMissingKindConfigValue    = errors.New("missing required configuration value for agent kind")
 	ErrKindImageAlreadyPublished = errors.New("this build image is already published as a kind version")
+	ErrSourceAgentNotFound       = errors.New("source agent not found; cannot publish a kind from a deleted agent")
 )

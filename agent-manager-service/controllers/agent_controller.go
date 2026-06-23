@@ -103,6 +103,9 @@ func handleCommonErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 	case errors.Is(err, utils.ErrKindVersionNotFound):
 		utils.WriteErrorResponseWithReason(w, http.StatusNotFound,
 			"Agent kind version not found", err.Error(), utils.ErrCodeNotFound)
+	case errors.Is(err, utils.ErrSourceAgentNotFound):
+		utils.WriteErrorResponseWithReason(w, http.StatusNotFound,
+			"Source agent not found", err.Error(), utils.ErrCodeNotFound)
 
 	// Conflict errors
 	case errors.Is(err, utils.ErrAgentAlreadyExists):
