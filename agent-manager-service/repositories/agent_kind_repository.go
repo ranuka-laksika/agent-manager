@@ -33,6 +33,21 @@ type AgentKindRepository interface {
 	UpdateKind(ctx context.Context, kind *models.AgentKind) error
 	DeleteKind(ctx context.Context, orgName, kindName string) error
 
+	// ExistsBySourceAgent reports whether any agent kind is published from the
+	// given source agent.
+	//
+	// NOTE: this is intentionally a plain existence check, not lock-protected.
+	// There's a check-then-act gap between this and whatever the caller does next
+	// (e.g. deleting the agent in OpenChoreo), but closing it fully would mean
+	// holding a DB transaction open across OpenChoreo/secret-manager network
+	// calls — a worse trade than the risk it prevents. That risk also requires
+	// two admins racing the exact same agent within milliseconds, and is
+	// independently mitigated by publishVersion verifying the source agent still
+	// exists before it ever creates a kind (see agent_kind_service.go). Treat a
+	// false negative here as acceptable; do not "fix" this with a lock without
+	// re-reading that reasoning.
+	ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error)
+
 	CreateVersion(ctx context.Context, version *models.AgentKindVersion) error
 	GetVersion(ctx context.Context, kindID uuid.UUID, versionTag string) (*models.AgentKindVersion, error)
 	GetVersionByImageID(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error)
@@ -55,6 +70,14 @@ func (r *agentKindRepo) CreateKind(ctx context.Context, kind *models.AgentKind) 
 	}
 	result := r.db.WithContext(ctx).Create(kind)
 	return result.Error
+}
+
+func (r *agentKindRepo) ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+	var count int64
+	result := r.db.WithContext(ctx).Model(&models.AgentKind{}).
+		Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+		Count(&count)
+	return count > 0, result.Error
 }
 
 func (r *agentKindRepo) GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKind, error) {

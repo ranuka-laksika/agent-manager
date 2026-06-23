@@ -54,6 +54,11 @@ type AgentKindService interface {
 
 	// ListKindAgents returns all agents deployed from a given kind across all projects in the org.
 	ListKindAgents(ctx context.Context, orgName, kindName string) ([]*models.AgentResponse, error)
+
+	// HasKindsSourcedFrom reports whether any agent kind is published from the
+	// given source agent. See ExistsBySourceAgent in agent_kind_repository.go for
+	// why this is a plain (not lock-protected) check, by design.
+	HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error)
 }
 
 type agentKindService struct {
@@ -138,6 +143,19 @@ func (s *agentKindService) DeleteKind(ctx context.Context, orgName, kindName str
 		return utils.ErrAgentKindNotFound
 	}
 	return err
+}
+
+// HasKindsSourcedFrom reports whether any agent kind is published from the
+// given source agent. This is a plain existence check, not lock-protected —
+// see the NOTE on AgentKindRepository.ExistsBySourceAgent for why a small
+// check-then-act window here is an accepted, intentional trade-off rather than
+// an oversight.
+func (s *agentKindService) HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+	exists, err := s.kindRepo.ExistsBySourceAgent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		return false, fmt.Errorf("failed to check agent kinds sourced from agent: %w", err)
+	}
+	return exists, nil
 }
 
 // AddVersion publishes a new version to an existing Agent Kind.
@@ -345,6 +363,17 @@ func (s *agentKindService) publishVersion(
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("failed to check existing version: %w", err)
+	}
+
+	// Explicitly verify the source agent component still exists, rather than
+	// relying on GetBuild to fail if it doesn't. Build CRs aren't guaranteed to be
+	// cascade-deleted with their owning component, so without this check a kind
+	// could be published from (or have a version added from) an agent that was
+	// already deleted — with no concurrency/timing involved at all. This is what
+	// actually closes the "kind published from a deleted agent" gap; the
+	// recheck in DeleteAgent only narrows the much rarer concurrent-race variant.
+	if _, err := s.ocClient.GetComponent(ctx, orgName, sourceProjectName, sourceAgentName); err != nil {
+		return nil, fmt.Errorf("%w: %s/%s", utils.ErrSourceAgentNotFound, sourceProjectName, sourceAgentName)
 	}
 
 	build, err := s.ocClient.GetBuild(ctx, orgName, sourceProjectName, sourceAgentName, buildName)
