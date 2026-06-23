@@ -42,7 +42,7 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("LLM provider configured across environments", Label("llm-provider", "two-env"), Ordered, func() {
+var _ = Describe("LLM provider configured across environments:", Label("llm-provider", "two-env"), Ordered, func() {
 	var (
 		suffix      string
 		agentName   string

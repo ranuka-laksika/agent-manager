@@ -34,7 +34,6 @@ import (
 	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
 	"github.com/wso2/agent-manager/test/e2e/operations/build"
 	"github.com/wso2/agent-manager/test/e2e/operations/deployment"
-	"github.com/wso2/agent-manager/test/e2e/operations/project"
 	traceops "github.com/wso2/agent-manager/test/e2e/operations/trace"
 )
 
@@ -52,20 +51,12 @@ var _ = Describe("Internal chat agent in default environment:", Label("agent", "
 	It("creates an internal IT-helpdesk chat agent from its source repository", func() {
 		Expect(Cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set")
 
-		projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", Cfg.DefaultOrg, projectName)
-		if !framework.ResourceExists(Client, projPath) {
-			project.CreateProject(Default, Client, &project.CreateProjectParams{
-				OrgName: Cfg.DefaultOrg,
-				Request: framework.NewCreateProjectRequest(projectName, "E2E Shared Project", "Shared project for e2e tests", "default"),
-			})
-		}
-
+		// The shared project is created once in the suite's SynchronizedBeforeSuite.
 		agentPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s", Cfg.DefaultOrg, projectName, agentName)
 		if framework.ResourceExists(Client, agentPath) {
 			GinkgoWriter.Printf("Agent already exists, reusing: %s\n", agentName)
 			return
 		}
-
 		ag := agentops.CreateAgent(Default, Client, &agentops.CreateAgentParams{
 			OrgName:     Cfg.DefaultOrg,
 			ProjectName: projectName,

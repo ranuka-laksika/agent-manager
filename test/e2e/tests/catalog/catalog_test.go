@@ -42,7 +42,7 @@ import (
 
 var _ = Describe("Agent catalog:", Label("catalog"), Ordered, func() {
 	var (
-		promotable    *framework.SharedPromotableITHelpdeskAgent
+		promotableAgent    *framework.SharedPromotableITHelpdeskAgent
 		fromKindAgent string
 		envName       string
 		projectName   string
@@ -57,13 +57,13 @@ var _ = Describe("Agent catalog:", Label("catalog"), Ordered, func() {
 		fromKindAgent = "e2e-catalog-kind-" + uuid.New().String()[:6]
 
 		By("Ensuring the shared promotable IT helpdesk agent is built and deployed")
-		promotable = testsetup.SetupSharedPromotableITHelpdeskAgent(Client, Cfg)
-		projectName = promotable.ProjectName
-		envName = promotable.SecondEnv
+		promotableAgent = testsetup.SetupSharedPromotableITHelpdeskAgent(Client, Cfg)
+		projectName = promotableAgent.ProjectName
+		envName = promotableAgent.SecondEnv
 
 		invokeReq = framework.DefaultInvokeRequest()
 		GinkgoWriter.Printf("Setup complete: agent=%s env=%s project=%s\n",
-			promotable.AgentName, envName, projectName)
+			promotableAgent.AgentName, envName, projectName)
 	})
 
 	It("publishes a pre built  agent as a reusable catalog kind", func() {
@@ -73,12 +73,12 @@ var _ = Describe("Agent catalog:", Label("catalog"), Ordered, func() {
 		}
 		buildName := build.WaitForBuildSuccess(Client, &build.WaitForBuildParams{
 			OrgName:     Cfg.DefaultOrg,
-			ProjectName: promotable.ProjectName,
-			AgentName:   promotable.AgentName,
+			ProjectName: promotableAgent.ProjectName,
+			AgentName:   promotableAgent.AgentName,
 			Timeout:     20 * time.Minute,
 		})
 		kind := catalogops.PublishKind(Default, Client,
-			Cfg.DefaultOrg, promotable.ProjectName, promotable.AgentName,
+			Cfg.DefaultOrg, promotableAgent.ProjectName, promotableAgent.AgentName,
 			framework.PublishKindRequest{
 				KindName:        framework.E2ESharedKindName,
 				KindDisplayName: framework.E2ESharedKindName,

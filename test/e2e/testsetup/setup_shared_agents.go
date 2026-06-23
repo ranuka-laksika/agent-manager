@@ -17,6 +17,7 @@
 package testsetup
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -60,6 +61,53 @@ func SetupSharedITHelpdeskAgent(client *framework.AMPClient, cfg *framework.Conf
 	ginkgo.GinkgoWriter.Printf("Shared IT helpdesk agent ready: project=%s agent=%s endpoint=%s\n",
 		agent.ProjectName, agent.AgentName, agent.EndpointURL)
 	return agent
+}
+
+// SynchronizedSharedITHelpdeskAgent returns the two phase functions for a
+// SynchronizedBeforeSuite in a suite that reuses the shared single-env IT
+// helpdesk agent.
+//
+// Under `ginkgo -p` a plain BeforeSuite runs on every parallel process, so the
+// shared agent would be provisioned concurrently N times — producing the racy
+// "already exists" creates and the self-heal delete/recreate that wedges the
+// deployment into a failed state. SynchronizedBeforeSuite instead runs the first
+// phase on a single process: it provisions the agent exactly once and returns it
+// as JSON. The second phase runs on every process: it builds that process's own
+// API client and decodes the shared agent handle. The provided pointers are
+// populated by the second phase so the suite's package-level vars are set on
+// every process.
+func SynchronizedSharedITHelpdeskAgent(
+	cfg **framework.Config,
+	client **framework.AMPClient,
+	agent **framework.SharedITHelpdeskAgent,
+) (func() []byte, func([]byte)) {
+	provision := func() []byte {
+		c := framework.LoadConfig()
+		ginkgo.By("Waiting for API readiness")
+		framework.WaitForAPIReady(c)
+		ginkgo.By("Creating API client")
+		cl, err := framework.NewAMPClient(c)
+		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
+		ginkgo.By("Verifying default organization")
+		framework.VerifyDefaultOrg(cl, c.DefaultOrg)
+		ginkgo.By("Provisioning shared single-env IT helpdesk agent")
+		data, err := json.Marshal(SetupSharedITHelpdeskAgent(cl, c))
+		Expect(err).NotTo(HaveOccurred(), "failed to marshal shared agent")
+		return data
+	}
+
+	distribute := func(data []byte) {
+		*cfg = framework.LoadConfig()
+		framework.WaitForAPIReady(*cfg)
+		cl, err := framework.NewAMPClient(*cfg)
+		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
+		*client = cl
+		a := &framework.SharedITHelpdeskAgent{}
+		Expect(json.Unmarshal(data, a)).To(Succeed(), "failed to decode shared agent")
+		*agent = a
+	}
+
+	return provision, distribute
 }
 
 // SetupSharedPromotableITHelpdeskAgent provisions the shared promotable IT
@@ -186,7 +234,11 @@ func EnsurePromotableInfra(client *framework.AMPClient, cfg *framework.Config) (
 	return projName, secondEnv
 }
 
-// EnsureProject creates the named project if it does not already exist.
+// EnsureProject creates the named project if it does not already exist and waits
+// until it is visible. Project creation is asynchronous (the POST returns 202
+// before the project is queryable), so callers that go on to create resources in
+// the project must wait for it to appear; otherwise that follow-up create races
+// the project's provisioning.
 func EnsureProject(client *framework.AMPClient, cfg *framework.Config, name, displayName, description string) {
 	projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", cfg.DefaultOrg, name)
 	if framework.ResourceExists(client, projPath) {
@@ -197,6 +249,10 @@ func EnsureProject(client *framework.AMPClient, cfg *framework.Config, name, dis
 		OrgName: cfg.DefaultOrg,
 		Request: framework.NewCreateProjectRequest(name, displayName, description, "default"),
 	})
+	Eventually(func() bool {
+		return framework.ResourceExists(client, projPath)
+	}).WithTimeout(2*time.Minute).WithPolling(2*time.Second).Should(BeTrue(),
+		"project %q was not visible in time after creation", name)
 }
 
 // ensureSecondEnvironment provisions the shared promotion-target environment via

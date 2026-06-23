@@ -25,7 +25,6 @@ import (
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
 	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
-	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
 var _ = Describe("External agent:", Label("agent", "external-agent"), Ordered, func() {
@@ -35,15 +34,10 @@ var _ = Describe("External agent:", Label("agent", "external-agent"), Ordered, f
 	)
 
 	BeforeAll(func() {
-		// The shared project is normally created by the internal/promote agent
-		// suites as lifecycle steps. This suite only creates its own agent there,
-		// so ensure the project exists to avoid an order-dependent failure when
-		// this suite runs first.
-		testsetup.EnsureProject(Client, Cfg, framework.E2ESharedProjectName, "E2E Shared Project", "Shared project for e2e tests")
-
+		// The shared project is created once in the suite's SynchronizedBeforeSuite;
+		// this suite only registers its own agent there.
 		suffix := uuid.New().String()[:8]
 		agentName = "e2e-test-agent-" + suffix
-
 		createReq = framework.NewExternalAgentRequest(agentName, "Externa agent registered by the external-agent lifecycle e2e tests")
 	})
 

@@ -45,20 +45,8 @@ func TestConfiguration(t *testing.T) {
 	RunSpecs(t, "Configuration Suite")
 }
 
-var _ = BeforeSuite(func() {
-	Cfg = framework.LoadConfig()
-
-	By("Waiting for API readiness")
-	framework.WaitForAPIReady(Cfg)
-
-	By("Creating API client")
-	var err error
-	Client, err = framework.NewAMPClient(Cfg)
-	Expect(err).NotTo(HaveOccurred(), "failed to create API client")
-
-	By("Verifying default organization")
-	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
-
-	By("Reusing shared single-env IT helpdesk agent")
-	SharedITHelpdeskAgent = testsetup.SetupSharedITHelpdeskAgent(Client, Cfg)
-})
+// Under `ginkgo -p` the shared agent is provisioned once (on a single process)
+// and decoded by every process; see testsetup.SynchronizedSharedITHelpdeskAgent.
+var _ = SynchronizedBeforeSuite(
+	testsetup.SynchronizedSharedITHelpdeskAgent(&Cfg, &Client, &SharedITHelpdeskAgent),
+)

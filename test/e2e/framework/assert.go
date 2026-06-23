@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 
 	. "github.com/onsi/gomega"
 )
@@ -31,6 +32,19 @@ func ExpectStatus(g Gomega, resp *http.Response, expected int) {
 		body, _ := io.ReadAll(resp.Body)
 		g.Expect(resp.StatusCode).To(Equal(expected), "response body: %s", string(body))
 	}
+}
+
+// ExpectStatusIn asserts the HTTP response status code is one of the expected
+// codes. On mismatch it includes the response body in the failure message.
+// Useful for idempotent operations whose existence check can race the resource's
+// asynchronous creation (e.g. a 202 create that returns 409 when the resource
+// was already created via another code path but is not yet visible to a GET).
+func ExpectStatusIn(g Gomega, resp *http.Response, expected ...int) {
+	if slices.Contains(expected, resp.StatusCode) {
+		return
+	}
+	body, _ := io.ReadAll(resp.Body)
+	g.Expect(expected).To(ContainElement(resp.StatusCode), "response body: %s", string(body))
 }
 
 // DecodeBody reads the response body and JSON-decodes it into type T.

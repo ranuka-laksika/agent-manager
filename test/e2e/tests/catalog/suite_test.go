@@ -36,6 +36,8 @@ func TestCatalog(t *testing.T) {
 	RunSpecs(t, "Catalog Suite")
 }
 
+// The catalog suite has a single Ordered container; its shared promotable agent
+// is provisioned lazily in that container's BeforeAll (runs once, no -p race).
 var _ = BeforeSuite(func() {
 	Cfg = framework.LoadConfig()
 

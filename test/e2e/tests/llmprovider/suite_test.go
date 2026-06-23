@@ -29,6 +29,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework"
+	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
 // Client is the shared API client used by all llmprovider tests.
@@ -52,18 +53,32 @@ func TestLLMProvider(t *testing.T) {
 	RunSpecs(t, "LLM Provider Suite")
 }
 
-var _ = BeforeSuite(func() {
-	Cfg = framework.LoadConfig()
+// The shared project is created once here (on a single process) because the
+// internal-agent and external-agent containers both build agents into it and run
+// on different parallel processes under `ginkgo -p`. The two-env promotion infra
+// is provisioned lazily by the two-env container's BeforeAll (only that one
+// container needs it). Each process still builds its own API client.
+var _ = SynchronizedBeforeSuite(func() []byte {
+	cfg := framework.LoadConfig()
 
 	By("Waiting for API readiness")
-	framework.WaitForAPIReady(Cfg)
+	framework.WaitForAPIReady(cfg)
 
 	By("Creating API client")
-	var err error
-	Client, err = framework.NewAMPClient(Cfg)
+	client, err := framework.NewAMPClient(cfg)
 	Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 
 	By("Verifying default organization")
-	framework.VerifyDefaultOrg(Client, Cfg.DefaultOrg)
+	framework.VerifyDefaultOrg(client, cfg.DefaultOrg)
 
+	By("Ensuring shared project exists")
+	testsetup.EnsureProject(client, cfg, framework.E2ESharedProjectName,
+		"E2E Shared Project", "Shared project for e2e tests")
+	return nil
+}, func(_ []byte) {
+	Cfg = framework.LoadConfig()
+	framework.WaitForAPIReady(Cfg)
+	var err error
+	Client, err = framework.NewAMPClient(Cfg)
+	Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 })
