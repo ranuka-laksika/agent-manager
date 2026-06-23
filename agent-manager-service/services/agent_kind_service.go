@@ -54,6 +54,9 @@ type AgentKindService interface {
 
 	// ListKindAgents returns all agents deployed from a given kind across all projects in the org.
 	ListKindAgents(ctx context.Context, orgName, kindName string) ([]*models.AgentResponse, error)
+
+	// HasKindsSourcedFrom reports whether any agent kind is sourced from the given agent.
+	HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error)
 }
 
 type agentKindService struct {
@@ -138,6 +141,15 @@ func (s *agentKindService) DeleteKind(ctx context.Context, orgName, kindName str
 		return utils.ErrAgentKindNotFound
 	}
 	return err
+}
+
+// HasKindsSourcedFrom reports whether any agent kind is sourced from the given agent.
+func (s *agentKindService) HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+	exists, err := s.kindRepo.ExistsBySourceAgent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		return false, fmt.Errorf("failed to check agent kinds sourced from agent: %w", err)
+	}
+	return exists, nil
 }
 
 // AddVersion publishes a new version to an existing Agent Kind.

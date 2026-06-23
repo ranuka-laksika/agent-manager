@@ -135,6 +135,9 @@ func handleCommonErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 	case errors.Is(err, utils.ErrAgentKindHasInstances):
 		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
 			"Agent kind has active instances", err.Error(), utils.ErrCodeConflict)
+	case errors.Is(err, utils.ErrAgentIsKindSource):
+		utils.WriteErrorResponseWithReason(w, http.StatusConflict,
+			"Agent is the source of an agent kind", err.Error(), utils.ErrCodeConflict)
 	// Generic conflict catch-all: any unclassified conflict (e.g. a raw "already exists"
 	// from OpenChoreo) is a 409, never a 500. Keep this after the specific conflict cases
 	// above so they win; err.Error() carries the detail in the response reason.

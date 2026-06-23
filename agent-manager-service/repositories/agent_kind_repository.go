@@ -32,6 +32,7 @@ type AgentKindRepository interface {
 	ListKinds(ctx context.Context, orgName string, limit, offset int) ([]models.AgentKind, int64, error)
 	UpdateKind(ctx context.Context, kind *models.AgentKind) error
 	DeleteKind(ctx context.Context, orgName, kindName string) error
+	ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error)
 
 	CreateVersion(ctx context.Context, version *models.AgentKindVersion) error
 	GetVersion(ctx context.Context, kindID uuid.UUID, versionTag string) (*models.AgentKindVersion, error)
@@ -184,6 +185,14 @@ func (r *agentKindRepo) ListVersions(ctx context.Context, kindID uuid.UUID) ([]m
 		Order("created_at DESC").
 		Find(&versions)
 	return versions, result.Error
+}
+
+func (r *agentKindRepo) ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+	var count int64
+	result := r.db.WithContext(ctx).Model(&models.AgentKind{}).
+		Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+		Count(&count)
+	return count > 0, result.Error
 }
 
 func (r *agentKindRepo) DeleteVersion(ctx context.Context, kindID uuid.UUID, versionTag string) error {

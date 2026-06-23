@@ -1940,6 +1940,17 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 		return translateProjectError(err)
 	}
 
+	// Refuse to delete an agent that is still the source of an agent kind —
+	// deleting it would leave the kind unable to create new instances.
+	isKindSource, err := s.agentKindService.HasKindsSourcedFrom(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to check agent kinds sourced from agent", "agentName", agentName, "error", err)
+		return err
+	}
+	if isKindSource {
+		return utils.ErrAgentIsKindSource
+	}
+
 	// Step 1: Fetch workload and check for secret references in env vars
 	secretRefNames, err := s.ocClient.GetWorkloadSecretRefNames(ctx, orgName, projectName, agentName)
 	if err != nil {

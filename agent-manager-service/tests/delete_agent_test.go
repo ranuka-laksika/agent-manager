@@ -22,12 +22,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/tests/apitestutils"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/wiring"
@@ -190,6 +193,51 @@ func TestDeleteAgent(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDeleteAgentBlockedWhenKindSource(t *testing.T) {
+	authMiddleware := jwtassertion.NewMockMiddleware(t)
+
+	t.Run("Deleting an agent that is the source of an agent kind should return 409", func(t *testing.T) {
+		orgName := fmt.Sprintf("test-org-%s", uuid.New().String()[:5])
+		projName := fmt.Sprintf("test-project-%s", uuid.New().String()[:5])
+		agentName := fmt.Sprintf("test-agent-%s", uuid.New().String()[:5])
+
+		gdb := db.DB(context.Background())
+		kind := &models.AgentKind{
+			ID:          uuid.New(),
+			Name:        fmt.Sprintf("test-kind-%s", uuid.New().String()[:5]),
+			DisplayName: "Test Kind",
+			OrgName:     orgName,
+			ProjectName: projName,
+			AgentName:   agentName,
+			CreatedAt:   time.Now(),
+			UpdatedAt:   time.Now(),
+		}
+		require.NoError(t, gdb.Create(kind).Error)
+		t.Cleanup(func() {
+			gdb.Delete(kind)
+		})
+
+		openChoreoClient := apitestutils.CreateMockOpenChoreoClient()
+		secretMgmtClient := apitestutils.CreateMockSecretManagementClient()
+		testClients := wiring.TestClients{
+			OpenChoreoClient: openChoreoClient,
+			SecretMgmtClient: secretMgmtClient,
+		}
+
+		app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
+
+		url := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s", orgName, projName, agentName)
+		req := httptest.NewRequest(http.MethodDelete, url, nil)
+
+		rr := httptest.NewRecorder()
+		app.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusConflict, rr.Code)
+		require.Contains(t, rr.Body.String(), "Agent is the source of an agent kind")
+		require.Empty(t, openChoreoClient.DeleteComponentCalls())
+	})
 }
 
 func TestDeleteAgentIdempotency(t *testing.T) {
