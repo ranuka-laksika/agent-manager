@@ -1,0 +1,663 @@
+// Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+// UNIT tests for infraResourceManager. No `//go:build integration` tag, so this
+// runs in the fast unit tier with the OpenChoreo client mocked
+// (clientmocks.OpenChoreoClientMock). The goal is to assert the service's OWN
+// logic — error propagation, validation gates, pagination, filtering, and the
+// project↔pipeline linkage fan-out — without touching the database.
+//
+// An unconfigured mock method panics, so leaving a method nil asserts it must
+// not be reached on that code path.
+package services
+
+import (
+	"context"
+	"errors"
+	"io"
+	"log/slog"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/spec"
+	"github.com/wso2/agent-manager/agent-manager-service/utils"
+)
+
+// newInfraManager wires the service with the mocked OpenChoreo client and a
+// discard logger. Note: strPtr is already declared in llm_deployment_service_test.go.
+func newInfraManager(oc *clientmocks.OpenChoreoClientMock) InfraResourceManager {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return NewInfraResourceManager(oc, logger)
+}
+
+// okOrg returns a GetOrganization func that always resolves — used to get past
+// the org-existence validation gate that fronts almost every method.
+func okOrg() func(context.Context, string) (*models.OrganizationResponse, error) {
+	return func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+		return &models.OrganizationResponse{Name: orgName}, nil
+	}
+}
+
+// -----------------------------------------------------------------------------
+// ListOrganizations — static stub; asserts the hard-coded default response.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_ListOrganizations(t *testing.T) {
+	svc := newInfraManager(&clientmocks.OpenChoreoClientMock{})
+
+	orgs, total, err := svc.ListOrganizations(context.Background(), 10, 0)
+
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), total)
+	require.Len(t, orgs, 1)
+	assert.Equal(t, "default", orgs[0].Name)
+}
+
+// -----------------------------------------------------------------------------
+// GetOrganization — straight error propagation + happy path.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_GetOrganization(t *testing.T) {
+	const org = "acme"
+
+	t.Run("propagates client error", func(t *testing.T) {
+		boom := errors.New("oc down")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: func(_ context.Context, _ string) (*models.OrganizationResponse, error) {
+				return nil, boom
+			},
+		}
+		_, err := newInfraManager(oc).GetOrganization(context.Background(), org)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("returns the org on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{GetOrganizationFunc: okOrg()}
+		got, err := newInfraManager(oc).GetOrganization(context.Background(), org)
+		require.NoError(t, err)
+		assert.Equal(t, org, got.Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// CreateProject — org gate, create error, and happy-path transformation.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_CreateProject(t *testing.T) {
+	const org = "acme"
+	payload := spec.CreateProjectRequest{
+		Name:               "proj-a",
+		DisplayName:        "Project A",
+		Description:        strPtr("a description"),
+		DeploymentPipeline: "default-pipeline",
+	}
+
+	t.Run("fails fast when org lookup fails (CreateProject not reached)", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: func(_ context.Context, _ string) (*models.OrganizationResponse, error) {
+				return nil, utils.ErrOrganizationNotFound
+			},
+			// CreateProjectFunc nil => must not be called.
+		}
+		_, err := newInfraManager(oc).CreateProject(context.Background(), org, payload)
+		assert.ErrorIs(t, err, utils.ErrOrganizationNotFound)
+	})
+
+	t.Run("propagates create error", func(t *testing.T) {
+		boom := errors.New("create failed")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			CreateProjectFunc: func(_ context.Context, _ string, _ occlient.CreateProjectRequest) error {
+				return boom
+			},
+		}
+		_, err := newInfraManager(oc).CreateProject(context.Background(), org, payload)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("maps request and returns the created project on success", func(t *testing.T) {
+		var captured occlient.CreateProjectRequest
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			CreateProjectFunc: func(_ context.Context, _ string, req occlient.CreateProjectRequest) error {
+				captured = req
+				return nil
+			},
+		}
+		got, err := newInfraManager(oc).CreateProject(context.Background(), org, payload)
+
+		require.NoError(t, err)
+		// The service maps the spec payload onto the client request.
+		assert.Equal(t, "proj-a", captured.Name)
+		assert.Equal(t, "Project A", captured.DisplayName)
+		assert.Equal(t, "a description", captured.Description)
+		assert.Equal(t, "default-pipeline", captured.DeploymentPipeline)
+		// And synthesises the response from the payload.
+		assert.Equal(t, "proj-a", got.Name)
+		assert.Equal(t, org, got.OrgName)
+		assert.Equal(t, "a description", got.Description)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// UpdateProject — org gate, project gate, patch error, and refetch happy path.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_UpdateProject(t *testing.T) {
+	const org, proj = "acme", "proj-a"
+	payload := spec.UpdateProjectRequest{
+		DisplayName:        "New Name",
+		Description:        "new desc",
+		DeploymentPipeline: "pipe",
+	}
+
+	t.Run("fails when project lookup fails (Patch not reached)", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return nil, utils.ErrProjectNotFound
+			},
+			// PatchProjectFunc nil => must not be called.
+		}
+		_, err := newInfraManager(oc).UpdateProject(context.Background(), org, proj, payload)
+		assert.ErrorIs(t, err, utils.ErrProjectNotFound)
+	})
+
+	t.Run("wraps patch error", func(t *testing.T) {
+		boom := errors.New("patch failed")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return &models.ProjectResponse{Name: proj}, nil
+			},
+			PatchProjectFunc: func(_ context.Context, _, _ string, _ occlient.PatchProjectRequest) error {
+				return boom
+			},
+		}
+		_, err := newInfraManager(oc).UpdateProject(context.Background(), org, proj, payload)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("returns the refetched project on success", func(t *testing.T) {
+		calls := 0
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				calls++
+				return &models.ProjectResponse{Name: proj, DisplayName: "New Name"}, nil
+			},
+			PatchProjectFunc: func(_ context.Context, _, _ string, _ occlient.PatchProjectRequest) error {
+				return nil
+			},
+		}
+		got, err := newInfraManager(oc).UpdateProject(context.Background(), org, proj, payload)
+		require.NoError(t, err)
+		assert.Equal(t, "New Name", got.DisplayName)
+		assert.Equal(t, 2, calls, "GetProject is called for validation and then to refetch")
+	})
+}
+
+// -----------------------------------------------------------------------------
+// ListProjects — org gate, list error wrapping, and pagination slicing.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_ListProjects(t *testing.T) {
+	const org = "acme"
+
+	t.Run("wraps list error", func(t *testing.T) {
+		boom := errors.New("list boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return nil, boom
+			},
+		}
+		_, _, err := newInfraManager(oc).ListProjects(context.Background(), org, 10, 0)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("paginates and reports the unpaginated total", func(t *testing.T) {
+		all := []*models.ProjectResponse{
+			{Name: "p1"}, {Name: "p2"}, {Name: "p3"}, {Name: "p4"},
+		}
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return all, nil
+			},
+		}
+		page, total, err := newInfraManager(oc).ListProjects(context.Background(), org, 2, 1)
+		require.NoError(t, err)
+		assert.Equal(t, int32(4), total)
+		require.Len(t, page, 2)
+		assert.Equal(t, "p2", page[0].Name)
+		assert.Equal(t, "p3", page[1].Name)
+	})
+
+	t.Run("clamps offset beyond the end to an empty page", func(t *testing.T) {
+		all := []*models.ProjectResponse{{Name: "p1"}}
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return all, nil
+			},
+		}
+		page, total, err := newInfraManager(oc).ListProjects(context.Background(), org, 10, 5)
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), total)
+		assert.Empty(t, page)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// DeleteProject — idempotency on not-found, the associated-agents guard, and
+// the happy path.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_DeleteProject(t *testing.T) {
+	const org, proj = "acme", "proj-a"
+
+	t.Run("idempotent when ListComponents reports project not found", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+				return nil, utils.ErrProjectNotFound
+			},
+			// DeleteProjectFunc nil => must not be reached.
+		}
+		err := newInfraManager(oc).DeleteProject(context.Background(), org, proj)
+		require.NoError(t, err)
+	})
+
+	t.Run("refuses deletion when agents are associated", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+				return []*models.AgentResponse{{Name: "agent-1"}}, nil
+			},
+		}
+		err := newInfraManager(oc).DeleteProject(context.Background(), org, proj)
+		assert.ErrorIs(t, err, utils.ErrProjectHasAssociatedAgents)
+	})
+
+	t.Run("deletes when no agents exist", func(t *testing.T) {
+		deleted := false
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+				return nil, nil
+			},
+			DeleteProjectFunc: func(_ context.Context, _, _ string) error {
+				deleted = true
+				return nil
+			},
+		}
+		err := newInfraManager(oc).DeleteProject(context.Background(), org, proj)
+		require.NoError(t, err)
+		assert.True(t, deleted, "expected DeleteProject to be invoked")
+	})
+
+	t.Run("idempotent when DeleteProject reports project not found", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+				return nil, nil
+			},
+			DeleteProjectFunc: func(_ context.Context, _, _ string) error {
+				return utils.ErrProjectNotFound
+			},
+		}
+		err := newInfraManager(oc).DeleteProject(context.Background(), org, proj)
+		require.NoError(t, err)
+	})
+
+	t.Run("surfaces a non-not-found list error", func(t *testing.T) {
+		boom := errors.New("list boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+				return nil, boom
+			},
+		}
+		err := newInfraManager(oc).DeleteProject(context.Background(), org, proj)
+		assert.ErrorIs(t, err, boom)
+		assert.NotErrorIs(t, err, utils.ErrProjectHasAssociatedAgents)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// GetProject — org gate then project propagation.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_GetProject(t *testing.T) {
+	const org, proj = "acme", "proj-a"
+
+	t.Run("propagates project error", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return nil, utils.ErrProjectNotFound
+			},
+		}
+		_, err := newInfraManager(oc).GetProject(context.Background(), org, proj)
+		assert.ErrorIs(t, err, utils.ErrProjectNotFound)
+	})
+
+	t.Run("returns the project on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return &models.ProjectResponse{Name: proj}, nil
+			},
+		}
+		got, err := newInfraManager(oc).GetProject(context.Background(), org, proj)
+		require.NoError(t, err)
+		assert.Equal(t, proj, got.Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// ListOrgDeploymentPipelines — pagination over the client result.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_ListOrgDeploymentPipelines(t *testing.T) {
+	const org = "acme"
+
+	t.Run("wraps list error", func(t *testing.T) {
+		boom := errors.New("dp boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
+				return nil, boom
+			},
+		}
+		_, _, err := newInfraManager(oc).ListOrgDeploymentPipelines(context.Background(), org, 10, 0)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("paginates and returns total", func(t *testing.T) {
+		all := []*models.DeploymentPipelineResponse{
+			{Name: "dp1"}, {Name: "dp2"}, {Name: "dp3"},
+		}
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
+				return all, nil
+			},
+		}
+		page, total, err := newInfraManager(oc).ListOrgDeploymentPipelines(context.Background(), org, 1, 1)
+		require.NoError(t, err)
+		assert.Equal(t, 3, total)
+		require.Len(t, page, 1)
+		assert.Equal(t, "dp2", page[0].Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// ListOrgEnvironments — org gate then env propagation.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_ListOrgEnvironments(t *testing.T) {
+	const org = "acme"
+
+	t.Run("propagates env error", func(t *testing.T) {
+		boom := errors.New("env boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return nil, boom
+			},
+		}
+		_, err := newInfraManager(oc).ListOrgEnvironments(context.Background(), org)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("returns environments on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{{Name: "dev"}, {Name: "prod"}}, nil
+			},
+		}
+		got, err := newInfraManager(oc).ListOrgEnvironments(context.Background(), org)
+		require.NoError(t, err)
+		require.Len(t, got, 2)
+		assert.Equal(t, "dev", got[0].Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// GetProjectDeploymentPipeline — org gate then pipeline propagation.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_GetProjectDeploymentPipeline(t *testing.T) {
+	const org, proj = "acme", "proj-a"
+
+	t.Run("propagates pipeline error", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+				return nil, utils.ErrDeploymentPipelineNotFound
+			},
+		}
+		_, err := newInfraManager(oc).GetProjectDeploymentPipeline(context.Background(), org, proj)
+		assert.ErrorIs(t, err, utils.ErrDeploymentPipelineNotFound)
+	})
+
+	t.Run("returns pipeline on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+				return &models.DeploymentPipelineResponse{Name: "pipe"}, nil
+			},
+		}
+		got, err := newInfraManager(oc).GetProjectDeploymentPipeline(context.Background(), org, proj)
+		require.NoError(t, err)
+		assert.Equal(t, "pipe", got.Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// CreateOrgDeploymentPipeline — slugified name, create error, optional project
+// linkage fan-out (GetProject + PatchProject) and its error branch.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_CreateOrgDeploymentPipeline(t *testing.T) {
+	const org = "acme"
+
+	t.Run("propagates create error", func(t *testing.T) {
+		boom := errors.New("create dp boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			CreateDeploymentPipelineFunc: func(_ context.Context, _, _ string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				return nil, boom
+			},
+		}
+		_, err := newInfraManager(oc).CreateOrgDeploymentPipeline(context.Background(), org, "My Pipeline", nil, nil, nil)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("creates with a slugified name and no project linkage", func(t *testing.T) {
+		var gotPipelineName string
+		oc := &clientmocks.OpenChoreoClientMock{
+			CreateDeploymentPipelineFunc: func(_ context.Context, _, pipelineName string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				gotPipelineName = pipelineName
+				return &models.DeploymentPipelineResponse{Name: pipelineName}, nil
+			},
+			// GetProject / PatchProject nil => no linkage path taken.
+		}
+		got, err := newInfraManager(oc).CreateOrgDeploymentPipeline(context.Background(), org, "My Pipeline", nil, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "my-pipeline", gotPipelineName)
+		assert.Equal(t, "my-pipeline", got.Name)
+	})
+
+	t.Run("links the pipeline to a project when projectName is provided", func(t *testing.T) {
+		proj := "proj-a"
+		var patched occlient.PatchProjectRequest
+		oc := &clientmocks.OpenChoreoClientMock{
+			CreateDeploymentPipelineFunc: func(_ context.Context, _, pipelineName string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				return &models.DeploymentPipelineResponse{Name: pipelineName}, nil
+			},
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return &models.ProjectResponse{Name: proj, DisplayName: "Proj A", Description: "desc"}, nil
+			},
+			PatchProjectFunc: func(_ context.Context, _, _ string, req occlient.PatchProjectRequest) error {
+				patched = req
+				return nil
+			},
+		}
+		_, err := newInfraManager(oc).CreateOrgDeploymentPipeline(context.Background(), org, "My Pipeline", nil, &proj, nil)
+		require.NoError(t, err)
+		// The project is patched to reference the new pipeline by its slug.
+		assert.Equal(t, "my-pipeline", patched.DeploymentPipeline)
+		assert.Equal(t, "Proj A", patched.DisplayName)
+	})
+
+	t.Run("returns error when linkage GetProject fails", func(t *testing.T) {
+		proj := "proj-a"
+		oc := &clientmocks.OpenChoreoClientMock{
+			CreateDeploymentPipelineFunc: func(_ context.Context, _, pipelineName string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				return &models.DeploymentPipelineResponse{Name: pipelineName}, nil
+			},
+			GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+				return nil, utils.ErrProjectNotFound
+			},
+			// PatchProjectFunc nil => not reached because GetProject failed.
+		}
+		_, err := newInfraManager(oc).CreateOrgDeploymentPipeline(context.Background(), org, "My Pipeline", nil, &proj, nil)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, utils.ErrProjectNotFound)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// UpdateOrgDeploymentPipeline — pure error propagation / pass-through.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_UpdateOrgDeploymentPipeline(t *testing.T) {
+	const org, pipe = "acme", "pipe"
+
+	t.Run("propagates update error", func(t *testing.T) {
+		boom := errors.New("update boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			UpdateDeploymentPipelineFunc: func(_ context.Context, _, _ string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				return nil, boom
+			},
+		}
+		_, err := newInfraManager(oc).UpdateOrgDeploymentPipeline(context.Background(), org, pipe, nil, nil, nil)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("returns updated pipeline on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			UpdateDeploymentPipelineFunc: func(_ context.Context, _, _ string, _, _ *string, _ []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+				return &models.DeploymentPipelineResponse{Name: pipe}, nil
+			},
+		}
+		got, err := newInfraManager(oc).UpdateOrgDeploymentPipeline(context.Background(), org, pipe, nil, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, pipe, got.Name)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// DeleteOrgDeploymentPipeline — the referencing-projects guard (the core logic),
+// the list-error wrap, and the happy path.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_DeleteOrgDeploymentPipeline(t *testing.T) {
+	const org, pipe = "acme", "pipe"
+
+	t.Run("wraps the list-projects error", func(t *testing.T) {
+		boom := errors.New("list boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return nil, boom
+			},
+		}
+		err := newInfraManager(oc).DeleteOrgDeploymentPipeline(context.Background(), org, pipe)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("refuses deletion when a project references the pipeline", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return []*models.ProjectResponse{
+					{Name: "p1", DeploymentPipeline: "other"},
+					{Name: "p2", DeploymentPipeline: pipe}, // referencing
+				}, nil
+			},
+			// DeleteOrgDeploymentPipelineFunc nil => must not be reached.
+		}
+		err := newInfraManager(oc).DeleteOrgDeploymentPipeline(context.Background(), org, pipe)
+		assert.ErrorIs(t, err, utils.ErrDeploymentPipelineInUse)
+	})
+
+	t.Run("deletes when no project references the pipeline", func(t *testing.T) {
+		deleted := false
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListProjectsFunc: func(_ context.Context, _ string) ([]*models.ProjectResponse, error) {
+				return []*models.ProjectResponse{{Name: "p1", DeploymentPipeline: "other"}}, nil
+			},
+			DeleteOrgDeploymentPipelineFunc: func(_ context.Context, _, _ string) error {
+				deleted = true
+				return nil
+			},
+		}
+		err := newInfraManager(oc).DeleteOrgDeploymentPipeline(context.Background(), org, pipe)
+		require.NoError(t, err)
+		assert.True(t, deleted, "expected the pipeline to be deleted")
+	})
+}
+
+// -----------------------------------------------------------------------------
+// GetDataplanes — org gate then dataplane propagation.
+// -----------------------------------------------------------------------------
+
+func TestInfraResourceManager_GetDataplanes(t *testing.T) {
+	const org = "acme"
+
+	t.Run("propagates dataplane error", func(t *testing.T) {
+		boom := errors.New("dp boom")
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListDataPlanesFunc: func(_ context.Context) ([]*models.DataPlaneResponse, error) {
+				return nil, boom
+			},
+		}
+		_, err := newInfraManager(oc).GetDataplanes(context.Background(), org)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("returns dataplanes on success", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			GetOrganizationFunc: okOrg(),
+			ListDataPlanesFunc: func(_ context.Context) ([]*models.DataPlaneResponse, error) {
+				return []*models.DataPlaneResponse{{Name: "dp-1"}}, nil
+			},
+		}
+		got, err := newInfraManager(oc).GetDataplanes(context.Background(), org)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, "dp-1", got[0].Name)
+	})
+}
