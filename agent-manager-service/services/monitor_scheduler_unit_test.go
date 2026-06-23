@@ -348,7 +348,7 @@ func TestMonitorScheduler_triggerPendingMonitors(t *testing.T) {
 		repo := &repomocks.MonitorRepositoryMock{
 			ListDueMonitorsFunc: func(monitorType string, _ time.Time) ([]models.Monitor, error) {
 				assert.Equal(t, models.MonitorTypeFuture, monitorType)
-				return nil, nil
+				return []models.Monitor{}, nil
 			},
 		}
 		// Executor left unconfigured — must NOT be reached.
@@ -408,7 +408,7 @@ func TestMonitorScheduler_triggerPendingMonitors(t *testing.T) {
 func TestMonitorScheduler_syncRunStatus(t *testing.T) {
 	t.Run("returns nil and skips when there are no pending/running runs", func(t *testing.T) {
 		repo := &repomocks.MonitorRepositoryMock{
-			ListPendingOrRunningRunsFunc: func(_ int) ([]models.MonitorRun, error) { return nil, nil },
+			ListPendingOrRunningRunsFunc: func(_ int) ([]models.MonitorRun, error) { return []models.MonitorRun{}, nil },
 		}
 		s := newScheduler(&clientmocks.OpenChoreoClientMock{}, &fakeProvisioner{}, &fakeMonitorExecutor{}, repo)
 
@@ -462,6 +462,7 @@ func TestMonitorScheduler_syncSingleRunStatus(t *testing.T) {
 
 	t.Run("returns nil (skips) when the monitor no longer exists", func(t *testing.T) {
 		repo := &repomocks.MonitorRepositoryMock{
+			//nolint:nilnil // intentionally exercising the (nil, nil) "not found" input the service must handle
 			GetMonitorByIDFunc: func(_ uuid.UUID) (*models.Monitor, error) { return nil, nil },
 		}
 		// OC client / provisioner left unconfigured — must NOT be reached.

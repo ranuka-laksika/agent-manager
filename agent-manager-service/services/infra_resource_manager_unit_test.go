@@ -304,7 +304,7 @@ func TestInfraResourceManager_DeleteProject(t *testing.T) {
 		oc := &clientmocks.OpenChoreoClientMock{
 			GetOrganizationFunc: okOrg(),
 			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
-				return nil, nil
+				return []*models.AgentResponse{}, nil
 			},
 			DeleteProjectFunc: func(_ context.Context, _, _ string) error {
 				deleted = true
@@ -320,7 +320,7 @@ func TestInfraResourceManager_DeleteProject(t *testing.T) {
 		oc := &clientmocks.OpenChoreoClientMock{
 			GetOrganizationFunc: okOrg(),
 			ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
-				return nil, nil
+				return []*models.AgentResponse{}, nil
 			},
 			DeleteProjectFunc: func(_ context.Context, _, _ string) error {
 				return utils.ErrProjectNotFound

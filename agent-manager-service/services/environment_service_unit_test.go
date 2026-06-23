@@ -433,7 +433,7 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 				return &models.EnvironmentResponse{UUID: envUUID, Name: "dev"}, nil
 			},
 			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
-				return nil, nil
+				return []*models.DeploymentPipelineResponse{}, nil
 			},
 			DeleteEnvironmentFunc: func(_ context.Context, _, _ string) error {
 				return boom
@@ -455,7 +455,7 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 				return &models.EnvironmentResponse{UUID: envUUID, Name: "dev"}, nil
 			},
 			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
-				return nil, nil
+				return []*models.DeploymentPipelineResponse{}, nil
 			},
 			DeleteEnvironmentFunc: func(_ context.Context, _, _ string) error {
 				return utils.ErrEnvironmentNotFound
@@ -482,7 +482,7 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 				return &models.EnvironmentResponse{UUID: envUUID, Name: "dev"}, nil
 			},
 			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
-				return nil, nil
+				return []*models.DeploymentPipelineResponse{}, nil
 			},
 			DeleteEnvironmentFunc: func(_ context.Context, _, _ string) error {
 				return nil
@@ -607,6 +607,7 @@ func TestEnvironmentService_GetEnvironmentGateways(t *testing.T) {
 				case errorGW.String():
 					return nil, errors.New("transient") // skipped, not fatal
 				case missingGW.String():
+					//nolint:nilnil // intentionally exercising the (nil, nil) "missing, skip" input the service must handle
 					return nil, nil // skipped
 				default:
 					return nil, errors.New("unexpected gateway id")

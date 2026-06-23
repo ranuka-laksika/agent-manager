@@ -179,7 +179,7 @@ func TestAgentKindService_DeleteKind(t *testing.T) {
 				return []*models.ProjectResponse{{Name: "proj-a"}}, nil
 			},
 			ListComponentsByKindFunc: func(_ context.Context, _, _, _ string) ([]*models.AgentResponse, error) {
-				return nil, nil // no agents from this kind
+				return []*models.AgentResponse{}, nil // no agents from this kind
 			},
 		}
 		svc := newKindService(repo, oc)

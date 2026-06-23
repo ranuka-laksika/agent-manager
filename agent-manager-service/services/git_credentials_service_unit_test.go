@@ -118,6 +118,7 @@ func TestGitCredentialsService_GetGitCredentials_Gates(t *testing.T) {
 	t.Run("fails when the secret reference is nil", func(t *testing.T) {
 		oc := &clientmocks.OpenChoreoClientMock{
 			GetSecretReferenceFunc: func(_ context.Context, _, _ string) (*occlient.SecretReferenceInfo, error) {
+				//nolint:nilnil // intentionally exercising the (nil, nil) input the service must handle
 				return nil, nil
 			},
 		}

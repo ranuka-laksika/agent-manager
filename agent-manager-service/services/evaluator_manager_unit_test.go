@@ -567,7 +567,7 @@ func TestEvaluatorManagerService_DeleteCustomEvaluator(t *testing.T) {
 		}
 		mon := &repomocks.MonitorRepositoryMock{
 			FindActiveMonitorsByEvaluatorIdentifierFunc: func(_ string, _ string) ([]models.Monitor, error) {
-				return nil, nil
+				return []models.Monitor{}, nil
 			},
 		}
 		svc := newEvaluatorService(cust, mon)
