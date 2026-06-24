@@ -89,6 +89,9 @@ gw="$(build_gateway_helm_args 203.0.113.10)"
 assert_eq "gateway vhost" \
   "gateway.vhost=https://gateway.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'gateway.vhost' <<<"$gw")"
+assert_eq "gateway hostname matches vhost host" \
+  "gateway.hostname=gateway.amp.203.0.113.10.sslip.io" \
+  "$(grep -F 'gateway.hostname' <<<"$gw")"
 # keymanagers supplied as a full list via --set-json (a list-index --set wipes the
 # other entry); ThunderKeyManager gets the public issuer, agent-manager-service kept.
 assert_eq "gateway keymanagers via --set-json" "yes" "$(has "$gw" '--set-json')"
@@ -194,7 +197,12 @@ assert_eq "caddy email block" "	email ops@example.com" "$(grep -F 'email ops@exa
 assert_eq "caddy console site" "console.amp.203.0.113.10.sslip.io {" "$(grep -F 'console.amp' <<<"$cf" | head -1)"
 assert_eq "caddy console upstream" "	reverse_proxy 127.0.0.1:3000" "$(grep -F '127.0.0.1:3000' <<<"$cf")"
 assert_eq "caddy thunder upstream" "	reverse_proxy 127.0.0.1:8080" "$(grep -F '127.0.0.1:8080' <<<"$cf")"
-assert_eq "caddy gateway upstream" "	reverse_proxy 127.0.0.1:22893" "$(grep -F '127.0.0.1:22893' <<<"$cf")"
+# gateway host routes through the kgateway data plane (19080), not the ClusterIP
+# runtime (22893) which is not node-published; scope the grep to the gateway block
+# since 19080 is shared with the agents site.
+assert_eq "caddy gateway upstream (via kgateway)" "	reverse_proxy 127.0.0.1:19080" \
+  "$(grep -F -A8 'gateway.amp.203.0.113.10.sslip.io {' <<<"$cf" | grep -F 'reverse_proxy' | head -1)"
+assert_eq "caddy no 22893 dead-end" "" "$(grep -F '127.0.0.1:22893' <<<"$cf")"
 assert_eq "caddy no cp when disabled" "" "$(grep -F 'cp.amp' <<<"$cf")"
 assert_eq "caddy api upstream" "	reverse_proxy 127.0.0.1:9000" "$(grep -F '127.0.0.1:9000' <<<"$cf")"
 assert_eq "caddy observer upstream" "	reverse_proxy 127.0.0.1:9098" "$(grep -F '127.0.0.1:9098' <<<"$cf")"
@@ -308,6 +316,9 @@ assert_eq "agent site on_demand + disable_http_challenge" "yes" \
   assert_eq "core gateway vhost" \
     "gateway.vhost=https://gateway.amp.example.com" \
     "$(grep -F 'gateway.vhost' <<<"$core_gw")"
+  assert_eq "core gateway hostname matches vhost host" \
+    "gateway.hostname=gateway.amp.example.com" \
+    "$(grep -F 'gateway.hostname' <<<"$core_gw")"
 
   core_cp="$(cp_helm_args)"
   assert_eq "core cp oidc issuer" \

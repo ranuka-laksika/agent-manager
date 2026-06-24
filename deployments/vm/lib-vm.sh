@@ -82,6 +82,12 @@ build_amp_helm_args() {
 # in full; only the ThunderKeyManager issuer differs from the chart default. This is
 # chart-version-coupled: re-verify both keymanagers (names + jwks URIs) on chart bumps.
 # gateway_helm_args — hostname-driven core. Reads AMP_HOST_GATEWAY, AMP_HOST_THUNDER.
+#
+# gateway.hostname MUST match the host in gateway.vhost. vhost is the public URL the
+# controller mints into LLM-proxy endpoints; hostname is the host the kgateway
+# catch-all HTTPRoute matches to forward traffic to the gateway runtime. Left unset,
+# hostname defaults to "<env>-<org>.gateway.localhost", which never matches the public
+# vhost the LLM judge calls, so the proxy request 404s at kgateway. Keep them aligned.
 # shellcheck disable=SC2154  # AMP_HOST_* come from the caller's scope by design.
 gateway_helm_args() {
   local thunder keymanagers
@@ -89,6 +95,7 @@ gateway_helm_args() {
   keymanagers=$(printf '[{"name":"agent-manager-service","issuer":"agent-manager-service","jwks":{"remote":{"uri":"http://amp-api.wso2-amp.svc.cluster.local:9000/auth/external/jwks.json","skipTlsVerify":true}}},{"name":"ThunderKeyManager","issuer":"%s","jwks":{"remote":{"uri":"http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks","skipTlsVerify":true}}}]' "$thunder")
   printf '%s\n' \
     "--set" "gateway.vhost=https://${AMP_HOST_GATEWAY}" \
+    "--set" "gateway.hostname=${AMP_HOST_GATEWAY}" \
     "--set-json" "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers=${keymanagers}"
 }
 
@@ -359,7 +366,14 @@ caddyfile() {
   _site "$AMP_HOST_API"      9000   # agent-manager REST API
   _site "$AMP_HOST_THUNDER"  8080   # Thunder OAuth (OC kgateway, host-routed)
   _site "$AMP_HOST_OBSERVER" 9098   # traces observer
-  _site "$AMP_HOST_GATEWAY"  22893  # api-platform gateway: OTel ingest
+  # The api-platform gateway runtime is a ClusterIP service (ports 22893/22894 are
+  # not node-published), so it is reached through the kgateway data plane on 19080 —
+  # which has a catch-all HTTPRoute for AMP_HOST_GATEWAY that forwards to the runtime
+  # (see gateway_helm_args setting gateway.hostname). Pointing here at 22893 dead-ends
+  # (Caddy gets an empty reply -> 502), breaking the publicly-minted LLM-judge proxy
+  # URL. (Agent OTel ingestion is unaffected: it goes in-cluster to the runtime
+  # ClusterIP, not through this host.)
+  _site "$AMP_HOST_GATEWAY"  19080  # api-platform gateway via kgateway (LLM proxy)
 
   if [[ -n "$AMP_HOST_CP" ]]; then
     # 9243 is HTTPS with a self-signed cert -> proxy over TLS, skip verification.
