@@ -76,21 +76,41 @@ CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 
 
 # --- Resolve chart version ---
-# CHART_VERSION is optional. When unset, resolve the latest published version
-# from the OCI registry so new environments always get the newest gateway chart.
-# `helm show chart` without --version pulls the registry's highest semver tag.
+# The gateway extension chart is a pinned dependency (its version is defined by
+# the platform install, e.g. install.sh's GATEWAY_CHART_VERSION). An added
+# environment must run the SAME gateway chart as the default environment, so
+# CHART_VERSION resolves in this order:
+#   1. Explicit CHART_VERSION override (when a caller deliberately pins one).
+#   2. The chart version of the gateway already installed for the default
+#      environment — the normal path, so an added env inherits the platform's
+#      pinned version automatically.
+#   3. The latest published version in the OCI registry (last-resort fallback
+#      for a fresh install with no gateway yet).
+# Resolving from the registry as the *default* is unsafe: it can pick a GA tag
+# that differs from the installed platform, producing a version mismatch between
+# environments (the cause of cross-environment gateway routing failures).
 CHART_VERSION="${CHART_VERSION:-}"
-if [ -z "$CHART_VERSION" ]; then
-    echo "🔎 Resolving latest gateway chart version from ${CHART_REF}..."
-    CHART_VERSION=$(helm show chart "${CHART_REF}" 2>/dev/null | awk '/^version:/ {print $2; exit}')
-    if [ -z "$CHART_VERSION" ]; then
-        echo "❌ Could not resolve the latest chart version from ${CHART_REF}"
-        echo "   Pin a version explicitly and retry (e.g. CHART_VERSION=0.15.0)."
-        exit 1
-    fi
-    echo "✅ Using latest chart version: ${CHART_VERSION}"
-else
+if [ -n "$CHART_VERSION" ]; then
     echo "📌 Using pinned chart version: ${CHART_VERSION}"
+else
+    # Try the already-installed default-environment gateway release first.
+    # The default-env gateway is installed as "api-platform-<org>-default"
+    # (same naming this script uses below: api-platform-<org>-<env>).
+    INSTALLED_RELEASE="api-platform-${ORG_NAME}-default"
+    CHART_VERSION=$(helm get metadata "${INSTALLED_RELEASE}" -n "${GATEWAY_NAMESPACE}" -o json 2>/dev/null \
+        | yq -r '.version // ""' 2>/dev/null)
+    if [ -n "$CHART_VERSION" ]; then
+        echo "✅ Inheriting installed gateway chart version: ${CHART_VERSION} (from release '${INSTALLED_RELEASE}')"
+    else
+        echo "🔎 No installed gateway found; resolving latest chart version from ${CHART_REF}..."
+        CHART_VERSION=$(helm show chart "${CHART_REF}" 2>/dev/null | awk '/^version:/ {print $2; exit}')
+        if [ -z "$CHART_VERSION" ]; then
+            echo "❌ Could not resolve the chart version from ${CHART_REF}"
+            echo "   Pin a version explicitly and retry (e.g. CHART_VERSION=0.15.0)."
+            exit 1
+        fi
+        echo "⚠️  Using latest registry chart version: ${CHART_VERSION} (no installed gateway to inherit from)"
+    fi
 fi
 
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).

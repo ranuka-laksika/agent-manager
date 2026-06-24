@@ -39,7 +39,7 @@ const E2EEnvPrefix = "e2e-"
 // Shared Projects and Agent
 const E2ESharedProjectName = "e2e-test-shared"
 const SharedITHelpdeskAgentName = "e2e-it-helpdesk"
-const E2ESharedProjectWithMultiEnvDepPipeline  = "e2e-test-multi-"
+const E2ESharedProjectWithMultiEnvDepPipeline = "e2e-test-multienv"
 const SharedPromotableITHelpdeskAgentName = "e2e-it-helpdesk-multi"
 
 // E2ESharedSecondEnv is the fixed promotion-target environment for the shared promotable IT helpdesk agent. It
