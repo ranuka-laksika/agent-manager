@@ -144,17 +144,32 @@ build_cp_helm_args() {
 }
 
 # build_platform_resources_helm_args
-# Prints PLATFORM_RESOURCES_HELM_ARGS tokens. The platform-resources chart's
-# workload-publisher defaults its OAuth token endpoint to the kgateway path
-# (`host.k3d.internal:8080/oauth2/token` + Host `thunder.amp.localhost`). On the
-# VM that route no longer matches: build_cp_helm_args / build_thunder_helm_args
-# move Thunder's vhost to the public sslip.io host, so the localhost Host header
-# 404s and `generate-workload-cr` fails with "Failed to get access token". Point
-# it at the Thunder service directly (no gateway, no Host header, no issuer
-# coupling) — the same in-cluster endpoint every other extension already uses.
+# Prints PLATFORM_RESOURCES_HELM_ARGS tokens. Two overrides:
+#
+# 1. OAuth token endpoint. The platform-resources chart's workload-publisher
+#    defaults its OAuth token endpoint to the kgateway path
+#    (`host.k3d.internal:8080/oauth2/token` + Host `thunder.amp.localhost`). On the
+#    VM that route no longer matches: build_cp_helm_args / build_thunder_helm_args
+#    move Thunder's vhost to the public sslip.io host, so the localhost Host header
+#    404s and `generate-workload-cr` fails with "Failed to get access token". Point
+#    it at the Thunder service directly (no gateway, no Host header, no issuer
+#    coupling) — the same in-cluster endpoint every other extension already uses.
+#
+# 2. Default-Environment agent-facing gateway host. The chart seeds the default
+#    Environment CR with environment.gateway.http (default am-gateway.localhost:19080).
+#    OpenChoreo builds deployed-agent route hostnames as "<env>-<org>.<that host>",
+#    and the Environment's external WHOLLY REPLACES the dataplane's, so without this
+#    override agent routes land on *.am-gateway.localhost: the console then shows an
+#    empty invoke URL and try-out 405s against its own host. Point it at the public
+#    agents base (AMP_AGENTS_BASE, e.g. agents.<domain> or agents.<ip>.sslip.io) on
+#    :443 so routes resolve to <org>-<project>.<AMP_AGENTS_BASE>, served by Caddy's
+#    wildcard *.agents site.
+# shellcheck disable=SC2154  # AMP_AGENTS_BASE comes from the caller's scope by design.
 build_platform_resources_helm_args() {
   printf '%s\n' \
-    "--set" "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token"
+    "--set" "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
+    "--set" "environment.gateway.http.host=${AMP_AGENTS_BASE}" \
+    "--set" "environment.gateway.http.port=443"
 }
 
 # build_thunder_helm_args <ip>

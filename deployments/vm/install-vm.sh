@@ -81,6 +81,11 @@ run_install() {
   mapfile -t GATEWAY_HELM_ARGS < <(build_gateway_helm_args "$VM_IP")
   # shellcheck disable=SC2034
   mapfile -t CP_HELM_ARGS < <(build_cp_helm_args "$VM_IP")
+  # Public agents base for the default Environment's gateway host (read by
+  # build_platform_resources_helm_args via dynamic scope); mirrors
+  # render_dataplane_external_ingress.
+  # shellcheck disable=SC2034
+  local AMP_AGENTS_BASE="agents.${VM_IP}.sslip.io"
   # shellcheck disable=SC2034
   mapfile -t PLATFORM_RESOURCES_HELM_ARGS < <(build_platform_resources_helm_args)
   # shellcheck disable=SC2034

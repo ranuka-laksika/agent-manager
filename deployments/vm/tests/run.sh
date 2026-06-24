@@ -218,14 +218,26 @@ assert_eq "caddy cp on by default" "cp.amp.203.0.113.10.sslip.io {" "$(grep -F '
 cf_cp="$(render_caddyfile 203.0.113.10 "" true)"
 assert_eq "caddy cp tls skip verify" "			tls_insecure_skip_verify" "$(grep -F 'tls_insecure_skip_verify' <<<"$cf_cp")"
 
-# --- build_platform_resources_helm_args points the workload publisher at the
-#     Thunder service directly (the gateway path 404s once Thunder's vhost moves
-#     to the public sslip.io host) ---
-pr="$(build_platform_resources_helm_args)"
-assert_eq "platform-resources oauth tokenUrl (direct svc)" \
-  "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
-  "$(grep -F 'global.oauth.tokenUrl' <<<"$pr")"
-assert_eq "platform-resources oauth not via host.k3d.internal" "no" "$(has "$pr" 'host.k3d.internal')"
+# --- build_platform_resources_helm_args: point the workload publisher at the
+#     Thunder service directly (the gateway path 404s once Thunder's vhost moves to
+#     the public sslip.io host), AND advertise the public agents host on the default
+#     Environment so deployed-agent routes resolve to <org>-<project>.<agents-base>
+#     (else OpenChoreo uses am-gateway.localhost and the console invoke URL is empty,
+#     with try-out 405ing against its own host). Reads AMP_AGENTS_BASE from scope. ---
+(
+  AMP_AGENTS_BASE=agents.amp.example.com
+  pr="$(build_platform_resources_helm_args)"
+  assert_eq "platform-resources oauth tokenUrl (direct svc)" \
+    "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
+    "$(grep -F 'global.oauth.tokenUrl' <<<"$pr")"
+  assert_eq "platform-resources oauth not via host.k3d.internal" "no" "$(has "$pr" 'host.k3d.internal')"
+  assert_eq "platform-resources env gateway host (public agents base)" \
+    "environment.gateway.http.host=agents.amp.example.com" \
+    "$(grep -F 'environment.gateway.http.host' <<<"$pr")"
+  assert_eq "platform-resources env gateway port 443" \
+    "environment.gateway.http.port=443" \
+    "$(grep -F 'environment.gateway.http.port' <<<"$pr")"
+)
 
 # --- render_coredns_vm_config rewrites the in-cluster names to the server node ---
 cd_cfg="$(render_coredns_vm_config k3d-amp-local-server-0)"
