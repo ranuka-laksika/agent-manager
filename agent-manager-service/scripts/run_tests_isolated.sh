@@ -27,6 +27,63 @@ TEST_DB_USER="${DB_USER}"
 TEST_DB_PASSWORD="${DB_PASSWORD}"
 TEST_DB_NAME="${DB_NAME}"
 
+# psql_exec runs a one-off SQL command against the server. It prefers a psql
+# binary on the host; if none exists (common on dev machines that only run
+# Postgres via Docker), it falls back to executing psql inside the running
+# Postgres container. Set PG_CONTAINER to override container auto-detection.
+# Args: <extra-psql-flags...> -c "<sql>"  — passed straight through to psql.
+PG_CONTAINER="${PG_CONTAINER:-}"
+
+detect_pg_container() {
+    [ -n "$PG_CONTAINER" ] && { echo "$PG_CONTAINER"; return; }
+    command -v docker >/dev/null 2>&1 || return
+    # Find every Postgres container publishing the test port. We refuse to guess
+    # when more than one matches: psql_exec drives destructive DROP/CREATE DATABASE
+    # commands, so picking the wrong instance could wipe the wrong database.
+    local matches
+    matches="$(docker ps --filter "publish=${TEST_DB_PORT}" --format '{{.Names}} {{.Image}}' 2>/dev/null \
+        | awk 'tolower($2) ~ /postgres/ {print $1}')"
+
+    local count
+    count="$(printf '%s\n' "$matches" | grep -c .)"
+    if [ "$count" -gt 1 ]; then
+        echo "✗ FAILED - Multiple Postgres containers publish port ${TEST_DB_PORT}; refusing to guess which to use." >&2
+        echo "  Matching containers:" >&2
+        printf '%s\n' "$matches" | sed 's/^/    /' >&2
+        echo "  Set PG_CONTAINER=<name> to disambiguate." >&2
+        return 1
+    fi
+    if [ "$count" -eq 0 ]; then
+        # No match: let the caller (psql_exec) emit its install/PG_CONTAINER hint.
+        return
+    fi
+    printf '%s\n' "$matches"
+}
+
+psql_exec() {
+    if command -v psql >/dev/null 2>&1; then
+        PGPASSWORD="$TEST_DB_PASSWORD" psql \
+            -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" "$@"
+        return $?
+    fi
+    local container detect_rc
+    container="$(detect_pg_container)"
+    detect_rc=$?
+    # detect_pg_container returns non-zero only when the match is ambiguous; it has
+    # already printed the matching containers and the PG_CONTAINER hint to stderr.
+    if [ "$detect_rc" -ne 0 ]; then
+        return "$detect_rc"
+    fi
+    if [ -z "$container" ]; then
+        echo "✗ FAILED - psql not found on host and no Postgres container detected." >&2
+        echo "  Install psql (brew install libpq) or set PG_CONTAINER=<name>." >&2
+        return 127
+    fi
+    # Inside the container, connect over the local socket as the configured user.
+    docker exec -e PGPASSWORD="$TEST_DB_PASSWORD" -i "$container" \
+        psql -U "$TEST_DB_USER" "$@"
+}
+
 # Set up log file early so ALL output (including migration failures) is captured
 mkdir -p localdata
 LOG_FILE="$PROJECT_ROOT/localdata/test_output_isolated.log"
@@ -49,23 +106,24 @@ echo ""
 # Step 1: Setup test database
 echo "Step 1: Setting up test database"
 echo "→ Checking PostgreSQL connection..."
-if ! PGPASSWORD="$TEST_DB_PASSWORD" psql -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" -q -c "SELECT 1" 2>/dev/null; then
+if ! psql_exec -q -c "SELECT 1" >/dev/null 2>&1; then
     echo "✗ FAILED - Cannot connect to PostgreSQL"
     echo ""
     echo "Please check:"
     echo "  1. PostgreSQL is running: pg_isready -h $TEST_DB_HOST -p $TEST_DB_PORT"
     echo "  2. Credentials are correct in .env.test"
     echo "  3. Main database user '$TEST_DB_USER' exists"
+    echo "  4. If psql is not on the host, a Postgres container is running (or set PG_CONTAINER)"
     exit 1
 fi
 echo "✓ PostgreSQL connection verified"
 
 # Drop and recreate test database for clean state
 echo "→ Dropping existing test database (if exists)..."
-PGPASSWORD="$TEST_DB_PASSWORD" psql -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" -q -c "DROP DATABASE IF EXISTS $TEST_DB_NAME;" 2>/dev/null || true
+psql_exec -q -c "DROP DATABASE IF EXISTS $TEST_DB_NAME;" 2>/dev/null || true
 
 echo "→ Creating test database..."
-if ! PGPASSWORD="$TEST_DB_PASSWORD" psql -h "$TEST_DB_HOST" -p "$TEST_DB_PORT" -U "$TEST_DB_USER" -q -c "CREATE DATABASE $TEST_DB_NAME OWNER $TEST_DB_USER;" 2>/dev/null; then
+if ! psql_exec -q -c "CREATE DATABASE $TEST_DB_NAME OWNER $TEST_DB_USER;" 2>/dev/null; then
     echo "✗ FAILED - Could not create test database"
     exit 1
 fi
@@ -101,8 +159,14 @@ echo ""
 start_time=$SECONDS
 
 # Run tests (output already tee'd to log file via exec above)
+# -tags=integration includes the database-backed test files.
+COVERAGE_OUT="${COVERAGE_OUT:-$PROJECT_ROOT/localdata/coverage-integration.out}"
 set +e
-go test -v --race ./...
+go test -v --race -tags=integration \
+    -covermode=atomic \
+    -coverpkg=./... \
+    -coverprofile="$COVERAGE_OUT" \
+    ./...
 testExitCode=$?
 set -e
 

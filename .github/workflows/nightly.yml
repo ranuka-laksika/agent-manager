@@ -254,6 +254,8 @@ jobs:
     permissions:
       contents: read
       checks: write
+    outputs:
+      summary: ${{ steps.test-summary.outputs.summary }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
@@ -336,6 +338,33 @@ jobs:
           path: test/e2e/e2e-output.log
           retention-days: 7
 
+      # Parse the ginkgo JUnit report into a one-line summary for the Chat alert.
+      # Sums the attributes across all <testsuite> elements so the counts hold
+      # even if ginkgo emits more than one suite.
+      - name: Build test summary
+        id: test-summary
+        if: always()
+        run: |
+          REPORT="test/e2e/report.xml"
+          if [ ! -f "$REPORT" ]; then
+            echo "summary=test report not found (suite likely failed before producing report.xml)" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sum_attr() {
+            grep -o "<testsuite [^>]*" "$REPORT" \
+              | grep -o "$1=\"[0-9]*\"" \
+              | grep -o '[0-9]*' \
+              | awk '{s+=$1} END {print s+0}'
+          }
+          TESTS=$(sum_attr tests)
+          FAILURES=$(sum_attr failures)
+          ERRORS=$(sum_attr errors)
+          SKIPPED=$(sum_attr skipped)
+          PASSED=$(( TESTS - FAILURES - ERRORS - SKIPPED ))
+          SUMMARY="${PASSED} passed, ${FAILURES} failed, ${ERRORS} errored, ${SKIPPED} skipped (of ${TESTS})"
+          echo "summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+          echo "Test summary: $SUMMARY"
+
   notify-google-chat:
     name: Notify Google Chat
     needs: [compute-version, e2e]
@@ -347,13 +376,19 @@ jobs:
           GCHAT_WEBHOOK_URL: ${{ secrets.GCHAT_WEBHOOK_URL }}
           DEV_VERSION: ${{ needs.compute-version.outputs.dev-version }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TEST_SUMMARY: ${{ needs.e2e.outputs.summary }}
         run: |
           if [ -z "${GCHAT_WEBHOOK_URL}" ]; then
             echo "::warning::GCHAT_WEBHOOK_URL secret is not set; skipping Chat notification."
             exit 0
           fi
+          SUMMARY_LINE="${TEST_SUMMARY:-no test summary available}"
+          # Build the JSON with jq so the summary text is safely escaped.
+          PAYLOAD=$(jq -n \
+            --arg version "${DEV_VERSION}" \
+            --arg summary "${SUMMARY_LINE}" \
+            --arg url "${RUN_URL}" \
+            '{text: ("*🔴 Nightly E2E failed* — `\($version)`\n" + $summary + "\n<\($url)|View run>")}')
           curl -s -X POST "${GCHAT_WEBHOOK_URL}" \
             -H 'Content-Type: application/json' \
-            -d "{
-              \"text\": \"*🔴 Nightly E2E failed* — \`${DEV_VERSION}\`\n<${RUN_URL}|View run>\"
-            }"
+            -d "${PAYLOAD}"

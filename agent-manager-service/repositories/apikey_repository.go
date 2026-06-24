@@ -23,6 +23,8 @@ import (
 )
 
 // APIKeyRepository defines the interface for API key persistence
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/apikey_repository_mock.go . APIKeyRepository:APIKeyRepositoryMock
 type APIKeyRepository interface {
 	Upsert(key *models.StoredAPIKey) error
 	Delete(artifactUUID, name string) error

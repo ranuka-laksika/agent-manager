@@ -28,6 +28,8 @@ import (
 )
 
 // EnvAgentMCPMappingRepository defines data access for per-environment MCP mappings.
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/env_agent_mcp_mapping_repository_mock.go . EnvAgentMCPMappingRepository:EnvAgentMCPMappingRepositoryMock
 type EnvAgentMCPMappingRepository interface {
 	Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, orgName string) error
 	ListByConfig(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)

@@ -25,6 +25,10 @@ wire: ## Run wire code gen.
 .PHONY: codegen
 codegen: ## Run code gen.
 	@echo "Running go generate"
+	@# Requires the `moq` binary on PATH (mock generation for client + repository
+	@# interfaces, see //go:generate directives). Install with (version pinned in README):
+	@#   go install github.com/matryer/moq@v0.5.3
+	@command -v moq >/dev/null 2>&1 || echo "WARNING: 'moq' not found on PATH; go generate will still run but mock (re)generation will fail. Install: go install github.com/matryer/moq@v0.5.3"
 	@go generate -tags=wireinject ./...
 	@echo "Go generate done"
 
@@ -36,13 +40,24 @@ fmt: ## Format code.
 format: ## Format code (alias for fmt).
 	sh scripts/fmt.sh
 
-.PHONY: dev-test
-dev-test: gen-keys ## Run tests with isolated test database.
+.PHONY: test-unit
+test-unit: gen-keys ## Run fast unit tests (no database required).
+	bash scripts/run_unit_tests.sh
+
+.PHONY: test-integration
+test-integration: gen-keys ## Run integration tests with an isolated test database (-tags=integration).
 	bash scripts/run_tests_isolated.sh
 
+.PHONY: dev-test
+dev-test: test-integration ## Alias for test-integration (isolated DB). Kept for backwards compatibility.
+
 .PHONY: test
-test: gen-keys ## Run tests against main database (for development).
+test: gen-keys ## Run all tests (unit + integration) against the main database. For development.
 	bash scripts/run_tests.sh
+
+.PHONY: test-coverage
+test-coverage: gen-keys ## Run unit + integration tests and produce a merged HTML coverage report.
+	bash scripts/run_coverage.sh
 
 .PHONY: lint
 lint: ## Lint code.

@@ -37,6 +37,8 @@ type CustomEvaluatorFilters struct {
 }
 
 // CustomEvaluatorRepository defines the interface for custom evaluator data access
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/custom_evaluator_repository_mock.go . CustomEvaluatorRepository:CustomEvaluatorRepositoryMock
 type CustomEvaluatorRepository interface {
 	WithTx(tx *gorm.DB) CustomEvaluatorRepository
 	RunInTransaction(fn func(txRepo CustomEvaluatorRepository) error) error

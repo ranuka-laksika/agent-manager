@@ -48,6 +48,8 @@ type GatewayFilterOptions struct {
 }
 
 // GatewayRepository defines the interface for gateway data access
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/gateway_repository_mock.go . GatewayRepository:GatewayRepositoryMock
 type GatewayRepository interface {
 	// Gateway operations
 	Create(gateway *models.Gateway) error

@@ -26,6 +26,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
 
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/agent_kind_repository_mock.go . AgentKindRepository:AgentKindRepositoryMock
 type AgentKindRepository interface {
 	CreateKind(ctx context.Context, kind *models.AgentKind) error
 	GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKind, error)

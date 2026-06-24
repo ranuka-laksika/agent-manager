@@ -22,7 +22,8 @@ exec 6>&1 7>&2
 # Redirect both stdout and stderr to log file
 exec > localdata/test_output.log 2>&1
 
-go test -v  --race  ./...
+# -tags=integration runs the full suite (unit + database-backed integration tests).
+go test -v --race -tags=integration ./...
 
 testExitCode=$?
 

@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // PostgreSQL driver
@@ -33,10 +34,26 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/db/connpool"
 )
 
-var db *gorm.DB
+var (
+	db     *gorm.DB
+	dbOnce sync.Once
+)
 
-func init() {
-	db = initDbConn(config.GetConfig().POSTGRESQL)
+// instance lazily establishes the database connection on first use.
+//
+// The connection is intentionally NOT opened in an init() function: doing so
+// forced every package that transitively imports db to reach a live database
+// at import time, which made package init (and therefore pure-logic unit tests)
+// fail without Postgres. Connecting on first use keeps production behavior
+// unchanged — startup paths (app bootstrap, migrations) call DB()/GetDB()
+// immediately after config load, so the process still connects at startup and
+// still fails fast (os.Exit) if the database is unreachable — while letting
+// callers that never touch the DB run without one.
+func instance() *gorm.DB {
+	dbOnce.Do(func() {
+		db = initDbConn(config.GetConfig().POSTGRESQL)
+	})
+	return db
 }
 
 // slogWriter implements the GORM logger Writer interface using slog
@@ -110,7 +127,7 @@ func setConfigsOnDB(db *sql.DB, cfg config.DbConfigs) {
 // This should be used when injecting the DB into repositories that will
 // add context per-operation using db.DB(ctx).
 func GetDB() *gorm.DB {
-	return db
+	return instance()
 }
 
 func makeConnString(p config.POSTGRESQL) string {

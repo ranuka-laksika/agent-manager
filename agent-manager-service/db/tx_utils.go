@@ -39,10 +39,10 @@ func DB(ctx context.Context) *gorm.DB {
 		// Note: We don't defer cancel() here because the returned *gorm.DB
 		// will be used beyond this function's scope.
 		_ = cancel
-		return db.WithContext(timeoutCtx)
+		return instance().WithContext(timeoutCtx)
 	}
 
-	return db.WithContext(ctx)
+	return instance().WithContext(ctx)
 }
 
 func CtxWithTx(ctx context.Context, tx *gorm.DB) context.Context {

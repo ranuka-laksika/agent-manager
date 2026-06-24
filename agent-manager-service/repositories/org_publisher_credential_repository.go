@@ -26,6 +26,8 @@ import (
 )
 
 // OrgPublisherCredentialRepository defines the interface for per-org publisher credential data access
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/org_publisher_credential_repository_mock.go . OrgPublisherCredentialRepository:OrgPublisherCredentialRepositoryMock
 type OrgPublisherCredentialRepository interface {
 	GetByOrgName(orgName string) (*models.OrgPublisherCredential, error)
 	Upsert(cred *models.OrgPublisherCredential) error

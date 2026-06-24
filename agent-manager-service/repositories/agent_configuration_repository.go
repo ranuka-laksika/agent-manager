@@ -29,6 +29,8 @@ import (
 )
 
 // AgentConfigurationRepository defines data access for agent configurations
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/agent_configuration_repository_mock.go . AgentConfigurationRepository:AgentConfigurationRepositoryMock
 type AgentConfigurationRepository interface {
 	// Create creates a new agent configuration (use within transaction)
 	Create(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error

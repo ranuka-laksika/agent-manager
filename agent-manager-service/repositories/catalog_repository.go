@@ -30,6 +30,8 @@ import (
 )
 
 // CatalogRepository defines the interface for catalog data access
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/catalog_repository_mock.go . CatalogRepository:CatalogRepositoryMock
 type CatalogRepository interface {
 	// ListByKind lists catalog entries filtered by kind with pagination
 	ListByKind(orgUUID, kind string, limit, offset int) ([]models.CatalogEntry, int64, error)

@@ -31,6 +31,8 @@ import (
 )
 
 // LLMProviderRepository defines the interface for LLM provider persistence
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/llm_provider_repository_mock.go . LLMProviderRepository:LLMProviderRepositoryMock
 type LLMProviderRepository interface {
 	Create(tx *gorm.DB, p *models.LLMProvider, handle, name, version string, orgUUID string) error
 	GetByUUID(providerID, orgUUID string) (*models.LLMProvider, error)

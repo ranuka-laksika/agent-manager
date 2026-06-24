@@ -27,6 +27,8 @@ import (
 )
 
 // ArtifactRepository defines the interface for artifact data access
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/artifact_repository_mock.go . ArtifactRepository:ArtifactRepositoryMock
 type ArtifactRepository interface {
 	Create(tx *gorm.DB, artifact *models.Artifact) error
 	Delete(tx *gorm.DB, uuid string) error
