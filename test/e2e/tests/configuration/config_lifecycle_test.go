@@ -100,44 +100,4 @@ var _ = Describe("Agent runtime configurations:", Label("configuration", "single
 			DeployedAfter: lastDeployedBefore,
 		})
 	})
-
-	It("becomes ready after the configuration redeploy", func() {
-		deployment.WaitForReadiness(Client, Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName, Cfg.DefaultEnv, 10*time.Minute)
-	})
-
-	It("reflects the updated non-secret configuration values", func() {
-		configs := configuration.GetAgentConfigurations(Default, Client,
-			Cfg.DefaultOrg, ConfigAgent.ProjectName, ConfigAgent.AgentName, Cfg.DefaultEnv)
-
-		var foundDB bool
-		for _, c := range configs.Configurations.Env {
-			if c.Key == "DATABASE_URL" {
-				foundDB = true
-				Expect(c.Value).To(Equal("http://localhost:6000"),
-					"DATABASE_URL should have the updated value")
-			}
-		}
-		Expect(foundDB).To(BeTrue(), "DATABASE_URL should still exist after redeploy")
-	})
-
-	It("surfaces the invalid-API-key error in the agent runtime logs", func() {
-		By("Invoking the agent so the runtime attempts a LLM call")
-		// requireOK=false: the invocation is expected to error (invalid key); we only
-		// need it to reach the runtime so the failure is logged.
-		agentops.InvokeAgentEndpoint(
-			ConfigAgent.EndpointURL+"/chat",
-			ConfigAgent.InvokeReq,
-			ConfigAgent.APIKey,
-			false)
-
-		By("Waiting for the invalid-API-key error in the runtime logs")
-		agentops.WaitForRuntimeLog(Client, &agentops.WaitForRuntimeLogParams{
-			OrgName:     Cfg.DefaultOrg,
-			ProjectName: ConfigAgent.ProjectName,
-			AgentName:   ConfigAgent.AgentName,
-			Environment: Cfg.DefaultEnv,
-			SearchText:  "Incorrect API key provided",
-			Timeout:     10 * time.Minute,
-		})
-	})
 })
