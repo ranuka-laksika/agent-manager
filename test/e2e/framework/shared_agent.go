@@ -55,6 +55,30 @@ const E2ESharedKindName = "e2e-it-helpdesk-kind"
 // E2ESharedKindVersion is the version used when publishing the shared kind.
 const E2ESharedKindVersion = "1.0.0"
 
+const (
+	// E2ECLIProjectName is the dedicated project owning the amctl CLI e2e slow
+	// suite's agent. Stable + reused across runs (not swept), so the suite can
+	// mutate (deploy/redeploy) without touching the shared agent the HTTP
+	// observability suites read.
+	E2ECLIProjectName = "e2e-cli-shared"
+	// CLILifecycleAgentName is the dedicated internal agent the amctl CLI slow
+	// suite builds, redeploys, and observes.
+	CLILifecycleAgentName = "e2e-cli-it-helpdesk"
+)
+
+// CLILifecycleAgent is a handle to the dedicated CLI-owned IT-helpdesk agent:
+// a built/deployed/ready agent the amctl slow suite drives mutating and
+// observability commands against. Same shape as SharedITHelpdeskAgent but
+// semantically owned by the CLI suite alone.
+type CLILifecycleAgent struct {
+	ProjectName string
+	AgentName   string
+	BuildName   string
+	EndpointURL string
+	APIKey      string
+	InvokeReq   json.RawMessage
+}
+
 // SharedITHelpdeskAgent holds details of the shared internal chat agent that is
 // provisioned once in BeforeSuite and reused by multiple test suites.
 type SharedITHelpdeskAgent struct {
