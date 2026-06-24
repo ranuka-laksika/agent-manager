@@ -20,6 +20,14 @@ spec:
           type: boolean
           default: true
           description: "Enable or disable env injection instrumentation"
+        otelEndpointEnvName:
+          type: string
+          default: "AMP_OTEL_ENDPOINT"
+          description: "Name of the environment variable to inject the OTEL endpoint into. Override per language (e.g. Ballerina uses BAL_CONFIG_VAR_BALLERINAX_AMP_OTELENDPOINT)."
+        apiKeyEnvName:
+          type: string
+          default: "AMP_AGENT_API_KEY"
+          description: "Name of the environment variable to inject the agent API key into. Override per language (e.g. Ballerina uses BAL_CONFIG_VAR_BALLERINAX_AMP_APIKEY)."
       required:
         - agentApiKeySecretRef
 
@@ -65,9 +73,7 @@ spec:
                   ${has(environmentConfigs.agentApiKeySecretProperty) ? environmentConfigs.agentApiKeySecretProperty : (has(parameters.agentApiKeySecretProperty) ? parameters.agentApiKeySecretProperty : oc_omit())}
 
   # Patches to inject AMP_OTEL_ENDPOINT and AMP_AGENT_API_KEY.
-  # This is the sole injector for these vars across all agent types
-  # (Python buildpack and Docker). The python-otel-instrumentation-trait
-  # does NOT inject these to avoid duplicates.
+  # This is the sole injector for these vars across all agent types.
   patches:
     - target:
         kind: Deployment
@@ -77,14 +83,14 @@ spec:
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:
-            name: AMP_OTEL_ENDPOINT
+            name: ${parameters.otelEndpointEnvName}
             # Derived from the apiGatewayName helper convention ("api-platform-<org>-<env>")
             # + the gateway runtime in-cluster Service.
             value: "http://api-platform-${metadata.componentNamespace}-${metadata.environmentName}-gateway-gateway-runtime.openchoreo-data-plane:22893/otel"
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:
-            name: AMP_AGENT_API_KEY
+            name: ${parameters.apiKeyEnvName}
             valueFrom:
               secretKeyRef:
                 name: ${metadata.name}-agent-api-key

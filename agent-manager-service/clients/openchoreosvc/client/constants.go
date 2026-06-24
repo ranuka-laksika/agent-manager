@@ -23,10 +23,11 @@ package client
 // -----------------------------------------------------------------------------
 
 const (
-	TraitOTELInstrumentation TraitType = "python-otel-instrumentation-trait"
-	TraitEnvInjection        TraitType = "instrumentation-trait-env-injection"
-	TraitAPIManagement       TraitType = "api-configuration"
-	TraitAutoscaling         TraitType = "horizontal-pod-autoscaler"
+	TraitOTELInstrumentation          TraitType = "python-otel-instrumentation-trait"
+	TraitEnvInjection                 TraitType = "instrumentation-trait-env-injection"
+	TraitBallerinaOTELInstrumentation TraitType = "ballerina-otel-instrumentation-trait"
+	TraitAPIManagement                TraitType = "api-configuration"
+	TraitAutoscaling                  TraitType = "horizontal-pod-autoscaler"
 )
 
 // -----------------------------------------------------------------------------
@@ -109,13 +110,19 @@ const (
 const (
 	EnvVarOTELEndpoint = "AMP_OTEL_ENDPOINT"
 	EnvVarAgentAPIKey  = "AMP_AGENT_API_KEY"
+	// Ballerina reads the OTEL endpoint and agent API key as Ballerina config
+	// variables, so the env-injection trait injects them under these names instead.
+	BalConfigVarOTELEndpoint = "BAL_CONFIG_VAR_BALLERINAX_AMP_OTELENDPOINT"
+	BalConfigVarAgentAPIKey  = "BAL_CONFIG_VAR_BALLERINAX_AMP_APIKEY"
 )
 
 // SystemInjectedEnvVars is a set of environment variable names that are automatically
 // injected by the system and should be filtered out from user-facing configuration APIs
 var SystemInjectedEnvVars = map[string]struct{}{
-	EnvVarOTELEndpoint: {},
-	EnvVarAgentAPIKey:  {},
+	EnvVarOTELEndpoint:       {},
+	EnvVarAgentAPIKey:        {},
+	BalConfigVarOTELEndpoint: {},
+	BalConfigVarAgentAPIKey:  {},
 }
 
 // -----------------------------------------------------------------------------

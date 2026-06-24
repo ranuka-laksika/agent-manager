@@ -146,6 +146,18 @@ func TestCreateAgent(t *testing.T) {
 
 	t.Run("Creating an agent with ballerina language should return 202", func(t *testing.T) {
 		openChoreoClient := apitestutils.CreateMockOpenChoreoClient()
+		openChoreoClient.GetComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				UUID:        uuid.New().String(),
+				Name:        componentName,
+				ProjectName: projectName,
+				Provisioning: models.Provisioning{
+					Type: "internal",
+				},
+				CreatedAt: time.Now(),
+			}, nil
+		}
+
 		testClients := wiring.TestClients{
 			OpenChoreoClient: openChoreoClient,
 			SecretMgmtClient: apitestutils.CreateMockSecretManagementClient(),

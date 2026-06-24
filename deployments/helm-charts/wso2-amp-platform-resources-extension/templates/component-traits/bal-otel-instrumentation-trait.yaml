@@ -1,0 +1,85 @@
+apiVersion: openchoreo.dev/v1alpha1
+kind: Trait
+metadata:
+  name: ballerina-otel-instrumentation-trait
+  namespace: {{ .Values.global.defaultResources.namespace }}
+  annotations:
+    openchoreo.dev/description: "Trait that mounts am-instrumentation.toml into a Ballerina agent and sets BAL_CONFIG_FILES, enabling AMP tracing. The OTEL endpoint and API key env vars are injected separately by instrumentation-trait-env-injection."
+spec:
+  parameters:
+    openAPIV3Schema:
+      type: object
+      properties:
+        configMountDir:
+          type: string
+          # The Ballerina buildpack run image uses /workspace as its WORKDIR.
+          # am-instrumentation.toml is referenced by BAL_CONFIG_FILES as a relative
+          # path, so it must land in that working directory (where Config.toml lives)
+          # for Ballerina to load it. Override this if the run image uses a different WORKDIR.
+          default: "/workspace"
+          description: "Directory in the main container where am-instrumentation.toml is mounted (the Ballerina app working directory)."
+        instrumentationEnabled:
+          type: boolean
+          default: true
+          description: "Enable or disable AMP tracing for the Ballerina agent."
+
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      properties:
+        instrumentationEnabled:
+          type: boolean
+          description: "Enable or disable AMP tracing for this environment."
+
+  # When disabled, am-instrumentation.toml is not mounted and BAL_CONFIG_FILES is not set, so Ballerina emits no traces.
+  patches:
+    - target:
+        kind: Deployment
+        group: apps
+        version: v1
+        where: |
+          ${has(environmentConfigs.instrumentationEnabled) ? environmentConfigs.instrumentationEnabled : parameters.instrumentationEnabled}
+      operations:
+        # 1. Init container writes am-instrumentation.toml into a shared volume.
+        - op: add
+          path: /spec/template/spec/initContainers/-
+          value:
+            name: setup-bal-instrumentation
+            image: busybox:1.36
+            imagePullPolicy: IfNotPresent
+            command:
+              - sh
+              - -c
+              - |
+                cat > /amp-instrumentation/am-instrumentation.toml <<'EOF'
+                [ballerina.observe]
+                tracingEnabled=true
+                tracingProvider="amp"
+                EOF
+            volumeMounts:
+              - name: bal-instrumentation-config
+                mountPath: /amp-instrumentation
+
+        # 2. Shared emptyDir volume holding the generated toml.
+        - op: add
+          path: /spec/template/spec/volumes/-
+          value:
+            name: bal-instrumentation-config
+            emptyDir: {}
+
+        # 3. Mount only am-instrumentation.toml into the app working dir (subPath
+        #    keeps the existing files, e.g. Config.toml, visible).
+        - op: add
+          path: /spec/template/spec/containers/0/volumeMounts/-
+          value:
+            name: bal-instrumentation-config
+            mountPath: ${parameters.configMountDir}/am-instrumentation.toml
+            subPath: am-instrumentation.toml
+            readOnly: true
+
+        # 4. Make Ballerina load both config files.
+        - op: add
+          path: /spec/template/spec/containers/0/env/-
+          value:
+            name: BAL_CONFIG_FILES
+            value: "am-instrumentation.toml:Config.toml"

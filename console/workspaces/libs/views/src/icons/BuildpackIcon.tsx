@@ -37,6 +37,16 @@ export function BuildpackIcon(props: BuildpackIconProps) {
         )
     }
 
+    if (language === "ballerina") {
+        return (
+            <svg {...rest} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" height="24" width="24">
+                <title>Ballerina</title>
+                <rect x="2" y="2" width="20" height="20" rx="4" fill="none" stroke={color} strokeWidth="1.5" />
+                <text x="12" y="16" textAnchor="middle" fontSize="9" fontFamily="sans-serif" fontWeight="700" fill={color}>Bal</text>
+            </svg>
+        )
+    }
+
     if (language === "docker") {
         return (
             <svg {...rest} role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" height="24" width="24">

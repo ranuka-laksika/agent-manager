@@ -168,6 +168,15 @@ export const buildAgentCreationPayload = (
               dockerfilePath: data.dockerfilePath ?? "./Dockerfile",
             },
           }
+          : data.language === "ballerina"
+          // Ballerina resolves its distribution version from Ballerina.toml, so no
+          // language version or start command is collected in the UI.
+          ? {
+            type: "buildpack" as const,
+            buildpack: {
+              language: "ballerina",
+            },
+          }
           : {
             type: "buildpack" as const,
             buildpack: {
