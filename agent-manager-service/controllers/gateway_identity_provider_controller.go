@@ -146,7 +146,7 @@ func (c *gatewayController) UpsertGatewayIdentityProvider(w http.ResponseWriter,
 	}
 
 	provider, err := c.gatewayService.UpsertIdentityProvider(
-		gatewayID, orgName, name,
+		r.Context(), gatewayID, orgName, name,
 		derefString(req.Issuer), derefString(req.JwksUri), derefString(req.Description), derefBool(req.SkipTlsVerify),
 	)
 	if err != nil {
@@ -168,7 +168,7 @@ func (c *gatewayController) DeleteGatewayIdentityProvider(w http.ResponseWriter,
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 	name := strings.TrimSpace(r.PathValue("name"))
 
-	if err := c.gatewayService.DeleteIdentityProvider(gatewayID, orgName, name); err != nil {
+	if err := c.gatewayService.DeleteIdentityProvider(r.Context(), gatewayID, orgName, name); err != nil {
 		log.Error("DeleteGatewayIdentityProvider: failed to delete", "error", err)
 		handleGatewayErrors(w, err, "Failed to delete identity provider")
 		return

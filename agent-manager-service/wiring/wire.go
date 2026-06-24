@@ -472,7 +472,7 @@ func ProvideOrgResolver(client thundersvc.IdentityClient) middleware.OrgResolver
 }
 
 // InitializeAppParams wires up all application dependencies
-func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider) (*AppParams, error) {
+func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier) (*AppParams, error) {
 	wire.Build(
 		configProviderSet,
 		clientProviderSet,
@@ -495,6 +495,7 @@ func InitializeTestAppParamsWithClientMocks(
 	db *gorm.DB,
 	authMiddleware jwtassertion.Middleware,
 	testClients TestClients,
+	gatewayApplier services.GatewayConfigApplier,
 ) (*AppParams, error) {
 	wire.Build(
 		testClientProviderSet,

@@ -33,7 +33,7 @@ import (
 // Injectors from wire.go:
 
 // InitializeAppParams wires up all application dependencies
-func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.AuthProvider, secretProvider secretmanagersvc.Provider) (*AppParams, error) {
+func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier) (*AppParams, error) {
 	configConfig := ProvideConfigFromPtr(cfg)
 	middleware := ProvideAuthMiddleware(configConfig)
 	logger := ProvideLogger()
@@ -102,7 +102,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	repositoryController := controllers.NewRepositoryController(repositoryService)
 	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient)
 	environmentController := controllers.NewEnvironmentController(environmentService)
-	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository)
+	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository, gatewayApplier)
 	gatewayController := controllers.NewGatewayController(platformGatewayService, openChoreoClient)
 	llmProviderTemplateRepository := ProvideLLMProviderTemplateRepository(db)
 	llmTemplateStore := services.NewLLMTemplateStore()
@@ -203,7 +203,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 }
 
 // InitializeTestAppParamsWithClientMocks wires up application dependencies with test mocks
-func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, authMiddleware jwtassertion.Middleware, testClients TestClients) (*AppParams, error) {
+func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, authMiddleware jwtassertion.Middleware, testClients TestClients, gatewayApplier services.GatewayConfigApplier) (*AppParams, error) {
 	logger := ProvideLogger()
 	configConfig := ProvideConfigFromPtr(cfg)
 	thunderConfig := ProvideThunderConfig(configConfig)
@@ -262,7 +262,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	repositoryController := controllers.NewRepositoryController(repositoryService)
 	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient)
 	environmentController := controllers.NewEnvironmentController(environmentService)
-	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository)
+	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository, gatewayApplier)
 	gatewayController := controllers.NewGatewayController(platformGatewayService, openChoreoClient)
 	llmProviderTemplateRepository := ProvideLLMProviderTemplateRepository(db)
 	llmTemplateStore := services.NewLLMTemplateStore()

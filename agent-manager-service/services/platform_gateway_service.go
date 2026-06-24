@@ -17,6 +17,7 @@
 package services
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -39,20 +40,26 @@ import (
 
 // PlatformGatewayService handles gateway business logic for API Platform integration
 type PlatformGatewayService struct {
-	gatewayRepo repositories.GatewayRepository
-	tokenCache  *TokenCache
+	gatewayRepo    repositories.GatewayRepository
+	tokenCache     *TokenCache
+	gatewayApplier GatewayConfigApplier
 }
 
-// NewPlatformGatewayService creates a new platform gateway service
+// NewPlatformGatewayService creates a new platform gateway service. gatewayApplier is
+// nil in open-source deployments (gateway config applied out of band by
+// manage-identity-provider.sh) and non-nil in cloud deployments, which patch the
+// gateway runtime config in the same request that writes the mirror.
 func NewPlatformGatewayService(
 	gatewayRepo repositories.GatewayRepository,
+	gatewayApplier GatewayConfigApplier,
 ) *PlatformGatewayService {
 	// Initialize token cache with 5 minute TTL
 	tokenCache := NewTokenCache(5 * time.Minute)
 
 	return &PlatformGatewayService{
-		gatewayRepo: gatewayRepo,
-		tokenCache:  tokenCache,
+		gatewayRepo:    gatewayRepo,
+		tokenCache:     tokenCache,
+		gatewayApplier: gatewayApplier,
 	}
 }
 
@@ -750,7 +757,13 @@ func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, orgName string) (
 
 // UpsertIdentityProvider creates or updates an identity provider mirror row for a
 // gateway. System provenance is derived from the well-known provider names.
-func (s *PlatformGatewayService) UpsertIdentityProvider(gatewayID, orgName, name, issuer, jwksURI, description string, skipTLS bool) (*models.GatewayIdentityProvider, error) {
+//
+// When a gateway config applier is configured (cloud deployments), the gateway runtime
+// config is patched before the mirror is written, so the two never diverge; if the
+// apply fails the mirror is left untouched. System providers are bootstrapped into the
+// gateway out of band, so only custom providers are applied here. Open-source builds
+// (nil applier) write the mirror only and rely on manage-identity-provider.sh.
+func (s *PlatformGatewayService) UpsertIdentityProvider(ctx context.Context, gatewayID, orgName, name, issuer, jwksURI, description string, skipTLS bool) (*models.GatewayIdentityProvider, error) {
 	if name == models.ReservedIdentityProviderName {
 		return nil, utils.ErrInvalidInput
 	}
@@ -779,7 +792,22 @@ func (s *PlatformGatewayService) UpsertIdentityProvider(gatewayID, orgName, name
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}
+	// Patch the gateway runtime config first so a failed apply never leaves a mirror
+	// row the gateway does not honor.
+	applied := false
+	if s.gatewayApplier != nil && providerType == models.IdentityProviderTypeCustom {
+		if err := s.gatewayApplier.ApplyIdentityProvider(ctx, gatewayID, orgName, *provider); err != nil {
+			return nil, err
+		}
+		applied = true
+	}
 	if err := s.gatewayRepo.UpsertIdentityProvider(provider); err != nil {
+		if applied {
+			// Gateway was patched but the mirror write failed: the two are diverged
+			// until the client retries (both operations are idempotent).
+			slog.Warn("gateway identity provider applied but mirror upsert failed; retry to reconcile",
+				"gatewayID", gatewayID, "provider", name, "error", err)
+		}
 		return nil, err
 	}
 	return provider, nil
@@ -787,12 +815,33 @@ func (s *PlatformGatewayService) UpsertIdentityProvider(gatewayID, orgName, name
 
 // DeleteIdentityProvider removes an identity provider mirror row for a gateway.
 // System providers cannot be deleted (enforced in the repository).
-func (s *PlatformGatewayService) DeleteIdentityProvider(gatewayID, orgName, name string) error {
+//
+// When a gateway config applier is configured (cloud deployments), the provider is
+// removed from the gateway runtime config before the mirror row, keeping the two in
+// sync; if the apply fails the mirror is left untouched. System providers are skipped
+// (the repository rejects their deletion), so only custom providers are applied here.
+func (s *PlatformGatewayService) DeleteIdentityProvider(ctx context.Context, gatewayID, orgName, name string) error {
 	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
 	if err != nil {
 		return err
 	}
-	return s.gatewayRepo.DeleteIdentityProvider(gwUUIDStr, name)
+	removed := false
+	if s.gatewayApplier != nil && !models.IsSystemIdentityProvider(name) {
+		if err := s.gatewayApplier.DeleteIdentityProvider(ctx, gatewayID, orgName, name); err != nil {
+			return err
+		}
+		removed = true
+	}
+	if err := s.gatewayRepo.DeleteIdentityProvider(gwUUIDStr, name); err != nil {
+		if removed {
+			// Gateway entry was removed but the mirror delete failed: the two are
+			// diverged until the client retries (both operations are idempotent).
+			slog.Warn("gateway identity provider removed but mirror delete failed; retry to reconcile",
+				"gatewayID", gatewayID, "provider", name, "error", err)
+		}
+		return err
+	}
+	return nil
 }
 
 // ListIdentityProvidersByGateway lists the identity providers mirrored for a gateway.
