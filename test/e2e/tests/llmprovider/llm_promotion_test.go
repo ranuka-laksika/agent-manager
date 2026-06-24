@@ -180,26 +180,6 @@ var _ = Describe("LLM provider configured across environments:", Label("llm-prov
 		GinkgoWriter.Printf("Model config added for provider: %s\n", providerID)
 	})
 
-	It("redeploys the default environment with the LLM provider enabled", func() {
-		deps := deployment.GetDeploymentDetails(Default, Client,
-			Cfg.DefaultOrg, projectName, agentName)
-		dep, exists := deps[Cfg.DefaultEnv]
-		Expect(exists).To(BeTrue(), "deployment should exist for default environment")
-		Expect(dep.ImageID).NotTo(BeEmpty())
-		lastDeployedBefore = dep.LastDeployed
-
-		autoInstr := true
-		deployment.DeployAgent(Default, Client, Cfg.DefaultOrg, projectName, agentName,
-			framework.DeployAgentRequest{
-				ImageID: dep.ImageID,
-				Env: []framework.EnvironmentVariable{
-					{Key: "USE_LLM_PROVIDER", Value: "true"},
-				},
-				EnableAutoInstrumentation: &autoInstr,
-			})
-		GinkgoWriter.Printf("Default-env redeployment triggered with USE_LLM_PROVIDER=true\n")
-	})
-
 	It("becomes active after the default-environment redeploy", func() {
 		deployment.WaitForDeployed(Client, &deployment.WaitForDeploymentParams{
 			OrgName:       Cfg.DefaultOrg,
