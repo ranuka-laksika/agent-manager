@@ -32,7 +32,8 @@ import (
 func MakeAppClientWithDeps(t *testing.T, testClients wiring.TestClients, authMiddleware jwtassertion.Middleware) http.Handler {
 	// Use wire to initialize the app parameters with test clients
 	db := db.DB(context.Background())
-	appParams, err := wiring.InitializeTestAppParamsWithClientMocks(config.GetConfig(), db, authMiddleware, testClients)
+	// nil gateway applier: tests exercise the open-source mirror-only behavior.
+	appParams, err := wiring.InitializeTestAppParamsWithClientMocks(config.GetConfig(), db, authMiddleware, testClients, nil)
 	if err != nil {
 		t.Fatalf("failed to initialize test app params: %v", err)
 	}

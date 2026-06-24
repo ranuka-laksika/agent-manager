@@ -39,20 +39,26 @@ import (
 
 // PlatformGatewayService handles gateway business logic for API Platform integration
 type PlatformGatewayService struct {
-	gatewayRepo repositories.GatewayRepository
-	tokenCache  *TokenCache
+	gatewayRepo    repositories.GatewayRepository
+	tokenCache     *TokenCache
+	gatewayApplier GatewayConfigApplier
 }
 
-// NewPlatformGatewayService creates a new platform gateway service
+// NewPlatformGatewayService creates a new platform gateway service. gatewayApplier is
+// nil in open-source deployments (gateway config applied out of band by
+// manage-identity-provider.sh) and non-nil in cloud deployments, which patch the
+// gateway runtime config in the same request that writes the mirror.
 func NewPlatformGatewayService(
 	gatewayRepo repositories.GatewayRepository,
+	gatewayApplier GatewayConfigApplier,
 ) *PlatformGatewayService {
 	// Initialize token cache with 5 minute TTL
 	tokenCache := NewTokenCache(5 * time.Minute)
 
 	return &PlatformGatewayService{
-		gatewayRepo: gatewayRepo,
-		tokenCache:  tokenCache,
+		gatewayRepo:    gatewayRepo,
+		tokenCache:     tokenCache,
+		gatewayApplier: gatewayApplier,
 	}
 }
 

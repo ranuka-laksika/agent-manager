@@ -38,6 +38,7 @@ import (
 	dbmigrations "github.com/wso2/agent-manager/agent-manager-service/db_migrations"
 	"github.com/wso2/agent-manager/agent-manager-service/resources"
 	"github.com/wso2/agent-manager/agent-manager-service/server"
+	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/signals"
 	"github.com/wso2/agent-manager/agent-manager-service/wiring"
 
@@ -54,6 +55,11 @@ type Options struct {
 	// ExtraAPIRoutes registers additional routes onto the authenticated /api/v1 sub-mux.
 	// Use this to inject deployment-specific routes without modifying the core handler.
 	ExtraAPIRoutes func(mux *http.ServeMux, params *wiring.AppParams)
+	// GatewayConfigApplier patches the gateway runtime config when an identity provider
+	// changes, keeping the gateway and the AMS mirror in sync. nil (the open-source
+	// default) preserves the script-driven behavior; cloud deployments inject an
+	// implementation. See services.GatewayConfigApplier.
+	GatewayConfigApplier services.GatewayConfigApplier
 }
 
 // Run starts the application with the provided providers and options.
@@ -90,7 +96,7 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 
 	// Get the raw DB instance without context - repositories will add context per-operation
 	database := db.GetDB()
-	dependencies, err := wiring.InitializeAppParams(cfg, database, authProvider, secretProvider)
+	dependencies, err := wiring.InitializeAppParams(cfg, database, authProvider, secretProvider, opts.GatewayConfigApplier)
 	if err != nil {
 		slog.Error("failed to initialize app dependencies", "error", err)
 		os.Exit(1)
