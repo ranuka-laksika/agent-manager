@@ -323,7 +323,7 @@ install_gateway_extension() {
     local chart_ref="oci://${HELM_CHART_REGISTRY}/${GATEWAY_EXTENSION_CHART_NAME}"
     local chart_version="${VERSION}"
     local release_name="api-platform-default-default"
-    local gateway_vhost="http://default-default.am-gateway.localhost:19080"
+    local gateway_vhost="http://default-default.gateway.localhost:19080"
 
 
     # Install Helm chart
