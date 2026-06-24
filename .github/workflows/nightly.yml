@@ -313,6 +313,14 @@ jobs:
           for pod in $(kubectl get pods -n workflows-default --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
             kubectl logs "$pod" -n workflows-default --all-containers=true --tail=200 > "/tmp/pod-logs/wf-pod-${pod}.txt" 2>&1 || true
           done
+          # User workload (agent runtime) pods live in per-env data-plane namespaces
+          # (dp-<org>-<project>-<env>-<hash>). These carry the actual agent invocation
+          # errors (e.g. "500 Connection error"), so capture logs for every pod in them.
+          for ns in $(kubectl get ns --no-headers -o custom-columns=":metadata.name" 2>/dev/null | grep '^dp-'); do
+            for pod in $(kubectl get pods -n "$ns" --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
+              kubectl logs "$pod" -n "$ns" --all-containers=true --tail=500 > "/tmp/pod-logs/dp-${ns}-${pod}.txt" 2>&1 || true
+            done
+          done
 
       - name: Upload pod logs
         if: failure()

@@ -323,12 +323,15 @@ install_gateway_extension() {
     local chart_ref="oci://${HELM_CHART_REGISTRY}/${GATEWAY_EXTENSION_CHART_NAME}"
     local chart_version="${VERSION}"
     local release_name="api-platform-default-default"
+    local gateway_vhost="http://default-default.am-gateway.localhost:19080"
+
 
     # Install Helm chart
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${DATA_PLANE_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
         --set agentManager.orgName=default \
         --set gateway.environment=default \
+        --set gateway.vhost="${gateway_vhost}" \
         "${GATEWAY_HELM_ARGS[@]}"; then
         return 1
     fi
