@@ -164,12 +164,22 @@ build_cp_helm_args() {
 #    agents base (AMP_AGENTS_BASE, e.g. agents.<domain> or agents.<ip>.sslip.io) on
 #    :443 so routes resolve to <org>-<project>.<AMP_AGENTS_BASE>, served by Caddy's
 #    wildcard *.agents site.
+#
+#    Set BOTH the http and https variants. Because the override wholly replaces the
+#    dataplane's external endpoint, an http-only override drops the https variant
+#    dataplane_external_ingress emits. The console reads the https variant when
+#    tlsEnabled=true, so an http-only override leaves the binding with only an http
+#    externalURL: the invoke URL is empty and try-out falls back to a relative /chat
+#    (405) — the very symptom this override exists to fix. Both bind listenerName
+#    http (TLS terminates at Caddy) and differ only in advertised scheme.
 # shellcheck disable=SC2154  # AMP_AGENTS_BASE comes from the caller's scope by design.
 build_platform_resources_helm_args() {
   printf '%s\n' \
     "--set" "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
     "--set" "environment.gateway.http.host=${AMP_AGENTS_BASE}" \
-    "--set" "environment.gateway.http.port=443"
+    "--set" "environment.gateway.http.port=443" \
+    "--set" "environment.gateway.https.host=${AMP_AGENTS_BASE}" \
+    "--set" "environment.gateway.https.port=443"
 }
 
 # build_thunder_helm_args <ip>

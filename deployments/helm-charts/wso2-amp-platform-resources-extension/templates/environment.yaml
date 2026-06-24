@@ -27,3 +27,13 @@ spec:
           host: {{ .Values.environment.gateway.http.host | quote }}
           listenerName: http
           port: {{ .Values.environment.gateway.http.port }}
+        {{- with .Values.environment.gateway.https }}
+        # The external gateway wholly replaces the dataplane's, so when the console
+        # reads the https endpoint variant (tlsEnabled=true) this block must exist or
+        # the binding carries only an http externalURL and the invoke URL is empty.
+        # Bind listenerName http (TLS terminates upstream, e.g. at Caddy on the VM).
+        https:
+          host: {{ .host | quote }}
+          listenerName: http
+          port: {{ .port }}
+        {{- end }}

@@ -237,6 +237,16 @@ assert_eq "caddy cp tls skip verify" "			tls_insecure_skip_verify" "$(grep -F 't
   assert_eq "platform-resources env gateway port 443" \
     "environment.gateway.http.port=443" \
     "$(grep -F 'environment.gateway.http.port' <<<"$pr")"
+  # The console reads the https endpoint variant when tlsEnabled=true, so the
+  # Environment override MUST carry an https variant too. Without it the binding
+  # status has only an http externalURL, the console invoke URL is empty, and
+  # try-out falls back to a relative /chat (405). Mirror dataplane_external_ingress.
+  assert_eq "platform-resources env gateway https host (public agents base)" \
+    "environment.gateway.https.host=agents.amp.example.com" \
+    "$(grep -F 'environment.gateway.https.host' <<<"$pr")"
+  assert_eq "platform-resources env gateway https port 443" \
+    "environment.gateway.https.port=443" \
+    "$(grep -F 'environment.gateway.https.port' <<<"$pr")"
 )
 
 # --- render_coredns_vm_config rewrites the in-cluster names to the server node ---
