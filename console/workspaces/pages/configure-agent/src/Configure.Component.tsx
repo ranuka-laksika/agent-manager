@@ -16,7 +16,6 @@
  */
 
 import React, { useMemo } from "react";
-import { Divider } from "@wso2/oxygen-ui";
 import { generatePath, useParams } from "react-router-dom";
 import { PageLayout } from "@agent-management-platform/views";
 import {
@@ -159,7 +158,6 @@ export const ConfigureComponent: React.FC = () => {
           })
         }
       />
-      <Divider sx={{ my: 3 }} />
       <AgentConfigTableSection
         configs={mcpConfigs}
         isLoading={isLoadingMCP}
