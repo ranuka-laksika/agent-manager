@@ -135,3 +135,18 @@ func DeleteAgent(g Gomega, h *amctl.Harness, org, project, name string) DeleteRe
 func AgentStatus(g Gomega, h *amctl.Harness, org, project, name string) AgentStatusResult {
 	return amctl.DecodeData[AgentStatusResult](g, h.Run("agent", "status", name, "--org", org, "--project", project, "--json"))
 }
+
+// DeployResult is the data shape of `amctl agent deploy --json`.
+type DeployResult struct {
+	Agent             string   `json:"agent"`
+	Build             string   `json:"build"`
+	ImageId           string   `json:"imageId"`
+	TargetEnvironment string   `json:"targetEnvironment"`
+	ConflictsResolved []string `json:"conflictsResolved"`
+}
+
+// DeployAgent runs `amctl agent deploy --yes` (a redeploy of the latest build
+// to the pipeline's lowest environment) and returns the deploy result.
+func DeployAgent(g Gomega, h *amctl.Harness, org, project, name string) DeployResult {
+	return amctl.DecodeData[DeployResult](g, h.Run("agent", "deploy", name, "--org", org, "--project", project, "--yes", "--json"))
+}
