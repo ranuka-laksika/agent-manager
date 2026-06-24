@@ -162,7 +162,7 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 			req.Header[authHeader] = []string{proxyAPIKey}
 
 			resp, err := httpClient.Do(req)
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred(), "MCP proxy request to %s failed: %v", proxyURL, err)
 			defer resp.Body.Close()
 
 			body, _ := io.ReadAll(resp.Body)
@@ -186,7 +186,7 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 			req.Header.Set("Accept", "application/json, text/event-stream")
 
 			resp, err := httpClient.Do(req)
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred(), "MCP proxy request to %s failed: %v", proxyURL, err)
 			defer resp.Body.Close()
 
 			body, _ := io.ReadAll(resp.Body)

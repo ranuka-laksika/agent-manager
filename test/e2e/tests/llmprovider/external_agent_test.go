@@ -204,7 +204,7 @@ var _ = Describe("LLM provider configured for an external agent:", Label("llm-pr
 			req.Header["api-key"] = []string{proxyAPIKey}
 
 			resp, err := httpClient.Do(req)
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred(), "proxy invocation request to %s failed: %v", endpoint, err)
 			defer resp.Body.Close()
 
 			body, _ := io.ReadAll(resp.Body)
@@ -275,7 +275,7 @@ var _ = Describe("LLM provider configured for an external agent:", Label("llm-pr
 			req.Header["api-key"] = []string{proxyAPIKey}
 
 			resp, err := httpClient.Do(req)
-			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(err).NotTo(HaveOccurred(), "proxy invocation request to %s failed: %v", endpoint, err)
 			defer resp.Body.Close()
 
 			body, _ := io.ReadAll(resp.Body)
