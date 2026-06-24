@@ -87,7 +87,11 @@ var _ = Describe("amctl agent CRUD (build-free)", Label("cli", "agent"), Ordered
 	It("shows status with no deployments", func() {
 		st := cliagent.AgentStatus(Default, H, H.Org(), projName, agentName)
 		Expect(st.Agent).To(Equal(agentName))
-		Expect(st.Environments).To(BeEmpty())
+		// The agent inherits the project's default pipeline (a single "default"
+		// environment) and reports "not-deployed" there until something deploys.
+		Expect(st.Environments).To(HaveLen(1))
+		Expect(st.Environments[0].Name).To(Equal("default"))
+		Expect(st.Environments[0].Status).To(Equal("not-deployed"))
 	})
 
 	It("creates a platform (internal) agent, triggering build+deploy", func() {
