@@ -74,6 +74,7 @@ const (
 
 // Status values
 const (
+	StatusCreated = "CREATED"
 	StatusActive  = "active"
 	StatusPending = "pending"
 	StatusFailed  = "failed"

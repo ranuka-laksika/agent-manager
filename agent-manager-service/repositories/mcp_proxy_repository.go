@@ -65,6 +65,9 @@ func (r *MCPProxyRepo) Create(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 	if p.UUID == uuid.Nil {
 		p.UUID = uuid.New()
 	}
+	if p.Status == "" {
+		p.Status = models.StatusCreated
+	}
 	now := time.Now()
 
 	if err := r.artifactRepo.Create(tx.WithContext(ctx), &models.Artifact{
@@ -81,7 +84,7 @@ func (r *MCPProxyRepo) Create(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 		return fmt.Errorf("failed to create artifact: %w", err)
 	}
 
-	if err := tx.WithContext(ctx).Omit("status").Create(p).Error; err != nil {
+	if err := tx.WithContext(ctx).Create(p).Error; err != nil {
 		return err
 	}
 	return nil

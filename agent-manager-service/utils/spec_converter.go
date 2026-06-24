@@ -346,7 +346,6 @@ func ConvertSpecToModelLLMProxy(req *spec.CreateLLMProxyRequest, projectID strin
 		ProviderUUID:  providerUUID,
 		Description:   ptrToString(req.Description),
 		OpenAPISpec:   ptrToString(req.Openapi),
-		Status:        "ACTIVE",
 		Configuration: ConvertSpecToModelLLMProxyConfig(req.Configuration),
 	}
 

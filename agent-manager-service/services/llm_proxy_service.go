@@ -98,7 +98,6 @@ func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMPro
 	// Set default values
 	proxy.CreatedBy = createdBy
 	proxy.ProviderUUID = providerModel.UUID
-	proxy.Status = llmStatusPending
 	if proxy.Configuration.Context == nil {
 		defaultContext := "/"
 		proxy.Configuration.Context = &defaultContext

@@ -2130,7 +2130,6 @@ func (s *agentConfigurationService) updateExistingMCPMapping(ctx context.Context
 			Updates(map[string]interface{}{
 				"source_mcp_proxy_uuid": proxyMapping.SourceMCPProxyUUID,
 				"description":           proxyMapping.Description,
-				"status":                proxyMapping.Status,
 				"configuration":         proxyMapping.Configuration,
 			}).Error; err != nil {
 			return err
@@ -3812,7 +3811,7 @@ func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPPr
 		UUID:               deployedProxy.UUID,
 		SourceMCPProxyUUID: sourceProxyUUID,
 		Description:        deployedProxy.Description,
-		Status:             deployedProxy.Status,
+		Status:             models.StatusCreated,
 		Configuration:      deployedProxy.Configuration,
 	}
 }

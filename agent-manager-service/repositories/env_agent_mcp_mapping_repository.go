@@ -71,6 +71,9 @@ func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, 
 	if proxyMapping.SourceMCPProxyUUID == uuid.Nil {
 		proxyMapping.SourceMCPProxyUUID = mapping.MCPProxyUUID
 	}
+	if proxyMapping.Status == "" {
+		proxyMapping.Status = models.StatusCreated
+	}
 	now := time.Now()
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
 		UUID:             mapping.ArtifactUUID,

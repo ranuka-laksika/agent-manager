@@ -33,10 +33,6 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
-const (
-	llmStatusPending = "pending"
-)
-
 // DeploymentResult captures the outcome of deploying to a single gateway
 type DeploymentResult struct {
 	GatewayID string `json:"gateway_id"`

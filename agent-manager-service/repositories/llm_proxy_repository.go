@@ -129,7 +129,7 @@ func (r *LLMProxyRepo) Create(p *models.LLMProxy, handle, name, version string, 
 		}
 
 		// Insert into llm_proxies table
-		return tx.Create(p).Error
+		return tx.Omit("Status").Create(p).Error
 	})
 }
 
@@ -255,7 +255,6 @@ func (r *LLMProxyRepo) Update(p *models.LLMProxy, handle string, orgName string)
 				"description":   p.Description,
 				"provider_uuid": p.ProviderUUID,
 				"openapi_spec":  p.OpenAPISpec,
-				"status":        p.Status,
 				"configuration": p.Configuration,
 			})
 
