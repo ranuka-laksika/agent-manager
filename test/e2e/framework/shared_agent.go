@@ -70,6 +70,9 @@ const (
 // a built/deployed/ready agent the amctl slow suite drives mutating and
 // observability commands against. Same shape as SharedITHelpdeskAgent but
 // semantically owned by the CLI suite alone.
+// Unlike SharedITHelpdeskAgent it carries no JSON tags: it is a process-local
+// handle created in the slow suite's BeforeAll and never serialized across
+// processes.
 type CLILifecycleAgent struct {
 	ProjectName string
 	AgentName   string

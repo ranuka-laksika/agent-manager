@@ -73,7 +73,10 @@ type DeleteResult struct {
 	Deleted bool   `json:"deleted"`
 }
 
-// AgentStatusResult is the data shape of `amctl agent status --json`.
+// AgentStatusResult is the data shape of `amctl agent status --json`. The
+// embedded environment entries decode only name+status (a subset of the CLI's
+// EnvStatus); extend them if a spec ever asserts on a populated environment
+// (displayName, lastDeployed, endpoints).
 type AgentStatusResult struct {
 	Agent        string `json:"agent"`
 	Environments []struct {
