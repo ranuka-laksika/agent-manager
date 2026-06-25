@@ -35,10 +35,32 @@ interface ConfigTableEmptyStateProps {
   colSpan: number;
 }
 
+/** The centered illustration / title / description / action, layout only. */
+export function EmptyStateContent({
+  illustration,
+  title,
+  description,
+  action,
+}: Omit<ConfigTableEmptyStateProps, "colSpan">) {
+  return (
+    <Box sx={{ textAlign: "center", py: 4 }}>
+      <Box sx={{ mb: 2 }}>{illustration}</Box>
+      <Typography variant="body2" fontWeight={500} gutterBottom>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {description}
+      </Typography>
+      {action ? <Box sx={{ mt: 2 }}>{action}</Box> : null}
+    </Box>
+  );
+}
+
 /**
- * A centered empty-state row for a {@link ListingTable}. Used to communicate an
- * empty list, a failed load, or an empty search result, and can optionally
- * surface a primary action in the middle of the box.
+ * A centered empty-state row for a {@link ListingTable}. Used to communicate a
+ * failed load or an empty search result, where the table header and toolbar stay
+ * in place around it. For a genuinely empty list (no header/toolbar), render
+ * {@link EmptyStateContent} standalone instead — see {@link ConfigTableSection}.
  */
 export function ConfigTableEmptyState({
   illustration,
@@ -50,24 +72,23 @@ export function ConfigTableEmptyState({
   return (
     <ListingTable.Row>
       <ListingTable.Cell colSpan={colSpan}>
-        <Box sx={{ textAlign: "center", py: 4 }}>
-          <Box sx={{ mb: 2 }}>{illustration}</Box>
-          <Typography variant="body2" fontWeight={500} gutterBottom>
-            {title}
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            {description}
-          </Typography>
-          {action ? <Box sx={{ mt: 2 }}>{action}</Box> : null}
-        </Box>
+        <EmptyStateContent
+          illustration={illustration}
+          title={title}
+          description={description}
+          action={action}
+        />
       </ListingTable.Cell>
     </ListingTable.Row>
   );
 }
 
 interface ConfigTableSectionProps {
-  /** Section heading rendered above the table. */
-  title: string;
+  /**
+   * Section heading rendered above the table. Omit when the section is rendered
+   * under a tab whose label already names it.
+   */
+  title?: string;
   /** Toolbar (search + actions). */
   toolbar: ReactNode;
   /**
@@ -82,6 +103,14 @@ interface ConfigTableSectionProps {
   hasRows: boolean;
   /** Rendered inside the table body when {@link hasRows} is false. */
   emptyState: ReactNode;
+  /**
+   * Content shown when the list is genuinely empty (no configs at all, as
+   * opposed to a zero-result search or a load error). When set and not loading,
+   * it replaces the whole table — header, body and pagination — with a centered
+   * standalone empty state, so there's no table chrome wrapped around "nothing
+   * here". Build it with {@link EmptyStateContent}.
+   */
+  standaloneEmptyState?: ReactNode;
   /** The table rows, rendered when {@link hasRows} is true. */
   children: ReactNode;
   /** Optional pagination footer. */
@@ -105,12 +134,18 @@ export function ConfigTableSection({
   isLoading,
   hasRows,
   emptyState,
+  standaloneEmptyState,
   children,
   pagination,
 }: ConfigTableSectionProps) {
+  // A genuinely empty list shows just the centered empty state — no table header
+  // or pagination wrapped around "nothing here". The error and zero-result-search
+  // cases keep the table chrome so headers and the search input stay in place.
+  const showStandaloneEmpty = !isLoading && Boolean(standaloneEmptyState);
+
   return (
     <Stack spacing={2}>
-      <Typography variant="h6">{title}</Typography>
+      {title && <Typography variant="h6">{title}</Typography>}
       <ListingTable.Container>
         {showToolbar && toolbar}
         {isLoading ? (
@@ -119,6 +154,8 @@ export function ConfigTableSection({
               <Skeleton key={i} variant="rounded" height={56} />
             ))}
           </Stack>
+        ) : showStandaloneEmpty ? (
+          standaloneEmptyState
         ) : (
           <ListingTable>
             {tableHeader}
@@ -127,7 +164,7 @@ export function ConfigTableSection({
             </ListingTable.Body>
           </ListingTable>
         )}
-        {pagination}
+        {!showStandaloneEmpty && pagination}
       </ListingTable.Container>
     </Stack>
   );

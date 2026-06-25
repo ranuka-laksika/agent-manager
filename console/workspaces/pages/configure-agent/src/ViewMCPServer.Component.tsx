@@ -282,7 +282,7 @@ export const ViewMCPServerComponent = () => {
   if (isLoading) {
     return (
       <PageLayout
-        title="MCP Configuration"
+        title="Tool Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -299,7 +299,7 @@ export const ViewMCPServerComponent = () => {
   if (isError || !config) {
     return (
       <PageLayout
-        title="MCP Configuration"
+        title="Tool Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
