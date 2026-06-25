@@ -357,6 +357,43 @@ jobs:
             PYTHON_VERSION=${{ matrix.image.python_version }}
             TRACELOOP_VERSION=${{ matrix.image.traceloop_version }}
 
+  build-amctl:
+    name: Build amctl CLI
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          ref: amp/v${{ inputs.target_version }}
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v6.1.0
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+
+      - name: Run CLI tests
+        run: cd cli && go test ./...
+
+      - name: Build release artifacts
+        run: |
+          scripts/build-amctl.sh \
+            --version "${{ inputs.target_version }}" \
+            --commit "$(git rev-parse --short HEAD)" \
+            --date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --output-dir dist/
+
+      - name: Upload amctl artifacts
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: amctl-dist
+          path: dist/
+          retention-days: 7
+
   package-charts:
     name: Package ${{ matrix.chart.name }}
     needs:
@@ -509,6 +546,7 @@ jobs:
         build-images,
         build-python-instrumentation-provider-images,
         package-charts,
+        build-amctl,
         e2e,
       ]
     if: ${{ !contains(inputs.target_version, '-rc') }}
@@ -557,6 +595,10 @@ jobs:
             jq -r '.charts[]' "$CONFIG_FILE" | while read -r chart; do
               echo "- \`${HELM_REGISTRY}/${chart}:${VERSION}\`"
             done
+
+            echo ""
+            echo "### CLI (amctl)"
+            echo "Prebuilt \`amctl\` binaries (Linux, macOS, Windows) and \`checksums.txt\` are attached to this release."
           } > /tmp/release-body.md
 
           {
@@ -568,6 +610,12 @@ jobs:
           VERSION: ${{ inputs.target_version }}
         shell: bash
 
+      - name: Download amctl artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: amctl-dist
+          path: dist/
+
       - name: Create GitHub release
         id: create-release
         uses: softprops/action-gh-release@v2
@@ -576,5 +624,6 @@ jobs:
           name: Release amp/v${{ inputs.target_version }}
           body: ${{ steps.release-body.outputs.body }}
           draft: true
+          files: dist/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
