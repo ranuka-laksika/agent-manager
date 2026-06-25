@@ -7971,6 +7971,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       summary: Update authenticated user's own profile and credentials
       description: Allows users to update their own profile information and credentials. Users can only update their own profile (self-service endpoint).
