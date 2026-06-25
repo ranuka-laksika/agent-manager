@@ -27,4 +27,7 @@ export enum MountPoints {
     BottomRightPanel = "bottom-right-panel",
     LeftNavItem = "left-nav-item",
     PrivateRepoSupport = "private-repo-support",
+    // config-kind point: a cloud build injects { enabled: true } here to switch the
+    // gateway identity-provider dialog from the script snippet to direct REST calls.
+    IdentityProviderMode = "identity-provider-mode",
 }
