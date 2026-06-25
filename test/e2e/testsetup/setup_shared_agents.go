@@ -134,9 +134,9 @@ func SynchronizedITHelpdeskAgent(
 }
 
 // SetupCLILifecycleAgent provisions a dedicated IT-helpdesk agent owned solely
-// by the amctl CLI e2e slow suite, in its own project. It mirrors
+// by the amctl CLI e2e suite, in its own project. It mirrors
 // SetupSharedITHelpdeskAgent (idempotent build-once + self-heal via
-// ensureSharedAgentReady) but under CLI-specific names, so the slow suite can
+// ensureSharedAgentReady) but under CLI-specific names, so the suite can
 // run mutating commands (deploy/redeploy, and future agent llm *) without
 // disturbing the shared agent that the HTTP traces/monitors suites read.
 func SetupCLILifecycleAgent(client *framework.AMPClient, cfg *framework.Config) *framework.CLILifecycleAgent {
@@ -149,7 +149,7 @@ func SetupCLILifecycleAgent(client *framework.AMPClient, cfg *framework.Config) 
 
 	EnsureProject(client, cfg, agent.ProjectName, "E2E CLI Project", "Dedicated project for amctl CLI e2e mutation tests")
 	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName,
-		"Dedicated IT helpdesk agent owned by the amctl CLI e2e slow suite")
+		"Dedicated IT helpdesk agent owned by the amctl CLI e2e suite")
 
 	resolveEndpointAndKey(client, cfg, agent.ProjectName, agent.AgentName, cfg.DefaultEnv,
 		&agent.EndpointURL, &agent.APIKey)

@@ -14,37 +14,22 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package cliagentobstests
+package cliagentplatformtests
 
 import (
-	"os"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/wso2/agent-manager/test/e2e/framework"
 	agentops "github.com/wso2/agent-manager/test/e2e/operations/agent"
 	cliagent "github.com/wso2/agent-manager/test/e2e/operations/cli/agent"
 	"github.com/wso2/agent-manager/test/e2e/operations/deployment"
-	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-var _ = Describe("amctl agent (CLI-owned lifecycle)", Label("cli", "agent", "slow"), Ordered, func() {
-	var (
-		cfg   *framework.Config
-		owned *framework.CLILifecycleAgent
-	)
-
+var _ = Describe("amctl agent (CLI-owned lifecycle)", Label("cli", "agent"), Ordered, func() {
 	BeforeAll(func() {
-		if os.Getenv("OPENAI_API_KEY") == "" {
-			Skip("OPENAI_API_KEY not set; skipping slow CLI lifecycle suite")
-		}
-		cfg = framework.LoadConfig()
-		client, err := framework.NewAMPClient(cfg)
-		Expect(err).NotTo(HaveOccurred())
-		// Provision (idempotent, build-once) the dedicated CLI-owned agent.
-		owned = testsetup.SetupCLILifecycleAgent(client, cfg)
+		ensurePlatformAgent()
 	})
 
 	// Deploy/mutation commands. These run first (Ordered) so the observability
@@ -59,9 +44,7 @@ var _ = Describe("amctl agent (CLI-owned lifecycle)", Label("cli", "agent", "slo
 		})
 
 		It("becomes ready again after redeploy", func() {
-			client, err := framework.NewAMPClient(cfg)
-			Expect(err).NotTo(HaveOccurred())
-			deployment.WaitForReadiness(client, cfg.DefaultOrg, owned.ProjectName, owned.AgentName, cfg.DefaultEnv, 10*time.Minute)
+			deployment.WaitForReadiness(apiClient, cfg.DefaultOrg, owned.ProjectName, owned.AgentName, cfg.DefaultEnv, 10*time.Minute)
 		})
 	})
 
