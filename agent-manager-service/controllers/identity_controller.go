@@ -1306,7 +1306,7 @@ func (c *identityController) GetUserProfile(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	_, ok := middleware.GetResolvedOrg(ctx)
 	if !ok {
 		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
 		return
@@ -1369,7 +1369,8 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 		return
 	}
 
-	log.Info("UpdateCurrentUserProfile - received from frontend", "bodyAttributes", body.Attributes)
+	sanitized := sanitizeAttributesForLogging(body.Attributes)
+	log.Info("UpdateCurrentUserProfile - received from frontend", "attributes", sanitized)
 
 	// Fetch current user to get their type and existing attributes
 	currentUser, err := c.client.GetUser(ctx, userID)
@@ -1380,6 +1381,11 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 		}
 		log.Error("Failed to fetch current user", "userID", userID, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update user profile")
+		return
+	}
+
+	// Validate tenant ownership: ensure user belongs to caller's organization
+	if !validateUserOwnership(w, ctx, currentUser, resolvedOrg.OUID) {
 		return
 	}
 
@@ -1408,7 +1414,8 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 	}
 
 	log.Info("UpdateCurrentUserProfile - request details", "userID", userID, "ouID", resolvedOrg.OUID, "type", currentUser.Type)
-	log.Info("UpdateCurrentUserProfile - attributes being sent", "attrs", attrs)
+	sanitizedMerged := sanitizeAttributesForLogging(attrs)
+	log.Info("UpdateCurrentUserProfile - attributes being sent", "attrs", sanitizedMerged)
 
 	updatedUser, err := c.client.UpdateUser(ctx, userID, thundersvc.UpdateUserRequest{
 		Attributes: attrs,
@@ -1425,7 +1432,8 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 		return
 	}
 
-	log.Info("UpdateCurrentUserProfile - response from Thunder", "userID", userID, "attributes", updatedUser.Attributes)
+	sanitizedResponse := sanitizeAttributesForLogging(updatedUser.Attributes)
+	log.Info("UpdateCurrentUserProfile - response from Thunder", "userID", userID, "attributes", sanitizedResponse)
 	utils.WriteSuccessResponse(w, http.StatusOK, updatedUser)
 }
 
@@ -1454,6 +1462,37 @@ func validateRoleOwnership(w http.ResponseWriter, ctx context.Context, role *thu
 		return false
 	}
 	return true
+}
+
+// sanitizeAttributesForLogging removes sensitive fields before logging
+func sanitizeAttributesForLogging(attrs interface{}) map[string]string {
+	result := make(map[string]string)
+	sensitiveFields := map[string]bool{"password": true}
+
+	switch v := attrs.(type) {
+	case map[string]string:
+		for k, val := range v {
+			if !sensitiveFields[k] {
+				result[k] = val
+			}
+		}
+	case *map[string]string:
+		if v != nil {
+			for k, val := range *v {
+				if !sensitiveFields[k] {
+					result[k] = val
+				}
+			}
+		}
+	case map[string]interface{}:
+		for k := range v {
+			if !sensitiveFields[k] {
+				result[k] = "[set]"
+			}
+		}
+	}
+
+	return result
 }
 
 func isPredefinedRole(roleName string) bool {

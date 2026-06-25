@@ -63,6 +63,13 @@ export const ProfilePage: React.FC = () => {
 
   const [successMessage, setSuccessMessage] = useState("");
 
+  const getErrorMessage = (error: unknown): string => {
+    if (error && typeof error === 'object' && 'message' in error) {
+      return (error as Error).message;
+    }
+    return "An error occurred";
+  };
+
   const { data: userProfile } = useGetUserProfile({
     orgName: orgId || "default",
     userId: userInfo?.sub || "",
@@ -176,9 +183,9 @@ export const ProfilePage: React.FC = () => {
           </Alert>
         )}
 
-        {profileError && (
+        {!!profileError && (
           <Alert severity="error">
-            {profileError instanceof Error ? profileError.message : "An error occurred"}
+            {getErrorMessage(profileError)}
           </Alert>
         )}
 

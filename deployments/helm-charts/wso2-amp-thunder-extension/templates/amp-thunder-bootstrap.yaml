@@ -1475,7 +1475,7 @@ data:
     # repository actions  → amp:repository:<action>
     create_action "$RS_ID" "$R_REPO"         "Read"                   "read"                   "Browse repository branches and commits"
 
-    log_info "Agent Manager resource server registration complete (96 permissions registered)."
+    log_info "Agent Manager resource server registration complete (97 permissions registered)."
 
   61-amp-default-roles.sh: |
     #!/bin/bash
