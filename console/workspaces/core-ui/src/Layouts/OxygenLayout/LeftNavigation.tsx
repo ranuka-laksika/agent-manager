@@ -65,7 +65,23 @@ export function LeftNavigation({
 }: LeftNavigationProps) {
   return (
     <Sidebar collapsed={collapsed} activeItem={activeItem} width={280}>
-      <Sidebar.Nav>
+      <Sidebar.Nav
+        sx={{
+          "& .MuiButtonBase-root": {
+            animation: "leftNavFadeIn 320ms ease-out",
+          },
+          "@keyframes leftNavFadeIn": {
+            from: {
+              opacity: 0,
+              transform: "translateX(6px)",
+            },
+            to: {
+              opacity: 1,
+              transform: "translateX(0)",
+            },
+          },
+        }}
+      >
         <Sidebar.Category>{mainItems.map(renderItem)}</Sidebar.Category>
         {groupedItems.map((group) => (
           <Sidebar.Category key={group.title}>
