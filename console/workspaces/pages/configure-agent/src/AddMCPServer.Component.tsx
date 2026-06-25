@@ -263,7 +263,7 @@ export const AddMCPServerComponent: React.FC = () => {
   if (isLoadingEnvironments) {
     return (
       <PageLayout
-        title="Add MCP Configuration"
+        title="Add Tool Configuration"
         backHref={backHref}
         disableIcon
         backLabel="Back to Configure"
@@ -279,7 +279,7 @@ export const AddMCPServerComponent: React.FC = () => {
 
   return (
     <PageLayout
-      title="Add MCP Configuration"
+      title="Add Tool Configuration"
       backHref={backHref}
       disableIcon
       backLabel="Back to Configure"

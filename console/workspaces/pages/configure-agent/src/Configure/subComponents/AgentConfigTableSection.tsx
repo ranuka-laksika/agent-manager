@@ -41,6 +41,7 @@ import { type AgentModelConfigListItem as AgentConfigListItem } from "@agent-man
 import {
   ConfigTableEmptyState,
   ConfigTableSection,
+  EmptyStateContent,
 } from "./ConfigTableSection";
 
 const COLUMN_COUNT = 3;
@@ -76,6 +77,11 @@ interface AgentConfigTableSectionProps {
   onRemove: (configId: string) => void;
   /** Disables the row remove action while a delete is in flight. */
   isRemoving?: boolean;
+  /**
+   * Render the section heading above the table. Set false when the section sits
+   * under a tab whose label already names it. Defaults to true.
+   */
+  showTitle?: boolean;
 }
 
 /**
@@ -92,6 +98,7 @@ export function AgentConfigTableSection({
   getViewPath,
   onRemove,
   isRemoving = false,
+  showTitle = true,
 }: AgentConfigTableSectionProps) {
   const { orgId, projectId, agentId } = useParams<{
     orgId: string;
@@ -186,6 +193,20 @@ export function AgentConfigTableSection({
     </ListingTable.Head>
   );
 
+  // A genuinely empty list (no configs at all, before any search) renders as a
+  // standalone centered empty state with no table header or pagination around it.
+  const isGenuinelyEmpty = !error && configs.length === 0;
+  const standaloneEmptyState = isGenuinelyEmpty ? (
+    <EmptyStateContent
+      illustration={<ServerCog size={64} />}
+      title={labels.emptyTitle}
+      description={labels.emptyDescription}
+      action={addButton("outlined")}
+    />
+  ) : undefined;
+
+  // The error and zero-result-search cases keep the table chrome (header + search
+  // box) in place, so they stay rendered inside the table body.
   const getEmptyState = () => {
     if (error) {
       return (
@@ -203,17 +224,6 @@ export function AgentConfigTableSection({
         />
       );
     }
-    if (configs.length === 0) {
-      return (
-        <ConfigTableEmptyState
-          colSpan={COLUMN_COUNT}
-          illustration={<ServerCog size={64} />}
-          title={labels.emptyTitle}
-          description={labels.emptyDescription}
-          action={addButton("outlined")}
-        />
-      );
-    }
     return (
       <ConfigTableEmptyState
         colSpan={COLUMN_COUNT}
@@ -226,7 +236,7 @@ export function AgentConfigTableSection({
 
   return (
     <ConfigTableSection
-      title={labels.title}
+      title={showTitle ? labels.title : undefined}
       toolbar={toolbar}
       // Keep the search/toolbar visible whenever the agent has configs of this
       // type, so filtering down to zero results doesn't hide the search input.
@@ -235,6 +245,7 @@ export function AgentConfigTableSection({
       isLoading={isLoading}
       hasRows={filteredConfigs.length > 0}
       emptyState={getEmptyState()}
+      standaloneEmptyState={standaloneEmptyState}
       pagination={
         <TablePagination
           rowsPerPageOptions={ROWS_PER_PAGE_OPTIONS}
