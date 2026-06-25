@@ -22,9 +22,11 @@ package environment
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/onsi/ginkgo/v2"
@@ -81,8 +83,8 @@ func runScript(scriptName string, params *ScriptParams, extraEnv []string) error
 	)
 
 	cmd := exec.CommandContext(ctx, "bash", scriptPath)
-	// Inherit the ambient environment (PATH, KUBECONFIG, any pinned CHART_VERSION)
-	// and layer the script-specific variables on top.
+	// Inherit the ambient environment (PATH, KUBECONFIG, etc.) and layer the
+	// script-specific variables on top.
 	cmd.Env = append(cmd.Environ(), env...)
 	cmd.Stdout = ginkgo.GinkgoWriter
 	cmd.Stderr = ginkgo.GinkgoWriter
@@ -95,8 +97,14 @@ func runScript(scriptName string, params *ScriptParams, extraEnv []string) error
 // environment via the Agent Manager API and installs its API Platform Gateway.
 // Asserts the script succeeds.
 func AddEnvironment(params *ScriptParams) {
+	chartVersion := strings.TrimSpace(os.Getenv("CHART_VERSION"))
+	Expect(chartVersion).NotTo(BeEmpty(),
+		"CHART_VERSION must be set for add-environment.sh; set it to the chart version "+
+			"the platform was installed with (see test/e2e/.env.example)")
+
 	extra := []string{
 		"DISPLAY_NAME=" + params.DisplayName,
+		"CHART_VERSION=" + chartVersion,
 		fmt.Sprintf("IS_PRODUCTION=%t", params.IsProduction),
 	}
 	err := runScript("add-environment.sh", params, extra)
