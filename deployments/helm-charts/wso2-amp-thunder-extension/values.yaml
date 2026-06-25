@@ -536,10 +536,10 @@ thunder:
     userSchema:
       name: "engineer"
       allowSelfRegistration: true
-    # Default admin user configuration
+    # Default users configuration
     defaultUsers:
-      - username: "amp-admin"
-        password: "amp-admin"
+      - username: "admin"
+        password: "admin"
         givenName: "Admin"
         familyName: "User"
-        groups: ["platformEngineer"]
+        groups: []

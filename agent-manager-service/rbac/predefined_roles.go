@@ -17,10 +17,10 @@
 package rbac
 
 const (
-	RoleAdmin            = "admin"
-	RoleDeveloper        = "developer"
-	RoleAILead           = "ai-lead"
-	RolePlatformEngineer = "platform-engineer"
+	RoleAdmin            = "Agent Manager Admin"
+	RoleDeveloper        = "Developer"
+	RoleAILead           = "AI Lead"
+	RolePlatformEngineer = "Platform Engineer"
 )
 
 // PredefinedRolePermissions maps each predefined role name to its set of permissions.
