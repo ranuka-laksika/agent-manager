@@ -3,7 +3,7 @@ set -eu
 
 REPO="wso2/agent-manager"
 BINARY="amctl"
-TAG_PREFIX="amctl/v"
+TAG_PREFIX="amp/v"
 
 log() {
     printf '==> %s\n' "$*"
