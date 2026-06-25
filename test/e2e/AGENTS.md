@@ -188,9 +188,11 @@ picked up automatically with no CI change.
 
 - **HTTP operations** go in `operations/<resource>/`; **CLI operations** go in
   `operations/cli/<resource>/`. The `agentplatform` suite owns a dedicated
-  running platform agent and hosts its mutating/observability/llm commands; the
-  keyless `agent` suite covers build-free agent CRUD. Every e2e run executes all
-  suites together.
+  running platform agent and hosts its mutating/observability/llm/mcp commands;
+  the keyless `agent` suite covers build-free agent CRUD. Every e2e run executes
+  all suites together. The `agent mcp` specs additionally require a running AI
+  gateway in `DefaultEnv` and reachability of `framework.TestMCPServerURL`, since
+  an mcp config can only bind a gateway-deployed catalog proxy.
 - Keep `framework/amctl` resource-agnostic. Never add project/agent/etc.
   knowledge to the harness.
 - CLI specs assert exit codes and JSON envelopes, not human-readable text.

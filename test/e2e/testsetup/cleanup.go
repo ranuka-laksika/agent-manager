@@ -110,6 +110,7 @@ func CleanupStaleE2EResources(client *framework.AMPClient, orgName string) {
 	// deletion while a pipeline references it).
 	cleanupStaleDeploymentPipelines(client, orgName)
 	cleanupStaleLLMProviders(client, orgName)
+	cleanupStaleMCPProxies(client, orgName)
 	cleanupStaleCustomEvaluators(client, orgName)
 	cleanupStaleEnvironments(client, orgName)
 }
@@ -275,6 +276,84 @@ func cleanupStaleLLMProviders(client *framework.AMPClient, orgName string) {
 		delResp.Body.Close()
 		logDeleteResult("LLM provider", p.ID, delResp.StatusCode)
 	}
+}
+
+// cleanupStaleMCPProxies deletes e2e-created MCP proxies (handle prefixed with
+// E2EMCPProxyPrefix) created more than the cutoff ago. These are org-scoped and
+// are not cascaded by project or environment deletion. The list payload omits
+// createdAt, so each candidate is fetched by handle to read its age.
+func cleanupStaleMCPProxies(client *framework.AMPClient, orgName string) {
+
+	path := fmt.Sprintf("/api/v1/orgs/%s/mcp-proxies", orgName)
+	resp, err := client.Get(path)
+	if err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to list MCP proxies: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: list MCP proxies returned %d, skipping\n", resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to read MCP proxies response: %v\n", err)
+		return
+	}
+
+	var proxies framework.MCPProxyListResponse
+	if err := json.Unmarshal(body, &proxies); err != nil {
+		ginkgo.GinkgoWriter.Printf("stale cleanup: failed to decode MCP proxies: %v\n", err)
+		return
+	}
+
+	for _, p := range proxies.List {
+		if p.ID == nil || !strings.HasPrefix(*p.ID, framework.E2EMCPProxyPrefix) {
+			continue
+		}
+		if !mcpProxyOlderThanCutoff(client, orgName, *p.ID) {
+			continue
+		}
+
+		proxyPath := fmt.Sprintf("/api/v1/orgs/%s/mcp-proxies/%s", orgName, *p.ID)
+		delResp, err := client.Delete(proxyPath)
+		if err != nil {
+			ginkgo.GinkgoWriter.Printf("stale cleanup: failed to delete MCP proxy %s: %v\n", *p.ID, err)
+			continue
+		}
+		delResp.Body.Close()
+		logDeleteResult("MCP proxy", *p.ID, delResp.StatusCode)
+	}
+}
+
+// mcpProxyOlderThanCutoff fetches a proxy by handle and reports whether it was
+// created more than the cutoff ago. On any fetch/decode error (or missing
+// createdAt) it returns false, leaving an unreadable proxy alone rather than
+// deleting one out from under a concurrent run.
+func mcpProxyOlderThanCutoff(client *framework.AMPClient, orgName, handle string) bool {
+	path := fmt.Sprintf("/api/v1/orgs/%s/mcp-proxies/%s", orgName, handle)
+	resp, err := client.Get(path)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return false
+	}
+	var proxy framework.MCPProxyResponse
+	if err := json.Unmarshal(body, &proxy); err != nil {
+		return false
+	}
+	if proxy.CreatedAt == nil {
+		return false
+	}
+	return time.Since(*proxy.CreatedAt) >= cutoff
 }
 
 // cleanupStaleEnvironments finds environments with the E2EEnvPrefix that were
