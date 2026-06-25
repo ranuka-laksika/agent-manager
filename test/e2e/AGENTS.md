@@ -29,14 +29,16 @@ operations/         HTTP operation wrappers per resource
 operations/cli/     CLI operation wrappers per resource (mirror operations/)
   project/
   agent/
+  llmprovider/
 tests/              HTTP Ginkgo specs
   project/
   agent/
   ...
 tests/cli/          CLI Ginkgo specs
   project/          CRUD lifecycle
-  agent/            fast, build-free agent coverage
-  agentobs/         slow, opt-in observability (CLI-owned agent)
+  agent/            build-free agent CRUD (keyless)
+  llmprovider/      llm-provider CRUD (keyless)
+  agentplatform/    owns a running platform agent; deploy + observability + agent llm (requires OPENAI_API_KEY)
 testsetup/          suite-wide setup / teardown / stale cleanup
 ```
 
@@ -185,10 +187,10 @@ picked up automatically with no CI change.
 ## Rules of thumb
 
 - **HTTP operations** go in `operations/<resource>/`; **CLI operations** go in
-  `operations/cli/<resource>/`. Agent CLI specs are split by cost: a fast
-  build-free suite (`tests/cli/agent/`) and a slow opt-in suite
-  (`tests/cli/agentobs/`) that owns a dedicated agent for mutating/observability
-  commands.
+  `operations/cli/<resource>/`. The `agentplatform` suite owns a dedicated
+  running platform agent and hosts its mutating/observability/llm commands; the
+  keyless `agent` suite covers build-free agent CRUD. Every e2e run executes all
+  suites together — there is no fast/slow or opt-in tier.
 - Keep `framework/amctl` resource-agnostic. Never add project/agent/etc.
   knowledge to the harness.
 - CLI specs assert exit codes and JSON envelopes, not human-readable text.
