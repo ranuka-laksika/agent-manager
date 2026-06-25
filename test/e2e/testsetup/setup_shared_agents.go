@@ -105,6 +105,37 @@ func SynchronizedITHelpdeskAgent(
 	client **framework.AMPClient,
 	agent **framework.SharedITHelpdeskAgent,
 ) (func() []byte, func([]byte)) {
+	return synchronizedAgentSetup(provision, cfg, client, agent)
+}
+
+// SynchronizedCLILifecycleAgent returns the two SynchronizedBeforeSuite phase
+// functions for the amctl CLI platform-agent suite. Phase 1 provisions the
+// dedicated CLI-owned agent exactly once on parallel process 1; phase 2 runs on
+// every process to build its own API client and decode the shared handle.
+//
+// Wire it into the harness's single SynchronizedBeforeSuite via
+// amctl.WithSharedSetup. Doing so keeps the CLI-owned agent from being created
+// concurrently by each parallel process — the race that otherwise produced
+// "already exists" creates and deployments wedged into a failed state.
+func SynchronizedCLILifecycleAgent(
+	cfg **framework.Config,
+	client **framework.AMPClient,
+	agent **framework.CLILifecycleAgent,
+) (func() []byte, func([]byte)) {
+	return synchronizedAgentSetup(SetupCLILifecycleAgent, cfg, client, agent)
+}
+
+// synchronizedAgentSetup builds the generic two-phase SynchronizedBeforeSuite
+// functions around a provisioner that runs once on process 1. Phase 1 sets up a
+// client, calls provision, and returns the resulting handle as JSON; phase 2
+// runs on every process to build that process's own client and decode the
+// handle into the provided pointers.
+func synchronizedAgentSetup[T any](
+	provision func(*framework.AMPClient, *framework.Config) *T,
+	cfg **framework.Config,
+	client **framework.AMPClient,
+	agent **T,
+) (func() []byte, func([]byte)) {
 	phase1 := func() []byte {
 		c := framework.LoadConfig()
 		ginkgo.By("Waiting for API readiness")
@@ -125,7 +156,7 @@ func SynchronizedITHelpdeskAgent(
 		cl, err := framework.NewAMPClient(*cfg)
 		Expect(err).NotTo(HaveOccurred(), "failed to create API client")
 		*client = cl
-		a := &framework.SharedITHelpdeskAgent{}
+		a := new(T)
 		Expect(json.Unmarshal(data, a)).To(Succeed(), "failed to decode agent")
 		*agent = a
 	}

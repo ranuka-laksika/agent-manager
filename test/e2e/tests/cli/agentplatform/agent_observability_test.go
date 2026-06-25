@@ -28,9 +28,9 @@ import (
 )
 
 var _ = Describe("amctl agent (CLI-owned lifecycle)", Label("cli", "agent"), Ordered, func() {
-	BeforeAll(func() {
-		ensurePlatformAgent()
-	})
+	// The CLI-owned agent is provisioned once by the suite's
+	// SynchronizedBeforeSuite (see suite_test.go), so cfg/apiClient/owned are
+	// ready before these specs run — no per-suite BeforeAll setup needed.
 
 	// Deploy/mutation commands. These run first (Ordered) so the observability
 	// specs below assert against a freshly redeployed, ready instance.

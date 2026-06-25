@@ -42,8 +42,6 @@ var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm
 	var providerID string
 
 	BeforeAll(func() {
-		ensurePlatformAgent()
-
 		// A config-only provider (no gateway/upstream/api-key) for the agent's
 		// llm config to reference.
 		providerID = framework.E2ELLMProviderPrefix + uuid.New().String()[:8]

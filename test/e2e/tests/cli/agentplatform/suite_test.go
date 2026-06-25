@@ -17,7 +17,6 @@
 package cliagentplatformtests
 
 import (
-	"sync"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -28,30 +27,28 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
-// H is the shared CLI harness: binary built once, logged in per parallel process.
-var H = amctl.RegisterSuite()
-
-// Per-process shared fixture for the platform-agent suite: the loaded config, an
-// authenticated API client, and the dedicated CLI-owned agent. The observability
-// and agent-llm specs both need these; ensurePlatformAgent provisions them once
-// instead of each spec re-running login and agent setup in its own BeforeAll.
+// Suite-wide shared fixture for the platform-agent suite: the loaded config, an
+// authenticated API client, and the dedicated CLI-owned agent. The agent is
+// provisioned exactly once on parallel process 1 and its handle is broadcast to
+// every process (see WithSharedSetup below), so the observability, llm, and mcp
+// specs all share one built/deployed instance instead of each parallel process
+// racing to create it.
 var (
-	setupOnce sync.Once
 	cfg       *framework.Config
 	apiClient *framework.AMPClient
 	owned     *framework.CLILifecycleAgent
 )
 
-func ensurePlatformAgent() {
-	setupOnce.Do(func() {
-		var err error
-		cfg = framework.LoadConfig()
-		apiClient, err = framework.NewAMPClient(cfg)
-		Expect(err).NotTo(HaveOccurred())
-		// Idempotent: builds/provisions the CLI-owned agent only on first call.
-		owned = testsetup.SetupCLILifecycleAgent(apiClient, cfg)
-	})
-}
+// H is the shared CLI harness: binary built once, logged in per parallel
+// process. It also carries the once-only provisioning of the CLI-owned agent,
+// folded into the harness's single SynchronizedBeforeSuite (Ginkgo allows only
+// one). Provisioning over the API client racing concurrently across processes is
+// exactly what produced the "already exists" creates and wedged deployments.
+var H = amctl.RegisterSuite(
+	amctl.WithSharedSetup(
+		testsetup.SynchronizedCLILifecycleAgent(&cfg, &apiClient, &owned),
+	),
+)
 
 func TestCLIAgentPlatform(t *testing.T) {
 	RegisterFailHandler(Fail)

@@ -77,17 +77,16 @@ const (
 // CLILifecycleAgent is a handle to the dedicated CLI-owned IT-helpdesk agent:
 // a built/deployed/ready agent the amctl CLI suite drives mutating and
 // observability commands against. Same shape as SharedITHelpdeskAgent but
-// semantically owned by the CLI suite alone.
-// Unlike SharedITHelpdeskAgent it carries no JSON tags: it is a process-local
-// handle created in the CLI suite's BeforeAll and never serialized across
-// processes.
+// semantically owned by the CLI suite alone. It is provisioned once on parallel
+// process 1 and serialized to every process via the suite's
+// SynchronizedBeforeSuite, so its fields carry JSON tags.
 type CLILifecycleAgent struct {
-	ProjectName string
-	AgentName   string
-	BuildName   string
-	EndpointURL string
-	APIKey      string
-	InvokeReq   json.RawMessage
+	ProjectName string          `json:"projectName"`
+	AgentName   string          `json:"agentName"`
+	BuildName   string          `json:"buildName"`
+	EndpointURL string          `json:"endpointURL"`
+	APIKey      string          `json:"apiKey"`
+	InvokeReq   json.RawMessage `json:"invokeReq"`
 }
 
 // SharedITHelpdeskAgent holds details of the shared internal chat agent that is

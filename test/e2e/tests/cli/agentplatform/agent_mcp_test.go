@@ -50,8 +50,6 @@ var _ = Describe("amctl agent mcp (CLI-owned agent)", Label("cli", "agent", "mcp
 	var proxyID string
 
 	BeforeAll(func() {
-		ensurePlatformAgent()
-
 		// The agent's mcp config can only bind a catalog proxy, which requires a
 		// gateway deployment — provision one over HTTP (the CLI can't).
 		gatewayUUID := gateway.WaitForActiveGatewayForEnv(apiClient, H.Org(), cfg.DefaultEnv, 3*time.Minute)
