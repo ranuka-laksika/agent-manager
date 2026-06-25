@@ -31,7 +31,6 @@ import (
 	"github.com/wso2/agent-manager/test/e2e/framework"
 	cliagent "github.com/wso2/agent-manager/test/e2e/operations/cli/agent"
 	clillmprovider "github.com/wso2/agent-manager/test/e2e/operations/cli/llmprovider"
-	"github.com/wso2/agent-manager/test/e2e/testsetup"
 )
 
 var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm"), Ordered, func() {
@@ -40,21 +39,13 @@ var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm
 		urlEnv     = "E2E_LLM_URL"
 		apiKeyEnv  = "E2E_LLM_KEY"
 	)
-	var (
-		cfg        *framework.Config
-		owned      *framework.CLILifecycleAgent
-		providerID string
-	)
+	var providerID string
 
 	BeforeAll(func() {
-		cfg = framework.LoadConfig()
-		client, err := framework.NewAMPClient(cfg)
-		Expect(err).NotTo(HaveOccurred())
-		// Reuse the already-running CLI-owned agent (idempotent; no extra build).
-		owned = testsetup.SetupCLILifecycleAgent(client, cfg)
+		ensurePlatformAgent()
 
-		// Config-only provider (primary path). See the TDD checkpoint below if
-		// `agent llm set` rejects an undeployed provider.
+		// A config-only provider (no gateway/upstream/api-key) for the agent's
+		// llm config to reference.
 		providerID = framework.E2ELLMProviderPrefix + uuid.New().String()[:8]
 		clillmprovider.CreateLLMProvider(Default, H, H.Org(), providerID, "CLI E2E LLM Provider", "openai")
 
@@ -81,7 +72,7 @@ var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm
 		Expect(c.Name).To(Equal(configName))
 		Expect(c.Type).To(Equal("llm"))
 		Expect(c.EnvMappings).To(HaveKey(cfg.DefaultEnv))
-		// TDD probe (open question #1): the env mapping must reference the provider.
+		// The env mapping must reference the provider we set.
 		Expect(c.EnvMappings[cfg.DefaultEnv].Configuration).NotTo(BeNil())
 		Expect(c.EnvMappings[cfg.DefaultEnv].Configuration.ProviderName).To(Equal(providerID))
 	})

@@ -20,31 +20,21 @@
 package clillmprovider
 
 import (
-	"time"
-
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework/amctl"
 )
 
 // LLMProvider is the subset of the CLI's llm-provider envelope data we assert on
-// (matches the server's LLMProviderResponse / LLMProviderListItem shapes). Note:
-// the list item has no `version` field, so Version is empty on list decodes.
+// (matches the server's LLMProviderResponse / LLMProviderListItem shapes).
 type LLMProvider struct {
-	ID        string    `json:"id"`
-	UUID      string    `json:"uuid"`
-	Name      string    `json:"name"`
-	Template  string    `json:"template"`
-	Version   string    `json:"version"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Template string `json:"template"`
 }
 
 // LLMProviderList is the data shape of `amctl llm-provider list --json`.
 type LLMProviderList struct {
-	Limit     int           `json:"limit"`
-	Offset    int           `json:"offset"`
-	Total     int           `json:"total"`
 	Providers []LLMProvider `json:"providers"`
 }
 

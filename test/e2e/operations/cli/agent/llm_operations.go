@@ -28,31 +28,21 @@ import (
 
 // AgentLLMConfig is the data shape of `agent llm set`/`get` (AgentModelConfigResponse).
 type AgentLLMConfig struct {
-	Name                 string                        `json:"name"`
-	Type                 string                        `json:"type"`
-	UUID                 string                        `json:"uuid"`
-	Description          string                        `json:"description"`
-	EnvMappings          map[string]AgentLLMEnvMapping `json:"envMappings"`
-	EnvironmentVariables []AgentLLMEnvVar              `json:"environmentVariables"`
+	Name        string                        `json:"name"`
+	Type        string                        `json:"type"`
+	Description string                        `json:"description"`
+	EnvMappings map[string]AgentLLMEnvMapping `json:"envMappings"`
 }
 
 // AgentLLMEnvMapping is one entry of AgentModelConfigResponse.EnvMappings.
 // Configuration is server-managed and may be nil for an undeployed provider.
 type AgentLLMEnvMapping struct {
-	EnvironmentName string               `json:"environmentName"`
-	Configuration   *AgentLLMProviderRef `json:"configuration,omitempty"`
+	Configuration *AgentLLMProviderRef `json:"configuration,omitempty"`
 }
 
 // AgentLLMProviderRef is the subset of ProviderConfig we assert on.
 type AgentLLMProviderRef struct {
 	ProviderName string `json:"providerName"`
-	Status       string `json:"status,omitempty"`
-}
-
-// AgentLLMEnvVar mirrors EnvironmentVariableConfig.
-type AgentLLMEnvVar struct {
-	Key  string `json:"key"`
-	Name string `json:"name"`
 }
 
 // AgentLLMConfigList is the data shape of `agent llm list --json` (CLI's ListResult).
