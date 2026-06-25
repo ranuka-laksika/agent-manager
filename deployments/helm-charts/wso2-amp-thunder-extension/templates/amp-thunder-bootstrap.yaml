@@ -935,7 +935,6 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
-
     log_info "Checking if application '{{ .Values.thunder.bootstrap.amCliClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -1164,7 +1163,6 @@ data:
 
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
-
 
     log_info "Registering Agent Manager (amp) as a Thunder resource server..."
 
@@ -1607,40 +1605,6 @@ data:
     log_info "Default role provisioning complete (4 roles created/updated)."
 
     # ===========================================================================
-    # Assign default users to roles
-    # ===========================================================================
-    assign_user_to_role() {
-      local username="$1" role_id="$2" role_name="$3"
-      local response http_code body user_id
-
-      response=$(thunder_api_call GET "/users")
-      http_code="${response: -3}"
-      body="${response%???}"
-      if [[ "$http_code" != "200" ]]; then
-        log_error "Failed to fetch users (HTTP $http_code)"
-        exit 1
-      fi
-
-      user_id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"username\":\"${username}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-      if [[ -z "$user_id" ]]; then
-        log_warning "User '${username}' not found, skipping role assignment"
-        return 0
-      fi
-
-      local payload="{\"assignments\":[{\"id\":\"${user_id}\",\"type\":\"user\"}]}"
-      response=$(thunder_api_call POST "/roles/${role_id}/assignments/add" "$payload")
-      http_code="${response: -3}"
-      if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
-        log_success "Assigned user '${username}' to role '${role_name}'"
-      else
-        log_error "Failed to assign user '${username}' to role '${role_name}' (HTTP $http_code): ${response%???}"
-        exit 1
-      fi
-    }
-
-    assign_user_to_role "admin" "$ADMIN_ID" "Agent Manager Admin"
-
-    # ===========================================================================
     # Assign ampApiClient app to Agent Manager Admin role so it gets all scopes in M2M tokens
     # ===========================================================================
     log_info "Assigning ampApiClient app to Agent Manager Admin role..."
@@ -1786,8 +1750,8 @@ data:
     else
       log_info "Found admin user (id: $ADMIN_USER_ID)"
       log_info "Assigning admin user to Agent Manager Admins group..."
-      ASSIGN_USER_PAYLOAD='{"assignments":[{"id":"'${ADMIN_USER_ID}'","type":"user"}]}'
-      RESPONSE=$(thunder_api_call POST "/groups/$ADMINS_GROUP_ID/assignments/add" "$ASSIGN_USER_PAYLOAD")
+      ASSIGN_USER_PAYLOAD='{"members":[{"type":"user","id":"'${ADMIN_USER_ID}'"}]}'
+      RESPONSE=$(thunder_api_call POST "/groups/$ADMINS_GROUP_ID/members/add" "$ASSIGN_USER_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]] || [[ "$HTTP_CODE" == "409" ]]; then
         log_success "Assigned admin user to Agent Manager Admins group"
