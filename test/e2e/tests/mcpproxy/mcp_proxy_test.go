@@ -52,7 +52,7 @@ var _ = Describe("MCP Proxy Lifecycle", Label("mcp-proxy"), Ordered, func() {
 	It("should discover the upstream MCP server", func() {
 		info := mcpproxyop.FetchServerInfo(Default, Client, Cfg.DefaultOrg,
 			framework.MCPServerInfoFetchRequest{
-				URL: testMCPServerURL,
+				URL: framework.TestMCPServerURL,
 			})
 		Expect(len(info.Tools)).To(BeNumerically(">", 0), "expected the everything server to report tools")
 		GinkgoWriter.Printf("Discovered MCP server: %d tools, %d prompts, %d resources\n",
@@ -60,7 +60,7 @@ var _ = Describe("MCP Proxy Lifecycle", Label("mcp-proxy"), Ordered, func() {
 	})
 
 	It("should create an MCP proxy deployed to the gateway", func() {
-		upstreamURL := testMCPServerURL
+		upstreamURL := framework.TestMCPServerURL
 		ctx := "/" + proxyID
 
 		proxy := mcpproxyop.CreateMCPProxy(Default, Client, Cfg.DefaultOrg,

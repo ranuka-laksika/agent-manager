@@ -83,7 +83,7 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 	})
 
 	It("should create an MCP proxy with api-key security deployed to the gateway", func() {
-		upstreamURL := testMCPServerURL
+		upstreamURL := framework.TestMCPServerURL
 		ctx := "/" + proxyID
 
 		proxy := mcpproxyop.CreateMCPProxy(Default, Client, Cfg.DefaultOrg,

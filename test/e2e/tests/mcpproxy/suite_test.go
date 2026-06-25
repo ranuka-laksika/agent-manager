@@ -31,8 +31,6 @@ var Client *framework.AMPClient
 // Cfg is the shared test configuration.
 var Cfg *framework.Config
 
-const testMCPServerURL = "https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/godzilla/mcp-everything-server/v1.0/mcp"
-
 func TestMCPProxy(t *testing.T) {
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "MCP Proxy Suite")

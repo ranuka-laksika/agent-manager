@@ -15,8 +15,9 @@
  * under the License.
  */
 
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { generatePath, useParams } from "react-router-dom";
+import { Box, Card, Divider, Tab, Tabs } from "@wso2/oxygen-ui";
 import { PageLayout } from "@agent-management-platform/views";
 import {
   useDeleteAgentMCPConfig,
@@ -53,23 +54,38 @@ const llmLabels: AgentConfigTableLabels = {
 };
 
 const mcpLabels: AgentConfigTableLabels = {
-  title: "MCP Configurations",
+  title: "Tool Configurations",
   searchPlaceholder: "Search by name or description...",
-  addButtonLabel: "Add MCP Configuration",
-  emptyTitle: "No MCP Configurations selected",
-  emptyDescription: "Add MCP Configurations that this agent can use.",
-  errorTitle: "Failed to load MCP configurations",
-  errorFallback: "Failed to load MCP configurations. Please try again.",
-  searchEmptyTitle: "No MCP Configurations match your search criteria",
+  addButtonLabel: "Add Tool Configuration",
+  emptyTitle: "No tool configurations added yet",
+  emptyDescription: "Add tool configurations that this agent can use.",
+  errorTitle: "Failed to load tool configurations",
+  errorFallback: "Failed to load tool configurations. Please try again.",
+  searchEmptyTitle: "No tool configurations match your search criteria",
   searchEmptyDescription: "Try adjusting your search keywords.",
-  removeTitle: "Remove MCP Configuration",
-  removeTooltip: "Remove MCP configuration",
+  removeTitle: "Remove Tool Configuration",
+  removeTooltip: "Remove tool configuration",
   removeConfirmation: (config) =>
     `Are you sure you want to remove "${config.name}" from this agent?`,
   removeAriaLabel: (config) => `Remove ${config.name}`,
 };
 
+type TabPanelProps = {
+  value: number;
+  index: number;
+  children: React.ReactNode;
+};
+
+function TabPanel({ value, index, children }: TabPanelProps) {
+  return (
+    <Box role="tabpanel" hidden={value !== index} sx={{ px: 3, py: 3 }}>
+      {value === index ? children : null}
+    </Box>
+  );
+}
+
 export const ConfigureComponent: React.FC = () => {
+  const [tabIndex, setTabIndex] = useState(0);
   const { orgId, projectId, agentId } = useParams<{
     orgId: string;
     projectId: string;
@@ -143,36 +159,56 @@ export const ConfigureComponent: React.FC = () => {
 
   return (
     <PageLayout title="Configure Agent" disableIcon>
-      <AgentConfigTableSection
-        configs={llmConfigs}
-        isLoading={isLoadingLLM}
-        error={llmError}
-        labels={llmLabels}
-        addPath={llmAddPath}
-        getViewPath={getLlmViewPath}
-        isRemoving={isRemovingLLM}
-        onRemove={(configId) =>
-          deleteLLMConfig({
-            ...deleteParams,
-            configId,
-          })
-        }
-      />
-      <AgentConfigTableSection
-        configs={mcpConfigs}
-        isLoading={isLoadingMCP}
-        error={mcpError}
-        labels={mcpLabels}
-        addPath={mcpAddPath}
-        getViewPath={getMcpViewPath}
-        isRemoving={isRemovingMCP}
-        onRemove={(configId) =>
-          deleteMCPConfig({
-            ...deleteParams,
-            configId,
-          })
-        }
-      />
+      <Card variant="outlined">
+        <Tabs
+          value={tabIndex}
+          onChange={(_, v: number) => setTabIndex(v)}
+          variant="scrollable"
+          allowScrollButtonsMobile
+        >
+          <Tab label={llmLabels.title} />
+          <Tab label={mcpLabels.title} />
+        </Tabs>
+        <Divider />
+
+        <TabPanel value={tabIndex} index={0}>
+          <AgentConfigTableSection
+            configs={llmConfigs}
+            isLoading={isLoadingLLM}
+            error={llmError}
+            labels={llmLabels}
+            addPath={llmAddPath}
+            getViewPath={getLlmViewPath}
+            isRemoving={isRemovingLLM}
+            showTitle={false}
+            onRemove={(configId) =>
+              deleteLLMConfig({
+                ...deleteParams,
+                configId,
+              })
+            }
+          />
+        </TabPanel>
+
+        <TabPanel value={tabIndex} index={1}>
+          <AgentConfigTableSection
+            configs={mcpConfigs}
+            isLoading={isLoadingMCP}
+            error={mcpError}
+            labels={mcpLabels}
+            addPath={mcpAddPath}
+            getViewPath={getMcpViewPath}
+            isRemoving={isRemovingMCP}
+            showTitle={false}
+            onRemove={(configId) =>
+              deleteMCPConfig({
+                ...deleteParams,
+                configId,
+              })
+            }
+          />
+        </TabPanel>
+      </Card>
     </PageLayout>
   );
 };

@@ -39,7 +39,7 @@ gateway:
   # Defaults to the Helm release name if empty.
   name: ""
   # Human-readable display name
-  displayName: "Default API Platform Gateway"
+  displayName: "Default API Gateway"
   # Virtual host (FQDN or IP) that the gateway is reachable on
   vhost: "http://api-platform-gateway.amp.localhost:22893"
   # Hostname for routing traffic to this gateway through kgateway.
