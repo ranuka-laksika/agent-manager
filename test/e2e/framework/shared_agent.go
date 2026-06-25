@@ -30,11 +30,19 @@ import (
 const E2EProjectPrefix = "e2e-test-"
 const E2EAgentPrefix = "e2e-test-agent-"
 const E2ELLMProviderPrefix = "e2e-test-llm-provider-"
+const E2EMCPProxyPrefix = "e2e-test-mcp-proxy-"
 const E2EMonitorPrefix = "e2e-test-mon-monitor-"
 
 // E2EEnvPrefix is the naming prefix for all e2e test environments. It is kept
 // short because environment names are length-constrained:
 const E2EEnvPrefix = "e2e-"
+
+// TestMCPServerURL is a public, always-on upstream MCP "everything" server used
+// as the proxy upstream by the MCP e2e tests (proxy lifecycle, invocation, and
+// the CLI agent-mcp suite). Proxy creation validates this URL via SSRF checks
+// but does not require a live MCP handshake, so it is safe to reuse for
+// config-only coverage.
+const TestMCPServerURL = "https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/godzilla/mcp-everything-server/v1.0/mcp"
 
 // Shared Projects and Agent
 const E2ESharedProjectName = "e2e-test-shared"
