@@ -47,6 +47,17 @@ export function getAmpVersion(): string {
 }
 
 /**
+ * Agent Manager release version without the leading "v", for contexts that need
+ * bare semver — e.g. the `CHART_VERSION` passed to the gateway-extension OCI chart
+ * (OCI tags are plain semver like "0.17.0-rc4", not "v0.17.0-rc4"). Empty when the
+ * version is not injected (dev).
+ */
+export function getAmpVersionHelm(): string {
+  const v = getAmpVersion();
+  return v.startsWith("v") ? v.slice(1) : v;
+}
+
+/**
  * Git ref used to fetch deployment scripts from raw.githubusercontent.com.
  * Release tags are `amp/vX.Y.Z`, so a versioned build pins to that tag. An unset
  * or dev placeholder version (e.g. `0.0.0-dev`) has no matching tag, so fall back

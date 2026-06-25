@@ -45,7 +45,7 @@ import {
   useListGateways,
 } from "@agent-management-platform/api-client";
 import {
-  getGatewayVersion,
+  getAmpVersionHelm,
   getRawScriptUrl,
 } from "@agent-management-platform/shared-component";
 import type {
@@ -107,7 +107,7 @@ function buildScript(i: ScriptInputs): string {
     `    ENV_NAME=${i.envName || "<env-name>"} \\`,
     `    GATEWAY_ID=${i.gatewayId || "<gateway-id>"} \\`,
     `    AGENT_MANAGER_TOKEN=${i.token} \\`,
-    `    CHART_VERSION=${getGatewayVersion()} \\`,
+    `    CHART_VERSION=${getAmpVersionHelm()} \\`,
     `    IDP_NAME=${i.name || "<identity-provider-name>"} \\`,
     ...actionEnvLines,
     "    bash",
