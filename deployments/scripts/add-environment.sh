@@ -23,28 +23,23 @@ set -euo pipefail
 #   - AGENT_MANAGER_TOKEN: bearer token authorized to create environments
 #   - ENV_NAME: resource name (lowercase alphanumeric with hyphens)
 #   - DISPLAY_NAME: human-readable name
+#   - CHART_VERSION: gateway-extension chart version, pinned to the platform
+#     release so an added env runs the same chart. Injected by the console.
 # Optional:
-#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
-#     When unset (the default), the latest published version is resolved from
-#     oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension so new
-#     environments always get the newest gateway chart. Set it only to pin a
-#     specific version.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
 #   - ENV_INGRESS_HOST (default: am-gateway.localhost): agent-facing gateway host.
-#   - ENV_INGRESS_HTTPS_HOST (default: unset): set on TLS deployments to advertise
-#     an https listener variant. The console reads the https endpoint variant when
-#     the platform runs with tlsEnabled=true, and an Environment's external gateway
-#     wholly replaces the dataplane's, so without this the deployed-agent invoke URL
-#     is empty and try-out 405s. Defaults to ENV_INGRESS_HOST on :443 when only the
-#     TLS toggle is wanted (set ENV_INGRESS_HTTPS_HOST=$ENV_INGRESS_HOST).
+#   - ENV_INGRESS_HTTPS_HOST (default: unset): on TLS deployments, advertises an
+#     https listener variant. Set ENV_INGRESS_HTTPS_HOST=$ENV_INGRESS_HOST for
+#     the TLS toggle alone; without it the deployed-agent invoke URL is empty.
 #   - ENV_INGRESS_HTTPS_PORT (default: 443): port for the https listener variant.
 
 # --- Required inputs ---
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
 : "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging\")}"
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
+: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.15.0)}"
 
 IS_PRODUCTION="${IS_PRODUCTION:-false}"
 case "$IS_PRODUCTION" in
@@ -82,44 +77,7 @@ GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
 
 CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 
-
-# --- Resolve chart version ---
-# The gateway extension chart is a pinned dependency (its version is defined by
-# the platform install, e.g. install.sh's GATEWAY_CHART_VERSION). An added
-# environment must run the SAME gateway chart as the default environment, so
-# CHART_VERSION resolves in this order:
-#   1. Explicit CHART_VERSION override (when a caller deliberately pins one).
-#   2. The chart version of the gateway already installed for the default
-#      environment — the normal path, so an added env inherits the platform's
-#      pinned version automatically.
-#   3. The latest published version in the OCI registry (last-resort fallback
-#      for a fresh install with no gateway yet).
-# Resolving from the registry as the *default* is unsafe: it can pick a GA tag
-# that differs from the installed platform, producing a version mismatch between
-# environments (the cause of cross-environment gateway routing failures).
-CHART_VERSION="${CHART_VERSION:-}"
-if [ -n "$CHART_VERSION" ]; then
-    echo "📌 Using pinned chart version: ${CHART_VERSION}"
-else
-    # Try the already-installed default-environment gateway release first.
-    # The default-env gateway is installed as "api-platform-<org>-default"
-    # (same naming this script uses below: api-platform-<org>-<env>).
-    INSTALLED_RELEASE="api-platform-${ORG_NAME}-default"
-    CHART_VERSION=$(helm get metadata "${INSTALLED_RELEASE}" -n "${GATEWAY_NAMESPACE}" -o json 2>/dev/null \
-        | yq -r '.version // ""' 2>/dev/null)
-    if [ -n "$CHART_VERSION" ]; then
-        echo "✅ Inheriting installed gateway chart version: ${CHART_VERSION} (from release '${INSTALLED_RELEASE}')"
-    else
-        echo "🔎 No installed gateway found; resolving latest chart version from ${CHART_REF}..."
-        CHART_VERSION=$(helm show chart "${CHART_REF}" 2>/dev/null | awk '/^version:/ {print $2; exit}')
-        if [ -z "$CHART_VERSION" ]; then
-            echo "❌ Could not resolve the chart version from ${CHART_REF}"
-            echo "   Pin a version explicitly and retry (e.g. CHART_VERSION=0.15.0)."
-            exit 1
-        fi
-        echo "⚠️  Using latest registry chart version: ${CHART_VERSION} (no installed gateway to inherit from)"
-    fi
-fi
+echo "📌 Using chart version: ${CHART_VERSION}"
 
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"

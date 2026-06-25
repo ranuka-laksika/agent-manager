@@ -84,12 +84,16 @@ function buildScript(
   // base URL itself, so we only need to pipe these two values through.
   const internalBase = globalConfig.agentManagerInternalBaseUrl?.trim();
   const internalCp = globalConfig.agentManagerInternalCpHost?.trim();
+  // Required by add-environment.sh: the gateway chart version, pinned to the
+  // platform release version so an added environment runs the same gateway chart.
+  const chartVersion = globalConfig.ampVersion?.trim();
 
   const lines = [
     `curl -fsSL ${getRawScriptUrl("add-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
     `    DISPLAY_NAME="${displayName || "<display-name>"}" \\`,
     `    AGENT_MANAGER_TOKEN=${token} \\`,
+    `    CHART_VERSION=${chartVersion || "<chart-version>"} \\`,
     ...(isProduction ? ["    IS_PRODUCTION=true \\"] : []),
     ...(internalBase ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`] : []),
     ...(internalCp ? [`    AGENT_MANAGER_INTERNAL_CP=${internalCp} \\`] : []),
