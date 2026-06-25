@@ -23,14 +23,16 @@ import {
   Footer,
   ColorSchemeToggle,
   UserMenu,
+  Box,
 } from "@wso2/oxygen-ui";
-import { generatePath, Outlet, useNavigate } from "react-router-dom";
+import { generatePath, Outlet, useNavigate, Link, useParams } from "react-router-dom";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { Logo, useExternalComponentModules } from "@agent-management-platform/views";
 import { globalConfig, absoluteRouteMap } from "@agent-management-platform/types";
 import { LeftNavigation, type NavigationItem, type NavigationSection } from "./LeftNavigation";
 import { useNavigationItems } from "./navigationItems";
 import { TopNavigation } from "./TopNavigation";
+import { createUserMenuItems } from "./userMenuItems";
 import { useListOrganizations } from "@agent-management-platform/api-client";
 import { MountPoints } from "../../types";
 
@@ -45,6 +47,7 @@ export function OxygenLayout() {
   const [collapsed, setCollapsed] = useState(false);
   const { userInfo, logout } = useAuthHooks();
   const navigate = useNavigate();
+  const { orgId } = useParams();
 
   const externalTopRightComponentModules =
     useExternalComponentModules(MountPoints.TopRightPanel);
@@ -81,6 +84,10 @@ export function OxygenLayout() {
   const handleLogout = async () => {
     await logout();
   };
+
+  const userMenuItems = useMemo(() => {
+    return createUserMenuItems({ logout: handleLogout });
+  }, []);
 
   return (
     <AppShell>
@@ -121,6 +128,30 @@ export function OxygenLayout() {
               <UserMenu.Trigger name={user.primaryLine} />
               <UserMenu.Header name={user.primaryLine} email={user.secondaryLine} />
               <UserMenu.Divider />
+              {orgId && (
+                <Link
+                  to={generatePath("/org/:orgId/profile", { orgId })}
+                  style={{ textDecoration: "none", color: "inherit" }}
+                >
+                  <Box
+                    sx={{
+                      padding: (theme) => `${theme.spacing(1.5)} ${theme.spacing(2)}`,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: (theme) => theme.spacing(1.5),
+                      fontSize: (theme) => theme.typography.body2.fontSize,
+                      color: "inherit",
+                      "&:hover": {
+                        backgroundColor: (theme) => theme.palette.action.hover,
+                      },
+                    }}
+                  >
+                    {userMenuItems[0]?.icon}
+                    {userMenuItems[0]?.label}
+                  </Box>
+                </Link>
+              )}
               <UserMenu.Logout onClick={handleLogout} />
             </UserMenu>
           </Header.Actions>

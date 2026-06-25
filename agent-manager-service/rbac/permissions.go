@@ -192,3 +192,9 @@ const (
 	CatalogRead    Permission = "catalog:read"
 	RepositoryRead Permission = "repository:read"
 )
+
+// Profile permissions
+const (
+	ProfileRead             Permission = "profile:read"
+	ProfileUpdateAttributes Permission = "profile:update-attributes"
+)

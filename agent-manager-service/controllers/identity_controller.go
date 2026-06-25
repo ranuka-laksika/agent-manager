@@ -27,6 +27,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/constants"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -43,6 +44,8 @@ type IdentityController interface {
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
 	GetUserRoles(w http.ResponseWriter, r *http.Request)
 	InviteUser(w http.ResponseWriter, r *http.Request)
+	GetUserProfile(w http.ResponseWriter, r *http.Request)
+	UpdateCurrentUserProfile(w http.ResponseWriter, r *http.Request)
 
 	// Groups
 	ListGroups(w http.ResponseWriter, r *http.Request)
@@ -1298,6 +1301,142 @@ func (c *identityController) ListAMPPermissions(w http.ResponseWriter, r *http.R
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"permissions": perms, "resourceServerId": rsID})
 }
 
+// GetUserProfile retrieves a user's profile information
+func (c *identityController) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	_, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return
+	}
+
+	userID := r.PathValue(utils.PathParamUserID)
+	if userID == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "User ID is required")
+		return
+	}
+
+	// Enforce self-check: caller can only read their own profile
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil || claims.Sub != userID {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "You can only view your own profile")
+		return
+	}
+
+	user, err := c.client.GetUser(ctx, userID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+		log.Error("GetUserProfile failed", "userID", userID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get user profile")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, user)
+}
+
+// UpdateCurrentUserProfile updates the current user's profile information
+func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return
+	}
+
+	userID := r.PathValue(utils.PathParamUserID)
+	if userID == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "User ID is required")
+		return
+	}
+
+	// Enforce self-check: caller can only update their own profile
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil || claims.Sub != userID {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "You can only update your own profile")
+		return
+	}
+
+	var body spec.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	sanitized := sanitizeAttributesForLogging(body.Attributes)
+	log.Info("UpdateCurrentUserProfile - received from frontend", "attributes", sanitized)
+
+	// Fetch current user to get their type and existing attributes
+	currentUser, err := c.client.GetUser(ctx, userID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+		log.Error("Failed to fetch current user", "userID", userID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update user profile")
+		return
+	}
+
+	// Validate tenant ownership: ensure user belongs to caller's organization
+	if !validateUserOwnership(w, ctx, currentUser, resolvedOrg.OUID) {
+		return
+	}
+
+	// Only include known schema fields
+	knownFields := map[string]bool{"username": true, "given_name": true, "family_name": true, "email": true, "password": true}
+
+	// Start with existing attributes from current user
+	attrs := make(map[string]string)
+	if currentUser.Attributes != nil {
+		for k, v := range currentUser.Attributes {
+			if knownFields[k] {
+				if str, ok := v.(string); ok {
+					attrs[k] = str
+				}
+			}
+		}
+	}
+
+	// Override with new attributes from request
+	if body.Attributes != nil {
+		for k, v := range *body.Attributes {
+			if knownFields[k] {
+				attrs[k] = v
+			}
+		}
+	}
+
+	log.Info("UpdateCurrentUserProfile - request details", "userID", userID, "ouID", resolvedOrg.OUID, "type", currentUser.Type)
+	sanitizedMerged := sanitizeAttributesForLogging(attrs)
+	log.Info("UpdateCurrentUserProfile - attributes being sent", "attrs", sanitizedMerged)
+
+	updatedUser, err := c.client.UpdateUser(ctx, userID, thundersvc.UpdateUserRequest{
+		Attributes: attrs,
+		OuID:       resolvedOrg.OUID,
+		Type:       currentUser.Type,
+	})
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+		log.Error("UpdateCurrentUserProfile failed", "userID", userID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update user profile")
+		return
+	}
+
+	sanitizedResponse := sanitizeAttributesForLogging(updatedUser.Attributes)
+	log.Info("UpdateCurrentUserProfile - response from Thunder", "userID", userID, "attributes", sanitizedResponse)
+	utils.WriteSuccessResponse(w, http.StatusOK, updatedUser)
+}
+
 // validateUserOwnership checks if a user belongs to the caller's OU
 func validateUserOwnership(w http.ResponseWriter, ctx context.Context, user *thundersvc.ThunderUser, callerOuID string) bool {
 	if user.OuID != "" && user.OuID != callerOuID {
@@ -1323,6 +1462,37 @@ func validateRoleOwnership(w http.ResponseWriter, ctx context.Context, role *thu
 		return false
 	}
 	return true
+}
+
+// sanitizeAttributesForLogging removes sensitive fields before logging
+func sanitizeAttributesForLogging(attrs interface{}) map[string]string {
+	result := make(map[string]string)
+	sensitiveFields := map[string]bool{"password": true}
+
+	switch v := attrs.(type) {
+	case map[string]string:
+		for k, val := range v {
+			if !sensitiveFields[k] {
+				result[k] = val
+			}
+		}
+	case *map[string]string:
+		if v != nil {
+			for k, val := range *v {
+				if !sensitiveFields[k] {
+					result[k] = val
+				}
+			}
+		}
+	case map[string]interface{}:
+		for k := range v {
+			if !sensitiveFields[k] {
+				result[k] = "[set]"
+			}
+		}
+	}
+
+	return result
 }
 
 func isPredefinedRole(roleName string) bool {

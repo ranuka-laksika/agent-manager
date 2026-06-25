@@ -75,6 +75,19 @@ func (r CreateUserRequest) MarshalJSON() ([]byte, error) {
 // UpdateUserRequest is the payload for PUT /users/{id}.
 type UpdateUserRequest struct {
 	Attributes map[string]string `json:"attributes,omitempty"`
+	OuID       string            `json:"ouId,omitempty"`
+	Type       string            `json:"type,omitempty"`
+	IsReadOnly bool              `json:"isReadOnly,omitempty"`
+}
+
+func (r UpdateUserRequest) MarshalJSON() ([]byte, error) {
+	type wire struct {
+		OuID       string            `json:"ouId,omitempty"`
+		Type       string            `json:"type,omitempty"`
+		Attributes map[string]string `json:"attributes,omitempty"`
+		IsReadOnly bool              `json:"isReadOnly,omitempty"`
+	}
+	return json.Marshal(wire{OuID: r.OuID, Type: r.Type, Attributes: r.Attributes, IsReadOnly: r.IsReadOnly})
 }
 
 // ThunderGroup represents a user group in Thunder.

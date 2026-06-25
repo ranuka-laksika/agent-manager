@@ -73,6 +73,17 @@ export async function getUser(
   return res.json();
 }
 
+export async function getUserProfile(
+  params: UserPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ThunderUser> {
+  const { orgName = "default", userId } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(`${orgBase(orgName)}/users/${encodeURIComponent(userId)}/profile`, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
 export async function createUser(
   params: IdentityOrgPathParams,
   body: CreateUserRequest,
@@ -401,6 +412,22 @@ export async function removeRoleAssignees(
     `${orgBase(orgName)}/roles/${encodeURIComponent(roleId)}/assignees/remove`, body, { token },
   );
   if (!res.ok) throw await res.json();
+}
+
+// --- User Profile & Credentials (Self) ---
+
+export async function updateUserProfile(
+  params: UserPathParams,
+  body: UpdateUserRequest,
+  getToken?: () => Promise<string>,
+): Promise<ThunderUser> {
+  const { orgName = "default", userId } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPUT(
+    `${orgBase(orgName)}/users/${encodeURIComponent(userId)}/profile`, body, { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
 }
 
 // --- Permissions catalog ---

@@ -30,6 +30,10 @@ export const rootRouteMap: AppRoute = {
             path: '/org/:orgId',
             index: true,
             children: {
+                profile: {
+                    path: 'profile',
+                    children: {},
+                },
                 gateways: {
                     path: 'gateways',
                     index: true,
