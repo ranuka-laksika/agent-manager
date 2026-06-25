@@ -135,15 +135,15 @@ export function OxygenLayout() {
                 >
                   <Box
                     sx={{
-                      padding: "12px 16px",
+                      padding: (theme) => `${theme.spacing(1.5)} ${theme.spacing(2)}`,
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
-                      gap: "12px",
-                      fontSize: "14px",
+                      gap: (theme) => theme.spacing(1.5),
+                      fontSize: (theme) => theme.typography.body2.fontSize,
                       color: "inherit",
                       "&:hover": {
-                        backgroundColor: "rgba(0, 0, 0, 0.04)",
+                        backgroundColor: (theme) => theme.palette.action.hover,
                       },
                     }}
                   >

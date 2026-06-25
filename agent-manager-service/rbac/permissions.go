@@ -195,5 +195,6 @@ const (
 
 // Profile permissions
 const (
+	ProfileRead             Permission = "profile:read"
 	ProfileUpdateAttributes Permission = "profile:update-attributes"
 )

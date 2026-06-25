@@ -7933,9 +7933,40 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /orgs/{orgName}/identities/users/{userId}/profile:
+    get:
+      summary: Get user profile information
+      operationId: getUserProfile
+      tags:
+        - Identity - Users
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          description: Organization name
+          schema:
+            type: string
+        - name: userId
+          in: path
+          required: true
+          description: User ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     put:
       summary: Update user profile and credentials
-      operationId: updateCurrentUserProfile
+      operationId: updateUserProfile
       tags:
         - Identity - Users
       parameters:

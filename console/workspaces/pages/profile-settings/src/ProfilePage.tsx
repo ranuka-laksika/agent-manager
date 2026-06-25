@@ -16,48 +16,36 @@
  * under the License.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import {
   Alert,
   Box,
   Button,
+  Divider,
   Form,
   Stack,
   Tabs,
   Tab,
-  CircularProgress,
+  Typography,
+  useTheme,
 } from "@wso2/oxygen-ui";
 import { PageLayout, TextInput } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
-import { useUpdateUserProfile } from "@agent-management-platform/api-client";
+import { useUpdateUserProfile, useGetUserProfile } from "@agent-management-platform/api-client";
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index } = props;
-
-  return (
-    <div hidden={value !== index} style={{ width: "100%" }}>
-      {value === index && <Box sx={{ pt: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+type ActiveTab = "profile" | "password";
 
 export const ProfilePage: React.FC = () => {
+  const theme = useTheme();
   const { userInfo } = useAuthHooks();
   const { orgId } = useParams<{ orgId: string }>();
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
 
-  // Profile update state
   const [profileData, setProfileData] = useState({
     username: userInfo?.username || "",
-    firstname: userInfo?.givenName || "",
-    lastname: userInfo?.familyName || "",
+    given_name: userInfo?.givenName || "",
+    family_name: userInfo?.familyName || "",
     email: userInfo?.email || "",
   });
   const [profileErrors, setProfileErrors] = useState<Record<string, string>>({});
@@ -67,7 +55,6 @@ export const ProfilePage: React.FC = () => {
     error: profileError,
   } = useUpdateUserProfile();
 
-  // Credential update state
   const [credentialData, setCredentialData] = useState({
     currentPassword: "",
     newPassword: "",
@@ -77,7 +64,23 @@ export const ProfilePage: React.FC = () => {
 
   const [successMessage, setSuccessMessage] = useState("");
 
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
+  const { data: userProfile } = useGetUserProfile({
+    orgName: orgId || "default",
+    userId: userInfo?.sub || "",
+  });
+
+  useEffect(() => {
+    if (userProfile?.attributes) {
+      setProfileData({
+        username: (userProfile.attributes.username as string) || "",
+        given_name: (userProfile.attributes.given_name as string) || "",
+        family_name: (userProfile.attributes.family_name as string) || "",
+        email: (userProfile.attributes.email as string) || "",
+      });
+    }
+  }, [userProfile]);
+
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: ActiveTab) => {
     setActiveTab(newValue);
     setSuccessMessage("");
   };
@@ -119,8 +122,8 @@ export const ProfilePage: React.FC = () => {
         body: {
           attributes: {
             username: profileData.username.trim(),
-            firstname: profileData.firstname.trim(),
-            lastname: profileData.lastname.trim(),
+            given_name: profileData.given_name.trim(),
+            family_name: profileData.family_name.trim(),
             email: profileData.email.trim(),
           },
         },
@@ -141,8 +144,8 @@ export const ProfilePage: React.FC = () => {
         body: {
           attributes: {
             username: profileData.username.trim(),
-            firstname: profileData.firstname.trim(),
-            lastname: profileData.lastname.trim(),
+            given_name: profileData.given_name.trim(),
+            family_name: profileData.family_name.trim(),
             email: profileData.email.trim(),
             password: credentialData.newPassword,
           },
@@ -161,31 +164,34 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <PageLayout
-      title="Profile Settings"
-      disableIcon
-    >
-      <Box sx={{ maxWidth: 700 }}>
-        {successMessage ? (
-          <Alert severity="success" sx={{ mb: 2 }}>
+    <PageLayout title="Profile Settings" disableIcon>
+      <Stack spacing={3}>
+        {successMessage && (
+          <Alert severity="success" onClose={() => setSuccessMessage("")}>
             {successMessage}
           </Alert>
-        ) : null}
+        )}
 
-        {profileError ? (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {(profileError as Error)?.message || "An error occurred"}
+        {profileError && (
+          <Alert severity="error">
+            {profileError instanceof Error ? profileError.message : "An error occurred"}
           </Alert>
-        ) : null}
+        )}
 
-        <Tabs value={activeTab} onChange={handleTabChange}>
-          <Tab label="Profile Information" />
-          <Tab label="Change Password" />
+        <Tabs
+          value={activeTab}
+          onChange={handleTabChange}
+          sx={{
+            borderBottom: `1px solid ${theme.palette.divider}`,
+          }}
+        >
+          <Tab label="Profile Information" value="profile" />
+          <Tab label="Change Password" value="password" />
         </Tabs>
 
         {/* Profile Information Tab */}
-        <TabPanel value={activeTab} index={0}>
-          <Form.Stack spacing={3}>
+        {activeTab === "profile" && (
+          <Stack spacing={3}>
             <Form.Section>
               <Form.Header>Account Information</Form.Header>
               <Form.Stack spacing={2}>
@@ -232,14 +238,18 @@ export const ProfilePage: React.FC = () => {
                 >
                   <TextInput
                     label="First Name"
-                    value={profileData.firstname}
-                    onChange={(e) => setProfileData({ ...profileData, firstname: e.target.value })}
+                    value={profileData.given_name}
+                    onChange={(e) =>
+                      setProfileData({ ...profileData, given_name: e.target.value })
+                    }
                   />
 
                   <TextInput
                     label="Last Name"
-                    value={profileData.lastname}
-                    onChange={(e) => setProfileData({ ...profileData, lastname: e.target.value })}
+                    value={profileData.family_name}
+                    onChange={(e) =>
+                      setProfileData({ ...profileData, family_name: e.target.value })
+                    }
                   />
                 </Box>
               </Form.Stack>
@@ -251,17 +261,20 @@ export const ProfilePage: React.FC = () => {
                 onClick={handleProfileSubmit}
                 disabled={isUpdatingProfile}
               >
-                {isUpdatingProfile ? <CircularProgress size={24} /> : "Save Changes"}
+                {isUpdatingProfile ? "Saving..." : "Save Changes"}
               </Button>
             </Stack>
-          </Form.Stack>
-        </TabPanel>
+          </Stack>
+        )}
 
         {/* Change Password Tab */}
-        <TabPanel value={activeTab} index={1}>
-          <Form.Stack spacing={3}>
+        {activeTab === "password" && (
+          <Stack spacing={3}>
             <Form.Section>
               <Form.Header>Update Password</Form.Header>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Enter a new password to update your account security.
+              </Typography>
               <Form.Stack spacing={2}>
                 <TextInput
                   label="New Password"
@@ -303,12 +316,12 @@ export const ProfilePage: React.FC = () => {
                 onClick={handleCredentialSubmit}
                 disabled={isUpdatingProfile || !credentialData.newPassword}
               >
-                {isUpdatingProfile ? <CircularProgress size={24} /> : "Update Password"}
+                {isUpdatingProfile ? "Updating..." : "Update Password"}
               </Button>
             </Stack>
-          </Form.Stack>
-        </TabPanel>
-      </Box>
+          </Stack>
+        )}
+      </Stack>
     </PageLayout>
   );
 };

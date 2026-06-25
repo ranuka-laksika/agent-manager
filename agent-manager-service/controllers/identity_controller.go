@@ -43,6 +43,7 @@ type IdentityController interface {
 	GetUserGroups(w http.ResponseWriter, r *http.Request)
 	GetUserRoles(w http.ResponseWriter, r *http.Request)
 	InviteUser(w http.ResponseWriter, r *http.Request)
+	GetUserProfile(w http.ResponseWriter, r *http.Request)
 	UpdateCurrentUserProfile(w http.ResponseWriter, r *http.Request)
 
 	// Groups
@@ -1299,10 +1300,51 @@ func (c *identityController) ListAMPPermissions(w http.ResponseWriter, r *http.R
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"permissions": perms, "resourceServerId": rsID})
 }
 
+// GetUserProfile retrieves a user's profile information
+func (c *identityController) GetUserProfile(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return
+	}
+
+	userID := r.PathValue(utils.PathParamUserID)
+	if userID == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "User ID is required")
+		return
+	}
+
+	user, err := c.client.GetUser(ctx, userID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+		log.Error("GetUserProfile failed", "userID", userID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get user profile")
+		return
+	}
+
+	if !validateUserOwnership(w, ctx, user, resolvedOrg.OUID) {
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, user)
+}
+
 // UpdateCurrentUserProfile updates the current user's profile information
 func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
+
+	resolvedOrg, ok := middleware.GetResolvedOrg(ctx)
+	if !ok {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "missing org context")
+		return
+	}
 
 	userID := r.PathValue(utils.PathParamUserID)
 	if userID == "" {
@@ -1316,8 +1358,51 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 		return
 	}
 
+	log.Info("UpdateCurrentUserProfile - received from frontend", "bodyAttributes", body.Attributes)
+
+	// Fetch current user to get their type and existing attributes
+	currentUser, err := c.client.GetUser(ctx, userID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "User not found")
+			return
+		}
+		log.Error("Failed to fetch current user", "userID", userID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update user profile")
+		return
+	}
+
+	// Only include known schema fields
+	knownFields := map[string]bool{"username": true, "given_name": true, "family_name": true, "email": true, "password": true}
+
+	// Start with existing attributes from current user
+	attrs := make(map[string]string)
+	if currentUser.Attributes != nil {
+		for k, v := range currentUser.Attributes {
+			if knownFields[k] {
+				if str, ok := v.(string); ok {
+					attrs[k] = str
+				}
+			}
+		}
+	}
+
+	// Override with new attributes from request
+	if body.Attributes != nil {
+		for k, v := range *body.Attributes {
+			if knownFields[k] {
+				attrs[k] = v
+			}
+		}
+	}
+
+	log.Info("UpdateCurrentUserProfile - request details", "userID", userID, "ouID", resolvedOrg.OUID, "type", currentUser.Type)
+	log.Info("UpdateCurrentUserProfile - attributes being sent", "attrs", attrs)
+
 	updatedUser, err := c.client.UpdateUser(ctx, userID, thundersvc.UpdateUserRequest{
-		Attributes: *body.Attributes,
+		Attributes: attrs,
+		OuID:       resolvedOrg.OUID,
+		Type:       currentUser.Type,
 	})
 	if err != nil {
 		if thundersvc.IsNotFound(err) {
@@ -1329,6 +1414,7 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 		return
 	}
 
+	log.Info("UpdateCurrentUserProfile - response from Thunder", "userID", userID, "attributes", updatedUser.Attributes)
 	utils.WriteSuccessResponse(w, http.StatusOK, updatedUser)
 }
 

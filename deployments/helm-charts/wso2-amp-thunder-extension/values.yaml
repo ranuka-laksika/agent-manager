@@ -255,6 +255,7 @@ thunder:
       - "group:delete"
       - "catalog:read"
       - "repository:read"
+      - "profile:read"
       - "profile:update-attributes"
     configMap:
       name: amp-thunder-bootstrap

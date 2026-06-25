@@ -585,7 +585,7 @@ func (a *IdentityUsersAPIService) ListUsersExecute(r ApiListUsersRequest) (*User
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiUpdateCurrentUserProfileRequest struct {
+type ApiUpdateUserRequest struct {
 	ctx               context.Context
 	ApiService        *IdentityUsersAPIService
 	orgName           string
@@ -593,25 +593,25 @@ type ApiUpdateCurrentUserProfileRequest struct {
 	updateUserRequest *UpdateUserRequest
 }
 
-func (r ApiUpdateCurrentUserProfileRequest) UpdateUserRequest(updateUserRequest UpdateUserRequest) ApiUpdateCurrentUserProfileRequest {
+func (r ApiUpdateUserRequest) UpdateUserRequest(updateUserRequest UpdateUserRequest) ApiUpdateUserRequest {
 	r.updateUserRequest = &updateUserRequest
 	return r
 }
 
-func (r ApiUpdateCurrentUserProfileRequest) Execute() (*UserResponse, *http.Response, error) {
-	return r.ApiService.UpdateCurrentUserProfileExecute(r)
+func (r ApiUpdateUserRequest) Execute() (*UserResponse, *http.Response, error) {
+	return r.ApiService.UpdateUserExecute(r)
 }
 
 /*
-UpdateCurrentUserProfile Update user profile and credentials
+UpdateUser Update user
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name
 	@param userId User ID
-	@return ApiUpdateCurrentUserProfileRequest
+	@return ApiUpdateUserRequest
 */
-func (a *IdentityUsersAPIService) UpdateCurrentUserProfile(ctx context.Context, orgName string, userId string) ApiUpdateCurrentUserProfileRequest {
-	return ApiUpdateCurrentUserProfileRequest{
+func (a *IdentityUsersAPIService) UpdateUser(ctx context.Context, orgName string, userId string) ApiUpdateUserRequest {
+	return ApiUpdateUserRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
@@ -622,7 +622,7 @@ func (a *IdentityUsersAPIService) UpdateCurrentUserProfile(ctx context.Context, 
 // Execute executes the request
 //
 //	@return UserResponse
-func (a *IdentityUsersAPIService) UpdateCurrentUserProfileExecute(r ApiUpdateCurrentUserProfileRequest) (*UserResponse, *http.Response, error) {
+func (a *IdentityUsersAPIService) UpdateUserExecute(r ApiUpdateUserRequest) (*UserResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
@@ -630,12 +630,12 @@ func (a *IdentityUsersAPIService) UpdateCurrentUserProfileExecute(r ApiUpdateCur
 		localVarReturnValue *UserResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "IdentityUsersAPIService.UpdateCurrentUserProfile")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "IdentityUsersAPIService.UpdateUser")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/identities/users/{userId}/profile"
+	localVarPath := localBasePath + "/orgs/{orgName}/identities/users/{userId}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"userId"+"}", url.PathEscape(parameterValueToString(r.userId, "userId")), -1)
 
@@ -745,7 +745,7 @@ func (a *IdentityUsersAPIService) UpdateCurrentUserProfileExecute(r ApiUpdateCur
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiUpdateUserRequest struct {
+type ApiUpdateUserProfileRequest struct {
 	ctx               context.Context
 	ApiService        *IdentityUsersAPIService
 	orgName           string
@@ -753,25 +753,25 @@ type ApiUpdateUserRequest struct {
 	updateUserRequest *UpdateUserRequest
 }
 
-func (r ApiUpdateUserRequest) UpdateUserRequest(updateUserRequest UpdateUserRequest) ApiUpdateUserRequest {
+func (r ApiUpdateUserProfileRequest) UpdateUserRequest(updateUserRequest UpdateUserRequest) ApiUpdateUserProfileRequest {
 	r.updateUserRequest = &updateUserRequest
 	return r
 }
 
-func (r ApiUpdateUserRequest) Execute() (*UserResponse, *http.Response, error) {
-	return r.ApiService.UpdateUserExecute(r)
+func (r ApiUpdateUserProfileRequest) Execute() (*UserResponse, *http.Response, error) {
+	return r.ApiService.UpdateUserProfileExecute(r)
 }
 
 /*
-UpdateUser Update user
+UpdateUserProfile Update user profile and credentials
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name
 	@param userId User ID
-	@return ApiUpdateUserRequest
+	@return ApiUpdateUserProfileRequest
 */
-func (a *IdentityUsersAPIService) UpdateUser(ctx context.Context, orgName string, userId string) ApiUpdateUserRequest {
-	return ApiUpdateUserRequest{
+func (a *IdentityUsersAPIService) UpdateUserProfile(ctx context.Context, orgName string, userId string) ApiUpdateUserProfileRequest {
+	return ApiUpdateUserProfileRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
@@ -782,7 +782,7 @@ func (a *IdentityUsersAPIService) UpdateUser(ctx context.Context, orgName string
 // Execute executes the request
 //
 //	@return UserResponse
-func (a *IdentityUsersAPIService) UpdateUserExecute(r ApiUpdateUserRequest) (*UserResponse, *http.Response, error) {
+func (a *IdentityUsersAPIService) UpdateUserProfileExecute(r ApiUpdateUserProfileRequest) (*UserResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
@@ -790,12 +790,12 @@ func (a *IdentityUsersAPIService) UpdateUserExecute(r ApiUpdateUserRequest) (*Us
 		localVarReturnValue *UserResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "IdentityUsersAPIService.UpdateUser")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "IdentityUsersAPIService.UpdateUserProfile")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/identities/users/{userId}"
+	localVarPath := localBasePath + "/orgs/{orgName}/identities/users/{userId}/profile"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"userId"+"}", url.PathEscape(parameterValueToString(r.userId, "userId")), -1)
 

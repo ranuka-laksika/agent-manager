@@ -18,7 +18,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  listUsers, getUser, createUser, inviteUser, updateUser, deleteUser, getUserGroups, getUserRoles,
+  listUsers, getUser, getUserProfile, createUser, inviteUser, updateUser, deleteUser, getUserGroups, getUserRoles,
   listGroups, getGroup, createGroup, updateGroup, deleteGroup,
   addGroupMembers, removeGroupMembers, getGroupMembers, getGroupRoles,
   listRoles, getRole, createRole, updateRole, deleteRole,
@@ -132,6 +132,15 @@ export function useDeleteUser() {
       queryClient.invalidateQueries({ queryKey: ['identity-users-all'] });
       queryClient.invalidateQueries({ queryKey: ['identity-user', params] });
     },
+  });
+}
+
+export function useGetUserProfile(params: UserPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ThunderUser>({
+    queryKey: ['identity-user-profile', params],
+    queryFn: () => getUserProfile(params, getToken),
+    enabled: !!params.orgName && !!params.userId,
   });
 }
 
