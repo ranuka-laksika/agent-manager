@@ -16,7 +16,7 @@ You need a reachable Agent Manager instance before logging in. Follow the [Quick
 
 Download the release archive for your platform from the [Agent Manager releases page](https://github.com/wso2/agent-manager/releases), extract the binary, and move it onto your `PATH`.
 
-The latest published build is **`amctl/v0.1.0`** (pre-release). Replace `0.1.0` in the commands below with a newer version once one is published.
+`amctl` ships with each Agent Manager release and shares its version. The commands below use **`0.17.0`** as an example — replace it with the latest version from the [releases page](https://github.com/wso2/agent-manager/releases).
 
 :::note Pre-release
 `amctl` is currently shipped as a pre-release. Expect breaking changes between versions until the first stable release.
@@ -25,39 +25,39 @@ The latest published build is **`amctl/v0.1.0`** (pre-release). Replace `0.1.0` 
 ### macOS (Apple Silicon)
 
 ```bash
-curl -LO https://github.com/wso2/agent-manager/releases/download/amctl/v0.1.0/amctl_v0.1.0_darwin_arm64.tar.gz
-tar -xzf amctl_v0.1.0_darwin_arm64.tar.gz
+curl -LO https://github.com/wso2/agent-manager/releases/download/amp/v0.17.0/amctl_v0.17.0_darwin_arm64.tar.gz
+tar -xzf amctl_v0.17.0_darwin_arm64.tar.gz
 sudo mv amctl /usr/local/bin/
 ```
 
 ### macOS (Intel)
 
 ```bash
-curl -LO https://github.com/wso2/agent-manager/releases/download/amctl/v0.1.0/amctl_v0.1.0_darwin_amd64.tar.gz
-tar -xzf amctl_v0.1.0_darwin_amd64.tar.gz
+curl -LO https://github.com/wso2/agent-manager/releases/download/amp/v0.17.0/amctl_v0.17.0_darwin_amd64.tar.gz
+tar -xzf amctl_v0.17.0_darwin_amd64.tar.gz
 sudo mv amctl /usr/local/bin/
 ```
 
 ### Linux (x64)
 
 ```bash
-curl -LO https://github.com/wso2/agent-manager/releases/download/amctl/v0.1.0/amctl_v0.1.0_linux_amd64.tar.gz
-tar -xzf amctl_v0.1.0_linux_amd64.tar.gz
+curl -LO https://github.com/wso2/agent-manager/releases/download/amp/v0.17.0/amctl_v0.17.0_linux_amd64.tar.gz
+tar -xzf amctl_v0.17.0_linux_amd64.tar.gz
 sudo mv amctl /usr/local/bin/
 ```
 
 ### Linux (ARM64)
 
 ```bash
-curl -LO https://github.com/wso2/agent-manager/releases/download/amctl/v0.1.0/amctl_v0.1.0_linux_arm64.tar.gz
-tar -xzf amctl_v0.1.0_linux_arm64.tar.gz
+curl -LO https://github.com/wso2/agent-manager/releases/download/amp/v0.17.0/amctl_v0.17.0_linux_arm64.tar.gz
+tar -xzf amctl_v0.17.0_linux_arm64.tar.gz
 sudo mv amctl /usr/local/bin/
 ```
 
 ### Windows (x64)
 
 ```powershell
-Invoke-WebRequest -Uri https://github.com/wso2/agent-manager/releases/download/amctl/v0.1.0/amctl_v0.1.0_windows_amd64.zip -OutFile amctl.zip
+Invoke-WebRequest -Uri https://github.com/wso2/agent-manager/releases/download/amp/v0.17.0/amctl_v0.17.0_windows_amd64.zip -OutFile amctl.zip
 Expand-Archive amctl.zip -DestinationPath $env:USERPROFILE\amctl
 $env:Path += ";$env:USERPROFILE\amctl"
 ```
