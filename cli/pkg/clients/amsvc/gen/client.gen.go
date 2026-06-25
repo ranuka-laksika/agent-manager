@@ -326,10 +326,13 @@ type ClientInterface interface {
 
 	UpdateUser(ctx context.Context, orgName string, userId string, body UpdateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// UpdateCurrentUserProfileWithBody request with any body
-	UpdateCurrentUserProfileWithBody(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetUserProfile request
+	GetUserProfile(ctx context.Context, orgName string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	UpdateCurrentUserProfile(ctx context.Context, orgName string, userId string, body UpdateCurrentUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// UpdateUserProfileWithBody request with any body
+	UpdateUserProfileWithBody(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateUserProfile(ctx context.Context, orgName string, userId string, body UpdateUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListIdentityProviders request
 	ListIdentityProviders(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1713,8 +1716,8 @@ func (c *Client) UpdateUser(ctx context.Context, orgName string, userId string, 
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateCurrentUserProfileWithBody(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateCurrentUserProfileRequestWithBody(c.Server, orgName, userId, contentType, body)
+func (c *Client) GetUserProfile(ctx context.Context, orgName string, userId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUserProfileRequest(c.Server, orgName, userId)
 	if err != nil {
 		return nil, err
 	}
@@ -1725,8 +1728,20 @@ func (c *Client) UpdateCurrentUserProfileWithBody(ctx context.Context, orgName s
 	return c.Client.Do(req)
 }
 
-func (c *Client) UpdateCurrentUserProfile(ctx context.Context, orgName string, userId string, body UpdateCurrentUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateCurrentUserProfileRequest(c.Server, orgName, userId, body)
+func (c *Client) UpdateUserProfileWithBody(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserProfileRequestWithBody(c.Server, orgName, userId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateUserProfile(ctx context.Context, orgName string, userId string, body UpdateUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateUserProfileRequest(c.Server, orgName, userId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6592,19 +6607,60 @@ func NewUpdateUserRequestWithBody(server string, orgName string, userId string, 
 	return req, nil
 }
 
-// NewUpdateCurrentUserProfileRequest calls the generic UpdateCurrentUserProfile builder with application/json body
-func NewUpdateCurrentUserProfileRequest(server string, orgName string, userId string, body UpdateCurrentUserProfileJSONRequestBody) (*http.Request, error) {
+// NewGetUserProfileRequest generates requests for GetUserProfile
+func NewGetUserProfileRequest(server string, orgName string, userId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "userId", userId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/identities/users/%s/profile", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateUserProfileRequest calls the generic UpdateUserProfile builder with application/json body
+func NewUpdateUserProfileRequest(server string, orgName string, userId string, body UpdateUserProfileJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewUpdateCurrentUserProfileRequestWithBody(server, orgName, userId, "application/json", bodyReader)
+	return NewUpdateUserProfileRequestWithBody(server, orgName, userId, "application/json", bodyReader)
 }
 
-// NewUpdateCurrentUserProfileRequestWithBody generates requests for UpdateCurrentUserProfile with any type of body
-func NewUpdateCurrentUserProfileRequestWithBody(server string, orgName string, userId string, contentType string, body io.Reader) (*http.Request, error) {
+// NewUpdateUserProfileRequestWithBody generates requests for UpdateUserProfile with any type of body
+func NewUpdateUserProfileRequestWithBody(server string, orgName string, userId string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -12853,10 +12909,13 @@ type ClientWithResponsesInterface interface {
 
 	UpdateUserWithResponse(ctx context.Context, orgName string, userId string, body UpdateUserJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserResp, error)
 
-	// UpdateCurrentUserProfileWithBodyWithResponse request with any body
-	UpdateCurrentUserProfileWithBodyWithResponse(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCurrentUserProfileResp, error)
+	// GetUserProfileWithResponse request
+	GetUserProfileWithResponse(ctx context.Context, orgName string, userId string, reqEditors ...RequestEditorFn) (*GetUserProfileResp, error)
 
-	UpdateCurrentUserProfileWithResponse(ctx context.Context, orgName string, userId string, body UpdateCurrentUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserProfileResp, error)
+	// UpdateUserProfileWithBodyWithResponse request with any body
+	UpdateUserProfileWithBodyWithResponse(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserProfileResp, error)
+
+	UpdateUserProfileWithResponse(ctx context.Context, orgName string, userId string, body UpdateUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserProfileResp, error)
 
 	// ListIdentityProvidersWithResponse request
 	ListIdentityProvidersWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListIdentityProvidersResp, error)
@@ -14861,7 +14920,31 @@ func (r UpdateUserResp) StatusCode() int {
 	return 0
 }
 
-type UpdateCurrentUserProfileResp struct {
+type GetUserProfileResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *UserResponse
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUserProfileResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUserProfileResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateUserProfileResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *UserResponse
@@ -14872,7 +14955,7 @@ type UpdateCurrentUserProfileResp struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r UpdateCurrentUserProfileResp) Status() string {
+func (r UpdateUserProfileResp) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -14880,7 +14963,7 @@ func (r UpdateCurrentUserProfileResp) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r UpdateCurrentUserProfileResp) StatusCode() int {
+func (r UpdateUserProfileResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -18025,21 +18108,30 @@ func (c *ClientWithResponses) UpdateUserWithResponse(ctx context.Context, orgNam
 	return ParseUpdateUserResp(rsp)
 }
 
-// UpdateCurrentUserProfileWithBodyWithResponse request with arbitrary body returning *UpdateCurrentUserProfileResp
-func (c *ClientWithResponses) UpdateCurrentUserProfileWithBodyWithResponse(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateCurrentUserProfileResp, error) {
-	rsp, err := c.UpdateCurrentUserProfileWithBody(ctx, orgName, userId, contentType, body, reqEditors...)
+// GetUserProfileWithResponse request returning *GetUserProfileResp
+func (c *ClientWithResponses) GetUserProfileWithResponse(ctx context.Context, orgName string, userId string, reqEditors ...RequestEditorFn) (*GetUserProfileResp, error) {
+	rsp, err := c.GetUserProfile(ctx, orgName, userId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpdateCurrentUserProfileResp(rsp)
+	return ParseGetUserProfileResp(rsp)
 }
 
-func (c *ClientWithResponses) UpdateCurrentUserProfileWithResponse(ctx context.Context, orgName string, userId string, body UpdateCurrentUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateCurrentUserProfileResp, error) {
-	rsp, err := c.UpdateCurrentUserProfile(ctx, orgName, userId, body, reqEditors...)
+// UpdateUserProfileWithBodyWithResponse request with arbitrary body returning *UpdateUserProfileResp
+func (c *ClientWithResponses) UpdateUserProfileWithBodyWithResponse(ctx context.Context, orgName string, userId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateUserProfileResp, error) {
+	rsp, err := c.UpdateUserProfileWithBody(ctx, orgName, userId, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseUpdateCurrentUserProfileResp(rsp)
+	return ParseUpdateUserProfileResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateUserProfileWithResponse(ctx context.Context, orgName string, userId string, body UpdateUserProfileJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateUserProfileResp, error) {
+	rsp, err := c.UpdateUserProfile(ctx, orgName, userId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateUserProfileResp(rsp)
 }
 
 // ListIdentityProvidersWithResponse request returning *ListIdentityProvidersResp
@@ -22216,15 +22308,55 @@ func ParseUpdateUserResp(rsp *http.Response) (*UpdateUserResp, error) {
 	return response, nil
 }
 
-// ParseUpdateCurrentUserProfileResp parses an HTTP response from a UpdateCurrentUserProfileWithResponse call
-func ParseUpdateCurrentUserProfileResp(rsp *http.Response) (*UpdateCurrentUserProfileResp, error) {
+// ParseGetUserProfileResp parses an HTTP response from a GetUserProfileWithResponse call
+func ParseGetUserProfileResp(rsp *http.Response) (*GetUserProfileResp, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &UpdateCurrentUserProfileResp{
+	response := &GetUserProfileResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest UserResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateUserProfileResp parses an HTTP response from a UpdateUserProfileWithResponse call
+func ParseUpdateUserProfileResp(rsp *http.Response) (*UpdateUserProfileResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateUserProfileResp{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

@@ -7934,7 +7934,8 @@ paths:
 
   /orgs/{orgName}/identities/users/{userId}/profile:
     get:
-      summary: Get user profile information
+      summary: Get authenticated user's own profile information
+      description: Retrieves the profile information of the authenticated user. Users can only retrieve their own profile (self-service endpoint).
       operationId: getUserProfile
       tags:
         - Identity - Users
@@ -7948,7 +7949,7 @@ paths:
         - name: userId
           in: path
           required: true
-          description: User ID
+          description: User ID - must match the authenticated user's identity
           schema:
             type: string
       responses:
@@ -7958,6 +7959,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
+        '403':
+          description: Forbidden - missing authentication context or user does not belong to organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         '404':
           description: User not found
           content:
@@ -7965,7 +7972,8 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
     put:
-      summary: Update user profile and credentials
+      summary: Update authenticated user's own profile and credentials
+      description: Allows users to update their own profile information and credentials. Users can only update their own profile (self-service endpoint).
       operationId: updateUserProfile
       tags:
         - Identity - Users
@@ -7979,7 +7987,7 @@ paths:
         - name: userId
           in: path
           required: true
-          description: User ID
+          description: User ID - must match the authenticated user's identity
           schema:
             type: string
       requestBody:
@@ -8002,7 +8010,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Forbidden - missing org context
+          description: Forbidden - missing authentication context or user does not belong to organization
           content:
             application/json:
               schema:

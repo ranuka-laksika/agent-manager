@@ -27,6 +27,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/constants"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -1317,6 +1318,13 @@ func (c *identityController) GetUserProfile(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Enforce self-check: caller can only read their own profile
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil || claims.Sub != userID {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "You can only view your own profile")
+		return
+	}
+
 	user, err := c.client.GetUser(ctx, userID)
 	if err != nil {
 		if thundersvc.IsNotFound(err) {
@@ -1325,10 +1333,6 @@ func (c *identityController) GetUserProfile(w http.ResponseWriter, r *http.Reque
 		}
 		log.Error("GetUserProfile failed", "userID", userID, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get user profile")
-		return
-	}
-
-	if !validateUserOwnership(w, ctx, user, resolvedOrg.OUID) {
 		return
 	}
 
@@ -1349,6 +1353,13 @@ func (c *identityController) UpdateCurrentUserProfile(w http.ResponseWriter, r *
 	userID := r.PathValue(utils.PathParamUserID)
 	if userID == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "User ID is required")
+		return
+	}
+
+	// Enforce self-check: caller can only update their own profile
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil || claims.Sub != userID {
+		utils.WriteErrorResponse(w, http.StatusForbidden, "You can only update your own profile")
 		return
 	}
 

@@ -22,7 +22,6 @@ import {
   Alert,
   Box,
   Button,
-  Divider,
   Form,
   Stack,
   Tabs,
@@ -79,6 +78,15 @@ export const ProfilePage: React.FC = () => {
       });
     }
   }, [userProfile]);
+
+  useEffect(() => {
+    setProfileData({
+      username: userInfo?.username || "",
+      given_name: userInfo?.givenName || "",
+      family_name: userInfo?.familyName || "",
+      email: userInfo?.email || "",
+    });
+  }, [userInfo]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: ActiveTab) => {
     setActiveTab(newValue);
@@ -143,10 +151,6 @@ export const ProfilePage: React.FC = () => {
         params: { orgName: orgId, userId: userInfo.sub },
         body: {
           attributes: {
-            username: profileData.username.trim(),
-            given_name: profileData.given_name.trim(),
-            family_name: profileData.family_name.trim(),
-            email: profileData.email.trim(),
             password: credentialData.newPassword,
           },
         },
