@@ -43,6 +43,7 @@ import (
 type capturedRequest struct {
 	method string
 	path   string
+	query  string
 	body   []byte
 }
 
@@ -91,7 +92,7 @@ func newTestRouter(t *testing.T, routes map[string]routeResponse) (func(context.
 				continue
 			}
 			route := routes[pattern]
-			cap := &capturedRequest{method: r.Method, path: r.URL.Path}
+			cap := &capturedRequest{method: r.Method, path: r.URL.Path, query: r.URL.RawQuery}
 			cap.body, _ = io.ReadAll(r.Body)
 			captured[pattern] = cap
 			w.Header().Set("Content-Type", "application/json")
@@ -99,6 +100,19 @@ func newTestRouter(t *testing.T, routes map[string]routeResponse) (func(context.
 			if route.Body != nil {
 				_ = json.NewEncoder(w).Encode(route.Body)
 			}
+			return
+		}
+		// External agent creation resolves the lowest environment from the
+		// deployment pipeline before minting a token. Tests that don't exercise
+		// that resolution get a default single-environment pipeline so the token
+		// flow still runs; tests that care route it explicitly above.
+		if strings.HasSuffix(r.URL.Path, "/deployment-pipeline") {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(amsvc.DeploymentPipelineResponse{
+				Name:           "default",
+				PromotionPaths: []amsvc.PromotionPath{{SourceEnvironmentRef: "development"}},
+			})
 			return
 		}
 		t.Errorf("unrouted request: %s %s", r.Method, r.URL.Path)
@@ -657,6 +671,67 @@ func TestCreate_External_JSON(t *testing.T) {
 	}
 	if _, ok := data["instrumentationInstructions"].(string); !ok {
 		t.Errorf("data.instrumentationInstructions missing or not a string: %v", data["instrumentationInstructions"])
+	}
+}
+
+// External agent creation must resolve the lowest (entry) environment of the
+// project's deployment pipeline and send it on the token request, mirroring how
+// internal agent deploys pick their target environment. Without it the server
+// has no environment to resolve for the token claims and fails.
+func TestCreate_External_ResolvesLowestEnvironment(t *testing.T) {
+	ios, _, _ := newTestIO(false)
+	routes := map[string]routeResponse{
+		"/orgs/acme/projects/triage/agents/testing/token": {
+			Status: 200,
+			Body:   amsvc.TokenResponse{Token: "tok-abc", ExpiresAt: 1700000000, IssuedAt: 1690000000, TokenType: "Bearer"},
+		},
+		"/orgs/acme/projects/triage/deployment-pipeline": {
+			Status: 200,
+			Body: amsvc.DeploymentPipelineResponse{
+				Name: "default",
+				PromotionPaths: []amsvc.PromotionPath{
+					{
+						SourceEnvironmentRef:  "development",
+						TargetEnvironmentRefs: []amsvc.TargetEnvironmentRef{{Name: "production"}},
+					},
+				},
+			},
+		},
+		"/orgs/acme/projects/triage/agents": {
+			Status: 202,
+			Body: amsvc.AgentResponse{
+				Name:         "testing",
+				DisplayName:  "Testing",
+				AgentType:    amsvc.AgentType{Type: "external-agent-api"},
+				Provisioning: amsvc.Provisioning{Type: amsvc.ProvisioningTypeExternal},
+				ProjectName:  "triage",
+				Uuid:         "u",
+			},
+		},
+	}
+	clientFn, captured, cleanup := newTestRouter(t, routes)
+	defer cleanup()
+
+	cmd := testCreateCmd(t, ios, clientFn, "https://otel.example")
+	cmd.SetArgs([]string{
+		"agent", "create", "testing",
+		"--project", "triage",
+		"--display-name", "Testing",
+		"--provisioning", "external",
+	})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if _, ok := captured["/orgs/acme/projects/triage/deployment-pipeline"]; !ok {
+		t.Fatal("deployment pipeline was not fetched to resolve the environment")
+	}
+	tokenReq, ok := captured["/orgs/acme/projects/triage/agents/testing/token"]
+	if !ok {
+		t.Fatal("no token request captured")
+	}
+	if got := tokenReq.query; got != "environment=development" {
+		t.Errorf("token request query = %q, want environment=development", got)
 	}
 }
 

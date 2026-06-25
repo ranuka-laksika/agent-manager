@@ -73,51 +73,6 @@ func TestParseEnvFlag(t *testing.T) {
 	}
 }
 
-func TestFindLowestEnvironment(t *testing.T) {
-	cases := []struct {
-		name  string
-		paths []gen.PromotionPath
-		want  string
-	}{
-		{
-			name: "linear dev->staging->prod, dev is entry",
-			paths: []gen.PromotionPath{
-				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []gen.TargetEnvironmentRef{{Name: "staging"}}},
-				{SourceEnvironmentRef: "staging", TargetEnvironmentRefs: []gen.TargetEnvironmentRef{{Name: "prod"}}},
-			},
-			want: "dev",
-		},
-		{
-			name:  "empty pipeline",
-			paths: nil,
-			want:  "",
-		},
-		{
-			name: "single path dev->prod",
-			paths: []gen.PromotionPath{
-				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []gen.TargetEnvironmentRef{{Name: "prod"}}},
-			},
-			want: "dev",
-		},
-		{
-			name: "every source is also a target (cycle) -> empty",
-			paths: []gen.PromotionPath{
-				{SourceEnvironmentRef: "a", TargetEnvironmentRefs: []gen.TargetEnvironmentRef{{Name: "b"}}},
-				{SourceEnvironmentRef: "b", TargetEnvironmentRefs: []gen.TargetEnvironmentRef{{Name: "a"}}},
-			},
-			want: "",
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := findLowestEnvironment(tc.paths)
-			if got != tc.want {
-				t.Errorf("findLowestEnvironment = %q, want %q", got, tc.want)
-			}
-		})
-	}
-}
-
 func TestMergeEnv(t *testing.T) {
 	type result struct {
 		final     map[string]string

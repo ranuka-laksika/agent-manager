@@ -213,7 +213,7 @@ func orderEnvironments(paths []amsvc.PromotionPath, deployments amsvc.Deployment
 		bySource[p.SourceEnvironmentRef] = p
 	}
 
-	cur := findLowestEnvironment(paths)
+	cur := cmdutil.LowestEnvironment(paths)
 	for cur != "" {
 		if _, seen := traversed[cur]; seen {
 			break

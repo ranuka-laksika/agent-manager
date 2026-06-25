@@ -59,25 +59,6 @@ func parseEnvFlag(inputs []string) (map[string]string, error) {
 	return out, nil
 }
 
-// findLowestEnvironment returns the entry environment of the deployment
-// pipeline — the SourceEnvironmentRef that does not appear anywhere as a
-// target. Mirrors the server-side selection rule; replicated client-side so we
-// can fetch GetAgentConfigurations for that env before the deploy call.
-func findLowestEnvironment(paths []gen.PromotionPath) string {
-	targets := make(map[string]struct{})
-	for _, p := range paths {
-		for _, t := range p.TargetEnvironmentRefs {
-			targets[t.Name] = struct{}{}
-		}
-	}
-	for _, p := range paths {
-		if _, isTarget := targets[p.SourceEnvironmentRef]; !isTarget {
-			return p.SourceEnvironmentRef
-		}
-	}
-	return ""
-}
-
 func mergeEnv(current []gen.ConfigurationItem, cli map[string]string) ([]gen.EnvironmentVariable, []envConflict) {
 	final := make([]gen.EnvironmentVariable, 0, len(current)+len(cli))
 	conflicts := make([]envConflict, 0, len(current)+len(cli))
@@ -264,17 +245,9 @@ func runDeploy(ctx context.Context, o *DeployOptions) error {
 		return render.Error(o.IO, o.Scope, err)
 	}
 
-	pipeResp, err := client.GetDeploymentPipelineWithResponse(ctx, o.Org, o.Proj)
+	targetEnv, err := cmdutil.ResolveEntryEnvironment(ctx, client, o.Org, o.Proj)
 	if err != nil {
-		return render.Error(o.IO, o.Scope, clierr.Newf(clierr.Transport, "%v", err))
-	}
-	if pipeResp.JSON200 == nil {
-		return render.Error(o.IO, o.Scope, cmdutil.ErrorFromServer(pipeResp.HTTPResponse, cmdutil.FirstNonNil(pipeResp.JSON404, pipeResp.JSON500)))
-	}
-	targetEnv := findLowestEnvironment(pipeResp.JSON200.PromotionPaths)
-	if targetEnv == "" {
-		return render.Error(o.IO, o.Scope, clierr.Newf(clierr.Internal,
-			"deployment pipeline has no entry environment for project %q", o.Proj))
+		return render.Error(o.IO, o.Scope, err)
 	}
 
 	cfgResp, err := client.GetAgentConfigurationsWithResponse(ctx, o.Org, o.Proj, o.AgentName,

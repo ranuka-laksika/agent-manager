@@ -133,6 +133,33 @@ func SynchronizedITHelpdeskAgent(
 	return phase1, phase2
 }
 
+// SetupCLILifecycleAgent provisions a dedicated IT-helpdesk agent owned solely
+// by the amctl CLI e2e slow suite, in its own project. It mirrors
+// SetupSharedITHelpdeskAgent (idempotent build-once + self-heal via
+// ensureSharedAgentReady) but under CLI-specific names, so the slow suite can
+// run mutating commands (deploy/redeploy, and future agent llm *) without
+// disturbing the shared agent that the HTTP traces/monitors suites read.
+func SetupCLILifecycleAgent(client *framework.AMPClient, cfg *framework.Config) *framework.CLILifecycleAgent {
+	Expect(cfg.OpenAIAPIKey).NotTo(BeEmpty(), "OPENAI_API_KEY must be set for the CLI lifecycle agent")
+
+	agent := &framework.CLILifecycleAgent{
+		ProjectName: framework.E2ECLIProjectName,
+		AgentName:   framework.CLILifecycleAgentName,
+	}
+
+	EnsureProject(client, cfg, agent.ProjectName, "E2E CLI Project", "Dedicated project for amctl CLI e2e mutation tests")
+	agent.BuildName = ensureSharedAgentReady(client, cfg, agent.ProjectName, agent.AgentName,
+		"Dedicated IT helpdesk agent owned by the amctl CLI e2e slow suite")
+
+	resolveEndpointAndKey(client, cfg, agent.ProjectName, agent.AgentName, cfg.DefaultEnv,
+		&agent.EndpointURL, &agent.APIKey)
+	agent.InvokeReq = framework.DefaultInvokeRequest()
+
+	ginkgo.GinkgoWriter.Printf("CLI lifecycle agent ready: project=%s agent=%s endpoint=%s\n",
+		agent.ProjectName, agent.AgentName, agent.EndpointURL)
+	return agent
+}
+
 // SetupSharedPromotableITHelpdeskAgent provisions the shared promotable IT
 // helpdesk agent: it ensures a second environment and a deployment pipeline
 // exist, builds the agent, and deploys it to the default environment. It is

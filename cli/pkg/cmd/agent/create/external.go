@@ -37,10 +37,19 @@ func runExternalPostCreate(ctx context.Context, opts *CreateOptions, agent *amsv
 	}
 	traceObsURL := tc.URL()
 
+	// The token's environment claim must name a real environment. Resolve the
+	// lowest (entry) environment of the project's deployment pipeline — the same
+	// environment internal agent deploys target first — and send it explicitly.
+	env, err := cmdutil.ResolveEntryEnvironment(ctx, client, opts.Org, opts.Proj)
+	if err != nil {
+		return err
+	}
+
 	expires := externalTokenExpiresIn
 	body := amsvc.TokenRequest{ExpiresIn: &expires}
+	params := &amsvc.GenerateAgentTokenParams{Environment: &env}
 
-	tokenResp, err := client.GenerateAgentTokenWithResponse(ctx, opts.Org, opts.Proj, agent.Name, nil, body)
+	tokenResp, err := client.GenerateAgentTokenWithResponse(ctx, opts.Org, opts.Proj, agent.Name, params, body)
 	if err != nil {
 		return clierr.Newf(clierr.Transport, "generate agent token: %v", err)
 	}
