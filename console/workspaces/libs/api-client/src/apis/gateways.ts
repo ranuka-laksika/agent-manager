@@ -29,6 +29,10 @@ import type {
   ListGatewaysPathParams,
   ListGatewaysQuery,
   ListIdentityProvidersPathParams,
+  UpsertIdentityProviderPathParams,
+  UpsertIdentityProviderRequest,
+  DeleteIdentityProviderPathParams,
+  IdentityProvider,
   GatewayListResponse,
   GatewayResponse,
   GatewayTokenListResponse,
@@ -294,4 +298,39 @@ export async function listEnvironmentIdentityProviders(
   );
   if (!res.ok) throw await res.json();
   return res.json();
+}
+
+export async function upsertIdentityProvider(
+  params: UpsertIdentityProviderPathParams,
+  body: UpsertIdentityProviderRequest,
+  getToken?: () => Promise<string>,
+): Promise<IdentityProvider> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const id = encodeRequired(params.gatewayId, "gatewayId");
+  const name = encodeRequired(params.name, "name");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpPUT(
+    `${SERVICE_BASE}/orgs/${org}/gateways/${id}/identity-providers/${name}`,
+    body,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function deleteIdentityProvider(
+  params: DeleteIdentityProviderPathParams,
+  getToken?: () => Promise<string>,
+): Promise<void> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const id = encodeRequired(params.gatewayId, "gatewayId");
+  const name = encodeRequired(params.name, "name");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpDELETE(
+    `${SERVICE_BASE}/orgs/${org}/gateways/${id}/identity-providers/${name}`,
+    { token },
+  );
+  if (!res.ok && res.status !== 204) throw await res.json();
 }
