@@ -42,8 +42,14 @@ import {
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useListDataPlanes } from "@agent-management-platform/api-client";
 import { globalConfig, type DataPlane } from "@agent-management-platform/types";
-import { getRawScriptUrl } from "@agent-management-platform/shared-component";
-import { createEnvironmentSchema, type CreateEnvironmentFormValues } from "../form/environmentSchema";
+import {
+  getAmpVersionHelm,
+  getRawScriptUrl,
+} from "@agent-management-platform/shared-component";
+import {
+  createEnvironmentSchema,
+  type CreateEnvironmentFormValues,
+} from "../form/environmentSchema";
 
 const TOKEN_MASK = "•••••••••••••••";
 
@@ -86,7 +92,8 @@ function buildScript(
   const internalCp = globalConfig.agentManagerInternalCpHost?.trim();
   // Required by add-environment.sh: the gateway chart version, pinned to the
   // platform release version so an added environment runs the same gateway chart.
-  const chartVersion = globalConfig.ampVersion?.trim();
+
+  const chartVersion = getAmpVersionHelm();
 
   const lines = [
     `curl -fsSL ${getRawScriptUrl("add-environment.sh")} \\`,
@@ -95,15 +102,22 @@ function buildScript(
     `    AGENT_MANAGER_TOKEN=${token} \\`,
     `    CHART_VERSION=${chartVersion || "<chart-version>"} \\`,
     ...(isProduction ? ["    IS_PRODUCTION=true \\"] : []),
-    ...(internalBase ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`] : []),
+    ...(internalBase
+      ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`]
+      : []),
     ...(internalCp ? [`    AGENT_MANAGER_INTERNAL_CP=${internalCp} \\`] : []),
     "    bash",
   ];
   return lines.join("\n");
 }
 
-export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironmentDrawerProps) {
-  const [formData, setFormData] = useState<CreateEnvironmentFormValues>(DEFAULT_FORM);
+export function CreateEnvironmentDrawer({
+  open,
+  onClose,
+  orgId,
+}: CreateEnvironmentDrawerProps) {
+  const [formData, setFormData] =
+    useState<CreateEnvironmentFormValues>(DEFAULT_FORM);
   const [showToken, setShowToken] = useState(false);
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -146,9 +160,15 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
       setFormData((prev) => {
         const derivedName = deriveNameFromDisplayName(value);
         const nameInSync =
-          prev.name === "" || prev.name === deriveNameFromDisplayName(prev.displayName);
+          prev.name === "" ||
+          prev.name === deriveNameFromDisplayName(prev.displayName);
         const newName = nameInSync ? derivedName : prev.name;
-        const next = { ...prev, displayName: value, name: newName, dnsPrefix: newName };
+        const next = {
+          ...prev,
+          displayName: value,
+          name: newName,
+          dnsPrefix: newName,
+        };
         setFieldError("displayName", validateField("displayName", value, next));
         setFieldError("name", validateField("name", newName, next));
         return next;
@@ -198,7 +218,13 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
     } catch {
       // silently fail
     }
-  }, [resolvedToken, getToken, formData.name, formData.displayName, formData.isProduction]);
+  }, [
+    resolvedToken,
+    getToken,
+    formData.name,
+    formData.displayName,
+    formData.isProduction,
+  ]);
 
   const displayScript = useMemo(
     () =>
@@ -208,19 +234,30 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
         formData.isProduction ?? false,
         showToken && resolvedToken ? resolvedToken : TOKEN_MASK,
       ),
-    [formData.name, formData.displayName, formData.isProduction, showToken, resolvedToken],
+    [
+      formData.name,
+      formData.displayName,
+      formData.isProduction,
+      showToken,
+      resolvedToken,
+    ],
   );
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Plus size={24} />} title="Create Environment" onClose={onClose} />
+      <DrawerHeader
+        icon={<Plus size={24} />}
+        title="Create Environment"
+        onClose={onClose}
+      />
       <DrawerContent>
         <Stack spacing={3}>
           <Typography variant="body2" color="text.secondary">
-            Environments are provisioned by a script that creates the environment in Agent Manager
-            and installs its API Platform Gateway via Helm. Fill in the details below, then copy and
-            run the command in a terminal with <code>kubectl</code> and <code>helm</code> configured
-            against your cluster.
+            Environments are provisioned by a script that creates the
+            environment in Agent Manager and installs its API Platform Gateway
+            via Helm. Fill in the details below, then copy and run the command
+            in a terminal with <code>kubectl</code> and <code>helm</code>{" "}
+            configured against your cluster.
           </Typography>
 
           <Stack spacing={2}>
@@ -230,7 +267,9 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
                 <Select
                   size="small"
                   value={formData.dataplaneRef}
-                  onChange={(e) => handleChange("dataplaneRef", e.target.value as string)}
+                  onChange={(e) =>
+                    handleChange("dataplaneRef", e.target.value as string)
+                  }
                   error={Boolean(errors.dataplaneRef)}
                 >
                   {planes.map((p: DataPlane) => (
@@ -240,7 +279,9 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
                   ))}
                 </Select>
                 {errors.dataplaneRef && (
-                  <Typography variant="caption" color="error">{errors.dataplaneRef}</Typography>
+                  <Typography variant="caption" color="error">
+                    {errors.dataplaneRef}
+                  </Typography>
                 )}
               </FormControl>
             )}
@@ -278,7 +319,9 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
               control={
                 <Checkbox
                   checked={formData.isProduction ?? false}
-                  onChange={(e) => handleChange("isProduction", e.target.checked)}
+                  onChange={(e) =>
+                    handleChange("isProduction", e.target.checked)
+                  }
                 />
               }
               label="Production environment"
@@ -286,7 +329,9 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
           </Stack>
 
           <Stack spacing={1}>
-            <Typography variant="body2">Run from the root of your repo clone:</Typography>
+            <Typography variant="body2">
+              Run from the root of your repo clone:
+            </Typography>
             <Box
               sx={{
                 position: "relative",
@@ -301,7 +346,15 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
                 overflowX: "auto",
               }}
             >
-              <Box sx={{ position: "absolute", top: 6, right: 6, display: "flex", gap: 0.5 }}>
+              <Box
+                sx={{
+                  position: "absolute",
+                  top: 6,
+                  right: 6,
+                  display: "flex",
+                  gap: 0.5,
+                }}
+              >
                 <Tooltip title={showToken ? "Hide token" : "Show token"}>
                   <IconButton
                     size="small"
@@ -329,8 +382,8 @@ export function CreateEnvironmentDrawer({ open, onClose, orgId }: CreateEnvironm
           </Stack>
 
           <Alert severity="info">
-            Once the script completes, the new environment will appear in the list. The script is
-            idempotent — safe to re-run.
+            Once the script completes, the new environment will appear in the
+            list. The script is idempotent — safe to re-run.
           </Alert>
 
           <Box display="flex" justifyContent="flex-end">
