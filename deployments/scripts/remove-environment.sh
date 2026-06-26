@@ -89,7 +89,7 @@ else
 fi
 
 # Wait for gateway operator to clean up the APIGateway CR
-GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
+GATEWAY_NAME=$(printf "api-platform-%s-%s" "${ORG_NAME}" "${ENV_NAME}" | head -c 63 | sed 's/-*$//')
 echo ""
 echo "⏳ Waiting for gateway resources to be cleaned up..."
 if kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null; then
