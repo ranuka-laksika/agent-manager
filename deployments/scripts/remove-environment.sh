@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Removes an environment: uninstalls its API Platform Gateway helm release, then
-# deletes the Environment via the Agent Manager API (which in turn deletes it in
-# OpenChoreo and cleans up link tables).
+# Removes an environment: deletes the Environment via the Agent Manager API (which
+# in turn deletes it in OpenChoreo and cleans up link tables), then uninstalls its
+# API Platform Gateway helm release.
 #
 # All inputs are provided via environment variables so the script can be piped
 # directly into bash:
@@ -43,27 +43,7 @@ RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 echo "=== Removing Environment: ${ENV_NAME} ==="
 echo ""
 
-# --- Step 1: Uninstall the gateway helm release ---
-echo "🌐 Uninstalling API Platform Gateway..."
-if helm status "${RELEASE_NAME}" --namespace "${GATEWAY_NAMESPACE}" > /dev/null 2>&1; then
-    helm uninstall "${RELEASE_NAME}" --namespace "${GATEWAY_NAMESPACE}"
-    echo "✅ Gateway helm release uninstalled"
-else
-    echo "ℹ️  Gateway helm release '${RELEASE_NAME}' not found, skipping..."
-fi
-
-# Wait for gateway operator to clean up the APIGateway CR
-GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
-echo ""
-echo "⏳ Waiting for gateway resources to be cleaned up..."
-if kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null; then
-    echo "✅ Gateway resources cleaned up"
-else
-    echo "⚠️  Timed out or failed waiting for apigateway/${GATEWAY_NAME} to delete; continuing..."
-fi
-
-# --- Step 2: Delete the environment via Agent Manager API ---
-echo ""
+# --- Step 1: Delete the environment via Agent Manager API ---
 echo "⏳ Checking Agent Manager is healthy..."
 MAX_WAIT=30
 ELAPSED=0
@@ -97,6 +77,26 @@ case "$DEL_HTTP_CODE" in
         exit 1
         ;;
 esac
+
+# --- Step 2: Uninstall the gateway helm release ---
+echo ""
+echo "🌐 Uninstalling API Platform Gateway..."
+if helm status "${RELEASE_NAME}" --namespace "${GATEWAY_NAMESPACE}" > /dev/null 2>&1; then
+    helm uninstall "${RELEASE_NAME}" --namespace "${GATEWAY_NAMESPACE}"
+    echo "✅ Gateway helm release uninstalled"
+else
+    echo "ℹ️  Gateway helm release '${RELEASE_NAME}' not found, skipping..."
+fi
+
+# Wait for gateway operator to clean up the APIGateway CR
+GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
+echo ""
+echo "⏳ Waiting for gateway resources to be cleaned up..."
+if kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null; then
+    echo "✅ Gateway resources cleaned up"
+else
+    echo "⚠️  Timed out or failed waiting for apigateway/${GATEWAY_NAME} to delete; continuing..."
+fi
 
 echo ""
 echo "=== Environment '${ENV_NAME}' removed ==="
