@@ -156,7 +156,6 @@ Agent Manager can drive external WSO2 AI gateways. The control-plane endpoint `h
 - **Certificates never issue / hosts unreachable from outside.** Open inbound `:443` in your cloud security group / NACL, and make sure the public `:443` reaches the VM as **raw TCP**: a TLS-terminating load balancer in front breaks the TLS-ALPN-01 challenge. The installer can't verify external reachability from inside the VM, so this surfaces as Caddy failing to obtain certificates (`docker logs amp-caddy`).
 - **Certificate not issued.** Check `docker logs amp-caddy`. Let's Encrypt rate limits on sslip.io are high but not infinite; if hit, retry shortly.
 - **Login redirect mismatch.** Confirm you reached the console via its `console.amp.<IP>.sslip.io` URL, not the raw IP.
-- **`403 insufficient permissions` on API calls.** You are signed in as Thunder's system `admin` account, which has no Agent Manager application role. Sign out and sign back in as `admin` (see [Log in](#log-in)).
 - **Certificate error on first agent invocation** (`ERR_CERTIFICATE_TRANSPARENCY_REQUIRED` or similar): the per-agent certificate is issued on demand, and the first request races with that issuance. Reload the page after a second or two; it only happens once per new agent host (see [Deployed-agent invocation](#deployed-agent-invocation)).
 
 </TabItem>
@@ -465,7 +464,6 @@ The control-plane endpoint `https://cp.<DOMAIN_BASE>` is exposed by default. Gen
 - **Certificates never issue / hosts unreachable (letsencrypt).** Open inbound `:443` in your cloud security group, and ensure it reaches the VM as **raw TCP**; a TLS-terminating load balancer in front breaks TLS-ALPN-01. If you have such a load balancer, use `upstream` mode instead. If the VM has no public ingress at all, use `letsencrypt-dns` (DNS-01) instead. Check `docker logs amp-caddy`.
 - **DNS-01 issuance failed (letsencrypt-dns).** `lego` could not create or validate the `_acme-challenge` TXT record. Check that `DNS_PROVIDER` is correct and its credential env vars are set in `amp-config.env`, that those credentials can write to the zone, and that the zone is delegated to that provider. Re-run with `ACME_SERVER` pointed at Let's Encrypt staging to iterate without hitting rate limits.
 - **Changed the domain but the console still shows the old hostnames.** Re-running with a new `DOMAIN_BASE` does not reconfigure existing releases. Tear down and reinstall (see [Persistence and teardown](#adv-persistence)).
-- **`403 insufficient permissions` on API calls.** Sign in as `admin`, not Thunder's system `admin` account.
 
 </TabItem>
 </Tabs>
