@@ -74,11 +74,18 @@ spec:
 
   # Patches to inject AMP_OTEL_ENDPOINT and AMP_AGENT_API_KEY.
   # This is the sole injector for these vars across all agent types.
+  # Gated by envInjectionEnabled (per-environment overridable) the same way the
+  # OTEL instrumentation traits gate on instrumentationEnabled: when false the
+  # 'where' clause filters out the target so no env vars are injected. The
+  # parameter defaults to true, so agent types that never set it (Python, Docker)
+  # are unaffected.
   patches:
     - target:
         kind: Deployment
         group: apps
         version: v1
+        where: |
+          ${has(environmentConfigs.envInjectionEnabled) ? environmentConfigs.envInjectionEnabled : parameters.envInjectionEnabled}
       operations:
         - op: add
           path: /spec/template/spec/containers/0/env/-

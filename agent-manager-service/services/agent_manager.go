@@ -380,6 +380,10 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 		if err != nil {
 			return nil, fmt.Errorf("failed to store agent API key: %w", err)
 		}
+		// Gate env injection on the same autoInstrumentation flag as the Ballerina
+		// OTEL trait, so when instrumentation is disabled the OTEL endpoint and API
+		// key env vars are not injected either. Patches are gated by the 'where'
+		// clause and per-environment overridable via traitEnvironmentConfigs.
 		traits = append(traits, client.TraitRequest{
 			TraitKind: client.TraitKindTrait,
 			TraitType: client.TraitEnvInjection,
@@ -388,6 +392,7 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 				client.WithAgentApiKeySecretProperty(apiKeySecretProperty),
 				client.WithOtelEndpointEnvName(client.BalConfigVarOTELEndpoint),
 				client.WithApiKeyEnvName(client.BalConfigVarAgentAPIKey),
+				client.WithEnvInjectionEnabled(autoInstrumentation),
 			},
 		})
 		traits = append(traits, client.TraitRequest{
@@ -2778,6 +2783,12 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 		traitEnvConfigs[instanceName(client.TraitBallerinaOTELInstrumentation)] = map[string]interface{}{
 			"instrumentationEnabled": autoInstrumentation,
 		}
+		// Gate env injection together with Ballerina instrumentation so the OTEL
+		// endpoint and API key env vars are only injected when instrumentation is
+		// enabled for this environment.
+		traitEnvConfigs[instanceName(client.TraitEnvInjection)] = map[string]interface{}{
+			"envInjectionEnabled": autoInstrumentation,
+		}
 	}
 	return traitEnvConfigs
 }
@@ -2987,9 +2998,13 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			s.logger.Warn("Failed to store agent API key for promotion", "agentName", agentName, "environment", req.TargetEnvironment, "error", storeErr)
 		} else {
 			envInjKey := agentName + "-" + string(client.TraitEnvInjection)
-			envInjCfg := map[string]interface{}{
-				"agentApiKeySecretRef": apiKeySecretRef,
+			// Preserve any env config buildTraitEnvConfigs already set (e.g.
+			// envInjectionEnabled for Ballerina) instead of overwriting it.
+			envInjCfg, _ := traitEnvConfigs[envInjKey].(map[string]interface{})
+			if envInjCfg == nil {
+				envInjCfg = map[string]interface{}{}
 			}
+			envInjCfg["agentApiKeySecretRef"] = apiKeySecretRef
 			if apiKeySecretProperty != "" {
 				envInjCfg["agentApiKeySecretProperty"] = apiKeySecretProperty
 			}
