@@ -497,7 +497,7 @@ jobs:
         run: |
           set -o pipefail
           cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 45m \
-            --poll-progress-after=600s --junit-report=report.xml \
+            --poll-progress-after=600s --keep-going --junit-report=report.xml \
             ./tests/... 2>&1 | tee e2e-output.log
 
       - name: Dump pod logs on failure
