@@ -133,7 +133,7 @@ func loadEnvs() {
 	// Trace Observer service configuration.
 	// URL is used server-side (in-cluster) by the agent-manager-service to
 	// query trace data. PublicURL is the externally reachable URL handed to
-	// out-of-cluster clients (e.g. the CLI) via /v1/config; it mirrors the
+	// out-of-cluster clients (e.g. the CLI) via GET /api/v1/config; it mirrors the
 	// console's trace observer URL and falls back to URL when unset.
 	traceObserverURL := r.readOptionalString("TRACE_OBSERVER_URL", "http://localhost:9098")
 	config.TraceObserver = TraceObserverConfig{
@@ -266,6 +266,7 @@ func loadEnvs() {
 	validateOAuthAuthorizationServers(config, r)
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
+	validateTraceObserverURLs(config, r)
 	validateResourceLimitsConfig(config, r)
 	validateAgentWorkloadCORSConfig(agentWorkloadConfig, r)
 
@@ -344,6 +345,27 @@ func validateInstrumentationURL(cfg *Config, r *configReader) {
 	if u.Host == "" {
 		r.errors = append(r.errors, fmt.Errorf("INSTRUMENTATION_URL %q must have a non-empty host", cfg.InstrumentationURL))
 	}
+}
+
+func validateTraceObserverURLs(cfg *Config, r *configReader) {
+	validate := func(envVar, raw string) {
+		if raw == "" {
+			return
+		}
+		u, err := url.Parse(raw)
+		if err != nil {
+			r.errors = append(r.errors, fmt.Errorf("%s %q is not a valid URL: %w", envVar, raw, err))
+			return
+		}
+		if u.Scheme != "http" && u.Scheme != "https" {
+			r.errors = append(r.errors, fmt.Errorf("%s %q must use http or https scheme", envVar, raw))
+		}
+		if u.Host == "" {
+			r.errors = append(r.errors, fmt.Errorf("%s %q must have a non-empty host", envVar, raw))
+		}
+	}
+	validate("TRACE_OBSERVER_URL", cfg.TraceObserver.URL)
+	validate("TRACE_OBSERVER_PUBLIC_URL", cfg.TraceObserver.PublicURL)
 }
 
 func validateInternalServerConfigs(cfg *Config, r *configReader) {

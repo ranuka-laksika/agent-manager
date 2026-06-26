@@ -170,3 +170,78 @@ func TestValidateServerPublicURL(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateTraceObserverURLs(t *testing.T) {
+	tests := []struct {
+		name        string
+		url         string
+		publicURL   string
+		wantErrors  int
+		errContains string
+	}{
+		{
+			name:       "valid in-cluster and public URLs",
+			url:        "http://amp-traces-observer.openchoreo-observability-plane.svc.cluster.local:9098",
+			publicURL:  "https://traces.example.com",
+			wantErrors: 0,
+		},
+		{
+			name:       "valid http URL with port",
+			url:        "http://localhost:9098",
+			publicURL:  "http://localhost:9098",
+			wantErrors: 0,
+		},
+		{
+			name:        "malformed in-cluster URL rejected",
+			url:         "not-a-url",
+			publicURL:   "https://traces.example.com",
+			wantErrors:  2, // missing scheme + missing host
+			errContains: "TRACE_OBSERVER_URL",
+		},
+		{
+			name:        "malformed public URL rejected",
+			url:         "http://localhost:9098",
+			publicURL:   "not-a-url",
+			wantErrors:  2, // missing scheme + missing host
+			errContains: "TRACE_OBSERVER_PUBLIC_URL",
+		},
+		{
+			name:        "non-http(s) scheme rejected",
+			url:         "ftp://traces.example.com",
+			publicURL:   "https://traces.example.com",
+			wantErrors:  1,
+			errContains: "must use http or https",
+		},
+		{
+			name:        "missing host rejected",
+			url:         "http://localhost:9098",
+			publicURL:   "https://",
+			wantErrors:  1,
+			errContains: "must have a non-empty host",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{TraceObserver: TraceObserverConfig{URL: tc.url, PublicURL: tc.publicURL}}
+			r := &configReader{}
+			validateTraceObserverURLs(cfg, r)
+
+			if len(r.errors) != tc.wantErrors {
+				t.Fatalf("expected %d errors, got %d: %v", tc.wantErrors, len(r.errors), r.errors)
+			}
+			if tc.errContains != "" {
+				found := false
+				for _, e := range r.errors {
+					if strings.Contains(e.Error(), tc.errContains) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected an error containing %q, got %v", tc.errContains, r.errors)
+				}
+			}
+		})
+	}
+}
