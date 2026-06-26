@@ -206,18 +206,19 @@ bootstrap:
   # the AMS identity-provider API. It is intentionally decoupled from
   # apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers: that list is the
   # gateway runtime's JWT-validation config (and legitimately includes the internal
-  # 'agent-manager-service' keymanager), whereas this list is what AMS exposes in the
-  # Security UI and as agent OAuth issuer options. Only list user-visible providers
-  # here — omit any internal/reserved keymanagers (e.g. agent-manager-service).
+  # 'agent-manager-service' keymanager and ThunderKeyManager), whereas this list is
+  # what AMS exposes in the Security UI and as agent OAuth issuer options. Only list
+  # user-visible providers here — omit any internal/reserved keymanagers (e.g.
+  # agent-manager-service).
   #
-  # If this list is omitted entirely, the bootstrap job falls back to deriving IdPs
-  # from jwtauth_v1.keymanagers (skipping agent-manager-service) for backward
-  # compatibility. Each entry: { name, issuer, jwksUri, skipTlsVerify }.
-  identityProviders:
-    - name: ThunderKeyManager
-      issuer: http://thunder.amp.localhost:8080
-      jwksUri: http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks
-      skipTlsVerify: true
+  # Defaults to empty: no IdP is auto-mirrored into AMS. ThunderKeyManager stays a
+  # gateway keymanager (so deployed agents still validate Thunder-issued tokens), but
+  # is no longer registered as a visible identity provider by default — operators add
+  # IdPs on demand via the Manage Identity Provider flow.
+  #
+  # The bootstrap job seeds exactly the entries listed here, so an empty list seeds
+  # nothing. Each entry: { name, issuer, jwksUri, skipTlsVerify }.
+  identityProviders: []
   # TTL after completion (seconds). 86400 = 1 day
   ttlSecondsAfterFinished: 86400
   resources:
