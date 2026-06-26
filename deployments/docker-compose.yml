@@ -56,6 +56,9 @@ services:
       # - OPENSEARCH_URL=http://host.docker.internal:9200
       - OBSERVER_URL=http://host.docker.internal:8085
       - TRACE_OBSERVER_URL=http://host.docker.internal:9098
+      # Externally reachable trace observer URL returned to the CLI via /v1/config.
+      # Mirrors the console's OBS_API_BASE_URL so the CLI and console agree.
+      - TRACE_OBSERVER_PUBLIC_URL=http://localhost:9098
       - IDP_TOKEN_URL=http://thunder.amp.localhost:8080/oauth2/token
       - IDP_CLIENT_ID=amp-api-client
       - IDP_CLIENT_SECRET=amp-api-client-secret
