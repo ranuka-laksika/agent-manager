@@ -221,8 +221,13 @@ type OTELConfig struct {
 }
 
 type TraceObserverConfig struct {
-	// Trace observer service URL
+	// URL is the trace observer service URL the agent-manager-service itself
+	// uses (server-side, in-cluster) to query trace data.
 	URL string
+	// PublicURL is the externally reachable trace observer URL handed to
+	// out-of-cluster clients (e.g. the CLI) via the /v1/config endpoint. It
+	// mirrors the URL the console uses for the trace observer.
+	PublicURL string
 }
 
 type ObserverConfig struct {

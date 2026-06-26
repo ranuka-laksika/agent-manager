@@ -102,7 +102,12 @@ agentManagerService:
     # Enable RBAC enforcement on all routes
     rbacEnabled: "true"
     observerURL: "http://observer.openchoreo-observability-plane.svc.cluster.local:8080"
+    # In-cluster URL the agent-manager-service uses to query trace data server-side.
     traceObserverURL: "http://amp-traces-observer.openchoreo-observability-plane.svc.cluster.local:9098"
+    # Externally reachable trace observer URL returned to out-of-cluster clients
+    # (e.g. the CLI) via /v1/config. Leave empty to inherit the console's URL
+    # (console.config.obsApiBaseUrl) so the CLI and console use the same endpoint.
+    traceObserverPublicURL: ""
 
 
     # TLS Configuration
