@@ -935,7 +935,6 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
-
     log_info "Checking if application '{{ .Values.thunder.bootstrap.amCliClient.name }}' already exists..."
 
     # Get the default OU ID
@@ -1164,7 +1163,6 @@ data:
 
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
-
 
     log_info "Registering Agent Manager (amp) as a Thunder resource server..."
 
@@ -1577,73 +1575,39 @@ data:
     }
 
     # ===========================================================================
-    # admin — full access to all resources
+    # Agent Manager Admin — full access to all resources
     # ===========================================================================
-    ADMIN_ID=$(create_or_get_role "admin" "Full administrative access to all AMP resources")
-    set_role_permissions "$ADMIN_ID" "admin" "Full administrative access to all AMP resources" \
+    ADMIN_ID=$(create_or_get_role "Agent Manager Admin" "Full administrative access to all AMP resources")
+    set_role_permissions "$ADMIN_ID" "Agent Manager Admin" "Full administrative access to all AMP resources" \
       '["org:view","org:modify-settings","org:invite-member","org:remove-member","org:assign-role","org:manage-idp","org:manage-service-account","project:create","project:read","project:update","project:delete","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token-manage","data-plane:read","deployment-pipeline:create","deployment-pipeline:read","deployment-pipeline:update","deployment-pipeline:delete","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key-manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key-manage","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy-non-production","agent:deploy-production","agent:promote","agent:rollback","agent:suspend","agent:token-manage","agent:api-key-manage","agent-kind:read","agent-kind:create","agent-kind:update","agent-kind:delete","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score-read","monitor:score-publish","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","observability:infra-metric","role:create","role:read","role:update","role:delete","group:create","group:read","group:update","group:delete","catalog:read","repository:read","profile:read","profile:update-attributes"]'
 
     # ===========================================================================
     # developer — project-scoped development and deployment
     # ===========================================================================
-    DEV_ID=$(create_or_get_role "developer" "Development access: build, deploy, and observe agents within projects")
-    set_role_permissions "$DEV_ID" "developer" "Development access: build, deploy, and observe agents within projects" \
+    DEV_ID=$(create_or_get_role "Developer" "Development access: build, deploy, and observe agents within projects")
+    set_role_permissions "$DEV_ID" "Developer" "Development access: build, deploy, and observe agents within projects" \
       '["org:view","project:create","project:read","project:update","project:delete","environment:read","data-plane:read","deployment-pipeline:read","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:read","llm-provider:read","llm-provider:configure-guardrail","llm-provider:connect","mcp-server:read","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key-manage","evaluator:read","agent-kind:read","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy-non-production","agent:token-manage","agent:api-key-manage","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score-read","observability:project-dashboard","observability:infra-metric","catalog:read","repository:read","profile:read","profile:update-attributes"]'
 
     # ===========================================================================
     # ai-lead — AI/ML resources and provider management
     # ===========================================================================
-    AILEAD_ID=$(create_or_get_role "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators")
-    set_role_permissions "$AILEAD_ID" "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators" \
+    AILEAD_ID=$(create_or_get_role "AI Lead" "AI lead access: manage LLM providers, MCP servers, and evaluators")
+    set_role_permissions "$AILEAD_ID" "AI Lead" "AI lead access: manage LLM providers, MCP servers, and evaluators" \
       '["org:view","project:read","environment:read","data-plane:read","deployment-pipeline:read","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key-manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent-kind:read","agent:read","agent:build","agent:deploy-non-production","agent:api-key-manage","monitor:read","monitor:score-read","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","catalog:read","profile:read","profile:update-attributes"]'
 
     # ===========================================================================
     # platform-engineer — infrastructure and deployment pipeline management
     # ===========================================================================
-    PE_ID=$(create_or_get_role "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments")
-    set_role_permissions "$PE_ID" "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments" \
+    PE_ID=$(create_or_get_role "Platform Engineer" "Platform engineering: manage environments, gateways, and agent deployments")
+    set_role_permissions "$PE_ID" "Platform Engineer" "Platform engineering: manage environments, gateways, and agent deployments" \
       '["org:view","project:read","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token-manage","data-plane:read","deployment-pipeline:create","deployment-pipeline:read","deployment-pipeline:update","deployment-pipeline:delete","llm-provider:read","llm-provider:configure-guardrail","mcp-server:read","mcp-server:configure-guardrail","agent-kind:read","agent:read","agent:build","agent:api-key-manage","agent:deploy-non-production","agent:deploy-production","agent:promote","agent:rollback","agent:suspend","monitor:read","monitor:score-read","observability:org-dashboard","observability:project-dashboard","observability:infra-metric","catalog:read","profile:read","profile:update-attributes"]'
 
     log_info "Default role provisioning complete (4 roles created/updated)."
 
     # ===========================================================================
-    # Assign default users to roles
+    # Assign ampApiClient app to Agent Manager Admin role so it gets all scopes in M2M tokens
     # ===========================================================================
-    assign_user_to_role() {
-      local username="$1" role_id="$2" role_name="$3"
-      local response http_code body user_id
-
-      response=$(thunder_api_call GET "/users")
-      http_code="${response: -3}"
-      body="${response%???}"
-      if [[ "$http_code" != "200" ]]; then
-        log_error "Failed to fetch users (HTTP $http_code)"
-        exit 1
-      fi
-
-      user_id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"username\":\"${username}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
-      if [[ -z "$user_id" ]]; then
-        log_warning "User '${username}' not found, skipping role assignment"
-        return 0
-      fi
-
-      local payload="{\"assignments\":[{\"id\":\"${user_id}\",\"type\":\"user\"}]}"
-      response=$(thunder_api_call POST "/roles/${role_id}/assignments/add" "$payload")
-      http_code="${response: -3}"
-      if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
-        log_success "Assigned user '${username}' to role '${role_name}'"
-      else
-        log_error "Failed to assign user '${username}' to role '${role_name}' (HTTP $http_code): ${response%???}"
-        exit 1
-      fi
-    }
-
-    assign_user_to_role "amp-admin" "$ADMIN_ID" "admin"
-
-    # ===========================================================================
-    # Assign ampApiClient app to admin role so it gets all scopes in M2M tokens
-    # ===========================================================================
-    log_info "Assigning ampApiClient app to admin role..."
+    log_info "Assigning ampApiClient app to Agent Manager Admin role..."
     response=$(thunder_api_call GET "/applications")
     http_code="${response: -3}"
     body="${response%???}"
@@ -1660,9 +1624,9 @@ data:
       response=$(thunder_api_call POST "/roles/${ADMIN_ID}/assignments/add" "$payload")
       http_code="${response: -3}"
       if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
-        log_success "Assigned ampApiClient to admin role"
+        log_success "Assigned ampApiClient to Agent Manager Admin role"
       else
-        log_error "Failed to assign ampApiClient to admin role (HTTP $http_code): ${response%???}"
+        log_error "Failed to assign ampApiClient to Agent Manager Admin role (HTTP $http_code): ${response%???}"
         exit 1
       fi
     fi
@@ -1735,12 +1699,12 @@ data:
     # ===========================================================================
     # Create default groups
     # ===========================================================================
-    ADMINS_GROUP_ID=$(create_or_get_group "admins" "Administrative group with full access to all AMP resources")
+    ADMINS_GROUP_ID=$(create_or_get_group "Agent Manager Admins" "Administrative group with full access to all AMP resources")
 
     # ===========================================================================
-    # Assign admin role to admins group
+    # Assign Agent Manager Admin role to Agent Manager Admins group
     # ===========================================================================
-    log_info "Looking up admin role..."
+    log_info "Looking up Agent Manager Admin role..."
     RESPONSE=$(thunder_api_call GET "/roles")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
@@ -1749,23 +1713,53 @@ data:
       exit 1
     fi
 
-    ADMIN_ROLE_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"name":"admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ADMIN_ROLE_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"name":"Agent Manager Admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$ADMIN_ROLE_ID" ]]; then
-      log_error "Could not find admin role"
+      log_error "Could not find Agent Manager Admin role"
       exit 1
     fi
-    log_info "Found admin role (id: $ADMIN_ROLE_ID)"
+    log_info "Found Agent Manager Admin role (id: $ADMIN_ROLE_ID)"
 
-    log_info "Assigning admin role to admins group..."
+    log_info "Assigning Agent Manager Admin role to Agent Manager Admins group..."
     ASSIGN_PAYLOAD='{"assignments":[{"id":"'${ADMINS_GROUP_ID}'","type":"group"}]}'
     RESPONSE=$(thunder_api_call POST "/roles/$ADMIN_ROLE_ID/assignments/add" "$ASSIGN_PAYLOAD")
     HTTP_CODE="${RESPONSE: -3}"
     if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]] || [[ "$HTTP_CODE" == "409" ]]; then
-      log_success "Assigned admin role to admins group"
+      log_success "Assigned Agent Manager Admin role to Agent Manager Admins group"
     else
-      log_error "Failed to assign admin role to admins group (HTTP $HTTP_CODE)"
+      log_error "Failed to assign Agent Manager Admin role to Agent Manager Admins group (HTTP $HTTP_CODE)"
       echo "Response: ${RESPONSE%???}"
       exit 1
+    fi
+
+    # ===========================================================================
+    # Assign admin user to Agent Manager Admins group
+    # ===========================================================================
+    log_info "Looking up admin user..."
+    RESPONSE=$(thunder_api_call GET "/users")
+    HTTP_CODE="${RESPONSE: -3}"
+    BODY="${RESPONSE%???}"
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      log_error "Failed to fetch users (HTTP $HTTP_CODE)"
+      exit 1
+    fi
+
+    ADMIN_USER_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"username":"admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    if [[ -z "$ADMIN_USER_ID" ]]; then
+      log_warning "admin user not found, skipping group assignment"
+    else
+      log_info "Found admin user (id: $ADMIN_USER_ID)"
+      log_info "Assigning admin user to Agent Manager Admins group..."
+      ASSIGN_USER_PAYLOAD='{"members":[{"type":"user","id":"'${ADMIN_USER_ID}'"}]}'
+      RESPONSE=$(thunder_api_call POST "/groups/$ADMINS_GROUP_ID/members/add" "$ASSIGN_USER_PAYLOAD")
+      HTTP_CODE="${RESPONSE: -3}"
+      if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]] || [[ "$HTTP_CODE" == "409" ]]; then
+        log_success "Assigned admin user to Agent Manager Admins group"
+      else
+        log_error "Failed to assign admin user to Agent Manager Admins group (HTTP $HTTP_CODE)"
+        echo "Response: ${RESPONSE%???}"
+        exit 1
+      fi
     fi
 
     log_info "Default group provisioning complete (1 group created/updated)."

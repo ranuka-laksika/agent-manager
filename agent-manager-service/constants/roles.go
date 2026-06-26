@@ -17,11 +17,11 @@
 package constants
 
 var predefinedRoles = map[string]bool{
-	"admin":             true,
-	"developer":         true,
-	"ai-lead":           true,
-	"platform-engineer": true,
-	"Administrator":     true,
+	"Agent Manager Admin": true,
+	"Developer":           true,
+	"AI Lead":             true,
+	"Platform Engineer":   true,
+	"Administrator":       true,
 }
 
 func IsPredefinedRole(roleName string) bool {
