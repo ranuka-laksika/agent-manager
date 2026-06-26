@@ -35,7 +35,8 @@ import (
 
 var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm"), Ordered, func() {
 	const (
-		configName = "primary"
+		// Distinct from the mcp spec: config names are unique per agent across types and both specs share this agent.
+		configName = "llm-primary"
 		urlEnv     = "E2E_LLM_URL"
 		apiKeyEnv  = "E2E_LLM_KEY"
 	)
