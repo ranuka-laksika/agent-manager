@@ -35,11 +35,11 @@ func setupConfigMux() *http.ServeMux {
 func withTraceObserverURL(t *testing.T, url string) {
 	t.Helper()
 	cfg := config.GetConfig()
-	orig := cfg.TraceObserver.URL
+	orig := cfg.TraceObserver.PublicURL
 	t.Cleanup(func() {
-		cfg.TraceObserver.URL = orig
+		cfg.TraceObserver.PublicURL = orig
 	})
-	cfg.TraceObserver.URL = url
+	cfg.TraceObserver.PublicURL = url
 }
 
 func TestConfigEndpoint_HappyPath(t *testing.T) {

@@ -30,7 +30,7 @@ func registerConfigRoutes(mux *http.ServeMux) {
 		cfg := config.GetConfig()
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(spec.ConfigResponse{
-			TraceObserverBaseUrl: cfg.TraceObserver.URL,
+			TraceObserverBaseUrl: cfg.TraceObserver.PublicURL,
 		}); err != nil {
 			logger.GetLogger(r.Context()).Error("failed to encode config response", "error", err)
 		}
