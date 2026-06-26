@@ -64,13 +64,15 @@ const E2ESharedKindName = "e2e-it-helpdesk-kind"
 const E2ESharedKindVersion = "1.0.0"
 
 const (
-	// E2ECLIProjectName is the dedicated project owning the amctl CLI e2e
-	// suite's agent. Stable + reused across runs (not swept), so the suite can
-	// mutate (deploy/redeploy) without touching the shared agent the HTTP
-	// observability suites read.
-	E2ECLIProjectName = "e2e-cli-shared"
-	// CLILifecycleAgentName is the dedicated internal agent the amctl CLI
-	// suite builds, redeploys, and observes.
+	// E2ECLIProjectPrefix is the prefix for projects owned solely by the amctl
+	// CLI e2e suite. Distinct from E2EProjectPrefix so the suite can mutate its
+	// own agent freely; the stale sweep reaps it as a teardown backstop.
+	E2ECLIProjectPrefix = "e2e-cli-"
+	// E2ECLIProjectName is the project owning the CLI suite's agent. Torn down on
+	// exit (amctl.WithSharedTeardown) and rebuilt fresh next run.
+	E2ECLIProjectName = E2ECLIProjectPrefix + "shared"
+	// CLILifecycleAgentName is the agent the amctl CLI suite builds, redeploys,
+	// and observes.
 	CLILifecycleAgentName = "e2e-cli-it-helpdesk"
 )
 

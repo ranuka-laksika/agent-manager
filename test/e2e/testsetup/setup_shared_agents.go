@@ -19,6 +19,7 @@ package testsetup
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -189,6 +190,53 @@ func SetupCLILifecycleAgent(client *framework.AMPClient, cfg *framework.Config) 
 	ginkgo.GinkgoWriter.Printf("CLI lifecycle agent ready: project=%s agent=%s endpoint=%s\n",
 		agent.ProjectName, agent.AgentName, agent.EndpointURL)
 	return agent
+}
+
+// CleanupCLILifecycleAgent returns a best-effort teardown that deletes the
+// CLI-owned agent and its project. The agent is owned solely by this suite, so
+// it is safe to drop on exit. It deletes by constant name (not the provisioned
+// handle) so cleanup runs even if provisioning partially failed. Wire it via
+// amctl.WithSharedTeardown to run once on process 1 after all specs finish.
+func CleanupCLILifecycleAgent(client **framework.AMPClient, cfg **framework.Config) func() {
+	return func() {
+		if client == nil || *client == nil || cfg == nil || *cfg == nil {
+			ginkgo.GinkgoWriter.Println("teardown: CLI lifecycle agent cleanup skipped (client/config unset)")
+			return
+		}
+		cl, c := *client, *cfg
+		// Agent before project (LIFO), mirroring the per-test cleanup order.
+		agentops.DeleteAgentBestEffort(cl, c.DefaultOrg, framework.E2ECLIProjectName, framework.CLILifecycleAgentName)
+		deleteProjectBestEffort(cl, c.DefaultOrg, framework.E2ECLIProjectName)
+	}
+}
+
+// deleteProjectBestEffort deletes a project without failing the suite. A 409
+// (agent cascade still in flight) is retried; other non-2xx is logged and left
+// for the stale sweep.
+func deleteProjectBestEffort(client *framework.AMPClient, orgName, projName string) {
+	projPath := fmt.Sprintf("/api/v1/orgs/%s/projects/%s", orgName, projName)
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			time.Sleep(3 * time.Second)
+		}
+		resp, err := client.Delete(projPath)
+		if err != nil {
+			ginkgo.GinkgoWriter.Printf("teardown: delete project %q failed: %v\n", projName, err)
+			return
+		}
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusNotFound {
+			ginkgo.GinkgoWriter.Printf("teardown: deleted project %q (status %d)\n", projName, resp.StatusCode)
+			return
+		}
+		if resp.StatusCode == http.StatusConflict && attempt < 4 {
+			ginkgo.GinkgoWriter.Printf("teardown: project %q still has resources, retrying...\n", projName)
+			continue
+		}
+		ginkgo.GinkgoWriter.Printf("teardown: delete project %q returned status %d (left for stale sweep)\n",
+			projName, resp.StatusCode)
+		return
+	}
 }
 
 // SetupSharedPromotableITHelpdeskAgent provisions the shared promotable IT

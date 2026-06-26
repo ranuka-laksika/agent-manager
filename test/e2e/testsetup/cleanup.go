@@ -64,7 +64,10 @@ func CleanupStaleE2EResources(client *framework.AMPClient, orgName string) {
 	}
 
 	for _, proj := range projects.Projects {
-		if !strings.HasPrefix(proj.Name, framework.E2EProjectPrefix) {
+		// e2e-cli-* is the CLI suite's own project, swept here as a backstop
+		// when a run dies before its teardown.
+		if !strings.HasPrefix(proj.Name, framework.E2EProjectPrefix) &&
+			!strings.HasPrefix(proj.Name, framework.E2ECLIProjectPrefix) {
 			continue
 		}
 		if time.Since(proj.CreatedAt) < cutoff {
