@@ -18,9 +18,8 @@
 
 import { useAsgardeo, useUser } from "@asgardeo/react";
 import type { UserInfo } from "../../types";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { globalConfig } from "@agent-management-platform/types";
-import { useQuery } from "@tanstack/react-query";
 
 const decodeJWTPart = (part: string): Record<string, unknown> | null => {
   try {
@@ -65,28 +64,47 @@ export const useAuthHooks = (): AuthHooks => {
   } = useAsgardeo() ?? {};
 
   const { flattenedProfile } = useUser();
-  const { data: tokenInfo } = useQuery({
-    queryKey: ["tokenInfo"],
-    queryFn: async (): Promise<string> => {
-      const token = await getAccessToken?.();
-      if (!token) {
-        throw new Error("Access token is not available");
-      }
-      return token;
-    },
-    select: (data) => decodeJWT(data as string),
-    enabled: !!isSignedIn && !!getAccessToken,
-    staleTime: 5 * 60 * 1000,
-  });
+
+  const [accessTokenPayload, setAccessTokenPayload] =
+    useState<Record<string, unknown> | null>(null);
+
+  const getAccessTokenRef = useRef(getAccessToken);
+  getAccessTokenRef.current = getAccessToken;
+
+  useEffect(() => {
+    if (!isSignedIn || !isInitialized) {
+      if (!isSignedIn) setAccessTokenPayload(null);
+      return;
+    }
+    let cancelled = false;
+    const tokenPromise = getAccessTokenRef.current?.();
+    if (!tokenPromise) return;
+    tokenPromise
+      .then((token) => {
+        if (cancelled) return;
+        if (!token) {
+          setAccessTokenPayload(null);
+          return;
+        }
+        const decoded = decodeJWT(token);
+        if (!cancelled) setAccessTokenPayload(decoded?.payload ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAccessTokenPayload(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, isInitialized]);
 
   const userInfo = useMemo(() => {
     return {
       ...flattenedProfile,
       familyName: flattenedProfile?.family_name,
       givenName: flattenedProfile?.given_name,
-      ...tokenInfo?.payload,
+      ...(accessTokenPayload ?? {}),
     } as UserInfo;
-  }, [flattenedProfile, tokenInfo]);
+  }, [flattenedProfile, accessTokenPayload]);
 
   const customLogin = () => {
     void signIn?.();

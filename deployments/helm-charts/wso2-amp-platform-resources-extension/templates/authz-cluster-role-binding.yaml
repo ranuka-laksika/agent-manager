@@ -13,7 +13,7 @@ metadata:
 spec:
   effect: allow
   entitlement:
-    claim: sub
+    claim: client_id
     value: {{ .Values.authz.ampApiClient.clientId | default "amp-api-client" }}
   roleMappings:
     - roleRef:

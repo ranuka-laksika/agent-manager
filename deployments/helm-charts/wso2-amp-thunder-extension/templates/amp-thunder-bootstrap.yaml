@@ -23,7 +23,7 @@ data:
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -41,7 +41,7 @@ data:
     log_info "Using OU ID: $DEFAULT_OU_ID"
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -58,7 +58,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check if app already exists
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -96,7 +96,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.ampApiClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.ampApiClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' updated successfully"
@@ -107,7 +107,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampApiClient.name }}' created successfully"
@@ -129,7 +129,7 @@ data:
 
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -147,7 +147,7 @@ data:
     log_info "Using organization unit ID: $DEFAULT_OU_ID"
 
     log_info "Checking if user schema '{{ .Values.thunder.bootstrap.userSchema.name }}' already exists..."
-    RESPONSE=$(thunder_api_call GET "/user-schemas")
+    RESPONSE=$(api_call GET "/user-types")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -158,10 +158,13 @@ data:
 
     if echo "$BODY" | grep -q '"name":"{{ .Values.thunder.bootstrap.userSchema.name }}"'; then
       log_info "User schema '{{ .Values.thunder.bootstrap.userSchema.name }}' already exists, checking for email attribute..."
-      SCHEMA_ID=$(echo "$BODY" | python3 -c "import sys,json; schemas=json.load(sys.stdin); schemas=schemas if isinstance(schemas,list) else schemas.get('schemas',[]); [print(s['id']) for s in schemas if s.get('name')=='{{ .Values.thunder.bootstrap.userSchema.name }}']" 2>/dev/null | head -1)
-      if [[ -n "$SCHEMA_ID" ]] && ! echo "$BODY" | grep -q '"email"'; then
+      SCHEMA_ID=$(echo "$BODY" | python3 -c "import sys,json; data=json.load(sys.stdin); items=data if isinstance(data,list) else data.get('types',[]); [print(s['id']) for s in items if s.get('name')=='{{ .Values.thunder.bootstrap.userSchema.name }}']" 2>/dev/null | head -1)
+      # Check 'email' on the MATCHED schema only — grepping the whole response
+      # would match another user type's email and wrongly skip patching this one.
+      SCHEMA_HAS_EMAIL=$(echo "$BODY" | python3 -c "import sys,json; data=json.load(sys.stdin); items=data if isinstance(data,list) else data.get('types',[]); print('true' if any(s.get('name')=='{{ .Values.thunder.bootstrap.userSchema.name }}' and 'email' in (s.get('schema') or {}) for s in items) else 'false')" 2>/dev/null)
+      if [[ -n "$SCHEMA_ID" ]] && [[ "$SCHEMA_HAS_EMAIL" != "true" ]]; then
         log_info "Adding email attribute to existing schema (ID: $SCHEMA_ID)..."
-        PATCH_RESPONSE=$(thunder_api_call PATCH "/user-schemas/$SCHEMA_ID" "{
+        PATCH_RESPONSE=$(api_call PATCH "/user-types/$SCHEMA_ID" "{
           \"schema\": {
             \"email\": {
               \"type\": \"string\",
@@ -178,7 +181,7 @@ data:
       fi
     else
       log_info "User schema does not exist, creating user schema '{{ .Values.thunder.bootstrap.userSchema.name }}'..."
-      RESPONSE=$(thunder_api_call POST "/user-schemas" "{
+      RESPONSE=$(api_call POST "/user-types" "{
         \"name\": \"{{ .Values.thunder.bootstrap.userSchema.name }}\",
         \"ouId\": \"$DEFAULT_OU_ID\",
         \"allowSelfRegistration\": {{ .Values.thunder.bootstrap.userSchema.allowSelfRegistration }},
@@ -206,11 +209,6 @@ data:
           \"email\": {
             \"type\": \"string\",
             \"displayName\": \"Email\"
-          },
-          \"groups\": {
-            \"type\": \"array\",
-            \"displayName\": \"Groups\",
-            \"items\": {\"type\": \"string\"}
           }
         },
         \"systemAttributes\": {
@@ -234,7 +232,7 @@ data:
     {{- if .Values.thunder.bootstrap.defaultUsers }}
     {{- range .Values.thunder.bootstrap.defaultUsers }}
     log_info "Checking if user '{{ .username }}' already exists..."
-    RESPONSE=$(thunder_api_call GET "/users")
+    RESPONSE=$(api_call GET "/users")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -247,15 +245,14 @@ data:
       log_info "User '{{ .username }}' already exists, skipping creation"
     else
       log_info "User does not exist, creating user '{{ .username }}'..."
-      RESPONSE=$(thunder_api_call POST "/users" "{
+      RESPONSE=$(api_call POST "/users" "{
         \"type\": \"{{ $.Values.thunder.bootstrap.userSchema.name }}\",
         \"ouId\": \"$DEFAULT_OU_ID\",
         \"attributes\": {
           \"username\": \"{{ .username }}\",
           \"password\": \"{{ .password }}\",
           \"given_name\": \"{{ .givenName }}\",
-          \"family_name\": \"{{ .familyName }}\",
-          \"groups\": {{ .groups | toJson | replace "\"" "\\\"" }}
+          \"family_name\": \"{{ .familyName }}\"
         }
       }")
 
@@ -283,29 +280,45 @@ data:
     # -----------------------------------------------------------------------
     # 1. Upsert the Agent Manager Console layout (GET → PUT if exists, POST if not)
     # -----------------------------------------------------------------------
-    LAYOUT_ID="{{ .Values.thunder.bootstrap.ampConsoleLayout.id }}"
-    log_info "Checking if Agent Manager Console layout (id: $LAYOUT_ID) exists..."
+    LAYOUT_HANDLE="{{ .Values.thunder.bootstrap.ampConsoleLayout.handle }}"
+    log_info "Checking if layout '$LAYOUT_HANDLE' already exists (by handle)..."
 
     LAYOUT_PAYLOAD='{{ .Values.thunder.bootstrap.ampConsoleLayout | toJson }}'
 
-    RESPONSE=$(thunder_api_call GET "/design/layouts/$LAYOUT_ID")
+    # List all layouts and find by handle
+    RESPONSE=$(api_call GET "/design/layouts")
     HTTP_CODE="${RESPONSE: -3}"
+    BODY="${RESPONSE%???}"
 
-    if [[ "$HTTP_CODE" == "200" ]]; then
-      log_info "Layout exists, updating..."
-      RESPONSE=$(thunder_api_call PUT "/design/layouts/$LAYOUT_ID" "$LAYOUT_PAYLOAD")
+    if [[ "$HTTP_CODE" != "200" ]]; then
+      log_error "Failed to check layout existence (HTTP $HTTP_CODE)"
+      echo "Response: $BODY"
+      exit 1
+    fi
+
+    EXISTING_LAYOUT_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' \
+      | grep "\"handle\":\"$LAYOUT_HANDLE\"" \
+      | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+    if [[ -n "$EXISTING_LAYOUT_ID" ]]; then
+      # Found it — update using the actual ID from the database
+      log_info "Layout exists (id: $EXISTING_LAYOUT_ID), updating..."
+      STATIC_LAYOUT_ID='{{ .Values.thunder.bootstrap.ampConsoleLayout.id }}'
+      LAYOUT_PAYLOAD="${LAYOUT_PAYLOAD//$STATIC_LAYOUT_ID/$EXISTING_LAYOUT_ID}"
+      RESPONSE=$(api_call PUT "/design/layouts/$EXISTING_LAYOUT_ID" "$LAYOUT_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]]; then
         log_info "Layout updated successfully"
-        echo "$LAYOUT_ID" > /tmp/amp-console-layout-id
+        echo "$EXISTING_LAYOUT_ID" > /tmp/amp-console-layout-id
       else
         log_error "Failed to update layout (HTTP $HTTP_CODE)"
         echo "Response: ${RESPONSE%???}"
         exit 1
       fi
-    elif [[ "$HTTP_CODE" == "404" ]]; then
+    else
+      # Not found — create it
       log_info "Layout not found, creating..."
-      RESPONSE=$(thunder_api_call POST "/design/layouts" "$LAYOUT_PAYLOAD")
+      RESPONSE=$(api_call POST "/design/layouts" "$LAYOUT_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       BODY="${RESPONSE%???}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
@@ -317,10 +330,6 @@ data:
         echo "Response: ${RESPONSE%???}"
         exit 1
       fi
-    else
-      log_error "Failed to check layout existence (HTTP $HTTP_CODE)"
-      echo "Response: ${RESPONSE%???}"
-      exit 1
     fi
 
     # -----------------------------------------------------------------------
@@ -329,7 +338,7 @@ data:
     THEME_HANDLE="{{ .Values.thunder.bootstrap.ampConsoleTheme.handle }}"
     log_info "Checking if theme '$THEME_HANDLE' already exists..."
 
-    RESPONSE=$(thunder_api_call GET "/design/themes")
+    RESPONSE=$(api_call GET "/design/themes")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -344,7 +353,7 @@ data:
 
     if [[ -n "$EXISTING_THEME_ID" ]]; then
       log_info "Theme '$THEME_HANDLE' exists (id: $EXISTING_THEME_ID), updating..."
-      RESPONSE=$(thunder_api_call PUT "/design/themes/$EXISTING_THEME_ID" "$THEME_PAYLOAD")
+      RESPONSE=$(api_call PUT "/design/themes/$EXISTING_THEME_ID" "$THEME_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Theme updated successfully"
@@ -356,7 +365,7 @@ data:
       fi
     else
       log_info "Theme '$THEME_HANDLE' not found, creating..."
-      RESPONSE=$(thunder_api_call POST "/design/themes" "$THEME_PAYLOAD")
+      RESPONSE=$(api_call POST "/design/themes" "$THEME_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       BODY="${RESPONSE%???}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
@@ -385,7 +394,7 @@ data:
     CONSOLE_LAYOUT_ID=$(cat /tmp/amp-console-layout-id 2>/dev/null || echo "{{ .Values.thunder.bootstrap.ampConsoleLayout.id }}")
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -403,7 +412,7 @@ data:
     log_info "Using OU ID: $DEFAULT_OU_ID"
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -420,7 +429,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -468,7 +477,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.ampConsoleClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.ampConsoleClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.ampConsoleClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampConsoleClient.name }}' updated successfully"
@@ -479,7 +488,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.ampConsoleClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampConsoleClient.name }}' created successfully"
@@ -503,7 +512,7 @@ data:
     log_info "Checking if application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -520,7 +529,7 @@ data:
     fi
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -556,7 +565,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.workloadPublisherClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.workloadPublisherClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' updated successfully"
@@ -567,7 +576,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.workloadPublisherClient.name }}' created successfully"
@@ -591,7 +600,7 @@ data:
     log_info "Checking if application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -608,7 +617,7 @@ data:
     fi
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -644,7 +653,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.observerResourceReaderClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.observerResourceReaderClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' updated successfully"
@@ -655,7 +664,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.observerResourceReaderClient.name }}' created successfully"
@@ -679,7 +688,7 @@ data:
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -696,7 +705,7 @@ data:
     fi
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -713,7 +722,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -751,7 +760,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.ampPublisherClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.ampPublisherClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' updated successfully"
@@ -762,7 +771,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampPublisherClient.name }}' created successfully"
@@ -786,7 +795,7 @@ data:
     log_info "Checking if application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -803,7 +812,7 @@ data:
     fi
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -820,7 +829,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -860,7 +869,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.ampSystemClient.clientId }}"'; then
       SYSTEM_APP_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.ampSystemClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' already exists (id: $SYSTEM_APP_ID), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$SYSTEM_APP_ID" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$SYSTEM_APP_ID" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' updated successfully"
@@ -871,7 +880,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       BODY="${RESPONSE%???}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
@@ -880,7 +889,7 @@ data:
       elif [[ "$HTTP_CODE" == "409" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.ampSystemClient.name }}' already exists, skipping"
         # Re-fetch to get the ID
-        RESPONSE=$(thunder_api_call GET "/applications")
+        RESPONSE=$(api_call GET "/applications")
         BODY="${RESPONSE%???}"
         SYSTEM_APP_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.ampSystemClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       else
@@ -897,7 +906,7 @@ data:
 
     # Assign the system app to the Administrator role so it can get system-scoped tokens
     log_info "Looking up Administrator role..."
-    RESPONSE=$(thunder_api_call GET "/roles")
+    RESPONSE=$(api_call GET "/roles")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -915,7 +924,7 @@ data:
 
     log_info "Assigning system app to Administrator role..."
     ASSIGN_PAYLOAD='{"assignments":[{"id":"'${SYSTEM_APP_ID}'","type":"app"}]}'
-    RESPONSE=$(thunder_api_call POST "/roles/$ADMIN_ROLE_ID/assignments/add" "$ASSIGN_PAYLOAD")
+    RESPONSE=$(api_call POST "/roles/$ADMIN_ROLE_ID/assignments/add" "$ASSIGN_PAYLOAD")
     HTTP_CODE="${RESPONSE: -3}"
     if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]]; then
       log_info "System app assigned to Administrator role successfully"
@@ -935,10 +944,11 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Checking if application '{{ .Values.thunder.bootstrap.amCliClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -956,7 +966,7 @@ data:
     log_info "Using OU ID: $DEFAULT_OU_ID"
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -973,7 +983,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1018,7 +1028,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{ .Values.thunder.bootstrap.amCliClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{ .Values.thunder.bootstrap.amCliClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{ .Values.thunder.bootstrap.amCliClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.amCliClient.name }}' updated successfully"
@@ -1029,7 +1039,7 @@ data:
       fi
     else
       log_info "Application '{{ .Values.thunder.bootstrap.amCliClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{ .Values.thunder.bootstrap.amCliClient.name }}' created successfully"
@@ -1053,7 +1063,7 @@ data:
     log_info "Checking if application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' already exists..."
 
     # Get the default OU ID
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1071,7 +1081,7 @@ data:
     log_info "Using OU ID: $DEFAULT_OU_ID"
 
     # Look up the default auth flow ID
-    RESPONSE=$(thunder_api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
+    RESPONSE=$(api_call GET "/flows?flowType=AUTHENTICATION&limit=200")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1088,7 +1098,7 @@ data:
     log_info "Using auth flow ID: $AUTH_FLOW_ID"
 
     # Check existing apps
-    RESPONSE=$(thunder_api_call GET "/applications")
+    RESPONSE=$(api_call GET "/applications")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1133,7 +1143,7 @@ data:
     if echo "$BODY" | grep -q '"clientId":"{{  .Values.thunder.bootstrap.amMcpClient.clientId }}"'; then
       app_id=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"clientId":"{{  .Values.thunder.bootstrap.amMcpClient.clientId }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
       log_info "Application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' already exists (id: $app_id), updating..."
-      RESPONSE=$(thunder_api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
+      RESPONSE=$(api_call PUT "/applications/$app_id" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' updated successfully"
@@ -1144,7 +1154,7 @@ data:
       fi
     else
       log_info "Application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' does not exist, creating..."
-      RESPONSE=$(thunder_api_call POST "/applications" "$APP_PAYLOAD")
+      RESPONSE=$(api_call POST "/applications" "$APP_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "200" ]]; then
         log_info "Application '{{  .Values.thunder.bootstrap.amMcpClient.name }}' created successfully"
@@ -1164,6 +1174,7 @@ data:
     SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]:-$0}")"
     source "${SCRIPT_DIR}/common.sh"
 
+
     log_info "Registering Agent Manager (amp) as a Thunder resource server..."
 
     # ---------------------------------------------------------------------------
@@ -1174,7 +1185,7 @@ data:
       local payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"identifier\":\"${identifier}\",\"description\":\"${description}\",\"ouId\":\"${ou_id}\"}"
       local response http_code body id
 
-      response=$(thunder_api_call POST "/resource-servers" "$payload")
+      response=$(api_call POST "/resource-servers" "$payload")
       http_code="${response: -3}"
       body="${response%???}"
 
@@ -1186,7 +1197,7 @@ data:
 
       if [[ "$http_code" == "409" ]]; then
         log_warning "Resource server '${identifier}' already exists, retrieving ID..."
-        response=$(thunder_api_call GET "/resource-servers")
+        response=$(api_call GET "/resource-servers")
         http_code="${response: -3}"
         body="${response%???}"
         if [[ "$http_code" != "200" ]]; then
@@ -1224,7 +1235,7 @@ data:
         list_url="/resource-servers/${rs_id}/resources"
       fi
 
-      response=$(thunder_api_call POST "/resource-servers/${rs_id}/resources" "$payload")
+      response=$(api_call POST "/resource-servers/${rs_id}/resources" "$payload")
       http_code="${response: -3}"
       body="${response%???}"
 
@@ -1236,7 +1247,7 @@ data:
 
       if [[ "$http_code" == "409" ]]; then
         log_warning "Resource '${handle}' already exists, retrieving ID..."
-        response=$(thunder_api_call GET "${list_url}")
+        response=$(api_call GET "${list_url}")
         http_code="${response: -3}"
         body="${response%???}"
         if [[ "$http_code" != "200" ]]; then
@@ -1266,7 +1277,7 @@ data:
       local payload="{\"name\":\"${name}\",\"handle\":\"${handle}\",\"description\":\"${description}\"}"
       local response http_code body
 
-      response=$(thunder_api_call POST "/resource-servers/${rs_id}/resources/${res_id}/actions" "$payload")
+      response=$(api_call POST "/resource-servers/${rs_id}/resources/${res_id}/actions" "$payload")
       http_code="${response: -3}"
       body="${response%???}"
 
@@ -1282,7 +1293,7 @@ data:
     # 0. Fetch default OU ID (required by Thunder for resource server creation)
     # ===========================================================================
     log_info "Fetching default organization unit ID..."
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1488,7 +1499,7 @@ data:
     # ---------------------------------------------------------------------------
     # Fetch default OU ID
     # ---------------------------------------------------------------------------
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1505,7 +1516,7 @@ data:
     # ---------------------------------------------------------------------------
     # Fetch AMP resource server ID
     # ---------------------------------------------------------------------------
-    RESPONSE=$(thunder_api_call GET "/resource-servers")
+    RESPONSE=$(api_call GET "/resource-servers")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1527,7 +1538,7 @@ data:
       local payload="{\"name\":\"${name}\",\"ouId\":\"${DEFAULT_OU_ID}\",\"description\":\"${description}\"}"
       local response http_code body id
 
-      response=$(thunder_api_call POST "/roles" "$payload")
+      response=$(api_call POST "/roles" "$payload")
       http_code="${response: -3}"
       body="${response%???}"
 
@@ -1540,7 +1551,7 @@ data:
 
       if [[ "$http_code" == "409" ]]; then
         log_warning "Role '${name}' already exists, retrieving ID..." >&2
-        response=$(thunder_api_call GET "/roles")
+        response=$(api_call GET "/roles")
         body="${response%???}"
         id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"name\":\"${name}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
         if [[ -z "$id" ]]; then
@@ -1564,7 +1575,7 @@ data:
       local payload="{\"ouId\":\"${DEFAULT_OU_ID}\",\"name\":\"${role_name}\",\"description\":\"${role_desc}\",\"permissions\":[{\"resourceServerId\":\"${AMP_RS_ID}\",\"permissions\":${permissions_json}}]}"
       local response http_code
 
-      response=$(thunder_api_call PUT "/roles/${role_id}" "$payload")
+      response=$(api_call PUT "/roles/${role_id}" "$payload")
       http_code="${response: -3}"
       if [[ "$http_code" == "200" ]] || [[ "$http_code" == "204" ]]; then
         log_success "Permissions set for role '${role_name}'"
@@ -1577,38 +1588,72 @@ data:
     # ===========================================================================
     # Agent Manager Admin — full access to all resources
     # ===========================================================================
-    ADMIN_ID=$(create_or_get_role "Agent Manager Admin" "Full administrative access to all AMP resources")
-    set_role_permissions "$ADMIN_ID" "Agent Manager Admin" "Full administrative access to all AMP resources" \
-      '["org:view","org:modify-settings","org:invite-member","org:remove-member","org:assign-role","org:manage-idp","org:manage-service-account","project:create","project:read","project:update","project:delete","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token-manage","data-plane:read","deployment-pipeline:create","deployment-pipeline:read","deployment-pipeline:update","deployment-pipeline:delete","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key-manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key-manage","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy-non-production","agent:deploy-production","agent:promote","agent:rollback","agent:suspend","agent:token-manage","agent:api-key-manage","agent-kind:read","agent-kind:create","agent-kind:update","agent-kind:delete","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score-read","monitor:score-publish","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","observability:infra-metric","role:create","role:read","role:update","role:delete","group:create","group:read","group:update","group:delete","catalog:read","repository:read","profile:read","profile:update-attributes"]'
+    ADMIN_ID=$(create_or_get_role "admin" "Full administrative access to all AMP resources")
+    set_role_permissions "$ADMIN_ID" "admin" "Full administrative access to all AMP resources" \
+      '["amp:org:view","amp:org:modify-settings","amp:org:invite-member","amp:org:remove-member","amp:org:assign-role","amp:org:manage-idp","amp:org:manage-service-account","amp:project:create","amp:project:read","amp:project:update","amp:project:delete","amp:environment:create","amp:environment:read","amp:environment:update","amp:environment:delete","amp:gateway:create","amp:gateway:read","amp:gateway:update","amp:gateway:delete","amp:gateway:token-manage","amp:data-plane:read","amp:deployment-pipeline:create","amp:deployment-pipeline:read","amp:deployment-pipeline:update","amp:deployment-pipeline:delete","amp:git-secret:create","amp:git-secret:read","amp:git-secret:delete","amp:llm-provider-template:create","amp:llm-provider-template:read","amp:llm-provider-template:update","amp:llm-provider-template:delete","amp:llm-provider:create","amp:llm-provider:read","amp:llm-provider:update","amp:llm-provider:delete","amp:llm-provider:configure-guardrail","amp:llm-provider:connect","amp:llm-provider:deploy","amp:llm-provider:api-key-manage","amp:mcp-server:create","amp:mcp-server:read","amp:mcp-server:update","amp:mcp-server:delete","amp:mcp-server:configure-guardrail","amp:mcp-server:connect","amp:llm-proxy:create","amp:llm-proxy:read","amp:llm-proxy:update","amp:llm-proxy:delete","amp:llm-proxy:deploy","amp:llm-proxy:api-key-manage","amp:evaluator:create","amp:evaluator:read","amp:evaluator:update","amp:evaluator:delete","amp:agent:create","amp:agent:read","amp:agent:update","amp:agent:delete","amp:agent:build","amp:agent:deploy-non-production","amp:agent:deploy-production","amp:agent:promote","amp:agent:rollback","amp:agent:suspend","amp:agent:token-manage","amp:agent:api-key-manage","amp:agent-kind:read","amp:agent-kind:create","amp:agent-kind:update","amp:agent-kind:delete","amp:monitor:create","amp:monitor:read","amp:monitor:update","amp:monitor:delete","amp:monitor:execute","amp:monitor:score-read","amp:monitor:score-publish","amp:observability:org-dashboard","amp:observability:project-dashboard","amp:observability:guardrail-metric","amp:observability:infra-metric","amp:role:create","amp:role:read","amp:role:update","amp:role:delete","amp:group:create","amp:group:read","amp:group:update","amp:group:delete","amp:catalog:read","amp:repository:read"]'
 
     # ===========================================================================
     # developer — project-scoped development and deployment
     # ===========================================================================
-    DEV_ID=$(create_or_get_role "Developer" "Development access: build, deploy, and observe agents within projects")
-    set_role_permissions "$DEV_ID" "Developer" "Development access: build, deploy, and observe agents within projects" \
-      '["org:view","project:create","project:read","project:update","project:delete","environment:read","data-plane:read","deployment-pipeline:read","git-secret:create","git-secret:read","git-secret:delete","llm-provider-template:read","llm-provider:read","llm-provider:configure-guardrail","llm-provider:connect","mcp-server:read","mcp-server:configure-guardrail","mcp-server:connect","llm-proxy:create","llm-proxy:read","llm-proxy:update","llm-proxy:delete","llm-proxy:deploy","llm-proxy:api-key-manage","evaluator:read","agent-kind:read","agent:create","agent:read","agent:update","agent:delete","agent:build","agent:deploy-non-production","agent:token-manage","agent:api-key-manage","monitor:create","monitor:read","monitor:update","monitor:delete","monitor:execute","monitor:score-read","observability:project-dashboard","observability:infra-metric","catalog:read","repository:read","profile:read","profile:update-attributes"]'
+    DEV_ID=$(create_or_get_role "developer" "Development access: build, deploy, and observe agents within projects")
+    set_role_permissions "$DEV_ID" "developer" "Development access: build, deploy, and observe agents within projects" \
+      '["amp:org:view","amp:project:create","amp:project:read","amp:project:update","amp:project:delete","amp:environment:read","amp:data-plane:read","amp:deployment-pipeline:read","amp:git-secret:create","amp:git-secret:read","amp:git-secret:delete","amp:llm-provider-template:read","amp:llm-provider:read","amp:llm-provider:configure-guardrail","amp:llm-provider:connect","amp:mcp-server:read","amp:mcp-server:configure-guardrail","amp:mcp-server:connect","amp:llm-proxy:create","amp:llm-proxy:read","amp:llm-proxy:update","amp:llm-proxy:delete","amp:llm-proxy:deploy","amp:llm-proxy:api-key-manage","amp:evaluator:read","amp:agent-kind:read","amp:agent:create","amp:agent:read","amp:agent:update","amp:agent:delete","amp:agent:build","amp:agent:deploy-non-production","amp:agent:token-manage","amp:agent:api-key-manage","amp:monitor:create","amp:monitor:read","amp:monitor:update","amp:monitor:delete","amp:monitor:execute","amp:monitor:score-read","amp:observability:project-dashboard","amp:observability:infra-metric","amp:catalog:read","amp:repository:read"]'
 
     # ===========================================================================
     # ai-lead — AI/ML resources and provider management
     # ===========================================================================
-    AILEAD_ID=$(create_or_get_role "AI Lead" "AI lead access: manage LLM providers, MCP servers, and evaluators")
-    set_role_permissions "$AILEAD_ID" "AI Lead" "AI lead access: manage LLM providers, MCP servers, and evaluators" \
-      '["org:view","project:read","environment:read","data-plane:read","deployment-pipeline:read","llm-provider-template:create","llm-provider-template:read","llm-provider-template:update","llm-provider-template:delete","llm-provider:create","llm-provider:read","llm-provider:update","llm-provider:delete","llm-provider:configure-guardrail","llm-provider:connect","llm-provider:deploy","llm-provider:api-key-manage","mcp-server:create","mcp-server:read","mcp-server:update","mcp-server:delete","mcp-server:configure-guardrail","mcp-server:connect","evaluator:create","evaluator:read","evaluator:update","evaluator:delete","agent-kind:read","agent:read","agent:build","agent:deploy-non-production","agent:api-key-manage","monitor:read","monitor:score-read","observability:org-dashboard","observability:project-dashboard","observability:guardrail-metric","catalog:read","profile:read","profile:update-attributes"]'
+    AILEAD_ID=$(create_or_get_role "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators")
+    set_role_permissions "$AILEAD_ID" "ai-lead" "AI lead access: manage LLM providers, MCP servers, and evaluators" \
+      '["amp:org:view","amp:project:read","amp:environment:read","amp:data-plane:read","amp:deployment-pipeline:read","amp:llm-provider-template:create","amp:llm-provider-template:read","amp:llm-provider-template:update","amp:llm-provider-template:delete","amp:llm-provider:create","amp:llm-provider:read","amp:llm-provider:update","amp:llm-provider:delete","amp:llm-provider:configure-guardrail","amp:llm-provider:connect","amp:llm-provider:deploy","amp:llm-provider:api-key-manage","amp:mcp-server:create","amp:mcp-server:read","amp:mcp-server:update","amp:mcp-server:delete","amp:mcp-server:configure-guardrail","amp:mcp-server:connect","amp:evaluator:create","amp:evaluator:read","amp:evaluator:update","amp:evaluator:delete","amp:agent-kind:read","amp:agent:read","amp:agent:build","amp:agent:deploy-non-production","amp:agent:api-key-manage","amp:monitor:read","amp:monitor:score-read","amp:observability:org-dashboard","amp:observability:project-dashboard","amp:observability:guardrail-metric","amp:catalog:read"]'
 
     # ===========================================================================
     # platform-engineer — infrastructure and deployment pipeline management
     # ===========================================================================
-    PE_ID=$(create_or_get_role "Platform Engineer" "Platform engineering: manage environments, gateways, and agent deployments")
-    set_role_permissions "$PE_ID" "Platform Engineer" "Platform engineering: manage environments, gateways, and agent deployments" \
-      '["org:view","project:read","environment:create","environment:read","environment:update","environment:delete","gateway:create","gateway:read","gateway:update","gateway:delete","gateway:token-manage","data-plane:read","deployment-pipeline:create","deployment-pipeline:read","deployment-pipeline:update","deployment-pipeline:delete","llm-provider:read","llm-provider:configure-guardrail","mcp-server:read","mcp-server:configure-guardrail","agent-kind:read","agent:read","agent:build","agent:api-key-manage","agent:deploy-non-production","agent:deploy-production","agent:promote","agent:rollback","agent:suspend","monitor:read","monitor:score-read","observability:org-dashboard","observability:project-dashboard","observability:infra-metric","catalog:read","profile:read","profile:update-attributes"]'
+    PE_ID=$(create_or_get_role "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments")
+    set_role_permissions "$PE_ID" "platform-engineer" "Platform engineering: manage environments, gateways, and agent deployments" \
+      '["amp:org:view","amp:project:read","amp:environment:create","amp:environment:read","amp:environment:update","amp:environment:delete","amp:gateway:create","amp:gateway:read","amp:gateway:update","amp:gateway:delete","amp:gateway:token-manage","amp:data-plane:read","amp:deployment-pipeline:create","amp:deployment-pipeline:read","amp:deployment-pipeline:update","amp:deployment-pipeline:delete","amp:llm-provider:read","amp:llm-provider:configure-guardrail","amp:mcp-server:read","amp:mcp-server:configure-guardrail","amp:agent-kind:read","amp:agent:read","amp:agent:build","amp:agent:api-key-manage","amp:agent:deploy-non-production","amp:agent:deploy-production","amp:agent:promote","amp:agent:rollback","amp:agent:suspend","amp:monitor:read","amp:monitor:score-read","amp:observability:org-dashboard","amp:observability:project-dashboard","amp:observability:infra-metric","amp:catalog:read"]'
 
     log_info "Default role provisioning complete (4 roles created/updated)."
 
     # ===========================================================================
+    # Assign default users to roles
+    # ===========================================================================
+    assign_user_to_role() {
+      local username="$1" role_id="$2" role_name="$3"
+      local response http_code body user_id
+
+      response=$(api_call GET "/users")
+      http_code="${response: -3}"
+      body="${response%???}"
+      if [[ "$http_code" != "200" ]]; then
+        log_error "Failed to fetch users (HTTP $http_code)"
+        exit 1
+      fi
+
+      user_id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"username\":\"${username}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+      if [[ -z "$user_id" ]]; then
+        log_warning "User '${username}' not found, skipping role assignment"
+        return 0
+      fi
+
+      local payload="{\"assignments\":[{\"id\":\"${user_id}\",\"type\":\"user\"}]}"
+      response=$(api_call POST "/roles/${role_id}/assignments/add" "$payload")
+      http_code="${response: -3}"
+      if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
+        log_success "Assigned user '${username}' to role '${role_name}'"
+      else
+        log_error "Failed to assign user '${username}' to role '${role_name}' (HTTP $http_code): ${response%???}"
+        exit 1
+      fi
+    }
+
+    assign_user_to_role "admin" "$ADMIN_ID" "Agent Manager Admin"
+
+    # ===========================================================================
     # Assign ampApiClient app to Agent Manager Admin role so it gets all scopes in M2M tokens
     # ===========================================================================
-    log_info "Assigning ampApiClient app to Agent Manager Admin role..."
-    response=$(thunder_api_call GET "/applications")
+    log_info "Assigning ampApiClient app to admin role..."
+    response=$(api_call GET "/applications")
     http_code="${response: -3}"
     body="${response%???}"
     if [[ "$http_code" != "200" ]]; then
@@ -1621,7 +1666,7 @@ data:
       log_warning "ampApiClient app not found, skipping role assignment"
     else
       payload="{\"assignments\":[{\"id\":\"${AMP_API_CLIENT_ID}\",\"type\":\"app\"}]}"
-      response=$(thunder_api_call POST "/roles/${ADMIN_ID}/assignments/add" "$payload")
+      response=$(api_call POST "/roles/${ADMIN_ID}/assignments/add" "$payload")
       http_code="${response: -3}"
       if [[ "$http_code" == "200" ]] || [[ "$http_code" == "201" ]] || [[ "$http_code" == "204" ]] || [[ "$http_code" == "409" ]]; then
         log_success "Assigned ampApiClient to Agent Manager Admin role"
@@ -1645,7 +1690,7 @@ data:
     # ---------------------------------------------------------------------------
     # Fetch default OU ID
     # ---------------------------------------------------------------------------
-    RESPONSE=$(thunder_api_call GET "/organization-units/tree/default")
+    RESPONSE=$(api_call GET "/organization-units/tree/default")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1667,7 +1712,7 @@ data:
       local payload="{\"name\":\"${name}\",\"ouId\":\"${DEFAULT_OU_ID}\",\"description\":\"${description}\"}"
       local response http_code body id
 
-      response=$(thunder_api_call POST "/groups" "$payload")
+      response=$(api_call POST "/groups" "$payload")
       http_code="${response: -3}"
       body="${response%???}"
 
@@ -1680,7 +1725,7 @@ data:
 
       if [[ "$http_code" == "409" ]]; then
         log_warning "Group '${name}' already exists, retrieving ID..." >&2
-        response=$(thunder_api_call GET "/groups")
+        response=$(api_call GET "/groups")
         body="${response%???}"
         id=$(echo "$body" | sed 's/},{/}\n{/g' | grep "\"name\":\"${name}\"" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
         if [[ -z "$id" ]]; then
@@ -1704,8 +1749,8 @@ data:
     # ===========================================================================
     # Assign Agent Manager Admin role to Agent Manager Admins group
     # ===========================================================================
-    log_info "Looking up Agent Manager Admin role..."
-    RESPONSE=$(thunder_api_call GET "/roles")
+    log_info "Looking up admin role..."
+    RESPONSE=$(api_call GET "/roles")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1713,16 +1758,16 @@ data:
       exit 1
     fi
 
-    ADMIN_ROLE_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"name":"Agent Manager Admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ADMIN_ROLE_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"name":"admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$ADMIN_ROLE_ID" ]]; then
-      log_error "Could not find Agent Manager Admin role"
+      log_error "Could not find 'admin' role"
       exit 1
     fi
-    log_info "Found Agent Manager Admin role (id: $ADMIN_ROLE_ID)"
+    log_info "Found 'admin' role (id: $ADMIN_ROLE_ID)"
 
     log_info "Assigning Agent Manager Admin role to Agent Manager Admins group..."
     ASSIGN_PAYLOAD='{"assignments":[{"id":"'${ADMINS_GROUP_ID}'","type":"group"}]}'
-    RESPONSE=$(thunder_api_call POST "/roles/$ADMIN_ROLE_ID/assignments/add" "$ASSIGN_PAYLOAD")
+    RESPONSE=$(api_call POST "/roles/$ADMIN_ROLE_ID/assignments/add" "$ASSIGN_PAYLOAD")
     HTTP_CODE="${RESPONSE: -3}"
     if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]] || [[ "$HTTP_CODE" == "409" ]]; then
       log_success "Assigned Agent Manager Admin role to Agent Manager Admins group"
@@ -1736,7 +1781,7 @@ data:
     # Assign admin user to Agent Manager Admins group
     # ===========================================================================
     log_info "Looking up admin user..."
-    RESPONSE=$(thunder_api_call GET "/users")
+    RESPONSE=$(api_call GET "/users")
     HTTP_CODE="${RESPONSE: -3}"
     BODY="${RESPONSE%???}"
     if [[ "$HTTP_CODE" != "200" ]]; then
@@ -1750,8 +1795,8 @@ data:
     else
       log_info "Found admin user (id: $ADMIN_USER_ID)"
       log_info "Assigning admin user to Agent Manager Admins group..."
-      ASSIGN_USER_PAYLOAD='{"members":[{"type":"user","id":"'${ADMIN_USER_ID}'"}]}'
-      RESPONSE=$(thunder_api_call POST "/groups/$ADMINS_GROUP_ID/members/add" "$ASSIGN_USER_PAYLOAD")
+      ASSIGN_USER_PAYLOAD='{"members":[{"id":"'${ADMIN_USER_ID}'","type":"user"}]}'
+      RESPONSE=$(api_call POST "/groups/$ADMINS_GROUP_ID/members/add" "$ASSIGN_USER_PAYLOAD")
       HTTP_CODE="${RESPONSE: -3}"
       if [[ "$HTTP_CODE" == "200" ]] || [[ "$HTTP_CODE" == "201" ]] || [[ "$HTTP_CODE" == "204" ]] || [[ "$HTTP_CODE" == "409" ]]; then
         log_success "Assigned admin user to Agent Manager Admins group"

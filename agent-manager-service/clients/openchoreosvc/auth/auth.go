@@ -45,6 +45,9 @@ type Config struct {
 
 	// ClientSecret is the OAuth2 client secret
 	ClientSecret string
+
+	// Scope is the OAuth2 scope(s) to request (space-separated)
+	Scope string
 }
 
 // AuthProvider implements client.AuthProvider for on-prem deployments using IDP
@@ -144,9 +147,13 @@ func (p *AuthProvider) fetchToken(ctx context.Context) (string, int64, error) {
 		Method: http.MethodPost,
 	}
 	// Use client_secret_basic: credentials in Authorization header (Base64 encoded)
-	req.SetFormData(map[string]string{
+	formData := map[string]string{
 		"grant_type": "client_credentials",
-	})
+	}
+	if p.config.Scope != "" {
+		formData["scope"] = p.config.Scope
+	}
+	req.SetFormData(formData)
 	auth := base64.StdEncoding.EncodeToString([]byte(p.config.ClientID + ":" + p.config.ClientSecret))
 	req.SetHeader("Authorization", "Basic "+auth)
 

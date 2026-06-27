@@ -34,6 +34,11 @@ install_control_plane() {
     echo "📦 Installing/Upgrading OpenChoreo Control Plane..."
     echo "   This may take up to 10 minutes..."
 
+    # Delete the configmap before Helm runs so it is always recreated from chart defaults
+    # with a clean field manager state. Prevents Apply/Update operation splits that
+    # cause 'conflict with helm' errors on repeated setup runs.
+    kubectl delete configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null || true
+
     local install_output
     if ! install_output=$(helm upgrade --install openchoreo-control-plane oci://ghcr.io/openchoreo/helm-charts/openchoreo-control-plane \
         --version "${OPENCHOREO_VERSION}" \
@@ -60,6 +65,45 @@ install_control_plane() {
 
     echo "⏳ Waiting for Control Plane deployments to be ready (timeout: 5 minutes)..."
     kubectl wait -n openchoreo-control-plane --for=condition=available --timeout=300s deployment --all
+
+    # ThunderID v0.45.0 uses 'client_id' (not 'sub') for client_credentials tokens.
+    # The Helm chart schema doesn't expose this setting, so patch the configmap using
+    # server-side apply (Apply operation) to stay compatible with Helm's field manager.
+    echo "🔧 Patching openchoreo-api-config: service_account entitlement claim → client_id..."
+    if kubectl get configmap openchoreo-api-config -n openchoreo-control-plane &>/dev/null; then
+        patched_yaml=$(kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml \
+            | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+        if ! echo "$patched_yaml" | grep -q "claim: client_id"; then
+            echo "❌ Failed to patch openchoreo-api-config entitlement claim to client_id"
+            return 1
+        fi
+        echo "$patched_yaml" | kubectl apply --server-side --field-manager=helm -f -
+        kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
+        kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=120s
+        echo "✅ openchoreo-api-config patched (client_id claim)"
+    else
+        echo "⚠️  openchoreo-api-config not found — skipping claim patch"
+    fi
+
+    # v0.45 puts the client name in 'client_id' (was 'sub'), so the built-in service-account
+    # bindings keyed on 'sub' stop matching and return 403. Switch them to 'client_id';
+    echo "🔧 Migrating service-account ClusterAuthzRoleBindings: claim sub → client_id..."
+    for binding in $(kubectl get clusterauthzrolebindings.openchoreo.dev \
+        -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+        claim=$(kubectl get clusterauthzrolebinding.openchoreo.dev "$binding" \
+            -o jsonpath='{.spec.entitlement.claim}' 2>/dev/null)
+        if [ "$claim" = "sub" ]; then
+            if kubectl patch clusterauthzrolebinding.openchoreo.dev "$binding" \
+                --type=merge -p '{"spec":{"entitlement":{"claim":"client_id"}}}' >/dev/null 2>&1; then
+                echo "   ✓ migrated ${binding}"
+            else
+                echo "❌ Failed to migrate ClusterAuthzRoleBinding '${binding}' to client_id"
+                return 1
+            fi
+        fi
+    done
+    echo "✅ Service-account bindings migrated to client_id"
+
     echo "✅ OpenChoreo Control Plane ready"
 }
 
@@ -209,6 +253,25 @@ install_observability_plane() {
     kubectl wait -n openchoreo-observability-plane --for=condition=available --timeout=300s deployment --all
     echo "✅ OpenChoreo Observability Plane deployments ready"
 
+    # The observer resolves service accounts from its own config (observer-auth-config),
+    # still keyed on 'claim: sub'. Patch it to 'client_id' (like openchoreo-api-config),
+    # else agent build-log queries get 403.
+    echo "🔧 Patching observer-auth-config: service_account entitlement claim → client_id..."
+    if kubectl get configmap observer-auth-config -n openchoreo-observability-plane &>/dev/null; then
+        patched_obs_yaml=$(kubectl get configmap observer-auth-config -n openchoreo-observability-plane -o yaml \
+            | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+        if ! echo "$patched_obs_yaml" | grep -q "claim: client_id"; then
+            echo "❌ Failed to patch observer-auth-config entitlement claim to client_id"
+            return 1
+        fi
+        echo "$patched_obs_yaml" | kubectl apply --server-side --field-manager=helm -f -
+        kubectl rollout restart deployment/observer -n openchoreo-observability-plane
+        kubectl rollout status deployment/observer -n openchoreo-observability-plane --timeout=120s
+        echo "✅ observer-auth-config patched (client_id claim)"
+    else
+        echo "⚠️  observer-auth-config not found — skipping observer claim patch"
+    fi
+
     # Registering the Observability Plane with the control plane
     echo "🔗 Registering Observability Plane..."
     OP_CA_CERT=$(kubectl get secret cluster-agent-tls -n openchoreo-observability-plane -o jsonpath='{.data.ca\.crt}' | base64 -d)
@@ -292,6 +355,48 @@ echo ""
 # Define installation functions for parallel execution
 install_thunder_extension() {
     echo "📦 Installing/Upgrading WSO2 AMP Thunder Extension..."
+
+    # Detect an image mismatch and do a clean uninstall+install so the
+    # pre-install setup job re-runs and re-bootstraps the database.
+    local target_image="ghcr.io/thunder-id/thunderid:0.45.0"
+    local selector="app.kubernetes.io/instance=amp-thunder-extension"
+    if helm status amp-thunder-extension -n amp-thunder &>/dev/null; then
+        local current_image
+        current_image=$(kubectl get pods -n amp-thunder -l "$selector" \
+            -o jsonpath='{range .items[*]}{.spec.containers[0].image}{"\n"}{end}' 2>/dev/null \
+            | grep -v "^$" | head -1 || echo "")
+        if [[ -z "$current_image" ]]; then
+            echo "❌ Could not determine current Thunder image; refusing destructive reset"
+            return 1
+        fi
+        if [[ "$current_image" != "$target_image" ]]; then
+            echo "⚠️  Thunder version mismatch (installed: '${current_image}', target: '${target_image}')"
+            echo "   Uninstalling for clean reinstall (setup job must re-run with new scope format)..."
+            if ! helm uninstall amp-thunder-extension -n amp-thunder --wait --timeout=2m; then
+                echo "❌ Failed to uninstall existing Thunder release; aborting clean reinstall"
+                helm status amp-thunder-extension -n amp-thunder 2>/dev/null || true
+                return 1
+            fi
+
+            # Explicitly delete the PVC so the setup job initialises a fresh database.
+            if kubectl get pvc -n amp-thunder -l "$selector" -o name 2>/dev/null | grep -q .; then
+                if ! kubectl delete pvc -n amp-thunder -l "$selector" --wait --timeout=60s; then
+                    echo "❌ Failed to delete Thunder PVC(s); aborting to avoid reusing the stale database"
+                    kubectl get pvc -n amp-thunder -l "$selector" 2>/dev/null || true
+                    return 1
+                fi
+                # Confirm none linger (async delete / stuck finalizer)
+                if kubectl get pvc -n amp-thunder -l "$selector" -o name 2>/dev/null | grep -q .; then
+                    echo "❌ Thunder PVC(s) still present after delete; aborting clean reinstall"
+                    return 1
+                fi
+            fi
+            echo "✅ Existing Thunder release removed (database reset)"
+        else
+            echo "   Thunder is already at target version, skipping reinstall."
+        fi
+    fi
+
     helm upgrade --install amp-thunder-extension "${SCRIPT_DIR}/../helm-charts/wso2-amp-thunder-extension" \
         --namespace amp-thunder --create-namespace
     echo "✅ AMP Thunder Extension installed/upgraded successfully"

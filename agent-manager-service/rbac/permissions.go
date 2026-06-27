@@ -22,10 +22,10 @@ type Permission string
 // ResourceServer is the OAuth2 resource server identifier for Agent Manager.
 const ResourceServer = "amp"
 
-// Scope returns the OAuth2 scope string for this permission as Thunder issues it (e.g. "org:view").
-// Thunder stores and returns permissions without the resource server prefix in the token scope claim.
+// Scope returns the OAuth2 scope string for this permission as Thunder issues it (e.g. "amp:org:view").
+// Thunder v0.45 builds permissions as <resource-server-handle>:<resource>:<action>
 func (p Permission) Scope() string {
-	return string(p)
+	return ResourceServer + ":" + string(p)
 }
 
 // Org permissions
