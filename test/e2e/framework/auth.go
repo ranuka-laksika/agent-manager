@@ -59,7 +59,8 @@ const ampScopes = "amp:agent-kind:create amp:agent-kind:delete amp:agent-kind:re
 	"amp:observability:guardrail-metric amp:observability:infra-metric amp:observability:org-dashboard amp:observability:project-dashboard " +
 	"amp:org:assign-role amp:org:invite-member amp:org:manage-idp amp:org:manage-service-account amp:org:modify-settings amp:org:remove-member amp:org:view " +
 	"amp:project:create amp:project:delete amp:project:read amp:project:update amp:repository:read " +
-	"amp:role:create amp:role:delete amp:role:read amp:role:update"
+	"amp:role:create amp:role:delete amp:role:read amp:role:update" +
+	"amp:profile:read amp:profile:update-attributes"
 
 // FetchToken obtains an OAuth2 access token from the Thunder IDP using the
 // client_credentials grant type. It retries on transient errors.
