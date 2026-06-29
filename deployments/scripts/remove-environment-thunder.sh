@@ -112,6 +112,13 @@ main() {
     echo "ℹ️  Namespace '${ns}' not found — already deleted"
   fi
 
+  # --- Step 3: Remove local credential file (namespace deletion already removed K8s Secret) ---
+  local cred_file="${HOME}/.amp/thunder-credentials/${org}-${ENV_NAME}.env"
+  if [ -f "$cred_file" ]; then
+    rm -f "$cred_file"
+    echo "🧹 Removed local credential file (${cred_file})"
+  fi
+
   echo ""
   echo "=== Thunder ID for '${ENV_NAME}' removed ==="
   echo ""
