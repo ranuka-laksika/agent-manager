@@ -48,6 +48,10 @@ var H = amctl.RegisterSuite(
 	amctl.WithSharedSetup(
 		testsetup.SynchronizedCLILifecycleAgent(&cfg, &apiClient, &owned),
 	),
+	// Tear the CLI-owned agent + project down when the suite ends.
+	amctl.WithSharedTeardown(
+		testsetup.CleanupCLILifecycleAgent(&apiClient, &cfg),
+	),
 )
 
 func TestCLIAgentPlatform(t *testing.T) {

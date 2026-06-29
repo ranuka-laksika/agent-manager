@@ -37,6 +37,9 @@ type suiteConfig struct {
 	// sharedEveryProc runs on every process during the second phase, after
 	// login, receiving the bytes sharedProc1 returned. nil when unused.
 	sharedEveryProc func([]byte)
+	// sharedTeardownProc1 runs on process 1 in SynchronizedAfterSuite, after all
+	// specs finish, to tear down whatever sharedProc1 provisioned. nil when unused.
+	sharedTeardownProc1 func()
 }
 
 // SuiteOption configures optional behavior on RegisterSuite.
@@ -54,6 +57,16 @@ func WithSharedSetup(proc1 func() []byte, everyProc func([]byte)) SuiteOption {
 	return func(c *suiteConfig) {
 		c.sharedProc1 = proc1
 		c.sharedEveryProc = everyProc
+	}
+}
+
+// WithSharedTeardown registers teardown that runs once on process 1 after all
+// specs finish — the counterpart to WithSharedSetup's proc1 provisioning, for
+// deleting a once-provisioned fixture. Should be best-effort. Ginkgo allows only
+// one SynchronizedAfterSuite per suite, so teardown must route through here.
+func WithSharedTeardown(proc1 func()) SuiteOption {
+	return func(c *suiteConfig) {
+		c.sharedTeardownProc1 = proc1
 	}
 }
 
@@ -120,7 +133,10 @@ func RegisterSuite(opts ...SuiteOption) *Harness {
 			_ = os.RemoveAll(h.home)
 		}
 	}, func() {
-		// Process 1 only: drop the built binary (skipped when AMCTL_BIN was used).
+		// Process 1 only: tear down the shared fixture, then drop the binary.
+		if sc.sharedTeardownProc1 != nil {
+			sc.sharedTeardownProc1()
+		}
 		if h.builtBinDir != "" {
 			_ = os.RemoveAll(h.builtBinDir)
 		}
