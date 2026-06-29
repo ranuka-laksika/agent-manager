@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"strings"
 
 	"github.com/wso2/agent-manager/agent-manager-service/app"
 	ocauth "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/auth"
@@ -38,6 +39,7 @@ func main() {
 		TokenURL:     cfg.IDP.TokenURL,
 		ClientID:     cfg.IDP.ClientID,
 		ClientSecret: cfg.IDP.ClientSecret,
+		Scope:        strings.Join(cfg.OAuthScopesSupported, " "),
 	})
 
 	// Open-source: OpenBao secret management

@@ -36,7 +36,7 @@ func (c *openChoreoClient) EnsureClusterRoleBinding(ctx context.Context, clientI
 		Spec: &gen.ClusterAuthzRoleBindingSpec{
 			Effect: &effect,
 			Entitlement: gen.AuthzEntitlementClaim{
-				Claim: "sub",
+				Claim: "client_id",
 				Value: clientID,
 			},
 			RoleMappings: []gen.ClusterAuthzRoleMapping{
@@ -74,7 +74,7 @@ func (c *openChoreoClient) EnsureClusterRoleBinding(ctx context.Context, clientI
 			if existing.Spec != nil &&
 				existing.Spec.Effect != nil &&
 				*existing.Spec.Effect == effect &&
-				existing.Spec.Entitlement.Claim == "sub" &&
+				existing.Spec.Entitlement.Claim == "client_id" &&
 				existing.Spec.Entitlement.Value == clientID &&
 				len(existing.Spec.RoleMappings) == 1 &&
 				existing.Spec.RoleMappings[0].RoleRef.Kind == roleRefKind &&

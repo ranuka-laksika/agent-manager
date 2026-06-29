@@ -17,7 +17,8 @@ maintainers:
     url: https://wso2.com
 
 dependencies:
-  - name: thunder
+  - name: thunderid
+    alias: thunder
     condition: thunder.enabled
-    repository: oci://ghcr.io/asgardeo/helm-charts
-    version: "0.34.0"
+    repository: oci://ghcr.io/thunder-id/helm-charts
+    version: "0.45.0"
