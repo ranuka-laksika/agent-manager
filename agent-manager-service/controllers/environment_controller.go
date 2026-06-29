@@ -37,6 +37,7 @@ type EnvironmentController interface {
 	UpdateEnvironment(w http.ResponseWriter, r *http.Request)
 	DeleteEnvironment(w http.ResponseWriter, r *http.Request)
 	GetEnvironmentGateways(w http.ResponseWriter, r *http.Request)
+	ListThunderInstances(w http.ResponseWriter, r *http.Request)
 }
 
 type environmentController struct {
@@ -370,4 +371,21 @@ func convertToSpecGatewayResponse(gw *models.GatewayResponse) spec.GatewayRespon
 	}
 
 	return response
+}
+
+
+func (c *environmentController) ListThunderInstances(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+
+	result, err := c.environmentService.ListThunderInstances(ctx, orgName)
+	if err != nil {
+		log.Error("ListThunderInstances: failed to list thunder instances", "orgName", orgName, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list Thunder instances")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, result)
 }

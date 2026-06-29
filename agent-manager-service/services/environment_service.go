@@ -25,6 +25,7 @@ import (
 	"github.com/google/uuid"
 
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -38,6 +39,7 @@ type EnvironmentService interface {
 	UpdateEnvironment(ctx context.Context, orgName string, envID string, req *models.UpdateEnvironmentRequest) (*models.GatewayEnvironmentResponse, error)
 	DeleteEnvironment(ctx context.Context, orgName string, envID string) error
 	GetEnvironmentGateways(ctx context.Context, orgName string, envID string) ([]models.GatewayResponse, error)
+	ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error)
 }
 
 type environmentService struct {
@@ -406,4 +408,31 @@ func toOCClientGatewayListenerSpec(l *models.GatewayListenerSpec) *occlient.Gate
 		return nil
 	}
 	return &occlient.GatewayListenerSpec{Port: l.Port, Host: l.Host}
+}
+
+// ListThunderInstances returns the Thunder OAuth2 identity provider info for every
+// environment in the org. The URLs are computed from naming conventions — no DB reads
+// or external HTTP calls are made beyond the environment list.
+func (s *environmentService) ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error) {
+	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
+	if err != nil {
+		return nil, fmt.Errorf("list environments for org %s: %w", orgName, err)
+	}
+
+	instances := make([]models.ThunderInstanceResponse, 0, len(envs))
+	for _, env := range envs {
+		if env == nil {
+			continue
+		}
+		instances = append(instances, models.ThunderInstanceResponse{
+			EnvName:      env.Name,
+			DisplayName:  env.DisplayName,
+			IsProduction: env.IsProduction,
+			IssuerURL:    thundersvc.ThunderIssuerURL(orgName, env.Name),
+			TokenURL:     thundersvc.ThunderTokenURL(orgName, env.Name),
+			JWKSURL:      thundersvc.ThunderJWKSURL(orgName, env.Name),
+			Namespace:    thundersvc.ThunderNamespace(orgName, env.Name),
+		})
+	}
+	return &models.ThunderInstanceListResponse{ThunderInstances: instances}, nil
 }

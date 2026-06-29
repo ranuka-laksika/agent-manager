@@ -15,9 +15,10 @@
  * under the License.
  */
 
-import { DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
+import { DoorClosedLocked, KeyRound } from "@wso2/oxygen-ui-icons-react";
 import type { PageMetadata } from "@agent-management-platform/types";
 import { GatewaysOrganization } from "./Gateways.Organization";
+import { ThunderInstancesOrganization } from "./ThunderInstances.Organization";
 
 export const metaData: PageMetadata = {
   title: "Gateways",
@@ -35,6 +36,23 @@ export const gatewaysMetadata = {
   icon: metaData.icon,
 };
 
-export { GatewaysOrganization };
+
+export const thunderInstancesMetaData: PageMetadata = {
+  title: "Identity",
+  description: "Environment-scoped OAuth2 identity providers for agent authentication",
+  icon: KeyRound,
+  path: "/thunder-instances",
+  component: ThunderInstancesOrganization,
+  levels: {
+    organization: ThunderInstancesOrganization,
+  },
+};
+
+export const thunderInstancesMetadata = {
+  title: thunderInstancesMetaData.title,
+  icon: thunderInstancesMetaData.icon,
+};
+
+export { GatewaysOrganization, ThunderInstancesOrganization };
 
 export default GatewaysOrganization;

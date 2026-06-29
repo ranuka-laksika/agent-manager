@@ -1648,6 +1648,7 @@ data:
     }
 
     assign_user_to_role "admin" "$ADMIN_ID" "Agent Manager Admin"
+    assign_user_to_role "{{ (index .Values.thunder.bootstrap.defaultUsers 0).username }}" "$ADMIN_ID" "admin"
 
     # ===========================================================================
     # Assign ampApiClient app to Agent Manager Admin role so it gets all scopes in M2M tokens

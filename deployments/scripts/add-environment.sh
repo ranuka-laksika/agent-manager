@@ -26,6 +26,14 @@ set -euo pipefail
 #   - CHART_VERSION: gateway-extension chart version, pinned to the platform
 #     release so an added env runs the same chart. Injected by the console.
 # Optional:
+#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
+#     When unset (the default), the latest published version is resolved from
+#     oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension so new
+#     environments always get the newest gateway chart. Set it only to pin a
+#     specific version.
+#   - GATEWAY_CHART: path to a local chart directory or tarball (e.g. ./deployments/helm-charts/wso2-amp-api-platform-gateway-extension).
+#     When set, CHART_VERSION is ignored and the local chart is used directly.
+#     Useful for testing uncommitted gateway chart changes without publishing to OCI.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
@@ -39,7 +47,8 @@ set -euo pipefail
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
 : "${DISPLAY_NAME:?DISPLAY_NAME is required (e.g. DISPLAY_NAME=\"Staging\")}"
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
-: "${CHART_VERSION:?CHART_VERSION is required (e.g. CHART_VERSION=0.15.0)}"
+# CHART_VERSION is required when pulling from OCI but ignored when GATEWAY_CHART is set.
+CHART_VERSION="${CHART_VERSION:-}"
 
 IS_PRODUCTION="${IS_PRODUCTION:-false}"
 case "$IS_PRODUCTION" in
@@ -77,7 +86,29 @@ GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
 
 CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 
-echo "📌 Using chart version: ${CHART_VERSION}"
+# GATEWAY_CHART: optional path or ref to an alternative chart (e.g. a private OCI registry
+# or a tarball). When unset, the published OCI chart at CHART_REF is used.
+GATEWAY_CHART="${GATEWAY_CHART:-}"
+
+# --- Resolve chart reference and version ---
+# When GATEWAY_CHART is set, use it directly (no --version flag).
+# Otherwise resolve the latest OCI version or use the pinned CHART_VERSION.
+if [ -n "$GATEWAY_CHART" ]; then
+    echo "📦 Using gateway chart: ${GATEWAY_CHART}"
+    CHART_REF="${GATEWAY_CHART}"
+    CHART_VERSION=""
+elif [ -z "$CHART_VERSION" ]; then
+    echo "🔎 Resolving latest gateway chart version from ${CHART_REF}..."
+    CHART_VERSION=$(helm show chart "${CHART_REF}" 2>/dev/null | awk '/^version:/ {print $2; exit}')
+    if [ -z "$CHART_VERSION" ]; then
+        echo "❌ Could not resolve the latest chart version from ${CHART_REF}"
+        echo "   Pin a version explicitly and retry (e.g. CHART_VERSION=0.15.0)."
+        exit 1
+    fi
+    echo "✅ Using latest chart version: ${CHART_VERSION}"
+else
+    echo "📌 Using pinned chart version: ${CHART_VERSION}"
+fi
 
 # Port the gateway runtime is exposed on (matches values.yaml gateway.vhost default).
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
@@ -89,6 +120,38 @@ AGENT_MANAGER_INTERNAL_BASE_URL="${AGENT_MANAGER_INTERNAL_BASE_URL:-http://host.
 AGENT_MANAGER_INTERNAL_CP="${AGENT_MANAGER_INTERNAL_CP:-host.docker.internal:9243}"
 AGENT_MANAGER_INTERNAL_API="${AGENT_MANAGER_INTERNAL_BASE_URL}/api/v1"
 AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_BASE_URL}/auth/external/jwks.json"
+
+# ---------------------------------------------------------------------------
+# Thunder naming helpers — mirror add-environment-thunder.sh and naming.go.
+# Computes per-env Thunder coordinates so the gateway ThunderKeyManager points
+# at THIS environment's Thunder, not the shared platform Thunder instance.
+# ---------------------------------------------------------------------------
+_thunder_sha6() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | cut -c1-6
+  else
+    printf '%s' "$1" | sha256sum | cut -c1-6
+  fi
+}
+
+# _thunder_release_name ORG ENV -> Helm release name <=53 chars, collision-safe.
+_thunder_release_name() {
+  local org="$1" env="$2" full hash prefix
+  full="amp-thunder-${org}-${env}"
+  if [ "${#full}" -le 53 ]; then
+    printf '%s' "${full%-}"
+    return 0
+  fi
+  hash="$(_thunder_sha6 "${org}/${env}")"
+  prefix="${full:0:46}"
+  prefix="${prefix%-}"
+  printf '%s-%s' "$prefix" "$hash"
+}
+
+# _thunder_host ORG ENV -> wildcard-cert-friendly hostname under thunder.amp.localhost.
+_thunder_host() {
+  printf '%s-%s.thunder.amp.localhost' "$1" "$2"
+}
 
 echo "=== Adding Environment: ${DISPLAY_NAME} (${ENV_NAME}) ==="
 echo ""
@@ -172,9 +235,18 @@ RELEASE_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 # any trailing hyphens left by truncation.
 RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 
+# Per-env Thunder JWKS wiring: the gateway's ThunderKeyManager must trust the
+# JWT tokens minted by THIS environment's Thunder (not the shared platform Thunder).
+#   issuer        = Thunder's publicUrl / jwt.issuer (what it stamps into the JWT iss claim)
+#   internal_jwks = Thunder's K8s service DNS — avoids routing through the ingress
+#                   Service name follows the chart template: {{ .Release.Name }}-service
+THUNDER_RELEASE="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+THUNDER_ISSUER="http://$(_thunder_host "${ORG_NAME}" "${ENV_NAME}"):8080"
+THUNDER_INTERNAL_JWKS="http://${THUNDER_RELEASE}-service.${THUNDER_RELEASE}.svc.cluster.local:8090/oauth2/jwks"
+
 helm upgrade --install "${RELEASE_NAME}" \
     "${CHART_REF}" \
-    --version "${CHART_VERSION}" \
+    ${CHART_VERSION:+--version "${CHART_VERSION}"} \
     --namespace "${GATEWAY_NAMESPACE}" \
     --set agentManager.orgName="${ORG_NAME}" \
     --set gateway.environment="${ENV_NAME}" \
@@ -188,8 +260,8 @@ helm upgrade --install "${RELEASE_NAME}" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.uri=${AGENT_MANAGER_INTERNAL_JWKS}" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.skipTlsVerify=true" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=http://thunder.amp.localhost:8080" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks" \
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}" \
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}" \
     --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
 
 # --- Step 3: Wait for gateway to be ready ---
@@ -200,6 +272,27 @@ if kubectl wait --for=condition=Programmed "apigateway/${GATEWAY_NAME}" -n "${GA
     echo "✅ Gateway is programmed"
 else
     echo "⚠️  Gateway did not become ready in time — check: kubectl get apigateway ${GATEWAY_NAME} -n ${GATEWAY_NAMESPACE}"
+fi
+
+# --- Step 4: Provision the environment's Thunder ID instance ---
+# Each environment gets its own Thunder ID (the identity provider for that environment's
+# agent OAuth clients). Chained here so one curl covers env + gateway + Thunder.
+# Non-fatal: the environment and gateway already exist if this step fails.
+if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
+    echo ""
+    echo "🔐 Provisioning Thunder ID instance for '${ENV_NAME}'..."
+    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
+    # The console sets it via getRawScriptUrl; the default follows main (latest).
+    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
+    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" \
+        | ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
+          DATAPLANE_REF="${DATAPLANE_REF}" bash; then
+        echo "✅ Thunder ID instance provisioned"
+    else
+        echo "⚠️  Thunder ID provisioning failed — environment and gateway are up."
+        echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
+    fi
 fi
 
 echo ""

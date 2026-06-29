@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Removes an environment: deletes the Environment via the Agent Manager API (which
-# in turn deletes it in OpenChoreo and cleans up link tables), then uninstalls its
-# API Platform Gateway helm release.
+# Removes an environment: deprovisions its Thunder ID instance, uninstalls its
+# API Platform Gateway helm release, then deletes the Environment via the Agent
+# Manager API (which in turn deletes it in OpenChoreo and cleans up link tables).
 #
 # All inputs are provided via environment variables so the script can be piped
 # directly into bash:
@@ -20,6 +20,8 @@ set -euo pipefail
 #   - ORG_NAME (default: default)
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
 #   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
+#   - DEPROVISION_THUNDER (default: true) — set to false to skip Thunder removal
+#   - THUNDER_SCRIPT_URL — override the URL of remove-environment-thunder.sh
 
 # --- Required inputs ---
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
@@ -42,6 +44,24 @@ RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 
 echo "=== Removing Environment: ${ENV_NAME} ==="
 echo ""
+
+# --- Step 0: Deprovision the environment's Thunder ID instance ---
+# Thunder is removed first (LIFO — last provisioned, first deprovisioned).
+# Failure is non-fatal: the gateway and environment removal proceed regardless.
+if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
+    echo "🔐 Removing Thunder ID instance for '${ENV_NAME}'..."
+    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
+    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
+    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" \
+        | ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash; then
+        echo "✅ Thunder ID instance removed"
+    else
+        echo "⚠️  Thunder ID removal failed — continuing with gateway and environment removal."
+        echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} ORG_NAME=${ORG_NAME} bash"
+    fi
+    echo ""
+fi
 
 # --- Step 1: Delete the environment via Agent Manager API ---
 echo "⏳ Checking Agent Manager is healthy..."

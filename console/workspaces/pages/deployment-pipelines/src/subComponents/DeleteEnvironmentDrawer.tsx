@@ -44,16 +44,17 @@ interface DeleteEnvironmentDrawerProps {
 }
 
 function buildScript(name: string, token: string): string {
-  // The remove-environment.sh script uninstalls the environment's API Platform
-  // Gateway helm release and then deletes the Environment via the Agent Manager
-  // API. Inputs are piped in as environment variables so the script can be
-  // curled straight into bash. Mirrors the Create Environment drawer; ORG_NAME
-  // is left to the script's default so the gateway release name matches what
-  // add-environment.sh installed.
+  // The remove-environment.sh script deprovisions the environment's Thunder ID
+  // instance, uninstalls its API Platform Gateway helm release, and then deletes
+  // the Environment via the Agent Manager API. Pass the version-matched
+  // THUNDER_SCRIPT_URL so the chained call fetches the script from the same git
+  // ref as this one. ORG_NAME is left to the script's default so release names
+  // match what add-environment.sh installed.
   const lines = [
     `curl -fsSL ${getRawScriptUrl("remove-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
     `    AGENT_MANAGER_TOKEN=${token} \\`,
+    `    THUNDER_SCRIPT_URL=${getRawScriptUrl("remove-environment-thunder.sh")} \\`,
     "    bash",
   ];
   return lines.join("\n");
@@ -116,10 +117,10 @@ export function DeleteEnvironmentDrawer({
       <DrawerContent>
         <Stack spacing={3}>
           <Typography variant="body2" color="text.secondary">
-            Environments are removed by a script that uninstalls the environment&apos;s API Platform
-            Gateway via Helm and then deletes the environment in Agent Manager. Copy and run the
-            command below in a terminal with <code>kubectl</code> and <code>helm</code> configured
-            against your cluster.
+            Environments are removed by a script that deprovisions the environment&apos;s dedicated
+            identity (Thunder) instance, uninstalls its API Platform Gateway via Helm, and then
+            deletes the environment in Agent Manager. Copy and run the command below in a terminal
+            with <code>kubectl</code> and <code>helm</code> configured against your cluster.
           </Typography>
 
           <Alert severity="warning">
