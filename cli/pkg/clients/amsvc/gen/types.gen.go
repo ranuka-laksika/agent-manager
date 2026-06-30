@@ -14,7 +14,6 @@ import (
 
 // Defines values for APIKeySecurityIn.
 const (
-	APIKeySecurityInCookie APIKeySecurityIn = "cookie"
 	APIKeySecurityInHeader APIKeySecurityIn = "header"
 	APIKeySecurityInQuery  APIKeySecurityIn = "query"
 )
@@ -22,8 +21,6 @@ const (
 // Valid indicates whether the value is a known member of the APIKeySecurityIn enum.
 func (e APIKeySecurityIn) Valid() bool {
 	switch e {
-	case APIKeySecurityInCookie:
-		return true
 	case APIKeySecurityInHeader:
 		return true
 	case APIKeySecurityInQuery:
@@ -1096,6 +1093,27 @@ func (e GetAgentTraceScoresParamsSortOrder) Valid() bool {
 	default:
 		return false
 	}
+}
+
+// APIKeyInfo Masked, read-only view of a stored API key for listing. The plain key value is never returned; only the masked representation.
+type APIKeyInfo struct {
+	// CreatedAt Creation timestamp in RFC3339 format.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DisplayName Human-readable name shown in the console.
+	DisplayName string `json:"displayName"`
+
+	// ExpiresAt Optional expiration timestamp if set.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// MaskedApiKey Masked representation of the API key (full value is shown only once at creation).
+	MaskedApiKey string `json:"maskedApiKey"`
+
+	// Name Unique name of the API key.
+	Name string `json:"name"`
+
+	// Status Current lifecycle status of the API key (e.g. active, revoked).
+	Status string `json:"status"`
 }
 
 // APIKeySecurity defines model for APIKeySecurity.
@@ -3318,6 +3336,12 @@ type LabelEvaluatorSummary struct {
 	SkippedCount int32 `json:"skippedCount"`
 }
 
+// ListAPIKeysResponse defines model for ListAPIKeysResponse.
+type ListAPIKeysResponse struct {
+	// Keys List of masked API keys.
+	Keys []APIKeyInfo `json:"keys"`
+}
+
 // ListBranchesRequest Request body for listing repository branches
 type ListBranchesRequest struct {
 	// IncludeDefault Whether to include default branch information in the response
@@ -4363,7 +4387,7 @@ type SecuritySummary struct {
 	// ApiKeyEnabled Whether API key security is enabled
 	ApiKeyEnabled *bool `json:"apiKeyEnabled,omitempty"`
 
-	// ApiKeyIn Where the API key is located (header/query/cookie)
+	// ApiKeyIn Where the API key is located (header/query)
 	ApiKeyIn *string `json:"apiKeyIn,omitempty"`
 
 	// Enabled Whether security is enabled
@@ -5427,6 +5451,12 @@ type CreateAgentModelConfigJSONRequestBody = CreateAgentModelConfigRequest
 
 // UpdateAgentModelConfigJSONRequestBody defines body for UpdateAgentModelConfig for application/json ContentType.
 type UpdateAgentModelConfigJSONRequestBody = UpdateAgentModelConfigRequest
+
+// CreateLLMConfigAPIKeyJSONRequestBody defines body for CreateLLMConfigAPIKey for application/json ContentType.
+type CreateLLMConfigAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
+
+// RotateLLMConfigAPIKeyJSONRequestBody defines body for RotateLLMConfigAPIKey for application/json ContentType.
+type RotateLLMConfigAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
 
 // CreateMonitorJSONRequestBody defines body for CreateMonitor for application/json ContentType.
 type CreateMonitorJSONRequestBody = CreateMonitorRequest

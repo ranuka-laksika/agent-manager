@@ -55,15 +55,20 @@ func (c *llmProxyAPIKeyController) ListAPIKeys(w http.ResponseWriter, r *http.Re
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	projName := r.PathValue(utils.PathParamProjName)
 	proxyID := r.PathValue("id")
 
-	log.Info("ListLLMProxyAPIKeys: starting", "orgName", orgName, "proxyID", proxyID)
+	log.Info("ListLLMProxyAPIKeys: starting", "orgName", orgName, "projName", projName, "proxyID", proxyID)
 
-	response, err := c.apiKeyService.ListAPIKeys(ctx, orgName, proxyID)
+	response, err := c.apiKeyService.ListAPIKeys(ctx, orgName, projName, proxyID)
 	if err != nil {
 		switch {
+		case errors.Is(err, utils.ErrProjectNotFound):
+			log.Warn("ListLLMProxyAPIKeys: project not found", "orgName", orgName, "projName", projName)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Project not found")
+			return
 		case errors.Is(err, utils.ErrLLMProxyNotFound):
-			log.Warn("ListLLMProxyAPIKeys: proxy not found", "orgName", orgName, "proxyID", proxyID)
+			log.Warn("ListLLMProxyAPIKeys: proxy not found", "orgName", orgName, "projName", projName, "proxyID", proxyID)
 			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM proxy not found")
 			return
 		default:

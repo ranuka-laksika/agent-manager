@@ -237,6 +237,8 @@ export const ViewLLMProvider: React.FC = () => {
                 orgName={orgId}
                 providerId={providerId}
                 isLoading={isLoading}
+                error={providerError instanceof Error ? providerError
+                  : providerError ? new Error(getErrorMessage(providerError)) : null}
               />
             </TabPanel>
 

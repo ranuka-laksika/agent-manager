@@ -34,6 +34,11 @@ export type LLMProviderAPIKeysTabProps = {
   orgName: string | undefined;
   providerId: string | undefined;
   isLoading?: boolean;
+  /**
+   * Error from the provider fetch, used to distinguish a failed load from a
+   * provider with API keys disabled.
+   */
+  error?: Error | null;
 };
 
 export function LLMProviderAPIKeysTab({
@@ -41,6 +46,7 @@ export function LLMProviderAPIKeysTab({
   orgName,
   providerId,
   isLoading = false,
+  error: providerError = null,
 }: LLMProviderAPIKeysTabProps) {
   const apiKeyEnabled = isApiKeyAuthEnabled(providerData?.security);
 
@@ -76,6 +82,21 @@ export function LLMProviderAPIKeysTab({
 
   if (isLoading) {
     return <Skeleton variant="rectangular" width="100%" height={200} />;
+  }
+
+  // A failed provider fetch leaves providerData undefined; surface the error
+  // explicitly instead of falling through to the "API keys disabled" message,
+  // which would otherwise misrepresent the cause.
+  if (providerError) {
+    return (
+      <Alert severity="error">
+        {providerError.message || "Failed to load the LLM provider."}
+      </Alert>
+    );
+  }
+
+  if (!providerData) {
+    return null;
   }
 
   if (!apiKeyEnabled) {

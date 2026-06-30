@@ -92,6 +92,7 @@ export function LLMProxyAPIKeysSection({
 
   return (
     <SingleAPIKeyManager
+      scopeKey={`${configId ?? ""}:${envName ?? ""}`}
       description="Generate an API key to authenticate this agent's requests to the LLM provider through the gateway. Only one key can exist per configuration."
       apiKey={apiKey}
       isLoading={isLoading}

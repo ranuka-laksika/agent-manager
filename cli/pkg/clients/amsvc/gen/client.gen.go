@@ -630,6 +630,22 @@ type ClientInterface interface {
 
 	UpdateAgentModelConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentModelConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListLLMConfigAPIKeys request
+	ListLLMConfigAPIKeys(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateLLMConfigAPIKeyWithBody request with any body
+	CreateLLMConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeLLMConfigAPIKey request
+	RevokeLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateLLMConfigAPIKeyWithBody request with any body
+	RotateLLMConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RotateLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListMonitors request
 	ListMonitors(ctx context.Context, orgName string, projName string, agentName string, params *ListMonitorsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -3118,6 +3134,78 @@ func (c *Client) UpdateAgentModelConfigWithBody(ctx context.Context, orgName str
 
 func (c *Client) UpdateAgentModelConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentModelConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAgentModelConfigRequest(c.Server, orgName, projName, agentName, configId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListLLMConfigAPIKeys(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLLMConfigAPIKeysRequest(c.Server, orgName, projName, agentName, configId, envName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateLLMConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLLMConfigAPIKeyRequestWithBody(c.Server, orgName, projName, agentName, configId, envName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateLLMConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevokeLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeLLMConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, keyName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateLLMConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateLLMConfigAPIKeyRequestWithBody(c.Server, orgName, projName, agentName, configId, envName, keyName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateLLMConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateLLMConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, keyName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -11565,6 +11653,294 @@ func NewUpdateAgentModelConfigRequestWithBody(server string, orgName string, pro
 	return req, nil
 }
 
+// NewListLLMConfigAPIKeysRequest generates requests for ListLLMConfigAPIKeys
+func NewListLLMConfigAPIKeysRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/model-configs/%s/environments/%s/api-keys", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateLLMConfigAPIKeyRequest calls the generic CreateLLMConfigAPIKey builder with application/json body
+func NewCreateLLMConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateLLMConfigAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateLLMConfigAPIKeyRequestWithBody(server, orgName, projName, agentName, configId, envName, "application/json", bodyReader)
+}
+
+// NewCreateLLMConfigAPIKeyRequestWithBody generates requests for CreateLLMConfigAPIKey with any type of body
+func NewCreateLLMConfigAPIKeyRequestWithBody(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/model-configs/%s/environments/%s/api-keys", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeLLMConfigAPIKeyRequest generates requests for RevokeLLMConfigAPIKey
+func NewRevokeLLMConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam5 string
+
+	pathParam5, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/model-configs/%s/environments/%s/api-keys/%s", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4, pathParam5)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotateLLMConfigAPIKeyRequest calls the generic RotateLLMConfigAPIKey builder with application/json body
+func NewRotateLLMConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateLLMConfigAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateLLMConfigAPIKeyRequestWithBody(server, orgName, projName, agentName, configId, envName, keyName, "application/json", bodyReader)
+}
+
+// NewRotateLLMConfigAPIKeyRequestWithBody generates requests for RotateLLMConfigAPIKey with any type of body
+func NewRotateLLMConfigAPIKeyRequestWithBody(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam5 string
+
+	pathParam5, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/model-configs/%s/environments/%s/api-keys/%s", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4, pathParam5)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewListMonitorsRequest generates requests for ListMonitors
 func NewListMonitorsRequest(server string, orgName string, projName string, agentName string, params *ListMonitorsParams) (*http.Request, error) {
 	var err error
@@ -14539,6 +14915,22 @@ type ClientWithResponsesInterface interface {
 
 	UpdateAgentModelConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentModelConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentModelConfigResp, error)
 
+	// ListLLMConfigAPIKeysWithResponse request
+	ListLLMConfigAPIKeysWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*ListLLMConfigAPIKeysResp, error)
+
+	// CreateLLMConfigAPIKeyWithBodyWithResponse request with any body
+	CreateLLMConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMConfigAPIKeyResp, error)
+
+	CreateLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLLMConfigAPIKeyResp, error)
+
+	// RevokeLLMConfigAPIKeyWithResponse request
+	RevokeLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*RevokeLLMConfigAPIKeyResp, error)
+
+	// RotateLLMConfigAPIKeyWithBodyWithResponse request with any body
+	RotateLLMConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateLLMConfigAPIKeyResp, error)
+
+	RotateLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateLLMConfigAPIKeyResp, error)
+
 	// ListMonitorsWithResponse request
 	ListMonitorsWithResponse(ctx context.Context, orgName string, projName string, agentName string, params *ListMonitorsParams, reqEditors ...RequestEditorFn) (*ListMonitorsResp, error)
 
@@ -16673,7 +17065,7 @@ func (r UpdateLLMProviderResp) StatusCode() int {
 type ListLLMProviderAPIKeysResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]StoredAPIKey
+	JSON200      *ListAPIKeysResponse
 	JSON401      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -17193,7 +17585,7 @@ func (r UpdateMCPProxyResp) StatusCode() int {
 type ListMCPProxyAPIKeysResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]StoredAPIKey
+	JSON200      *ListAPIKeysResponse
 	JSON401      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -18090,7 +18482,7 @@ func (r UpdateAgentMCPConfigResp) StatusCode() int {
 type ListMCPConfigAPIKeysResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]StoredAPIKey
+	JSON200      *ListAPIKeysResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 }
@@ -18116,6 +18508,7 @@ type CreateMCPConfigAPIKeyResp struct {
 	HTTPResponse *http.Response
 	JSON201      *CreateLLMAPIKeyResponse
 	JSON400      *ErrorResponse
+	JSON403      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 	JSON503      *ErrorResponse
@@ -18140,6 +18533,7 @@ func (r CreateMCPConfigAPIKeyResp) StatusCode() int {
 type RevokeMCPConfigAPIKeyResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON403      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 }
@@ -18164,6 +18558,7 @@ type RotateMCPConfigAPIKeyResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *RotateLLMAPIKeyResponse
+	JSON403      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
 	JSON503      *ErrorResponse
@@ -18328,6 +18723,107 @@ func (r UpdateAgentModelConfigResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateAgentModelConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListLLMConfigAPIKeysResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ListAPIKeysResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLLMConfigAPIKeysResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLLMConfigAPIKeysResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateLLMConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *CreateLLMAPIKeyResponse
+	JSON400      *ErrorResponse
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateLLMConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateLLMConfigAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RevokeLLMConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeLLMConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeLLMConfigAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotateLLMConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RotateLLMAPIKeyResponse
+	JSON403      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateLLMConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateLLMConfigAPIKeyResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19037,7 +19533,7 @@ func (r UpdateLLMProxyResp) StatusCode() int {
 type ListLLMProxyAPIKeysResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *[]StoredAPIKey
+	JSON200      *ListAPIKeysResponse
 	JSON401      *ErrorResponse
 	JSON404      *ErrorResponse
 	JSON500      *ErrorResponse
@@ -20934,6 +21430,58 @@ func (c *ClientWithResponses) UpdateAgentModelConfigWithResponse(ctx context.Con
 		return nil, err
 	}
 	return ParseUpdateAgentModelConfigResp(rsp)
+}
+
+// ListLLMConfigAPIKeysWithResponse request returning *ListLLMConfigAPIKeysResp
+func (c *ClientWithResponses) ListLLMConfigAPIKeysWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*ListLLMConfigAPIKeysResp, error) {
+	rsp, err := c.ListLLMConfigAPIKeys(ctx, orgName, projName, agentName, configId, envName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLLMConfigAPIKeysResp(rsp)
+}
+
+// CreateLLMConfigAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateLLMConfigAPIKeyResp
+func (c *ClientWithResponses) CreateLLMConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMConfigAPIKeyResp, error) {
+	rsp, err := c.CreateLLMConfigAPIKeyWithBody(ctx, orgName, projName, agentName, configId, envName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLLMConfigAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLLMConfigAPIKeyResp, error) {
+	rsp, err := c.CreateLLMConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateLLMConfigAPIKeyResp(rsp)
+}
+
+// RevokeLLMConfigAPIKeyWithResponse request returning *RevokeLLMConfigAPIKeyResp
+func (c *ClientWithResponses) RevokeLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*RevokeLLMConfigAPIKeyResp, error) {
+	rsp, err := c.RevokeLLMConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, keyName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeLLMConfigAPIKeyResp(rsp)
+}
+
+// RotateLLMConfigAPIKeyWithBodyWithResponse request with arbitrary body returning *RotateLLMConfigAPIKeyResp
+func (c *ClientWithResponses) RotateLLMConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateLLMConfigAPIKeyResp, error) {
+	rsp, err := c.RotateLLMConfigAPIKeyWithBody(ctx, orgName, projName, agentName, configId, envName, keyName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateLLMConfigAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) RotateLLMConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateLLMConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateLLMConfigAPIKeyResp, error) {
+	rsp, err := c.RotateLLMConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, keyName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateLLMConfigAPIKeyResp(rsp)
 }
 
 // ListMonitorsWithResponse request returning *ListMonitorsResp
@@ -25093,7 +25641,7 @@ func ParseListLLMProviderAPIKeysResp(rsp *http.Response) (*ListLLMProviderAPIKey
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []StoredAPIKey
+		var dest ListAPIKeysResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -26161,7 +26709,7 @@ func ParseListMCPProxyAPIKeysResp(rsp *http.Response) (*ListMCPProxyAPIKeysResp,
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []StoredAPIKey
+		var dest ListAPIKeysResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27832,7 +28380,7 @@ func ParseListMCPConfigAPIKeysResp(rsp *http.Response) (*ListMCPConfigAPIKeysRes
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []StoredAPIKey
+		var dest ListAPIKeysResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -27885,6 +28433,13 @@ func ParseCreateMCPConfigAPIKeyResp(rsp *http.Response) (*CreateMCPConfigAPIKeyR
 		}
 		response.JSON400 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -27925,6 +28480,13 @@ func ParseRevokeMCPConfigAPIKeyResp(rsp *http.Response) (*RevokeMCPConfigAPIKeyR
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -27964,6 +28526,13 @@ func ParseRotateMCPConfigAPIKeyResp(rsp *http.Response) (*RotateMCPConfigAPIKeyR
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
 		var dest ErrorResponse
@@ -28260,6 +28829,201 @@ func ParseUpdateAgentModelConfigResp(rsp *http.Response) (*UpdateAgentModelConfi
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLLMConfigAPIKeysResp parses an HTTP response from a ListLLMConfigAPIKeysWithResponse call
+func ParseListLLMConfigAPIKeysResp(rsp *http.Response) (*ListLLMConfigAPIKeysResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLLMConfigAPIKeysResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ListAPIKeysResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateLLMConfigAPIKeyResp parses an HTTP response from a CreateLLMConfigAPIKeyWithResponse call
+func ParseCreateLLMConfigAPIKeyResp(rsp *http.Response) (*CreateLLMConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateLLMConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeLLMConfigAPIKeyResp parses an HTTP response from a RevokeLLMConfigAPIKeyWithResponse call
+func ParseRevokeLLMConfigAPIKeyResp(rsp *http.Response) (*RevokeLLMConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeLLMConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateLLMConfigAPIKeyResp parses an HTTP response from a RotateLLMConfigAPIKeyWithResponse call
+func ParseRotateLLMConfigAPIKeyResp(rsp *http.Response) (*RotateLLMConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateLLMConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RotateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -29597,7 +30361,7 @@ func ParseListLLMProxyAPIKeysResp(rsp *http.Response) (*ListLLMProxyAPIKeysResp,
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest []StoredAPIKey
+		var dest ListAPIKeysResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

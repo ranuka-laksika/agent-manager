@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
   Box,
@@ -49,6 +49,13 @@ import { NoDataFound } from "@agent-management-platform/views";
 import type { APIKeyInfo } from "@agent-management-platform/types";
 
 export interface SingleAPIKeyManagerProps {
+  /**
+   * Stable identifier for the resource this manager is bound to (e.g. a
+   * config/env identifier). When it changes, the transient UI state (one-time
+   * key banner and open confirm dialogs) is reset so it never carries over from
+   * a previously selected resource.
+   */
+  scopeKey?: string;
   /** Section heading. Defaults to "API Keys". */
   title?: string;
   /** Helper copy shown under the heading. */
@@ -172,6 +179,7 @@ function ConfirmDialog({
  * parent so the same UI backs both LLM proxy and MCP proxy configurations.
  */
 export function SingleAPIKeyManager({
+  scopeKey,
   title = "API Keys",
   description,
   apiKey,
@@ -189,6 +197,14 @@ export function SingleAPIKeyManager({
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
+
+  // Reset transient UI state when the backing resource changes so a key banner
+  // or open confirm dialog from a previous config/env never leaks into another.
+  useEffect(() => {
+    setNewKeyValue(null);
+    setDeleteOpen(false);
+    setRegenerateOpen(false);
+  }, [scopeKey]);
 
   const handleGenerate = async () => {
     try {

@@ -32,6 +32,7 @@ import (
 type LLMProxyRepository interface {
 	Create(p *models.LLMProxy, handle, name, version string, orgName string) error
 	GetByID(proxyID, orgName string) (*models.LLMProxy, error)
+	GetByIDAndProject(proxyID, orgName, projectUUID string) (*models.LLMProxy, error)
 	List(orgName string, limit, offset int) ([]*models.LLMProxy, error)
 	ListByProject(orgName, projectUUID string, limit, offset int) ([]*models.LLMProxy, error)
 	ListByProvider(orgName, providerUUID string, limit, offset int) ([]*models.LLMProxy, error)
@@ -142,6 +143,32 @@ func (r *LLMProxyRepo) GetByID(proxyID, orgName string) (*models.LLMProxy, error
 		Select("llm_proxies.*, a.organization_name as artifact_org_uuid, a.handle as artifact_handle, a.name as artifact_name, a.version as artifact_version, a.created_at as artifact_created_at, a.updated_at as artifact_updated_at").
 		Joins("JOIN artifacts a ON llm_proxies.uuid = a.uuid").
 		Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", proxyID, orgName, models.KindLLMProxy).
+		Take(&result).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Scan does not return ErrRecordNotFound when no rows match, so check for zero UUID
+	if result.UUID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	proxy := result.LLMProxy
+	populateProxyArtifactFields(&proxy, result)
+	return &proxy, nil
+}
+
+// GetByIDAndProject retrieves an LLM proxy by ID (handle) scoped to a specific
+// project. The proxy is only returned when it belongs to the given org AND
+// project, so a proxy owned by a different project is treated as not found.
+func (r *LLMProxyRepo) GetByIDAndProject(proxyID, orgName, projectUUID string) (*models.LLMProxy, error) {
+	var result proxyWithArtifact
+
+	err := r.db.
+		Table("llm_proxies").
+		Select("llm_proxies.*, a.organization_name as artifact_org_uuid, a.handle as artifact_handle, a.name as artifact_name, a.version as artifact_version, a.created_at as artifact_created_at, a.updated_at as artifact_updated_at").
+		Joins("JOIN artifacts a ON llm_proxies.uuid = a.uuid").
+		Where("a.handle = ? AND a.organization_name = ? AND llm_proxies.project_uuid = ? AND a.kind = ?", proxyID, orgName, projectUUID, models.KindLLMProxy).
 		Take(&result).Error
 	if err != nil {
 		return nil, err

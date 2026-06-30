@@ -106,7 +106,19 @@ function CreateAPIKeyDialog({
 
   const handleCreate = async () => {
     if (!canSubmit) return;
-    const expiresAtRFC3339 = `${expiresAt}T23:59:59.999Z`;
+    // Interpret the picked date as the end of that day in the user's local time
+    // zone (not UTC), so the selected calendar day is preserved regardless of
+    // the user's offset. toISOString() then yields the correct RFC3339 instant.
+    const [year, month, day] = expiresAt.split("-").map(Number);
+    const expiresAtRFC3339 = new Date(
+      year,
+      month - 1,
+      day,
+      23,
+      59,
+      59,
+      999,
+    ).toISOString();
     try {
       const key = await onCreate({
         displayName: trimmedDisplayName,

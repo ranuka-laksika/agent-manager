@@ -214,7 +214,7 @@ export interface LLMRateLimitingConfig {
   consumerLevel?: RateLimitingScopeConfig;
 }
 
-export type APIKeyLocation = "header" | "query" | "cookie";
+export type APIKeyLocation = "header" | "query";
 
 export interface APIKeySecurity {
   enabled?: boolean;

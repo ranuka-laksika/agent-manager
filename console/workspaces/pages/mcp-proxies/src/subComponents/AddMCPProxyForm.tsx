@@ -183,7 +183,9 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
         const nextName =
           getServerInfoValue(result.serverInfo, "name") || "mcp-proxy";
         setProxyName(nextName);
-        setProxyVersion("v1.0.0");
+        setProxyVersion(
+          getServerInfoValue(result.serverInfo, "version") || "v1.0.0",
+        );
         setProxyDescription("");
         setProxyContext(`/default/${nextName}`);
         setProxyTarget(url);

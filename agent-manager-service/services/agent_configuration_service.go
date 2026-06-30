@@ -606,7 +606,7 @@ func (s *agentConfigurationService) ListLLMConfigAPIKeys(
 	if err != nil {
 		return nil, err
 	}
-	return s.llmProxyAPIKeyService.ListAPIKeys(ctx, orgName, handle)
+	return s.llmProxyAPIKeyService.ListAPIKeys(ctx, orgName, projectName, handle)
 }
 
 // CreateLLMConfigAPIKey generates the per-config LLM API key and broadcasts it. The

@@ -3932,6 +3932,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Configuration not found
           content:
@@ -4009,6 +4015,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RotateLLMAPIKeyResponse"
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Configuration not found
           content:
@@ -4036,6 +4048,230 @@ paths:
       responses:
         "204":
           description: API key revoked successfully
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Organization name
+      - name: projName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Project name
+      - name: agentName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Agent name
+      - name: configId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Model configuration UUID
+      - name: envName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Environment name
+    get:
+      tags:
+        - LLM API Keys
+      summary: List API keys for an external agent's model configuration
+      description: Returns the API key(s) for an external agent's model configuration in the given environment (masked values only).
+      operationId: listLLMConfigAPIKeys
+      responses:
+        "200":
+          description: List of API keys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAPIKeysResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - LLM API Keys
+      summary: Generate an API key for an external agent's model configuration
+      description: Generates a new API key for an external agent's model configuration and broadcasts it to all connected gateways. The key is returned only once.
+      operationId: createLLMConfigAPIKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLLMAPIKeyRequest"
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateLLMAPIKeyResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: No gateway connections available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Organization name
+      - name: projName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Project name
+      - name: agentName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Agent name
+      - name: configId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Model configuration UUID
+      - name: envName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Environment name
+      - name: keyName
+        in: path
+        required: true
+        schema:
+          type: string
+        description: API key name/identifier
+    put:
+      tags:
+        - LLM API Keys
+      summary: Regenerate an external agent's model configuration API key
+      description: Revokes the current API key and generates a new value under the same key name, broadcasting the update to all connected gateways. The new key is returned only once.
+      operationId: rotateLLMConfigAPIKey
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RotateLLMAPIKeyRequest"
+      responses:
+        "200":
+          description: API key rotated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RotateLLMAPIKeyResponse"
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Configuration not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: No gateway connections available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - LLM API Keys
+      summary: Delete an external agent's model configuration API key
+      description: Revokes and removes the API key for an external agent's model configuration and broadcasts the revocation to all connected gateways.
+      operationId: revokeLLMConfigAPIKey
+      responses:
+        "204":
+          description: API key revoked successfully
+        "403":
+          description: API key management is only available for external agents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Configuration not found
           content:
@@ -14339,7 +14575,6 @@ components:
           enum:
             - header
             - query
-            - cookie
           example: header
 
     # ============================================================================
@@ -15470,7 +15705,7 @@ components:
           example: true
         apiKeyIn:
           type: string
-          description: Where the API key is located (header/query/cookie)
+          description: Where the API key is located (header/query)
           example: "header"
 
     RateLimitingSummary:

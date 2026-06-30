@@ -149,6 +149,17 @@ func (a *MCPAPIKeysAPIService) CreateMCPConfigAPIKeyExecute(r ApiCreateMCPConfig
 			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
 		if localVarHTTPResponse.StatusCode == 404 {
 			var v ErrorResponse
 			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
@@ -379,7 +390,7 @@ type ApiListMCPConfigAPIKeysRequest struct {
 	envName    string
 }
 
-func (r ApiListMCPConfigAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
+func (r ApiListMCPConfigAPIKeysRequest) Execute() (*ListAPIKeysResponse, *http.Response, error) {
 	return r.ApiService.ListMCPConfigAPIKeysExecute(r)
 }
 
@@ -410,13 +421,13 @@ func (a *MCPAPIKeysAPIService) ListMCPConfigAPIKeys(ctx context.Context, orgName
 
 // Execute executes the request
 //
-//	@return []StoredAPIKey
-func (a *MCPAPIKeysAPIService) ListMCPConfigAPIKeysExecute(r ApiListMCPConfigAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
+//	@return ListAPIKeysResponse
+func (a *MCPAPIKeysAPIService) ListMCPConfigAPIKeysExecute(r ApiListMCPConfigAPIKeysRequest) (*ListAPIKeysResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue []StoredAPIKey
+		localVarReturnValue *ListAPIKeysResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.ListMCPConfigAPIKeys")
@@ -517,7 +528,7 @@ type ApiListMCPProxyAPIKeysRequest struct {
 	proxyId    string
 }
 
-func (r ApiListMCPProxyAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
+func (r ApiListMCPProxyAPIKeysRequest) Execute() (*ListAPIKeysResponse, *http.Response, error) {
 	return r.ApiService.ListMCPProxyAPIKeysExecute(r)
 }
 
@@ -542,13 +553,13 @@ func (a *MCPAPIKeysAPIService) ListMCPProxyAPIKeys(ctx context.Context, orgName 
 
 // Execute executes the request
 //
-//	@return []StoredAPIKey
-func (a *MCPAPIKeysAPIService) ListMCPProxyAPIKeysExecute(r ApiListMCPProxyAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
+//	@return ListAPIKeysResponse
+func (a *MCPAPIKeysAPIService) ListMCPProxyAPIKeysExecute(r ApiListMCPProxyAPIKeysRequest) (*ListAPIKeysResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue []StoredAPIKey
+		localVarReturnValue *ListAPIKeysResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.ListMCPProxyAPIKeys")
@@ -755,6 +766,17 @@ func (a *MCPAPIKeysAPIService) RevokeMCPConfigAPIKeyExecute(r ApiRevokeMCPConfig
 		newErr := &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 404 {
 			var v ErrorResponse
@@ -1053,6 +1075,17 @@ func (a *MCPAPIKeysAPIService) RotateMCPConfigAPIKeyExecute(r ApiRotateMCPConfig
 		newErr := &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 404 {
 			var v ErrorResponse
