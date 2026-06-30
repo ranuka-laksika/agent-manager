@@ -78,9 +78,18 @@ thunder_namespace() {
 }
 
 # thunder_host ORG ENV -> single DNS label under thunder.amp.localhost
-# (wildcard-cert friendly: *.thunder.amp.localhost).
+# (wildcard-cert friendly: *.thunder.amp.localhost), capped at 63 characters.
 thunder_host() {
-  printf '%s-%s.thunder.amp.localhost' "$1" "$2"
+  local org="$1" env="$2" label hash prefix
+  label="${org}-${env}"
+  if [ "${#label}" -le 63 ]; then
+    printf '%s.thunder.amp.localhost' "${label%-}"
+    return 0
+  fi
+  hash="$(_sha6 "${org}/${env}")"
+  prefix="${label:0:56}"
+  prefix="${prefix%-}"
+  printf '%s-%s.thunder.amp.localhost' "$prefix" "$hash"
 }
 
 # thunder_issuer ORG ENV -> the OIDC issuer / publicUrl (immutable once minting).
@@ -177,6 +186,7 @@ write_to_openbao() {
   echo "⚠️  Could not write to OpenBao (HTTP ${http_code:-unreachable}, kubectl exec also failed)"
   echo "   agent-manager-service uses OpenBao to resolve env-Thunder credentials."
   echo "   Re-run add-environment-thunder.sh once OpenBao is reachable."
+  return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -259,7 +269,9 @@ main() {
     echo "🔐 Stored new system-client secret (${secret_name})"
   fi
   # Mirror the secret to OpenBao so agent-manager-service can read it from Docker and K8s.
-  write_to_openbao "$org" "$ENV_NAME" "$system_secret"
+  if ! write_to_openbao "$org" "$ENV_NAME" "$system_secret"; then
+    exit 1
+  fi
 
   # Per-env overrides. The chart's defaults serve the platform Thunder; these turn
   # one chart into an isolated per-environment instance.

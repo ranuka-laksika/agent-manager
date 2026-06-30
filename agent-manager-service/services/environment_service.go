@@ -411,8 +411,7 @@ func toOCClientGatewayListenerSpec(l *models.GatewayListenerSpec) *occlient.Gate
 }
 
 // ListThunderInstances returns the Thunder OAuth2 identity provider info for every
-// environment in the org. The URLs are computed from naming conventions — no DB reads
-// or external HTTP calls are made beyond the environment list.
+// environment in the org that has been provisioned (i.e. has active gateway mappings).
 func (s *environmentService) ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error) {
 	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
 	if err != nil {
@@ -424,6 +423,19 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, orgName s
 		if env == nil {
 			continue
 		}
+
+		// Verify the environment has been provisioned (i.e. has gateway mappings in our DB).
+		// Environments without gateway mappings do not have a corresponding Thunder ID instance.
+		mappings, err := s.gatewayRepo.GetEnvironmentMappingsByEnvironmentID(env.UUID)
+		if err != nil {
+			s.logger.Warn("Failed to check gateway mappings for environment", "envName", env.Name, "envUUID", env.UUID, "error", err)
+			continue
+		}
+		if len(mappings) == 0 {
+			// Skip advertising Thunder for unprovisioned environments.
+			continue
+		}
+
 		instances = append(instances, models.ThunderInstanceResponse{
 			EnvName:      env.Name,
 			DisplayName:  env.DisplayName,

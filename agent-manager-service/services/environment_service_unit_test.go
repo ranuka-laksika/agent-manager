@@ -651,3 +651,66 @@ func TestEnvironmentService_GetEnvironmentGateways(t *testing.T) {
 		assert.Equal(t, string(models.GatewayStatusInactive), resp[0].Status)
 	})
 }
+
+// -----------------------------------------------------------------------------
+// ListThunderInstances — gates returning Thunder instance info on whether
+// the environment is actually provisioned with a gateway mapping in the local DB.
+// -----------------------------------------------------------------------------
+
+func TestEnvironmentService_ListThunderInstances(t *testing.T) {
+	const org = "acme"
+
+	t.Run("wraps list environments error", func(t *testing.T) {
+		boom := errors.New("oc down")
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return nil, boom
+			},
+		}
+		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
+
+		_, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("gates instances on presence of gateway mappings in local DB", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{
+					{UUID: "u1", Name: "dev-provisioned", DisplayName: "Dev", IsProduction: false},
+					{UUID: "u2", Name: "staging-unprovisioned", DisplayName: "Staging", IsProduction: false},
+				}, nil
+			},
+		}
+
+		repo := &repomocks.GatewayRepositoryMock{
+			GetEnvironmentMappingsByEnvironmentIDFunc: func(id string) ([]models.GatewayEnvironmentMapping, error) {
+				if id == "u1" {
+					return []models.GatewayEnvironmentMapping{{GatewayUUID: uuid.New()}}, nil
+				}
+				// u2 has no mappings
+				return []models.GatewayEnvironmentMapping{}, nil
+			},
+		}
+
+		svc := newEnvService(repo, oc)
+
+		resp, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Len(t, resp.ThunderInstances, 1)
+
+		inst := resp.ThunderInstances[0]
+		assert.Equal(t, "dev-provisioned", inst.EnvName)
+		assert.Equal(t, "Dev", inst.DisplayName)
+		assert.False(t, inst.IsProduction)
+		assert.Equal(t, "http://acme-dev-provisioned.thunder.amp.localhost:8080", inst.IssuerURL)
+		assert.Equal(t, "http://amp-thunder-acme-dev-provisioned-service.amp-thunder-acme-dev-provisioned.svc.cluster.local:8090/oauth2/token", inst.TokenURL)
+		assert.Equal(t, "http://amp-thunder-acme-dev-provisioned-service.amp-thunder-acme-dev-provisioned.svc.cluster.local:8090/oauth2/jwks", inst.JWKSURL)
+		assert.Equal(t, "amp-thunder-acme-dev-provisioned", inst.Namespace)
+	})
+}
+

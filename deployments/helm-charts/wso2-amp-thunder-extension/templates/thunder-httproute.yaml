@@ -39,7 +39,7 @@ spec:
     {{- if .Values.thunder.ocIngress.https.enabled }}
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: thunder-https-gateway
+      name: {{ .Release.Name }}-https-gateway
       namespace: openchoreo-control-plane
     {{- end }}
   rules:

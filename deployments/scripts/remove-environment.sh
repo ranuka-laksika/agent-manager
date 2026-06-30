@@ -53,13 +53,19 @@ if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
     # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
     SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
-    if curl -fsSL "${THUNDER_SCRIPT_URL}" \
-        | ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash; then
+    local script_tmp
+    script_tmp="$(mktemp)"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
+      if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash "$script_tmp"; then
         echo "✅ Thunder ID instance removed"
-    else
+      else
         echo "⚠️  Thunder ID removal failed — continuing with gateway and environment removal."
         echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} ORG_NAME=${ORG_NAME} bash"
+      fi
+    else
+      echo "⚠️  Failed to fetch Thunder ID removal script from ${THUNDER_SCRIPT_URL}"
     fi
+    rm -f "$script_tmp"
     echo ""
 fi
 

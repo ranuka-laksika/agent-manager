@@ -1,4 +1,5 @@
 {{- if .Values.thunder.ocIngress.https.enabled }}
+{{- if .Values.thunder.ocIngress.https.createIssuer }}
 # Self-signed bootstrap issuer (creates the root CA cert below).
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
@@ -48,19 +49,20 @@ spec:
   ca:
     secretName: amp-local-root-ca-secret
 ---
+{{- end }}
 # TLS leaf certificate for thunder.amp.localhost.
 # Created in openchoreo-control-plane so the Gateway there can reference it directly.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: thunder-local-tls
+  name: {{ .Release.Name }}-local-tls
   namespace: openchoreo-control-plane
   labels:
     app.kubernetes.io/instance: {{ .Release.Name }}
     app.kubernetes.io/managed-by: {{ .Release.Service }}
     app.kubernetes.io/name: thunder
 spec:
-  secretName: thunder-local-tls
+  secretName: {{ .Release.Name }}-local-tls
   duration: 8760h
   renewBefore: 720h
   dnsNames:
@@ -76,7 +78,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: thunder-https-gateway
+  name: {{ .Release.Name }}-https-gateway
   namespace: openchoreo-control-plane
   labels:
     app.kubernetes.io/instance: {{ .Release.Name }}
@@ -91,7 +93,7 @@ spec:
       tls:
         mode: Terminate
         certificateRefs:
-          - name: thunder-local-tls
+          - name: {{ .Release.Name }}-local-tls
             namespace: openchoreo-control-plane
       allowedRoutes:
         namespaces:

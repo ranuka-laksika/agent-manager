@@ -43,6 +43,11 @@ const (
 // If the natural name exceeds 53 chars, it is truncated to 46 characters (trailing "-" stripped)
 // and a 6-char hex hash of "org/env" is appended for collision safety.
 func ThunderReleaseName(org, env string) string {
+	org = slugify(org)
+	env = slugify(env)
+	if org == "" || env == "" {
+		panic("org and env names must be valid alphanumeric slugs and not empty")
+	}
 	full := fmt.Sprintf("amp-thunder-%s-%s", org, env)
 	if len(full) <= maxReleaseNameLen {
 		return strings.TrimSuffix(full, "-")
@@ -87,10 +92,27 @@ func ThunderTokenURL(org, env string) string {
 	return ThunderInternalURL(org, env) + "/oauth2/token"
 }
 
+// ThunderHost returns the wildcard-cert-friendly hostname under thunder.amp.localhost for the env-Thunder instance.
+// Capped at 63 characters for the DNS label limit.
+func ThunderHost(org, env string) string {
+	org = slugify(org)
+	env = slugify(env)
+	if org == "" || env == "" {
+		panic("org and env names must be valid alphanumeric slugs and not empty")
+	}
+	label := fmt.Sprintf("%s-%s", org, env)
+	if len(label) <= 63 {
+		return fmt.Sprintf("%s.thunder.amp.localhost", strings.TrimSuffix(label, "-"))
+	}
+	hash := thunderSHA6(org + "/" + env)
+	prefix := strings.TrimSuffix(label[:56], "-")
+	return fmt.Sprintf("%s-%s.thunder.amp.localhost", prefix, hash)
+}
+
 // ThunderIssuerURL returns the public issuer URL for the env-Thunder instance.
 // This is what Thunder stamps into the JWT iss claim.
 func ThunderIssuerURL(org, env string) string {
-	return fmt.Sprintf("http://%s-%s.thunder.amp.localhost:8080", org, env)
+	return fmt.Sprintf("http://%s:8080", ThunderHost(org, env))
 }
 
 const maxAgentAppNameLen = 100
@@ -99,6 +121,12 @@ const maxAgentAppNameLen = 100
 // Format: amp-agent-<org>-<project>-<agent>, truncated to 100 chars, trailing hyphen stripped.
 // The name mirrors amp-publisher-<org> but is fully scoped to project + agent to avoid collisions.
 func AgentThunderAppName(org, project, agent string) string {
+	org = slugify(org)
+	project = slugify(project)
+	agent = slugify(agent)
+	if org == "" || project == "" || agent == "" {
+		panic("org, project, and agent names must be valid alphanumeric slugs and not empty")
+	}
 	name := fmt.Sprintf("amp-agent-%s-%s-%s", org, project, agent)
 	if len(name) <= maxAgentAppNameLen {
 		return strings.TrimSuffix(name, "-")
@@ -111,4 +139,23 @@ func AgentThunderAppName(org, project, agent string) string {
 func thunderSHA6(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return fmt.Sprintf("%x", h[:])[:6]
+}
+
+// slugify converts string to lowercase, replaces invalid characters (spaces, underscores)
+// with hyphens, merges consecutive hyphens, and trims leading/trailing hyphens.
+func slugify(s string) string {
+	s = strings.ToLower(s)
+	var sb strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			sb.WriteRune(r)
+		} else if r == '-' || r == '_' || r == ' ' {
+			sb.WriteRune('-')
+		}
+	}
+	res := sb.String()
+	for strings.Contains(res, "--") {
+		res = strings.ReplaceAll(res, "--", "-")
+	}
+	return strings.Trim(res, "-")
 }

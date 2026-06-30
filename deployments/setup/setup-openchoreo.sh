@@ -469,7 +469,7 @@ echo ""
 # Wait for platform Thunder's TLS cert to be ready so env-Thunder can fetch the JWKS.
 # Non-fatal: failure to provision env-Thunder should not abort the rest of the setup.
 echo "⏳ Waiting for platform Thunder TLS certificate to be issued by cert-manager..."
-if kubectl wait --for=condition=Ready certificate/thunder-local-tls \
+if kubectl wait --for=condition=Ready certificate/amp-thunder-extension-local-tls \
     -n openchoreo-control-plane --timeout=300s 2>/dev/null; then
     echo "✅ Platform Thunder TLS certificate is ready"
 else
@@ -615,10 +615,9 @@ while IFS= read -r _ns; do
   _user="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d)"
   _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)"
   echo "  ${_ns#amp-thunder-}:"
-  echo "    URL:      ${_url}"
+  echo "    URL:      ${_url}/console"
   echo "    Username: ${_user}"
   echo "    Password: ${_pass}"
-  echo "    K8s:      kubectl get secret ${_secret} -n ${_ns} -o jsonpath='{.data.password}' | base64 -d"
   echo ""
 done < <(kubectl get namespaces -o name 2>/dev/null | sed 's|^namespace/||' | grep '^amp-thunder-')
 if [ "$_active_count" -gt 0 ]; then

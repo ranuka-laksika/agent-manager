@@ -150,7 +150,16 @@ _thunder_release_name() {
 
 # _thunder_host ORG ENV -> wildcard-cert-friendly hostname under thunder.amp.localhost.
 _thunder_host() {
-  printf '%s-%s.thunder.amp.localhost' "$1" "$2"
+  local org="$1" env="$2" label hash prefix
+  label="${org}-${env}"
+  if [ "${#label}" -le 63 ]; then
+    printf '%s.thunder.amp.localhost' "${label%-}"
+    return 0
+  fi
+  hash="$(_thunder_sha6 "${org}/${env}")"
+  prefix="${label:0:56}"
+  prefix="${prefix%-}"
+  printf '%s-%s.thunder.amp.localhost' "$prefix" "$hash"
 }
 
 echo "=== Adding Environment: ${DISPLAY_NAME} (${ENV_NAME}) ==="
@@ -285,14 +294,20 @@ if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
     # The console sets it via getRawScriptUrl; the default follows main (latest).
     SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
-    if curl -fsSL "${THUNDER_SCRIPT_URL}" \
-        | ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
-          DATAPLANE_REF="${DATAPLANE_REF}" bash; then
+    local script_tmp
+    script_tmp="$(mktemp)"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
+      if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
+          DATAPLANE_REF="${DATAPLANE_REF}" bash "$script_tmp"; then
         echo "✅ Thunder ID instance provisioned"
-    else
+      else
         echo "⚠️  Thunder ID provisioning failed — environment and gateway are up."
         echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
+      fi
+    else
+      echo "⚠️  Failed to fetch Thunder ID provisioning script from ${THUNDER_SCRIPT_URL}"
     fi
+    rm -f "$script_tmp"
 fi
 
 echo ""
