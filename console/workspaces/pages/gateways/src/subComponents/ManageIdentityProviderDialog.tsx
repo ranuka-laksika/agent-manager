@@ -37,12 +37,15 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerWrapper,
+  useExternalConfigModules,
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import {
+  useDeleteIdentityProvider,
   useDiscoverOidc,
   useListEnvironments,
   useListGateways,
+  useUpsertIdentityProvider,
 } from "@agent-management-platform/api-client";
 import {
   getAmpVersionHelm,
@@ -55,6 +58,13 @@ import type {
 
 const SCRIPT_NAME = "manage-identity-provider.sh";
 const TOKEN_MASK = "•••••••••••••••";
+
+// Must mirror MountPoints.IdentityProviderMode in @agent-management-platform/am-core-ui.
+// A cloud build injects a config module here with { enabled: true } so the server-side
+// applier patches the gateway runtime config directly; the dialog then calls the REST
+// endpoints instead of rendering the self-hosted script snippet. Nothing injected (the
+// self-hosted default) keeps the script behavior unchanged.
+const IDENTITY_PROVIDER_MODE_MOUNT_POINT = "identity-provider-mode";
 
 export type ManageIdentityProviderMode = "upsert" | "delete";
 
@@ -143,6 +153,52 @@ export function ManageIdentityProviderDialog({
   const [showToken, setShowToken] = useState(false);
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Managed mode: a cloud build injects { enabled: true } at this mount point so the
+  // server patches the gateway runtime config. When off (self-hosted default), the
+  // dialog renders the script snippet exactly as before.
+  const idpModeModules = useExternalConfigModules(IDENTITY_PROVIDER_MODE_MOUNT_POINT);
+  const managedMode = idpModeModules.some(
+    (m) => (m.value as { enabled?: boolean } | undefined)?.enabled === true,
+  );
+  const upsertIdp = useUpsertIdentityProvider();
+  const deleteIdp = useDeleteIdentityProvider();
+  const isSubmitting = upsertIdp.isPending || deleteIdp.isPending;
+
+  const canSubmit = isDelete
+    ? !!gatewayId && !!name
+    : !!gatewayId && !!name.trim() && !!issuer.trim() && !!jwksUri.trim();
+
+  const handleManagedSubmit = useCallback(async () => {
+    try {
+      if (isDelete) {
+        await deleteIdp.mutateAsync({ orgName: orgId, gatewayId, name });
+      } else {
+        await upsertIdp.mutateAsync({
+          params: { orgName: orgId, gatewayId, name: name.trim() },
+          body: {
+            issuer: issuer.trim(),
+            jwksUri: jwksUri.trim(),
+            skipTlsVerify,
+          },
+        });
+      }
+      onClose();
+    } catch {
+      // Failure is surfaced via the mutation's error notification; keep the dialog open.
+    }
+  }, [
+    isDelete,
+    deleteIdp,
+    upsertIdp,
+    orgId,
+    gatewayId,
+    name,
+    issuer,
+    jwksUri,
+    skipTlsVerify,
+    onClose,
+  ]);
 
   const { data: environments } = useListEnvironments({ orgName: orgId });
   // Gateways belonging to the selected environment populate the gateway picker
@@ -326,10 +382,19 @@ export function ManageIdentityProviderDialog({
       <DrawerContent>
         <Stack spacing={3}>
           <Typography variant="body2" color="text.secondary">
-            Identity providers are owned by the gateway. This command patches the gateway
-            configuration and syncs Agent Manager. Run it in a terminal with{" "}
-            <code>kubectl</code>, <code>helm</code>, and <code>jq</code> configured against your
-            cluster — for the quickstart, run it inside the dev container shell.
+            {managedMode ? (
+              <>
+                Identity providers are owned by the gateway. Agent Manager patches the gateway
+                configuration and applies the change for you.
+              </>
+            ) : (
+              <>
+                Identity providers are owned by the gateway. This command patches the gateway
+                configuration and syncs Agent Manager. Run it in a terminal with{" "}
+                <code>kubectl</code>, <code>helm</code>, and <code>jq</code> configured against
+                your cluster — for the quickstart, run it inside the dev container shell.
+              </>
+            )}
           </Typography>
 
           <Stack spacing={2}>
@@ -423,6 +488,7 @@ export function ManageIdentityProviderDialog({
             )}
           </Stack>
 
+          {!managedMode && (
           <Stack spacing={1}>
             <Typography variant="body2">Run this command:</Typography>
             <Box
@@ -461,16 +527,35 @@ export function ManageIdentityProviderDialog({
               Your access token will be substituted when you copy.
             </Typography>
           </Stack>
+          )}
 
-          <Alert severity="info">
-            Once the script completes, the list reflects the change. The script is idempotent —
-            safe to re-run.
-          </Alert>
+          {!managedMode && (
+            <Alert severity="info">
+              Once the script completes, the list reflects the change. The script is idempotent —
+              safe to re-run.
+            </Alert>
+          )}
 
-          <Box display="flex" justifyContent="flex-end">
+          <Box display="flex" justifyContent="flex-end" gap={1}>
             <Button variant="outlined" color="inherit" onClick={onClose}>
-              Close
+              {managedMode ? "Cancel" : "Close"}
             </Button>
+            {managedMode && (
+              <Button
+                variant="contained"
+                color={isDelete ? "error" : "primary"}
+                onClick={handleManagedSubmit}
+                disabled={!canSubmit || isSubmitting}
+              >
+                {isSubmitting
+                  ? isDelete
+                    ? "Removing…"
+                    : "Saving…"
+                  : isDelete
+                    ? "Remove"
+                    : "Add"}
+              </Button>
+            )}
           </Box>
         </Stack>
       </DrawerContent>

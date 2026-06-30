@@ -115,6 +115,25 @@ export interface IdentityProviderListResponse {
 
 export type ListIdentityProvidersPathParams = OrgPathParams;
 
+export interface UpsertIdentityProviderPathParams extends OrgPathParams {
+  gatewayId: string;
+  /** Identity provider name (taken from the path; not part of the request body). */
+  name: string;
+}
+
+/** Request body for creating or updating a gateway identity provider. */
+export interface UpsertIdentityProviderRequest {
+  issuer: string;
+  jwksUri: string;
+  skipTlsVerify?: boolean;
+  description?: string;
+}
+
+export interface DeleteIdentityProviderPathParams extends OrgPathParams {
+  gatewayId: string;
+  name: string;
+}
+
 /** Issuer metadata resolved from an OpenID Connect discovery document. */
 export interface OidcDiscoveryResponse {
   issuer: string;
