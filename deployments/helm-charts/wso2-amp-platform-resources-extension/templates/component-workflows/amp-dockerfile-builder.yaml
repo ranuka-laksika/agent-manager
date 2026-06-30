@@ -10,7 +10,6 @@ spec:
   workflowPlaneRef:
     kind: ClusterWorkflowPlane
     name: default
-  ttlAfterCompletion: "7d"
   parameters:
     openAPIV3Schema:
       type: object
@@ -155,6 +154,8 @@ spec:
       name: ${metadata.workflowRunName}
       namespace: ${metadata.namespace}
     spec:
+      ttlStrategy:
+          secondsAfterCompletion: 86400  # Deletes 1 day after it finishes (success or failure)
       activeDeadlineSeconds: 3600
       arguments:
         parameters:
