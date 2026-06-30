@@ -21,9 +21,13 @@ import { useAuthHooks } from "@agent-management-platform/auth";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
 import {
   createAgentMCPConfig,
+  createMCPConfigAPIKey,
   deleteAgentMCPConfig,
   getAgentMCPConfig,
   listAgentMCPConfigs,
+  listMCPConfigAPIKeys,
+  revokeMCPConfigAPIKey,
+  rotateMCPConfigAPIKey,
   updateAgentMCPConfig,
 } from "../apis/agent-mcp-configs";
 import type {
@@ -32,9 +36,18 @@ import type {
   AgentMCPConfigResponse,
   CreateAgentMCPConfigPathParams,
   CreateAgentMCPConfigRequest,
+  CreateMCPConfigAPIKeyPathParams,
+  CreateMCPConfigAPIKeyRequest,
+  CreateMCPConfigAPIKeyResponse,
   DeleteAgentMCPConfigPathParams,
   ListAgentMCPConfigsPathParams,
   ListAgentMCPConfigsQuery,
+  ListAPIKeysResponse,
+  ListMCPConfigAPIKeysPathParams,
+  RevokeMCPConfigAPIKeyPathParams,
+  RotateMCPConfigAPIKeyPathParams,
+  RotateMCPConfigAPIKeyRequest,
+  RotateMCPConfigAPIKeyResponse,
   UpdateAgentMCPConfigPathParams,
   UpdateAgentMCPConfigRequest,
 } from "@agent-management-platform/types";
@@ -143,4 +156,84 @@ function toAgentPathParams(params: {
     projName: params.projName,
     agentName: params.agentName,
   };
+}
+
+// -----------------------------------------------------------------------------
+// Per-config MCP API keys (external agents)
+// -----------------------------------------------------------------------------
+
+const MCP_CONFIG_API_KEY_QUERY_KEY = "mcp-config-api-keys";
+
+export function useListMCPConfigAPIKeys(params: ListMCPConfigAPIKeysPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ListAPIKeysResponse>({
+    queryKey: [
+      MCP_CONFIG_API_KEY_QUERY_KEY,
+      params.orgName,
+      params.projName,
+      params.agentName,
+      params.configId,
+      params.envName,
+    ],
+    queryFn: () => listMCPConfigAPIKeys(params, getToken),
+    enabled: !!(
+      params.orgName &&
+      params.projName &&
+      params.agentName &&
+      params.configId &&
+      params.envName
+    ),
+  });
+}
+
+export function useCreateMCPConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    CreateMCPConfigAPIKeyResponse,
+    unknown,
+    { params: CreateMCPConfigAPIKeyPathParams; body: CreateMCPConfigAPIKeyRequest }
+  >({
+    action: { verb: "create", target: "MCP config api key" },
+    mutationFn: ({ params, body }) =>
+      createMCPConfigAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [MCP_CONFIG_API_KEY_QUERY_KEY],
+      });
+    },
+  });
+}
+
+export function useRotateMCPConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    RotateMCPConfigAPIKeyResponse,
+    unknown,
+    { params: RotateMCPConfigAPIKeyPathParams; body: RotateMCPConfigAPIKeyRequest }
+  >({
+    action: { verb: "rotate", target: "MCP config api key" },
+    mutationFn: ({ params, body }) =>
+      rotateMCPConfigAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [MCP_CONFIG_API_KEY_QUERY_KEY],
+      });
+    },
+  });
+}
+
+export function useRevokeMCPConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, RevokeMCPConfigAPIKeyPathParams>({
+    action: { verb: "revoke", target: "MCP config api key" },
+    mutationFn: (params) => revokeMCPConfigAPIKey(params, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [MCP_CONFIG_API_KEY_QUERY_KEY],
+      });
+    },
+  });
 }

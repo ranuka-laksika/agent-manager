@@ -40,7 +40,10 @@ import type {
   GetLLMProviderPathParams,
   GetLLMProviderTemplatePathParams,
   GetLLMProxyPathParams,
+  ListAPIKeysResponse,
   ListLLMDeploymentsPathParams,
+  ListLLMProviderAPIKeysPathParams,
+  ListLLMProxyAPIKeysPathParams,
   ListLLMProviderConsumersPathParams,
   ListLLMProviderProxiesPathParams,
   ListLLMProviderTemplatesPathParams,
@@ -90,11 +93,13 @@ import {
   getLLMProviderTemplate,
   getLLMProxy,
   listLLMDeployments,
+  listLLMProviderAPIKeys,
   listLLMProviderConsumers,
   listLLMProviderProxies,
   listLLMProviders,
   listLLMProviderTemplates,
   listLLMProxies,
+  listLLMProxyAPIKeys,
   restoreLLMDeployment,
   revokeLLMProviderAPIKey,
   revokeLLMProxyAPIKey,
@@ -451,6 +456,15 @@ export function useListLLMProviderConsumers(params: ListLLMProviderConsumersPath
 
 // LLM API Keys — provider
 
+export function useListLLMProviderAPIKeys(params: ListLLMProviderAPIKeysPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ListAPIKeysResponse>({
+    queryKey: ["llm-provider-api-keys", params.orgName, params.providerId],
+    queryFn: () => listLLMProviderAPIKeys(params, getToken),
+    enabled: !!(params.orgName && params.providerId),
+  });
+}
+
 export function useCreateLLMProviderAPIKey() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
@@ -463,12 +477,14 @@ export function useCreateLLMProviderAPIKey() {
     mutationFn: ({ params, body }) => createLLMProviderAPIKey(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-provider"] });
+      queryClient.invalidateQueries({ queryKey: ["llm-provider-api-keys"] });
     },
   });
 }
 
 export function useRotateLLMProviderAPIKey() {
   const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
   return useApiMutation<
     RotateLLMAPIKeyResponse,
     unknown,
@@ -476,6 +492,9 @@ export function useRotateLLMProviderAPIKey() {
   >({
     action: { verb: 'rotate', target: 'llm provider api key' },
     mutationFn: ({ params, body }) => rotateLLMProviderAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["llm-provider-api-keys"] });
+    },
   });
 }
 
@@ -487,11 +506,21 @@ export function useRevokeLLMProviderAPIKey() {
     mutationFn: (params) => revokeLLMProviderAPIKey(params, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-provider"] });
+      queryClient.invalidateQueries({ queryKey: ["llm-provider-api-keys"] });
     },
   });
 }
 
 // LLM API Keys — proxy
+
+export function useListLLMProxyAPIKeys(params: ListLLMProxyAPIKeysPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ListAPIKeysResponse>({
+    queryKey: ["llm-proxy-api-keys", params.orgName, params.projName, params.proxyId],
+    queryFn: () => listLLMProxyAPIKeys(params, getToken),
+    enabled: !!(params.orgName && params.projName && params.proxyId),
+  });
+}
 
 export function useCreateLLMProxyAPIKey() {
   const { getToken } = useAuthHooks();
@@ -505,12 +534,14 @@ export function useCreateLLMProxyAPIKey() {
     mutationFn: ({ params, body }) => createLLMProxyAPIKey(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-proxy"] });
+      queryClient.invalidateQueries({ queryKey: ["llm-proxy-api-keys"] });
     },
   });
 }
 
 export function useRotateLLMProxyAPIKey() {
   const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
   return useApiMutation<
     RotateLLMAPIKeyResponse,
     unknown,
@@ -518,6 +549,9 @@ export function useRotateLLMProxyAPIKey() {
   >({
     action: { verb: 'rotate', target: 'llm proxy api key' },
     mutationFn: ({ params, body }) => rotateLLMProxyAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["llm-proxy-api-keys"] });
+    },
   });
 }
 
@@ -529,6 +563,7 @@ export function useRevokeLLMProxyAPIKey() {
     mutationFn: (params) => revokeLLMProxyAPIKey(params, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-proxy"] });
+      queryClient.invalidateQueries({ queryKey: ["llm-proxy-api-keys"] });
     },
   });
 }

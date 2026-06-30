@@ -39,6 +39,7 @@ type MCPProxyController interface {
 	UpdateMCPProxy(w http.ResponseWriter, r *http.Request)
 	DeleteMCPProxy(w http.ResponseWriter, r *http.Request)
 	FetchServerInfo(w http.ResponseWriter, r *http.Request)
+	ListAPIKeys(w http.ResponseWriter, r *http.Request)
 	CreateAPIKey(w http.ResponseWriter, r *http.Request)
 	RevokeAPIKey(w http.ResponseWriter, r *http.Request)
 	RotateAPIKey(w http.ResponseWriter, r *http.Request)
@@ -241,6 +242,22 @@ func (c *mcpProxyController) DeleteMCPProxy(w http.ResponseWriter, r *http.Reque
 
 	log.Info("DeleteMCPProxy: completed", "orgName", orgName, "proxyID", proxyID)
 	utils.WriteSuccessResponse(w, http.StatusNoContent, struct{}{})
+}
+
+// ListAPIKeys handles GET /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys.
+func (c *mcpProxyController) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	orgName := r.PathValue(utils.PathParamOrgName)
+	proxyID := r.PathValue(utils.PathParamProxyId)
+
+	response, err := c.mcpProxyService.ListAPIKeys(ctx, orgName, proxyID)
+	if err != nil {
+		c.writeMCPProxyAPIKeyError(w, log, "ListMCPProxyAPIKeys", orgName, proxyID, "", err)
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 // CreateAPIKey handles POST /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys.

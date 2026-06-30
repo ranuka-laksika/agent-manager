@@ -75,6 +75,7 @@ import { MCPLogo } from "@agent-management-platform/mcp-proxies";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
 import { MCPServerDisplay } from "./Configure/subComponents/MCPServerDisplay";
 import { EmptyConfigCard } from "./Configure/subComponents/EmptyConfigCard";
+import { MCPProxyAPIKeysSection } from "./Configure/subComponents/MCPProxyAPIKeysSection";
 
 type AuthInfoEntry = {
   type: string;
@@ -705,6 +706,16 @@ export const ViewMCPServerComponent = () => {
             />
           </Stack>
         </Form.Section>
+
+        {isExternal && providerConfig && (
+          <MCPProxyAPIKeysSection
+            orgName={orgId}
+            projName={projectId}
+            agentName={agentId}
+            configId={decodedConfigId}
+            envName={selectedEnvName}
+          />
+        )}
       </Stack>
 
       {envVarsPanel}

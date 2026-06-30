@@ -114,7 +114,7 @@ func (r *APIKeyRepo) ListPermanentByArtifactKind(orgName, kind string) ([]models
 	err := r.db.
 		Joins("JOIN artifacts a ON api_keys.artifact_uuid = a.uuid").
 		Where("a.organization_name = ? AND a.kind = ? AND api_keys.purpose = ?",
-			orgName, kind, models.APIKeyPurposePermanent).
+			orgName, kind, models.APIKeyPurposeUserManaged).
 		Find(&keys).Error
 	return keys, err
 }

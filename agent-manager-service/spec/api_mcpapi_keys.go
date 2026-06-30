@@ -19,225 +19,58 @@ import (
 	"strings"
 )
 
-// LLMAPIKeysAPIService LLMAPIKeysAPI service
-type LLMAPIKeysAPIService service
+// MCPAPIKeysAPIService MCPAPIKeysAPI service
+type MCPAPIKeysAPIService service
 
-type ApiCreateLLMProviderAPIKeyRequest struct {
+type ApiCreateMCPConfigAPIKeyRequest struct {
 	ctx                    context.Context
-	ApiService             *LLMAPIKeysAPIService
-	orgName                string
-	id                     string
-	createLLMAPIKeyRequest *CreateLLMAPIKeyRequest
-}
-
-func (r ApiCreateLLMProviderAPIKeyRequest) CreateLLMAPIKeyRequest(createLLMAPIKeyRequest CreateLLMAPIKeyRequest) ApiCreateLLMProviderAPIKeyRequest {
-	r.createLLMAPIKeyRequest = &createLLMAPIKeyRequest
-	return r
-}
-
-func (r ApiCreateLLMProviderAPIKeyRequest) Execute() (*CreateLLMAPIKeyResponse, *http.Response, error) {
-	return r.ApiService.CreateLLMProviderAPIKeyExecute(r)
-}
-
-/*
-CreateLLMProviderAPIKey Create an API key for an LLM provider
-
-Generates a new API key for an LLM provider and broadcasts it to all connected gateways. The key is returned only once in the response.
-
-	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param id Provider UUID
-	@return ApiCreateLLMProviderAPIKeyRequest
-*/
-func (a *LLMAPIKeysAPIService) CreateLLMProviderAPIKey(ctx context.Context, orgName string, id string) ApiCreateLLMProviderAPIKeyRequest {
-	return ApiCreateLLMProviderAPIKeyRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		id:         id,
-	}
-}
-
-// Execute executes the request
-//
-//	@return CreateLLMAPIKeyResponse
-func (a *LLMAPIKeysAPIService) CreateLLMProviderAPIKeyExecute(r ApiCreateLLMProviderAPIKeyRequest) (*CreateLLMAPIKeyResponse, *http.Response, error) {
-	var (
-		localVarHTTPMethod  = http.MethodPost
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue *CreateLLMAPIKeyResponse
-	)
-
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.CreateLLMProviderAPIKey")
-	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
-	}
-
-	localVarPath := localBasePath + "/orgs/{orgName}/llm-providers/{id}/api-keys"
-	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
-
-	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
-	if r.createLLMAPIKeyRequest == nil {
-		return localVarReturnValue, nil, reportError("createLLMAPIKeyRequest is required and must be specified")
-	}
-
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{"application/json"}
-
-	// set Content-Type header
-	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
-	if localVarHTTPContentType != "" {
-		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
-	}
-
-	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
-	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
-	if localVarHTTPHeaderAccept != "" {
-		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
-	}
-	// body params
-	localVarPostBody = r.createLLMAPIKeyRequest
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
-	if err != nil {
-		return localVarReturnValue, nil, err
-	}
-
-	localVarHTTPResponse, err := a.client.callAPI(req)
-	if err != nil || localVarHTTPResponse == nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
-	if err != nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: localVarHTTPResponse.Status,
-		}
-		if localVarHTTPResponse.StatusCode == 400 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 401 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 404 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 503 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-	if err != nil {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: err.Error(),
-		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	return localVarReturnValue, localVarHTTPResponse, nil
-}
-
-type ApiCreateLLMProxyAPIKeyRequest struct {
-	ctx                    context.Context
-	ApiService             *LLMAPIKeysAPIService
+	ApiService             *MCPAPIKeysAPIService
 	orgName                string
 	projName               string
-	id                     string
+	agentName              string
+	configId               string
+	envName                string
 	createLLMAPIKeyRequest *CreateLLMAPIKeyRequest
 }
 
-func (r ApiCreateLLMProxyAPIKeyRequest) CreateLLMAPIKeyRequest(createLLMAPIKeyRequest CreateLLMAPIKeyRequest) ApiCreateLLMProxyAPIKeyRequest {
+func (r ApiCreateMCPConfigAPIKeyRequest) CreateLLMAPIKeyRequest(createLLMAPIKeyRequest CreateLLMAPIKeyRequest) ApiCreateMCPConfigAPIKeyRequest {
 	r.createLLMAPIKeyRequest = &createLLMAPIKeyRequest
 	return r
 }
 
-func (r ApiCreateLLMProxyAPIKeyRequest) Execute() (*CreateLLMAPIKeyResponse, *http.Response, error) {
-	return r.ApiService.CreateLLMProxyAPIKeyExecute(r)
+func (r ApiCreateMCPConfigAPIKeyRequest) Execute() (*CreateLLMAPIKeyResponse, *http.Response, error) {
+	return r.ApiService.CreateMCPConfigAPIKeyExecute(r)
 }
 
 /*
-CreateLLMProxyAPIKey Create an API key for an LLM proxy
+CreateMCPConfigAPIKey Generate an API key for an external agent's MCP configuration
 
-Generates a new API key for an LLM proxy and broadcasts it to all connected gateways. The key is returned only once in the response.
+Generates a new API key for an external agent's MCP configuration and broadcasts it to all connected gateways. The key is returned only once.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
+	@param orgName Organization name
 	@param projName Project name
-	@param id LLM proxy UUID or handle
-	@return ApiCreateLLMProxyAPIKeyRequest
+	@param agentName Agent name
+	@param configId MCP configuration UUID
+	@param envName Environment name
+	@return ApiCreateMCPConfigAPIKeyRequest
 */
-func (a *LLMAPIKeysAPIService) CreateLLMProxyAPIKey(ctx context.Context, orgName string, projName string, id string) ApiCreateLLMProxyAPIKeyRequest {
-	return ApiCreateLLMProxyAPIKeyRequest{
+func (a *MCPAPIKeysAPIService) CreateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId string, envName string) ApiCreateMCPConfigAPIKeyRequest {
+	return ApiCreateMCPConfigAPIKeyRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
 		projName:   projName,
-		id:         id,
+		agentName:  agentName,
+		configId:   configId,
+		envName:    envName,
 	}
 }
 
 // Execute executes the request
 //
 //	@return CreateLLMAPIKeyResponse
-func (a *LLMAPIKeysAPIService) CreateLLMProxyAPIKeyExecute(r ApiCreateLLMProxyAPIKeyRequest) (*CreateLLMAPIKeyResponse, *http.Response, error) {
+func (a *MCPAPIKeysAPIService) CreateMCPConfigAPIKeyExecute(r ApiCreateMCPConfigAPIKeyRequest) (*CreateLLMAPIKeyResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPost
 		localVarPostBody    interface{}
@@ -245,15 +78,179 @@ func (a *LLMAPIKeysAPIService) CreateLLMProxyAPIKeyExecute(r ApiCreateLLMProxyAP
 		localVarReturnValue *CreateLLMAPIKeyResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.CreateLLMProxyAPIKey")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.CreateMCPConfigAPIKey")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys"
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"configId"+"}", url.PathEscape(parameterValueToString(r.configId, "configId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envName"+"}", url.PathEscape(parameterValueToString(r.envName, "envName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.createLLMAPIKeyRequest == nil {
+		return localVarReturnValue, nil, reportError("createLLMAPIKeyRequest is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.createLLMAPIKeyRequest
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 503 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiCreateMCPProxyAPIKeyRequest struct {
+	ctx                    context.Context
+	ApiService             *MCPAPIKeysAPIService
+	orgName                string
+	proxyId                string
+	createLLMAPIKeyRequest *CreateLLMAPIKeyRequest
+}
+
+func (r ApiCreateMCPProxyAPIKeyRequest) CreateLLMAPIKeyRequest(createLLMAPIKeyRequest CreateLLMAPIKeyRequest) ApiCreateMCPProxyAPIKeyRequest {
+	r.createLLMAPIKeyRequest = &createLLMAPIKeyRequest
+	return r
+}
+
+func (r ApiCreateMCPProxyAPIKeyRequest) Execute() (*CreateLLMAPIKeyResponse, *http.Response, error) {
+	return r.ApiService.CreateMCPProxyAPIKeyExecute(r)
+}
+
+/*
+CreateMCPProxyAPIKey Create an API key for an MCP proxy
+
+Generates a new API key for an MCP proxy and broadcasts it to all connected gateways. The key is returned only once in the response.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@param proxyId MCP proxy UUID or handle
+	@return ApiCreateMCPProxyAPIKeyRequest
+*/
+func (a *MCPAPIKeysAPIService) CreateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string) ApiCreateMCPProxyAPIKeyRequest {
+	return ApiCreateMCPProxyAPIKeyRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		proxyId:    proxyId,
+	}
+}
+
+// Execute executes the request
+//
+//	@return CreateLLMAPIKeyResponse
+func (a *MCPAPIKeysAPIService) CreateMCPProxyAPIKeyExecute(r ApiCreateMCPProxyAPIKeyRequest) (*CreateLLMAPIKeyResponse, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CreateLLMAPIKeyResponse
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.CreateMCPProxyAPIKey")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/api-keys"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -372,40 +369,49 @@ func (a *LLMAPIKeysAPIService) CreateLLMProxyAPIKeyExecute(r ApiCreateLLMProxyAP
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiListLLMProviderAPIKeysRequest struct {
+type ApiListMCPConfigAPIKeysRequest struct {
 	ctx        context.Context
-	ApiService *LLMAPIKeysAPIService
+	ApiService *MCPAPIKeysAPIService
 	orgName    string
-	id         string
+	projName   string
+	agentName  string
+	configId   string
+	envName    string
 }
 
-func (r ApiListLLMProviderAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
-	return r.ApiService.ListLLMProviderAPIKeysExecute(r)
+func (r ApiListMCPConfigAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
+	return r.ApiService.ListMCPConfigAPIKeysExecute(r)
 }
 
 /*
-ListLLMProviderAPIKeys List API keys for an LLM provider
+ListMCPConfigAPIKeys List API keys for an external agent's MCP configuration
 
-Returns the list of API keys for an LLM provider (masked values only).
+Returns the API key(s) for an external agent's MCP configuration in the given environment (masked values only).
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param id Provider UUID
-	@return ApiListLLMProviderAPIKeysRequest
+	@param orgName Organization name
+	@param projName Project name
+	@param agentName Agent name
+	@param configId MCP configuration UUID
+	@param envName Environment name
+	@return ApiListMCPConfigAPIKeysRequest
 */
-func (a *LLMAPIKeysAPIService) ListLLMProviderAPIKeys(ctx context.Context, orgName string, id string) ApiListLLMProviderAPIKeysRequest {
-	return ApiListLLMProviderAPIKeysRequest{
+func (a *MCPAPIKeysAPIService) ListMCPConfigAPIKeys(ctx context.Context, orgName string, projName string, agentName string, configId string, envName string) ApiListMCPConfigAPIKeysRequest {
+	return ApiListMCPConfigAPIKeysRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
-		id:         id,
+		projName:   projName,
+		agentName:  agentName,
+		configId:   configId,
+		envName:    envName,
 	}
 }
 
 // Execute executes the request
 //
 //	@return []StoredAPIKey
-func (a *LLMAPIKeysAPIService) ListLLMProviderAPIKeysExecute(r ApiListLLMProviderAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
+func (a *MCPAPIKeysAPIService) ListMCPConfigAPIKeysExecute(r ApiListMCPConfigAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
@@ -413,14 +419,146 @@ func (a *LLMAPIKeysAPIService) ListLLMProviderAPIKeysExecute(r ApiListLLMProvide
 		localVarReturnValue []StoredAPIKey
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.ListLLMProviderAPIKeys")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.ListMCPConfigAPIKeys")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/llm-providers/{id}/api-keys"
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"configId"+"}", url.PathEscape(parameterValueToString(r.configId, "configId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envName"+"}", url.PathEscape(parameterValueToString(r.envName, "envName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiListMCPProxyAPIKeysRequest struct {
+	ctx        context.Context
+	ApiService *MCPAPIKeysAPIService
+	orgName    string
+	proxyId    string
+}
+
+func (r ApiListMCPProxyAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
+	return r.ApiService.ListMCPProxyAPIKeysExecute(r)
+}
+
+/*
+ListMCPProxyAPIKeys List API keys for an MCP proxy
+
+Returns the list of API keys for an MCP proxy (masked values only).
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@param proxyId MCP proxy UUID or handle
+	@return ApiListMCPProxyAPIKeysRequest
+*/
+func (a *MCPAPIKeysAPIService) ListMCPProxyAPIKeys(ctx context.Context, orgName string, proxyId string) ApiListMCPProxyAPIKeysRequest {
+	return ApiListMCPProxyAPIKeysRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		proxyId:    proxyId,
+	}
+}
+
+// Execute executes the request
+//
+//	@return []StoredAPIKey
+func (a *MCPAPIKeysAPIService) ListMCPProxyAPIKeysExecute(r ApiListMCPProxyAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue []StoredAPIKey
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.ListMCPProxyAPIKeys")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/api-keys"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -512,199 +650,67 @@ func (a *LLMAPIKeysAPIService) ListLLMProviderAPIKeysExecute(r ApiListLLMProvide
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiListLLMProxyAPIKeysRequest struct {
+type ApiRevokeMCPConfigAPIKeyRequest struct {
 	ctx        context.Context
-	ApiService *LLMAPIKeysAPIService
+	ApiService *MCPAPIKeysAPIService
 	orgName    string
 	projName   string
-	id         string
+	agentName  string
+	configId   string
+	envName    string
+	keyName    string
 }
 
-func (r ApiListLLMProxyAPIKeysRequest) Execute() ([]StoredAPIKey, *http.Response, error) {
-	return r.ApiService.ListLLMProxyAPIKeysExecute(r)
+func (r ApiRevokeMCPConfigAPIKeyRequest) Execute() (*http.Response, error) {
+	return r.ApiService.RevokeMCPConfigAPIKeyExecute(r)
 }
 
 /*
-ListLLMProxyAPIKeys List API keys for an LLM proxy
+RevokeMCPConfigAPIKey Delete an external agent's MCP configuration API key
 
-Returns the list of API keys for an LLM proxy (masked values only).
+Revokes and removes the API key for an external agent's MCP configuration and broadcasts the revocation to all connected gateways.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
+	@param orgName Organization name
 	@param projName Project name
-	@param id LLM proxy UUID or handle
-	@return ApiListLLMProxyAPIKeysRequest
+	@param agentName Agent name
+	@param configId MCP configuration UUID
+	@param envName Environment name
+	@param keyName API key name/identifier
+	@return ApiRevokeMCPConfigAPIKeyRequest
 */
-func (a *LLMAPIKeysAPIService) ListLLMProxyAPIKeys(ctx context.Context, orgName string, projName string, id string) ApiListLLMProxyAPIKeysRequest {
-	return ApiListLLMProxyAPIKeysRequest{
+func (a *MCPAPIKeysAPIService) RevokeMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId string, envName string, keyName string) ApiRevokeMCPConfigAPIKeyRequest {
+	return ApiRevokeMCPConfigAPIKeyRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
 		projName:   projName,
-		id:         id,
-	}
-}
-
-// Execute executes the request
-//
-//	@return []StoredAPIKey
-func (a *LLMAPIKeysAPIService) ListLLMProxyAPIKeysExecute(r ApiListLLMProxyAPIKeysRequest) ([]StoredAPIKey, *http.Response, error) {
-	var (
-		localVarHTTPMethod  = http.MethodGet
-		localVarPostBody    interface{}
-		formFiles           []formFile
-		localVarReturnValue []StoredAPIKey
-	)
-
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.ListLLMProxyAPIKeys")
-	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
-	}
-
-	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys"
-	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
-
-	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
-
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{}
-
-	// set Content-Type header
-	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
-	if localVarHTTPContentType != "" {
-		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
-	}
-
-	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
-	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
-	if localVarHTTPHeaderAccept != "" {
-		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
-	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
-	if err != nil {
-		return localVarReturnValue, nil, err
-	}
-
-	localVarHTTPResponse, err := a.client.callAPI(req)
-	if err != nil || localVarHTTPResponse == nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
-	if err != nil {
-		return localVarReturnValue, localVarHTTPResponse, err
-	}
-
-	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: localVarHTTPResponse.Status,
-		}
-		if localVarHTTPResponse.StatusCode == 401 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 404 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-	if err != nil {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: err.Error(),
-		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
-	}
-
-	return localVarReturnValue, localVarHTTPResponse, nil
-}
-
-type ApiRevokeLLMProviderAPIKeyRequest struct {
-	ctx        context.Context
-	ApiService *LLMAPIKeysAPIService
-	orgName    string
-	id         string
-	keyName    string
-}
-
-func (r ApiRevokeLLMProviderAPIKeyRequest) Execute() (*http.Response, error) {
-	return r.ApiService.RevokeLLMProviderAPIKeyExecute(r)
-}
-
-/*
-RevokeLLMProviderAPIKey Revoke an LLM provider API key
-
-Revokes an API key for an LLM provider and broadcasts the revocation to all connected gateways.
-
-	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param id Provider UUID
-	@param keyName API key name/identifier
-	@return ApiRevokeLLMProviderAPIKeyRequest
-*/
-func (a *LLMAPIKeysAPIService) RevokeLLMProviderAPIKey(ctx context.Context, orgName string, id string, keyName string) ApiRevokeLLMProviderAPIKeyRequest {
-	return ApiRevokeLLMProviderAPIKeyRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		id:         id,
+		agentName:  agentName,
+		configId:   configId,
+		envName:    envName,
 		keyName:    keyName,
 	}
 }
 
 // Execute executes the request
-func (a *LLMAPIKeysAPIService) RevokeLLMProviderAPIKeyExecute(r ApiRevokeLLMProviderAPIKeyRequest) (*http.Response, error) {
+func (a *MCPAPIKeysAPIService) RevokeMCPConfigAPIKeyExecute(r ApiRevokeMCPConfigAPIKeyRequest) (*http.Response, error) {
 	var (
 		localVarHTTPMethod = http.MethodDelete
 		localVarPostBody   interface{}
 		formFiles          []formFile
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.RevokeLLMProviderAPIKey")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.RevokeMCPConfigAPIKey")
 	if err != nil {
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}"
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"configId"+"}", url.PathEscape(parameterValueToString(r.configId, "configId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envName"+"}", url.PathEscape(parameterValueToString(r.envName, "envName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"keyName"+"}", url.PathEscape(parameterValueToString(r.keyName, "keyName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -749,6 +755,138 @@ func (a *LLMAPIKeysAPIService) RevokeLLMProviderAPIKeyExecute(r ApiRevokeLLMProv
 		newErr := &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarHTTPResponse, newErr
+	}
+
+	return localVarHTTPResponse, nil
+}
+
+type ApiRevokeMCPProxyAPIKeyRequest struct {
+	ctx        context.Context
+	ApiService *MCPAPIKeysAPIService
+	orgName    string
+	proxyId    string
+	keyName    string
+}
+
+func (r ApiRevokeMCPProxyAPIKeyRequest) Execute() (*http.Response, error) {
+	return r.ApiService.RevokeMCPProxyAPIKeyExecute(r)
+}
+
+/*
+RevokeMCPProxyAPIKey Revoke an MCP proxy API key
+
+Revokes an API key for an MCP proxy and broadcasts the revocation to all connected gateways.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@param proxyId MCP proxy UUID or handle
+	@param keyName API key name/identifier
+	@return ApiRevokeMCPProxyAPIKeyRequest
+*/
+func (a *MCPAPIKeysAPIService) RevokeMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string) ApiRevokeMCPProxyAPIKeyRequest {
+	return ApiRevokeMCPProxyAPIKeyRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		proxyId:    proxyId,
+		keyName:    keyName,
+	}
+}
+
+// Execute executes the request
+func (a *MCPAPIKeysAPIService) RevokeMCPProxyAPIKeyExecute(r ApiRevokeMCPProxyAPIKeyRequest) (*http.Response, error) {
+	var (
+		localVarHTTPMethod = http.MethodDelete
+		localVarPostBody   interface{}
+		formFiles          []formFile
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.RevokeMCPProxyAPIKey")
+	if err != nil {
+		return nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"keyName"+"}", url.PathEscape(parameterValueToString(r.keyName, "keyName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 401 {
 			var v ErrorResponse
@@ -799,188 +937,50 @@ func (a *LLMAPIKeysAPIService) RevokeLLMProviderAPIKeyExecute(r ApiRevokeLLMProv
 	return localVarHTTPResponse, nil
 }
 
-type ApiRevokeLLMProxyAPIKeyRequest struct {
-	ctx        context.Context
-	ApiService *LLMAPIKeysAPIService
-	orgName    string
-	projName   string
-	id         string
-	keyName    string
-}
-
-func (r ApiRevokeLLMProxyAPIKeyRequest) Execute() (*http.Response, error) {
-	return r.ApiService.RevokeLLMProxyAPIKeyExecute(r)
-}
-
-/*
-RevokeLLMProxyAPIKey Revoke an LLM proxy API key
-
-Revokes an API key for an LLM proxy and broadcasts the revocation to all connected gateways.
-
-	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param projName Project name
-	@param id LLM proxy UUID
-	@param keyName API key name/identifier
-	@return ApiRevokeLLMProxyAPIKeyRequest
-*/
-func (a *LLMAPIKeysAPIService) RevokeLLMProxyAPIKey(ctx context.Context, orgName string, projName string, id string, keyName string) ApiRevokeLLMProxyAPIKeyRequest {
-	return ApiRevokeLLMProxyAPIKeyRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		projName:   projName,
-		id:         id,
-		keyName:    keyName,
-	}
-}
-
-// Execute executes the request
-func (a *LLMAPIKeysAPIService) RevokeLLMProxyAPIKeyExecute(r ApiRevokeLLMProxyAPIKeyRequest) (*http.Response, error) {
-	var (
-		localVarHTTPMethod = http.MethodDelete
-		localVarPostBody   interface{}
-		formFiles          []formFile
-	)
-
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.RevokeLLMProxyAPIKey")
-	if err != nil {
-		return nil, &GenericOpenAPIError{error: err.Error()}
-	}
-
-	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}"
-	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"keyName"+"}", url.PathEscape(parameterValueToString(r.keyName, "keyName")), -1)
-
-	localVarHeaderParams := make(map[string]string)
-	localVarQueryParams := url.Values{}
-	localVarFormParams := url.Values{}
-
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{}
-
-	// set Content-Type header
-	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
-	if localVarHTTPContentType != "" {
-		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
-	}
-
-	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
-	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
-	if localVarHTTPHeaderAccept != "" {
-		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
-	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
-	if err != nil {
-		return nil, err
-	}
-
-	localVarHTTPResponse, err := a.client.callAPI(req)
-	if err != nil || localVarHTTPResponse == nil {
-		return localVarHTTPResponse, err
-	}
-
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
-	if err != nil {
-		return localVarHTTPResponse, err
-	}
-
-	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: localVarHTTPResponse.Status,
-		}
-		if localVarHTTPResponse.StatusCode == 401 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 404 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 503 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
-		return localVarHTTPResponse, newErr
-	}
-
-	return localVarHTTPResponse, nil
-}
-
-type ApiRotateLLMProviderAPIKeyRequest struct {
+type ApiRotateMCPConfigAPIKeyRequest struct {
 	ctx                    context.Context
-	ApiService             *LLMAPIKeysAPIService
+	ApiService             *MCPAPIKeysAPIService
 	orgName                string
-	id                     string
+	projName               string
+	agentName              string
+	configId               string
+	envName                string
 	keyName                string
 	rotateLLMAPIKeyRequest *RotateLLMAPIKeyRequest
 }
 
-func (r ApiRotateLLMProviderAPIKeyRequest) RotateLLMAPIKeyRequest(rotateLLMAPIKeyRequest RotateLLMAPIKeyRequest) ApiRotateLLMProviderAPIKeyRequest {
+func (r ApiRotateMCPConfigAPIKeyRequest) RotateLLMAPIKeyRequest(rotateLLMAPIKeyRequest RotateLLMAPIKeyRequest) ApiRotateMCPConfigAPIKeyRequest {
 	r.rotateLLMAPIKeyRequest = &rotateLLMAPIKeyRequest
 	return r
 }
 
-func (r ApiRotateLLMProviderAPIKeyRequest) Execute() (*RotateLLMAPIKeyResponse, *http.Response, error) {
-	return r.ApiService.RotateLLMProviderAPIKeyExecute(r)
+func (r ApiRotateMCPConfigAPIKeyRequest) Execute() (*RotateLLMAPIKeyResponse, *http.Response, error) {
+	return r.ApiService.RotateMCPConfigAPIKeyExecute(r)
 }
 
 /*
-RotateLLMProviderAPIKey Rotate an LLM provider API key
+RotateMCPConfigAPIKey Regenerate an external agent's MCP configuration API key
 
-Generates a new API key value for the given key name and broadcasts the update to all connected gateways. The new key is returned only once in the response.
+Revokes the current API key and generates a new value under the same key name, broadcasting the update to all connected gateways. The new key is returned only once.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param id Provider UUID
+	@param orgName Organization name
+	@param projName Project name
+	@param agentName Agent name
+	@param configId MCP configuration UUID
+	@param envName Environment name
 	@param keyName API key name/identifier
-	@return ApiRotateLLMProviderAPIKeyRequest
+	@return ApiRotateMCPConfigAPIKeyRequest
 */
-func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKey(ctx context.Context, orgName string, id string, keyName string) ApiRotateLLMProviderAPIKeyRequest {
-	return ApiRotateLLMProviderAPIKeyRequest{
+func (a *MCPAPIKeysAPIService) RotateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId string, envName string, keyName string) ApiRotateMCPConfigAPIKeyRequest {
+	return ApiRotateMCPConfigAPIKeyRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
-		id:         id,
+		projName:   projName,
+		agentName:  agentName,
+		configId:   configId,
+		envName:    envName,
 		keyName:    keyName,
 	}
 }
@@ -988,7 +988,7 @@ func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKey(ctx context.Context, orgN
 // Execute executes the request
 //
 //	@return RotateLLMAPIKeyResponse
-func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKeyExecute(r ApiRotateLLMProviderAPIKeyRequest) (*RotateLLMAPIKeyResponse, *http.Response, error) {
+func (a *MCPAPIKeysAPIService) RotateMCPConfigAPIKeyExecute(r ApiRotateMCPConfigAPIKeyRequest) (*RotateLLMAPIKeyResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
@@ -996,14 +996,17 @@ func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKeyExecute(r ApiRotateLLMProv
 		localVarReturnValue *RotateLLMAPIKeyResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.RotateLLMProviderAPIKey")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.RotateMCPConfigAPIKey")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}"
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"configId"+"}", url.PathEscape(parameterValueToString(r.configId, "configId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envName"+"}", url.PathEscape(parameterValueToString(r.envName, "envName")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"keyName"+"}", url.PathEscape(parameterValueToString(r.keyName, "keyName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
@@ -1051,28 +1054,6 @@ func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKeyExecute(r ApiRotateLLMProv
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		if localVarHTTPResponse.StatusCode == 400 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 401 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
 		if localVarHTTPResponse.StatusCode == 404 {
 			var v ErrorResponse
 			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
@@ -1120,44 +1101,41 @@ func (a *LLMAPIKeysAPIService) RotateLLMProviderAPIKeyExecute(r ApiRotateLLMProv
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiRotateLLMProxyAPIKeyRequest struct {
+type ApiRotateMCPProxyAPIKeyRequest struct {
 	ctx                    context.Context
-	ApiService             *LLMAPIKeysAPIService
+	ApiService             *MCPAPIKeysAPIService
 	orgName                string
-	projName               string
-	id                     string
+	proxyId                string
 	keyName                string
 	rotateLLMAPIKeyRequest *RotateLLMAPIKeyRequest
 }
 
-func (r ApiRotateLLMProxyAPIKeyRequest) RotateLLMAPIKeyRequest(rotateLLMAPIKeyRequest RotateLLMAPIKeyRequest) ApiRotateLLMProxyAPIKeyRequest {
+func (r ApiRotateMCPProxyAPIKeyRequest) RotateLLMAPIKeyRequest(rotateLLMAPIKeyRequest RotateLLMAPIKeyRequest) ApiRotateMCPProxyAPIKeyRequest {
 	r.rotateLLMAPIKeyRequest = &rotateLLMAPIKeyRequest
 	return r
 }
 
-func (r ApiRotateLLMProxyAPIKeyRequest) Execute() (*RotateLLMAPIKeyResponse, *http.Response, error) {
-	return r.ApiService.RotateLLMProxyAPIKeyExecute(r)
+func (r ApiRotateMCPProxyAPIKeyRequest) Execute() (*RotateLLMAPIKeyResponse, *http.Response, error) {
+	return r.ApiService.RotateMCPProxyAPIKeyExecute(r)
 }
 
 /*
-RotateLLMProxyAPIKey Rotate an LLM proxy API key
+RotateMCPProxyAPIKey Rotate an MCP proxy API key
 
 Generates a new API key value for the given key name and broadcasts the update to all connected gateways. The new key is returned only once in the response.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
-	@param projName Project name
-	@param id LLM proxy UUID
+	@param proxyId MCP proxy UUID or handle
 	@param keyName API key name/identifier
-	@return ApiRotateLLMProxyAPIKeyRequest
+	@return ApiRotateMCPProxyAPIKeyRequest
 */
-func (a *LLMAPIKeysAPIService) RotateLLMProxyAPIKey(ctx context.Context, orgName string, projName string, id string, keyName string) ApiRotateLLMProxyAPIKeyRequest {
-	return ApiRotateLLMProxyAPIKeyRequest{
+func (a *MCPAPIKeysAPIService) RotateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string) ApiRotateMCPProxyAPIKeyRequest {
+	return ApiRotateMCPProxyAPIKeyRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
-		projName:   projName,
-		id:         id,
+		proxyId:    proxyId,
 		keyName:    keyName,
 	}
 }
@@ -1165,7 +1143,7 @@ func (a *LLMAPIKeysAPIService) RotateLLMProxyAPIKey(ctx context.Context, orgName
 // Execute executes the request
 //
 //	@return RotateLLMAPIKeyResponse
-func (a *LLMAPIKeysAPIService) RotateLLMProxyAPIKeyExecute(r ApiRotateLLMProxyAPIKeyRequest) (*RotateLLMAPIKeyResponse, *http.Response, error) {
+func (a *MCPAPIKeysAPIService) RotateMCPProxyAPIKeyExecute(r ApiRotateMCPProxyAPIKeyRequest) (*RotateLLMAPIKeyResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
@@ -1173,15 +1151,14 @@ func (a *LLMAPIKeysAPIService) RotateLLMProxyAPIKeyExecute(r ApiRotateLLMProxyAP
 		localVarReturnValue *RotateLLMAPIKeyResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "LLMAPIKeysAPIService.RotateLLMProxyAPIKey")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPAPIKeysAPIService.RotateMCPProxyAPIKey")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}"
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"id"+"}", url.PathEscape(parameterValueToString(r.id, "id")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
 	localVarPath = strings.Replace(localVarPath, "{"+"keyName"+"}", url.PathEscape(parameterValueToString(r.keyName, "keyName")), -1)
 
 	localVarHeaderParams := make(map[string]string)

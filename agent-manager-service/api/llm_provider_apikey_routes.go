@@ -24,6 +24,7 @@ import (
 
 // RegisterLLMProviderAPIKeyRoutes registers API key routes for LLM providers
 func RegisterLLMProviderAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMProviderAPIKeyController) {
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/llm-providers/{id}/api-keys", rbac.LLMProviderRead, ctrl.ListAPIKeys)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/llm-providers/{id}/api-keys", rbac.LLMProviderAPIKeyManage, ctrl.CreateAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage, ctrl.RevokeAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/llm-providers/{id}/api-keys/{keyName}", rbac.LLMProviderAPIKeyManage, ctrl.RotateAPIKey)

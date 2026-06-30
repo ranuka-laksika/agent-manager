@@ -19,6 +19,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -28,6 +29,7 @@ import (
 // LLMProxyAPIKeyService handles API key management for LLM proxies
 type LLMProxyAPIKeyService struct {
 	proxyRepo   repositories.LLMProxyRepository
+	apiKeyRepo  repositories.APIKeyRepository
 	broadcaster apiKeyBroadcaster
 }
 
@@ -39,13 +41,56 @@ func NewLLMProxyAPIKeyService(
 	apiKeyRepo repositories.APIKeyRepository,
 ) *LLMProxyAPIKeyService {
 	return &LLMProxyAPIKeyService{
-		proxyRepo: proxyRepo,
+		proxyRepo:  proxyRepo,
+		apiKeyRepo: apiKeyRepo,
 		broadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
 			gatewayService: gatewayService,
 			apiKeyRepo:     apiKeyRepo,
 		},
 	}
+}
+
+// ListAPIKeys returns the masked, user-managed (permanent) API keys for an LLM proxy.
+// The plain key value is never returned — only the masked representation.
+func (s *LLMProxyAPIKeyService) ListAPIKeys(
+	ctx context.Context,
+	orgID, proxyID string,
+) (*models.ListAPIKeysResponse, error) {
+	proxy, err := s.proxyRepo.GetByID(proxyID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get LLM proxy: %w", err)
+	}
+	if proxy == nil {
+		return nil, utils.ErrLLMProxyNotFound
+	}
+
+	stored, err := s.apiKeyRepo.ListByArtifact(proxy.UUID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API keys: %w", err)
+	}
+
+	keys := make([]models.APIKeyInfo, 0, len(stored))
+	for _, k := range stored {
+		// Only surface user-managed keys; hide console-managed and test keys.
+		if k.Purpose != models.APIKeyPurposeUserManaged {
+			continue
+		}
+		info := models.APIKeyInfo{
+			Name:         k.Name,
+			DisplayName:  k.DisplayName,
+			MaskedAPIKey: k.MaskedAPIKey,
+			Status:       k.Status,
+			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
+		}
+		if k.ExpiresAt != nil {
+			expiresAt := k.ExpiresAt.Format(time.RFC3339)
+			info.ExpiresAt = &expiresAt
+		}
+		keys = append(keys, info)
+	}
+
+	return &models.ListAPIKeysResponse{Keys: keys}, nil
 }
 
 // CreateAPIKey generates an API key for an LLM proxy and broadcasts it to all gateways

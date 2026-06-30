@@ -31,6 +31,7 @@ func RegisterMCPProxyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.MCPP
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/mcp-proxies/{proxyId}", rbac.MCPServerRead, ctrl.GetMCPProxy)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}", rbac.MCPServerUpdate, ctrl.UpdateMCPProxy)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}", rbac.MCPServerDelete, ctrl.DeleteMCPProxy)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys", rbac.MCPServerRead, ctrl.ListAPIKeys)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys", rbac.MCPServerConnect, ctrl.CreateAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}", rbac.MCPServerConnect, ctrl.RevokeAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}", rbac.MCPServerConnect, ctrl.RotateAPIKey)

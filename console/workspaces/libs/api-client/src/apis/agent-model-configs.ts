@@ -30,12 +30,21 @@ import type {
   AgentModelConfigResponse,
   CreateAgentModelConfigPathParams,
   CreateAgentModelConfigRequest,
+  CreateLLMConfigAPIKeyPathParams,
+  CreateLLMConfigAPIKeyRequest,
+  CreateLLMConfigAPIKeyResponse,
   DeleteAgentModelConfigPathParams,
   EnvProviderConfigMappings,
+  ListAPIKeysResponse,
+  ListLLMConfigAPIKeysPathParams,
   ProviderConfig,
   GetAgentModelConfigPathParams,
   ListAgentModelConfigsPathParams,
   ListAgentModelConfigsQuery,
+  RevokeLLMConfigAPIKeyPathParams,
+  RotateLLMConfigAPIKeyPathParams,
+  RotateLLMConfigAPIKeyRequest,
+  RotateLLMConfigAPIKeyResponse,
   UpdateAgentModelConfigPathParams,
   UpdateAgentModelConfigRequest,
 } from "@agent-management-platform/types";
@@ -124,6 +133,69 @@ export async function deleteAgentModelConfig(
   if (!res.ok) throw await res.json();
 }
 
+// -----------------------------------------------------------------------------
+// Per-config LLM API keys (external agents)
+// -----------------------------------------------------------------------------
+
+function llmConfigAPIKeysUrl(params: {
+  orgName?: string;
+  projName?: string;
+  agentName?: string;
+  configId?: string;
+  envName?: string;
+}): string {
+  const configId = encodeRequired(params.configId, "configId");
+  const envName = encodeRequired(params.envName, "envName");
+  return `${buildBaseUrl(params)}/${configId}/environments/${envName}/api-keys`;
+}
+
+export async function listLLMConfigAPIKeys(
+  params: ListLLMConfigAPIKeysPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ListAPIKeysResponse> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(llmConfigAPIKeysUrl(params), { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function createLLMConfigAPIKey(
+  params: CreateLLMConfigAPIKeyPathParams,
+  body: CreateLLMConfigAPIKeyRequest,
+  getToken?: () => Promise<string>,
+): Promise<CreateLLMConfigAPIKeyResponse> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPOST(llmConfigAPIKeysUrl(params), body, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function rotateLLMConfigAPIKey(
+  params: RotateLLMConfigAPIKeyPathParams,
+  body: RotateLLMConfigAPIKeyRequest,
+  getToken?: () => Promise<string>,
+): Promise<RotateLLMConfigAPIKeyResponse> {
+  const keyName = encodeRequired(params.keyName, "keyName");
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPUT(`${llmConfigAPIKeysUrl(params)}/${keyName}`, body, {
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function revokeLLMConfigAPIKey(
+  params: RevokeLLMConfigAPIKeyPathParams,
+  getToken?: () => Promise<string>,
+): Promise<void> {
+  const keyName = encodeRequired(params.keyName, "keyName");
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpDELETE(`${llmConfigAPIKeysUrl(params)}/${keyName}`, {
+    token,
+  });
+  if (!res.ok) throw await res.json();
+}
+
 export function normalizeAgentModelConfigResponse(
   raw: AgentModelConfigResponse & {
     envModelConfig?: Record<string, {
@@ -131,6 +203,7 @@ export function normalizeAgentModelConfigResponse(
       llmProxy?: {
         proxyUrl?: string;
         proxyUuid?: string;
+        proxyName?: string;
         providerName?: string;
         policies?: unknown[];
         apiKey?: string;
@@ -155,6 +228,7 @@ export function normalizeAgentModelConfigResponse(
             ? {
                 providerName: mapping.llmProxy.providerName,
                 proxyUuid: mapping.llmProxy.proxyUuid,
+                proxyName: mapping.llmProxy.proxyName,
                 url: mapping.llmProxy.proxyUrl,
                 authInfo: mapping.llmProxy.apiKey
                   ? {

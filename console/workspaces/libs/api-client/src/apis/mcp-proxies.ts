@@ -23,9 +23,11 @@ import type {
   DeleteMCPProxyPathParams,
   FetchMCPProxyServerInfoPathParams,
   GetMCPProxyPathParams,
+  ListAPIKeysResponse,
   ListAvailableMCPPoliciesPathParams,
   ListMCPProxiesPathParams,
   ListMCPProxiesQuery,
+  ListMCPProxyAPIKeysPathParams,
   MCPPolicyAvailabilityResponse,
   MCPProxy,
   MCPProxyListResponse,
@@ -157,6 +159,22 @@ export async function fetchMCPProxyServerInfo(
   const res = await httpPOST(
     `${SERVICE_BASE}/orgs/${org}/mcp-proxies/fetch-server-info`,
     body,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function listMCPProxyAPIKeys(
+  params: ListMCPProxyAPIKeysPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ListAPIKeysResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const proxyId = encodeRequired(params.proxyId, "proxyId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/mcp-proxies/${proxyId}/api-keys`,
     { token },
   );
   if (!res.ok) throw await res.json();

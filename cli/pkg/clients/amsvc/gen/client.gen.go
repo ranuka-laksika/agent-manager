@@ -378,6 +378,9 @@ type ClientInterface interface {
 
 	UpdateLLMProvider(ctx context.Context, orgName string, id string, body UpdateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListLLMProviderAPIKeys request
+	ListLLMProviderAPIKeys(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// CreateLLMProviderAPIKeyWithBody request with any body
 	CreateLLMProviderAPIKeyWithBody(ctx context.Context, orgName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -421,6 +424,49 @@ type ClientInterface interface {
 
 	// ListLLMProxiesByProvider request
 	ListLLMProxiesByProvider(ctx context.Context, orgName string, id string, params *ListLLMProxiesByProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMCPProxies request
+	ListMCPProxies(ctx context.Context, orgName string, params *ListMCPProxiesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateMCPProxyWithBody request with any body
+	CreateMCPProxyWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateMCPProxy(ctx context.Context, orgName string, body CreateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// FetchMCPProxyServerInfoWithBody request with any body
+	FetchMCPProxyServerInfoWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	FetchMCPProxyServerInfo(ctx context.Context, orgName string, body FetchMCPProxyServerInfoJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAvailableMCPPolicies request
+	ListAvailableMCPPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMCPProxy request
+	DeleteMCPProxy(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetMCPProxy request
+	GetMCPProxy(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateMCPProxyWithBody request with any body
+	UpdateMCPProxyWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateMCPProxy(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMCPProxyAPIKeys request
+	ListMCPProxyAPIKeys(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateMCPProxyAPIKeyWithBody request with any body
+	CreateMCPProxyAPIKeyWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeMCPProxyAPIKey request
+	RevokeMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateMCPProxyAPIKeyWithBody request with any body
+	RotateMCPProxyAPIKeyWithBody(ctx context.Context, orgName string, proxyId string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RotateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string, body RotateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProjects request
 	ListProjects(ctx context.Context, orgName string, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -543,6 +589,22 @@ type ClientInterface interface {
 	UpdateAgentMCPConfigWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMCPConfigAPIKeys request
+	ListMCPConfigAPIKeys(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateMCPConfigAPIKeyWithBody request with any body
+	CreateMCPConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RevokeMCPConfigAPIKey request
+	RevokeMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// RotateMCPConfigAPIKeyWithBody request with any body
+	RotateMCPConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RotateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAgentMetricsWithBody request with any body
 	GetAgentMetricsWithBody(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -669,6 +731,9 @@ type ClientInterface interface {
 	UpdateLLMProxyWithBody(ctx context.Context, orgName string, projName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateLLMProxy(ctx context.Context, orgName string, projName string, id string, body UpdateLLMProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListLLMProxyAPIKeys request
+	ListLLMProxyAPIKeys(ctx context.Context, orgName string, projName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateLLMProxyAPIKeyWithBody request with any body
 	CreateLLMProxyAPIKeyWithBody(ctx context.Context, orgName string, projName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1947,6 +2012,18 @@ func (c *Client) UpdateLLMProvider(ctx context.Context, orgName string, id strin
 	return c.Client.Do(req)
 }
 
+func (c *Client) ListLLMProviderAPIKeys(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLLMProviderAPIKeysRequest(c.Server, orgName, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) CreateLLMProviderAPIKeyWithBody(ctx context.Context, orgName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateLLMProviderAPIKeyRequestWithBody(c.Server, orgName, id, contentType, body)
 	if err != nil {
@@ -2129,6 +2206,198 @@ func (c *Client) GetLLMProviderDeployment(ctx context.Context, orgName string, i
 
 func (c *Client) ListLLMProxiesByProvider(ctx context.Context, orgName string, id string, params *ListLLMProxiesByProviderParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewListLLMProxiesByProviderRequest(c.Server, orgName, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMCPProxies(ctx context.Context, orgName string, params *ListMCPProxiesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPProxiesRequest(c.Server, orgName, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxyWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyRequestWithBody(c.Server, orgName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxy(ctx context.Context, orgName string, body CreateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyRequest(c.Server, orgName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) FetchMCPProxyServerInfoWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFetchMCPProxyServerInfoRequestWithBody(c.Server, orgName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) FetchMCPProxyServerInfo(ctx context.Context, orgName string, body FetchMCPProxyServerInfoJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewFetchMCPProxyServerInfoRequest(c.Server, orgName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAvailableMCPPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAvailableMCPPoliciesRequest(c.Server, orgName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteMCPProxy(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMCPProxyRequest(c.Server, orgName, proxyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetMCPProxy(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetMCPProxyRequest(c.Server, orgName, proxyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMCPProxyWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMCPProxyRequestWithBody(c.Server, orgName, proxyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMCPProxy(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMCPProxyRequest(c.Server, orgName, proxyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMCPProxyAPIKeys(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPProxyAPIKeysRequest(c.Server, orgName, proxyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxyAPIKeyWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyAPIKeyRequestWithBody(c.Server, orgName, proxyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyAPIKeyRequest(c.Server, orgName, proxyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevokeMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeMCPProxyAPIKeyRequest(c.Server, orgName, proxyId, keyName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateMCPProxyAPIKeyWithBody(ctx context.Context, orgName string, proxyId string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateMCPProxyAPIKeyRequestWithBody(c.Server, orgName, proxyId, keyName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateMCPProxyAPIKey(ctx context.Context, orgName string, proxyId string, keyName string, body RotateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateMCPProxyAPIKeyRequest(c.Server, orgName, proxyId, keyName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2669,6 +2938,78 @@ func (c *Client) UpdateAgentMCPConfigWithBody(ctx context.Context, orgName strin
 
 func (c *Client) UpdateAgentMCPConfig(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateAgentMCPConfigRequest(c.Server, orgName, projName, agentName, configId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMCPConfigAPIKeys(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPConfigAPIKeysRequest(c.Server, orgName, projName, agentName, configId, envName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPConfigAPIKeyRequestWithBody(c.Server, orgName, projName, agentName, configId, envName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RevokeMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRevokeMCPConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, keyName)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateMCPConfigAPIKeyWithBody(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateMCPConfigAPIKeyRequestWithBody(c.Server, orgName, projName, agentName, configId, envName, keyName, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateMCPConfigAPIKey(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateMCPConfigAPIKeyRequest(c.Server, orgName, projName, agentName, configId, envName, keyName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -3221,6 +3562,18 @@ func (c *Client) UpdateLLMProxyWithBody(ctx context.Context, orgName string, pro
 
 func (c *Client) UpdateLLMProxy(ctx context.Context, orgName string, projName string, id string, body UpdateLLMProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateLLMProxyRequest(c.Server, orgName, projName, id, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListLLMProxyAPIKeys(ctx context.Context, orgName string, projName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListLLMProxyAPIKeysRequest(c.Server, orgName, projName, id)
 	if err != nil {
 		return nil, err
 	}
@@ -7313,6 +7666,47 @@ func NewUpdateLLMProviderRequestWithBody(server string, orgName string, id strin
 	return req, nil
 }
 
+// NewListLLMProviderAPIKeysRequest generates requests for ListLLMProviderAPIKeys
+func NewListLLMProviderAPIKeysRequest(server string, orgName string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/llm-providers/%s/api-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateLLMProviderAPIKeyRequest calls the generic CreateLLMProviderAPIKey builder with application/json body
 func NewCreateLLMProviderAPIKeyRequest(server string, orgName string, id string, body CreateLLMProviderAPIKeyJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -8017,6 +8411,546 @@ func NewListLLMProxiesByProviderRequest(server string, orgName string, id string
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewListMCPProxiesRequest generates requests for ListMCPProxies
+func NewListMCPProxiesRequest(server string, orgName string, params *ListMCPProxiesParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		queryValues := queryURL.Query()
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		if params.Offset != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "offset", *params.Offset, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+				return nil, err
+			} else {
+				for k, v := range parsed {
+					for _, v2 := range v {
+						queryValues.Add(k, v2)
+					}
+				}
+			}
+
+		}
+
+		queryURL.RawQuery = queryValues.Encode()
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateMCPProxyRequest calls the generic CreateMCPProxy builder with application/json body
+func NewCreateMCPProxyRequest(server string, orgName string, body CreateMCPProxyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateMCPProxyRequestWithBody(server, orgName, "application/json", bodyReader)
+}
+
+// NewCreateMCPProxyRequestWithBody generates requests for CreateMCPProxy with any type of body
+func NewCreateMCPProxyRequestWithBody(server string, orgName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewFetchMCPProxyServerInfoRequest calls the generic FetchMCPProxyServerInfo builder with application/json body
+func NewFetchMCPProxyServerInfoRequest(server string, orgName string, body FetchMCPProxyServerInfoJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewFetchMCPProxyServerInfoRequestWithBody(server, orgName, "application/json", bodyReader)
+}
+
+// NewFetchMCPProxyServerInfoRequestWithBody generates requests for FetchMCPProxyServerInfo with any type of body
+func NewFetchMCPProxyServerInfoRequestWithBody(server string, orgName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/fetch-server-info", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAvailableMCPPoliciesRequest generates requests for ListAvailableMCPPolicies
+func NewListAvailableMCPPoliciesRequest(server string, orgName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteMCPProxyRequest generates requests for DeleteMCPProxy
+func NewDeleteMCPProxyRequest(server string, orgName string, proxyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetMCPProxyRequest generates requests for GetMCPProxy
+func NewGetMCPProxyRequest(server string, orgName string, proxyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateMCPProxyRequest calls the generic UpdateMCPProxy builder with application/json body
+func NewUpdateMCPProxyRequest(server string, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateMCPProxyRequestWithBody(server, orgName, proxyId, "application/json", bodyReader)
+}
+
+// NewUpdateMCPProxyRequestWithBody generates requests for UpdateMCPProxy with any type of body
+func NewUpdateMCPProxyRequestWithBody(server string, orgName string, proxyId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMCPProxyAPIKeysRequest generates requests for ListMCPProxyAPIKeys
+func NewListMCPProxyAPIKeysRequest(server string, orgName string, proxyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/api-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateMCPProxyAPIKeyRequest calls the generic CreateMCPProxyAPIKey builder with application/json body
+func NewCreateMCPProxyAPIKeyRequest(server string, orgName string, proxyId string, body CreateMCPProxyAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateMCPProxyAPIKeyRequestWithBody(server, orgName, proxyId, "application/json", bodyReader)
+}
+
+// NewCreateMCPProxyAPIKeyRequestWithBody generates requests for CreateMCPProxyAPIKey with any type of body
+func NewCreateMCPProxyAPIKeyRequestWithBody(server string, orgName string, proxyId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/api-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeMCPProxyAPIKeyRequest generates requests for RevokeMCPProxyAPIKey
+func NewRevokeMCPProxyAPIKeyRequest(server string, orgName string, proxyId string, keyName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/api-keys/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotateMCPProxyAPIKeyRequest calls the generic RotateMCPProxyAPIKey builder with application/json body
+func NewRotateMCPProxyAPIKeyRequest(server string, orgName string, proxyId string, keyName string, body RotateMCPProxyAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateMCPProxyAPIKeyRequestWithBody(server, orgName, proxyId, keyName, "application/json", bodyReader)
+}
+
+// NewRotateMCPProxyAPIKeyRequestWithBody generates requests for RotateMCPProxyAPIKey with any type of body
+func NewRotateMCPProxyAPIKeyRequestWithBody(server string, orgName string, proxyId string, keyName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/api-keys/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9938,6 +10872,294 @@ func NewUpdateAgentMCPConfigRequestWithBody(server string, orgName string, projN
 	}
 
 	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s", pathParam0, pathParam1, pathParam2, pathParam3)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMCPConfigAPIKeysRequest generates requests for ListMCPConfigAPIKeys
+func NewListMCPConfigAPIKeysRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s/environments/%s/api-keys", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateMCPConfigAPIKeyRequest calls the generic CreateMCPConfigAPIKey builder with application/json body
+func NewCreateMCPConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateMCPConfigAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateMCPConfigAPIKeyRequestWithBody(server, orgName, projName, agentName, configId, envName, "application/json", bodyReader)
+}
+
+// NewCreateMCPConfigAPIKeyRequestWithBody generates requests for CreateMCPConfigAPIKey with any type of body
+func NewCreateMCPConfigAPIKeyRequestWithBody(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s/environments/%s/api-keys", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewRevokeMCPConfigAPIKeyRequest generates requests for RevokeMCPConfigAPIKey
+func NewRevokeMCPConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam5 string
+
+	pathParam5, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s/environments/%s/api-keys/%s", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4, pathParam5)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewRotateMCPConfigAPIKeyRequest calls the generic RotateMCPConfigAPIKey builder with application/json body
+func NewRotateMCPConfigAPIKeyRequest(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateMCPConfigAPIKeyJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateMCPConfigAPIKeyRequestWithBody(server, orgName, projName, agentName, configId, envName, keyName, "application/json", bodyReader)
+}
+
+// NewRotateMCPConfigAPIKeyRequestWithBody generates requests for RotateMCPConfigAPIKey with any type of body
+func NewRotateMCPConfigAPIKeyRequestWithBody(server string, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "agentName", agentName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam3 string
+
+	pathParam3, err = runtime.StyleParamWithOptions("simple", false, "configId", configId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam4 string
+
+	pathParam4, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam5 string
+
+	pathParam5, err = runtime.StyleParamWithOptions("simple", false, "keyName", keyName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/agents/%s/mcp-configs/%s/environments/%s/api-keys/%s", pathParam0, pathParam1, pathParam2, pathParam3, pathParam4, pathParam5)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -12299,6 +13521,54 @@ func NewUpdateLLMProxyRequestWithBody(server string, orgName string, projName st
 	return req, nil
 }
 
+// NewListLLMProxyAPIKeysRequest generates requests for ListLLMProxyAPIKeys
+func NewListLLMProxyAPIKeysRequest(server string, orgName string, projName string, id string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "projName", projName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/projects/%s/llm-proxies/%s/api-keys", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewCreateLLMProxyAPIKeyRequest calls the generic CreateLLMProxyAPIKey builder with application/json body
 func NewCreateLLMProxyAPIKeyRequest(server string, orgName string, projName string, id string, body CreateLLMProxyAPIKeyJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -13017,6 +14287,9 @@ type ClientWithResponsesInterface interface {
 
 	UpdateLLMProviderWithResponse(ctx context.Context, orgName string, id string, body UpdateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLLMProviderResp, error)
 
+	// ListLLMProviderAPIKeysWithResponse request
+	ListLLMProviderAPIKeysWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProviderAPIKeysResp, error)
+
 	// CreateLLMProviderAPIKeyWithBodyWithResponse request with any body
 	CreateLLMProviderAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMProviderAPIKeyResp, error)
 
@@ -13060,6 +14333,49 @@ type ClientWithResponsesInterface interface {
 
 	// ListLLMProxiesByProviderWithResponse request
 	ListLLMProxiesByProviderWithResponse(ctx context.Context, orgName string, id string, params *ListLLMProxiesByProviderParams, reqEditors ...RequestEditorFn) (*ListLLMProxiesByProviderResp, error)
+
+	// ListMCPProxiesWithResponse request
+	ListMCPProxiesWithResponse(ctx context.Context, orgName string, params *ListMCPProxiesParams, reqEditors ...RequestEditorFn) (*ListMCPProxiesResp, error)
+
+	// CreateMCPProxyWithBodyWithResponse request with any body
+	CreateMCPProxyWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyResp, error)
+
+	CreateMCPProxyWithResponse(ctx context.Context, orgName string, body CreateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyResp, error)
+
+	// FetchMCPProxyServerInfoWithBodyWithResponse request with any body
+	FetchMCPProxyServerInfoWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FetchMCPProxyServerInfoResp, error)
+
+	FetchMCPProxyServerInfoWithResponse(ctx context.Context, orgName string, body FetchMCPProxyServerInfoJSONRequestBody, reqEditors ...RequestEditorFn) (*FetchMCPProxyServerInfoResp, error)
+
+	// ListAvailableMCPPoliciesWithResponse request
+	ListAvailableMCPPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableMCPPoliciesResp, error)
+
+	// DeleteMCPProxyWithResponse request
+	DeleteMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*DeleteMCPProxyResp, error)
+
+	// GetMCPProxyWithResponse request
+	GetMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*GetMCPProxyResp, error)
+
+	// UpdateMCPProxyWithBodyWithResponse request with any body
+	UpdateMCPProxyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error)
+
+	UpdateMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error)
+
+	// ListMCPProxyAPIKeysWithResponse request
+	ListMCPProxyAPIKeysWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*ListMCPProxyAPIKeysResp, error)
+
+	// CreateMCPProxyAPIKeyWithBodyWithResponse request with any body
+	CreateMCPProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyAPIKeyResp, error)
+
+	CreateMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyAPIKeyResp, error)
+
+	// RevokeMCPProxyAPIKeyWithResponse request
+	RevokeMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, reqEditors ...RequestEditorFn) (*RevokeMCPProxyAPIKeyResp, error)
+
+	// RotateMCPProxyAPIKeyWithBodyWithResponse request with any body
+	RotateMCPProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateMCPProxyAPIKeyResp, error)
+
+	RotateMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, body RotateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateMCPProxyAPIKeyResp, error)
 
 	// ListProjectsWithResponse request
 	ListProjectsWithResponse(ctx context.Context, orgName string, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*ListProjectsResp, error)
@@ -13182,6 +14498,22 @@ type ClientWithResponsesInterface interface {
 	UpdateAgentMCPConfigWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error)
 
 	UpdateAgentMCPConfigWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, body UpdateAgentMCPConfigJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateAgentMCPConfigResp, error)
+
+	// ListMCPConfigAPIKeysWithResponse request
+	ListMCPConfigAPIKeysWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*ListMCPConfigAPIKeysResp, error)
+
+	// CreateMCPConfigAPIKeyWithBodyWithResponse request with any body
+	CreateMCPConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPConfigAPIKeyResp, error)
+
+	CreateMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPConfigAPIKeyResp, error)
+
+	// RevokeMCPConfigAPIKeyWithResponse request
+	RevokeMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*RevokeMCPConfigAPIKeyResp, error)
+
+	// RotateMCPConfigAPIKeyWithBodyWithResponse request with any body
+	RotateMCPConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateMCPConfigAPIKeyResp, error)
+
+	RotateMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateMCPConfigAPIKeyResp, error)
 
 	// GetAgentMetricsWithBodyWithResponse request with any body
 	GetAgentMetricsWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetAgentMetricsResp, error)
@@ -13308,6 +14640,9 @@ type ClientWithResponsesInterface interface {
 	UpdateLLMProxyWithBodyWithResponse(ctx context.Context, orgName string, projName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateLLMProxyResp, error)
 
 	UpdateLLMProxyWithResponse(ctx context.Context, orgName string, projName string, id string, body UpdateLLMProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateLLMProxyResp, error)
+
+	// ListLLMProxyAPIKeysWithResponse request
+	ListLLMProxyAPIKeysWithResponse(ctx context.Context, orgName string, projName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProxyAPIKeysResp, error)
 
 	// CreateLLMProxyAPIKeyWithBodyWithResponse request with any body
 	CreateLLMProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMProxyAPIKeyResp, error)
@@ -15335,6 +16670,31 @@ func (r UpdateLLMProviderResp) StatusCode() int {
 	return 0
 }
 
+type ListLLMProviderAPIKeysResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]StoredAPIKey
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLLMProviderAPIKeysResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLLMProviderAPIKeysResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type CreateLLMProviderAPIKeyResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -15646,6 +17006,289 @@ func (r ListLLMProxiesByProviderResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r ListLLMProxiesByProviderResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMCPProxiesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPProxyListResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMCPProxiesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMCPProxiesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateMCPProxyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *MCPProxyResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateMCPProxyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateMCPProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type FetchMCPProxyServerInfoResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPServerInfoFetchResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r FetchMCPProxyServerInfoResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r FetchMCPProxyServerInfoResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAvailableMCPPoliciesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPPolicyAvailabilityResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAvailableMCPPoliciesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAvailableMCPPoliciesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteMCPProxyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON409      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMCPProxyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMCPProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetMCPProxyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPProxyResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetMCPProxyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetMCPProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateMCPProxyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPProxyResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateMCPProxyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateMCPProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMCPProxyAPIKeysResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]StoredAPIKey
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMCPProxyAPIKeysResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMCPProxyAPIKeysResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateMCPProxyAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *CreateLLMAPIKeyResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateMCPProxyAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateMCPProxyAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RevokeMCPProxyAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeMCPProxyAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeMCPProxyAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotateMCPProxyAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RotateLLMAPIKeyResponse
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateMCPProxyAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateMCPProxyAPIKeyResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -16438,6 +18081,104 @@ func (r UpdateAgentMCPConfigResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateAgentMCPConfigResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMCPConfigAPIKeysResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]StoredAPIKey
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMCPConfigAPIKeysResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMCPConfigAPIKeysResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateMCPConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *CreateLLMAPIKeyResponse
+	JSON400      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateMCPConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateMCPConfigAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RevokeMCPConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RevokeMCPConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RevokeMCPConfigAPIKeyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type RotateMCPConfigAPIKeyResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *RotateLLMAPIKeyResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+	JSON503      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r RotateMCPConfigAPIKeyResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r RotateMCPConfigAPIKeyResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -17287,6 +19028,31 @@ func (r UpdateLLMProxyResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateLLMProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListLLMProxyAPIKeysResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *[]StoredAPIKey
+	JSON401      *ErrorResponse
+	JSON404      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListLLMProxyAPIKeysResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListLLMProxyAPIKeysResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -18360,6 +20126,15 @@ func (c *ClientWithResponses) UpdateLLMProviderWithResponse(ctx context.Context,
 	return ParseUpdateLLMProviderResp(rsp)
 }
 
+// ListLLMProviderAPIKeysWithResponse request returning *ListLLMProviderAPIKeysResp
+func (c *ClientWithResponses) ListLLMProviderAPIKeysWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProviderAPIKeysResp, error) {
+	rsp, err := c.ListLLMProviderAPIKeys(ctx, orgName, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLLMProviderAPIKeysResp(rsp)
+}
+
 // CreateLLMProviderAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateLLMProviderAPIKeyResp
 func (c *ClientWithResponses) CreateLLMProviderAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, id string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMProviderAPIKeyResp, error) {
 	rsp, err := c.CreateLLMProviderAPIKeyWithBody(ctx, orgName, id, contentType, body, reqEditors...)
@@ -18498,6 +20273,145 @@ func (c *ClientWithResponses) ListLLMProxiesByProviderWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseListLLMProxiesByProviderResp(rsp)
+}
+
+// ListMCPProxiesWithResponse request returning *ListMCPProxiesResp
+func (c *ClientWithResponses) ListMCPProxiesWithResponse(ctx context.Context, orgName string, params *ListMCPProxiesParams, reqEditors ...RequestEditorFn) (*ListMCPProxiesResp, error) {
+	rsp, err := c.ListMCPProxies(ctx, orgName, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPProxiesResp(rsp)
+}
+
+// CreateMCPProxyWithBodyWithResponse request with arbitrary body returning *CreateMCPProxyResp
+func (c *ClientWithResponses) CreateMCPProxyWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyResp, error) {
+	rsp, err := c.CreateMCPProxyWithBody(ctx, orgName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateMCPProxyWithResponse(ctx context.Context, orgName string, body CreateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyResp, error) {
+	rsp, err := c.CreateMCPProxy(ctx, orgName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyResp(rsp)
+}
+
+// FetchMCPProxyServerInfoWithBodyWithResponse request with arbitrary body returning *FetchMCPProxyServerInfoResp
+func (c *ClientWithResponses) FetchMCPProxyServerInfoWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*FetchMCPProxyServerInfoResp, error) {
+	rsp, err := c.FetchMCPProxyServerInfoWithBody(ctx, orgName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseFetchMCPProxyServerInfoResp(rsp)
+}
+
+func (c *ClientWithResponses) FetchMCPProxyServerInfoWithResponse(ctx context.Context, orgName string, body FetchMCPProxyServerInfoJSONRequestBody, reqEditors ...RequestEditorFn) (*FetchMCPProxyServerInfoResp, error) {
+	rsp, err := c.FetchMCPProxyServerInfo(ctx, orgName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseFetchMCPProxyServerInfoResp(rsp)
+}
+
+// ListAvailableMCPPoliciesWithResponse request returning *ListAvailableMCPPoliciesResp
+func (c *ClientWithResponses) ListAvailableMCPPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableMCPPoliciesResp, error) {
+	rsp, err := c.ListAvailableMCPPolicies(ctx, orgName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAvailableMCPPoliciesResp(rsp)
+}
+
+// DeleteMCPProxyWithResponse request returning *DeleteMCPProxyResp
+func (c *ClientWithResponses) DeleteMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*DeleteMCPProxyResp, error) {
+	rsp, err := c.DeleteMCPProxy(ctx, orgName, proxyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMCPProxyResp(rsp)
+}
+
+// GetMCPProxyWithResponse request returning *GetMCPProxyResp
+func (c *ClientWithResponses) GetMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*GetMCPProxyResp, error) {
+	rsp, err := c.GetMCPProxy(ctx, orgName, proxyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetMCPProxyResp(rsp)
+}
+
+// UpdateMCPProxyWithBodyWithResponse request with arbitrary body returning *UpdateMCPProxyResp
+func (c *ClientWithResponses) UpdateMCPProxyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error) {
+	rsp, err := c.UpdateMCPProxyWithBody(ctx, orgName, proxyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMCPProxyResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error) {
+	rsp, err := c.UpdateMCPProxy(ctx, orgName, proxyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMCPProxyResp(rsp)
+}
+
+// ListMCPProxyAPIKeysWithResponse request returning *ListMCPProxyAPIKeysResp
+func (c *ClientWithResponses) ListMCPProxyAPIKeysWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*ListMCPProxyAPIKeysResp, error) {
+	rsp, err := c.ListMCPProxyAPIKeys(ctx, orgName, proxyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPProxyAPIKeysResp(rsp)
+}
+
+// CreateMCPProxyAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateMCPProxyAPIKeyResp
+func (c *ClientWithResponses) CreateMCPProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyAPIKeyResp, error) {
+	rsp, err := c.CreateMCPProxyAPIKeyWithBody(ctx, orgName, proxyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyAPIKeyResp, error) {
+	rsp, err := c.CreateMCPProxyAPIKey(ctx, orgName, proxyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyAPIKeyResp(rsp)
+}
+
+// RevokeMCPProxyAPIKeyWithResponse request returning *RevokeMCPProxyAPIKeyResp
+func (c *ClientWithResponses) RevokeMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, reqEditors ...RequestEditorFn) (*RevokeMCPProxyAPIKeyResp, error) {
+	rsp, err := c.RevokeMCPProxyAPIKey(ctx, orgName, proxyId, keyName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeMCPProxyAPIKeyResp(rsp)
+}
+
+// RotateMCPProxyAPIKeyWithBodyWithResponse request with arbitrary body returning *RotateMCPProxyAPIKeyResp
+func (c *ClientWithResponses) RotateMCPProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateMCPProxyAPIKeyResp, error) {
+	rsp, err := c.RotateMCPProxyAPIKeyWithBody(ctx, orgName, proxyId, keyName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateMCPProxyAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) RotateMCPProxyAPIKeyWithResponse(ctx context.Context, orgName string, proxyId string, keyName string, body RotateMCPProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateMCPProxyAPIKeyResp, error) {
+	rsp, err := c.RotateMCPProxyAPIKey(ctx, orgName, proxyId, keyName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateMCPProxyAPIKeyResp(rsp)
 }
 
 // ListProjectsWithResponse request returning *ListProjectsResp
@@ -18890,6 +20804,58 @@ func (c *ClientWithResponses) UpdateAgentMCPConfigWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseUpdateAgentMCPConfigResp(rsp)
+}
+
+// ListMCPConfigAPIKeysWithResponse request returning *ListMCPConfigAPIKeysResp
+func (c *ClientWithResponses) ListMCPConfigAPIKeysWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, reqEditors ...RequestEditorFn) (*ListMCPConfigAPIKeysResp, error) {
+	rsp, err := c.ListMCPConfigAPIKeys(ctx, orgName, projName, agentName, configId, envName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPConfigAPIKeysResp(rsp)
+}
+
+// CreateMCPConfigAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateMCPConfigAPIKeyResp
+func (c *ClientWithResponses) CreateMCPConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPConfigAPIKeyResp, error) {
+	rsp, err := c.CreateMCPConfigAPIKeyWithBody(ctx, orgName, projName, agentName, configId, envName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPConfigAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, body CreateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPConfigAPIKeyResp, error) {
+	rsp, err := c.CreateMCPConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPConfigAPIKeyResp(rsp)
+}
+
+// RevokeMCPConfigAPIKeyWithResponse request returning *RevokeMCPConfigAPIKeyResp
+func (c *ClientWithResponses) RevokeMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, reqEditors ...RequestEditorFn) (*RevokeMCPConfigAPIKeyResp, error) {
+	rsp, err := c.RevokeMCPConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, keyName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRevokeMCPConfigAPIKeyResp(rsp)
+}
+
+// RotateMCPConfigAPIKeyWithBodyWithResponse request with arbitrary body returning *RotateMCPConfigAPIKeyResp
+func (c *ClientWithResponses) RotateMCPConfigAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateMCPConfigAPIKeyResp, error) {
+	rsp, err := c.RotateMCPConfigAPIKeyWithBody(ctx, orgName, projName, agentName, configId, envName, keyName, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateMCPConfigAPIKeyResp(rsp)
+}
+
+func (c *ClientWithResponses) RotateMCPConfigAPIKeyWithResponse(ctx context.Context, orgName string, projName string, agentName string, configId openapi_types.UUID, envName string, keyName string, body RotateMCPConfigAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateMCPConfigAPIKeyResp, error) {
+	rsp, err := c.RotateMCPConfigAPIKey(ctx, orgName, projName, agentName, configId, envName, keyName, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateMCPConfigAPIKeyResp(rsp)
 }
 
 // GetAgentMetricsWithBodyWithResponse request with arbitrary body returning *GetAgentMetricsResp
@@ -19292,6 +21258,15 @@ func (c *ClientWithResponses) UpdateLLMProxyWithResponse(ctx context.Context, or
 		return nil, err
 	}
 	return ParseUpdateLLMProxyResp(rsp)
+}
+
+// ListLLMProxyAPIKeysWithResponse request returning *ListLLMProxyAPIKeysResp
+func (c *ClientWithResponses) ListLLMProxyAPIKeysWithResponse(ctx context.Context, orgName string, projName string, id string, reqEditors ...RequestEditorFn) (*ListLLMProxyAPIKeysResp, error) {
+	rsp, err := c.ListLLMProxyAPIKeys(ctx, orgName, projName, id, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListLLMProxyAPIKeysResp(rsp)
 }
 
 // CreateLLMProxyAPIKeyWithBodyWithResponse request with arbitrary body returning *CreateLLMProxyAPIKeyResp
@@ -23103,6 +25078,53 @@ func ParseUpdateLLMProviderResp(rsp *http.Response) (*UpdateLLMProviderResp, err
 	return response, nil
 }
 
+// ParseListLLMProviderAPIKeysResp parses an HTTP response from a ListLLMProviderAPIKeysWithResponse call
+func ParseListLLMProviderAPIKeysResp(rsp *http.Response) (*ListLLMProviderAPIKeysResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLLMProviderAPIKeysResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []StoredAPIKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseCreateLLMProviderAPIKeyResp parses an HTTP response from a CreateLLMProviderAPIKeyWithResponse call
 func ParseCreateLLMProviderAPIKeyResp(rsp *http.Response) (*CreateLLMProviderAPIKeyResp, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -23768,6 +25790,579 @@ func ParseListLLMProxiesByProviderResp(rsp *http.Response) (*ListLLMProxiesByPro
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMCPProxiesResp parses an HTTP response from a ListMCPProxiesWithResponse call
+func ParseListMCPProxiesResp(rsp *http.Response) (*ListMCPProxiesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMCPProxiesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPProxyListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateMCPProxyResp parses an HTTP response from a CreateMCPProxyWithResponse call
+func ParseCreateMCPProxyResp(rsp *http.Response) (*CreateMCPProxyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateMCPProxyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest MCPProxyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseFetchMCPProxyServerInfoResp parses an HTTP response from a FetchMCPProxyServerInfoWithResponse call
+func ParseFetchMCPProxyServerInfoResp(rsp *http.Response) (*FetchMCPProxyServerInfoResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &FetchMCPProxyServerInfoResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPServerInfoFetchResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAvailableMCPPoliciesResp parses an HTTP response from a ListAvailableMCPPoliciesWithResponse call
+func ParseListAvailableMCPPoliciesResp(rsp *http.Response) (*ListAvailableMCPPoliciesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAvailableMCPPoliciesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPPolicyAvailabilityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMCPProxyResp parses an HTTP response from a DeleteMCPProxyWithResponse call
+func ParseDeleteMCPProxyResp(rsp *http.Response) (*DeleteMCPProxyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMCPProxyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetMCPProxyResp parses an HTTP response from a GetMCPProxyWithResponse call
+func ParseGetMCPProxyResp(rsp *http.Response) (*GetMCPProxyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetMCPProxyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPProxyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseUpdateMCPProxyResp parses an HTTP response from a UpdateMCPProxyWithResponse call
+func ParseUpdateMCPProxyResp(rsp *http.Response) (*UpdateMCPProxyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateMCPProxyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPProxyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMCPProxyAPIKeysResp parses an HTTP response from a ListMCPProxyAPIKeysWithResponse call
+func ParseListMCPProxyAPIKeysResp(rsp *http.Response) (*ListMCPProxyAPIKeysResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMCPProxyAPIKeysResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []StoredAPIKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateMCPProxyAPIKeyResp parses an HTTP response from a CreateMCPProxyAPIKeyWithResponse call
+func ParseCreateMCPProxyAPIKeyResp(rsp *http.Response) (*CreateMCPProxyAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateMCPProxyAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeMCPProxyAPIKeyResp parses an HTTP response from a RevokeMCPProxyAPIKeyWithResponse call
+func ParseRevokeMCPProxyAPIKeyResp(rsp *http.Response) (*RevokeMCPProxyAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeMCPProxyAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateMCPProxyAPIKeyResp parses an HTTP response from a RotateMCPProxyAPIKeyWithResponse call
+func ParseRotateMCPProxyAPIKeyResp(rsp *http.Response) (*RotateMCPProxyAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateMCPProxyAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RotateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -25216,6 +27811,180 @@ func ParseUpdateAgentMCPConfigResp(rsp *http.Response) (*UpdateAgentMCPConfigRes
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMCPConfigAPIKeysResp parses an HTTP response from a ListMCPConfigAPIKeysWithResponse call
+func ParseListMCPConfigAPIKeysResp(rsp *http.Response) (*ListMCPConfigAPIKeysResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMCPConfigAPIKeysResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []StoredAPIKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateMCPConfigAPIKeyResp parses an HTTP response from a CreateMCPConfigAPIKeyWithResponse call
+func ParseCreateMCPConfigAPIKeyResp(rsp *http.Response) (*CreateMCPConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateMCPConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest CreateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRevokeMCPConfigAPIKeyResp parses an HTTP response from a RevokeMCPConfigAPIKeyWithResponse call
+func ParseRevokeMCPConfigAPIKeyResp(rsp *http.Response) (*RevokeMCPConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RevokeMCPConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseRotateMCPConfigAPIKeyResp parses an HTTP response from a RotateMCPConfigAPIKeyWithResponse call
+func ParseRotateMCPConfigAPIKeyResp(rsp *http.Response) (*RotateMCPConfigAPIKeyResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &RotateMCPConfigAPIKeyResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest RotateLLMAPIKeyResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
 
 	}
 
@@ -26786,6 +29555,53 @@ func ParseUpdateLLMProxyResp(rsp *http.Response) (*UpdateLLMProxyResp, error) {
 			return nil, err
 		}
 		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListLLMProxyAPIKeysResp parses an HTTP response from a ListLLMProxyAPIKeysWithResponse call
+func ParseListLLMProxyAPIKeysResp(rsp *http.Response) (*ListLLMProxyAPIKeysResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListLLMProxyAPIKeysResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []StoredAPIKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest ErrorResponse

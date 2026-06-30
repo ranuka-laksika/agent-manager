@@ -38,6 +38,9 @@ import type {
   GetLLMProviderTemplatePathParams,
   GetLLMProxyPathParams,
   ListLLMDeploymentsPathParams,
+  ListAPIKeysResponse,
+  ListLLMProviderAPIKeysPathParams,
+  ListLLMProxyAPIKeysPathParams,
   ListLLMProviderConsumersPathParams,
   ListLLMProviderProxiesPathParams,
   ListLLMProviderTemplatesPathParams,
@@ -535,6 +538,22 @@ export async function deleteLLMDeployment(
 // LLM API keys — provider
 // -----------------------------------------------------------------------------
 
+export async function listLLMProviderAPIKeys(
+  params: ListLLMProviderAPIKeysPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ListAPIKeysResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const id = encodeRequired(params.providerId, "providerId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/llm-providers/${id}/api-keys`,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
 export async function createLLMProviderAPIKey(
   params: CreateLLMProviderAPIKeyPathParams,
   body: CreateLLMAPIKeyRequest,
@@ -591,6 +610,23 @@ export async function revokeLLMProviderAPIKey(
 // -----------------------------------------------------------------------------
 // LLM API keys — proxy
 // -----------------------------------------------------------------------------
+
+export async function listLLMProxyAPIKeys(
+  params: ListLLMProxyAPIKeysPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ListAPIKeysResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const proj = encodeRequired(params.projName, "projName");
+  const id = encodeRequired(params.proxyId, "proxyId");
+  const token = getToken ? await getToken() : undefined;
+
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${org}/projects/${proj}/llm-proxies/${id}/api-keys`,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
 
 export async function createLLMProxyAPIKey(
   params: CreateLLMProxyAPIKeyPathParams,

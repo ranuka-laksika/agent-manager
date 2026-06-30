@@ -50,6 +50,7 @@ import {
 } from "@agent-management-platform/shared-component";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
 import { MCPProxyAccessControlTab } from "./MCPProxyAccessControlTab";
+import { MCPProxyAPIKeysTab } from "./MCPProxyAPIKeysTab";
 import { MCPProxyConnectionTab } from "./MCPProxyConnectionTab";
 import { MCPProxyOverviewTab } from "./MCPProxyOverviewTab";
 import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
@@ -62,6 +63,7 @@ const TABS = [
   "Connection",
   "Access Control",
   "Security",
+  "API Keys",
   "Rewrite",
   "Policies",
 ] as const;
@@ -400,6 +402,13 @@ export function ViewMCPProxy() {
               />
             )}
             {tabIndex === 5 && (
+              <MCPProxyAPIKeysTab
+                proxy={proxy}
+                orgName={orgId}
+                isLoading={isLoading}
+              />
+            )}
+            {tabIndex === 6 && (
               <MCPProxyRewriteTab
                 proxy={proxy}
                 orgName={orgId}
@@ -408,7 +417,7 @@ export function ViewMCPProxy() {
                 isUpdating={updateMCPProxy.isPending}
               />
             )}
-            {tabIndex === 6 && (
+            {tabIndex === 7 && (
               <MCPProxyPoliciesTab
                 orgName={orgId}
                 policies={editablePolicies}

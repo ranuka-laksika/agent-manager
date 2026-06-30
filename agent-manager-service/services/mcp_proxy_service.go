@@ -324,6 +324,10 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 	upstream := req.Upstream
 
+	// Track whether this update turns OFF API key authentication so we can revoke
+	// user-managed keys after the change is committed.
+	apiKeyAuthDisabled := false
+
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		proxy, err := s.repo.GetByHandleForUpdate(ctx, tx, handle, orgUUID)
 		if err != nil {
@@ -344,6 +348,8 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 			}
 			upstream.Main.Auth = auth
 		}
+
+		apiKeyAuthDisabled = isAPIKeyAuthEnabled(proxy.Configuration.Security) && !isAPIKeyAuthEnabled(req.Security)
 
 		proxy.Description = valueOrEmpty(req.Description)
 		proxy.Name = name
@@ -378,6 +384,16 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 	if err := s.redeployMCPProxyToCurrentGateways(ctx, updated, orgUUID); err != nil {
 		s.logger.Warn("Failed to redeploy updated MCP proxy", "proxyID", updated.UUID, "orgName", orgUUID, "error", err)
+	}
+
+	// If API key authentication was just turned off, revoke all user-managed API keys for
+	// this proxy. Best-effort: log and continue so a revoke failure doesn't fail the update.
+	if apiKeyAuthDisabled {
+		proxyUUID := updated.UUID.String()
+		if err := s.apiKeyBroadcaster.broadcastRevokeUserManaged(orgUUID, proxyUUID, proxyUUID); err != nil {
+			s.logger.Warn("Failed to revoke user-managed API keys after disabling API key security",
+				"proxyID", updated.UUID, "orgName", orgUUID, "error", err)
+		}
 	}
 
 	return convertModelMCPProxyToSpec(updated), updated, nil
@@ -427,6 +443,42 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 }
 
 // CreateAPIKey generates an API key for a source MCP proxy and broadcasts it to all gateways.
+// ListAPIKeys returns the masked, user-managed (permanent) API keys for an MCP proxy.
+// The plain key value is never returned — only the masked representation.
+func (s *MCPProxyService) ListAPIKeys(ctx context.Context, orgUUID, proxyID string) (*models.ListAPIKeysResponse, error) {
+	proxy, err := s.getMCPProxyByID(ctx, orgUUID, proxyID)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(proxy.UUID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API keys: %w", err)
+	}
+
+	keys := make([]models.APIKeyInfo, 0, len(stored))
+	for _, k := range stored {
+		// Only surface user-managed keys; hide console-managed and test keys.
+		if k.Purpose != models.APIKeyPurposeUserManaged {
+			continue
+		}
+		info := models.APIKeyInfo{
+			Name:         k.Name,
+			DisplayName:  k.DisplayName,
+			MaskedAPIKey: k.MaskedAPIKey,
+			Status:       k.Status,
+			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
+		}
+		if k.ExpiresAt != nil {
+			expiresAt := k.ExpiresAt.Format(time.RFC3339)
+			info.ExpiresAt = &expiresAt
+		}
+		keys = append(keys, info)
+	}
+
+	return &models.ListAPIKeysResponse{Keys: keys}, nil
+}
+
 func (s *MCPProxyService) CreateAPIKey(ctx context.Context, orgUUID, proxyID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
 	proxy, err := s.getMCPProxyByID(ctx, orgUUID, proxyID)
 	if err != nil {
