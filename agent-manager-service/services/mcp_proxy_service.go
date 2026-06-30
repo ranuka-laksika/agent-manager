@@ -390,7 +390,7 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 	// this proxy. Best-effort: log and continue so a revoke failure doesn't fail the update.
 	if apiKeyAuthDisabled {
 		proxyUUID := updated.UUID.String()
-		if err := s.apiKeyBroadcaster.broadcastRevokeUserManaged(orgUUID, proxyUUID, proxyUUID); err != nil {
+		if err := s.apiKeyBroadcaster.broadcastRevokeUserManaged(ctx, orgUUID, proxyUUID, proxyUUID); err != nil {
 			s.logger.Warn("Failed to revoke user-managed API keys after disabling API key security",
 				"proxyID", updated.UUID, "orgName", orgUUID, "error", err)
 		}
@@ -451,7 +451,7 @@ func (s *MCPProxyService) ListAPIKeys(ctx context.Context, orgUUID, proxyID stri
 		return nil, err
 	}
 
-	stored, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(proxy.UUID.String())
+	stored, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(ctx, proxy.UUID.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
@@ -485,7 +485,7 @@ func (s *MCPProxyService) CreateAPIKey(ctx context.Context, orgUUID, proxyID str
 		return nil, err
 	}
 	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastCreate(orgUUID, proxyUUID, proxyUUID, req)
+	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgUUID, proxyUUID, proxyUUID, req)
 }
 
 // RevokeAPIKey revokes an API key for a source MCP proxy and broadcasts the revocation.
@@ -495,7 +495,7 @@ func (s *MCPProxyService) RevokeAPIKey(ctx context.Context, orgUUID, proxyID, ke
 		return err
 	}
 	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastRevoke(orgUUID, proxyUUID, proxyUUID, keyName)
+	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgUUID, proxyUUID, proxyUUID, keyName)
 }
 
 // RotateAPIKey rotates an API key for a source MCP proxy and broadcasts the new hash.
@@ -505,7 +505,7 @@ func (s *MCPProxyService) RotateAPIKey(ctx context.Context, orgUUID, proxyID, ke
 		return nil, err
 	}
 	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastRotate(orgUUID, proxyUUID, proxyUUID, keyName, req)
+	return s.apiKeyBroadcaster.broadcastRotate(ctx, orgUUID, proxyUUID, proxyUUID, keyName, req)
 }
 
 func (s *MCPProxyService) getMCPProxyByID(ctx context.Context, orgUUID, proxyID string) (*models.MCPProxy, error) {

@@ -65,7 +65,7 @@ func (s *LLMProviderAPIKeyService) ListAPIKeys(
 		return nil, utils.ErrLLMProviderNotFound
 	}
 
-	stored, err := s.apiKeyRepo.ListByArtifact(providerID)
+	stored, err := s.apiKeyRepo.ListByArtifact(ctx, providerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
@@ -106,7 +106,7 @@ func (s *LLMProviderAPIKeyService) CreateAPIKey(
 	if provider == nil {
 		return nil, utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastCreate(orgID, providerID, providerID, req)
+	return s.broadcaster.broadcastCreate(ctx, orgID, providerID, providerID, req)
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to all gateways for this organization.
@@ -121,7 +121,7 @@ func (s *LLMProviderAPIKeyService) RevokeAPIKey(
 	if provider == nil {
 		return utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastRevoke(orgID, providerID, providerID, keyName)
+	return s.broadcaster.broadcastRevoke(ctx, orgID, providerID, providerID, keyName)
 }
 
 // RevokeAllUserManagedKeys revokes every user-managed API key for an LLM provider and
@@ -137,7 +137,7 @@ func (s *LLMProviderAPIKeyService) RevokeAllUserManagedKeys(
 	if provider == nil {
 		return utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastRevokeUserManaged(orgID, providerID, providerID)
+	return s.broadcaster.broadcastRevokeUserManaged(ctx, orgID, providerID, providerID)
 }
 
 // RotateAPIKey generates a new API key value and broadcasts the update to all gateways.
@@ -154,5 +154,5 @@ func (s *LLMProviderAPIKeyService) RotateAPIKey(
 	if provider == nil {
 		return nil, utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastRotate(orgID, providerID, providerID, keyName, req)
+	return s.broadcaster.broadcastRotate(ctx, orgID, providerID, providerID, keyName, req)
 }

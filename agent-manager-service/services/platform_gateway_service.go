@@ -678,7 +678,7 @@ func (s *PlatformGatewayService) InvalidateGatewayTokensCache(gatewayUUID uuid.U
 }
 
 // GetGatewayStatus retrieves gateway status information for polling
-func (s *PlatformGatewayService) GetGatewayStatus(orgName string, gatewayID *string) (*GatewayStatusListResponse, error) {
+func (s *PlatformGatewayService) GetGatewayStatus(ctx context.Context, orgName string, gatewayID *string) (*GatewayStatusListResponse, error) {
 	// Validate organizationId is provided and valid
 	if strings.TrimSpace(orgName) == "" {
 		return nil, errors.New("organization name is required")
@@ -703,7 +703,7 @@ func (s *PlatformGatewayService) GetGatewayStatus(orgName string, gatewayID *str
 		gateways = []*models.Gateway{gateway}
 	} else {
 		// Get all gateways for organization
-		gateways, err = s.gatewayRepo.GetByOrganizationID(orgName)
+		gateways, err = s.gatewayRepo.GetByOrganizationID(ctx, orgName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list gateways: %w", err)
 		}

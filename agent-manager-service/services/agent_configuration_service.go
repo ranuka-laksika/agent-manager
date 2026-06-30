@@ -341,7 +341,7 @@ func (s *agentConfigurationService) createMCPMappingAPIKey(ctx context.Context, 
 		return nil, fmt.Errorf("API key service is not configured")
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(orgName, mappingID, mappingID, &models.CreateAPIKeyRequest{
+	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, &models.CreateAPIKeyRequest{
 		Name: keyName,
 	})
 }
@@ -351,7 +351,7 @@ func (s *agentConfigurationService) revokeMCPMappingAPIKey(ctx context.Context, 
 		return fmt.Errorf("API key service is not configured")
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(orgName, mappingID, mappingID, keyName)
+	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
 }
 
 func mcpMappingScopedID(config *models.AgentConfiguration, envName string) string {
@@ -393,7 +393,7 @@ func (s *agentConfigurationService) revokeStaleMCPMappingAPIKeys(ctx context.Con
 	if s.llmProxyAPIKeyService == nil || s.llmProxyAPIKeyService.broadcaster.apiKeyRepo == nil {
 		return nil
 	}
-	keys, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(mappingUUID.String())
+	keys, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
 	if err != nil {
 		return err
 	}
@@ -471,7 +471,7 @@ func (s *agentConfigurationService) ListMCPConfigAPIKeys(
 		return nil, err
 	}
 
-	stored, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(mappingUUID.String())
+	stored, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
@@ -514,7 +514,7 @@ func (s *agentConfigurationService) CreateMCPConfigAPIKey(
 		return nil, err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(orgName, mappingID, mappingID, req)
+	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, req)
 }
 
 // RotateMCPConfigAPIKey revokes the current per-config MCP API key and generates a
@@ -533,7 +533,7 @@ func (s *agentConfigurationService) RotateMCPConfigAPIKey(
 		return nil, err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRotate(orgName, mappingID, mappingID, keyName, req)
+	return s.llmProxyAPIKeyService.broadcaster.broadcastRotate(ctx, orgName, mappingID, mappingID, keyName, req)
 }
 
 // RevokeMCPConfigAPIKey revokes and removes the per-config MCP API key.
@@ -551,7 +551,7 @@ func (s *agentConfigurationService) RevokeMCPConfigAPIKey(
 		return err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(orgName, mappingID, mappingID, keyName)
+	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
 }
 
 // resolveLLMProxyHandleForConfig resolves the LLM proxy handle backing an external

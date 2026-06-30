@@ -3894,9 +3894,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StoredAPIKey"
+                $ref: "#/components/schemas/ListAPIKeysResponse"
         "404":
           description: Configuration not found
           content:
@@ -5956,9 +5954,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StoredAPIKey"
+                $ref: "#/components/schemas/ListAPIKeysResponse"
         "401":
           description: Unauthorized
           content:
@@ -6166,9 +6162,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StoredAPIKey"
+                $ref: "#/components/schemas/ListAPIKeysResponse"
         "401":
           description: Unauthorized
           content:
@@ -6376,9 +6370,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/StoredAPIKey"
+                $ref: "#/components/schemas/ListAPIKeysResponse"
         "401":
           description: Unauthorized
           content:
@@ -9420,6 +9412,49 @@ components:
         apiKey:
           type: string
           description: Generated API key value. Returned only once; store it securely.
+
+    ListAPIKeysResponse:
+      type: object
+      required:
+        - keys
+      properties:
+        keys:
+          type: array
+          description: List of masked API keys.
+          items:
+            $ref: "#/components/schemas/APIKeyInfo"
+
+    APIKeyInfo:
+      type: object
+      description: Masked, read-only view of a stored API key for listing. The plain key value is never returned; only the masked representation.
+      required:
+        - name
+        - displayName
+        - maskedApiKey
+        - status
+        - createdAt
+      properties:
+        name:
+          type: string
+          description: Unique name of the API key.
+        displayName:
+          type: string
+          description: Human-readable name shown in the console.
+        maskedApiKey:
+          type: string
+          description: Masked representation of the API key (full value is shown only once at creation).
+        status:
+          type: string
+          description: Current lifecycle status of the API key (e.g. active, revoked).
+        createdAt:
+          type: string
+          format: date-time
+          description: Creation timestamp in RFC3339 format.
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiration timestamp if set.
 
     StoredAPIKey:
       type: object

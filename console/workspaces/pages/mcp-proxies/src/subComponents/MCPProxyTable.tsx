@@ -18,7 +18,6 @@
 import { useMemo, useState } from "react";
 import {
   Avatar,
-  Chip,
   IconButton,
   ListingTable,
   Stack,
@@ -40,17 +39,6 @@ import {
 } from "@agent-management-platform/types";
 import { MCPLogo } from "../components/MCPLogo";
 
-const STATUS_DISPLAY: Partial<
-  Record<
-    NonNullable<MCPProxyListItem["status"]>,
-    { label: string; color: "success" | "warning" | "error" }
-  >
-> = {
-  deployed: { label: "Deployed", color: "success" },
-  pending: { label: "Pending", color: "warning" },
-  failed: { label: "Failed", color: "error" },
-};
-
 export function MCPProxyTable() {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
@@ -70,7 +58,6 @@ export function MCPProxyTable() {
         proxy.id,
         proxy.version,
         proxy.context,
-        proxy.status,
         proxy.description,
       ]
         .filter(Boolean)
@@ -112,7 +99,6 @@ export function MCPProxyTable() {
         <ListingTable.Head>
           <ListingTable.Row>
             <ListingTable.Cell>Name</ListingTable.Cell>
-            <ListingTable.Cell width="160px">Status</ListingTable.Cell>
             <ListingTable.Cell width="160px">Version</ListingTable.Cell>
             <ListingTable.Cell width="140px" align="right">
               Last Updated
@@ -161,21 +147,6 @@ export function MCPProxyTable() {
                       {displayName}
                     </Typography>
                   </Stack>
-                </ListingTable.Cell>
-                <ListingTable.Cell>
-                  {proxy.status ? (
-                    <Chip
-                      label={STATUS_DISPLAY[proxy.status]?.label ?? proxy.status}
-                      color={STATUS_DISPLAY[proxy.status]?.color ?? "default"}
-                      size="small"
-                      variant="outlined"
-                      sx={{ width: "fit-content" }}
-                    />
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      -
-                    </Typography>
-                  )}
                 </ListingTable.Cell>
                 <ListingTable.Cell>
                   <Typography variant="body2">

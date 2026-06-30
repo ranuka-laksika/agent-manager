@@ -557,7 +557,7 @@ func (c *gatewayController) GetGatewayStatus(w http.ResponseWriter, r *http.Requ
 		gatewayIDPtr = &gatewayIDParam
 	}
 
-	statusResp, err := c.gatewayService.GetGatewayStatus(orgName, gatewayIDPtr)
+	statusResp, err := c.gatewayService.GetGatewayStatus(ctx, orgName, gatewayIDPtr)
 	if err != nil {
 		log.Error("GetGatewayStatus: failed to get status", "error", err)
 		handleGatewayErrors(w, err, "Failed to get gateway status")

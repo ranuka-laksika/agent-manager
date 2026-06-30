@@ -160,7 +160,7 @@ func (s *AIApplicationService) DeleteAllByAgent(ctx context.Context, orgName, pr
 // gateway in the org. The gateway interprets empty mappings as a full revocation of the application,
 // stopping per-consumer rate limit enforcement immediately without requiring a reconnect.
 func (s *AIApplicationService) broadcastDeletionToAllGateways(ctx context.Context, orgName string, app *models.AIApplication) {
-	gateways, err := s.gatewayRepo.GetByOrganizationID(orgName)
+	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, orgName)
 	if err != nil {
 		s.logger.Warn("Failed to list gateways for application deletion broadcast; gateway will sync on reconnect",
 			"orgName", orgName, "applicationUUID", app.UUID, "error", err)
@@ -186,7 +186,7 @@ func (s *AIApplicationService) broadcastDeletionToAllGateways(ctx context.Contex
 // broadcastToAllGateways sends an application.updated event to every gateway in the org.
 // Errors are logged but not returned so a broadcast failure never blocks the main flow.
 func (s *AIApplicationService) broadcastToAllGateways(ctx context.Context, orgName string, app *models.AIApplication, apiKeyUUID string) {
-	gateways, err := s.gatewayRepo.GetByOrganizationID(orgName)
+	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, orgName)
 	if err != nil {
 		s.logger.Warn("Failed to list gateways for application broadcast; gateway will sync on reconnect",
 			"orgName", orgName, "applicationUUID", app.UUID, "error", err)

@@ -65,7 +65,7 @@ func (s *LLMProxyAPIKeyService) ListAPIKeys(
 		return nil, utils.ErrLLMProxyNotFound
 	}
 
-	stored, err := s.apiKeyRepo.ListByArtifact(proxy.UUID.String())
+	stored, err := s.apiKeyRepo.ListByArtifact(ctx, proxy.UUID.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
@@ -106,7 +106,7 @@ func (s *LLMProxyAPIKeyService) CreateAPIKey(
 	if proxy == nil {
 		return nil, utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastCreate(orgID, proxyID, proxy.UUID.String(), req)
+	return s.broadcaster.broadcastCreate(ctx, orgID, proxyID, proxy.UUID.String(), req)
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to all gateways for this organization.
@@ -121,7 +121,7 @@ func (s *LLMProxyAPIKeyService) RevokeAPIKey(
 	if proxy == nil {
 		return utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastRevoke(orgID, proxyID, proxy.UUID.String(), keyName)
+	return s.broadcaster.broadcastRevoke(ctx, orgID, proxyID, proxy.UUID.String(), keyName)
 }
 
 // RotateAPIKey generates a new API key value and broadcasts the update to all gateways.
@@ -138,5 +138,5 @@ func (s *LLMProxyAPIKeyService) RotateAPIKey(
 	if proxy == nil {
 		return nil, utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastRotate(orgID, proxyID, proxy.UUID.String(), keyName, req)
+	return s.broadcaster.broadcastRotate(ctx, orgID, proxyID, proxy.UUID.String(), keyName, req)
 }
