@@ -19,7 +19,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -70,27 +69,7 @@ func (s *LLMProviderAPIKeyService) ListAPIKeys(
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
 
-	keys := make([]models.APIKeyInfo, 0, len(stored))
-	for _, k := range stored {
-		// Only surface user-managed keys; hide console-managed and test keys.
-		if k.Purpose != models.APIKeyPurposeUserManaged {
-			continue
-		}
-		info := models.APIKeyInfo{
-			Name:         k.Name,
-			DisplayName:  k.DisplayName,
-			MaskedAPIKey: k.MaskedAPIKey,
-			Status:       k.Status,
-			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
-		}
-		if k.ExpiresAt != nil {
-			expiresAt := k.ExpiresAt.Format(time.RFC3339)
-			info.ExpiresAt = &expiresAt
-		}
-		keys = append(keys, info)
-	}
-
-	return &models.ListAPIKeysResponse{Keys: keys}, nil
+	return &models.ListAPIKeysResponse{Keys: models.ToUserManagedAPIKeyInfos(stored)}, nil
 }
 
 // CreateAPIKey generates an API key for an LLM provider and broadcasts it to all gateways

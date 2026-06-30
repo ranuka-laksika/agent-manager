@@ -118,6 +118,7 @@ type agentConfigurationService struct {
 	mcpProxyService           *MCPProxyService
 	llmProxyDeploymentService *LLMProxyDeploymentService
 	llmProxyAPIKeyService     *LLMProxyAPIKeyService
+	apiKeyBroadcaster         *apiKeyBroadcaster
 	llmProviderAPIKeyService  *LLMProviderAPIKeyService
 	aiApplicationService      *AIApplicationService
 	infraResourceManager      InfraResourceManager
@@ -337,21 +338,21 @@ func mcpProxyAPIKeyHeaderName(proxy *models.MCPProxy) string {
 }
 
 func (s *agentConfigurationService) createMCPMappingAPIKey(ctx context.Context, orgName string, mappingUUID uuid.UUID, keyName string) (*models.CreateAPIKeyResponse, error) {
-	if s.llmProxyAPIKeyService == nil {
+	if s.apiKeyBroadcaster == nil {
 		return nil, fmt.Errorf("API key service is not configured")
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, &models.CreateAPIKeyRequest{
+	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, &models.CreateAPIKeyRequest{
 		Name: keyName,
 	})
 }
 
 func (s *agentConfigurationService) revokeMCPMappingAPIKey(ctx context.Context, orgName string, mappingUUID uuid.UUID, keyName string) error {
-	if s.llmProxyAPIKeyService == nil {
+	if s.apiKeyBroadcaster == nil {
 		return fmt.Errorf("API key service is not configured")
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
+	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
 }
 
 func mcpMappingScopedID(config *models.AgentConfiguration, envName string) string {
@@ -376,10 +377,10 @@ func mcpMappingSecretLocation(config *models.AgentConfiguration, orgName, envNam
 }
 
 func (s *agentConfigurationService) mcpMappingAPIKeyExists(mappingUUID uuid.UUID, keyName string) (bool, error) {
-	if s.llmProxyAPIKeyService == nil || s.llmProxyAPIKeyService.broadcaster.apiKeyRepo == nil {
+	if s.apiKeyBroadcaster == nil || s.apiKeyBroadcaster.apiKeyRepo == nil {
 		return false, nil
 	}
-	_, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.GetByArtifactAndName(mappingUUID.String(), keyName)
+	_, err := s.apiKeyBroadcaster.apiKeyRepo.GetByArtifactAndName(mappingUUID.String(), keyName)
 	if err == nil {
 		return true, nil
 	}
@@ -390,10 +391,10 @@ func (s *agentConfigurationService) mcpMappingAPIKeyExists(mappingUUID uuid.UUID
 }
 
 func (s *agentConfigurationService) revokeStaleMCPMappingAPIKeys(ctx context.Context, orgName string, mappingUUID uuid.UUID, keepName string) error {
-	if s.llmProxyAPIKeyService == nil || s.llmProxyAPIKeyService.broadcaster.apiKeyRepo == nil {
+	if s.apiKeyBroadcaster == nil || s.apiKeyBroadcaster.apiKeyRepo == nil {
 		return nil
 	}
-	keys, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
+	keys, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
 	if err != nil {
 		return err
 	}
@@ -413,6 +414,36 @@ func (s *agentConfigurationService) revokeAllMCPMappingAPIKeys(ctx context.Conte
 	return s.revokeStaleMCPMappingAPIKeys(ctx, orgName, mappingUUID, "")
 }
 
+// resolveConfigAndEnvUUID loads an agent configuration, validates it belongs to
+// the given agent/org/project, and resolves the environment name to its UUID.
+// Shared prologue for the per-config key resolvers; the returned config has its
+// env mappings preloaded (see AgentConfigurationRepository.GetByUUID).
+func (s *agentConfigurationService) resolveConfigAndEnvUUID(
+	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string,
+) (*models.AgentConfiguration, string, error) {
+	config, err := s.agentConfigRepo.GetByUUID(ctx, configUUID, orgName)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, "", utils.ErrAgentConfigNotFound
+		}
+		return nil, "", fmt.Errorf("failed to get agent configuration: %w", err)
+	}
+	if config == nil || config.AgentID != agentName || config.ProjectName != projectName {
+		return nil, "", utils.ErrAgentConfigNotFound
+	}
+
+	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, orgName)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to list environments: %w", err)
+	}
+	for _, env := range envs {
+		if env.Name == envName {
+			return config, env.UUID, nil
+		}
+	}
+	return nil, "", utils.ErrAgentConfigNotFound
+}
+
 // resolveMCPMappingArtifactUUID resolves the env mapping artifact UUID that backs
 // an external agent's MCP configuration in the given environment. This artifact is
 // the key holder for the per-config MCP API key (distinct from the shared source
@@ -420,37 +451,11 @@ func (s *agentConfigurationService) revokeAllMCPMappingAPIKeys(ctx context.Conte
 func (s *agentConfigurationService) resolveMCPMappingArtifactUUID(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string,
 ) (uuid.UUID, error) {
-	config, err := s.agentConfigRepo.GetByUUID(ctx, configUUID, orgName)
+	config, envUUID, err := s.resolveConfigAndEnvUUID(ctx, orgName, projectName, agentName, configUUID, envName)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return uuid.Nil, utils.ErrAgentConfigNotFound
-		}
-		return uuid.Nil, fmt.Errorf("failed to get agent configuration: %w", err)
+		return uuid.Nil, err
 	}
-	if config == nil || config.AgentID != agentName || config.ProjectName != projectName {
-		return uuid.Nil, utils.ErrAgentConfigNotFound
-	}
-
-	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, orgName)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to list environments: %w", err)
-	}
-	var envUUID string
-	for _, env := range envs {
-		if env.Name == envName {
-			envUUID = env.UUID
-			break
-		}
-	}
-	if envUUID == "" {
-		return uuid.Nil, utils.ErrAgentConfigNotFound
-	}
-
-	mappings, err := s.envMCPMappingRepo.ListByConfig(ctx, config.UUID)
-	if err != nil {
-		return uuid.Nil, fmt.Errorf("failed to list MCP mappings: %w", err)
-	}
-	for _, mapping := range mappings {
+	for _, mapping := range config.EnvMCPMappings {
 		if mapping.EnvironmentUUID.String() == envUUID {
 			return mapping.ArtifactUUID, nil
 		}
@@ -463,7 +468,7 @@ func (s *agentConfigurationService) resolveMCPMappingArtifactUUID(
 func (s *agentConfigurationService) ListMCPConfigAPIKeys(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string,
 ) (*models.ListAPIKeysResponse, error) {
-	if s.llmProxyAPIKeyService == nil || s.llmProxyAPIKeyService.broadcaster.apiKeyRepo == nil {
+	if s.apiKeyBroadcaster == nil || s.apiKeyBroadcaster.apiKeyRepo == nil {
 		return nil, fmt.Errorf("API key service is not configured")
 	}
 	mappingUUID, err := s.resolveMCPMappingArtifactUUID(ctx, orgName, projectName, agentName, configUUID, envName)
@@ -471,31 +476,12 @@ func (s *agentConfigurationService) ListMCPConfigAPIKeys(
 		return nil, err
 	}
 
-	stored, err := s.llmProxyAPIKeyService.broadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
+	stored, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
 
-	keys := make([]models.APIKeyInfo, 0, len(stored))
-	for _, k := range stored {
-		// Only surface user-managed keys; hide console-managed and test keys.
-		if k.Purpose != models.APIKeyPurposeUserManaged {
-			continue
-		}
-		info := models.APIKeyInfo{
-			Name:         k.Name,
-			DisplayName:  k.DisplayName,
-			MaskedAPIKey: k.MaskedAPIKey,
-			Status:       k.Status,
-			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
-		}
-		if k.ExpiresAt != nil {
-			expiresAt := k.ExpiresAt.Format(time.RFC3339)
-			info.ExpiresAt = &expiresAt
-		}
-		keys = append(keys, info)
-	}
-	return &models.ListAPIKeysResponse{Keys: keys}, nil
+	return &models.ListAPIKeysResponse{Keys: models.ToUserManagedAPIKeyInfos(stored)}, nil
 }
 
 // CreateMCPConfigAPIKey generates the per-config MCP API key and broadcasts it to
@@ -503,7 +489,7 @@ func (s *agentConfigurationService) ListMCPConfigAPIKeys(
 func (s *agentConfigurationService) CreateMCPConfigAPIKey(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string, req *models.CreateAPIKeyRequest,
 ) (*models.CreateAPIKeyResponse, error) {
-	if s.llmProxyAPIKeyService == nil {
+	if s.apiKeyBroadcaster == nil {
 		return nil, fmt.Errorf("API key service is not configured")
 	}
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
@@ -514,7 +500,7 @@ func (s *agentConfigurationService) CreateMCPConfigAPIKey(
 		return nil, err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, req)
+	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, req)
 }
 
 // RotateMCPConfigAPIKey revokes the current per-config MCP API key and generates a
@@ -522,7 +508,7 @@ func (s *agentConfigurationService) CreateMCPConfigAPIKey(
 func (s *agentConfigurationService) RotateMCPConfigAPIKey(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName, keyName string, req *models.RotateAPIKeyRequest,
 ) (*models.CreateAPIKeyResponse, error) {
-	if s.llmProxyAPIKeyService == nil {
+	if s.apiKeyBroadcaster == nil {
 		return nil, fmt.Errorf("API key service is not configured")
 	}
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
@@ -533,14 +519,14 @@ func (s *agentConfigurationService) RotateMCPConfigAPIKey(
 		return nil, err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRotate(ctx, orgName, mappingID, mappingID, keyName, req)
+	return s.apiKeyBroadcaster.broadcastRotate(ctx, orgName, mappingID, mappingID, keyName, req)
 }
 
 // RevokeMCPConfigAPIKey revokes and removes the per-config MCP API key.
 func (s *agentConfigurationService) RevokeMCPConfigAPIKey(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName, keyName string,
 ) error {
-	if s.llmProxyAPIKeyService == nil {
+	if s.apiKeyBroadcaster == nil {
 		return fmt.Errorf("API key service is not configured")
 	}
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
@@ -551,7 +537,7 @@ func (s *agentConfigurationService) RevokeMCPConfigAPIKey(
 		return err
 	}
 	mappingID := mappingUUID.String()
-	return s.llmProxyAPIKeyService.broadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
+	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
 }
 
 // resolveLLMProxyHandleForConfig resolves the LLM proxy handle backing an external
@@ -560,32 +546,10 @@ func (s *agentConfigurationService) RevokeMCPConfigAPIKey(
 func (s *agentConfigurationService) resolveLLMProxyHandleForConfig(
 	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string,
 ) (string, error) {
-	config, err := s.agentConfigRepo.GetByUUID(ctx, configUUID, orgName)
+	config, envUUID, err := s.resolveConfigAndEnvUUID(ctx, orgName, projectName, agentName, configUUID, envName)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return "", utils.ErrAgentConfigNotFound
-		}
-		return "", fmt.Errorf("failed to get agent configuration: %w", err)
+		return "", err
 	}
-	if config == nil || config.AgentID != agentName || config.ProjectName != projectName {
-		return "", utils.ErrAgentConfigNotFound
-	}
-
-	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, orgName)
-	if err != nil {
-		return "", fmt.Errorf("failed to list environments: %w", err)
-	}
-	var envUUID string
-	for _, env := range envs {
-		if env.Name == envName {
-			envUUID = env.UUID
-			break
-		}
-	}
-	if envUUID == "" {
-		return "", utils.ErrAgentConfigNotFound
-	}
-
 	for _, mapping := range config.EnvMappings {
 		if mapping.EnvironmentUUID.String() == envUUID && mapping.LLMProxy != nil {
 			return mapping.LLMProxy.Handle, nil
@@ -682,6 +646,8 @@ func NewAgentConfigurationService(
 	mcpProxyService *MCPProxyService,
 	llmProxyDeploymentService *LLMProxyDeploymentService,
 	llmProxyAPIKeyService *LLMProxyAPIKeyService,
+	gatewayService *GatewayEventsService,
+	apiKeyRepo repositories.APIKeyRepository,
 	infraResourceManager InfraResourceManager,
 	ocClient client.OpenChoreoClient,
 	llmProviderAPIKeyService *LLMProviderAPIKeyService,
@@ -703,13 +669,18 @@ func NewAgentConfigurationService(
 		mcpProxyService:           mcpProxyService,
 		llmProxyDeploymentService: llmProxyDeploymentService,
 		llmProxyAPIKeyService:     llmProxyAPIKeyService,
-		aiApplicationService:      aiApplicationService,
-		infraResourceManager:      infraResourceManager,
-		ocClient:                  ocClient,
-		llmProviderAPIKeyService:  llmProviderAPIKeyService,
-		logger:                    logger,
-		secretClient:              secretClient,
-		encryptionKey:             encryptionKey,
+		apiKeyBroadcaster: &apiKeyBroadcaster{
+			gatewayRepo:    gatewayRepo,
+			gatewayService: gatewayService,
+			apiKeyRepo:     apiKeyRepo,
+		},
+		aiApplicationService:     aiApplicationService,
+		infraResourceManager:     infraResourceManager,
+		ocClient:                 ocClient,
+		llmProviderAPIKeyService: llmProviderAPIKeyService,
+		logger:                   logger,
+		secretClient:             secretClient,
+		encryptionKey:            encryptionKey,
 	}
 	// Register the deletion reconciler now that this service exists; MCPProxyService is
 	// constructed first and calls back into here when a proxy is deleted to strip the

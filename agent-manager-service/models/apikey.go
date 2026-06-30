@@ -124,6 +124,31 @@ type ListAPIKeysResponse struct {
 	Keys []APIKeyInfo `json:"keys"`
 }
 
+// ToUserManagedAPIKeyInfos maps stored API keys to their masked, user-facing
+// representation. Only user-managed keys are surfaced; console-managed and test
+// keys are hidden. Timestamps are formatted as RFC3339.
+func ToUserManagedAPIKeyInfos(stored []StoredAPIKey) []APIKeyInfo {
+	keys := make([]APIKeyInfo, 0, len(stored))
+	for _, k := range stored {
+		if k.Purpose != APIKeyPurposeUserManaged {
+			continue
+		}
+		info := APIKeyInfo{
+			Name:         k.Name,
+			DisplayName:  k.DisplayName,
+			MaskedAPIKey: k.MaskedAPIKey,
+			Status:       k.Status,
+			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
+		}
+		if k.ExpiresAt != nil {
+			expiresAt := k.ExpiresAt.Format(time.RFC3339)
+			info.ExpiresAt = &expiresAt
+		}
+		keys = append(keys, info)
+	}
+	return keys
+}
+
 // CreateAPIKeyResponse represents the response after creating an API key
 type CreateAPIKeyResponse struct {
 	// Status indicates the result of the operation ("success" or "error")

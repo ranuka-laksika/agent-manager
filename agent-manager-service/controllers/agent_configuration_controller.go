@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -875,6 +876,41 @@ func (c *agentConfigurationController) configEnvAPIKeyParams(w http.ResponseWrit
 	return orgName, projName, agentName, envName, parsed, true
 }
 
+// writeConfigAPIKeyError maps the shared per-config API key service errors to HTTP
+// responses for the create/rotate/revoke handlers. operation labels the log line.
+func (c *agentConfigurationController) writeConfigAPIKeyError(w http.ResponseWriter, log *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, utils.ErrAgentConfigNotFound):
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+	case errors.Is(err, utils.ErrAgentConfigNotExternal):
+		utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
+	case errors.Is(err, utils.ErrGatewayNotFound):
+		utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
+	default:
+		log.Error(operation+": failed", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to manage API key")
+	}
+}
+
+// apiKeyCreateNameDisplayName unwraps the optional name/displayName fields of a
+// create-key request and enforces that at least one is provided. On failure it
+// writes a 400 and returns ok=false.
+func apiKeyCreateNameDisplayName(w http.ResponseWriter, name, displayName *string) (string, string, bool) {
+	n := ""
+	if name != nil {
+		n = *name
+	}
+	dn := ""
+	if displayName != nil {
+		dn = *displayName
+	}
+	if n == "" && dn == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "At least one of 'name' or 'displayName' must be provided")
+		return "", "", false
+	}
+	return n, dn, true
+}
+
 // ListMCPConfigAPIKeys handles GET .../mcp-configs/{configId}/environments/{envName}/api-keys
 func (c *agentConfigurationController) ListMCPConfigAPIKeys(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -913,16 +949,8 @@ func (c *agentConfigurationController) CreateMCPConfigAPIKey(w http.ResponseWrit
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	name := ""
-	if specReq.Name != nil {
-		name = *specReq.Name
-	}
-	displayName := ""
-	if specReq.DisplayName != nil {
-		displayName = *specReq.DisplayName
-	}
-	if name == "" && displayName == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "At least one of 'name' or 'displayName' must be provided")
+	name, displayName, ok := apiKeyCreateNameDisplayName(w, specReq.Name, specReq.DisplayName)
+	if !ok {
 		return
 	}
 
@@ -932,21 +960,8 @@ func (c *agentConfigurationController) CreateMCPConfigAPIKey(w http.ResponseWrit
 		ExpiresAt:   specReq.ExpiresAt,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("CreateMCPConfigAPIKey: failed to create API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "CreateMCPConfigAPIKey", err)
+		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusCreated, response)
 }
@@ -975,21 +990,8 @@ func (c *agentConfigurationController) RotateMCPConfigAPIKey(w http.ResponseWrit
 		ExpiresAt:   specReq.ExpiresAt,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("RotateMCPConfigAPIKey: failed to rotate API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to rotate API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "RotateMCPConfigAPIKey", err)
+		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
@@ -1006,21 +1008,8 @@ func (c *agentConfigurationController) RevokeMCPConfigAPIKey(w http.ResponseWrit
 	keyName := r.PathValue("keyName")
 
 	if err := c.agentConfigService.RevokeMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("RevokeMCPConfigAPIKey: failed to revoke API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to revoke API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "RevokeMCPConfigAPIKey", err)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1063,16 +1052,8 @@ func (c *agentConfigurationController) CreateLLMConfigAPIKey(w http.ResponseWrit
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	name := ""
-	if specReq.Name != nil {
-		name = *specReq.Name
-	}
-	displayName := ""
-	if specReq.DisplayName != nil {
-		displayName = *specReq.DisplayName
-	}
-	if name == "" && displayName == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "At least one of 'name' or 'displayName' must be provided")
+	name, displayName, ok := apiKeyCreateNameDisplayName(w, specReq.Name, specReq.DisplayName)
+	if !ok {
 		return
 	}
 
@@ -1082,21 +1063,8 @@ func (c *agentConfigurationController) CreateLLMConfigAPIKey(w http.ResponseWrit
 		ExpiresAt:   specReq.ExpiresAt,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("CreateLLMConfigAPIKey: failed to create API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to create API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "CreateLLMConfigAPIKey", err)
+		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusCreated, response)
 }
@@ -1125,21 +1093,8 @@ func (c *agentConfigurationController) RotateLLMConfigAPIKey(w http.ResponseWrit
 		ExpiresAt:   specReq.ExpiresAt,
 	})
 	if err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("RotateLLMConfigAPIKey: failed to rotate API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to rotate API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "RotateLLMConfigAPIKey", err)
+		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
@@ -1156,21 +1111,8 @@ func (c *agentConfigurationController) RevokeLLMConfigAPIKey(w http.ResponseWrit
 	keyName := r.PathValue("keyName")
 
 	if err := c.agentConfigService.RevokeLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
-		switch {
-		case errors.Is(err, utils.ErrAgentConfigNotFound):
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
-			return
-		case errors.Is(err, utils.ErrAgentConfigNotExternal):
-			utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
-			return
-		case errors.Is(err, utils.ErrGatewayNotFound):
-			utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
-			return
-		default:
-			log.Error("RevokeLLMConfigAPIKey: failed to revoke API key", "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to revoke API key")
-			return
-		}
+		c.writeConfigAPIKeyError(w, log, "RevokeLLMConfigAPIKey", err)
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

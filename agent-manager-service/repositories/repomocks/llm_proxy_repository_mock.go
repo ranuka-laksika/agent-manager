@@ -36,6 +36,9 @@ import (
 //			GetByIDFunc: func(proxyID string, orgName string) (*models.LLMProxy, error) {
 //				panic("mock out the GetByID method")
 //			},
+//			GetByIDAndProjectFunc: func(proxyID string, orgName string, projectUUID string) (*models.LLMProxy, error) {
+//				panic("mock out the GetByIDAndProject method")
+//			},
 //			ListFunc: func(orgName string, limit int, offset int) ([]*models.LLMProxy, error) {
 //				panic("mock out the List method")
 //			},
