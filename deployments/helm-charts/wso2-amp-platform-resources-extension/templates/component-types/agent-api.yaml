@@ -23,6 +23,8 @@ spec:
     - kind: Trait
       name: instrumentation-trait-env-injection
     - kind: Trait
+      name: ballerina-otel-instrumentation-trait
+    - kind: Trait
       name: api-configuration
   traits:
     - name: horizontal-pod-autoscaler

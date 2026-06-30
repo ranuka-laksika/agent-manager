@@ -182,6 +182,7 @@ const configureBuildSchema = z.object({
 
 const languageOptions = [
   { label: "Python", value: "python" },
+  { label: "Ballerina", value: "ballerina" },
   { label: "Docker", value: "docker" },
 ];
 
@@ -305,6 +306,12 @@ export function ConfigureBuildDrawer({
           // Re-validate Docker fields
           const dockerfilePathError = validateField('dockerfilePath', newData.dockerfilePath, newData);
           setFieldError('dockerfilePath', dockerfilePathError);
+        } else if (value === 'ballerina') {
+          // Switching to Ballerina - no conditional fields are required, so clear
+          // any stale Python/Docker errors from the now-hidden fields.
+          setFieldError('runCommand', undefined);
+          setFieldError('languageVersion', undefined);
+          setFieldError('dockerfilePath', undefined);
         }
       }
 
@@ -368,6 +375,13 @@ export function ConfigureBuildDrawer({
         ? {
             type: "docker" as const,
             docker: { dockerfilePath: formData.dockerfilePath ?? "./Dockerfile" }
+          }
+        : formData.language === "ballerina"
+        // Ballerina resolves its distribution version from Ballerina.toml, so no
+        // language version or start command is collected in the UI.
+        ? {
+            type: "buildpack" as const,
+            buildpack: { language: "ballerina" },
           }
         : {
             type: "buildpack" as const,

@@ -16,8 +16,9 @@
  * under the License.
  */
 
-import { Alert, Checkbox, Collapse, Form, FormControl, FormControlLabel, FormHelperText, MenuItem, Select, Stack, TextField, Typography, CircularProgress } from "@wso2/oxygen-ui";
-import { useEffect, useMemo, useCallback } from "react";
+import { Alert, Box, Checkbox, Collapse, Form, FormControl, FormControlLabel, FormHelperText, IconButton, MenuItem, Select, Stack, TextField, Tooltip, Typography, CircularProgress } from "@wso2/oxygen-ui";
+import { Copy as ContentCopy } from "@wso2/oxygen-ui-icons-react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import { useParams } from "react-router-dom";
 import { debounce } from "lodash";
 import {
@@ -60,6 +61,7 @@ interface InternalAgentFormProps {
 }
 const languageOptions = [
   { label: "Python", value: "python" },
+  { label: "Ballerina", value: "ballerina" },
   { label: "Docker", value: "docker" },
 ];
 
@@ -83,6 +85,18 @@ export const InternalAgentForm = ({
   firstEnvOnlyNotice,
 }: InternalAgentFormProps) => {
   const { orgId, projectId } = useParams<{ orgId: string; projectId: string }>();
+
+  const [copied, setCopied] = useState(false);
+  const handleCopyBalImport = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText("import ballerinax/amp as _;");
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Failed to copy - silently fail
+    }
+  }, []);
+
   const privateRepoConfigs = useExternalConfigModules("private-repo-support");
   const isPrivateRepoEnabled =
     privateRepoConfigs.length === 0 ||
@@ -189,6 +203,12 @@ export const InternalAgentForm = ({
             // Re-validate Docker fields
             const dockerfilePathError = validateField('dockerfilePath', newData.dockerfilePath, newData);
             setFieldError('dockerfilePath', dockerfilePathError);
+          } else if (value === 'ballerina') {
+            // Switching to Ballerina - no conditional fields are required, so clear
+            // any stale Python/Docker errors from the now-hidden fields.
+            setFieldError('runCommand', undefined);
+            setFieldError('languageVersion', undefined);
+            setFieldError('dockerfilePath', undefined);
           }
         }
 
@@ -505,6 +525,55 @@ export const InternalAgentForm = ({
           </Collapse>
 
 
+
+          <Collapse in={formData.language === "ballerina"}>
+            <Stack spacing={2}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.enableAutoInstrumentation ?? true}
+                    onChange={(e) => handleFieldChange('enableAutoInstrumentation', e.target.checked)}
+                  />
+                }
+                label="Enable auto instrumentation"
+              />
+              <Collapse in={formData.enableAutoInstrumentation !== false}>
+                <Alert severity="info" sx={{ mt: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Tracing Support for Ballerina-Based Agents
+                  </Typography>
+                  <Typography variant="body2" gutterBottom>
+                    To enable the AMP extension in a Ballerina program, add the following
+                    import to your program.
+                  </Typography>
+                  <Box sx={{ position: 'relative', mt: 1 }}>
+                    <Typography
+                      component="pre"
+                      variant="body2"
+                      sx={{ m: 0, bgcolor: 'action.hover', pl: 1, pr: 5, py: 0.5, borderRadius: 0.5, fontFamily: 'monospace' }}
+                    >
+                      import ballerinax/amp as _;
+                    </Typography>
+                    <Tooltip title={copied ? 'Copied!' : 'Copy code'}>
+                      <IconButton
+                        onClick={handleCopyBalImport}
+                        size="small"
+                        sx={{ position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)' }}
+                      >
+                        <ContentCopy size={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </Box>
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    Compatible with Ballerina version{' '}
+                    <Typography component="code" sx={{ bgcolor: 'action.hover', px: 0.5, borderRadius: 0.5 }}>
+                      2201.13.x +
+                    </Typography>
+                  </Typography>
+                </Alert>
+              </Collapse>
+            </Stack>
+          </Collapse>
 
           <Collapse in={formData.language === "docker"}>
             <Stack spacing={2}>

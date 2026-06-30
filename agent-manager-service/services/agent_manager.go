@@ -327,6 +327,7 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 	isAPIAgent := req.AgentType != nil && req.AgentType.Type == string(utils.AgentTypeAPI)
 
 	isPythonBuildpack := req.Build != nil && req.Build.BuildpackBuild != nil && req.Build.BuildpackBuild.Buildpack.Language == string(utils.LanguagePython)
+	isBallerinaBuildpack := req.Build != nil && req.Build.BuildpackBuild != nil && req.Build.BuildpackBuild.Buildpack.Language == string(utils.LanguageBallerina)
 	isDocker := req.Build != nil && req.Build.DockerBuild != nil
 
 	// Attach instrumentation traits at creation.
@@ -368,6 +369,37 @@ func (s *agentManagerService) buildCreateTraitRequests(ctx context.Context, orgN
 			Opts: []client.TraitOption{
 				client.WithAgentApiKeySecretRef(apiKeySecretRef),
 				client.WithAgentApiKeySecretProperty(apiKeySecretProperty),
+			},
+		})
+	} else if isAPIAgent && isBallerinaBuildpack {
+		apiKey, err := s.generateAgentAPIKey(ctx, orgName, projectName, req.Name, envName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate agent API key: %w", err)
+		}
+		apiKeySecretRef, apiKeySecretProperty, err := s.storeAgentAPIKey(ctx, orgName, projectName, req.Name, envName, apiKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to store agent API key: %w", err)
+		}
+		// Gate env injection on the same autoInstrumentation flag as the Ballerina
+		// OTEL trait, so when instrumentation is disabled the OTEL endpoint and API
+		// key env vars are not injected either. Patches are gated by the 'where'
+		// clause and per-environment overridable via traitEnvironmentConfigs.
+		traits = append(traits, client.TraitRequest{
+			TraitKind: client.TraitKindTrait,
+			TraitType: client.TraitEnvInjection,
+			Opts: []client.TraitOption{
+				client.WithAgentApiKeySecretRef(apiKeySecretRef),
+				client.WithAgentApiKeySecretProperty(apiKeySecretProperty),
+				client.WithOtelEndpointEnvName(client.BalConfigVarOTELEndpoint),
+				client.WithApiKeyEnvName(client.BalConfigVarAgentAPIKey),
+				client.WithEnvInjectionEnabled(autoInstrumentation),
+			},
+		})
+		traits = append(traits, client.TraitRequest{
+			TraitKind: client.TraitKindTrait,
+			TraitType: client.TraitBallerinaOTELInstrumentation,
+			Opts: []client.TraitOption{
+				client.WithInstrumentationEnabled(autoInstrumentation),
 			},
 		})
 	} else if isAPIAgent && isDocker {
@@ -2374,7 +2406,8 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	// so no per-env gateway lookup is needed for trait configs.
 	policies := buildPolicies(apiCfg)
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
-	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, enableAutoInstrumentation)
+	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
+	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, isBallerinaBuildpack, enableAutoInstrumentation)
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2725,9 +2758,10 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 // backendHost / backendPort / gatewayTarget are no longer written here — the
 // api-management trait derives them from the apiGatewayName convention
 // ("api-platform-<org>-<env>") + platform-wide gateway runtime constants.
-// For Python buildpack agents, instrumentationEnabled is set per-environment on the OTEL trait so
-// the 'where' clause on patches can enable/disable instrumentation independently per environment.
-func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack bool, autoInstrumentation bool) map[string]interface{} {
+// For Python buildpack agents, instrumentationEnabled is set per-environment on the OTEL trait;
+// for Ballerina buildpack agents it is set on the ballerina-config-file trait. In both cases the
+// 'where' clause on patches enables/disables instrumentation independently per environment.
+func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack, isBallerinaBuildpack bool, autoInstrumentation bool) map[string]interface{} {
 	instanceName := func(traitType client.TraitType) string {
 		return agentName + "-" + string(traitType)
 	}
@@ -2743,6 +2777,17 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 	if isPythonBuildpack {
 		traitEnvConfigs[instanceName(client.TraitOTELInstrumentation)] = map[string]interface{}{
 			"instrumentationEnabled": autoInstrumentation,
+		}
+	}
+	if isBallerinaBuildpack {
+		traitEnvConfigs[instanceName(client.TraitBallerinaOTELInstrumentation)] = map[string]interface{}{
+			"instrumentationEnabled": autoInstrumentation,
+		}
+		// Gate env injection together with Ballerina instrumentation so the OTEL
+		// endpoint and API key env vars are only injected when instrumentation is
+		// enabled for this environment.
+		traitEnvConfigs[instanceName(client.TraitEnvInjection)] = map[string]interface{}{
+			"envInjectionEnabled": autoInstrumentation,
 		}
 	}
 	return traitEnvConfigs
@@ -2943,7 +2988,8 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		}
 		targetArtifactID := artifact.UUID.String()
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
-		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, tracingCfg.EnableAutoInstrumentation)
+		promoteBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
+		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
 
 		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
 		if apiKeyErr != nil {
@@ -2952,9 +2998,13 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			s.logger.Warn("Failed to store agent API key for promotion", "agentName", agentName, "environment", req.TargetEnvironment, "error", storeErr)
 		} else {
 			envInjKey := agentName + "-" + string(client.TraitEnvInjection)
-			envInjCfg := map[string]interface{}{
-				"agentApiKeySecretRef": apiKeySecretRef,
+			// Preserve any env config buildTraitEnvConfigs already set (e.g.
+			// envInjectionEnabled for Ballerina) instead of overwriting it.
+			envInjCfg, _ := traitEnvConfigs[envInjKey].(map[string]interface{})
+			if envInjCfg == nil {
+				envInjCfg = map[string]interface{}{}
 			}
+			envInjCfg["agentApiKeySecretRef"] = apiKeySecretRef
 			if apiKeySecretProperty != "" {
 				envInjCfg["agentApiKeySecretProperty"] = apiKeySecretProperty
 			}
@@ -3052,7 +3102,8 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		return fmt.Errorf("failed to ensure agent env API artifact: %w", artifactErr)
 	}
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
-	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, tracingCfg.EnableAutoInstrumentation)
+	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
+	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
 
 	// Apply to the release binding (atomic: trait configs + restartedAt in a single update).
 	if updateErr := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, orgName, agentName, req.EnvironmentName, traitEnvConfigs); updateErr != nil {

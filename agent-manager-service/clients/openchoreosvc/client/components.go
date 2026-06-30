@@ -2056,6 +2056,29 @@ func WithAgentApiKeySecretProperty(property string) TraitOption {
 	}
 }
 
+// WithOtelEndpointEnvName overrides the env var name the env-injection trait uses
+// for the OTEL endpoint (default AMP_OTEL_ENDPOINT). Empty values are ignored so
+// the trait keeps its default. Used by Ballerina to inject the Ballerina config-var
+// name (BAL_CONFIG_VAR_BALLERINAX_AMP_OTELENDPOINT).
+func WithOtelEndpointEnvName(name string) TraitOption {
+	return func(params map[string]interface{}) {
+		if name != "" {
+			params["otelEndpointEnvName"] = name
+		}
+	}
+}
+
+// WithApiKeyEnvName overrides the env var name the env-injection trait uses for the
+// agent API key (default AMP_AGENT_API_KEY). Empty values are ignored. Used by
+// Ballerina to inject BAL_CONFIG_VAR_BALLERINAX_AMP_APIKEY.
+func WithApiKeyEnvName(name string) TraitOption {
+	return func(params map[string]interface{}) {
+		if name != "" {
+			params["apiKeyEnvName"] = name
+		}
+	}
+}
+
 // WithLanguageVersion sets the language version for the OTEL instrumentation trait,
 // so it does not need to re-fetch the component to determine the instrumentation image.
 func WithLanguageVersion(lv string) TraitOption {
@@ -2184,6 +2207,9 @@ func (c *openChoreoClient) buildTrait(ctx context.Context, namespaceName, projec
 			return gen.ComponentTrait{}, err
 		}
 		trait.Parameters = &params
+	case TraitBallerinaOTELInstrumentation:
+		params := c.buildBallerinaConfigFileTraitParameters(req.Opts...)
+		trait.Parameters = &params
 	case TraitAPIManagement:
 		params, err := c.buildAPIConfigurationTraitParameters(componentName, req.Opts...)
 		if err != nil {
@@ -2288,7 +2314,29 @@ func (c *openChoreoClient) buildEnvInjectionTraitParameters(opts ...TraitOption)
 	if v, ok := params["envInjectionEnabled"]; ok {
 		result["envInjectionEnabled"] = v
 	}
+	// Language-specific env var names; the trait defaults to the AMP_* names.
+	if v, ok := params["otelEndpointEnvName"].(string); ok && v != "" {
+		result["otelEndpointEnvName"] = v
+	}
+	if v, ok := params["apiKeyEnvName"].(string); ok && v != "" {
+		result["apiKeyEnvName"] = v
+	}
 	return result, nil
+}
+
+// buildBallerinaConfigFileTraitParameters builds parameters for the Ballerina
+// config-file trait, which mounts am-instrumentation.toml via an init container and
+// sets BAL_CONFIG_FILES. The OTEL endpoint + API key env vars are injected by the
+// shared env-injection trait (with Ballerina-specific names), not here. The image is
+// always built with observability included; whether tracing is emitted is a runtime
+// decision gated by the instrumentationEnabled parameter (set via
+// WithInstrumentationEnabled) and overridable per-environment via traitEnvironmentConfigs.
+func (c *openChoreoClient) buildBallerinaConfigFileTraitParameters(opts ...TraitOption) map[string]interface{} {
+	params := make(map[string]interface{})
+	for _, opt := range opts {
+		opt(params)
+	}
+	return params
 }
 
 // getInstrumentationImage builds the pre-built init-container image reference for
