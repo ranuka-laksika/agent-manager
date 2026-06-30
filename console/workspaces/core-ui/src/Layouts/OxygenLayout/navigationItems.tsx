@@ -38,10 +38,8 @@ import {
   globalConfig,
 } from "@agent-management-platform/types";
 import { useAuthHooks } from "@agent-management-platform/auth";
-import {
-  useGetAgent,
-  useListEnvironments,
-} from "@agent-management-platform/api-client";
+import { useGetAgent } from "@agent-management-platform/api-client";
+import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
 import { metaData as overviewMetadata } from "@agent-management-platform/overview";
 import { metaData as buildMetadata } from "@agent-management-platform/build";
 import { metaData as testMetadata } from "@agent-management-platform/test";
@@ -77,10 +75,8 @@ export function useNavigationItems(): Array<
     orgName: orgId,
     projName: projectId,
   });
-  const { data: environments, isLoading: isLoadingEnvironments } =
-    useListEnvironments({
-      orgName: orgId,
-    });
+  const { environments, isLoading: isLoadingEnvironments } =
+    usePipelineEnvironmentsState(orgId, projectId);
 
   const externalNavItems = useExternalNavItems();
   const { userInfo } = useAuthHooks();
@@ -134,8 +130,7 @@ export function useNavigationItems(): Array<
   }, [userInfo?.scope]);
 
   const defaultEnv =
-    envId ??
-    (environments && environments.length > 0 ? environments[0]?.name : "");
+    envId ?? (environments.length > 0 ? environments[0]?.name : "");
   const { pathname } = useLocation();
 
   const llmProvidersOrgRoute = (
