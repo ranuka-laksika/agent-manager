@@ -17,18 +17,51 @@
 
 import { useState } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
-import { PageLayout } from "@agent-management-platform/views";
+import {
+  PageLayout,
+  useExternalComponentModulesByMountPoint,
+} from "@agent-management-platform/views";
 import type { Environment } from "@agent-management-platform/types";
 import { EnvironmentTable } from "./subComponents/EnvironmentTable";
 import { EditEnvironmentDrawer } from "./subComponents/EditEnvironmentDrawer";
 import { CreateEnvironmentDrawer } from "./subComponents/CreateEnvironmentDrawer";
 import { DeleteEnvironmentDrawer } from "./subComponents/DeleteEnvironmentDrawer";
 
+const ENVIRONMENT_CREATE_DRAWER_MOUNT_POINT = "environment-create-drawer";
+const ENVIRONMENT_DELETE_DRAWER_MOUNT_POINT = "environment-delete-drawer";
+
+type CreateDrawerProps = {
+  open: boolean;
+  onClose: () => void;
+  orgId: string;
+};
+
+type DeleteDrawerProps = {
+  open: boolean;
+  onClose: () => void;
+  environment: Environment;
+  orgId: string;
+};
+
 export function EnvironmentsOrganization() {
   const { orgId } = useParams<{ orgId: string }>();
   const [envToEdit, setEnvToEdit] = useState<Environment | null>(null);
   const [envToDelete, setEnvToDelete] = useState<Environment | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // A deployment can override the create/delete drawers; otherwise fall back to
+  // the built-in script-based drawers.
+  const externalCreate = useExternalComponentModulesByMountPoint(
+    ENVIRONMENT_CREATE_DRAWER_MOUNT_POINT,
+  )[0];
+  const externalDelete = useExternalComponentModulesByMountPoint(
+    ENVIRONMENT_DELETE_DRAWER_MOUNT_POINT,
+  )[0];
+
+  const CreateDrawer = (externalCreate?.component ??
+    CreateEnvironmentDrawer) as React.ComponentType<CreateDrawerProps>;
+  const DeleteDrawer = (externalDelete?.component ??
+    DeleteEnvironmentDrawer) as React.ComponentType<DeleteDrawerProps>;
 
   return (
     <>
@@ -45,11 +78,14 @@ export function EnvironmentsOrganization() {
             </PageLayout>
           }
         />
-        <Route path="*" element={<Navigate to={`/org/${orgId}/environments`} replace />} />
+        <Route
+          path="*"
+          element={<Navigate to={`/org/${orgId}/environments`} replace />}
+        />
       </Routes>
 
       {orgId && (
-        <CreateEnvironmentDrawer
+        <CreateDrawer
           open={createOpen}
           onClose={() => setCreateOpen(false)}
           orgId={orgId}
@@ -65,11 +101,12 @@ export function EnvironmentsOrganization() {
         />
       )}
 
-      {envToDelete && (
-        <DeleteEnvironmentDrawer
+      {envToDelete && orgId && (
+        <DeleteDrawer
           open={envToDelete !== null}
           onClose={() => setEnvToDelete(null)}
           environment={envToDelete}
+          orgId={orgId}
         />
       )}
     </>

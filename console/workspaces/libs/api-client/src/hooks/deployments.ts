@@ -35,6 +35,7 @@ import {
   deleteDeploymentPipeline,
   updateEnvironment,
   createEnvironment,
+  deleteEnvironment,
 } from '../apis';
 import { useAuthHooks } from '@agent-management-platform/auth';
 import type {
@@ -78,6 +79,7 @@ import type {
   Environment,
   CreateEnvironmentRequest,
   CreateEnvironmentPathParams,
+  DeleteEnvironmentPathParams,
 } from '@agent-management-platform/types';
 import { POLL_INTERVAL } from '../utils';
 import { useApiMutation, useApiQuery } from './react-query-notifications';
@@ -298,6 +300,18 @@ export function useCreateEnvironment() {
   { params: CreateEnvironmentPathParams; body: CreateEnvironmentRequest }>({
     action: { verb: 'create', target: 'environment' },
     mutationFn: ({ params, body }) => createEnvironment(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['environments'] });
+    },
+  });
+}
+
+export function useDeleteEnvironment() {
+  const queryClient = useQueryClient();
+  const { getToken } = useAuthHooks();
+  return useApiMutation<void, unknown, DeleteEnvironmentPathParams>({
+    action: { verb: 'delete', target: 'environment' },
+    mutationFn: (params) => deleteEnvironment(params, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['environments'] });
     },

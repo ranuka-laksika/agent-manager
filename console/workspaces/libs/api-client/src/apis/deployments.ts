@@ -57,6 +57,7 @@ import type {
   Environment,
   CreateEnvironmentRequest,
   CreateEnvironmentPathParams,
+  DeleteEnvironmentPathParams,
 } from '@agent-management-platform/types';
 
 
@@ -357,4 +358,24 @@ export async function createEnvironment(
     );
     if (!res.ok) throw await res.json();
     return res.json();
+}
+
+export async function deleteEnvironment(
+    params: DeleteEnvironmentPathParams,
+    getToken?: () => Promise<string>,
+): Promise<void> {
+    const { orgName = "default", envName } = params;
+    if (!envName) {
+        throw new Error("envName is required");
+    }
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpDELETE(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/environments/${encodeURIComponent(envName)}`,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    // DELETE may return 204 No Content
+    if (res.status === 204 || res.headers.get('content-length') === '0') {
+        return;
+    }
 }

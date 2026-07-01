@@ -28,4 +28,9 @@ export enum MountPoints {
     LeftNavItem = "left-nav-item",
     PrivateRepoSupport = "private-repo-support",
     IdentityProviderMode = "identity-provider-mode",
+    // A deployment can inject its own environment create/delete drawer components
+    // at these mount points. When nothing is injected, the built-in script-based
+    // drawers are used (the self-hosted default).
+    EnvironmentCreateDrawer = "environment-create-drawer",
+    EnvironmentDeleteDrawer = "environment-delete-drawer",
 }
