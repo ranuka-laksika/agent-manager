@@ -52,10 +52,16 @@ _TOKEN_REFRESH_SKEW_S = 30
 # mint API key, and the teardown deletes). Mirrors how the console requests its
 # scope list. Unauthorised/unknown scopes are silently filtered by Thunder, so
 # this stays a tight, intention-revealing set.
+#
+# Thunder v0.45 namespaces every AMP scope with the `amp:` resource-server
+# handle (permissions are built as <resource-server>:<resource>:<action>; see
+# agent-manager-service rbac.Permission.Scope). The service enforces the
+# prefixed names, and Thunder filters the old bare names, so these MUST carry
+# the `amp:` prefix or every call 403s.
 _TOKEN_SCOPES = (
-    "project:create project:read project:delete "
-    "agent:create agent:read agent:delete agent:build "
-    "agent:deploy-non-production agent:api-key-manage"
+    "amp:project:create amp:project:read amp:project:delete "
+    "amp:agent:create amp:agent:read amp:agent:delete amp:agent:build "
+    "amp:agent:deploy-non-production amp:agent:api-key-manage"
 )
 
 # The deployed agent's source is cloned from this repo ref by the in-cluster
