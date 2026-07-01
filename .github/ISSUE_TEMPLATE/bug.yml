@@ -1,0 +1,79 @@
+name: "🐞 Report a Bug"
+description: Create an issue if something does not work as expected.
+title: "[Bug]: "
+labels: ["Type/Bug"]
+type: bug
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Please select the area the issue is related to
+      multiple: true
+      options:
+        - Area/AgentManagement (Agents, agent configurations, kinds, agent API keys)
+        - Area/Console (Web UI, portal, frontend)
+        - Area/Deployments (Deployments, environments, infra resources)
+        - Area/LLMProviders (LLM providers, LLM proxy, LLM configuration)
+        - Area/Gateways (Gateway integration, API catalog, routing)
+        - Area/Observability (Traces observer, telemetry, instrumentation runtime)
+        - Area/Evaluation (Evaluation jobs, evaluators)
+        - Area/ProjectsOrgs (Projects, organizations, multi-tenancy, RBAC)
+        - Area/Instrumentation (AMP instrumentation libs, auto-instrumentation)
+        - Area/Other (Anything else which does not match above categories)
+      default: 0
+    validations:
+      required: true
+  - type: dropdown
+    id: aspect
+    attributes:
+      label: Please select the aspect the issue is related to
+      multiple: true
+      options:
+        - Aspect/API (API backends, definitions, contracts, interfaces, OpenAPI)
+        - Aspect/UI (Frontend layouts, components, styling)
+        - Aspect/Configuration (Config files, settings, env vars, defaults)
+        - Aspect/Logging (Log formats, instrumentation, improvements)
+        - Aspect/Monitoring (Metrics, observability, health checks, alerts)
+        - Aspect/Performance (Latency, optimizations, load issues)
+        - Aspect/Security (AuthN/AuthZ, secrets, tenant isolation, vulnerabilities)
+        - Aspect/Testing (Test coverage, integration tests)
+        - Aspect/AI (AI/LLM integration, MCP, AI readiness)
+        - Aspect/UX (User experience, flows, usability, clarity)
+        - Aspect/Other (Anything else which does not match above categories)
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Please share a clear and concise description of the problem.
+      placeholder: Description
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: List the steps you followed when you encountered the issue. Provide sample source code to reproduce the issue where applicable.
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity Level of the Issue
+      description: Mark the severity of the issue you are facing
+      options:
+        - Severity/Blocker (Core functionality is broken and consumer is blocked. Need immediate attention)
+        - Severity/Critical (Core functionality is broken but there is a workaround. Need urgent attention)
+        - Severity/Major (Important functionality is broken. Should be prioritized. Doesn't need immediate attention)
+        - Severity/Minor (Non-critical functionality. Can be fixed in future releases)
+        - Severity/Trivial (Cosmetic issues. Can be fixed in future releases)
+      default: 0
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment Details (with versions)
+      description: Mention the environment details (OS, browser, service version, deployment mode, etc.) that the product is running on.
+    validations:
+      required: false
