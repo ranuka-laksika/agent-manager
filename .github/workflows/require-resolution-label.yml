@@ -1,0 +1,73 @@
+name: Require Resolution Label on Close
+
+# Enforces that every issue carries a `Resolution/*` label before it can be
+# closed. If an issue is closed without one, it is automatically reopened and a
+# comment is posted asking for a Resolution label. Applies to all closes,
+# including "not planned".
+
+on:
+  issues:
+    types: [closed]
+
+permissions:
+  issues: write
+
+jobs:
+  check-resolution-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure a Resolution/* label is present
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+
+            // Pull requests also surface through the issues API; ignore them.
+            if (issue.pull_request) {
+              core.info('Payload is a pull request; skipping.');
+              return;
+            }
+
+            const hasResolution = (issue.labels || []).some(
+              (label) => (typeof label === 'string' ? label : label.name || '')
+                .startsWith('Resolution/')
+            );
+
+            if (hasResolution) {
+              core.info('Resolution/* label present; close allowed.');
+              return;
+            }
+
+            core.warning(
+              `Issue #${issue.number} closed without a Resolution/* label; reopening.`
+            );
+
+            const { owner, repo } = context.repo;
+
+            await github.rest.issues.update({
+              owner,
+              repo,
+              issue_number: issue.number,
+              state: 'open',
+            });
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: [
+                '⚠️ This issue was reopened because it was closed without a '
+                  + '`Resolution/*` label.',
+                '',
+                'Please apply the appropriate resolution label, then close it '
+                  + 'again:',
+                '',
+                '- `Resolution/Fixed`',
+                '- `Resolution/Duplicate`',
+                '- `Resolution/Not a bug`',
+                '- `Resolution/Cannot Reproduce`',
+                "- `Resolution/Won't Fix`",
+                '- `Resolution/Invalid`',
+                '- `Resolution/Postponed`',
+              ].join('\n'),
+            });

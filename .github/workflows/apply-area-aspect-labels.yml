@@ -1,0 +1,119 @@
+name: Apply Area & Aspect Labels
+
+# Parses the "area" and "aspect" dropdown answers from the issue form body and
+# applies the matching Area/* and Aspect/* labels. Runs when an issue is opened
+# and when it is edited (so corrected dropdown selections are re-applied).
+#
+# Issue forms render each dropdown as a markdown section:
+#   ### Please select the area the issue is related to
+#
+#   Area/Console (Web UI shell, navigation, cross-cutting frontend), Area/Other (...)
+#
+# Selected options are comma-separated and include their parenthetical
+# description, so we match each repo Area/*|Aspect/* label whose name is a
+# prefix of a selected chunk.
+
+on:
+  issues:
+    types: [opened, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  apply-labels:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Parse dropdowns and apply matching labels
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (issue.pull_request) {
+              core.info('Payload is a pull request; skipping.');
+              return;
+            }
+
+            const body = issue.body || '';
+            if (!body.trim()) {
+              core.info('Empty issue body (likely a blank issue); nothing to parse.');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+
+            // The exact dropdown headings, matching the `label:` fields in the
+            // issue form templates.
+            const HEADINGS = [
+              'Please select the area the issue is related to',
+              'Please select the aspect the issue is related to',
+            ];
+
+            // Extract the text block under a given "### <heading>" up to the
+            // next "###" heading or end of body.
+            function sectionFor(heading) {
+              const escaped = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const re = new RegExp(
+                `###\\s*${escaped}\\s*\\n([\\s\\S]*?)(?=\\n###\\s|$)`
+              );
+              const m = body.match(re);
+              return m ? m[1].trim() : '';
+            }
+
+            // Gather all selected option chunks across both dropdowns.
+            const selectedChunks = [];
+            for (const heading of HEADINGS) {
+              const section = sectionFor(heading);
+              if (!section || section === '_No response_') continue;
+              for (const part of section.split(',')) {
+                const chunk = part.trim();
+                if (chunk) selectedChunks.push(chunk);
+              }
+            }
+
+            if (selectedChunks.length === 0) {
+              core.info('No Area/Aspect selections found in issue body.');
+              return;
+            }
+
+            // Fetch all Area/* and Aspect/* labels defined in the repo.
+            const repoLabels = await github.paginate(
+              github.rest.issues.listLabelsForRepo,
+              { owner, repo, per_page: 100 }
+            );
+            const taxonomyLabels = repoLabels
+              .map((l) => l.name)
+              .filter((n) => n.startsWith('Area/') || n.startsWith('Aspect/'));
+
+            // A label matches when its name is a prefix of a selected chunk,
+            // e.g. label "Area/Console" matches chunk
+            // "Area/Console (Web UI shell, navigation, cross-cutting frontend)".
+            // Longest names are checked first so "Area/LLM & MCP Governance"
+            // wins over any shorter accidental prefix.
+            const byLength = [...taxonomyLabels].sort(
+              (a, b) => b.length - a.length
+            );
+
+            const toApply = new Set();
+            for (const chunk of selectedChunks) {
+              for (const name of byLength) {
+                if (chunk === name || chunk.startsWith(name + ' ')) {
+                  toApply.add(name);
+                  break;
+                }
+              }
+            }
+
+            if (toApply.size === 0) {
+              core.info('No selected options matched an existing Area/Aspect label.');
+              return;
+            }
+
+            const labels = [...toApply];
+            core.info(`Applying labels: ${labels.join(', ')}`);
+            await github.rest.issues.addLabels({
+              owner,
+              repo,
+              issue_number: issue.number,
+              labels,
+            });
