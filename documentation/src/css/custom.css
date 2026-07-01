@@ -418,3 +418,29 @@
   padding-left: calc(var(--ifm-menu-link-padding-horizontal) - 3px);
   font-weight: 600;
 }
+
+/*
+ * Documentation heading sizes — matched to the WSO2 Integrator docs scale
+ * (h1 28px / h2 22px / h3 18px / h4 16px).
+ * Scoped to Markdown doc content so the homepage hero headings are unaffected.
+ * Infima re-declares --ifm-h2/h3-font-size on the child selectors
+ * (.markdown > h2, .markdown > h3) and bumps the first h1 to 3rem, so we must
+ * override at those same selectors — a plain `.markdown { ... }` var override
+ * is out-specified by them and has no effect.
+ */
+.markdown h1:first-child {
+  --ifm-h1-font-size: 1.75rem;
+}
+
+.markdown > h2 {
+  --ifm-h2-font-size: 1.375rem;
+  font-weight: 600;
+}
+
+.markdown > h3 {
+  --ifm-h3-font-size: 1.125rem;
+}
+
+.markdown > h4 {
+  --ifm-h4-font-size: 1rem;
+}
