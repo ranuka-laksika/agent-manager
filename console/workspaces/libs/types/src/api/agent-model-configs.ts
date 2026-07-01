@@ -90,9 +90,13 @@ export interface AuthInfo {
   value?: string;
 }
 
+export type MCPDeploymentStatus = "DEPLOYED" | "PENDING" | "NOT_DEPLOYED";
+
 export interface EnvProviderConfigMappings {
   environmentName: string;
   configuration?: ProviderConfig;
+  /** Per-environment MCP deployment status. Set only for MCP configs. */
+  deploymentStatus?: MCPDeploymentStatus;
 }
 
 export interface AgentModelConfigResponse {

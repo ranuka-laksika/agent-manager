@@ -60,7 +60,6 @@ type AppParams struct {
 	AgentAPIKeyController            controllers.AgentAPIKeyController
 	LLMProxyDeploymentController     controllers.LLMProxyDeploymentController
 	MCPProxyController               controllers.MCPProxyController
-	MCPProxyAPIKeyController         controllers.MCPProxyAPIKeyController
 	WebSocketController              controllers.WebSocketController
 	GatewayInternalController        controllers.GatewayInternalController
 	MonitorController                controllers.MonitorController

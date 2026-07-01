@@ -18,7 +18,6 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -29,7 +28,6 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
-	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 const (
@@ -80,99 +78,10 @@ type MCPProxyUpstream struct {
 	URL string `yaml:"url" json:"url"`
 }
 
-func (s *MCPProxyService) deployMCPProxyToSelectedGateways(ctx context.Context, proxy *models.MCPProxy, orgName string, gatewayIDs []string) error {
-	if s.deploymentRepo == nil || s.gatewayRepo == nil || s.gatewayEventsService == nil {
-		return nil
-	}
-
-	gateways, err := s.resolveSelectedMCPProxyGateways(ctx, orgName, gatewayIDs)
-	if err != nil {
-		return err
-	}
-	return s.deployMCPProxyToGateways(ctx, proxy, orgName, gateways)
-}
-
-func (s *MCPProxyService) redeployMCPProxyToCurrentGateways(ctx context.Context, proxy *models.MCPProxy, orgName string) error {
-	if s.deploymentRepo == nil || s.gatewayRepo == nil || s.gatewayEventsService == nil || proxy == nil {
-		return nil
-	}
-
-	// Include gateways whose last deploy left the proxy in UNDEPLOYED state: a save
-	// should retry those, and a previous failure must not strand future saves.
-	gatewayIDs, err := s.deploymentRepo.GetTrackedGatewaysByProvider(proxy.UUID, orgName)
-	if err != nil {
-		return fmt.Errorf("failed to list tracked gateways: %w", err)
-	}
-	if len(gatewayIDs) == 0 {
-		return nil
-	}
-
-	gateways, err := s.resolveSelectedMCPProxyGateways(ctx, orgName, gatewayIDs)
-	if err != nil {
-		return err
-	}
-	return s.deployMCPProxyToGateways(ctx, proxy, orgName, gateways)
-}
-
-func (s *MCPProxyService) resolveSelectedMCPProxyGateways(ctx context.Context, orgName string, gatewayIDs []string) ([]*models.Gateway, error) {
-	_ = ctx
-	if len(gatewayIDs) == 0 {
-		return nil, utils.ErrInvalidInput
-	}
-
-	gateways := make([]*models.Gateway, 0, len(gatewayIDs))
-	seen := map[string]struct{}{}
-	for _, gatewayID := range gatewayIDs {
-		gatewayID = strings.TrimSpace(gatewayID)
-		if gatewayID == "" {
-			return nil, fmt.Errorf("%w: gateway id is required", utils.ErrInvalidInput)
-		}
-		if _, err := uuid.Parse(gatewayID); err != nil {
-			return nil, fmt.Errorf("%w: invalid gateway id %q", utils.ErrInvalidInput, gatewayID)
-		}
-		if _, ok := seen[gatewayID]; ok {
-			continue
-		}
-		seen[gatewayID] = struct{}{}
-
-		gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get gateway %s: %w", gatewayID, err)
-		}
-		if gateway == nil {
-			return nil, fmt.Errorf("%w: gateway %s not found", utils.ErrInvalidInput, gatewayID)
-		}
-		if gateway.OrganizationName != orgName {
-			return nil, fmt.Errorf("%w: gateway %s does not belong to organization", utils.ErrInvalidInput, gatewayID)
-		}
-		if !gateway.IsActive {
-			return nil, fmt.Errorf("%w: gateway %s is not active", utils.ErrInvalidInput, gatewayID)
-		}
-		gateways = append(gateways, gateway)
-	}
-
-	if len(gateways) == 0 {
-		return nil, fmt.Errorf("%w: at least one gateway is required", utils.ErrInvalidInput)
-	}
-	return gateways, nil
-}
-
-func (s *MCPProxyService) deployMCPProxyToGateways(ctx context.Context, proxy *models.MCPProxy, orgName string, gateways []*models.Gateway) error {
-	var errs []error
-	for _, gateway := range gateways {
-		if gateway == nil {
-			continue
-		}
-		if err := s.deployMCPProxyToGateway(ctx, proxy, orgName, gateway); err != nil {
-			errs = append(errs, fmt.Errorf("gateway %s: %w", gateway.UUID, err))
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to deploy MCP proxy: %w", errors.Join(errs...))
-	}
-	return nil
-}
-
+// deployMCPProxyToGateway deploys a single MCP artifact to one gateway. The source
+// org-level proxy is a blueprint and never deploys itself; this is invoked only by the
+// agent-configuration flow to deploy per-environment mapping artifacts (which carry the
+// flat, single-environment config flattened from the blueprint).
 func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *models.MCPProxy, orgName string, gateway *models.Gateway) error {
 	_ = ctx
 	deploymentYAML, err := s.generateMCPProxyDeploymentYAML(proxy)

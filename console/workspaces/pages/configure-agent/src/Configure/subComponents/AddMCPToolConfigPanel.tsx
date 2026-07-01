@@ -1,0 +1,439 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { generatePath, useNavigate } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Form,
+  ListingTable,
+  SearchBar,
+  Skeleton,
+  Stack,
+  Tooltip,
+  Typography,
+} from "@wso2/oxygen-ui";
+import {
+  AlertTriangle,
+  Edit,
+  Link,
+  Search,
+  ServerCog,
+} from "@wso2/oxygen-ui-icons-react";
+import {
+  DrawerContent,
+  DrawerHeader,
+  DrawerWrapper,
+  TextInput,
+} from "@agent-management-platform/views";
+import { absoluteRouteMap } from "@agent-management-platform/types";
+import {
+  useCreateAgentMCPConfig,
+  useGetAgent,
+  useListAgentMCPConfigs,
+  useListMCPProxies,
+} from "@agent-management-platform/api-client";
+import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
+import { ConfigNameSection } from "./ConfigNameSection";
+import { MCPServerDisplay } from "./MCPServerDisplay";
+import {
+  ENV_VAR_KEYS,
+  generateEnvVarNames,
+  generateUniqueConfigName,
+  type EnvVarKey,
+} from "../../utils/envConfig";
+
+const ENV_VAR_DESCRIPTIONS: Record<EnvVarKey, string> = {
+  url: "Base URL of the MCP server endpoint",
+  apikey: "API key for authenticating with the MCP server endpoint",
+};
+
+export interface AddMCPToolConfigPanelProps {
+  /** Controls the right-side drawer's visibility. */
+  open: boolean;
+  orgId?: string;
+  projectId?: string;
+  agentId?: string;
+  /** Called on Cancel/close and after a successful create. */
+  onClose: () => void;
+}
+
+/**
+ * The "Add Tool Configuration" flow rendered as a single right-side drawer. It is a
+ * two-step flow within that one panel: first pick an MCP proxy from the list, then the
+ * same drawer shows the selected server plus the configuration name and env var names.
+ * Selection is environment-agnostic — on save every deployment-pipeline environment is
+ * mapped to the one selected proxy; the backend deploys where the proxy is configured
+ * and injects empty env vars everywhere else.
+ */
+export function AddMCPToolConfigPanel({
+  open,
+  orgId,
+  projectId,
+  agentId,
+  onClose,
+}: AddMCPToolConfigPanelProps) {
+  const navigate = useNavigate();
+
+  const { data: agent } = useGetAgent({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
+  });
+  const isExternal = agent?.provisioning?.type === "external";
+
+  const { environments, isLoading: isLoadingEnvironments } =
+    usePipelineEnvironmentsState(orgId, projectId);
+  const { data: proxiesData, isLoading: isLoadingProxies } = useListMCPProxies(
+    { orgName: orgId },
+    { limit: 50, offset: 0 },
+  );
+  const { data: existingConfigsList } = useListAgentMCPConfigs(
+    { orgName: orgId, projName: projectId, agentName: agentId },
+    { limit: 1000, offset: 0 },
+  );
+  const servers = useMemo(() => proxiesData?.list ?? [], [proxiesData]);
+
+  const [selectedProxyId, setSelectedProxyId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [configName, setConfigName] = useState("");
+  const configNameEditedRef = useRef(false);
+  const [envVarNames, setEnvVarNames] = useState<Record<EnvVarKey, string>>(() =>
+    generateEnvVarNames(""),
+  );
+  const envVarNamesEditedRef = useRef(false);
+
+  const createConfig = useCreateAgentMCPConfig();
+
+  // Reset to a clean slate every time the drawer opens.
+  useEffect(() => {
+    if (!open) return;
+    setSelectedProxyId(null);
+    setSearch("");
+    configNameEditedRef.current = false;
+    envVarNamesEditedRef.current = false;
+    setConfigName("");
+    setEnvVarNames(generateEnvVarNames(""));
+  }, [open]);
+
+  const selectedProxy = useMemo(
+    () => servers.find((s) => s.id === selectedProxyId) ?? null,
+    [servers, selectedProxyId],
+  );
+
+  const filteredServers = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return servers;
+    return servers.filter(
+      (s) =>
+        (s.name ?? "").toLowerCase().includes(query) ||
+        (s.description ?? "").toLowerCase().includes(query) ||
+        (s.context ?? "").toLowerCase().includes(query),
+    );
+  }, [servers, search]);
+
+  // Auto-generate env var names from the selected proxy until the user edits them.
+  useEffect(() => {
+    if (envVarNamesEditedRef.current) return;
+    setEnvVarNames(generateEnvVarNames(selectedProxyId ?? ""));
+  }, [selectedProxyId]);
+
+  const suggestedConfigName = useMemo(() => {
+    if (!selectedProxyId) return "";
+    const basis = selectedProxy?.name ?? selectedProxyId;
+    const existingNames = (existingConfigsList?.configs ?? []).map((c) => c.name);
+    return generateUniqueConfigName(basis, "mcp", existingNames);
+  }, [selectedProxyId, selectedProxy, existingConfigsList]);
+
+  // Auto-populate the config name until the user renames it.
+  useEffect(() => {
+    if (configNameEditedRef.current) return;
+    setConfigName(suggestedConfigName);
+  }, [suggestedConfigName]);
+
+  const handleSave = useCallback(() => {
+    if (!orgId || !projectId || !agentId || !selectedProxyId) return;
+
+    // Environment-agnostic: map EVERY pipeline environment to the SAME proxy.
+    const envMappings: Record<
+      string,
+      { proxyId?: string; configuration: Record<string, never> }
+    > = {};
+    for (const env of environments) {
+      envMappings[env.name] = { proxyId: selectedProxyId, configuration: {} };
+    }
+
+    const environmentVariables = !isExternal
+      ? ENV_VAR_KEYS.map((key) => ({
+          key,
+          name: (envVarNames[key] ?? "").trim(),
+        })).filter((envVar) => envVar.name.length > 0)
+      : [];
+
+    const name = configName.trim() || suggestedConfigName;
+
+    createConfig.mutate(
+      {
+        params: { orgName: orgId, projName: projectId, agentName: agentId },
+        body: {
+          name,
+          type: "mcp" as const,
+          envMappings,
+          environmentVariables:
+            environmentVariables.length > 0 ? environmentVariables : undefined,
+        },
+      },
+      { onSuccess: () => onClose() },
+    );
+  }, [
+    orgId,
+    projectId,
+    agentId,
+    selectedProxyId,
+    environments,
+    isExternal,
+    envVarNames,
+    configName,
+    suggestedConfigName,
+    createConfig,
+    onClose,
+  ]);
+
+  const canSave =
+    Boolean(selectedProxyId) &&
+    !createConfig.isPending &&
+    !isLoadingEnvironments &&
+    environments.length > 0;
+
+  return (
+    <DrawerWrapper open={open} onClose={onClose} minWidth={740}>
+      <DrawerHeader
+        icon={<ServerCog size={24} />}
+        title="Add Tool Configuration"
+        onClose={onClose}
+      />
+      <DrawerContent>
+        <Stack spacing={3}>
+          {createConfig.isError ? (
+            <Alert
+              severity="error"
+              icon={<AlertTriangle size={18} />}
+              onClose={createConfig.reset}
+            >
+              {String(
+                createConfig.error instanceof Error
+                  ? createConfig.error.message
+                  : "Failed to create MCP configuration. Please try again.",
+              )}
+            </Alert>
+          ) : null}
+
+          {!selectedProxyId ? (
+            /* Step 1 — pick an MCP server from the list. */
+            <Stack spacing={1}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                Choose the MCP server for this agent.
+              </Typography>
+              <SearchBar
+                placeholder="Search MCP servers"
+                size="small"
+                fullWidth
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                sx={{ mb: 1 }}
+              />
+              <Stack spacing={1} sx={{ overflowY: "auto" }}>
+                {isLoadingProxies ? (
+                  Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} variant="rounded" height={72} />
+                  ))
+                ) : servers.length === 0 ? (
+                  <ListingTable.Container>
+                    <ListingTable.EmptyState
+                      illustration={<ServerCog size={64} />}
+                      title="No MCP servers available"
+                      description="No MCP servers found. Add MCP servers from the organization MCP Proxies page first."
+                      action={
+                        orgId ? (
+                          <Button
+                            variant="contained"
+                            size="small"
+                            startIcon={<Link size={16} />}
+                            onClick={() =>
+                              navigate(
+                                generatePath(
+                                  absoluteRouteMap.children.org.children
+                                    .mcpProxies.children.add.path,
+                                  { orgId },
+                                ),
+                              )
+                            }
+                          >
+                            Add MCP Server
+                          </Button>
+                        ) : undefined
+                      }
+                    />
+                  </ListingTable.Container>
+                ) : filteredServers.length === 0 ? (
+                  <ListingTable.Container>
+                    <ListingTable.EmptyState
+                      illustration={<Search size={64} />}
+                      title="No MCP servers match your search"
+                      description="Try a different keyword or clear the search filter."
+                    />
+                  </ListingTable.Container>
+                ) : (
+                  filteredServers.map((server) => (
+                    <Form.CardButton
+                      key={server.id}
+                      selected={false}
+                      onClick={() => setSelectedProxyId(server.id ?? null)}
+                      aria-label={`${server.name}. Click to select`}
+                    >
+                      <Form.CardContent>
+                        <MCPServerDisplay server={server} isSelected={false} />
+                      </Form.CardContent>
+                    </Form.CardButton>
+                  ))
+                )}
+              </Stack>
+            </Stack>
+          ) : (
+            /* Step 2 — the same drawer shows the selection + configuration. */
+            <Stack spacing={3}>
+              <Form.Section>
+                <Form.Subheader>MCP Server</Form.Subheader>
+                <Form.CardButton
+                  onClick={() => setSelectedProxyId(null)}
+                  selected
+                  aria-label={`Selected: ${selectedProxy?.name}. Click to change.`}
+                  sx={{ position: "relative" }}
+                >
+                  <Tooltip title="Change MCP server" placement="top" arrow>
+                    <Box
+                      sx={{
+                        position: "absolute",
+                        top: 8,
+                        right: 8,
+                        display: "inline-flex",
+                        color: "text.secondary",
+                      }}
+                    >
+                      <Edit size={16} />
+                    </Box>
+                  </Tooltip>
+                  <Form.CardContent>
+                    <MCPServerDisplay
+                      server={selectedProxy}
+                      isSelected={false}
+                      hideCheckbox
+                    />
+                  </Form.CardContent>
+                </Form.CardButton>
+              </Form.Section>
+
+              <ConfigNameSection
+                value={configName}
+                onChange={(value) => {
+                  configNameEditedRef.current = true;
+                  setConfigName(value);
+                }}
+                description="A name for this MCP configuration."
+                placeholder="my-mcp-configuration"
+              />
+
+              {!isExternal ? (
+                <Form.Section>
+                  <Form.Subheader>Environment Variable Names</Form.Subheader>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2 }}
+                  >
+                    These names are shared across all environments. The platform
+                    injects the MCP server URL and API key values at runtime per
+                    environment (empty in environments the proxy is not configured
+                    for). Edit only if your code uses different names.
+                  </Typography>
+                  <ListingTable.Container>
+                    <ListingTable density="compact">
+                      <ListingTable.Head>
+                        <ListingTable.Row>
+                          <ListingTable.Cell>
+                            Variable Name{" "}
+                            <Typography
+                              component="span"
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              (editable)
+                            </Typography>
+                          </ListingTable.Cell>
+                          <ListingTable.Cell>Description</ListingTable.Cell>
+                        </ListingTable.Row>
+                      </ListingTable.Head>
+                      <ListingTable.Body>
+                        {ENV_VAR_KEYS.map((key) => (
+                          <ListingTable.Row key={key}>
+                            <ListingTable.Cell>
+                              <TextInput
+                                value={envVarNames[key] ?? ""}
+                                onChange={(event) => {
+                                  envVarNamesEditedRef.current = true;
+                                  setEnvVarNames((prev) => ({
+                                    ...prev,
+                                    [key]: event.target.value,
+                                  }));
+                                }}
+                                copyable
+                                copyTooltipText={`Copy ${envVarNames[key] || key}`}
+                                size="small"
+                              />
+                            </ListingTable.Cell>
+                            <ListingTable.Cell>
+                              <Typography variant="body2" color="text.secondary">
+                                {ENV_VAR_DESCRIPTIONS[key]}
+                              </Typography>
+                            </ListingTable.Cell>
+                          </ListingTable.Row>
+                        ))}
+                      </ListingTable.Body>
+                    </ListingTable>
+                  </ListingTable.Container>
+                </Form.Section>
+              ) : null}
+            </Stack>
+          )}
+
+          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+            <Button variant="outlined" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleSave} disabled={!canSave}>
+              {createConfig.isPending ? "Saving..." : "Save"}
+            </Button>
+          </Box>
+        </Stack>
+      </DrawerContent>
+    </DrawerWrapper>
+  );
+}
+
+export default AddMCPToolConfigPanel;

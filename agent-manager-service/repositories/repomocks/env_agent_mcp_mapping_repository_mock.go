@@ -30,6 +30,9 @@ import (
 //			ListByConfigFunc: func(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
 //				panic("mock out the ListByConfig method")
 //			},
+//			ListByEnvironmentFunc: func(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
+//				panic("mock out the ListByEnvironment method")
+//			},
 //			ListByMCPProxyFunc: func(ctx context.Context, mcpProxyUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
 //				panic("mock out the ListByMCPProxy method")
 //			},
@@ -54,6 +57,9 @@ type EnvAgentMCPMappingRepositoryMock struct {
 
 	// ListByConfigFunc mocks the ListByConfig method.
 	ListByConfigFunc func(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
+
+	// ListByEnvironmentFunc mocks the ListByEnvironment method.
+	ListByEnvironmentFunc func(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
 
 	// ListByMCPProxyFunc mocks the ListByMCPProxy method.
 	ListByMCPProxyFunc func(ctx context.Context, mcpProxyUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
@@ -107,6 +113,13 @@ type EnvAgentMCPMappingRepositoryMock struct {
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
 		}
+		// ListByEnvironment holds details about calls to the ListByEnvironment method.
+		ListByEnvironment []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// EnvUUID is the envUUID argument value.
+			EnvUUID uuid.UUID
+		}
 		// ListByMCPProxy holds details about calls to the ListByMCPProxy method.
 		ListByMCPProxy []struct {
 			// Ctx is the ctx argument value.
@@ -127,8 +140,9 @@ type EnvAgentMCPMappingRepositoryMock struct {
 	lockCreate         sync.RWMutex
 	lockDelete         sync.RWMutex
 	lockDeleteByConfig sync.RWMutex
-	lockListByConfig   sync.RWMutex
-	lockListByMCPProxy sync.RWMutex
+	lockListByConfig      sync.RWMutex
+	lockListByEnvironment sync.RWMutex
+	lockListByMCPProxy    sync.RWMutex
 	lockUpdate         sync.RWMutex
 }
 
@@ -305,6 +319,42 @@ func (mock *EnvAgentMCPMappingRepositoryMock) ListByConfigCalls() []struct {
 	mock.lockListByConfig.RLock()
 	calls = mock.calls.ListByConfig
 	mock.lockListByConfig.RUnlock()
+	return calls
+}
+
+// ListByEnvironment calls ListByEnvironmentFunc.
+func (mock *EnvAgentMCPMappingRepositoryMock) ListByEnvironment(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
+	if mock.ListByEnvironmentFunc == nil {
+		panic("EnvAgentMCPMappingRepositoryMock.ListByEnvironmentFunc: method is nil but EnvAgentMCPMappingRepository.ListByEnvironment was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		EnvUUID uuid.UUID
+	}{
+		Ctx:     ctx,
+		EnvUUID: envUUID,
+	}
+	mock.lockListByEnvironment.Lock()
+	mock.calls.ListByEnvironment = append(mock.calls.ListByEnvironment, callInfo)
+	mock.lockListByEnvironment.Unlock()
+	return mock.ListByEnvironmentFunc(ctx, envUUID)
+}
+
+// ListByEnvironmentCalls gets all the calls that were made to ListByEnvironment.
+// Check the length with:
+//
+//	len(mockedEnvAgentMCPMappingRepository.ListByEnvironmentCalls())
+func (mock *EnvAgentMCPMappingRepositoryMock) ListByEnvironmentCalls() []struct {
+	Ctx     context.Context
+	EnvUUID uuid.UUID
+} {
+	var calls []struct {
+		Ctx     context.Context
+		EnvUUID uuid.UUID
+	}
+	mock.lockListByEnvironment.RLock()
+	calls = mock.calls.ListByEnvironment
+	mock.lockListByEnvironment.RUnlock()
 	return calls
 }
 

@@ -51,14 +51,14 @@ import (
 // ListThunderInstances tests exercise it — see newEnvServiceWithProber.
 func newEnvService(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock) EnvironmentService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewEnvironmentService(logger, repo, oc, &clientmocks.ThunderProberMock{})
+	return NewEnvironmentService(logger, repo, oc, &clientmocks.ThunderProberMock{}, nil)
 }
 
 // newEnvServiceWithProber is like newEnvService but with a configured Thunder prober,
 // for tests that exercise ListThunderInstances' reachability branch.
 func newEnvServiceWithProber(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock, prober thundersvc.Prober) EnvironmentService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewEnvironmentService(logger, repo, oc, prober)
+	return NewEnvironmentService(logger, repo, oc, prober, nil)
 }
 
 // -----------------------------------------------------------------------------

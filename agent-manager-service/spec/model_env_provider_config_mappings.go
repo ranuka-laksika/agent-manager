@@ -22,6 +22,8 @@ type EnvProviderConfigMappings struct {
 	// Name of the environment
 	EnvironmentName string          `json:"environmentName"`
 	Configuration   *ProviderConfig `json:"configuration,omitempty"`
+	// Per-environment MCP deployment status: "DEPLOYED" | "PENDING" | "NOT_DEPLOYED".
+	DeploymentStatus *string `json:"deploymentStatus,omitempty"`
 }
 
 // NewEnvProviderConfigMappings instantiates a new EnvProviderConfigMappings object
@@ -111,6 +113,9 @@ func (o EnvProviderConfigMappings) ToMap() (map[string]interface{}, error) {
 	toSerialize["environmentName"] = o.EnvironmentName
 	if !IsNil(o.Configuration) {
 		toSerialize["configuration"] = o.Configuration
+	}
+	if !IsNil(o.DeploymentStatus) {
+		toSerialize["deploymentStatus"] = o.DeploymentStatus
 	}
 	return toSerialize, nil
 }

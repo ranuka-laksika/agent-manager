@@ -110,20 +110,13 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 	if handle == "" || name == "" || version == "" {
 		return nil, utils.ErrInvalidInput
 	}
-	if req.Upstream.Main == nil || strings.TrimSpace(req.Upstream.Main.URL) == "" {
-		return nil, utils.ErrInvalidInput
-	}
-	if err := validateMCPProxyUpstreamURLs(ctx, req.Upstream); err != nil {
-		return nil, fmt.Errorf("%w: %w", utils.ErrInvalidURL, err)
-	}
 
-	upstream := req.Upstream
-	if upstream.Main != nil {
-		auth, err := s.prepareMCPUpstreamAuthForStorage(nil, upstream.Main.Auth)
-		if err != nil {
-			return nil, err
-		}
-		upstream.Main.Auth = auth
+	if err := validateMCPEnvironments(ctx, req.Environments); err != nil {
+		return nil, err
+	}
+	environments, err := s.buildMCPEnvironmentsForStorage(req.Environments, nil)
+	if err != nil {
+		return nil, err
 	}
 
 	exists, err := s.repo.Exists(ctx, handle, orgUUID)
@@ -144,10 +137,7 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 			Context:      req.Context,
 			Vhost:        req.Vhost,
 			SpecVersion:  valueOrEmpty(req.McpSpecVersion),
-			Upstream:     upstream,
-			Policies:     copyMCPPoliciesPtr(req.Policies),
-			Capabilities: copyMCPCapabilities(req.Capabilities),
-			Security:     defaultMCPProxySecurity(req.Security),
+			Environments: environments,
 		},
 	}
 
@@ -169,12 +159,9 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 		return nil, fmt.Errorf("failed to retrieve MCP proxy: %w", err)
 	}
 
-	if len(req.Gateways) > 0 {
-		if err := s.deployMCPProxyToSelectedGateways(ctx, created, orgUUID, req.Gateways); err != nil {
-			return convertModelMCPProxyToSpec(created), fmt.Errorf("proxy created but deployment failed: %w", err)
-		}
-	}
-
+	// The source org-level MCP proxy is a blueprint and deploys nothing to any
+	// gateway. Gateway-deployable entities are the agent-scoped mappings created
+	// per-environment when an agent configuration references this proxy.
 	return convertModelMCPProxyToSpec(created), nil
 }
 
@@ -315,18 +302,13 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 	if name == "" || version == "" {
 		return nil, nil, utils.ErrInvalidInput
 	}
-	if req.Upstream.Main == nil || strings.TrimSpace(req.Upstream.Main.URL) == "" {
-		return nil, nil, utils.ErrInvalidInput
-	}
-	if err := validateMCPProxyUpstreamURLs(ctx, req.Upstream); err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", utils.ErrInvalidURL, err)
-	}
 
-	upstream := req.Upstream
-
-	// Track whether this update turns OFF API key authentication so we can revoke
-	// user-managed keys after the change is committed.
-	apiKeyAuthDisabled := false
+	// Validate the per-environment blueprint (structure + SSRF) outside the transaction
+	// so network checks don't hold the row lock. Auth is encrypted inside the transaction
+	// because it may need to preserve the previously stored secret when the client omits it.
+	if err := validateMCPEnvironments(ctx, req.Environments); err != nil {
+		return nil, nil, err
+	}
 
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		proxy, err := s.repo.GetByHandleForUpdate(ctx, tx, handle, orgUUID)
@@ -337,19 +319,10 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 			return fmt.Errorf("failed to get MCP proxy before update: %w", err)
 		}
 
-		var existingAuth *models.UpstreamAuth
-		if proxy.Configuration.Upstream.Main != nil {
-			existingAuth = proxy.Configuration.Upstream.Main.Auth
+		environments, err := s.buildMCPEnvironmentsForStorage(req.Environments, proxy.Configuration.Environments)
+		if err != nil {
+			return err
 		}
-		if upstream.Main != nil {
-			auth, err := s.prepareMCPUpstreamAuthForStorage(existingAuth, upstream.Main.Auth)
-			if err != nil {
-				return err
-			}
-			upstream.Main.Auth = auth
-		}
-
-		apiKeyAuthDisabled = isAPIKeyAuthEnabled(proxy.Configuration.Security) && !isAPIKeyAuthEnabled(req.Security)
 
 		proxy.Description = valueOrEmpty(req.Description)
 		proxy.Name = name
@@ -360,10 +333,7 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 			Context:      req.Context,
 			Vhost:        req.Vhost,
 			SpecVersion:  valueOrEmpty(req.McpSpecVersion),
-			Upstream:     upstream,
-			Policies:     copyMCPPoliciesPtr(req.Policies),
-			Capabilities: copyMCPCapabilities(req.Capabilities),
-			Security:     req.Security,
+			Environments: environments,
 		}
 
 		return s.repo.Update(ctx, tx, proxy, orgUUID)
@@ -382,20 +352,9 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 		return nil, nil, fmt.Errorf("failed to retrieve MCP proxy: %w", err)
 	}
 
-	if err := s.redeployMCPProxyToCurrentGateways(ctx, updated, orgUUID); err != nil {
-		s.logger.Warn("Failed to redeploy updated MCP proxy", "proxyID", updated.UUID, "orgName", orgUUID, "error", err)
-	}
-
-	// If API key authentication was just turned off, revoke all user-managed API keys for
-	// this proxy. Best-effort: log and continue so a revoke failure doesn't fail the update.
-	if apiKeyAuthDisabled {
-		proxyUUID := updated.UUID.String()
-		if err := s.apiKeyBroadcaster.broadcastRevokeUserManaged(ctx, orgUUID, proxyUUID, proxyUUID); err != nil {
-			s.logger.Warn("Failed to revoke user-managed API keys after disabling API key security",
-				"proxyID", updated.UUID, "orgName", orgUUID, "error", err)
-		}
-	}
-
+	// The source proxy deploys nothing itself. Its edits reach the gateway only through
+	// the agent-scoped mappings, which the caller redeploys via
+	// RedeployMCPMappingsForSourceProxy using the returned model.
 	return convertModelMCPProxyToSpec(updated), updated, nil
 }
 
@@ -426,11 +385,8 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 		return utils.ErrMCPProxyHasMappings
 	}
 
-	// Resolve gateway sets BEFORE deletion so deploymentRepo lookups still see the
-	// existing deployment rows; afterwards only the fallback "active gateways" set
-	// would be returned.
-	proxyGatewayIDs := s.gatewayIDsForDeletion(ctx, proxy, orgUUID)
-
+	// The source proxy deploys nothing to any gateway, so there is nothing to
+	// broadcast-delete. Per-mapping deletions are handled by the agent-config flow.
 	if err := s.repo.Delete(ctx, handle, orgUUID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.ErrMCPProxyNotFound
@@ -438,7 +394,6 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 		return fmt.Errorf("failed to delete MCP proxy: %w", err)
 	}
 
-	s.broadcastMCPProxyDeletion(ctx, proxy, proxyGatewayIDs)
 	return nil
 }
 
@@ -606,21 +561,6 @@ func timePtrIfNotZero(value time.Time) *time.Time {
 	return &value
 }
 
-func copyMCPPoliciesPtr(policies *[]models.MCPPolicy) []models.MCPPolicy {
-	if policies == nil || len(*policies) == 0 {
-		return nil
-	}
-	return copyMCPPolicies(*policies)
-}
-
-func copyMCPPoliciesToPtr(policies []models.MCPPolicy) *[]models.MCPPolicy {
-	if len(policies) == 0 {
-		return nil
-	}
-	out := copyMCPPolicies(policies)
-	return &out
-}
-
 func copyMCPPolicies(policies []models.MCPPolicy) []models.MCPPolicy {
 	if len(policies) == 0 {
 		return nil
@@ -641,13 +581,6 @@ func copyMCPCapabilities(capabilities *models.MCPProxyCapabilities) *models.MCPP
 	}
 }
 
-func sanitizeMCPUpstreamForResponse(upstream models.UpstreamConfig) models.UpstreamConfig {
-	return models.UpstreamConfig{
-		Main:    sanitizeMCPUpstreamEndpointForResponse(upstream.Main),
-		Sandbox: sanitizeMCPUpstreamEndpointForResponse(upstream.Sandbox),
-	}
-}
-
 func sanitizeMCPUpstreamEndpointForResponse(endpoint *models.UpstreamEndpoint) *models.UpstreamEndpoint {
 	if endpoint == nil {
 		return nil
@@ -655,6 +588,23 @@ func sanitizeMCPUpstreamEndpointForResponse(endpoint *models.UpstreamEndpoint) *
 	sanitized := *endpoint
 	sanitized.Auth = sanitizeMCPUpstreamAuthForResponse(endpoint.Auth)
 	return &sanitized
+}
+
+// sanitizeMCPEnvironmentsForResponse strips plaintext upstream credentials from each
+// per-environment blueprint block before returning it to the client.
+func sanitizeMCPEnvironmentsForResponse(environments map[string]models.MCPEnvironmentConfig) map[string]models.MCPEnvironmentConfig {
+	if len(environments) == 0 {
+		return nil
+	}
+	out := make(map[string]models.MCPEnvironmentConfig, len(environments))
+	for envID, env := range environments {
+		sanitized := env
+		sanitized.Upstream = sanitizeMCPUpstreamEndpointForResponse(env.Upstream)
+		sanitized.Policies = copyMCPPolicies(env.Policies)
+		sanitized.Capabilities = copyMCPCapabilities(env.Capabilities)
+		out[envID] = sanitized
+	}
+	return out
 }
 
 func sanitizeMCPUpstreamAuthForResponse(auth *models.UpstreamAuth) *models.UpstreamAuth {
@@ -739,9 +689,7 @@ func convertModelMCPProxyToSpec(proxy *models.MCPProxy) *models.MCPProxyDTO {
 		InCatalog:      inCatalog,
 		McpSpecVersion: stringPtrIfNotEmpty(proxy.Configuration.SpecVersion),
 		Name:           name,
-		Policies:       copyMCPPoliciesToPtr(proxy.Configuration.Policies),
-		Security:       proxy.Configuration.Security,
-		Upstream:       sanitizeMCPUpstreamForResponse(proxy.Configuration.Upstream),
+		Environments:   sanitizeMCPEnvironmentsForResponse(proxy.Configuration.Environments),
 		UpdatedAt:      timePtrIfNotZero(updatedAt),
 		Version:        version,
 		Vhost:          proxy.Configuration.Vhost,
@@ -782,26 +730,69 @@ func convertModelMCPProxyToListItem(proxy *models.MCPProxy) models.MCPProxyListI
 	}
 }
 
-func validateMCPProxyUpstreamURLs(ctx context.Context, upstream models.UpstreamConfig) error {
-	if upstream.Main != nil {
-		mainURL := strings.TrimSpace(upstream.Main.URL)
-		if mainURL == "" {
-			return fmt.Errorf("main upstream url is required")
-		}
-		if err := ssrf.ValidateURL(ctx, mainURL); err != nil {
-			return fmt.Errorf("main upstream url: %w", err)
-		}
+// validateMCPEnvironments enforces the per-environment blueprint structure: at least one
+// block, keyed by a non-empty environment UUID, each with a valid, SSRF-safe upstream URL.
+// Uniqueness is guaranteed by the map keys. It performs the network checks, so call it
+// outside a DB transaction.
+func validateMCPEnvironments(ctx context.Context, environments map[string]models.MCPEnvironmentConfig) error {
+	if len(environments) == 0 {
+		return fmt.Errorf("%w: at least one environment configuration is required", utils.ErrInvalidInput)
 	}
-	if upstream.Sandbox != nil {
-		sandboxURL := strings.TrimSpace(upstream.Sandbox.URL)
-		if sandboxURL == "" {
-			return nil
+	for envID, env := range environments {
+		envUUID := strings.TrimSpace(envID)
+		if envUUID == "" {
+			return fmt.Errorf("%w: an environment configuration is missing an environment id", utils.ErrInvalidInput)
 		}
-		if err := ssrf.ValidateURL(ctx, sandboxURL); err != nil {
-			return fmt.Errorf("sandbox upstream url: %w", err)
+		if _, err := uuid.Parse(envUUID); err != nil {
+			return fmt.Errorf("%w: environment %q has an invalid environment id: %w", utils.ErrInvalidInput, envID, err)
+		}
+		if env.Upstream == nil || strings.TrimSpace(env.Upstream.URL) == "" {
+			return fmt.Errorf("%w: environment %q is missing an upstream url", utils.ErrInvalidInput, envID)
+		}
+		if err := ssrf.ValidateURL(ctx, strings.TrimSpace(env.Upstream.URL)); err != nil {
+			return fmt.Errorf("%w: environment %q upstream url: %w", utils.ErrInvalidURL, envID, err)
 		}
 	}
 	return nil
+}
+
+// buildMCPEnvironmentsForStorage normalizes incoming per-environment blueprint blocks for
+// persistence: it trims the environment-UUID keys, encrypts each block's upstream auth
+// (preserving a previously stored secret when the client omits the credential), and applies
+// default security. Call validateMCPEnvironments first. existing may be nil (on create) and
+// is matched by environment UUID so an omitted credential falls back to the stored SecretRef.
+// This performs no network I/O, so it is safe to call inside a transaction.
+func (s *MCPProxyService) buildMCPEnvironmentsForStorage(incoming, existing map[string]models.MCPEnvironmentConfig) (map[string]models.MCPEnvironmentConfig, error) {
+	if len(incoming) == 0 {
+		return map[string]models.MCPEnvironmentConfig{}, nil
+	}
+	existingAuthByEnv := map[string]*models.UpstreamAuth{}
+	for envID, env := range existing {
+		if env.Upstream != nil {
+			existingAuthByEnv[strings.TrimSpace(envID)] = env.Upstream.Auth
+		}
+	}
+	out := make(map[string]models.MCPEnvironmentConfig, len(incoming))
+	for rawEnvID, incomingEnv := range incoming {
+		envID := strings.TrimSpace(rawEnvID)
+		block := models.MCPEnvironmentConfig{
+			Policies:     copyMCPPolicies(incomingEnv.Policies),
+			Capabilities: copyMCPCapabilities(incomingEnv.Capabilities),
+			Security:     defaultMCPProxySecurity(incomingEnv.Security),
+		}
+		if incomingEnv.Upstream != nil {
+			endpoint := *incomingEnv.Upstream
+			endpoint.URL = strings.TrimSpace(endpoint.URL)
+			auth, err := s.prepareMCPUpstreamAuthForStorage(existingAuthByEnv[envID], incomingEnv.Upstream.Auth)
+			if err != nil {
+				return nil, err
+			}
+			endpoint.Auth = auth
+			block.Upstream = &endpoint
+		}
+		out[envID] = block
+	}
+	return out, nil
 }
 
 func (s *MCPProxyService) fetchMCPServerInfo(ctx context.Context, endpointURL string, headerName string, headerValue string) (*models.MCPServerInfoFetchResponse, error) {

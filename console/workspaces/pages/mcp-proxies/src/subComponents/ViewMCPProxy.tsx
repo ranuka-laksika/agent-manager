@@ -15,15 +15,13 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   useGetMCPProxy,
+  useListEnvironments,
   useUpdateMCPProxy,
 } from "@agent-management-platform/api-client";
-import type {
-  MCPProxy,
-  MCPProxyPolicy,
-} from "@agent-management-platform/types";
+import type { MCPEnvironmentConfig } from "@agent-management-platform/types";
 import {
   Alert,
   Avatar,
@@ -32,8 +30,11 @@ import {
   Card,
   Chip,
   Divider,
+  FormControl,
   IconButton,
+  MenuItem,
   PageContent,
+  Select,
   Skeleton,
   Stack,
   Tab,
@@ -50,7 +51,6 @@ import {
 } from "@agent-management-platform/shared-component";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
 import { MCPProxyAccessControlTab } from "./MCPProxyAccessControlTab";
-import { MCPProxyAPIKeysTab } from "./MCPProxyAPIKeysTab";
 import { MCPProxyConnectionTab } from "./MCPProxyConnectionTab";
 import { MCPProxyOverviewTab } from "./MCPProxyOverviewTab";
 import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
@@ -63,7 +63,6 @@ const TABS = [
   "Connection",
   "Access Control",
   "Security",
-  "API Keys",
   "Rewrite",
   "Policies",
 ] as const;
@@ -72,6 +71,7 @@ export function ViewMCPProxy() {
   const { orgId, proxyId } = useParams<{ orgId: string; proxyId: string }>();
   const routeProxyId = proxyId ?? "";
   const [tabIndex, setTabIndex] = useState(0);
+  const [selectedEnvId, setSelectedEnvId] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [name, setName] = useState("");
   const [version, setVersion] = useState("");
@@ -84,12 +84,6 @@ export function ViewMCPProxy() {
     name: "",
     version: "",
   });
-  const [editablePolicies, setEditablePolicies] = useState<MCPProxyPolicy[]>(
-    [],
-  );
-  const [baselinePolicies, setBaselinePolicies] = useState<MCPProxyPolicy[]>(
-    [],
-  );
   const {
     data: proxy,
     isLoading,
@@ -98,47 +92,84 @@ export function ViewMCPProxy() {
     orgName: orgId,
     proxyId: routeProxyId,
   });
+  const { data: environments = [] } = useListEnvironments({
+    orgName: orgId ?? "",
+  });
   const updateMCPProxy = useUpdateMCPProxy();
 
-  // Merge-and-save callback used by self-contained tabs (e.g. Connection) that
-  // persist a slice of the proxy independently of the details/policies form.
-  const updateProxyFields = useCallback(
-    async (fields: Partial<MCPProxy>) => {
-      if (!orgId || !proxy?.id) {
-        throw new Error("MCP proxy is not loaded.");
+  const configuredEnvIds = useMemo<string[]>(
+    () => Object.keys(proxy?.environments ?? {}),
+    [proxy?.environments],
+  );
+
+  // Options for the environment dropdown, labelled with the human-friendly display
+  // name (falling back to the raw name, then the UUID) resolved from the org's
+  // environment list.
+  const environmentOptions = useMemo(() => {
+    return configuredEnvIds.map((envId) => {
+      const env = environments.find((item) => item.id === envId);
+      return {
+        id: envId,
+        label: env?.displayName ?? env?.name ?? envId,
+      };
+    });
+  }, [configuredEnvIds, environments]);
+
+  // Keep the selected environment valid: default to the first configured block and
+  // reset when the current selection is no longer present.
+  useEffect(() => {
+    if (configuredEnvIds.length === 0) {
+      return;
+    }
+    if (!configuredEnvIds.includes(selectedEnvId)) {
+      setSelectedEnvId(configuredEnvIds[0]);
+    }
+  }, [configuredEnvIds, selectedEnvId]);
+
+  const selectedConfig = useMemo<MCPEnvironmentConfig | undefined>(
+    () => proxy?.environments?.[selectedEnvId],
+    [proxy?.environments, selectedEnvId],
+  );
+
+  // Merge-and-save callback used by every config tab. It merges a partial into the
+  // selected environment's blueprint block, keyed by environment UUID, and PUTs the
+  // whole proxy — the per-environment equivalent of the old whole-proxy merge.
+  const updateSelectedEnvConfig = useCallback(
+    async (fields: Partial<MCPEnvironmentConfig>) => {
+      if (!orgId || !proxy?.id || !selectedEnvId) {
+        throw new Error("MCP proxy or environment is not loaded.");
       }
+      const existing = proxy.environments ?? {};
+      const mergedBlock: MCPEnvironmentConfig = {
+        ...existing[selectedEnvId],
+        ...fields,
+      };
       return updateMCPProxy.mutateAsync({
         params: { orgName: orgId, proxyId: proxy.id },
-        body: { ...proxy, ...fields },
+        body: {
+          ...proxy,
+          environments: { ...existing, [selectedEnvId]: mergedBlock },
+        },
       });
     },
-    [orgId, proxy, updateMCPProxy],
+    [orgId, proxy, selectedEnvId, updateMCPProxy],
   );
 
   const displayName = proxy?.name ?? proxy?.id ?? proxyId ?? "MCP Proxy";
-  const hasDetailsChanges =
+  const hasUnsavedChanges =
     name !== baselineDetails.name ||
     version !== baselineDetails.version ||
     context !== baselineDetails.context ||
     description !== baselineDetails.description;
-  const hasUnsavedChanges =
-    hasDetailsChanges ||
-    JSON.stringify(editablePolicies) !== JSON.stringify(baselinePolicies);
   const canSave = name.trim().length > 0 && version.trim().length > 0;
 
   useEffect(() => {
     const nextProxyId = proxy?.id ?? "";
     const isProxyChanged = nextProxyId !== baselineDetails.id;
-    const hasPolicyDraftChanges =
-      JSON.stringify(editablePolicies) !== JSON.stringify(baselinePolicies);
 
-    if (!isProxyChanged && (isEditingDetails || hasPolicyDraftChanges)) {
+    if (!isProxyChanged && isEditingDetails) {
       return;
     }
-
-    const nextPolicies = proxy?.policies ?? [];
-    setEditablePolicies(nextPolicies);
-    setBaselinePolicies(nextPolicies);
 
     const nextDetails = {
       context: proxy?.context ?? "",
@@ -155,11 +186,8 @@ export function ViewMCPProxy() {
     setIsEditingDetails(false);
   }, [
     baselineDetails.id,
-    baselinePolicies,
-    editablePolicies,
     isEditingDetails,
     proxy?.id,
-    proxy?.policies,
     proxy?.name,
     proxy?.version,
     proxy?.context,
@@ -171,7 +199,6 @@ export function ViewMCPProxy() {
     setVersion(baselineDetails.version);
     setContext(baselineDetails.context);
     setDescription(baselineDetails.description);
-    setEditablePolicies(baselinePolicies);
     setIsEditingDetails(false);
   };
 
@@ -185,12 +212,9 @@ export function ViewMCPProxy() {
         context: optionalString(context),
         description: optionalString(description),
         name: name.trim(),
-        policies: editablePolicies,
         version: version.trim(),
       },
     });
-    setEditablePolicies(updated.policies ?? []);
-    setBaselinePolicies(updated.policies ?? []);
     const nextDetails = {
       context: updated.context ?? "",
       description: updated.description ?? "",
@@ -229,6 +253,8 @@ export function ViewMCPProxy() {
       </PageContent>
     );
   }
+
+  const hasEnvironments = configuredEnvIds.length > 0;
 
   return (
     <PageContent fullWidth>
@@ -350,82 +376,111 @@ export function ViewMCPProxy() {
           </Stack>
         </Card>
 
-        <Card variant="outlined">
-          <Tabs
-            value={tabIndex}
-            onChange={(_, value: number) => setTabIndex(value)}
-          >
-            {TABS.map((tab) => (
-              <Tab key={tab} label={tab} />
-            ))}
-          </Tabs>
-          <Divider />
-          <Box sx={{ p: 3 }}>
-            {tabIndex === 0 && (
-              <MCPProxyOverviewTab
-                proxy={proxy}
-                orgName={orgId}
-                isLoading={isLoading}
-              />
-            )}
-            {tabIndex === 1 && (
-              <MCPCapabilitiesView
-                tools={proxy?.capabilities?.tools}
-                resources={proxy?.capabilities?.resources}
-                prompts={proxy?.capabilities?.prompts}
-                sectionTitleVariant="h6"
-              />
-            )}
-            {tabIndex === 2 && (
-              <MCPProxyConnectionTab
-                proxy={proxy}
-                isLoading={isLoading}
-                onUpdate={updateProxyFields}
-                isUpdating={updateMCPProxy.isPending}
-              />
-            )}
-            {tabIndex === 3 && (
-              <MCPProxyAccessControlTab
-                proxy={proxy}
-                orgName={orgId}
-                isLoading={isLoading}
-                onUpdate={updateProxyFields}
-                isUpdating={updateMCPProxy.isPending}
-              />
-            )}
-            {tabIndex === 4 && (
-              <MCPProxySecurityTab
-                proxy={proxy}
-                isLoading={isLoading}
-                onUpdate={updateProxyFields}
-                isUpdating={updateMCPProxy.isPending}
-              />
-            )}
-            {tabIndex === 5 && (
-              <MCPProxyAPIKeysTab
-                proxy={proxy}
-                orgName={orgId}
-                isLoading={isLoading}
-              />
-            )}
-            {tabIndex === 6 && (
-              <MCPProxyRewriteTab
-                proxy={proxy}
-                orgName={orgId}
-                isLoading={isLoading}
-                onUpdate={updateProxyFields}
-                isUpdating={updateMCPProxy.isPending}
-              />
-            )}
-            {tabIndex === 7 && (
-              <MCPProxyPoliciesTab
-                orgName={orgId}
-                policies={editablePolicies}
-                onPoliciesChange={setEditablePolicies}
-              />
-            )}
-          </Box>
-        </Card>
+        {hasEnvironments ? (
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Typography variant="body2" color="text.secondary">
+              Environment
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 260 }}>
+              <Select
+                value={selectedEnvId}
+                onChange={(event) =>
+                  setSelectedEnvId(event.target.value as string)
+                }
+              >
+                {environmentOptions.map((option) => (
+                  <MenuItem key={option.id} value={option.id}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Stack>
+        ) : null}
+
+        {hasEnvironments ? (
+          <Card variant="outlined">
+            <Tabs
+              value={tabIndex}
+              onChange={(_, value: number) => setTabIndex(value)}
+            >
+              {TABS.map((tab) => (
+                <Tab key={tab} label={tab} />
+              ))}
+            </Tabs>
+            <Divider />
+            <Box sx={{ p: 3 }}>
+              {tabIndex === 0 && (
+                <MCPProxyOverviewTab
+                  proxy={proxy}
+                  config={selectedConfig}
+                  isLoading={isLoading}
+                />
+              )}
+              {tabIndex === 1 && (
+                <MCPCapabilitiesView
+                  tools={selectedConfig?.capabilities?.tools}
+                  resources={selectedConfig?.capabilities?.resources}
+                  prompts={selectedConfig?.capabilities?.prompts}
+                  sectionTitleVariant="h6"
+                />
+              )}
+              {tabIndex === 2 && (
+                <MCPProxyConnectionTab
+                  config={selectedConfig}
+                  selectedEnvironmentId={selectedEnvId}
+                  isLoading={isLoading}
+                  onUpdate={updateSelectedEnvConfig}
+                  isUpdating={updateMCPProxy.isPending}
+                />
+              )}
+              {tabIndex === 3 && (
+                <MCPProxyAccessControlTab
+                  config={selectedConfig}
+                  selectedEnvironmentId={selectedEnvId}
+                  orgName={orgId}
+                  isLoading={isLoading}
+                  onUpdate={updateSelectedEnvConfig}
+                  isUpdating={updateMCPProxy.isPending}
+                />
+              )}
+              {tabIndex === 4 && (
+                <MCPProxySecurityTab
+                  config={selectedConfig}
+                  selectedEnvironmentId={selectedEnvId}
+                  isLoading={isLoading}
+                  onUpdate={updateSelectedEnvConfig}
+                  isUpdating={updateMCPProxy.isPending}
+                />
+              )}
+              {tabIndex === 5 && (
+                <MCPProxyRewriteTab
+                  config={selectedConfig}
+                  selectedEnvironmentId={selectedEnvId}
+                  orgName={orgId}
+                  isLoading={isLoading}
+                  onUpdate={updateSelectedEnvConfig}
+                  isUpdating={updateMCPProxy.isPending}
+                />
+              )}
+              {tabIndex === 6 && (
+                <MCPProxyPoliciesTab
+                  config={selectedConfig}
+                  selectedEnvironmentId={selectedEnvId}
+                  orgName={orgId}
+                  onUpdate={updateSelectedEnvConfig}
+                  isUpdating={updateMCPProxy.isPending}
+                />
+              )}
+            </Box>
+          </Card>
+        ) : (
+          <Card variant="outlined" sx={{ p: 3 }}>
+            <Alert severity="info">
+              This MCP proxy has no environments configured.
+            </Alert>
+          </Card>
+        )}
 
         {hasUnsavedChanges ? (
           <Card variant="outlined" sx={{ p: 2 }}>

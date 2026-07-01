@@ -15,217 +15,80 @@
  * under the License.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateMCPProxy,
-  useFetchMCPProxyServerInfo,
-  useListGateways,
+  useListEnvironments,
 } from "@agent-management-platform/api-client";
 import {
   absoluteRouteMap,
+  type MCPEnvironmentConfig,
   type MCPProxy,
-  type MCPServerInfoFetchResponse,
 } from "@agent-management-platform/types";
 import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Autocomplete,
   Box,
   Button,
   Chip,
   CircularProgress,
-  Collapse,
+  Divider,
   Form,
   FormControl,
   FormLabel,
   IconButton,
-  InputAdornment,
-  Skeleton,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import {
-  ChevronDown,
-  Eye,
-  EyeOff,
-  HelpCircle,
-} from "@wso2/oxygen-ui-icons-react";
-import { useSnackBar } from "@agent-management-platform/views";
-import { validateEndpointUrl } from "@agent-management-platform/shared-component";
-import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
+import { Lock, Plus, Trash2 } from "@wso2/oxygen-ui-icons-react";
+import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
 import { MCP_SPEC_VERSION } from "../constants";
 
 interface AddMCPProxyFormProps {
   onCancel: () => void;
 }
 
-type FormStep = "endpoint" | "details";
-
 export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
   const navigate = useNavigate();
   const { orgId } = useParams<{ orgId: string }>();
-  const fetchServerInfo = useFetchMCPProxyServerInfo();
   const createMCPProxy = useCreateMCPProxy();
-  const { data: gatewaysData, isLoading: isLoadingGateways } = useListGateways(
-    { orgName: orgId ?? "" },
-    { limit: 500 },
-  );
-  const { pushSnackBar } = useSnackBar();
-  const [step, setStep] = useState<FormStep>("endpoint");
-  const [endpointUrl, setEndpointUrl] = useState("");
-  const [authHeader, setAuthHeader] = useState("");
-  const [authValue, setAuthValue] = useState("");
-  const [showAuthValue, setShowAuthValue] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(true);
-  const [fetchedInfo, setFetchedInfo] =
-    useState<MCPServerInfoFetchResponse | null>(null);
+  const { data: environments = [] } = useListEnvironments({
+    orgName: orgId ?? "",
+  });
+
   const [proxyName, setProxyName] = useState("");
   const [proxyVersion, setProxyVersion] = useState("");
   const [proxyDescription, setProxyDescription] = useState("");
   const [proxyContext, setProxyContext] = useState("");
-  const [proxyTarget, setProxyTarget] = useState("");
-  const [selectedGatewayIds, setSelectedGatewayIds] = useState<string[]>([]);
-  const [urlError, setUrlError] = useState<string | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [endpoints, setEndpoints] = useState<EndpointDraft[]>([]);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const endpointIdRef = useRef(1);
 
-  const gateways = useMemo(
-    () =>
-      gatewaysData?.gateways.filter((gateway) => gateway.status === "ACTIVE") ??
-      [],
-    [gatewaysData?.gateways],
-  );
-  const trimmedUrl = endpointUrl.trim();
-  const isFetched = Boolean(fetchedInfo);
-  const isFetching = fetchServerInfo.isPending;
-  const isCreating = createMCPProxy.isPending;
-  const canFetch = Boolean(trimmedUrl) && !isFetching;
-
-  useEffect(() => {
-    setSelectedGatewayIds((current) => {
-      const activeGatewayIds = new Set(gateways.map((gateway) => gateway.uuid));
-      const retained = current.filter((gatewayId) =>
-        activeGatewayIds.has(gatewayId),
-      );
-      if (retained.length > 0) return retained;
-      return gateways[0]?.uuid ? [gateways[0].uuid] : [];
+  // Map of environment UUID -> display label, for rendering endpoint chips.
+  const environmentLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    environments.forEach((env) => {
+      if (env.id) labels.set(env.id, env.displayName || env.name);
     });
-  }, [gateways]);
+    return labels;
+  }, [environments]);
 
-  const resetFetchedInfo = useCallback(() => {
-    setFetchedInfo(null);
-    setStep("endpoint");
-  }, []);
+  // Environment UUIDs already claimed by an endpoint (one env maps to one endpoint).
+  const usedEnvIds = useMemo(() => {
+    const used = new Set<string>();
+    endpoints.forEach((endpoint) => {
+      endpoint.environments.forEach((envId) => used.add(envId));
+    });
+    return used;
+  }, [endpoints]);
 
-  const handleEndpointChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
-      setEndpointUrl(event.target.value);
-      resetFetchedInfo();
-      setUrlError(null);
-    },
-    [resetFetchedInfo],
+  const availableEnvironments = useMemo(
+    () => environments.filter((env) => !!env.id && !usedEnvIds.has(env.id)),
+    [environments, usedEnvIds],
   );
 
-  const performFetch = useCallback(
-    async (url: string) => {
-      if (!orgId) {
-        setUrlError("Organization is required to fetch MCP server info.");
-        return;
-      }
-
-      const urlValidationError = validateEndpointUrl(url, {
-        requiredMessage: "Enter a valid MCP Proxy endpoint URL.",
-        invalidMessage: "Enter a valid MCP Proxy endpoint URL.",
-        protocolMessage: "Enter a valid MCP Proxy endpoint URL.",
-      });
-      if (urlValidationError) {
-        setUrlError(urlValidationError);
-        return;
-      }
-
-      const header = authHeader.trim();
-      const value = authValue.trim();
-      const hasHeader = Boolean(header);
-      const hasValue = Boolean(value);
-      if (hasHeader !== hasValue) {
-        setAuthError("Enter both an authentication header and value.");
-        return;
-      }
-      setAuthError(null);
-
-      const body =
-        hasHeader && hasValue
-          ? {
-              url,
-              auth: {
-                type: "api-key" as const,
-                header,
-                value,
-              },
-            }
-          : { url };
-
-      try {
-        const result = await fetchServerInfo.mutateAsync({
-          params: { orgName: orgId },
-          body,
-        });
-        setFetchedInfo(result);
-        const nextName =
-          getServerInfoValue(result.serverInfo, "name") || "mcp-proxy";
-        setProxyName(nextName);
-        setProxyVersion(
-          getServerInfoValue(result.serverInfo, "version") || "v1.0.0",
-        );
-        setProxyDescription("");
-        setProxyContext(`/default/${nextName}`);
-        setProxyTarget(url);
-      } catch (err: unknown) {
-        resetFetchedInfo();
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          (err as { code?: string }).code === "UNAUTHORIZED"
-        ) {
-          setAdvancedOpen(true);
-          setAuthError(
-            "This server requires authentication. Enter the credentials above.",
-          );
-        } else {
-          const message =
-            err instanceof Error
-              ? err.message
-              : "Failed to fetch MCP server info. Please check the URL and try again.";
-          pushSnackBar({ message, type: "error" });
-        }
-      }
-    },
-    [
-      authHeader,
-      authValue,
-      fetchServerInfo,
-      orgId,
-      pushSnackBar,
-      resetFetchedInfo,
-    ],
-  );
-
-  const handlePrimaryAction = useCallback(async () => {
-    if (isFetched) {
-      setStep("details");
-      return;
-    }
-    await performFetch(trimmedUrl);
-  }, [isFetched, performFetch, trimmedUrl]);
+  const isCreating = createMCPProxy.isPending;
 
   const handleNameChange = useCallback(
     (value: string) => {
@@ -238,14 +101,76 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
     [proxyContext, proxyName],
   );
 
-  const handleCreate = useCallback(async () => {
-    if (!orgId || !fetchedInfo) return;
+  const handleAddEndpoint = useCallback(
+    (draft: Omit<EndpointDraft, "id">) => {
+      const id = String(endpointIdRef.current);
+      endpointIdRef.current += 1;
+      setEndpoints((current) => [...current, { ...draft, id }]);
 
-    const header = authHeader.trim();
-    const value = authValue.trim();
-    const hasAuth = Boolean(header) && Boolean(value);
-    const target = proxyTarget.trim();
+      // Convenience: seed the proxy name/version/context from the first fetched
+      // server when the user hasn't typed them yet. They remain fully editable.
+      if (!proxyName && draft.serverName) {
+        setProxyName(draft.serverName);
+        if (!proxyContext) setProxyContext(`/default/${draft.serverName}`);
+      }
+      if (!proxyVersion && draft.serverVersion) {
+        setProxyVersion(draft.serverVersion);
+      }
+      setDialogOpen(false);
+    },
+    [proxyContext, proxyName, proxyVersion],
+  );
+
+  const handleRemoveEndpoint = useCallback((id: string) => {
+    setEndpoints((current) => current.filter((endpoint) => endpoint.id !== id));
+  }, []);
+
+  const handleCreate = useCallback(async () => {
+    if (!orgId || endpoints.length === 0) return;
+
     const name = proxyName.trim();
+
+    // Each endpoint may serve several environments; materialise one per-environment
+    // config block for each, keyed by environment UUID, carrying that endpoint's
+    // upstream, fetched capabilities and default security. The org-level proxy is a
+    // blueprint and deploys nothing.
+    const environmentsConfig: Record<string, MCPEnvironmentConfig> =
+      Object.fromEntries(
+        endpoints.flatMap((endpoint) =>
+          endpoint.environments.map(
+            (environmentId): [string, MCPEnvironmentConfig] => [
+              environmentId,
+              {
+                upstream: {
+                  url: endpoint.url,
+                  auth:
+                    endpoint.authHeader && endpoint.authValue
+                      ? {
+                          type: "api-key" as const,
+                          header: endpoint.authHeader,
+                          value: endpoint.authValue,
+                        }
+                      : undefined,
+                },
+                capabilities: {
+                  tools: endpoint.fetchedInfo.tools,
+                  resources: endpoint.fetchedInfo.resources,
+                  prompts: endpoint.fetchedInfo.prompts,
+                },
+                security: {
+                  enabled: true,
+                  apiKey: {
+                    enabled: true,
+                    key: "X-API-Key",
+                    in: "header" as const,
+                  },
+                },
+              },
+            ],
+          ),
+        ),
+      );
+
     const body: MCPProxy = {
       id: toHandle(name),
       name,
@@ -253,96 +178,37 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
       description: proxyDescription.trim() || undefined,
       context: proxyContext.trim() || undefined,
       mcpSpecVersion: MCP_SPEC_VERSION,
-      gateways: selectedGatewayIds.length > 0 ? selectedGatewayIds : undefined,
-      upstream: {
-        main: {
-          url: target,
-          auth: hasAuth
-            ? {
-                type: "api-key",
-                header,
-                value,
-              }
-            : undefined,
-        },
-      },
-      capabilities: {
-        tools: fetchedInfo.tools,
-        resources: fetchedInfo.resources,
-        prompts: fetchedInfo.prompts,
-      },
-      security: {
-        enabled: true,
-        apiKey: {
-          enabled: true,
-          key: "X-API-Key",
-          in: "header",
-        },
-      },
+      environments: environmentsConfig,
     };
 
-    await createMCPProxy.mutateAsync({
-      params: { orgName: orgId },
-      body,
-    });
+    await createMCPProxy.mutateAsync({ params: { orgName: orgId }, body });
     navigate(
       generatePath(absoluteRouteMap.children.org.children.mcpProxies.path, {
         orgId,
       }),
     );
   }, [
-    authHeader,
-    authValue,
     createMCPProxy,
-    fetchedInfo,
+    endpoints,
     navigate,
     orgId,
     proxyContext,
     proxyDescription,
     proxyName,
-    proxyTarget,
     proxyVersion,
-    selectedGatewayIds,
   ]);
 
-  const preview = useMemo(() => {
-    if (!fetchedInfo) return null;
+  const canCreate =
+    Boolean(proxyName.trim()) &&
+    Boolean(proxyVersion.trim()) &&
+    endpoints.length > 0 &&
+    !isCreating;
 
-    const serverName = getServerInfoValue(fetchedInfo.serverInfo, "name");
-    const serverVersion = getServerInfoValue(fetchedInfo.serverInfo, "version");
+  const noEnvironmentsLeft =
+    environments.length > 0 && availableEnvironments.length === 0;
 
-    return (
-      <Form.Section>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Typography variant="h6" fontWeight={600}>
-              {serverName || "MCP Proxy"}
-            </Typography>
-            {serverVersion ? (
-              <Chip
-                label={
-                  serverVersion.startsWith("v")
-                    ? serverVersion
-                    : `v${serverVersion}`
-                }
-                size="small"
-                variant="outlined"
-              />
-            ) : null}
-          </Stack>
-
-          <MCPCapabilitiesView
-            tools={fetchedInfo.tools}
-            resources={fetchedInfo.resources}
-            prompts={fetchedInfo.prompts}
-          />
-        </Stack>
-      </Form.Section>
-    );
-  }, [fetchedInfo]);
-
-  if (step === "details") {
-    return (
+  return (
+    <>
       <Stack spacing={3} sx={{ maxWidth: 920 }}>
         <Form.Section>
           <Form.Stack spacing={2}>
@@ -389,48 +255,73 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
                 onChange={(event) => setProxyContext(event.target.value)}
               />
             </FormControl>
+          </Form.Stack>
+        </Form.Section>
 
-            <FormControl fullWidth>
-              <FormLabel required>Target</FormLabel>
-              <TextField
-                fullWidth
-                value={proxyTarget}
-                onChange={(event) => setProxyTarget(event.target.value)}
-              />
-            </FormControl>
+        <Form.Section>
+          <Form.Header>Endpoints</Form.Header>
+          <Form.Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Add a backend endpoint and assign it to one or more environments.
+              Environments without an endpoint are simply left unconfigured.
+            </Typography>
 
-            <FormControl fullWidth>
-              <FormLabel required>Gateway</FormLabel>
-              {isLoadingGateways ? (
-                <Skeleton variant="rounded" height={40} sx={{ mt: 0.5 }} />
-              ) : (
-                <Autocomplete
-                  multiple
-                  options={gateways}
-                  size="small"
-                  value={gateways.filter((gateway) =>
-                    selectedGatewayIds.includes(gateway.uuid),
-                  )}
-                  onChange={(_, selectedGateways) => {
-                    setSelectedGatewayIds(
-                      selectedGateways.map((gateway) => gateway.uuid),
-                    );
-                  }}
-                  getOptionLabel={(option) =>
-                    option.displayName || option.name || option.uuid
-                  }
-                  renderInput={(params) => (
-                    <TextField {...params} placeholder="Select gateway(s)" />
-                  )}
-                  sx={{ mt: 0.5 }}
-                />
-              )}
-              {!isLoadingGateways && gateways.length === 0 ? (
-                <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
-                  No active gateways available.
+            {endpoints.length > 0 ? (
+              <Stack spacing={1.5}>
+                {endpoints.map((endpoint) => (
+                  <EndpointRow
+                    key={endpoint.id}
+                    endpoint={endpoint}
+                    environmentLabels={environmentLabels}
+                    onRemove={() => handleRemoveEndpoint(endpoint.id)}
+                  />
+                ))}
+              </Stack>
+            ) : (
+              <Box
+                sx={{
+                  border: "1px dashed",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  px: 2,
+                  py: 3,
+                  textAlign: "center",
+                }}
+              >
+                <Typography variant="body2" color="text.secondary">
+                  No endpoints added yet.
                 </Typography>
-              ) : null}
-            </FormControl>
+              </Box>
+            )}
+
+            <Box>
+              <Tooltip
+                title={
+                  noEnvironmentsLeft
+                    ? "All environments already have an endpoint."
+                    : ""
+                }
+                disableHoverListener={!noEnvironmentsLeft}
+              >
+                <span>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Plus size={16} />}
+                    onClick={() => setDialogOpen(true)}
+                    disabled={noEnvironmentsLeft || environments.length === 0}
+                  >
+                    Add Endpoint
+                  </Button>
+                </span>
+              </Tooltip>
+            </Box>
+
+            {environments.length > 0 ? (
+              <Typography variant="caption" color="text.secondary">
+                {usedEnvIds.size} of {environments.length} environments have an
+                endpoint.
+              </Typography>
+            ) : null}
           </Form.Stack>
         </Form.Section>
 
@@ -440,14 +331,7 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
           </Button>
           <Button
             variant="contained"
-            disabled={
-              !proxyName.trim() ||
-              !proxyVersion.trim() ||
-              !proxyTarget.trim() ||
-              selectedGatewayIds.length === 0 ||
-              isLoadingGateways ||
-              isCreating
-            }
+            disabled={!canCreate}
             onClick={handleCreate}
             startIcon={
               isCreating ? (
@@ -459,165 +343,103 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
           </Button>
         </Stack>
       </Stack>
-    );
-  }
 
-  return (
-    <Stack spacing={3}>
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            lg: isFetched
-              ? "minmax(0, 1fr) minmax(0, 1fr)"
-              : "minmax(0, 1fr)",
-          },
-          gap: 3,
-          alignItems: "start",
-        }}
-      >
-        <Stack spacing={3}>
-          <Form.Section>
-            <Form.Header>Endpoint Details</Form.Header>
-            <Form.Stack spacing={2}>
-              <FormControl fullWidth error={Boolean(urlError)}>
-                <FormLabel required>MCP Proxy Endpoint URL</FormLabel>
-                <TextField
-                  fullWidth
-                  value={endpointUrl}
-                  onChange={handleEndpointChange}
-                  placeholder="Enter URL of your MCP Proxy"
-                  error={Boolean(urlError)}
-                  helperText={urlError}
-                />
-              </FormControl>
-
-              <Accordion
-                expanded={advancedOpen}
-                onChange={(_, expanded) => setAdvancedOpen(expanded)}
-                disableGutters
-                variant="outlined"
-              >
-                <AccordionSummary expandIcon={<ChevronDown size={18} />}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      Advanced Configurations
-                    </Typography>
-                    <Tooltip title="Configure optional request headers for the MCP proxy endpoint.">
-                      <HelpCircle size={16} />
-                    </Tooltip>
-                  </Stack>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <Form.Stack spacing={2}>
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Configure Authentication Header
-                    </Typography>
-                    <Form.Stack
-                      direction={{ xs: "column", md: "row" }}
-                      spacing={2}
-                      useFlexGap
-                    >
-                      <FormControl sx={{ flex: 1 }} error={Boolean(authError)}>
-                        <FormLabel>Header</FormLabel>
-                        <TextField
-                          fullWidth
-                          value={authHeader}
-                          onChange={(event) => {
-                            setAuthHeader(event.target.value);
-                            resetFetchedInfo();
-                            setAuthError(null);
-                          }}
-                          placeholder="Header"
-                          error={Boolean(authError)}
-                        />
-                      </FormControl>
-                      <FormControl sx={{ flex: 1 }} error={Boolean(authError)}>
-                        <FormLabel>Value</FormLabel>
-                        <TextField
-                          fullWidth
-                          value={authValue}
-                          onChange={(event) => {
-                            setAuthValue(event.target.value);
-                            resetFetchedInfo();
-                            setAuthError(null);
-                          }}
-                          placeholder="Value"
-                          error={Boolean(authError)}
-                          helperText={authError}
-                          type={showAuthValue ? "text" : "password"}
-                          slotProps={{
-                            input: {
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <IconButton
-                                    aria-label={
-                                      showAuthValue
-                                        ? "Hide header value"
-                                        : "Show header value"
-                                    }
-                                    onClick={() =>
-                                      setShowAuthValue((prev) => !prev)
-                                    }
-                                    edge="end"
-                                  >
-                                    {showAuthValue ? (
-                                      <EyeOff size={18} />
-                                    ) : (
-                                      <Eye size={18} />
-                                    )}
-                                  </IconButton>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                        />
-                      </FormControl>
-                    </Form.Stack>
-                  </Form.Stack>
-                </AccordionDetails>
-              </Accordion>
-            </Form.Stack>
-          </Form.Section>
-
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={onCancel}>
-              Cancel
-            </Button>
-            <Button
-              variant="contained"
-              disabled={!canFetch && !isFetched}
-              onClick={handlePrimaryAction}
-              startIcon={
-                isFetching ? (
-                  <CircularProgress size={16} color="inherit" />
-                ) : undefined
-              }
-            >
-              {isFetched
-                ? "Next"
-                : isFetching
-                  ? "Fetching"
-                  : "Fetch Server Info"}
-            </Button>
-          </Stack>
-        </Stack>
-
-        <Collapse in={isFetched} timeout="auto" unmountOnExit>
-          {preview}
-        </Collapse>
-      </Box>
-    </Stack>
+      <AddEndpointDialog
+        open={dialogOpen}
+        orgId={orgId ?? ""}
+        availableEnvironments={availableEnvironments}
+        onClose={() => setDialogOpen(false)}
+        onAdd={handleAddEndpoint}
+      />
+    </>
   );
 }
 
-function getServerInfoValue(
-  serverInfo: Record<string, unknown> | undefined,
-  key: string,
-): string | undefined {
-  const value = serverInfo?.[key];
-  return typeof value === "string" ? value : undefined;
+interface EndpointRowProps {
+  endpoint: EndpointDraft;
+  environmentLabels: Map<string, string>;
+  onRemove: () => void;
+}
+
+function EndpointRow({
+  endpoint,
+  environmentLabels,
+  onRemove,
+}: EndpointRowProps) {
+  const toolCount = endpoint.fetchedInfo.tools?.length ?? 0;
+  const resourceCount = endpoint.fetchedInfo.resources?.length ?? 0;
+  const promptCount = endpoint.fetchedInfo.prompts?.length ?? 0;
+  const hasAuth = Boolean(endpoint.authHeader && endpoint.authValue);
+
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        p: 2,
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={2}
+        alignItems="flex-start"
+        justifyContent="space-between"
+      >
+        <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            {endpoint.environments.map((envId) => (
+              <Chip
+                key={envId}
+                label={environmentLabels.get(envId) || envId}
+                size="small"
+                color="primary"
+                variant="outlined"
+              />
+            ))}
+            {hasAuth ? (
+              <Tooltip title={`Authenticated via ${endpoint.authHeader}`}>
+                <Chip
+                  icon={<Lock size={12} />}
+                  label="Auth"
+                  size="small"
+                  variant="outlined"
+                />
+              </Tooltip>
+            ) : null}
+          </Stack>
+
+          <Typography
+            variant="body2"
+            sx={{ wordBreak: "break-all", fontFamily: "monospace" }}
+          >
+            {endpoint.url}
+          </Typography>
+
+          <Divider flexItem />
+
+          <Stack direction="row" spacing={2} alignItems="center">
+            {endpoint.serverName ? (
+              <Typography variant="caption" color="text.secondary">
+                {endpoint.serverName}
+                {endpoint.serverVersion ? ` · ${endpoint.serverVersion}` : ""}
+              </Typography>
+            ) : null}
+            <Typography variant="caption" color="text.secondary">
+              {toolCount} tools · {resourceCount} resources · {promptCount}{" "}
+              prompts
+            </Typography>
+          </Stack>
+        </Stack>
+
+        <Tooltip title="Remove endpoint">
+          <IconButton size="small" onClick={onRemove} aria-label="Remove endpoint">
+            <Trash2 size={16} />
+          </IconButton>
+        </Tooltip>
+      </Stack>
+    </Box>
+  );
 }
 
 function toHandle(value: string): string {
