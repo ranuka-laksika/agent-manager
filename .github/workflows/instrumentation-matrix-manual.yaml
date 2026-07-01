@@ -45,7 +45,8 @@ concurrency:
 
 jobs:
   resolve-cells:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     # Skipped for heavy-only iteration — no emission matrix to expand.
     if: ${{ !inputs.heavy_only }}
     outputs:
@@ -73,7 +74,8 @@ jobs:
           exit 1
 
   run-cells:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: resolve-cells
     strategy:
       fail-fast: false
@@ -111,7 +113,8 @@ jobs:
             test/instrumentation-matrix/cassettes/
 
   open-record-pr:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: run-cells
     if: ${{ inputs.include_record_mode }}
     permissions:
@@ -159,7 +162,8 @@ jobs:
             investigating, not a rubber-stamp refresh.
 
   heavy:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: run-cells
     # Normal run: gate behind a green emission matrix. heavy_only: run
     # regardless (run-cells is skipped), so always() is needed to evaluate at all.
