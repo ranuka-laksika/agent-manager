@@ -55,7 +55,7 @@ var _ = Describe("amctl agent llm (CLI-owned agent)", Label("cli", "agent", "llm
 		})
 		DeferCleanup(func() {
 			_ = H.Run("agent", "llm", "unset", owned.AgentName, "--name", configName,
-				"--org", H.Org(), "--project", owned.ProjectName, "--json")
+				"--org", H.Org(), "--project", owned.ProjectName, "--yes", "--json")
 		})
 		GinkgoWriter.Printf("CLI agent llm: agent=%s provider=%s\n", owned.AgentName, providerID)
 	})

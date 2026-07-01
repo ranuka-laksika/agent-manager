@@ -97,12 +97,14 @@ func ListAgentLLM(g Gomega, h *amctl.Harness, org, project, agent string) AgentL
 		"--org", org, "--project", project, "--json"))
 }
 
-// UnsetAgentLLM runs `agent llm unset <agent> --name` (whole-config delete) and
-// returns the delete result (reusing the package's DeleteResult).
+// UnsetAgentLLM runs `agent llm unset <agent> --name --yes` (whole-config
+// delete) and returns the delete result (reusing the package's DeleteResult).
+// A whole-config unset (no --env) prompts for confirmation, so --yes is
+// required under the non-terminal harness.
 func UnsetAgentLLM(g Gomega, h *amctl.Harness, org, project, agent, name string) DeleteResult {
 	return amctl.DecodeData[DeleteResult](g, h.Run(
 		"agent", "llm", "unset", agent, "--name", name,
-		"--org", org, "--project", project, "--json"))
+		"--org", org, "--project", project, "--yes", "--json"))
 }
 
 // Names returns the config names in the list, for membership assertions.
