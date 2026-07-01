@@ -16,9 +16,10 @@
  * under the License.
  */
 
-export { default as CoreUI } from './CoreUI'
-export * from '@agent-management-platform/views';
-export * from '@agent-management-platform/auth';
-export * from '@agent-management-platform/api-client';
-export * from '@agent-management-platform/types';
-export * from './types';
+export { default as CoreUI } from "./CoreUI";
+export * from "@agent-management-platform/views";
+export * from "@agent-management-platform/auth";
+export * from "@agent-management-platform/api-client";
+export * from "@agent-management-platform/types";
+export { useConfirmationDialog } from "@agent-management-platform/shared-component";
+export * from "./types";
