@@ -294,7 +294,6 @@ if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
     # The console sets it via getRawScriptUrl; the default follows main (latest).
     SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
-    local script_tmp
     script_tmp="$(mktemp)"
     if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
       if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \

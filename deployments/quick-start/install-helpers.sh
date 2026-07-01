@@ -237,6 +237,30 @@ install_observability_extension() {
     return 0
 }
 
+# Provision a per-environment Thunder instance for the default environment.
+# Downloads add-environment-thunder.sh from the published release and runs it using
+# the OCI registry chart (default in the script when THUNDER_CHART is not set).
+install_default_env_thunder() {
+    local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
+    local tmp_script
+    tmp_script="$(mktemp)"
+
+    if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
+        echo "Failed to download add-environment-thunder.sh from ${script_url}"
+        rm -f "${tmp_script}"
+        return 1
+    fi
+
+    ENV_NAME=default \
+        DISPLAY_NAME="Default" \
+        ORG_NAME=default \
+        CHART_VERSION="${VERSION}" \
+        bash "${tmp_script}"
+    local status=$?
+    rm -f "${tmp_script}"
+    return $status
+}
+
 # Install AMP Thunder Extension
 install_amp_thunder_extension() {
     local chart_ref="oci://${HELM_CHART_REGISTRY}/${THUNDER_EXTENSION_CHART_NAME}"

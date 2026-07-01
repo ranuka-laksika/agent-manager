@@ -1506,6 +1506,30 @@ fi
 log_success "Platform Resources Extension installed successfully"
 echo ""
 
+# Provision per-environment Thunder instance for the default environment.
+# Mirrors setup-openchoreo.sh:install_default_env_thunder().
+# Must run after the platform Thunder TLS cert is issued (cert-manager) and
+# after the default environment exists (created by platform-resources above).
+log_info "Waiting for platform Thunder TLS certificate to be issued by cert-manager..."
+if kubectl wait --for=condition=Ready certificate/amp-thunder-extension-local-tls \
+        -n amp-thunder --timeout=120s 2>/dev/null; then
+    log_success "Platform Thunder TLS certificate is ready"
+else
+    log_warning "Platform Thunder TLS certificate not yet ready — env-Thunder trusted issuer may not be configured."
+    log_info "Continuing; re-run add-environment-thunder.sh once cert-manager has issued the cert."
+fi
+
+log_info "Provisioning Thunder identity provider for the default environment..."
+if ! install_default_env_thunder; then
+    log_warning "Default environment Thunder provisioning failed (non-fatal)"
+    echo "Re-run manually once the platform is ready:"
+    echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default CHART_VERSION=${VERSION} \\"
+    echo "  bash <(curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh)"
+else
+    log_success "Default environment Thunder identity provider provisioned"
+fi
+echo ""
+
 # Install observability extension
 log_info "Installing Observability Extension (Traces Observer)..."
 if ! install_observability_extension; then

@@ -32,10 +32,7 @@ import {
 } from "@agent-management-platform/configure-agent";
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
-import {
-  metaData as gatewaysMetadata,
-  thunderInstancesMetaData,
-} from "@agent-management-platform/gateways";
+import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
 import { metaData as identitiesMetadata } from "@agent-management-platform/identities";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
@@ -113,10 +110,6 @@ export const LazyMCPProxiesOrg = mcpProxiesMetadata.levels!.organization as FC;
 // Gateways
 export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 
-// Identity (Thunder Instances)
-export const LazyThunderInstancesOrg = thunderInstancesMetaData.levels!
-  .organization as FC;
-
 // Identities
 export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
 
@@ -133,6 +126,14 @@ export const LazyCatalogOrg = agentKindMetadata.levels!.organization as FC;
 export const LazyPublishComponent = agentKindMetadata.levels!.component as FC;
 export const LazyPublishOrg = agentKindMetadata.levels!
   .publishOrganization as FC;
+
+// Identity (Environment Thunder Instances) — code-split into its own chunk
+export const LazyThunderInstancesOrg = lazy(() =>
+  import("@agent-management-platform/env-thunders").then((module) => ({
+    default: module.thunderInstancesMetaData.levels!
+      .organization as ComponentType,
+  })),
+);
 
 // Lazy-loaded create pages (only needed when user creates something)
 export const LazyAddNewAgent = lazy(() =>

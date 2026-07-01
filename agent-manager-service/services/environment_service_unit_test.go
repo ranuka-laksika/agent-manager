@@ -713,4 +713,3 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 		assert.Equal(t, "amp-thunder-acme-dev-provisioned", inst.Namespace)
 	})
 }
-

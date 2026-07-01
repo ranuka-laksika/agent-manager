@@ -15,26 +15,14 @@
  * under the License.
  */
 
-import { DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
-import type { PageMetadata } from "@agent-management-platform/types";
-import { GatewaysOrganization } from "./Gateways.Organization";
+// Nav-only metadata (title + icon). Deliberately has no import of
+// ThunderInstancesOrganization or its subcomponents, so consumers that only
+// need the sidebar icon/label (e.g. navigationItems.tsx) don't pull the page's
+// component tree into their bundle. Route.tsx gets the component separately
+// via a dynamic import() of the package root, which keeps it in its own chunk.
+import { KeyRound } from "@wso2/oxygen-ui-icons-react";
 
-export const metaData: PageMetadata = {
-  title: "Gateways",
-  description: "A page component for Gateway management",
-  icon: DoorClosedLocked,
-  path: "/gateways",
-  component: GatewaysOrganization,
-  levels: {
-    organization: GatewaysOrganization,
-  },
+export const thunderInstancesMetadata = {
+  title: "Identity",
+  icon: KeyRound,
 };
-
-export const gatewaysMetadata = {
-  title: metaData.title,
-  icon: metaData.icon,
-};
-
-export { GatewaysOrganization };
-
-export default GatewaysOrganization;

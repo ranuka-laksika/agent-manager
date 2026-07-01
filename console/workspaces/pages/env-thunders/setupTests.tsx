@@ -15,26 +15,4 @@
  * under the License.
  */
 
-import { DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
-import type { PageMetadata } from "@agent-management-platform/types";
-import { GatewaysOrganization } from "./Gateways.Organization";
-
-export const metaData: PageMetadata = {
-  title: "Gateways",
-  description: "A page component for Gateway management",
-  icon: DoorClosedLocked,
-  path: "/gateways",
-  component: GatewaysOrganization,
-  levels: {
-    organization: GatewaysOrganization,
-  },
-};
-
-export const gatewaysMetadata = {
-  title: metaData.title,
-  icon: metaData.icon,
-};
-
-export { GatewaysOrganization };
-
-export default GatewaysOrganization;
+import "@testing-library/jest-dom";

@@ -51,10 +51,8 @@ import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
-import {
-  gatewaysMetadata,
-  thunderInstancesMetadata,
-} from "@agent-management-platform/gateways";
+import { gatewaysMetadata } from "@agent-management-platform/gateways";
+import { thunderInstancesMetadata } from "@agent-management-platform/env-thunders/metadata";
 import { identitiesMetadata } from "@agent-management-platform/identities";
 import {
   metaData as deploymentPipelinesMetadata,

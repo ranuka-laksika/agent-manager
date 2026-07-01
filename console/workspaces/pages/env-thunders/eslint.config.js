@@ -15,26 +15,29 @@
  * under the License.
  */
 
-import { DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
-import type { PageMetadata } from "@agent-management-platform/types";
-import { GatewaysOrganization } from "./Gateways.Organization";
+import eslintConfig from "@agent-management-platform/eslint-config";
 
-export const metaData: PageMetadata = {
-  title: "Gateways",
-  description: "A page component for Gateway management",
-  icon: DoorClosedLocked,
-  path: "/gateways",
-  component: GatewaysOrganization,
-  levels: {
-    organization: GatewaysOrganization,
+export default [
+  ...eslintConfig,
+  {
+    files: [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx",
+      "**/*.mjs",
+      "**/*.cjs",
+    ],
   },
-};
-
-export const gatewaysMetadata = {
-  title: metaData.title,
-  icon: metaData.icon,
-};
-
-export { GatewaysOrganization };
-
-export default GatewaysOrganization;
+  {
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      "**/.rush/**",
+      "**/common/temp/**",
+      "**/coverage/**",
+      "**.config.js",
+      "**.config.cjs",
+    ],
+  },
+];

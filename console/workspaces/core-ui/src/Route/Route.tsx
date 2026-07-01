@@ -242,7 +242,11 @@ export function RootRouter() {
                 relativeRouteMap.children.org.children.thunderInstances.path +
                 "/*"
               }
-              element={<LazyThunderInstancesOrg />}
+              element={
+                <Suspense fallback={<LoadingFallback />}>
+                  <LazyThunderInstancesOrg />
+                </Suspense>
+              }
             />
             <Route
               path={relativeRouteMap.children.org.children.gateways.path + "/*"}

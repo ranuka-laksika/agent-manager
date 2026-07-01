@@ -15,26 +15,15 @@
  * under the License.
  */
 
-import { DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
-import type { PageMetadata } from "@agent-management-platform/types";
-import { GatewaysOrganization } from "./Gateways.Organization";
+/// <reference types="vitest" />
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
 
-export const metaData: PageMetadata = {
-  title: "Gateways",
-  description: "A page component for Gateway management",
-  icon: DoorClosedLocked,
-  path: "/gateways",
-  component: GatewaysOrganization,
-  levels: {
-    organization: GatewaysOrganization,
+export default defineConfig({
+  plugins: [react()],
+  test: {
+    globals: true,
+    environment: "jsdom",
+    setupFiles: "./setupTests.tsx",
   },
-};
-
-export const gatewaysMetadata = {
-  title: metaData.title,
-  icon: metaData.icon,
-};
-
-export { GatewaysOrganization };
-
-export default GatewaysOrganization;
+});
