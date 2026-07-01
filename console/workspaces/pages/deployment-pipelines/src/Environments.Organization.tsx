@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useState, type ComponentType } from "react";
 import { Navigate, Route, Routes, useParams } from "react-router-dom";
 import {
   PageLayout,
@@ -59,9 +59,9 @@ export function EnvironmentsOrganization() {
   )[0];
 
   const CreateDrawer = (externalCreate?.component ??
-    CreateEnvironmentDrawer) as React.ComponentType<CreateDrawerProps>;
+    CreateEnvironmentDrawer) as ComponentType<CreateDrawerProps>;
   const DeleteDrawer = (externalDelete?.component ??
-    DeleteEnvironmentDrawer) as React.ComponentType<DeleteDrawerProps>;
+    DeleteEnvironmentDrawer) as ComponentType<DeleteDrawerProps>;
 
   return (
     <>
