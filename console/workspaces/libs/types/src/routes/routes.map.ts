@@ -38,7 +38,13 @@ export const rootRouteMap: AppRoute = {
                 thunderInstances: {
                     path: 'thunder-instances',
                     index: true,
-                    children: {},
+                    children: {
+                        view: {
+                            path: 'view/:envName',
+                            index: true,
+                            children: {},
+                        },
+                    },
                 },
                 gateways: {
                     path: 'gateways',

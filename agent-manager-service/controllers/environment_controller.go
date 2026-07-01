@@ -373,7 +373,6 @@ func convertToSpecGatewayResponse(gw *models.GatewayResponse) spec.GatewayRespon
 	return response
 }
 
-
 func (c *environmentController) ListThunderInstances(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)

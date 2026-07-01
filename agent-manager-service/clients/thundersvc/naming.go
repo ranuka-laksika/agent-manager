@@ -31,9 +31,9 @@ const (
 	// system client's OAuth2 secret.
 	thunderSystemClientSecretKey = "client-secret"
 
-	thunderInternalPort   = 8090
-	maxReleaseNameLen     = 53
-	truncatePrefixLen     = 46
+	thunderInternalPort = 8090
+	maxReleaseNameLen   = 53
+	truncatePrefixLen   = 46
 )
 
 // ThunderReleaseName returns the Helm release name (and namespace) for an env-Thunder instance.

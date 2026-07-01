@@ -46,6 +46,15 @@ validate_name() {
   printf '%s' "${1:-}" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 }
 
+# _sha256 FILE -> full SHA-256 hex of a file (portable: shasum or sha256sum).
+_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
 # _sha6 STRING -> first 6 hex chars of its sha256 (portable: shasum or sha256sum).
 _sha6() {
   if command -v shasum >/dev/null 2>&1; then
@@ -305,7 +314,7 @@ main() {
   #   4. Mount it into the env-Thunder pod and set SSL_CERT_FILE to the combined
   #      file so Go's TLS stack trusts both commercial CAs and the self-signed CA.
   # ---------------------------------------------------------------------------
-  local ca_pem ca_bundle mozilla_bundle
+  local ca_pem ca_bundle mozilla_bundle tmp_bundle expected_sha actual_sha
   local ca_cm_name="amp-thunder-platform-ca"
 
   # Fetch platform Thunder CA. Missing cert is fatal to prevent silent auth failures.
@@ -319,13 +328,45 @@ main() {
 
   # Fetch Mozilla root CA bundle. Appending our Root CA ensures the trust store
   # remains additive and compatible with any base image (Debian/Alpine).
-  echo "🔐 Fetching Mozilla CA bundle to build combined trust store..."
-  if ! mozilla_bundle="$(curl -fsSL --connect-timeout 30 https://curl.se/ca/cacert.pem 2>/dev/null)" \
-      || [ -z "$mozilla_bundle" ]; then
-    echo "❌ Could not fetch Mozilla CA bundle from https://curl.se/ca/cacert.pem"
-    echo "   Check network connectivity or set PLATFORM_THUNDER_CA_PEM to skip bundle fetch."
-    exit 1
-  fi
+  # The bundle is built on the operator's machine (not inside the pod), so we
+  # cannot rely on the pod's /etc/ssl — we need a portable external source.
+  echo "🔐 Fetching Mozilla CA bundle from curl.se..."
+  tmp_bundle="$(mktemp)"
+  local attempt verified
+  verified=false
+  for attempt in 1 2 3; do
+    if ! curl -fsSL --connect-timeout 30 https://curl.se/ca/cacert.pem -o "$tmp_bundle" 2>/dev/null \
+        || ! grep -q "BEGIN CERTIFICATE" "$tmp_bundle"; then
+      rm -f "$tmp_bundle"
+      echo "❌ Could not fetch Mozilla CA bundle from https://curl.se/ca/cacert.pem"
+      echo "   Download it on a machine with internet access, then re-run:"
+      echo "     curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem"
+      echo "     ENV_NAME=... bash $(basename "$0")"
+      exit 1
+    fi
+    # Verify against the published checksum to detect download corruption.
+    if expected_sha="$(curl -fsSL --connect-timeout 15 https://curl.se/ca/cacert.pem.sha256 2>/dev/null | awk '{print $1}')" \
+        && [ -n "$expected_sha" ]; then
+      actual_sha="$(_sha256 "$tmp_bundle")"
+      if [ "$expected_sha" != "$actual_sha" ]; then
+        if [ "$attempt" -lt 3 ]; then
+          echo "⚠️  Checksum mismatch on attempt ${attempt}/3 — retrying..."
+          sleep 2
+          continue
+        fi
+        rm -f "$tmp_bundle"
+        echo "❌ Mozilla CA bundle checksum mismatch after 3 attempts — download may be corrupt."
+        echo "   Expected: $expected_sha"
+        echo "   Got:      $actual_sha"
+        exit 1
+      fi
+      echo "   ✓ Checksum verified (SHA-256: ${actual_sha:0:16}...)"
+    fi
+    verified=true
+    break
+  done
+  mozilla_bundle="$(cat "$tmp_bundle")"
+  rm -f "$tmp_bundle"
   ca_bundle="${mozilla_bundle}
 ${ca_pem}"
 
