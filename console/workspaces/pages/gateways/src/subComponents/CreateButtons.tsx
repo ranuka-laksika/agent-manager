@@ -58,7 +58,7 @@ export const CreateButtons: React.FC<CreateButtonsProps> = ({
           onClick={onSubmit}
           disabled={isPending}
         >
-          Create AI Gateway
+          Create Gateway
         </Button>
       </Box>
     </Box>

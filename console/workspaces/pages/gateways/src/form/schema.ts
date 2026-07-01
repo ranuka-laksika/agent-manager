@@ -65,7 +65,8 @@ export const addGatewaySchema = z.object({
   isCritical: z.boolean(),
   environmentIds: z
     .array(z.string())
-    .min(1, "Select at least one environment"),
+    .min(1, "Select an environment")
+    .max(1, "A gateway can be assigned to only one environment"),
 });
 
 export type AddGatewayFormValues = z.infer<typeof addGatewaySchema>;

@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   useCreateMCPProxyAPIKey,
   useListGateways,
@@ -23,26 +23,18 @@ import {
 } from "@agent-management-platform/api-client";
 import type { MCPProxy } from "@agent-management-platform/types";
 import {
-  Alert,
-  Button,
   Card,
   Chip,
   Divider,
-  FormControl,
-  FormLabel,
   Grid,
-  IconButton,
-  InputAdornment,
-  MenuItem,
-  Select,
   Skeleton,
   Stack,
-  TextField,
-  Tooltip,
   Typography,
-  useTheme,
 } from "@wso2/oxygen-ui";
-import { Copy, DoorClosedLocked, Key } from "@wso2/oxygen-ui-icons-react";
+import {
+  InvokeEndpoints,
+  type InvokeEndpoint,
+} from "@agent-management-platform/shared-component";
 import { ACL_POLICY_NAME } from "../constants";
 
 export type MCPProxyOverviewTabProps = {
@@ -65,57 +57,27 @@ export function MCPProxyOverviewTab({
   orgName,
   isLoading = false,
 }: MCPProxyOverviewTabProps) {
-  const theme = useTheme();
-
   const { data: gatewaysData } = useListGateways(
     { orgName: orgName ?? "" },
     { limit: 500 },
   );
 
-  const gatewayOptions = useMemo(() => {
+  const endpoints = useMemo<InvokeEndpoint[]>(() => {
     const deployedGatewayIds = new Set(proxy?.gateways ?? []);
     const gateways = gatewaysData?.gateways ?? [];
     return gateways
       .filter((gateway) => deployedGatewayIds.has(gateway.uuid))
       .map((gateway) => ({
-        uuid: gateway.uuid,
+        gatewayId: gateway.uuid,
         url: buildMCPInvokeUrl(gateway.vhost, proxy?.context),
         displayName: gateway.displayName,
         name: gateway.name,
+        environment: gateway.environments?.[0],
       }));
   }, [proxy?.gateways, proxy?.context, gatewaysData]);
 
-  const [selectedGatewayId, setSelectedGatewayId] = useState("");
   const [generatedApiKey, setGeneratedApiKey] = useState<string | null>(null);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-  const [invokeUrlCopied, setInvokeUrlCopied] = useState(false);
-  const [apiKeyCopied, setApiKeyCopied] = useState(false);
-
-  const selectedGateway = useMemo(
-    () => gatewayOptions.find((gateway) => gateway.uuid === selectedGatewayId),
-    [gatewayOptions, selectedGatewayId],
-  );
-
-  useEffect(() => {
-    if (
-      gatewayOptions.length > 0 &&
-      (!selectedGatewayId ||
-        !gatewayOptions.some((gateway) => gateway.uuid === selectedGatewayId))
-    ) {
-      setSelectedGatewayId(gatewayOptions[0].uuid);
-    }
-  }, [gatewayOptions, selectedGatewayId]);
-
-  const handleCopyInvokeUrl = useCallback(async () => {
-    if (!selectedGateway?.url) return;
-    try {
-      await navigator.clipboard.writeText(selectedGateway.url);
-      setInvokeUrlCopied(true);
-      setTimeout(() => setInvokeUrlCopied(false), 2000);
-    } catch {
-      // Silently fail
-    }
-  }, [selectedGateway?.url]);
 
   const createApiKey = useCreateMCPProxyAPIKey();
   const rotateApiKey = useRotateMCPProxyAPIKey();
@@ -141,7 +103,7 @@ export function MCPProxyOverviewTab({
   }, []);
 
   const handleGenerateApiKey = useCallback(async () => {
-    if (!orgName || !proxy?.id || !selectedGateway) return;
+    if (!orgName || !proxy?.id || endpoints.length === 0) return;
     setApiKeyError(null);
     setGeneratedApiKey(null);
     const randomSuffix = Math.random().toString(36).slice(2, 10);
@@ -184,7 +146,7 @@ export function MCPProxyOverviewTab({
     orgName,
     proxy?.id,
     rotateApiKey,
-    selectedGateway,
+    endpoints.length,
   ]);
 
   if (isLoading) {
@@ -322,168 +284,15 @@ export function MCPProxyOverviewTab({
 
       <Divider />
 
-      {/* Invoke URL section */}
-      <Stack spacing={2}>
-        <Typography
-          variant="subtitle2"
-          color="text.secondary"
-          sx={{ fontWeight: 600 }}
-        >
-          Invoke URL
-        </Typography>
-        {gatewayOptions.length > 0 ? (
-          <Stack spacing={2}>
-            <FormControl size="small" sx={{ minWidth: 200 }}>
-              <FormLabel>Gateway</FormLabel>
-              <Select
-                value={selectedGatewayId || ""}
-                onChange={(e) => {
-                  setSelectedGatewayId(String(e.target.value ?? ""));
-                  setGeneratedApiKey(null);
-                  setApiKeyError(null);
-                }}
-                size="small"
-                displayEmpty
-              >
-                {gatewayOptions.map((gateway) => (
-                  <MenuItem key={gateway.uuid} value={gateway.uuid}>
-                    <Stack direction="row" alignItems="center" gap={1}>
-                      <DoorClosedLocked size={16} />
-                      {gateway.displayName || gateway.name || gateway.uuid}
-                    </Stack>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            {selectedGateway && (
-              <>
-                <FormControl fullWidth size="small">
-                  <FormLabel>Invoke URL</FormLabel>
-                  <TextField
-                    size="small"
-                    fullWidth
-                    key={selectedGatewayId}
-                    value={selectedGateway.url}
-                    slotProps={{
-                      input: {
-                        readOnly: true,
-                        endAdornment: (
-                          <InputAdornment position="end">
-                            <Tooltip title={invokeUrlCopied ? "Copied!" : "Copy"}>
-                              <IconButton
-                                size="small"
-                                onClick={handleCopyInvokeUrl}
-                                aria-label="Copy Invoke URL"
-                              >
-                                <Copy size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </InputAdornment>
-                        ),
-                      },
-                    }}
-                    sx={{
-                      "& .MuiInputBase-input": {
-                        fontFamily: "monospace",
-                        fontSize: theme.typography.body2?.fontSize,
-                        wordBreak: "break-all",
-                      },
-                    }}
-                  />
-                </FormControl>
-                <Stack spacing={1}>
-                  <FormLabel>Generate API Key</FormLabel>
-                  <Stack direction="row" spacing={1} alignItems="center">
-                    <Button
-                      variant="outlined"
-                      size="medium"
-                      startIcon={<Key size={16} />}
-                      onClick={handleGenerateApiKey}
-                      disabled={createApiKey.isPending || rotateApiKey.isPending}
-                    >
-                      {createApiKey.isPending || rotateApiKey.isPending
-                        ? "Generating..."
-                        : "Generate API Key"}
-                    </Button>
-                  </Stack>
-                  {apiKeyError && (
-                    <Alert severity="error" onClose={() => setApiKeyError(null)}>
-                      {apiKeyError}
-                    </Alert>
-                  )}
-                  {generatedApiKey && (
-                    <Alert
-                      severity="success"
-                      sx={{
-                        "& .MuiAlert-message": {
-                          flexGrow: 1,
-                        },
-                      }}
-                    >
-                      <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                        API Key Generated
-                      </Typography>
-                      <Typography variant="body2" sx={{ mb: 1 }}>
-                        Copy this API key now. It will not be shown again.
-                      </Typography>
-                      <Stack direction="row" spacing={1} flexGrow={1} alignItems="center">
-                        <TextField
-                          size="small"
-                          fullWidth
-                          value={generatedApiKey}
-                          slotProps={{
-                            input: {
-                              readOnly: true,
-                              endAdornment: (
-                                <InputAdornment position="end">
-                                  <Tooltip title={apiKeyCopied ? "Copied!" : "Copy"}>
-                                    <IconButton
-                                      size="small"
-                                      onClick={async () => {
-                                        try {
-                                          await navigator.clipboard.writeText(
-                                            generatedApiKey,
-                                          );
-                                          setApiKeyCopied(true);
-                                          setTimeout(
-                                            () => setApiKeyCopied(false),
-                                            2000,
-                                          );
-                                        } catch {
-                                          // Silently fail
-                                        }
-                                      }}
-                                      aria-label="Copy API Key"
-                                    >
-                                      <Copy size={16} />
-                                    </IconButton>
-                                  </Tooltip>
-                                </InputAdornment>
-                              ),
-                            },
-                          }}
-                          sx={{
-                            "& .MuiInputBase-input": {
-                              fontFamily: "monospace",
-                              fontSize: theme.typography.body2?.fontSize,
-                              wordBreak: "break-all",
-                            },
-                          }}
-                        />
-                      </Stack>
-                    </Alert>
-                  )}
-                </Stack>
-              </>
-            )}
-          </Stack>
-        ) : (
-          <Alert severity="info">
-            No invoke URLs available. Deploy this MCP proxy to an AI gateway to
-            see invoke URLs and generate API keys.
-          </Alert>
-        )}
-      </Stack>
+      <InvokeEndpoints
+        endpoints={endpoints}
+        onGenerateApiKey={handleGenerateApiKey}
+        isGeneratingApiKey={createApiKey.isPending || rotateApiKey.isPending}
+        apiKeyError={apiKeyError}
+        generatedApiKey={generatedApiKey}
+        onClearApiKeyError={() => setApiKeyError(null)}
+        emptyMessage="No invoke URLs available. Deploy this MCP proxy to an AI gateway to see invoke URLs and generate API keys."
+      />
     </Stack>
   );
 }
