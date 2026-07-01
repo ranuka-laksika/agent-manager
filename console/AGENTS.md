@@ -1,78 +1,132 @@
-# Oxygen UI - AI Development Guide
+# console — agent guide
 
-> WSO2's React component library built on Material-UI v7
+React 19 + TypeScript web UI. **Rush + pnpm monorepo**, built with **Vite**. Server state via **TanStack Query**; UI from **Oxygen UI** (WSO2's MUI 7 layer). Every package is scoped `@agent-management-platform/*` (the app shell `web-ui` is the one unscoped exception).
 
-## Quick Start
+For the Oxygen UI component library itself (theming, which components exist, import rules), see **`.ai/oxygen-ui/AGENTS.md`** — always import UI from `@wso2/oxygen-ui`, never `@mui/material` directly.
 
-```tsx
-import { OxygenUIThemeProvider, OxygenTheme, Button } from '@wso2/oxygen-ui';
+## Monorepo layout
 
-function App() {
-  return (
-    <OxygenUIThemeProvider theme={OxygenTheme}>
-      <Button variant="contained">Click me</Button>
-    </OxygenUIThemeProvider>
+| Area | Package(s) | Role |
+|---|---|---|
+| `apps/web-ui/` | `web-ui` | App entry, Vite config, runtime `config.js`, router mount |
+| `workspaces/core-ui/` | `@…/am-core-ui` | Provider stack, routing, layout, page registry |
+| `workspaces/libs/api-client/` | `@…/api-client` | **All** API fetch fns + TanStack Query hooks |
+| `workspaces/libs/auth/` | `@…/auth` | Auth-mode switch (Asgardeo vs no-auth) |
+| `workspaces/libs/types/` | `@…/types` | Shared types, `globalConfig`, route maps |
+| `workspaces/libs/views/` | `@…/views` | UI primitives (PageLayout, FormElements, SnackBar) |
+| `workspaces/libs/shared-component/` | `@…/shared-component` | Business components (ConfirmationDialog, PolicyListSection) |
+| `workspaces/pages/<feature>/` | `@…/<feature>` | One package per feature page (configure-agent, deploy, gateways, llm-providers, …) |
+
+`rush.json` is the authoritative project list. Vite (dev) resolves each `@agent-management-platform/*` import to the package's **`src/`** for hot reload — no separate TS build step in dev.
+
+## Commands
+
+```bash
+make install          # rush install (only after package.json / dep changes)
+make dev              # core-ui watch + web-ui dev server → http://localhost:3000
+make build            # rush build (all packages)
+make build-webapp     # rush build --to @agent-management-platform/am-core-ui
+make clean            # remove dist/ everywhere
+```
+
+Per-package (from inside the package dir):
+```bash
+rushx dev             # watch/build this package
+rushx build           # build → dist/
+rushx lint            # eslint
+rushx lint:fix        # eslint --fix
+rushx test            # vitest run
+rushx test-watch      # vitest watch
+```
+
+## Golden path: add an API-backed feature
+
+1. **Add the fetch fn** in `libs/api-client/src/apis/<resource>.ts`.
+2. **Add the hook** in `libs/api-client/src/hooks/<resource>.ts`.
+3. **Export** both from the package's `apis/index.ts` / `hooks/index.ts`.
+4. **Consume the hook** in a page under `workspaces/pages/<feature>/`.
+5. **Register the page** — export `metaData` from the feature package's `index.ts`; wire its route in `core-ui`.
+
+### The two-file API pattern (mandatory)
+
+Never call `fetch`/TanStack Query directly from a component. Split into a pure fetch fn and a hook.
+
+**`apis/<resource>.ts`** — pure fetch, takes `params` (path), `query` (search), `getToken`:
+```ts
+import { httpGET, SERVICE_BASE } from "../utils";
+
+export async function listAgents(params, query, getToken) {
+  const { orgName = "default", projName = "default" } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(
+    `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/projects/${encodeURIComponent(projName)}/agents`,
+    { searchParams: /* stringified query */, token },
   );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+```
+- HTTP helpers are `httpGET/POST/PUT/PATCH/DELETE` from `../utils` — they read `globalConfig.apiBaseUrl` and set the `Authorization: Bearer` header. Do not hand-roll `fetch`.
+- `SERVICE_BASE = '/api/v1'`; the observability service uses `OBS_SERVICE_BASE = '/api'` (`utils/utils.ts`).
+
+**`hooks/<resource>.ts`** — wrap with `useApiQuery` / `useApiMutation` (not raw `useQuery`/`useMutation`):
+```ts
+import { useAuthHooks } from "@agent-management-platform/auth";
+import { useApiQuery, useApiMutation } from "./react-query-notifications";
+
+export function useListAgents(params, query) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery({
+    queryKey: ["agents", params, query],
+    queryFn: () => listAgents(params, query, getToken),
+    enabled: !!params.orgName && !!params.projName,
+  });
+}
+
+export function useCreateAgent() {
+  const { getToken } = useAuthHooks();
+  const qc = useQueryClient();
+  return useApiMutation({
+    action: { verb: "create", target: "agent" },        // → auto snackbar "Agent created successfully"
+    mutationFn: ({ params, body }) => createAgent(params, body, getToken),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["agents"] }),
+  });
 }
 ```
 
-## Critical Rules
+Rules:
+- **`useApiQuery` / `useApiMutation`** (in `hooks/react-query-notifications.ts`) wrap TanStack Query and auto-fire success/error snackbars. `useApiMutation` takes `action: { verb, target }` to render the message.
+- **`queryKey` is a tuple** — `[domain, params, query]` for detail, `[domain]` for the collection. Invalidation is **prefix-based**: `invalidateQueries({ queryKey: ["agents"] })` clears every `["agents", …]`.
+- **Auth token** always comes from `useAuthHooks().getToken` and is passed into the fetch fn — never read a token another way.
 
-1. **Import from `@wso2/oxygen-ui`** - Never import directly from `@mui/material`
-2. **Always wrap with `OxygenUIThemeProvider`** - Required at app root
-3. **Icons from `@wso2/oxygen-ui-icons-react`** - Separate package for icons
-4. **MUI X uses namespaces** - `DataGrid.DataGrid`, `Charts.LineChart`, `DatePickers.DatePicker`
-5. **Use theme tokens** - Use `sx` prop with theme values, not hardcoded colors/spacing
+## Routing
 
-## Import Patterns
+Routes live in `core-ui/src/Route/`. Use the generated maps in `@…/types`, never hardcoded strings:
+- `relativeRouteMap.…path` for `<Route path=…>`.
+- `absoluteRouteMap.…path` with `generatePath(path, { orgId, projectId, agentId })` for links/navigation.
 
-```tsx
-// Components - import from @wso2/oxygen-ui
-import { Button, TextField, Box, Typography, ListingTable } from '@wso2/oxygen-ui';
+Feature pages are discovered by their exported `metaData` (`{ title, icon, path, component, … }`). Guards (`OrgGuard`, `ProjectGuard`, `AgentGuard`) validate the entity exists before rendering the outlet.
 
-// Icons - import from @wso2/oxygen-ui-icons-react
-import { HomeIcon, SettingsIcon, UserIcon } from '@wso2/oxygen-ui-icons-react';
+## Auth (runtime-selected)
 
-// MUI X - use as namespaces
-import { DataGrid, Charts, DatePickers, TreeView } from '@wso2/oxygen-ui';
-<DataGrid.DataGrid rows={rows} columns={columns} />
-<Charts.LineChart series={series} />
-```
+`@…/auth`'s `index.ts` picks the implementation at **module-load time** from `globalConfig.disableAuth`:
+- `false` → Asgardeo OAuth2 (`AsgardeoProvider`, real tokens/scopes).
+- `true` → no-auth stub (`getToken` → empty string, always authenticated) for local dev.
 
-## Theme Tokens (Always Use)
+`globalConfig` = `window.__RUNTIME_CONFIG__`, injected by `apps/web-ui/public/config.js` (rendered from `config.template.js` via env substitution) **before React mounts**. To change auth mode you set `DISABLE_AUTH` in that config and reload — it cannot flip at runtime.
 
-```tsx
-// CORRECT - Use theme tokens
-<Box sx={{ p: 2, bgcolor: 'background.paper', color: 'text.primary' }} />
+## Conventions & gotchas
 
-// WRONG - Never hardcode
-<Box sx={{ padding: '16px', backgroundColor: '#ffffff', color: '#333' }} />
-```
+- **UI imports** from `@wso2/oxygen-ui` (+ `@wso2/oxygen-ui-icons-react`), not `@mui/material`. Theme is `AcrylicOrangeTheme` via `OxygenUIThemeProvider`. Use theme tokens in `sx` (`color: "text.primary"`, `p: 2`).
+- **Forms are manual** — `useState` + inline validation; no react-hook-form/Formik. Zod appears in `core-ui` only.
+- **Server state = TanStack Query**; local/UI state = `useState`. No Redux/global store.
+- **Config is load-time** — anything under `globalConfig` (auth mode, API base URL, RBAC flag) is fixed once the page boots.
+- **Lint** is ESLint **flat config** (`eslint.config.js` per package; no `.eslintrc`). **Tests** are Vitest (jsdom, `globals: true`).
+- **Don't hand-edit `dist/`** — it's generated by `rushx build`.
 
-## Available Themes
+## Done checklist
 
-- `OxygenTheme` - Default theme (recommended)
-- `AcrylicOrangeTheme` - Orange accent variant
-- `AcrylicPurpleTheme` - Purple accent variant
-- `ClassicTheme` - Traditional styling
-- `HighContrastTheme` - Accessibility-focused
-
-## Custom Oxygen Components
-
-- **Layout**: `AppShell`, `Header`, `Sidebar`, `Footer`
-- **Data Display**: `ListingTable`, `PageTitle`, `CodeBlock`
-- **Forms**: `Form.TextInput`, `Form.SelectInput`, `Form.Wizard`
-- **Feedback**: `NotificationPanel`, `NotificationBanner`
-- **Theming**: `OxygenUIThemeProvider`, `ThemeSwitcher`, `ColorSchemeToggle`
-
-## Detailed Documentation
-
-For comprehensive API reference and examples, see:
-- [Component API Reference](./.ai/oxygen-ui/components.md)
-- [UI Patterns & Examples](./.ai/oxygen-ui/patterns.md)
-- [Theme Customization](./.ai/oxygen-ui/theming.md)
-- [Migration Guide](./.ai/oxygen-ui/migration.md)
-
----
-
-For Claude Code users with enhanced features (invokable skills): `npx @wso2/oxygen-ui init --claude`
+- [ ] `rushx lint` clean in every package you touched.
+- [ ] `rushx build` succeeds for the changed package(s) (`make build` for cross-package changes).
+- [ ] New API code follows the two-file pattern and is exported from the barrel.
+- [ ] New page exports `metaData` and is routed.

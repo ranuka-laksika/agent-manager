@@ -1,0 +1,41 @@
+# python-instrumentation-provider — agent guide
+
+A **Kubernetes init container** (Docker image only — no Python package) that injects Python auto-instrumentation into application pods. It copies the instrumentation packages into a shared volume that the app pod mounts onto its `PYTHONPATH`, so the app is instrumented with zero code change.
+
+## Files (6 total)
+
+| File | Role |
+|---|---|
+| `Dockerfile` | builds the init-container image; runs `setup-instrumentation.py` |
+| `setup-instrumentation.py` | copies packages from `/instrumentations/{INSTRUMENTATION_PROVIDER}` → shared volume `/otel-tracing-sdk`, incl. `sitecustomize.py` |
+| `sitecustomize.py` | minimal bootstrap auto-imported by the app's Python: sets Traceloop env vars and calls `Traceloop.init()` |
+| `Makefile` | build / load image |
+| `requirements.txt` | deps for the setup script |
+| `RELEASING.md` | release notes |
+
+## How injection works
+
+1. Init container runs `setup-instrumentation.py`, which copies the provider's packages + `sitecustomize.py` into an `emptyDir` volume at `/otel-tracing-sdk/`.
+2. The app pod mounts the same volume and puts it on `PYTHONPATH`.
+3. Python auto-imports `sitecustomize.py` at startup → `Traceloop.init(telemetry_enabled=False, api_endpoint=AMP_OTEL_ENDPOINT, headers={...})`.
+
+`sitecustomize.py` reads `AMP_OTEL_ENDPOINT` + `AMP_AGENT_API_KEY`; it also sets `TRACELOOP_TRACE_CONTENT` (default `true`), `TRACELOOP_METRICS_ENABLED=false`, and `OTEL_EXPORTER_OTLP_INSECURE=true`.
+
+## Commands
+
+```bash
+make build           # docker build (PYTHON_VERSION, TRACELOOP_VERSION args) → ghcr.io/wso2/amp-python-instrumentation-provider:TAG
+make docker-load-k3d # build + load into k3d (K3D_CLUSTER_NAME=openchoreo-local-setup)
+make help
+```
+
+Build args: `PYTHON_VERSION` (default 3.11), `TRACELOOP_VERSION` (default 0.60.0). Default `TAG=dev-python3.11`.
+
+## Gotchas
+
+- `sitecustomize.py` must land at the **root** of `/otel-tracing-sdk/` for Python to auto-import it.
+- `OTEL_EXPORTER_OTLP_INSECURE=true` is hard-coded (no TLS validation) — expected for in-cluster export.
+- If `AMP_OTEL_ENDPOINT`/`AMP_AGENT_API_KEY` are missing at app startup, `Traceloop.init()` fails and is logged, but the app still runs (no hard exit).
+- No tests — it's a build/copy script.
+
+Ships the package documented in `../libs/amp-instrumentation/AGENTS.md`.
