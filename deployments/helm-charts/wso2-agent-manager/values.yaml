@@ -137,7 +137,7 @@ agentManagerService:
       # Platform default AMP instrumentation version. Must exist in the
       # effective catalog (embedded baseline ∪ additionalInstrumentationVersions);
       # otherwise the server fails to start.
-      defaultInstrumentationVersion: "0.3.0"
+      defaultInstrumentationVersion: "0.4.0"
       # Operator-supplied catalog extension entries, added on top of the
       # bundled baseline. For air-gapped installs, point imageRepository
       # at the internal mirror.
