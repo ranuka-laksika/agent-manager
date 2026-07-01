@@ -40,7 +40,8 @@ spec:
     - rule: "${size(workload.endpoints) > 0}"
       message: "Agent API components must have at least one endpoint."
 
-  environmentConfigs:
+  # Baselines set at component creation time.
+  parameters:
     openAPIV3Schema:
       type: object
       $defs:
@@ -54,6 +55,30 @@ spec:
             memory:
               type: string
               default: "256Mi"
+        ResourceRequirements:
+          type: object
+          properties:
+            requests:
+              $ref: "#/$defs/ResourceQuantity"
+            limits:
+              $ref: "#/$defs/ResourceQuantity"
+          default: {}
+      properties:
+        resources:
+          $ref: "#/$defs/ResourceRequirements"
+
+  environmentConfigs:
+    openAPIV3Schema:
+      type: object
+      $defs:
+        ResourceQuantity:
+          type: object
+          default: {}
+          properties:
+            cpu:
+              type: string
+            memory:
+              type: string
         ResourceRequirements:
           type: object
           properties:
@@ -143,11 +168,11 @@ spec:
                       type: RuntimeDefault
                   resources:
                     requests:
-                      cpu: ${environmentConfigs.resources.requests.cpu}
-                      memory: ${environmentConfigs.resources.requests.memory}
+                      cpu: ${environmentConfigs.resources.requests.?cpu.orValue(parameters.resources.requests.cpu)}
+                      memory: ${environmentConfigs.resources.requests.?memory.orValue(parameters.resources.requests.memory)}
                     limits:
-                      cpu: ${environmentConfigs.resources.limits.cpu}
-                      memory: ${environmentConfigs.resources.limits.memory}
+                      cpu: ${environmentConfigs.resources.limits.?cpu.orValue(parameters.resources.limits.cpu)}
+                      memory: ${environmentConfigs.resources.limits.?memory.orValue(parameters.resources.limits.memory)}
                   env: ${dependencies.toContainerEnvs()}
                   envFrom: ${configurations.toContainerEnvFrom()}
                   volumeMounts: |

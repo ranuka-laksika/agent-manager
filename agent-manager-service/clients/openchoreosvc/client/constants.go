@@ -280,6 +280,15 @@ const (
 	DefaultReplicaCount  = 1
 )
 
+// Ballerina agents need a higher baseline than the schema defaults, so their
+// resource requests/limits are pinned at component creation time.
+const (
+	BallerinaCPURequest    = "250m"
+	BallerinaMemoryRequest = "512Mi"
+	BallerinaCPULimit      = "250m"
+	BallerinaMemoryLimit   = "512Mi"
+)
+
 // Resource defaults as variables (for pointer access)
 var (
 	defaultReplicaCount32  = int32(DefaultReplicaCount)
