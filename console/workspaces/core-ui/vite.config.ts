@@ -18,7 +18,6 @@
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import dts from 'vite-plugin-dts'
 import path from 'path'
 
 // https://vite.dev/config/
@@ -29,12 +28,13 @@ export default defineConfig({
         plugins: [['babel-plugin-react-compiler']],
       },
     }),
-    dts({
-      include: ['src'],
-      outDir: 'dist',
-      tsconfigPath: './tsconfig.app.json',
-    }),
   ],
+  // NOTE: TypeScript declarations are produced by a separate rollup-plugin-dts pass
+  // (see rollup.dts.config.mjs, wired into the `build` script). The JS bundle inlines
+  // the internal @agent-management-platform/* workspace packages via the source
+  // aliases below, so the declarations must be bundled the same way into a single
+  // self-contained dist/index.d.ts. vite-plugin-dts / API Extractor cannot do this
+  // here — it follows the aliased re-exports into raw .tsx sources and aborts.
   resolve: {
     dedupe: ['react', 'react-dom', 'react-router-dom'],
     alias: {
