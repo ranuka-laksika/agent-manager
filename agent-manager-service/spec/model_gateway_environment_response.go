@@ -30,6 +30,8 @@ type GatewayEnvironmentResponse struct {
 	DisplayName string `json:"displayName"`
 	// Optional description of the environment
 	Description *string `json:"description,omitempty"`
+	// Pod runtime isolation tier ("gvisor", "kata", or empty for default runc)
+	IsolationTier string `json:"isolationTier,omitempty"`
 	// Reference to the dataplane
 	DataplaneRef string `json:"dataplaneRef"`
 	// DNS prefix for the environment
@@ -368,6 +370,9 @@ func (o GatewayEnvironmentResponse) ToMap() (map[string]interface{}, error) {
 	}
 	toSerialize["dataplaneRef"] = o.DataplaneRef
 	toSerialize["dnsPrefix"] = o.DnsPrefix
+	if o.IsolationTier != "" {
+		toSerialize["isolationTier"] = o.IsolationTier
+	}
 	toSerialize["isProduction"] = o.IsProduction
 	if !IsNil(o.Gateway) {
 		toSerialize["gateway"] = o.Gateway

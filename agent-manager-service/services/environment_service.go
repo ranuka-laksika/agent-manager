@@ -59,12 +59,13 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, orgName stri
 	s.logger.Info("Creating environment in OpenChoreo", "name", req.Name, "orgName", orgName)
 
 	ocReq := occlient.CreateEnvironmentRequest{
-		Name:         req.Name,
-		DisplayName:  req.DisplayName,
-		Description:  req.Description,
-		DataplaneRef: req.DataplaneRef,
-		IsProduction: req.IsProduction,
-		Gateway:      toOCClientGatewaySpec(req.Gateway),
+		Name:          req.Name,
+		DisplayName:   req.DisplayName,
+		Description:   req.Description,
+		IsolationTier: req.IsolationTier,
+		DataplaneRef:  req.DataplaneRef,
+		IsProduction:  req.IsProduction,
+		Gateway:       toOCClientGatewaySpec(req.Gateway),
 	}
 
 	env, err := s.ocClient.CreateEnvironment(ctx, orgName, ocReq)
@@ -79,6 +80,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, orgName stri
 		Name:             env.Name,
 		DisplayName:      env.DisplayName,
 		Description:      req.Description,
+		IsolationTier:    env.IsolationTier,
 		DataplaneRef:     env.DataplaneRef,
 		IsProduction:     env.IsProduction,
 		Gateway:          env.Gateway,
@@ -109,6 +111,7 @@ func (s *environmentService) GetEnvironment(ctx context.Context, orgName string,
 		Name:             env.Name,
 		DisplayName:      env.DisplayName,
 		Description:      env.Description,
+		IsolationTier:    env.IsolationTier,
 		DataplaneRef:     env.DataplaneRef,
 		DNSPrefix:        env.DNSPrefix,
 		IsProduction:     env.IsProduction,
@@ -159,6 +162,7 @@ func (s *environmentService) ListEnvironments(ctx context.Context, orgName strin
 			Name:             env.Name,
 			DisplayName:      env.DisplayName,
 			Description:      env.Description,
+			IsolationTier:    env.IsolationTier,
 			DataplaneRef:     env.DataplaneRef,
 			DNSPrefix:        env.DNSPrefix,
 			IsProduction:     env.IsProduction,
