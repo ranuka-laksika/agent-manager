@@ -240,7 +240,7 @@ func loadEnvs() {
 	config.PerAgentResourceLimits = ResourceLimitsConfig{
 		MaxReplicas: int(r.readOptionalInt64("RESOURCE_MAX_REPLICAS", 10)),
 		MaxCPU:      r.readOptionalString("RESOURCE_MAX_CPU", "500m"),
-		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "512Mi"),
+		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "1Gi"),
 	}
 
 	// Gateway runtime addressing — how RestApi bindings reach the API Platform Gateway
