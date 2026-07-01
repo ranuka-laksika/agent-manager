@@ -23,6 +23,7 @@ import {
   Route,
   useParams,
   Outlet,
+  Navigate,
 } from "react-router-dom";
 import { OxygenLayout } from "../Layouts";
 import { Protected } from "../Providers/Protected";
@@ -43,7 +44,7 @@ import {
   LazyViewMCPServerComponent,
   LazyGatewaysOrg,
   LazyThunderInstancesOrg,
-  LazyIdentitiesOrg,
+  LazySettingsOrg,
   LazyDeploymentPipelinesOrg,
   LazyEnvironmentsOrg,
   LazyCatalogOrg,
@@ -80,6 +81,15 @@ import {
   useGetAgent,
 } from "@agent-management-platform/api-client";
 import { MountPoints } from "../types";
+
+// Back-compat redirect: the Identities pages (users/roles/groups) moved from
+// /org/:orgId/identities/* to /org/:orgId/settings/identities/*. Preserve any
+// trailing sub-path so existing deep links keep working.
+function LegacyIdentitiesRedirect() {
+  const { orgId, "*": rest } = useParams<{ orgId: string; "*": string }>();
+  const target = `/org/${orgId}/settings/identities${rest ? `/${rest}` : ""}`;
+  return <Navigate to={target} replace />;
+}
 
 // Remounts the Security page on agent change so per-agent component state
 // (Create-key dialog open flag, newly-issued-key banner) does not leak
@@ -254,10 +264,12 @@ export function RootRouter() {
             />
             <Route
               path={
-                relativeRouteMap.children.org.children.identities.path + "/*"
+                relativeRouteMap.children.org.children.settings.path + "/*"
               }
-              element={<LazyIdentitiesOrg />}
+              element={<LazySettingsOrg />}
             />
+            {/* Back-compat: identities pages moved under Settings → IDP Settings */}
+            <Route path="identities/*" element={<LegacyIdentitiesRedirect />} />
             <Route
               path={
                 relativeRouteMap.children.org.children.deploymentPipelines

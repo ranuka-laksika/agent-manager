@@ -72,7 +72,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       '@vitejs/plugin-react':
         specifier: ^6.0.1
-        version: 6.0.3(vite@8.1.0(@types/node@24.13.2)(less@4.3.0))
+        version: 6.0.3(vite@8.1.2(@types/node@24.13.2)(less@4.3.0))
       eslint:
         specifier: ^10.2.1
         version: 10.6.0
@@ -93,7 +93,7 @@ importers:
         version: 8.62.1(eslint@10.6.0)(typescript@6.0.3)
       vite:
         specifier: ^8.0.10
-        version: 8.1.0(@types/node@24.13.2)(less@4.3.0)
+        version: 8.1.2(@types/node@24.13.2)(less@4.3.0)
 
   ../../workspaces/core-ui:
     dependencies:
@@ -139,9 +139,6 @@ importers:
       '@agent-management-platform/gateways':
         specifier: workspace:*
         version: link:../pages/gateways
-      '@agent-management-platform/identities':
-        specifier: workspace:*
-        version: link:../pages/identities
       '@agent-management-platform/llm-providers':
         specifier: workspace:*
         version: link:../pages/llm-providers
@@ -160,6 +157,9 @@ importers:
       '@agent-management-platform/profile-settings':
         specifier: workspace:*
         version: link:../pages/profile-settings
+      '@agent-management-platform/settings':
+        specifier: workspace:*
+        version: link:../pages/settings
       '@agent-management-platform/shared-component':
         specifier: workspace:*
         version: link:../libs/shared-component
@@ -3669,6 +3669,154 @@ importers:
         specifier: 3.1.3
         version: 3.1.3(@types/debug@4.1.13)(@types/node@24.6.0)(jsdom@26.1.0)(less@4.3.0)(lightningcss@1.32.0)
 
+  ../../workspaces/pages/settings:
+    dependencies:
+      '@agent-management-platform/api-client':
+        specifier: workspace:*
+        version: link:../../libs/api-client
+      '@agent-management-platform/auth':
+        specifier: workspace:*
+        version: link:../../libs/auth
+      '@agent-management-platform/identities':
+        specifier: workspace:*
+        version: link:../identities
+      '@agent-management-platform/shared-component':
+        specifier: workspace:*
+        version: link:../../libs/shared-component
+      '@agent-management-platform/types':
+        specifier: workspace:*
+        version: link:../../libs/types
+      '@agent-management-platform/views':
+        specifier: workspace:*
+        version: link:../../libs/views
+      '@emotion/react':
+        specifier: 11.13.5
+        version: 11.13.5(@types/react@19.2.14)(react@19.1.1)
+      '@emotion/styled':
+        specifier: 11.13.5
+        version: 11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1)
+      '@mui/icons-material':
+        specifier: 7.0.0
+        version: 7.0.0(@mui/material@7.0.0(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react-dom@19.1.1(react@19.1.1))(react@19.1.1))(@types/react@19.2.14)(react@19.1.1)
+      '@mui/material':
+        specifier: 7.0.0
+        version: 7.0.0(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@wso2/oxygen-ui':
+        specifier: 0.8.3
+        version: 0.8.3(@mui/system@7.3.11(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(react@19.1.1))(@types/react@19.2.14)(@wso2/oxygen-ui-icons-react@0.8.3(react@19.1.1))(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@wso2/oxygen-ui-icons-react':
+        specifier: 0.8.3
+        version: 0.8.3(react@19.1.1)
+      clsx:
+        specifier: 2.1.1
+        version: 2.1.1
+      date-fns:
+        specifier: 4.1.0
+        version: 4.1.0
+      react-dom:
+        specifier: 19.1.1
+        version: 19.1.1(react@19.1.1)
+      react-router-dom:
+        specifier: 6.28.0
+        version: 6.28.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      zod:
+        specifier: 4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@agent-management-platform/eslint-config':
+        specifier: workspace:*
+        version: link:../../libs/eslint-config
+      '@eslint/eslintrc':
+        specifier: 3.3.1
+        version: 3.3.1
+      '@eslint/js':
+        specifier: 9.36.0
+        version: 9.36.0
+      '@testing-library/jest-dom':
+        specifier: 6.6.3
+        version: 6.6.3
+      '@testing-library/react':
+        specifier: 16.3.0
+        version: 16.3.0(@testing-library/dom@10.4.0)(@types/react-dom@19.1.9(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@types/jest':
+        specifier: 29.5.14
+        version: 29.5.14
+      '@types/node':
+        specifier: 24.6.0
+        version: 24.6.0
+      '@types/react':
+        specifier: 19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: 19.1.9
+        version: 19.1.9(@types/react@19.2.14)
+      '@typescript-eslint/eslint-plugin':
+        specifier: 8.33.1
+        version: 8.33.1(@typescript-eslint/parser@8.33.1(eslint@9.36.0)(typescript@5.9.3))(eslint@9.36.0)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: 8.33.1
+        version: 8.33.1(eslint@9.36.0)(typescript@5.9.3)
+      '@vitejs/plugin-react':
+        specifier: 5.0.4
+        version: 5.0.4(vite@6.3.5(@types/node@24.6.0)(less@4.3.0)(lightningcss@1.32.0))
+      eslint:
+        specifier: 9.36.0
+        version: 9.36.0
+      eslint-config-prettier:
+        specifier: 10.1.5
+        version: 10.1.5(eslint@9.36.0)
+      eslint-import-resolver-typescript:
+        specifier: 4.4.1
+        version: 4.4.1(eslint-plugin-import@2.31.0(eslint@9.36.0))(eslint@9.36.0)
+      eslint-plugin-import:
+        specifier: 2.31.0
+        version: 2.31.0(eslint@9.36.0)
+      eslint-plugin-jest-dom:
+        specifier: 5.5.0
+        version: 5.5.0(@testing-library/dom@10.4.0)(eslint@9.36.0)
+      eslint-plugin-prettier:
+        specifier: 5.4.0
+        version: 5.4.0(eslint-config-prettier@10.1.5(eslint@9.36.0))(eslint@9.36.0)(prettier@3.5.3)
+      eslint-plugin-react:
+        specifier: 7.37.5
+        version: 7.37.5(eslint@9.36.0)
+      eslint-plugin-react-hooks:
+        specifier: 7.0.0
+        version: 7.0.0(eslint@9.36.0)
+      eslint-plugin-testing-library:
+        specifier: 7.4.0
+        version: 7.4.0(eslint@9.36.0)(typescript@5.9.3)
+      globals:
+        specifier: 16.4.0
+        version: 16.4.0
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      postcss:
+        specifier: 8.5.3
+        version: 8.5.3
+      postcss-simple-vars:
+        specifier: 7.0.1
+        version: 7.0.1(postcss@8.5.3)
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+      react:
+        specifier: 19.1.1
+        version: 19.1.1
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+      typescript-eslint:
+        specifier: 8.45.0
+        version: 8.45.0(eslint@9.36.0)(typescript@5.9.3)
+      vite:
+        specifier: 6.3.5
+        version: 6.3.5(@types/node@24.6.0)(less@4.3.0)(lightningcss@1.32.0)
+      vitest:
+        specifier: 3.1.3
+        version: 3.1.3(@types/debug@4.1.13)(@types/node@24.6.0)(jsdom@26.1.0)(less@4.3.0)(lightningcss@1.32.0)
+
   ../../workspaces/pages/test:
     dependencies:
       '@agent-management-platform/api-client':
@@ -6614,8 +6762,8 @@ packages:
     resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
     engines: {node: '>=6'}
 
-  caniuse-lite@1.0.30001799:
-    resolution: {integrity: sha512-hG1bReV+OUU+MOqK4t/ZWI0tZOyz3rqS9XuhOUz1cIcbwBKjOyJEJuw9ER5JuNyqxNk8u/JUVbGibBOL1yrjFw==}
+  caniuse-lite@1.0.30001800:
+    resolution: {integrity: sha512-MMHtuAz9Ys840zAY5F4k6fV5GaivZ9sPk+nz0mY+GYVzRBnYkN0mpqkSR92oWRQ19yQWo4HvBV/FnC16AJX8MA==}
 
   ccount@2.0.1:
     resolution: {integrity: sha512-eyrF0jiFpY+3drT6383f1qhkbGsLSifNAjA61IUjZjmLCWjItY6LB9ft9YhoDgwfmclB2zhu51Lc7+95b8NRAg==}
@@ -6961,8 +7109,8 @@ packages:
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
 
-  electron-to-chromium@1.5.381:
-    resolution: {integrity: sha512-n9Wa6yB+vDsGuA8AKbl/0z7HbvWqt5jxIdvr1IUicd0ryPrk7/xzwqLv8D9AbbvZ6avVNtXYLTfmgFHkwkyelg==}
+  electron-to-chromium@1.5.383:
+    resolution: {integrity: sha512-I2484/KkAvl8lm9VyjH2JnbOIV0d/UCqT7gbzs6l+o6Vmn9wgB66uVcKX+Vk6HrXtY6fbWTOEXuv8waDTuFNCw==}
 
   elliptic@6.6.1:
     resolution: {integrity: sha512-RaddvvMatK2LJHqFJ+YA4WysVN5Ita9E35botqIYspQ4TkRAlCicdzKOjlyv/1Za5RyTNn7di//eEV0uTAfe3g==}
@@ -9439,8 +9587,8 @@ packages:
       yaml:
         optional: true
 
-  vite@8.1.0:
-    resolution: {integrity: sha512-BuJcQK/56NQTWDGn4ABea3q4SSBdNPWwNZKTkkUpcMPnLoquSYH8llRtSUIgoL1KSCpHt5eghLShn50mH36y7Q==}
+  vite@8.1.2:
+    resolution: {integrity: sha512-6YYPbRXTxx6bRXmOn7XdnQAy5DQNHhDgtjhDHI13oe4pY93kkcdGJWxpGwOm++/Wh0QpQhDrpIoVMrmrsI5AGQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -12443,10 +12591,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-react@6.0.3(vite@8.1.0(@types/node@24.13.2)(less@4.3.0))':
+  '@vitejs/plugin-react@6.0.3(vite@8.1.2(@types/node@24.13.2)(less@4.3.0))':
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.1.0(@types/node@24.13.2)(less@4.3.0)
+      vite: 8.1.2(@types/node@24.13.2)(less@4.3.0)
 
   '@vitest/expect@2.0.5':
     dependencies:
@@ -12910,8 +13058,8 @@ snapshots:
   browserslist@4.28.4:
     dependencies:
       baseline-browser-mapping: 2.10.40
-      caniuse-lite: 1.0.30001799
-      electron-to-chromium: 1.5.381
+      caniuse-lite: 1.0.30001800
+      electron-to-chromium: 1.5.383
       node-releases: 2.0.50
       update-browserslist-db: 1.2.3(browserslist@4.28.4)
 
@@ -12943,7 +13091,7 @@ snapshots:
 
   callsites@3.1.0: {}
 
-  caniuse-lite@1.0.30001799: {}
+  caniuse-lite@1.0.30001800: {}
 
   ccount@2.0.1: {}
 
@@ -13285,7 +13433,7 @@ snapshots:
 
   eastasianwidth@0.2.0: {}
 
-  electron-to-chromium@1.5.381: {}
+  electron-to-chromium@1.5.383: {}
 
   elliptic@6.6.1:
     dependencies:
@@ -16408,7 +16556,7 @@ snapshots:
       lightningcss: 1.32.0
       tsx: 4.7.0
 
-  vite@8.1.0(@types/node@24.13.2)(less@4.3.0):
+  vite@8.1.2(@types/node@24.13.2)(less@4.3.0):
     dependencies:
       lightningcss: 1.32.0
       picomatch: 4.0.4

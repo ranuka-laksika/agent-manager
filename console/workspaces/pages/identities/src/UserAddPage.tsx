@@ -16,16 +16,13 @@
  */
 
 import React, { useCallback, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Collapse,
-  Form,
-  TextField,
-} from "@wso2/oxygen-ui";
+import { Alert, Box, Button, Collapse, Form, TextField } from "@wso2/oxygen-ui";
 import { Plus } from "@wso2/oxygen-ui-icons-react";
-import { PageLayout, useFormValidation, useDirtyState, TextInput } from "@agent-management-platform/views";
+import {
+  useFormValidation,
+  useDirtyState,
+  TextInput,
+} from "@agent-management-platform/views";
 import { useNavigate, useParams, generatePath } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
@@ -35,16 +32,18 @@ export const UserAddPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
 
-  const identitiesRoute = (absoluteRouteMap.children.org.children as unknown as {
-    identities: { children: { users: { path: string } } };
-  }).identities;
+  const identitiesRoute =
+    absoluteRouteMap.children.org.children.settings.children.identities;
 
   const usersPath = orgId
     ? generatePath(identitiesRoute.children.users.path, { orgId })
     : "#";
 
-  const { mutateAsync: createUserMutation, isPending: loading, error: createError } =
-    useCreateUser();
+  const {
+    mutateAsync: createUserMutation,
+    isPending: loading,
+    error: createError,
+  } = useCreateUser();
 
   const [formData, setFormData] = useState<AddUserFormValues>({
     username: "",
@@ -108,19 +107,21 @@ export const UserAddPage: React.FC = () => {
       // createError state is set by React Query and displayed in the Alert above
     }
   }, [
-    formData, validateForm, errors, createUserMutation, orgId,
-    resetDirty, clearErrors, navigate, usersPath,
+    formData,
+    validateForm,
+    errors,
+    createUserMutation,
+    orgId,
+    resetDirty,
+    clearErrors,
+    navigate,
+    usersPath,
   ]);
 
   const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
-    <PageLayout
-      title="Add User"
-      backHref={usersPath}
-      backLabel="Back to Users"
-      disableIcon
-    >
+    <>
       <Box display="flex" flexDirection="column" gap={2}>
         {createError != null && (
           <Alert severity="error">
@@ -136,7 +137,9 @@ export const UserAddPage: React.FC = () => {
                 <TextField
                   id="username"
                   value={formData.username}
-                  onChange={(e) => handleFieldChange("username", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("username", e.target.value)
+                  }
                   placeholder="jane.doe"
                   autoComplete="off"
                   disabled={loading}
@@ -152,7 +155,9 @@ export const UserAddPage: React.FC = () => {
                   type="password"
                   showPasswordToggle
                   value={formData.password}
-                  onChange={(e) => handleFieldChange("password", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("password", e.target.value)
+                  }
                   autoComplete="new-password"
                   disabled={loading}
                   error={!!errors.password}
@@ -161,11 +166,16 @@ export const UserAddPage: React.FC = () => {
                 />
               </Form.ElementWrapper>
 
-              <Form.ElementWrapper label="First Name (optional)" name="firstName">
+              <Form.ElementWrapper
+                label="First Name (optional)"
+                name="firstName"
+              >
                 <TextField
                   id="firstName"
                   value={formData.firstName}
-                  onChange={(e) => handleFieldChange("firstName", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("firstName", e.target.value)
+                  }
                   disabled={loading}
                   error={!!errors.firstName}
                   helperText={errors.firstName}
@@ -177,7 +187,9 @@ export const UserAddPage: React.FC = () => {
                 <TextField
                   id="lastName"
                   value={formData.lastName}
-                  onChange={(e) => handleFieldChange("lastName", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("lastName", e.target.value)
+                  }
                   disabled={loading}
                   error={!!errors.lastName}
                   helperText={errors.lastName}
@@ -185,7 +197,10 @@ export const UserAddPage: React.FC = () => {
                 />
               </Form.ElementWrapper>
 
-              <Form.ElementWrapper label="Email Address (optional)" name="email">
+              <Form.ElementWrapper
+                label="Email Address (optional)"
+                name="email"
+              >
                 <TextField
                   id="email"
                   type="email"
@@ -211,7 +226,12 @@ export const UserAddPage: React.FC = () => {
             </Alert>
           </Collapse>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
-            <Button variant="outlined" color="primary" onClick={() => navigate(usersPath)} disabled={loading}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(usersPath)}
+              disabled={loading}
+            >
               Cancel
             </Button>
             <Button
@@ -219,13 +239,15 @@ export const UserAddPage: React.FC = () => {
               color="primary"
               startIcon={<Plus size={16} />}
               onClick={handleSubmit}
-              disabled={loading || !formData.username.trim() || !formData.password}
+              disabled={
+                loading || !formData.username.trim() || !formData.password
+              }
             >
               Create User
             </Button>
           </Box>
         </Box>
       </Box>
-    </PageLayout>
+    </>
   );
 };

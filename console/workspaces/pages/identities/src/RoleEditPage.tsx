@@ -48,13 +48,13 @@ import {
   useRemoveRolePermissions,
   useListAMPPermissions,
 } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
 import {
   absoluteRouteMap,
   type ThunderUser,
   type ThunderGroup,
   type ThunderPermission,
 } from "@agent-management-platform/types";
+import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
 
 type ActiveTab = "permissions" | "users" | "groups";
@@ -180,14 +180,13 @@ export const RoleEditPage: React.FC = () => {
 
   const rolesPath = orgId
     ? generatePath(
-        (
-          absoluteRouteMap.children.org.children as unknown as {
-            identities: { children: { roles: { path: string } } };
-          }
-        ).identities.children.roles.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.roles.path,
         { orgId },
       )
     : "#";
+
+  const pageTitle = roleData?.name ?? "Edit Role";
 
   // --- Derived displayed lists (users / groups) ---
   const displayedUsers = useMemo(() => {
@@ -368,8 +367,6 @@ export const RoleEditPage: React.FC = () => {
     isLoadingGroups ||
     isLoadingCatalog;
 
-  const pageTitle = roleData?.name ?? "Edit Role";
-
   // Surface the action row only when something differs from what's saved —
   // any pending user/group add or removal, or a changed permission selection.
   const permissionsDirty = useMemo(() => {
@@ -390,25 +387,16 @@ export const RoleEditPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <PageLayout
-        isLoading
-        disableIcon
-        backHref={rolesPath}
-        backLabel="Back to Roles"
-      >
+      <>
+        <BackButton to={rolesPath} label="Roles" />
         <EditFormSkeleton tabs={3} />
-      </PageLayout>
+      </>
     );
   }
 
   return (
-    <PageLayout
-      title={pageTitle}
-      description={roleData?.description ?? undefined}
-      backHref={rolesPath}
-      backLabel="Back to Roles"
-      disableIcon
-    >
+    <>
+      <BackButton to={rolesPath} label="Roles" />
       <Stack spacing={3}>
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && (
@@ -752,6 +740,6 @@ export const RoleEditPage: React.FC = () => {
           </Stack>
         )}
       </Stack>
-    </PageLayout>
+    </>
   );
 };

@@ -28,7 +28,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
-import { PageLayout, TextInput } from "@agent-management-platform/views";
+import { TextInput } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 
 export const UserCreatePage: React.FC = () => {
@@ -39,15 +39,21 @@ export const UserCreatePage: React.FC = () => {
   const [password, setPassword] = useState("");
   const [givenName, setGivenName] = useState("");
   const [familyName, setFamilyName] = useState("");
-  const [errors, setErrors] = useState<{ username?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{
+    username?: string;
+    password?: string;
+  }>({});
 
-  const { mutateAsync: createUser, isPending: isCreating, error: createError } = useCreateUser();
+  const {
+    mutateAsync: createUser,
+    isPending: isCreating,
+    error: createError,
+  } = useCreateUser();
 
   const usersPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { users: { path: string } } };
-        }).identities.children.users.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.users.path,
         { orgId },
       )
     : "#";
@@ -90,12 +96,7 @@ export const UserCreatePage: React.FC = () => {
   };
 
   return (
-    <PageLayout
-      title="Add User"
-      backHref={usersPath}
-      backLabel="Back to Users"
-      disableIcon
-    >
+    <>
       <Stack spacing={3} sx={{ maxWidth: 700 }}>
         {createError != null && (
           <Alert severity="error">
@@ -114,7 +115,8 @@ export const UserCreatePage: React.FC = () => {
                 value={username}
                 onChange={(e) => {
                   setUsername(e.target.value);
-                  if (errors.username) setErrors((p) => ({ ...p, username: undefined }));
+                  if (errors.username)
+                    setErrors((p) => ({ ...p, username: undefined }));
                 }}
                 placeholder="john.doe"
                 autoComplete="off"
@@ -131,7 +133,8 @@ export const UserCreatePage: React.FC = () => {
               value={password}
               onChange={(e) => {
                 setPassword(e.target.value);
-                if (errors.password) setErrors((p) => ({ ...p, password: undefined }));
+                if (errors.password)
+                  setErrors((p) => ({ ...p, password: undefined }));
               }}
               autoComplete="new-password"
               error={Boolean(errors.password)}
@@ -171,20 +174,27 @@ export const UserCreatePage: React.FC = () => {
                 />
               </FormControl>
             </Box>
-
           </Form.Stack>
         </Form.Section>
 
         {/* Actions */}
         <Stack direction="row" spacing={1} justifyContent="flex-end">
-          <Button variant="outlined" onClick={() => navigate(usersPath)} disabled={isCreating}>
+          <Button
+            variant="outlined"
+            onClick={() => navigate(usersPath)}
+            disabled={isCreating}
+          >
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSubmit} disabled={isCreating || !username.trim() || !password.trim()}>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={isCreating || !username.trim() || !password.trim()}
+          >
             {isCreating ? "Creating..." : "Create User"}
           </Button>
         </Stack>
       </Stack>
-    </PageLayout>
+    </>
   );
 };

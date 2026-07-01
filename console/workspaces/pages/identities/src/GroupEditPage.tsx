@@ -44,12 +44,12 @@ import {
   useAddGroupMembers,
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
 import {
   absoluteRouteMap,
   type ThunderUser,
   type ThunderRole,
 } from "@agent-management-platform/types";
+import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
 
 type ActiveTab = "users" | "roles";
@@ -115,14 +115,13 @@ export const GroupEditPage: React.FC = () => {
 
   const groupsPath = orgId
     ? generatePath(
-        (
-          absoluteRouteMap.children.org.children as unknown as {
-            identities: { children: { groups: { path: string } } };
-          }
-        ).identities.children.groups.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.groups.path,
         { orgId },
       )
     : "#";
+
+  const pageTitle = groupData?.name ?? "Edit Group";
 
   const membersTotal = membersData?.total ?? 0;
 
@@ -204,18 +203,12 @@ export const GroupEditPage: React.FC = () => {
     isLoadingAllMemberIds ||
     isLoadingUsers;
 
-  const pageTitle = groupData?.name ?? "Edit Group";
-
   if (isLoading) {
     return (
-      <PageLayout
-        isLoading
-        disableIcon
-        backHref={groupsPath}
-        backLabel="Back to Groups"
-      >
+      <>
+        <BackButton to={groupsPath} label="Groups" />
         <EditFormSkeleton tabs={2} />
-      </PageLayout>
+      </>
     );
   }
 
@@ -223,13 +216,8 @@ export const GroupEditPage: React.FC = () => {
   const isDirty = pendingAdds.length > 0 || removedIds.size > 0;
 
   return (
-    <PageLayout
-      title={pageTitle}
-      description={groupData?.description ?? undefined}
-      backHref={groupsPath}
-      backLabel="Back to Groups"
-      disableIcon
-    >
+    <>
+      <BackButton to={groupsPath} label="Groups" />
       <Stack spacing={3}>
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && (
@@ -430,6 +418,6 @@ export const GroupEditPage: React.FC = () => {
           </Stack>
         )}
       </Stack>
-    </PageLayout>
+    </>
   );
 };

@@ -433,6 +433,10 @@
       "projectFolder": "workspaces/pages/identities"
     },
     {
+      "packageName": "@agent-management-platform/settings",
+      "projectFolder": "workspaces/pages/settings"
+    },
+    {
       "packageName": "@agent-management-platform/deployment-pipelines",
       "projectFolder": "workspaces/pages/deployment-pipelines"
     },

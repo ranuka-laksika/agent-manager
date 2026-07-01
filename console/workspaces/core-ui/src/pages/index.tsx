@@ -33,7 +33,7 @@ import {
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
-import { metaData as identitiesMetadata } from "@agent-management-platform/identities";
+import { metaData as settingsMetadata } from "@agent-management-platform/settings";
 import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
@@ -110,8 +110,8 @@ export const LazyMCPProxiesOrg = mcpProxiesMetadata.levels!.organization as FC;
 // Gateways
 export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 
-// Identities
-export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
+// Settings (IDP Settings + Appearance)
+export const LazySettingsOrg = settingsMetadata.levels!.organization as FC;
 
 // Deployment Pipelines
 export const LazyDeploymentPipelinesOrg = deploymentPipelinesMetadata.levels!

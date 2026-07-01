@@ -22,9 +22,6 @@ import {
   Binoculars as ObservabilityOutline,
   Settings2 as EvaluationOutline,
   Settings,
-  Users,
-  Shield,
-  Folder,
 } from "@wso2/oxygen-ui-icons-react";
 
 import {
@@ -53,7 +50,7 @@ import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-p
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
 import { gatewaysMetadata } from "@agent-management-platform/gateways";
 import { thunderInstancesMetadata } from "@agent-management-platform/env-thunders/metadata";
-import { identitiesMetadata } from "@agent-management-platform/identities";
+import { settingsMetadata } from "@agent-management-platform/settings";
 import {
   metaData as deploymentPipelinesMetadata,
   environmentsMetaData,
@@ -157,16 +154,12 @@ export function useNavigationItems(): Array<
       { path: string; wildPath: string }
     >
   ).gateways;
-  const identitiesOrgRoute = (
+  const settingsOrgRoute = (
     absoluteRouteMap.children.org.children as unknown as Record<
       string,
-      {
-        path: string;
-        wildPath: string;
-        children: Record<string, { path: string; wildPath: string }>;
-      }
+      { path: string; wildPath: string }
     >
-  ).identities;
+  ).settings;
   const deploymentPipelinesOrgRoute = (
     absoluteRouteMap.children.org.children as unknown as Record<
       string,
@@ -712,68 +705,19 @@ export function useNavigationItems(): Array<
           pathname,
         ),
       },
-      ...(() => {
-        const identityItems = [
-          ...(navVisibility.identityUsers
-            ? [
-                {
-                  label: "Users",
-                  type: "item" as const,
-                  icon: <Users size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.users.path, {
-                    orgId,
-                  }),
-                  isActive: !!matchPath(
-                    identitiesOrgRoute.children.users.wildPath,
-                    pathname,
-                  ),
-                },
-              ]
-            : []),
-          ...(navVisibility.identityRoles
-            ? [
-                {
-                  label: "Roles",
-                  type: "item" as const,
-                  icon: <Shield size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.roles.path, {
-                    orgId,
-                  }),
-                  isActive: !!matchPath(
-                    identitiesOrgRoute.children.roles.wildPath,
-                    pathname,
-                  ),
-                },
-              ]
-            : []),
-          ...(navVisibility.identityGroups
-            ? [
-                {
-                  label: "Groups",
-                  type: "item" as const,
-                  icon: <Folder size={20} />,
-                  href: generatePath(identitiesOrgRoute.children.groups.path, {
-                    orgId,
-                  }),
-                  isActive: !!matchPath(
-                    identitiesOrgRoute.children.groups.wildPath,
-                    pathname,
-                  ),
-                },
-              ]
-            : []),
-        ];
-        return identityItems.length > 0
-          ? [
-              {
-                title: identitiesMetadata.title,
-                type: "section" as const,
-                icon: <identitiesMetadata.icon size={20} />,
-                items: identityItems,
-              },
-            ]
-          : [];
-      })(),
+      ...(navVisibility.identityUsers ||
+      navVisibility.identityRoles ||
+      navVisibility.identityGroups
+        ? [
+            {
+              label: settingsMetadata.title,
+              type: "item" as const,
+              icon: <settingsMetadata.icon size={20} />,
+              href: generatePath(settingsOrgRoute.path, { orgId }),
+              isActive: !!matchPath(settingsOrgRoute.wildPath, pathname),
+            },
+          ]
+        : []),
       ...(navVisibility.resources
         ? [
             {

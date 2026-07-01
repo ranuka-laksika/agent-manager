@@ -16,18 +16,14 @@
  */
 
 import React, { useCallback, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Collapse,
-  Form,
-  TextField,
-} from "@wso2/oxygen-ui";
+import { Alert, Box, Button, Collapse, Form, TextField } from "@wso2/oxygen-ui";
 import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateGroup } from "@agent-management-platform/api-client";
-import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import {
+  useFormValidation,
+  useDirtyState,
+} from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { createGroupSchema, type CreateGroupFormValues } from "./forms/schemas";
 
@@ -46,14 +42,16 @@ export const GroupCreatePage: React.FC = () => {
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
     useState<typeof errors>({});
 
-  const { mutateAsync: createGroup, isPending: isCreating, error: createError } =
-    useCreateGroup();
+  const {
+    mutateAsync: createGroup,
+    isPending: isCreating,
+    error: createError,
+  } = useCreateGroup();
 
   const groupsPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { groups: { path: string } } };
-        }).identities.children.groups.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.groups.path,
         { orgId },
       )
     : "#";
@@ -90,19 +88,21 @@ export const GroupCreatePage: React.FC = () => {
       // createError state is set by React Query and displayed in the Alert above
     }
   }, [
-    formData, validateForm, errors, createGroup, orgId,
-    resetDirty, clearErrors, navigate, groupsPath,
+    formData,
+    validateForm,
+    errors,
+    createGroup,
+    orgId,
+    resetDirty,
+    clearErrors,
+    navigate,
+    groupsPath,
   ]);
 
   const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
-    <PageLayout
-      title="Create Group"
-      backHref={groupsPath}
-      backLabel="Back to Groups"
-      disableIcon
-    >
+    <>
       <Box display="flex" flexDirection="column" gap={2}>
         {createError != null && (
           <Alert severity="error">
@@ -127,11 +127,16 @@ export const GroupCreatePage: React.FC = () => {
                 />
               </Form.ElementWrapper>
 
-              <Form.ElementWrapper label="Description (optional)" name="description">
+              <Form.ElementWrapper
+                label="Description (optional)"
+                name="description"
+              >
                 <TextField
                   id="description"
                   value={formData.description}
-                  onChange={(e) => handleFieldChange("description", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("description", e.target.value)
+                  }
                   placeholder="Describe the group's purpose"
                   multiline
                   minRows={2}
@@ -154,7 +159,11 @@ export const GroupCreatePage: React.FC = () => {
             </Alert>
           </Collapse>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
-            <Button variant="outlined" color="primary" onClick={() => navigate(groupsPath)}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(groupsPath)}
+            >
               Cancel
             </Button>
             <Button
@@ -169,6 +178,6 @@ export const GroupCreatePage: React.FC = () => {
           </Box>
         </Box>
       </Box>
-    </PageLayout>
+    </>
   );
 };
