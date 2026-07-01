@@ -34,7 +34,7 @@ Repeatable, error-prone procedures are captured as Claude Code skills in `.claud
 
 ## How the aspects fit together
 
-```
+```text
 console ──HTTP──▶ agent-manager-service ──▶ OpenChoreo / Postgres / Vault / NATS
    │                       │
    │                       └─ orchestrates agent deploys; agents are auto-instrumented by

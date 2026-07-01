@@ -4,10 +4,13 @@ Small Go service that serves the console's trace/observability API. It is **not*
 
 ## Request flow
 
+```text
+HTTP → RequestLogger → CORS → mux ┬→ /health              (no auth)
+                                   └→ JWTAuth → /api/v1/* → handlers/ → controllers/ → observer/ (HTTP client) → Observer service
+                                                                                    ↘ opensearch/ (span parsing / enrichment)
 ```
-HTTP → middleware (Logger → CORS → JWTAuth) → handlers/ → controllers/ → observer/ (HTTP client) → Observer service
-                                                                        ↘ opensearch/ (span parsing / enrichment)
-```
+
+`RequestLogger` and `CORS` wrap the whole server; `JWTAuth` wraps only the `apiMux` mounted at `/api/v1/*` (`main.go`). `/health` is registered on the bare mux and is **unauthenticated**.
 
 - **`handlers/`** — parse/validate the request, extract path params, call the controller, write the response. Client-facing errors are generic (`"Failed to retrieve …"`); real detail is logged server-side.
 - **`controllers/`** — orchestration + enrichment. Fetches trace overviews, then fans out to fetch span details and aggregates input/output/token usage.
@@ -53,13 +56,20 @@ make mock-traces  # generate OTLP traces via telemetrygen (for local testing)
 
 `config.Load()` reads env vars with defaults and validates at startup (`config/config.go`):
 
-| Var | Purpose |
-|---|---|
-| `TRACES_OBSERVER_PORT` | listen port (default 9098) |
-| `OBSERVER_BASE_URL`, `IDP_TOKEN_URL`, `IDP_CLIENT_ID`, `IDP_CLIENT_SECRET` | upstream Observer + its OAuth2 creds (all required together once `OBSERVER_BASE_URL` is set) |
-| `KEY_MANAGER_JWKS_URL`, `KEY_MANAGER_ISSUER`, `KEY_MANAGER_AUDIENCE` | JWT validation (required unless local dev) |
-| `IS_LOCAL_DEV_ENV` | `true` skips JWT signature validation (checks expiry only) |
-| `LOG_LEVEL` | DEBUG/INFO/WARN/ERROR |
+| Var | Config field (`config.Load()` result) | Purpose |
+|---|---|---|
+| `TRACES_OBSERVER_PORT` | `cfg.Server.Port` | listen port (default 9098) |
+| `OBSERVER_BASE_URL` | `cfg.Observer.BaseURL` | upstream Observer base URL |
+| `IDP_TOKEN_URL` | `cfg.Observer.TokenURL` | Observer OAuth2 token endpoint |
+| `IDP_CLIENT_ID` | `cfg.Observer.ClientID` | Observer OAuth2 client id |
+| `IDP_CLIENT_SECRET` | `cfg.Observer.ClientSecret` | Observer OAuth2 client secret |
+| `KEY_MANAGER_JWKS_URL` | `cfg.Auth.JWKSUrl` | JWKS endpoint for JWT validation |
+| `KEY_MANAGER_ISSUER` | `cfg.Auth.Issuer` (list) | accepted token issuers (comma-separated) |
+| `KEY_MANAGER_AUDIENCE` | `cfg.Auth.Audience` (list) | accepted audiences (comma-separated) |
+| `IS_LOCAL_DEV_ENV` | `cfg.Auth.IsLocalDevEnv` | `true` skips JWT signature validation (checks expiry only) |
+| `LOG_LEVEL` | `cfg.LogLevel` | DEBUG/INFO/WARN/ERROR |
+
+The four `cfg.Observer.*` fields are required together once `OBSERVER_BASE_URL` is set; the `cfg.Auth.*` fields are required unless `IsLocalDevEnv` is true.
 
 Co-dependent values are checked together — a partially-set Observer or Auth config fails at startup, not first request. `getEnvAsList` parses comma-separated issuer/audience lists.
 
@@ -69,18 +79,24 @@ Co-dependent values are checked together — a partially-set Observer or Auth co
 
 The **observer client** holds its own OAuth2 client-credentials token (cached with a 30s expiry buffer). On a `401` it invalidates the token and retries once, falling back from Basic-auth to POST-form auth for Keycloak compatibility.
 
+### ⚠️ Known gap: no caller-org authorization
+
+`middleware.JWTAuth` only validates the token itself (signature/issuer/audience). It does **not** cross-check the token's org against the requested organization. The handlers read the target org straight from the query string (`organization := query.Get("organization")` in `handlers/handlers.go`) into `controllers.TraceQueryParams.Organization`, which becomes the OpenSearch `Namespace`. **Any valid token can therefore query any organization's traces** — there is no tenant isolation in the request path today.
+
+The intended rule (not yet enforced): the caller's org identity from the JWT must match (or be authorized for) the `organization` query param before the trace query runs. If you add multi-tenant enforcement, do it in the handlers right after reading `organization`, before constructing `TraceQueryParams` — reject with `403` on mismatch. Until then, treat this service as trusting its network boundary for tenant isolation.
+
 ## Engineering rules (as practiced here)
 
-- **Errors** — wrap with a `pkg.Func:` prefix and `%w`: `fmt.Errorf("observer.QueryTraces: %w", err)`. Never return a nil context.
-- **Context** — every call takes `ctx` first and propagates it; handlers pass `r.Context()` down. Passing `nil` panics.
-- **Logging** — `slog` (JSON). Request-scoped logger via `logger.WithLogger`/`GetLogger(ctx)`; log with fields (`method`, `path`, `status`, `duration`). Upstream partial failures are logged as warnings, not fatal.
+- **Errors** — wrap with a `pkg.Func:` prefix and `%w`: `fmt.Errorf("observer.QueryTraces: %w", err)`.
+- **Context** — every I/O call takes `context.Context` first and propagates it. **Never pass `nil` as the context** — always pass `r.Context()` or a context derived from it (`context.WithCancel`/`WithTimeout`); a `nil` context panics downstream.
+- **Logging** — `slog` (JSON). Use the request-scoped logger via `logger.WithLogger`/`GetLogger(ctx)`. The request logger currently attaches `method`, `path`, `remote_addr`, `status`, `duration`. Per the platform rule, request-scoped logs should carry correlation context — when you log inside a trace query, add the identifiers you have (`organization`, trace/span IDs, request ID) so entries are traceable. Upstream partial failures are logged as warnings, not fatal.
 - **Concurrency in enrichment** — the controller uses a **two-tier semaphore** (outer: max 10 concurrent traces; inner: max 50 concurrent span fetches). Do not collapse to one pool — it prevents deadlock. Enrichment short-circuits once fields are filled, skips leaf aggregation above 100 spans, and caps leaf fetches at 50 (`TokenUsage.Partial=true` when truncated). The export path uses `context.WithCancel` + `atomic.Bool` for fail-fast.
 
 ## Gotchas
 
 - Service **cannot run in isolation** — it needs a reachable Observer (`OBSERVER_BASE_URL` + IDP creds). For local work set `IS_LOCAL_DEV_ENV=true`.
 - The old README mentions OpenSearch directly; the code does **not** talk to OpenSearch — the `opensearch/` package is only span-parsing types/logic.
-- Tests set/unset env vars themselves (`config_test.go` pattern: set → run → `defer` unset).
+- Tests need env vars set at import/run time. Some existing tests (e.g. `config_test.go`) use the manual `os.Setenv` + `defer os.Unsetenv` pattern; **prefer `t.Setenv("KEY", "val")` in new tests** — it sets the var for the test and auto-restores it on cleanup (no `defer` boilerplate, and it guards against parallel misuse).
 
 ## Done checklist
 
@@ -88,3 +104,5 @@ The **observer client** holds its own OAuth2 client-credentials token (cached wi
 - [ ] `make lint` (`golangci-lint run ./...`) clean.
 - [ ] `make fmt` applied.
 - [ ] New I/O paths take and propagate `context.Context`; errors wrapped with `%w`.
+- [ ] **Authorization** — any new endpoint that reads org-scoped data checks the caller's org against the requested `organization` (see the known-gap note under Auth); don't widen access without addressing it.
+- [ ] **Config validation** — new config values are validated in `config.validate()` at startup, with co-dependent values checked together.

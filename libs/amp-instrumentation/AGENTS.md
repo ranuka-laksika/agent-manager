@@ -5,6 +5,7 @@ Zero-code OpenTelemetry instrumentation for Python AI agents, built on the **Tra
 ## Layout
 
 `src/amp_instrumentation/`
+
 | File | Role |
 |---|---|
 | `__init__.py` | public API — exports `init_otel()` |

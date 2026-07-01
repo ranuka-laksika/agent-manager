@@ -39,7 +39,7 @@ description: Add a new evaluator to the amp-evaluation Python library. Use when 
 pip install -e '.[dev]'
 pytest                          # runs with coverage (see pyproject)
 ruff check src/                 # lint (line-length 120)
-black src/ && ruff format src/  # format
+black src/                      # format (project configures Black; don't also run `ruff format`)
 mypy src/                       # type-check
 ```
 

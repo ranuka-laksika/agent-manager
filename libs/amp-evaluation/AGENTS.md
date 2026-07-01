@@ -53,7 +53,7 @@ No Makefile. From this dir:
 pip install -e '.[dev]'        # dev extras: pytest, pytest-cov, black, ruff, deepeval, any-llm
 pytest                         # runs with -v --cov=amp_evaluation (see pyproject)
 ruff check src/                # lint
-black src/ && ruff format src/ # format
+black src/                     # format (project configures Black; don't also run `ruff format`)
 mypy src/                      # type-check (excludes samples/)
 ```
 

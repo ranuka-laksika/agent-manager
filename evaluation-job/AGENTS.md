@@ -11,22 +11,24 @@ A Dockerized Python **job** (not a library) that runs Monitor-mode evaluations a
 ## `main.py` structure
 
 - `OAuth2TokenManager` — client-credentials token caching (refresh when within 30s of expiry).
-- SIGTERM handler → sets a global flag for graceful shutdown; `Monitor.run()` must observe it.
+- `handle_sigterm` → logs and exits immediately via `sys.exit(0)` (graceful shutdown for Kubernetes). It does not set a shutdown flag, and nothing polls one.
 - Argparse config validation → evaluator registration from a JSON arg → trace fetch (paginated) → `Monitor.run()` → publish scores.
 
 ### CLI flags
 
 | Flag | Notes |
 |---|---|
-| `--monitor-name`, `--agent-id`, `--environment-id` | required identity |
+| `--monitor-name`, `--monitor-id`, `--run-id` | monitor + run identity |
+| `--organization`, `--project`, `--agent`, `--environment` | scope of the traces to evaluate |
 | `--evaluators='[{…}]'` | JSON array of `{name, …config}`; each becomes a builtin evaluator via `builtin(name, **config)` |
 | `--sampling-rate` | float, default 1.0 |
 | `--trace-start`, `--trace-end` | ISO-8601 window |
 | `--traces-api-endpoint` | e.g. `http://traces-observer:8080` |
-| `--oauth2-token-url/-client-id/-client-secret` | optional, for the token manager |
-| `--publish-endpoint`, `--publish-token` | where scores are POSTed |
+| `--publisher-endpoint` | agent-manager internal API base for score publishing (e.g. `http://agent-manager-internal:8081`) |
 
-Traces are fetched via `TraceFetcher.export_traces(...)` at **page size 10** (hard-coded to bound memory). Scores POST to `/api/evaluations/{monitor_id}/scores` as `EvaluatorSummary` dicts, with exponential backoff (3 retries, 2s initial).
+OAuth2 client credentials for publisher authentication are read from the environment (via `OAuth2TokenManager`), not passed as CLI flags.
+
+Traces are fetched via `TraceFetcher.fetch_traces(...)`. Page size is configurable via the `page_size` parameter and defaults to the value set on the `TraceFetcher` instance; this job constructs the fetcher with `page_size=TRACE_FETCH_PAGE_SIZE` (a module constant, currently `10`, to bound memory). Scores POST to `/api/v1/publisher/monitors/{monitor_id}/runs/{run_id}/scores` (built from `--publisher-endpoint`) as an `EvaluatorSummary`-derived payload (`individualScores` + `aggregatedScores`), with exponential backoff (3 retries, 2s initial).
 
 ## Commands
 

@@ -35,7 +35,7 @@ Build args: `PYTHON_VERSION` (default 3.11), `TRACELOOP_VERSION` (default 0.60.0
 
 - `sitecustomize.py` must land at the **root** of `/otel-tracing-sdk/` for Python to auto-import it.
 - `OTEL_EXPORTER_OTLP_INSECURE=true` is hard-coded (no TLS validation) — expected for in-cluster export.
-- If `AMP_OTEL_ENDPOINT`/`AMP_AGENT_API_KEY` are missing at app startup, `Traceloop.init()` fails and is logged, but the app still runs (no hard exit).
+- **Fail-open by design (diverges from the library contract).** This `sitecustomize.py` wraps its entire body in `try/except Exception` and only logs (`logger.exception`) — it never re-raises. So if `AMP_OTEL_ENDPOINT`/`AMP_AGENT_API_KEY` are missing (it raises a `ValueError`), or Traceloop import/init fails, instrumentation is silently skipped and **the host app keeps running**. This is intentional: an init container must not crash the app it instruments. Note this differs from `../libs/amp-instrumentation/AGENTS.md`, where `initialize_instrumentation()` raises `ConfigurationError`/`ImportError` on missing required vars. If you change this file, preserve the swallow-and-log behavior unless you deliberately want startup to hard-fail.
 - No tests — it's a build/copy script.
 
 Ships the package documented in `../libs/amp-instrumentation/AGENTS.md`.
