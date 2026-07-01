@@ -62,7 +62,9 @@ def test_access_token_requests_rbac_scopes():
     body = _u.parse_qs([r for r in responses.calls if r.request.url.startswith(TOKEN_URL)][0].request.body)
     assert body["grant_type"] == ["client_credentials"]
     requested = body["scope"][0].split()
-    for required in ("project:create", "agent:create", "agent:api-key-manage", "project:delete"):
+    # Thunder v0.45 namespaces AMP scopes with the `amp:` resource-server handle;
+    # the service enforces the prefixed names (rbac.Permission.Scope).
+    for required in ("amp:project:create", "amp:agent:create", "amp:agent:api-key-manage", "amp:project:delete"):
         assert required in requested
 
 
