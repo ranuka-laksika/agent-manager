@@ -162,8 +162,13 @@ jobs:
             investigating, not a rubber-stamp refresh.
 
   heavy:
-    runs-on:
-      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
+    # Pinned to GitHub-hosted, unlike the emission jobs above: this is the only
+    # job that stands up k3d (via amp-dev-stack), and k3d's API server never
+    # becomes reachable on the CodeBuild runners' Docker-in-Docker daemon — the
+    # published host port (kubeAPI 6550) lands on the Docker host, not the
+    # runner, so `kubectl` hangs and `make setup-k3d` times out. ubuntu-latest
+    # is its own Docker host, where k3d's port publishing works.
+    runs-on: ubuntu-latest
     needs: run-cells
     # Normal run: gate behind a green emission matrix. heavy_only: run
     # regardless (run-cells is skipped), so always() is needed to evaluate at all.
