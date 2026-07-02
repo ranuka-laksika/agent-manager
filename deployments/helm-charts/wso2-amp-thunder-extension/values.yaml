@@ -31,7 +31,7 @@ thunder:
         cpu: 100m
         memory: 128Mi
   persistence:
-    enabled: false
+    enabled: true
     storageClass: ""
     accessMode: ReadWriteOnce
     size: 1Gi
@@ -551,3 +551,4 @@ thunder:
         password: "admin"
         givenName: "Admin"
         familyName: "User"
+        groups: []

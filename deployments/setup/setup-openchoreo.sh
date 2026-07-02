@@ -444,10 +444,11 @@ install_default_env_thunder() {
     echo "📦 Provisioning Thunder ID instance for the default environment..."
     # The default environment (created by Platform Resources above) is the birthplace
     # of agent identities, so it gets its own Thunder instance — separate from the
-    # platform Thunder (amp-thunder) used for console login. Uses the local chart so
-    # it shares the dependency build done above; persistence is enabled by the script.
+    # platform Thunder (amp-thunder) used for console login. Installs the upstream
+    # ThunderID release chart directly (add-environment-thunder.sh's own default),
+    # NOT the wso2-amp-thunder-extension chart platform Thunder uses above — this
+    # keeps env-Thunder's version independent of whatever platform Thunder runs.
     ENV_NAME=default DISPLAY_NAME="Default" ORG_NAME=default \
-        THUNDER_CHART="${SCRIPT_DIR}/../helm-charts/wso2-amp-thunder-extension" \
         WAIT_TIMEOUT=300s \
         bash "${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
     echo "✅ Default environment Thunder ID instance provisioned"
@@ -483,7 +484,6 @@ if install_default_env_thunder; then
 else
     echo "⚠️  Default-env Thunder provisioning failed — continuing with remaining setup steps."
     echo "    Re-run manually: ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
-    echo "      THUNDER_CHART=${SCRIPT_DIR}/../helm-charts/wso2-amp-thunder-extension \\"
     echo "      bash ${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
     echo ""
 fi
@@ -603,7 +603,7 @@ echo ""
 _active_count=0
 while IFS= read -r _ns; do
   [ -n "$_ns" ] || continue
-  _secret="${_ns}-admin"
+  _secret="${_ns}-admin-credentials"
   kubectl get secret "$_secret" -n "$_ns" &>/dev/null 2>&1 || continue
   _active_count=$((_active_count + 1))
   if [ "$_active_count" -eq 1 ]; then
@@ -611,12 +611,14 @@ while IFS= read -r _ns; do
     echo "  Thunder ID — Provisioned Instances (save these credentials!)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   fi
-  _url="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.url}' 2>/dev/null | base64 -d)"
-  _user="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.username}' 2>/dev/null | base64 -d)"
+  _host="$(kubectl get httproute "$_ns" -n openchoreo-control-plane -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null || echo "")"
+  if [ -z "$_host" ]; then
+    _host="${_ns#amp-thunder-}.thunder.amp.localhost"
+  fi
   _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)"
   echo "  ${_ns#amp-thunder-}:"
-  echo "    URL:      ${_url}/console"
-  echo "    Username: ${_user}"
+  echo "    URL:      http://${_host}:8080/console"
+  echo "    Username: admin"
   echo "    Password: ${_pass}"
   echo ""
 done < <(kubectl get namespaces -o name 2>/dev/null | sed 's|^namespace/||' | grep '^amp-thunder-')

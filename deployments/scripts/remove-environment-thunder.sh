@@ -18,7 +18,6 @@ set -euo pipefail
 #   - ENV_NAME: the environment name (lowercase alphanumeric with hyphens)
 # Optional:
 #   - ORG_NAME (default: default)
-#   - THUNDER_NAMESPACE (default: derived amp-thunder-<org>-<env>)
 
 # ---------------------------------------------------------------------------
 # Pure helpers (re-defined here for standalone use; kept in sync with
@@ -56,11 +55,6 @@ thunder_namespace() {
   thunder_release_name "$1" "$2"
 }
 
-# thunder_host ORG ENV -> single DNS label under thunder.amp.localhost.
-thunder_host() {
-  printf '%s-%s.thunder.amp.localhost' "$1" "$2"
-}
-
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -80,9 +74,11 @@ main() {
     exit 1
   fi
 
+  # Namespace is ALWAYS computed from (org, env) — never overridable — so removal
+  # targets exactly the namespace add-environment-thunder.sh actually provisioned.
   local release ns
   release="$(thunder_release_name "$org" "$ENV_NAME")"
-  ns="${THUNDER_NAMESPACE:-$(thunder_namespace "$org" "$ENV_NAME")}"
+  ns="$(thunder_namespace "$org" "$ENV_NAME")"
 
   echo "=== Removing Thunder ID for environment '${ENV_NAME}' (org '${org}') ==="
   echo ""
@@ -91,13 +87,25 @@ main() {
   echo ""
 
   # --- Step 1: Uninstall the Thunder helm release ---
-  # helm uninstall also deletes the HTTPRoute in openchoreo-control-plane (Helm-managed).
   echo "🗑️  Uninstalling Thunder helm release..."
   if helm status "$release" --namespace "$ns" > /dev/null 2>&1; then
     helm uninstall "$release" --namespace "$ns"
     echo "✅ Thunder helm release uninstalled"
   else
     echo "ℹ️  Thunder release '${release}' not found — already removed or never installed"
+  fi
+
+  # --- Step 1b: Delete the cross-namespace HTTPRoute ---
+  # add-environment-thunder.sh applies this directly via kubectl (not part of the
+  # Helm release, since it lives in openchoreo-control-plane rather than the
+  # release's own namespace), so it is NOT removed by `helm uninstall` above.
+  echo ""
+  echo "🗑️  Deleting HTTPRoute in openchoreo-control-plane..."
+  if kubectl get httproute "$release" -n openchoreo-control-plane > /dev/null 2>&1; then
+    kubectl delete httproute "$release" -n openchoreo-control-plane
+    echo "✅ HTTPRoute deleted"
+  else
+    echo "ℹ️  HTTPRoute '${release}' not found — already removed or never created"
   fi
 
   # --- Step 2: Delete the Thunder namespace ---
@@ -110,13 +118,6 @@ main() {
     echo "✅ Thunder namespace deleted"
   else
     echo "ℹ️  Namespace '${ns}' not found — already deleted"
-  fi
-
-  # --- Step 3: Remove local credential file (namespace deletion already removed K8s Secret) ---
-  local cred_file="${HOME}/.amp/thunder-credentials/${org}-${ENV_NAME}.env"
-  if [ -f "$cred_file" ]; then
-    rm -f "$cred_file"
-    echo "🧹 Removed local credential file (${cred_file})"
   fi
 
   echo ""

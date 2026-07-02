@@ -1520,6 +1520,7 @@ else
 fi
 
 log_info "Provisioning Thunder identity provider for the default environment..."
+ENV_THUNDER_PROVISIONED=false
 if ! install_default_env_thunder; then
     log_warning "Default environment Thunder provisioning failed (non-fatal)"
     echo "Re-run manually once the platform is ready:"
@@ -1527,6 +1528,7 @@ if ! install_default_env_thunder; then
     echo "  bash <(curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh)"
 else
     log_success "Default environment Thunder identity provider provisioned"
+    ENV_THUNDER_PROVISIONED=true
 fi
 echo ""
 
@@ -1621,6 +1623,24 @@ if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
   log_info "Agent Management Platform Console: http://localhost:3000"
   log_info "Observability Gateway (for traces): http://localhost:22893/otel"
 fi
+
+# Print the default environment's Thunder ID console + admin credentials — the
+# release/namespace/host follow the fixed ENV_NAME=default ORG_NAME=default naming
+# convention (see thunder_release_name/thunder_namespace/thunder_host in
+# add-environment-thunder.sh). The password lives only in a K8s Secret (never written
+# to disk by add-environment-thunder.sh), so it's fetched fresh here rather than
+# re-printed from that script's own (long since scrolled-past) console output.
+if [[ "${ENV_THUNDER_PROVISIONED}" == "true" ]]; then
+  ENV_THUNDER_ADMIN_PASSWORD="$(kubectl get secret amp-thunder-default-default-admin-credentials \
+    -n amp-thunder-default-default -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  if [[ -n "${ENV_THUNDER_ADMIN_PASSWORD}" ]]; then
+    log_step "Default Environment Thunder ID Console"
+    log_info "URL:      http://default-default.thunder.amp.localhost:8080/console"
+    log_info "Username: admin"
+    log_info "Password: ${ENV_THUNDER_ADMIN_PASSWORD}"
+  fi
+fi
+
 echo ""
 echo ""
 log_info "To check status: kubectl get pods -A"

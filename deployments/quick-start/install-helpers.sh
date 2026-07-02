@@ -239,7 +239,11 @@ install_observability_extension() {
 
 # Provision a per-environment Thunder instance for the default environment.
 # Downloads add-environment-thunder.sh from the published release and runs it using
-# the OCI registry chart (default in the script when THUNDER_CHART is not set).
+# ITS OWN default chart: the upstream ThunderID release chart
+# (oci://ghcr.io/thunder-id/helm-charts/thunderid), NOT the agent-manager
+# wso2-amp-thunder-extension chart. CHART_VERSION is intentionally left unset here
+# so the script pins its own validated ThunderID version — the agent-manager
+# release VERSION has no bearing on which ThunderID release env-Thunder runs.
 install_default_env_thunder() {
     local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
     local tmp_script
@@ -254,7 +258,6 @@ install_default_env_thunder() {
     ENV_NAME=default \
         DISPLAY_NAME="Default" \
         ORG_NAME=default \
-        CHART_VERSION="${VERSION}" \
         bash "${tmp_script}"
     local status=$?
     rm -f "${tmp_script}"

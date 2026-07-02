@@ -232,7 +232,48 @@ else
     exit 1
 fi
 
-# --- Step 2: Helm install the gateway ---
+# --- Step 2: Provision the environment's Thunder ID instance ---
+# Each environment gets its own Thunder ID (the identity provider for that environment's
+# agent OAuth clients). Provisioned BEFORE the gateway (previously this ran after) so the
+# gateway's ThunderKeyManager is only ever wired to an address that is confirmed to exist.
+# The old order wired the gateway to a computed-but-not-yet-created Thunder address and
+# then provisioned Thunder as a non-fatal afterthought — if that step failed (or was
+# skipped via PROVISION_THUNDER=false), the gateway was left permanently pointed at a
+# per-env Thunder instance that was never created, silently breaking agent JWT validation.
+THUNDER_PROVISIONED=false
+if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
+    echo ""
+    echo "🔐 Provisioning Thunder ID instance for '${ENV_NAME}'..."
+    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
+    # The console sets it via getRawScriptUrl; the default follows main (latest).
+    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
+    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
+    script_tmp="$(mktemp)"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
+      if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
+          DATAPLANE_REF="${DATAPLANE_REF}" THUNDER_CHART="${THUNDER_CHART:-}" \
+          bash "$script_tmp"; then
+        echo "✅ Thunder ID instance provisioned"
+        THUNDER_PROVISIONED=true
+      else
+        echo "⚠️  Thunder ID provisioning failed."
+        echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)"
+        echo "    instead of an address that doesn't exist. To fix:"
+        echo "    1) Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
+        echo "    2) Re-run this add-environment.sh with the same ENV_NAME (idempotent) to re-wire the gateway"
+      fi
+    else
+      echo "⚠️  Failed to fetch Thunder ID provisioning script from ${THUNDER_SCRIPT_URL}"
+      echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)."
+    fi
+    rm -f "$script_tmp"
+else
+    echo ""
+    echo "ℹ️  PROVISION_THUNDER=false — skipping per-env Thunder; gateway will use its default"
+    echo "    ThunderKeyManager (shared platform Thunder) instead of a per-env address."
+fi
+
+# --- Step 3: Helm install the gateway ---
 echo ""
 echo "🌐 Installing API Platform Gateway for '${ENV_NAME}'..."
 
@@ -244,36 +285,51 @@ RELEASE_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 # any trailing hyphens left by truncation.
 RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 
-# Per-env Thunder JWKS wiring: the gateway's ThunderKeyManager must trust the
-# JWT tokens minted by THIS environment's Thunder (not the shared platform Thunder).
-#   issuer        = Thunder's publicUrl / jwt.issuer (what it stamps into the JWT iss claim)
-#   internal_jwks = Thunder's K8s service DNS — avoids routing through the ingress
-#                   Service name follows the chart template: {{ .Release.Name }}-service
-THUNDER_RELEASE="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
-THUNDER_ISSUER="http://$(_thunder_host "${ORG_NAME}" "${ENV_NAME}"):8080"
-THUNDER_INTERNAL_JWKS="http://${THUNDER_RELEASE}-service.${THUNDER_RELEASE}.svc.cluster.local:8090/oauth2/jwks"
+HELM_ARGS=(
+    upgrade --install "${RELEASE_NAME}"
+    "${CHART_REF}"
+    --namespace "${GATEWAY_NAMESPACE}"
+    --set agentManager.orgName="${ORG_NAME}"
+    --set gateway.environment="${ENV_NAME}"
+    --set gateway.displayName="${DISPLAY_NAME} API Platform Gateway"
+    --set gateway.vhost="http://${ENV_NAME}-${ORG_NAME}.gateway.localhost:${GATEWAY_VHOST_PORT}"
+    --set agentManager.apiUrl="${AGENT_MANAGER_INTERNAL_API}"
+    --set apiGateway.controlPlane.host="${AGENT_MANAGER_INTERNAL_CP}"
+    --set apiGateway.controlPlane.tls.insecureSkipVerify=true
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].name=agent-manager-service"
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].issuer=agent-manager-service"
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.uri=${AGENT_MANAGER_INTERNAL_JWKS}"
+    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.skipTlsVerify=true"
+)
+if [ -n "$CHART_VERSION" ]; then
+    HELM_ARGS+=(--version "${CHART_VERSION}")
+fi
 
-helm upgrade --install "${RELEASE_NAME}" \
-    "${CHART_REF}" \
-    ${CHART_VERSION:+--version "${CHART_VERSION}"} \
-    --namespace "${GATEWAY_NAMESPACE}" \
-    --set agentManager.orgName="${ORG_NAME}" \
-    --set gateway.environment="${ENV_NAME}" \
-    --set gateway.displayName="${DISPLAY_NAME} API Platform Gateway" \
-    --set gateway.vhost="http://${ENV_NAME}-${ORG_NAME}.gateway.localhost:${GATEWAY_VHOST_PORT}" \
-    --set agentManager.apiUrl="${AGENT_MANAGER_INTERNAL_API}" \
-    --set apiGateway.controlPlane.host="${AGENT_MANAGER_INTERNAL_CP}" \
-    --set apiGateway.controlPlane.tls.insecureSkipVerify=true \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].name=agent-manager-service" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].issuer=agent-manager-service" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.uri=${AGENT_MANAGER_INTERNAL_JWKS}" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.skipTlsVerify=true" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}" \
-    --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
+if [ "$THUNDER_PROVISIONED" = "true" ]; then
+    # Per-env Thunder JWKS wiring: the gateway's ThunderKeyManager must trust the
+    # JWT tokens minted by THIS environment's Thunder (not the shared platform Thunder).
+    # Only reached when Thunder provisioning above succeeded, so this address is
+    # guaranteed to already be live — never wired speculatively.
+    #   issuer        = Thunder's publicUrl / jwt.issuer (what it stamps into the JWT iss claim)
+    #   internal_jwks = Thunder's K8s service DNS — avoids routing through the ingress
+    #                   Service name follows the chart template: {{ .Release.Name }}-service
+    THUNDER_RELEASE="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+    THUNDER_ISSUER="http://$(_thunder_host "${ORG_NAME}" "${ENV_NAME}"):8080"
+    THUNDER_INTERNAL_JWKS="http://${THUNDER_RELEASE}-service.${THUNDER_RELEASE}.svc.cluster.local:8090/oauth2/jwks"
+    HELM_ARGS+=(
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
+    )
+else
+    echo "ℹ️  Per-env Thunder not provisioned in this run — gateway keeps the chart's"
+    echo "    default ThunderKeyManager (shared platform Thunder)."
+fi
 
-# --- Step 3: Wait for gateway to be ready ---
+helm "${HELM_ARGS[@]}"
+
+# --- Step 4: Wait for gateway to be ready ---
 GATEWAY_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
 echo ""
 echo "⏳ Waiting for gateway '${GATEWAY_NAME}' to be ready..."
@@ -281,32 +337,6 @@ if kubectl wait --for=condition=Programmed "apigateway/${GATEWAY_NAME}" -n "${GA
     echo "✅ Gateway is programmed"
 else
     echo "⚠️  Gateway did not become ready in time — check: kubectl get apigateway ${GATEWAY_NAME} -n ${GATEWAY_NAMESPACE}"
-fi
-
-# --- Step 4: Provision the environment's Thunder ID instance ---
-# Each environment gets its own Thunder ID (the identity provider for that environment's
-# agent OAuth clients). Chained here so one curl covers env + gateway + Thunder.
-# Non-fatal: the environment and gateway already exist if this step fails.
-if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
-    echo ""
-    echo "🔐 Provisioning Thunder ID instance for '${ENV_NAME}'..."
-    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
-    # The console sets it via getRawScriptUrl; the default follows main (latest).
-    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
-    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
-    script_tmp="$(mktemp)"
-    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
-      if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
-          DATAPLANE_REF="${DATAPLANE_REF}" bash "$script_tmp"; then
-        echo "✅ Thunder ID instance provisioned"
-      else
-        echo "⚠️  Thunder ID provisioning failed — environment and gateway are up."
-        echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
-      fi
-    else
-      echo "⚠️  Failed to fetch Thunder ID provisioning script from ${THUNDER_SCRIPT_URL}"
-    fi
-    rm -f "$script_tmp"
 fi
 
 echo ""

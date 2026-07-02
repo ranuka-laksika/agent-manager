@@ -420,7 +420,7 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, orgName s
 
 	instances := make([]models.ThunderInstanceResponse, 0, len(envs))
 	for _, env := range envs {
-		if env == nil {
+		if env == nil || env.Name == "" {
 			continue
 		}
 

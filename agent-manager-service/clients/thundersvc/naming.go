@@ -42,9 +42,14 @@ const (
 // Format: amp-thunder-<org>-<env>, capped at 53 characters.
 // If the natural name exceeds 53 chars, it is truncated to 46 characters (trailing "-" stripped)
 // and a 6-char hex hash of "org/env" is appended for collision safety.
+//
+// Deliberately lowercases only — does NOT collapse consecutive hyphens like slugify() does.
+// The bash scripts that actually provision Thunder (add-environment.sh, add-environment-thunder.sh)
+// use org/env raw, with no hyphen-collapsing. Slugifying here would let this function compute a
+// different address than what was actually deployed for any org/env containing "--".
 func ThunderReleaseName(org, env string) string {
-	org = slugify(org)
-	env = slugify(env)
+	org = strings.ToLower(org)
+	env = strings.ToLower(env)
 	if org == "" || env == "" {
 		panic("org and env names must be valid alphanumeric slugs and not empty")
 	}
@@ -94,9 +99,12 @@ func ThunderTokenURL(org, env string) string {
 
 // ThunderHost returns the wildcard-cert-friendly hostname under thunder.amp.localhost for the env-Thunder instance.
 // Capped at 63 characters for the DNS label limit.
+//
+// Deliberately lowercases only — see ThunderReleaseName for why slugify()'s hyphen-collapsing
+// is not applied here (must match the un-collapsed bash implementation byte-for-byte).
 func ThunderHost(org, env string) string {
-	org = slugify(org)
-	env = slugify(env)
+	org = strings.ToLower(org)
+	env = strings.ToLower(env)
 	if org == "" || env == "" {
 		panic("org and env names must be valid alphanumeric slugs and not empty")
 	}

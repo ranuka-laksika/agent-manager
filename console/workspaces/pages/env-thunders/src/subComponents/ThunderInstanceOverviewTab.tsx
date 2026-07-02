@@ -102,11 +102,6 @@ export function ThunderInstanceOverviewTab({ instance, onCopy }: ThunderInstance
         <Typography variant="subtitle2" fontWeight={600}>
           OAuth2 Endpoints
         </Typography>
-        <Alert severity="info" sx={{ py: 0.5 }}>
-          These are cluster-internal addresses. Agents running inside the Kubernetes cluster
-          can use them directly. For agents outside the cluster, expose Thunder through an
-          ingress and use the public URL instead.
-        </Alert>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <EndpointCard label="Token Endpoint" value={instance.tokenUrl} onCopy={onCopy} />
