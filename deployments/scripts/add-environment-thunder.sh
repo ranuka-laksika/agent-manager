@@ -54,10 +54,9 @@ set -euo pipefail
 #   - PLATFORM_THUNDER_ISSUER   (default: http://thunder.amp.localhost:8080)
 #   - PLATFORM_THUNDER_JWKS_URL (default: HTTPS JWKS endpoint of platform Thunder)
 #   - PLATFORM_THUNDER_TOKEN_AUDIENCE (default: amp — the aud claim platform Thunder's
-#     tokens actually carry once any amp:* scope is requested; verified end-to-end
-#     2026-07-02. A scopeless client_credentials token instead carries the calling
-#     client's own ID as aud (e.g. "amp-api-client") — not "amp" — since ThunderID
-#     composes aud from the resource server(s) resolved via the granted scopes.)
+#     tokens carry once any amp:* scope is requested, since ThunderID composes aud from
+#     the resource server(s) resolved via the granted scopes. A scopeless
+#     client_credentials token instead carries the calling client's own ID as aud.)
 
 # ---------------------------------------------------------------------------
 # Pure helpers (sourced by the test suite; keep free of side effects).
@@ -456,19 +455,17 @@ EOF
 # ConfigMap into the env-Thunder Deployment via a strategic-merge kubectl patch,
 # and sets SSL_CERT_FILE to point at it.
 #
-# NOT done via the chart's declarativeResources support: setting
-# `declarativeResources.enabled=true` doesn't just mount extra files — it flips a
-# GLOBAL "declarative mode" flag server-side (backend/internal/system/i18n/mgt/config.go
-# getI18nStoreMode: no explicit configuration.i18n.translation.store falls back to
-# declarativeresource.IsDeclarativeModeEnabled()), which makes i18n translations
-# read-only. ThunderID's OWN setup Job always tries to POST-seed default i18n
-# translations regardless, so it fails with HTTP 400 DCR-1002
-# "declarative_resource.update_operation_not_allowed" and the whole pre-install hook
-# fails. The setup Job never needs this CA bundle anyway (its bootstrap scripts only
-# call the LOCAL server on localhost:8090, never platform Thunder), so patching the
-# Deployment after install — instead of setting a chart value before install — avoids
-# the global flag entirely. Idempotent: `containers`/`volumes`/`env` merge by their
-# name/mountPath key, so re-applying the same patch on every re-run is a no-op.
+# NOT done via the chart's declarativeResources support: enabling it doesn't just
+# mount extra files — it flips a GLOBAL server-side "declarative mode" flag that
+# makes i18n translations read-only. ThunderID's OWN setup Job always tries to
+# POST-seed default i18n translations regardless, so it fails with HTTP 400
+# DCR-1002 "declarative_resource.update_operation_not_allowed" and the whole
+# pre-install hook fails. The setup Job never needs this CA bundle anyway (its
+# bootstrap scripts only call the LOCAL server on localhost:8090, never platform
+# Thunder), so patching the Deployment after install — instead of setting a chart
+# value before install — avoids the global flag entirely. Idempotent:
+# `containers`/`volumes`/`env` merge by their name/mountPath key, so re-applying
+# the same patch on every re-run is a no-op.
 patch_ca_bundle_mount() {
   local release="$1" ns="$2" ca_cm_name="$3"
   kubectl patch deployment "${release}-deployment" -n "$ns" --type=strategic -p "$(cat <<EOF
@@ -656,11 +653,16 @@ main() {
   #      caller — useful in tests/CI where cert-manager is not running).
   #   2. Fetch the Mozilla CA bundle (the same set shipped by Alpine / Debian
   #      ca-certificates packages) so the combined file is a complete trust store.
-  #   3. Store the combined PEM bundle as a ConfigMap in the env-Thunder namespace.
-  #   4. Mount it into the env-Thunder Deployment (via a post-install kubectl patch —
-  #      NOT via the chart's declarativeResources support, see patch_ca_bundle_mount
-  #      below for why) and set SSL_CERT_FILE to the combined file so Go's TLS stack
-  #      trusts both commercial CAs and the self-signed CA.
+  #   3. Store the combined PEM bundle as a ConfigMap in the env-Thunder namespace,
+  #      and queue --set trustedIssuer.issuer/jwksUrl/audience for the helm install
+  #      below — that's the actual trust decision (which issuer to accept, and
+  #      where to fetch its JWKS from); the CA bundle only exists so env-Thunder's
+  #      Go TLS stack can reach that (HTTPS) JWKS URL in the first place.
+  #   4. After install, mount the ConfigMap into the env-Thunder Deployment (via a
+  #      post-install kubectl patch — NOT via the chart's declarativeResources
+  #      support, see patch_ca_bundle_mount below for why) and set SSL_CERT_FILE
+  #      to the combined file so Go's TLS stack trusts both commercial CAs and
+  #      the self-signed CA.
   # ---------------------------------------------------------------------------
   local ca_pem ca_bundle mozilla_bundle tmp_bundle expected_sha actual_sha
   local ca_cm_name="amp-thunder-platform-ca"
