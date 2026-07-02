@@ -51,6 +51,7 @@ import {
 } from "@agent-management-platform/types";
 import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
+import { EntityHeader } from "./components/EntityHeader";
 
 type ActiveTab = "users" | "roles";
 
@@ -219,6 +220,12 @@ export const GroupEditPage: React.FC = () => {
     <>
       <BackButton to={groupsPath} label="Groups" />
       <Stack spacing={3}>
+        <EntityHeader
+          fallback="G"
+          name={groupData?.name ?? ""}
+          subtitle={groupData?.description}
+          id={groupId ?? ""}
+        />
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && (
           <Alert severity="success">Group updated successfully.</Alert>

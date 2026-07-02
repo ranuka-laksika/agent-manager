@@ -74,7 +74,7 @@ export const RoleCreatePage: React.FC = () => {
     setLastSubmittedValidationErrors({});
 
     try {
-      await createRole({
+      const created = await createRole({
         params: { orgName: orgId },
         body: {
           name: formData.name.trim(),
@@ -83,7 +83,13 @@ export const RoleCreatePage: React.FC = () => {
       });
       resetDirty();
       clearErrors();
-      navigate(rolesPath);
+      navigate(
+        generatePath(
+          absoluteRouteMap.children.org.children.settings.children.identities
+            .children.roles.children.detail.path,
+          { orgId, roleId: created.id },
+        ),
+      );
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }
@@ -96,7 +102,6 @@ export const RoleCreatePage: React.FC = () => {
     resetDirty,
     clearErrors,
     navigate,
-    rolesPath,
   ]);
 
   const submitErrors = Object.values(lastSubmittedValidationErrors);

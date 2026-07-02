@@ -74,7 +74,7 @@ export const GroupCreatePage: React.FC = () => {
     setLastSubmittedValidationErrors({});
 
     try {
-      await createGroup({
+      const created = await createGroup({
         params: { orgName: orgId },
         body: {
           name: formData.name.trim(),
@@ -83,7 +83,13 @@ export const GroupCreatePage: React.FC = () => {
       });
       resetDirty();
       clearErrors();
-      navigate(groupsPath);
+      navigate(
+        generatePath(
+          absoluteRouteMap.children.org.children.settings.children.identities
+            .children.groups.children.detail.path,
+          { orgId, groupId: created.id },
+        ),
+      );
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }
@@ -96,7 +102,6 @@ export const GroupCreatePage: React.FC = () => {
     resetDirty,
     clearErrors,
     navigate,
-    groupsPath,
   ]);
 
   const submitErrors = Object.values(lastSubmittedValidationErrors);

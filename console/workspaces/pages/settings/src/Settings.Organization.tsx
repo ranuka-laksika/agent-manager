@@ -20,34 +20,17 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { IdentitiesOrganization } from "@agent-management-platform/identities";
 import { SettingsLayout } from "./SettingsLayout";
 import { ThemePage } from "./ThemePage";
-import { useIdentityVisibility } from "./settingsRoutes";
 
-export const SettingsOrganization: React.FC = () => {
-  const identityVisibility = useIdentityVisibility();
-
-  // Land on the first identity area the user can see, otherwise Appearance.
-  const defaultPath = identityVisibility.users
-    ? "identities/users"
-    : identityVisibility.groups
-      ? "identities/groups"
-      : identityVisibility.roles
-        ? "identities/roles"
-        : "appearance/theme";
-
-  return (
-    <SettingsLayout>
-      <Routes>
-        <Route index element={<Navigate to={defaultPath} replace />} />
-        <Route path="identities/*" element={<IdentitiesOrganization />} />
-        <Route path="appearance/theme" element={<ThemePage />} />
-        <Route
-          path="appearance/*"
-          element={<Navigate to="appearance/theme" replace />}
-        />
-        <Route path="*" element={<Navigate to={defaultPath} replace />} />
-      </Routes>
-    </SettingsLayout>
-  );
-};
+export const SettingsOrganization: React.FC = () => (
+  <SettingsLayout>
+    <Routes>
+      <Route index element={<Navigate to="identities/users" replace />} />
+      <Route path="identities/*" element={<IdentitiesOrganization />} />
+      <Route path="appearance/theme" element={<ThemePage />} />
+      <Route path="appearance/*" element={<Navigate to="appearance/theme" replace />} />
+      <Route path="*" element={<Navigate to="identities/users" replace />} />
+    </Routes>
+  </SettingsLayout>
+);
 
 export default SettingsOrganization;

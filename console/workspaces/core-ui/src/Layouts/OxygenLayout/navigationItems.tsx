@@ -715,6 +715,7 @@ export function useNavigationItems(): Array<
               icon: <settingsMetadata.icon size={20} />,
               href: generatePath(settingsOrgRoute.path, { orgId }),
               isActive: !!matchPath(settingsOrgRoute.wildPath, pathname),
+              pinBottom: true,
             },
           ]
         : []),

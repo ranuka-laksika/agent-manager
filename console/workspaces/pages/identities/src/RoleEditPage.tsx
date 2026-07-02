@@ -56,6 +56,7 @@ import {
 } from "@agent-management-platform/types";
 import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
+import { EntityHeader } from "./components/EntityHeader";
 
 type ActiveTab = "permissions" | "users" | "groups";
 
@@ -398,6 +399,13 @@ export const RoleEditPage: React.FC = () => {
     <>
       <BackButton to={rolesPath} label="Roles" />
       <Stack spacing={3}>
+        <EntityHeader
+          fallback="R"
+          name={roleData?.name ?? ""}
+          subtitle={roleData?.description}
+          id={roleId ?? ""}
+          badge={isPermissionsReadOnly ? <Chip label="Read-only" size="small" /> : undefined}
+        />
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && (
           <Alert severity="success">Role updated successfully.</Alert>
