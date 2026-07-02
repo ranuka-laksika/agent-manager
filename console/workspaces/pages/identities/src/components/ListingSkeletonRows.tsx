@@ -31,7 +31,7 @@ interface ListingSkeletonRowsProps {
  * table chrome stays stable instead of flashing a centered spinner.
  */
 export const ListingSkeletonRows: React.FC<ListingSkeletonRowsProps> = ({
-  rows = 4,
+  rows = 5,
   columns = 2,
 }) => (
   <>
