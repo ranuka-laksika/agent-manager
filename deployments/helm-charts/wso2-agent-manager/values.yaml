@@ -38,7 +38,7 @@ agentManagerService:
 
   image:
     repository: ghcr.io/wso2/amp-api
-    tag: "0.0.0-dev"
+    tag: "v0.18.0"
     pullPolicy: IfNotPresent
 
   service:
@@ -281,7 +281,7 @@ console:
 
   image:
     repository: ghcr.io/wso2/amp-console
-    tag: "0.0.0-dev"
+    tag: "v0.18.0"
     pullPolicy: Always
 
   service:
@@ -338,7 +338,7 @@ console:
     # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z).
     # Placeholder is substituted with the real release version by the release
     # pipeline (.github/scripts/update-helm-charts.sh); dev builds fall back to main.
-    ampVersion: "0.0.0-dev"
+    ampVersion: "v0.18.0"
     instrumentationUrl: "https://localhost:22894/otel"
     # Cluster-internal URLs the API Platform Gateway uses to reach Agent
     # Manager when add-environment.sh installs a new gateway. The Create
@@ -378,7 +378,7 @@ dbMigration:
 
   image:
     repository: ghcr.io/wso2/amp-api
-    tag: "0.0.0-dev"
+    tag: "v0.18.0"
     pullPolicy: IfNotPresent
 
   resources:
