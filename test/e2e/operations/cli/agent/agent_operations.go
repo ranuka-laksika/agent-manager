@@ -19,6 +19,10 @@
 package cliagent
 
 import (
+	"fmt"
+	"time"
+
+	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/wso2/agent-manager/test/e2e/framework/amctl"
@@ -152,4 +156,30 @@ type DeployResult struct {
 // to the pipeline's lowest environment) and returns the deploy result.
 func DeployAgent(g Gomega, h *amctl.Harness, org, project, name string) DeployResult {
 	return amctl.DecodeData[DeployResult](g, h.Run("agent", "deploy", name, "--org", org, "--project", project, "--yes", "--json"))
+}
+
+// DeployAgentEventually redeploys the agent, tolerating a transient 409
+// conflict. The server rejects a redeploy while the target environment's
+// release binding still reports its Ready condition as Progressing, which can
+// briefly happen right after a fresh deployment settles (see the
+// IsDeploymentInProgress guard in agent_manager.go). That surfaces as a 409;
+// this retries on it and fails fast on any other error.
+func DeployAgentEventually(h *amctl.Harness, org, project, name string, timeout time.Duration) DeployResult {
+	var result DeployResult
+	Eventually(func(g Gomega) {
+		res := h.Run("agent", "deploy", name, "--org", org, "--project", project, "--yes", "--json")
+		if res.ExitCode != 0 {
+			env := res.Envelope(g)
+			g.Expect(env.Error).NotTo(BeNil(), "expected error envelope on failed deploy: %s", res.Combined())
+			if env.Error.Status != 409 {
+				StopTrying(fmt.Sprintf("agent deploy failed (non-retryable): %s", res.Combined())).Now()
+			}
+			ginkgo.GinkgoWriter.Printf("agent deploy: 409 deployment still in progress, retrying (%s)\n", name)
+			// Fail this attempt so Eventually retries the redeploy.
+			g.Expect(res.ExitCode).To(Equal(0), "deployment still in progress (409): %s", res.Combined())
+			return
+		}
+		result = amctl.DecodeData[DeployResult](g, res)
+	}).WithTimeout(timeout).WithPolling(10 * time.Second).Should(Succeed())
+	return result
 }
