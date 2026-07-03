@@ -84,7 +84,7 @@ func (c *environmentController) CreateEnvironment(w http.ResponseWriter, r *http
 	internalReq := &models.CreateEnvironmentRequest{
 		Name:         req.Name,
 		DisplayName:  req.DisplayName,
-		DataplaneRef: req.DataplaneRef,
+		DataplaneRef: utils.GetOrDefault(req.DataplaneRef, ""),
 		DNSPrefix:    req.DnsPrefix,
 		IsProduction: false,
 		Gateway:      fromSpecGatewaySpec(req.Gateway),

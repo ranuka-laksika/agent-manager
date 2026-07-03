@@ -1919,8 +1919,8 @@ type CreateDeploymentPipelineRequest struct {
 
 // CreateEnvironmentRequest defines model for CreateEnvironmentRequest.
 type CreateEnvironmentRequest struct {
-	// DataplaneRef Reference to the dataplane
-	DataplaneRef string `json:"dataplaneRef"`
+	// DataplaneRef Optional reference to the dataplane. When omitted, the default dataplane is used.
+	DataplaneRef *string `json:"dataplaneRef,omitempty"`
 
 	// Description Optional description of the environment
 	Description *string `json:"description,omitempty"`

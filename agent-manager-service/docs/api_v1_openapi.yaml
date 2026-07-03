@@ -11666,7 +11666,6 @@ components:
       required:
         - name
         - displayName
-        - dataplaneRef
         - dnsPrefix
       properties:
         name:
@@ -11688,8 +11687,7 @@ components:
           example: Production environment for critical AI agents
         dataplaneRef:
           type: string
-          description: Reference to the dataplane
-          minLength: 1
+          description: Optional reference to the dataplane. When omitted, the default dataplane is used.
           maxLength: 100
           example: default
         dnsPrefix:
