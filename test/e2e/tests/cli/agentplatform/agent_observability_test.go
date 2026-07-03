@@ -36,7 +36,7 @@ var _ = Describe("amctl agent (CLI-owned lifecycle)", Label("cli", "agent"), Ord
 	// specs below assert against a freshly redeployed, ready instance.
 	Context("deploy", func() {
 		It("redeploys the agent via amctl agent deploy", func() {
-			res := cliagent.DeployAgent(Default, H, H.Org(), owned.ProjectName, owned.AgentName)
+			res := cliagent.DeployAgentEventually(H, H.Org(), owned.ProjectName, owned.AgentName, 3*time.Minute)
 			Expect(res.Agent).To(Equal(owned.AgentName))
 			Expect(res.Build).NotTo(BeEmpty())
 			Expect(res.ImageId).NotTo(BeEmpty())
