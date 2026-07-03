@@ -16,22 +16,29 @@
  * under the License.
  */
 
+import { type CatalogLLMProviderEntry } from "@agent-management-platform/types";
 import {
-  absoluteRouteMap,
-  type CatalogLLMProviderEntry,
-} from "@agent-management-platform/types";
-import {
+  useCreateLLMProvider,
   useListCatalogLLMProviders,
   useListLLMProviderTemplates,
 } from "@agent-management-platform/api-client";
+import {
+  AddLLMProviderForm,
+  buildCreateLLMProviderRequest,
+  mapLLMProviderTemplatesToCards,
+  type AddLLMProviderFormValues,
+  type GuardrailSelection,
+} from "@agent-management-platform/llm-providers";
 import {
   DrawerContent,
   DrawerHeader,
   DrawerWrapper,
 } from "@agent-management-platform/views";
+import { getErrorMessage } from "@agent-management-platform/shared-component";
 import {
   Avatar,
   Box,
+  Button,
   Chip,
   CircularProgress,
   Divider,
@@ -43,11 +50,11 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import {
+  ArrowLeft,
   Check,
   Circle,
   Coins,
   DoorClosedLocked,
-  ExternalLink,
   Hash,
   Info,
   Plus,
@@ -55,7 +62,7 @@ import {
 } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { generatePath, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import debounce from "lodash/debounce";
 
 interface MonitorLLMProviderDrawerProps {
@@ -285,9 +292,11 @@ export function MonitorLLMProviderDrawer({
     { orgName: orgId },
     { limit: PAGE_SIZE, offset: fetchOffset },
   );
-  const { data: templatesData } = useListLLMProviderTemplates({
-    orgName: orgId,
-  });
+  const { data: templatesData, isLoading: isLoadingTemplates } =
+    useListLLMProviderTemplates(
+      { orgName: orgId },
+      { limit: 50, offset: 0 },
+    );
 
   const templateMap = useMemo(() => {
     const map = new Map<string, { displayName: string; logoUrl?: string }>();
@@ -297,6 +306,22 @@ export function MonitorLLMProviderDrawer({
     }
     return map;
   }, [templatesData]);
+
+  const templateCards = useMemo(
+    () => mapLLMProviderTemplatesToCards(templatesData?.templates),
+    [templatesData],
+  );
+
+  const [mode, setMode] = useState<"list" | "create">("list");
+  // Guards the "auto-open create view when the org has no providers" behavior
+  // so it fires at most once per drawer-open and never overrides a user who
+  // deliberately navigated back to the list.
+  const autoSwitchDone = useRef(false);
+  const {
+    mutate: createLLMProvider,
+    isPending: isCreatingProvider,
+    error: createProviderError,
+  } = useCreateLLMProvider();
 
   const debouncedSetSearch = useMemo(
     () => debounce((value: string) => setDebouncedSearch(value), 250),
@@ -314,8 +339,21 @@ export function MonitorLLMProviderDrawer({
       setAllProviders([]);
       setFetchOffset(0);
       setRefreshKey((k) => k + 1);
+      setMode("list");
+      autoSwitchDone.current = false;
     }
   }, [open]);
+
+  // When the org has no LLM providers yet, open straight into the create view
+  // so the user isn't shown an empty list they have to click through. Fires
+  // once per open; if the user goes back to the (empty) list, we respect it.
+  useEffect(() => {
+    if (!open || autoSwitchDone.current || isFetching || !catalogData) return;
+    autoSwitchDone.current = true;
+    if ((catalogData.total ?? 0) === 0) {
+      setMode("create");
+    }
+  }, [open, isFetching, catalogData]);
 
   // Accumulate each page as it arrives and trigger the next fetch if needed.
   useEffect(() => {
@@ -349,13 +387,6 @@ export function MonitorLLMProviderDrawer({
     );
   }, [allProviders, debouncedSearch, templateMap]);
 
-  const addProviderPath = orgId
-    ? generatePath(
-        absoluteRouteMap.children.org.children.llmProviders.children.add.path,
-        { orgId },
-      )
-    : null;
-
   const handleSearchChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       setSearch(event.target.value);
@@ -372,95 +403,136 @@ export function MonitorLLMProviderDrawer({
     [onProviderChange, onClose],
   );
 
+  const handleCreateProvider = useCallback(
+    (values: AddLLMProviderFormValues, guardrails: GuardrailSelection[]) => {
+      if (!orgId) return;
+      const body = buildCreateLLMProviderRequest(
+        values,
+        guardrails,
+        templateCards,
+      );
+      createLLMProvider(
+        { params: { orgName: orgId }, body },
+        {
+          onSuccess: (data) => {
+            onProviderChange(data.id);
+            onClose();
+          },
+        },
+      );
+    },
+    [orgId, templateCards, createLLMProvider, onProviderChange, onClose],
+  );
+
   return (
     <DrawerWrapper open={open} onClose={onClose} maxWidth={520}>
       <DrawerHeader
         icon={<DoorClosedLocked size={24} />}
-        title="Select LLM Provider"
+        title={mode === "create" ? "Create LLM Provider" : "Select LLM Provider"}
         onClose={onClose}
       />
       <DrawerContent>
-        <Stack spacing={2}>
-          <Typography variant="body2" color="text.secondary">
-            Select the LLM provider for all LLM-judge evaluators in this
-            monitor.
-          </Typography>
-          <SearchBar
-            placeholder="Search providers"
-            size="small"
-            fullWidth
-            value={search}
-            onChange={handleSearchChange}
-          />
-          {isFetching && filteredProviders.length === 0 && (
-            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
-              <CircularProgress size={32} />
-            </Box>
-          )}
-          {filteredProviders.length === 0 && !isFetching && (
-            <ListingTable.EmptyState
-              title={
-                search.trim()
-                  ? "No providers match your search"
-                  : "No LLM providers configured"
-              }
-              description={
-                search.trim()
-                  ? "Try a different keyword."
-                  : "Add an LLM service provider to get started."
-              }
+        {mode === "list" ? (
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Select the LLM provider for all LLM-judge evaluators in this
+              monitor.
+            </Typography>
+            <SearchBar
+              placeholder="Search providers"
+              size="small"
+              fullWidth
+              value={search}
+              onChange={handleSearchChange}
             />
-          )}
-          {filteredProviders.length > 0 && (
-            <Stack spacing={1}>
-              {filteredProviders.map((entry) => {
-                const isSelected = entry.handle === selectedProviderName;
-                const templateInfo = templateMap.get(entry.template ?? "");
-                return (
-                  <Form.CardButton
-                    key={entry.uuid}
-                    onClick={() => handleSelect(entry.handle)}
-                    selected={isSelected}
-                  >
-                    <Form.CardContent>
-                      <ProviderCardContent
-                        entry={entry}
-                        isSelected={isSelected}
-                        templateInfo={templateInfo}
-                      />
-                    </Form.CardContent>
-                  </Form.CardButton>
-                );
-              })}
-            </Stack>
-          )}
-          {addProviderPath && (
-            <>
-              <Divider />
-              <Box
-                component="a"
-                href={addProviderPath}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 1,
-                  color: "primary.main",
-                  textDecoration: "none",
-                  cursor: "pointer",
-                  "&:hover": { textDecoration: "underline" },
-                }}
-              >
-                <Plus size={16} />
-                <Typography variant="body2" color="primary">
-                  Add LLM Provider
-                </Typography>
-                <ExternalLink size={14} />
+            {isFetching && filteredProviders.length === 0 && (
+              <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+                <CircularProgress size={32} />
               </Box>
-            </>
-          )}
-        </Stack>
+            )}
+            {filteredProviders.length === 0 && !isFetching && (
+              <ListingTable.EmptyState
+                title={
+                  search.trim()
+                    ? "No providers match your search"
+                    : "No LLM providers configured"
+                }
+                description={
+                  search.trim()
+                    ? "Try a different keyword."
+                    : "Add an LLM service provider to get started."
+                }
+              />
+            )}
+            {filteredProviders.length > 0 && (
+              <Stack spacing={1}>
+                {filteredProviders.map((entry) => {
+                  const isSelected = entry.handle === selectedProviderName;
+                  const templateInfo = templateMap.get(entry.template ?? "");
+                  return (
+                    <Form.CardButton
+                      key={entry.uuid}
+                      onClick={() => handleSelect(entry.handle)}
+                      selected={isSelected}
+                    >
+                      <Form.CardContent>
+                        <ProviderCardContent
+                          entry={entry}
+                          isSelected={isSelected}
+                          templateInfo={templateInfo}
+                        />
+                      </Form.CardContent>
+                    </Form.CardButton>
+                  );
+                })}
+              </Stack>
+            )}
+            <Divider />
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<Plus size={16} />}
+              onClick={() => setMode("create")}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Add LLM Provider
+            </Button>
+          </Stack>
+        ) : (
+          <Stack spacing={2}>
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<ArrowLeft size={16} />}
+              onClick={() => setMode("list")}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Back to providers
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              Create an LLM provider for this monitor&apos;s LLM-judge
+              evaluators. It will be added to your organization&apos;s
+              provider catalog.
+            </Typography>
+            <AddLLMProviderForm
+              orgId={orgId ?? ""}
+              templates={templateCards}
+              isLoadingTemplates={isLoadingTemplates}
+              isSubmitting={isCreatingProvider}
+              errorMessage={
+                createProviderError
+                  ? getErrorMessage(createProviderError)
+                  : null
+              }
+              submitLabel="Create & use provider"
+              showAdvancedBasicDetails={false}
+              showGuardrails={false}
+              showGatewaySelector={false}
+              onCancel={() => setMode("list")}
+              onSubmit={handleCreateProvider}
+            />
+          </Stack>
+        )}
       </DrawerContent>
     </DrawerWrapper>
   );

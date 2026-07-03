@@ -55,6 +55,7 @@
     "@agent-management-platform/api-client": "workspace:*",
     "@agent-management-platform/types": "workspace:*",
     "@agent-management-platform/shared-component": "workspace:*",
+    "@agent-management-platform/llm-providers": "workspace:*",
     "zod": "4.3.6",
     "lodash": "4.17.21",
     "@monaco-editor/react": "4.7.0"
