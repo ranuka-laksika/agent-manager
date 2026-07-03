@@ -85,15 +85,6 @@ export const ProfilePage: React.FC = () => {
     }
   }, [userProfile]);
 
-  useEffect(() => {
-    setProfileData({
-      username: userInfo?.username || "",
-      given_name: userInfo?.givenName || "",
-      family_name: userInfo?.familyName || "",
-      email: userInfo?.email || "",
-    });
-  }, [userInfo]);
-
   const handleTabChange = (_event: React.SyntheticEvent, newValue: ActiveTab) => {
     setActiveTab(newValue);
     setSuccessMessage("");

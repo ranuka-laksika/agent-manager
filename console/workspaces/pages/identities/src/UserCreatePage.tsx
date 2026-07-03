@@ -30,6 +30,7 @@ import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateUser } from "@agent-management-platform/api-client";
 import { TextInput } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
+import { BackButton } from "./components/BackButton";
 
 export const UserCreatePage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -97,6 +98,7 @@ export const UserCreatePage: React.FC = () => {
 
   return (
     <>
+      <BackButton to={usersPath} label="Back to Users" />
       <Stack spacing={3} sx={{ maxWidth: 700 }}>
         {createError != null && (
           <Alert severity="error">

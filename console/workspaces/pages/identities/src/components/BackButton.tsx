@@ -26,11 +26,15 @@ interface BackButtonProps {
 }
 
 export const BackButton: React.FC<BackButtonProps> = ({ to, label }) => (
-  <Link to={to} style={{ textDecoration: "none" }}>
-    <Button variant="text" startIcon={<ArrowLeft size={16} />} sx={{ mb: 2 }}>
-      {label}
-    </Button>
-  </Link>
+  <Button
+    component={Link}
+    to={to}
+    variant="text"
+    startIcon={<ArrowLeft size={16} />}
+    sx={{ mb: 2 }}
+  >
+    {label}
+  </Button>
 );
 
 export default BackButton;

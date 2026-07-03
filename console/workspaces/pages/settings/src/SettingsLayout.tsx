@@ -86,7 +86,7 @@ export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
           wildPath: identityNode.roles.wildPath,
           icon: <Shield size={18} />,
         },
-      ].filter(Boolean) as SubNavItem[],
+      ].filter((item): item is SubNavItem => Boolean(item)),
     },
   ].filter((section) => section.items.length > 0);
 

@@ -24,6 +24,7 @@ import {
   useParams,
   Outlet,
   Navigate,
+  generatePath,
 } from "react-router-dom";
 import { OxygenLayout } from "../Layouts";
 import { Protected } from "../Providers/Protected";
@@ -69,7 +70,10 @@ import {
   LazyCompareMonitorComponent,
 } from "../pages";
 import { LoadingFallback } from "../components/LoadingFallback";
-import { relativeRouteMap } from "@agent-management-platform/types";
+import {
+  relativeRouteMap,
+  absoluteRouteMap,
+} from "@agent-management-platform/types";
 import {
   useExternalPageModules,
   type ExternalPageModule,
@@ -86,8 +90,11 @@ import { MountPoints } from "../types";
 // trailing sub-path so existing deep links keep working.
 function LegacyIdentitiesRedirect() {
   const { orgId, "*": rest } = useParams<{ orgId: string; "*": string }>();
-  const target = `/org/${orgId}/settings/identities${rest ? `/${rest}` : ""}`;
-  return <Navigate to={target} replace />;
+  const base = generatePath(
+    absoluteRouteMap.children.org.children.settings.children.identities.path,
+    { orgId },
+  );
+  return <Navigate to={rest ? `${base}/${rest}` : base} replace />;
 }
 
 // Remounts the Security page on agent change so per-agent component state
