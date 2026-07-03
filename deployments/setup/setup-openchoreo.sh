@@ -247,13 +247,20 @@ install_observability_plane() {
         --set openSearchSetup.openSearchSecretName="opensearch-admin-credentials" \
         --set opentelemetry-collector.configMap.existingName="amp-opentelemetry-collector-config"
 
-    # Prometheus based metrics module
+    # Prometheus based metrics module.
+    # The values file relabels sandbox-cgroup cAdvisor series (gVisor/Kata
+    # isolation tiers) to container="sandbox" so the metrics adapter's
+    # container-scoped usage queries return data for sandboxed agents too —
+    # without it, CPU/memory usage charts are empty on gVisor/Kata
+    # environments (usage lives in the sandbox cgroup, not per-container
+    # cgroups, on those runtimes).
     echo "Installing Prometheus based metrics module..."
     helm upgrade --install observability-metrics-prometheus \
       oci://ghcr.io/openchoreo/helm-charts/observability-metrics-prometheus \
       --create-namespace \
       --namespace openchoreo-observability-plane \
       --version "${OBSERVABILITY_METRICS_PROMETHEUS_VERSION}" \
+      --values "${PROJECT_ROOT}/deployments/values/observability-metrics-prometheus.yaml" \
       --set adapter.image.tag=""
     echo "✅ Prometheus based metrics module installed"
 
