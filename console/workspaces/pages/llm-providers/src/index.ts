@@ -40,3 +40,15 @@ export {
   LLMProvidersOrganization,
   AddLLMProvidersOrganization,
 };
+
+export { AddLLMProviderForm } from './subComponents/AddLLMProviderForm';
+export type {
+  AddLLMProviderFormValues,
+  GuardrailSelection,
+  TemplateCard,
+} from './subComponents/AddLLMProviderForm';
+export {
+  buildCreateLLMProviderRequest,
+  mapLLMProviderTemplatesToCards,
+  toProviderId,
+} from './utils/llmProviderPayload';

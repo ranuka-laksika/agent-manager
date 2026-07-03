@@ -217,6 +217,7 @@ export function useCreateLLMProvider() {
     mutationFn: ({ params, body }) => createLLMProvider(params, body, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["llm-providers"] });
+      queryClient.invalidateQueries({ queryKey: ["catalog", "llm-providers"] });
     },
   });
 }
