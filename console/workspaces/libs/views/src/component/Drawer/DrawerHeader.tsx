@@ -42,7 +42,7 @@ export function DrawerHeader(
     >
       <Box display="flex" flexDirection="row" alignItems="center" gap={1}>
         {icon}
-        <Typography variant="h3">{title}</Typography>
+        <Typography variant="h6">{title}</Typography>
       </Box>
       <Box display="flex" flexDirection="row" alignItems="center" gap={0.5}>
         {onToggleFullscreen && (

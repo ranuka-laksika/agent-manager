@@ -22,14 +22,13 @@ import {
   Alert,
   Box,
   Button,
-  Form,
   Stack,
   Tabs,
   Tab,
   Typography,
   useTheme,
 } from "@wso2/oxygen-ui";
-import { PageLayout, TextInput } from "@agent-management-platform/views";
+import { TextInput } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useUpdateUserProfile, useGetUserProfile } from "@agent-management-platform/api-client";
 
@@ -175,164 +174,139 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Profile Settings" disableIcon>
-      <Stack spacing={3}>
-        {successMessage && (
-          <Alert severity="success" onClose={() => setSuccessMessage("")}>
-            {successMessage}
-          </Alert>
-        )}
+    <Stack spacing={2}>
+      {successMessage && (
+        <Alert severity="success" onClose={() => setSuccessMessage("")}>
+          {successMessage}
+        </Alert>
+      )}
 
-        {!!profileError && (
-          <Alert severity="error">
-            {getErrorMessage(profileError)}
-          </Alert>
-        )}
+      {!!profileError && (
+        <Alert severity="error">
+          {getErrorMessage(profileError)}
+        </Alert>
+      )}
 
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          sx={{
-            borderBottom: `1px solid ${theme.palette.divider}`,
-          }}
-        >
-          <Tab label="Profile Information" value="profile" />
-          <Tab label="Change Password" value="password" />
-        </Tabs>
+      <Tabs
+        value={activeTab}
+        onChange={handleTabChange}
+        sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}
+      >
+        <Tab label="Profile Information" value="profile" />
+        <Tab label="Change Password" value="password" />
+      </Tabs>
 
-        {/* Profile Information Tab */}
-        {activeTab === "profile" && (
-          <Stack spacing={3}>
-            <Form.Section>
-              <Form.Header>Account Information</Form.Header>
-              <Form.Stack spacing={2}>
-                <TextInput
-                  label="Username"
-                  required
-                  value={profileData.username}
-                  onChange={(e) => {
-                    setProfileData({ ...profileData, username: e.target.value });
-                    if (profileErrors.username) {
-                      setProfileErrors({ ...profileErrors, username: "" });
-                    }
-                  }}
-                  error={Boolean(profileErrors.username)}
-                  helperText={profileErrors.username}
-                />
-
-                <TextInput
-                  label="Email"
-                  type="email"
-                  required
-                  value={profileData.email}
-                  onChange={(e) => {
-                    setProfileData({ ...profileData, email: e.target.value });
-                    if (profileErrors.email) {
-                      setProfileErrors({ ...profileErrors, email: "" });
-                    }
-                  }}
-                  error={Boolean(profileErrors.email)}
-                  helperText={profileErrors.email}
-                />
-              </Form.Stack>
-            </Form.Section>
-
-            <Form.Section>
-              <Form.Header>Personal Information</Form.Header>
-              <Form.Stack spacing={2}>
-                <Box
-                  sx={{
-                    display: "grid",
-                    gap: 2,
-                    gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" },
-                  }}
-                >
-                  <TextInput
-                    label="First Name"
-                    value={profileData.given_name}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, given_name: e.target.value })
-                    }
-                  />
-
-                  <TextInput
-                    label="Last Name"
-                    value={profileData.family_name}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, family_name: e.target.value })
-                    }
-                  />
-                </Box>
-              </Form.Stack>
-            </Form.Section>
-
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="contained"
-                onClick={handleProfileSubmit}
-                disabled={isUpdatingProfile}
-              >
-                {isUpdatingProfile ? "Saving..." : "Save Changes"}
-              </Button>
+      {activeTab === "profile" && (
+        <Stack spacing={2}>
+          <Stack spacing={1.5}>
+            <Typography variant="subtitle2" color="text.secondary">Account Information</Typography>
+            <Stack spacing={2}>
+              <TextInput
+                label="Username"
+                required
+                value={profileData.username}
+                onChange={(e) => {
+                  setProfileData({ ...profileData, username: e.target.value });
+                  if (profileErrors.username) {
+                    setProfileErrors({ ...profileErrors, username: "" });
+                  }
+                }}
+                error={Boolean(profileErrors.username)}
+                helperText={profileErrors.username}
+              />
+              <TextInput
+                label="Email"
+                type="email"
+                required
+                value={profileData.email}
+                onChange={(e) => {
+                  setProfileData({ ...profileData, email: e.target.value });
+                  if (profileErrors.email) {
+                    setProfileErrors({ ...profileErrors, email: "" });
+                  }
+                }}
+                error={Boolean(profileErrors.email)}
+                helperText={profileErrors.email}
+              />
             </Stack>
           </Stack>
-        )}
 
-        {/* Change Password Tab */}
-        {activeTab === "password" && (
-          <Stack spacing={3}>
-            <Form.Section>
-              <Form.Header>Update Password</Form.Header>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                Enter a new password to update your account security.
-              </Typography>
-              <Form.Stack spacing={2}>
-                <TextInput
-                  label="New Password"
-                  type="password"
-                  showPasswordToggle
-                  required
-                  value={credentialData.newPassword}
-                  onChange={(e) => {
-                    setCredentialData({ ...credentialData, newPassword: e.target.value });
-                    if (credentialErrors.newPassword) {
-                      setCredentialErrors({ ...credentialErrors, newPassword: "" });
-                    }
-                  }}
-                  error={Boolean(credentialErrors.newPassword)}
-                  helperText={credentialErrors.newPassword || "Minimum 8 characters"}
-                />
+          <Stack spacing={1.5}>
+            <Typography variant="subtitle2" color="text.secondary">Personal Information</Typography>
+            <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" } }}>
+              <TextInput
+                label="First Name"
+                value={profileData.given_name}
+                onChange={(e) => setProfileData({ ...profileData, given_name: e.target.value })}
+              />
+              <TextInput
+                label="Last Name"
+                value={profileData.family_name}
+                onChange={(e) => setProfileData({ ...profileData, family_name: e.target.value })}
+              />
+            </Box>
+          </Stack>
 
-                <TextInput
-                  label="Confirm Password"
-                  type="password"
-                  showPasswordToggle
-                  required
-                  value={credentialData.confirmPassword}
-                  onChange={(e) => {
-                    setCredentialData({ ...credentialData, confirmPassword: e.target.value });
-                    if (credentialErrors.confirmPassword) {
-                      setCredentialErrors({ ...credentialErrors, confirmPassword: "" });
-                    }
-                  }}
-                  error={Boolean(credentialErrors.confirmPassword)}
-                  helperText={credentialErrors.confirmPassword}
-                />
-              </Form.Stack>
-            </Form.Section>
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button variant="contained" onClick={handleProfileSubmit} disabled={isUpdatingProfile}>
+              {isUpdatingProfile ? "Saving..." : "Save Changes"}
+            </Button>
+          </Stack>
+        </Stack>
+      )}
 
-            <Stack direction="row" spacing={1} justifyContent="flex-end">
-              <Button
-                variant="contained"
-                onClick={handleCredentialSubmit}
-                disabled={isUpdatingProfile || !credentialData.newPassword}
-              >
-                {isUpdatingProfile ? "Updating..." : "Update Password"}
-              </Button>
+      {activeTab === "password" && (
+        <Stack spacing={2}>
+          <Stack spacing={1.5}>
+            <Typography variant="subtitle2" color="text.secondary">Update Password</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Enter a new password to update your account security.
+            </Typography>
+            <Stack spacing={2}>
+              <TextInput
+                label="New Password"
+                type="password"
+                showPasswordToggle
+                required
+                value={credentialData.newPassword}
+                onChange={(e) => {
+                  setCredentialData({ ...credentialData, newPassword: e.target.value });
+                  if (credentialErrors.newPassword) {
+                    setCredentialErrors({ ...credentialErrors, newPassword: "" });
+                  }
+                }}
+                error={Boolean(credentialErrors.newPassword)}
+                helperText={credentialErrors.newPassword || "Minimum 8 characters"}
+              />
+              <TextInput
+                label="Confirm Password"
+                type="password"
+                showPasswordToggle
+                required
+                value={credentialData.confirmPassword}
+                onChange={(e) => {
+                  setCredentialData({ ...credentialData, confirmPassword: e.target.value });
+                  if (credentialErrors.confirmPassword) {
+                    setCredentialErrors({ ...credentialErrors, confirmPassword: "" });
+                  }
+                }}
+                error={Boolean(credentialErrors.confirmPassword)}
+                helperText={credentialErrors.confirmPassword}
+              />
             </Stack>
           </Stack>
-        )}
-      </Stack>
-    </PageLayout>
+
+          <Stack direction="row" spacing={1} justifyContent="flex-end">
+            <Button
+              variant="contained"
+              onClick={handleCredentialSubmit}
+              disabled={isUpdatingProfile || !credentialData.newPassword}
+            >
+              {isUpdatingProfile ? "Updating..." : "Update Password"}
+            </Button>
+          </Stack>
+        </Stack>
+      )}
+    </Stack>
   );
 };

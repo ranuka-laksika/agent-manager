@@ -148,9 +148,3 @@ export const LazyAddNewProject = lazy(() =>
   })),
 );
 
-// Profile Settings
-export const LazyProfilePage = lazy(() =>
-  import("@agent-management-platform/profile-settings").then((module) => ({
-    default: module.ProfilePage as ComponentType,
-  })),
-);

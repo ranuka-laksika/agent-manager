@@ -25,7 +25,8 @@ import {
   UserMenu,
   Box,
 } from "@wso2/oxygen-ui";
-import { generatePath, Outlet, useNavigate, Link, useParams } from "react-router-dom";
+import { generatePath, Outlet, useNavigate, useParams } from "react-router-dom";
+import { ProfileDrawerProvider, useProfileDrawer } from "./ProfileDrawer";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { Logo, useExternalComponentModules } from "@agent-management-platform/views";
 import { globalConfig, absoluteRouteMap } from "@agent-management-platform/types";
@@ -43,9 +44,10 @@ const getFlattenedItems = (
   return [...mainItems, ...groupedItems.flatMap((item) => item.items)];
 };
 
-export function OxygenLayout() {
+function OxygenLayoutInner() {
   const [collapsed, setCollapsed] = useState(false);
   const { userInfo, logout } = useAuthHooks();
+  const { openProfileDrawer } = useProfileDrawer();
   const navigate = useNavigate();
   const { orgId } = useParams();
 
@@ -129,28 +131,24 @@ export function OxygenLayout() {
               <UserMenu.Header name={user.primaryLine} email={user.secondaryLine} />
               <UserMenu.Divider />
               {orgId && (
-                <Link
-                  to={generatePath("/org/:orgId/profile", { orgId })}
-                  style={{ textDecoration: "none", color: "inherit" }}
+                <Box
+                  onClick={openProfileDrawer}
+                  sx={{
+                    padding: (theme) => `${theme.spacing(1.5)} ${theme.spacing(2)}`,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: (theme) => theme.spacing(1.5),
+                    fontSize: (theme) => theme.typography.body2.fontSize,
+                    color: "inherit",
+                    "&:hover": {
+                      backgroundColor: (theme) => theme.palette.action.hover,
+                    },
+                  }}
                 >
-                  <Box
-                    sx={{
-                      padding: (theme) => `${theme.spacing(1.5)} ${theme.spacing(2)}`,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: (theme) => theme.spacing(1.5),
-                      fontSize: (theme) => theme.typography.body2.fontSize,
-                      color: "inherit",
-                      "&:hover": {
-                        backgroundColor: (theme) => theme.palette.action.hover,
-                      },
-                    }}
-                  >
-                    {userMenuItems[0]?.icon}
-                    {userMenuItems[0]?.label}
-                  </Box>
-                </Link>
+                  {userMenuItems[0]?.icon}
+                  {userMenuItems[0]?.label}
+                </Box>
               )}
               <UserMenu.Logout onClick={handleLogout} />
             </UserMenu>
@@ -216,5 +214,13 @@ export function OxygenLayout() {
         </Footer>
       </AppShell.Footer>
     </AppShell>
+  );
+}
+
+export function OxygenLayout() {
+  return (
+    <ProfileDrawerProvider>
+      <OxygenLayoutInner />
+    </ProfileDrawerProvider>
   );
 }
