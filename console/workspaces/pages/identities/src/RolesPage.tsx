@@ -128,6 +128,12 @@ export const RolesPage: React.FC = () => {
               title="No roles yet"
               description='Click "Create Role" to add one.'
             />
+          ) : filteredRoles.length === 0 ? (
+            <ListingTable.EmptyState
+              illustration={<Shield size={64} />}
+              title="No roles found"
+              description={`No roles match "${search}". Try a different search term.`}
+            />
           ) : (
             <ListingTable variant="table">
               <ListingTable.Head>

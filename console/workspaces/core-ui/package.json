@@ -63,7 +63,6 @@
     "@agent-management-platform/deployment-pipelines": "workspace:*",
     "@agent-management-platform/agent-security": "workspace:*",
     "@agent-management-platform/agent-kind": "workspace:*",
-    "@agent-management-platform/profile-settings": "workspace:*",
     "swagger-ui-react": "5.19.0",
     "@monaco-editor/react": "4.7.0"
   },

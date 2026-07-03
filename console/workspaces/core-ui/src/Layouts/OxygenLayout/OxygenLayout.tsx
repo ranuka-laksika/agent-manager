@@ -23,17 +23,16 @@ import {
   Footer,
   ColorSchemeToggle,
   UserMenu,
-  Box,
 } from "@wso2/oxygen-ui";
 import { generatePath, Outlet, useNavigate, useParams } from "react-router-dom";
-import { ProfileDrawerProvider, useProfileDrawer } from "./ProfileDrawer";
+import { Settings } from "@wso2/oxygen-ui-icons-react";
+import { ProfileDrawer } from "./ProfileDrawer";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { Logo, useExternalComponentModules } from "@agent-management-platform/views";
 import { globalConfig, absoluteRouteMap } from "@agent-management-platform/types";
 import { LeftNavigation, type NavigationItem, type NavigationSection } from "./LeftNavigation";
 import { useNavigationItems } from "./navigationItems";
 import { TopNavigation } from "./TopNavigation";
-import { createUserMenuItems } from "./userMenuItems";
 import { useListOrganizations } from "@agent-management-platform/api-client";
 import { MountPoints } from "../../types";
 
@@ -44,10 +43,10 @@ const getFlattenedItems = (
   return [...mainItems, ...groupedItems.flatMap((item) => item.items)];
 };
 
-function OxygenLayoutInner() {
+export function OxygenLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const { userInfo, logout } = useAuthHooks();
-  const { openProfileDrawer } = useProfileDrawer();
   const navigate = useNavigate();
   const { orgId } = useParams();
 
@@ -87,140 +86,119 @@ function OxygenLayoutInner() {
     await logout();
   };
 
-  const userMenuItems = useMemo(() => {
-    return createUserMenuItems({ logout: handleLogout });
-  }, []);
-
   return (
-    <AppShell>
-      <AppShell.Navbar>
-        <Header>
-          <Header.Toggle
-            collapsed={collapsed}
-            onToggle={() => setCollapsed(!collapsed)}
-          />
-          <Header.Brand onClick={() => navigate(homePath)}>
-            <Header.BrandLogo>
-              <Logo width={192} />
-              {externalLogoComponentModules?.map((module) => (
+    <>
+      <AppShell>
+        <AppShell.Navbar>
+          <Header>
+            <Header.Toggle
+              collapsed={collapsed}
+              onToggle={() => setCollapsed(!collapsed)}
+            />
+            <Header.Brand onClick={() => navigate(homePath)}>
+              <Header.BrandLogo>
+                <Logo width={192} />
+                {externalLogoComponentModules?.map((module) => (
+                  <div key={module.moduleName}>
+                    <module.component />
+                  </div>
+                ))}
+              </Header.BrandLogo>
+            </Header.Brand>
+            <TopNavigation />
+            {
+              externalTopLeftComponentModules?.map((module) => (
                 <div key={module.moduleName}>
                   <module.component />
                 </div>
-              ))}
-            </Header.BrandLogo>
-          </Header.Brand>
-          <TopNavigation />
-          {
-            externalTopLeftComponentModules?.map((module) => (
+              ))
+            }
+            <Header.Spacer />
+            {externalTopRightComponentModules?.map((module) => (
               <div key={module.moduleName}>
                 <module.component />
               </div>
             ))
-          }
-          <Header.Spacer />
-          {externalTopRightComponentModules?.map((module) => (
-            <div key={module.moduleName}>
-              <module.component />
-            </div>
-          ))
-          }
-          <Header.Actions>
-            <ColorSchemeToggle />
-            <UserMenu>
-              <UserMenu.Trigger name={user.primaryLine} />
-              <UserMenu.Header name={user.primaryLine} email={user.secondaryLine} />
-              <UserMenu.Divider />
-              {orgId && (
-                <Box
-                  onClick={openProfileDrawer}
-                  sx={{
-                    padding: (theme) => `${theme.spacing(1.5)} ${theme.spacing(2)}`,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: (theme) => theme.spacing(1.5),
-                    fontSize: (theme) => theme.typography.body2.fontSize,
-                    color: "inherit",
-                    "&:hover": {
-                      backgroundColor: (theme) => theme.palette.action.hover,
-                    },
-                  }}
-                >
-                  {userMenuItems[0]?.icon}
-                  {userMenuItems[0]?.label}
-                </Box>
-              )}
-              <UserMenu.Logout onClick={handleLogout} />
-            </UserMenu>
-          </Header.Actions>
-        </Header>
-      </AppShell.Navbar>
+            }
+            <Header.Actions>
+              <ColorSchemeToggle />
+              <UserMenu>
+                <UserMenu.Trigger name={user.primaryLine} />
+                <UserMenu.Header name={user.primaryLine} email={user.secondaryLine} />
+                <UserMenu.Divider />
+                {orgId && (
+                  <UserMenu.Item
+                    icon={<Settings />}
+                    label="Profile Settings"
+                    onClick={() => setProfileOpen(true)}
+                  />
+                )}
+                <UserMenu.Logout onClick={handleLogout} />
+              </UserMenu>
+            </Header.Actions>
+          </Header>
+        </AppShell.Navbar>
 
-      <AppShell.Sidebar>
-        <LeftNavigation
-          collapsed={collapsed}
-          activeItem={activeItem}
-          mainItems={mainItems}
-          groupedItems={groupedItems}
-        />
-      </AppShell.Sidebar>
+        <AppShell.Sidebar>
+          <LeftNavigation
+            collapsed={collapsed}
+            activeItem={activeItem}
+            mainItems={mainItems}
+            groupedItems={groupedItems}
+          />
+        </AppShell.Sidebar>
 
-      <AppShell.Main>
-        <Outlet />
-      </AppShell.Main>
+        <AppShell.Main>
+          <Outlet />
+        </AppShell.Main>
 
-      <AppShell.Footer>
-        <Footer>
+        <AppShell.Footer>
+          <Footer>
 
-          <Footer.Copyright>
-            © {new Date().getFullYear()} WSO2 LLC.
-          </Footer.Copyright>
-          <Footer.Divider />
-          {
-            globalConfig.ampVersion && (
-              <Footer.Version>
-                {
-                  (
-                    `${globalConfig.ampVersion}`
-                  )
-                }
-              </Footer.Version>
-            )
-          }
-          {
-            externalBottomLeftComponentModules?.map((module) => (
-              <div key={module.moduleName}>
-                <module.component />
-              </div>
-            ))
-          }
-          {
-            externalBottomRightComponentModules?.map((module) => (
-              <div key={module.moduleName}>
-                <module.component />
-              </div>
-            ))
-          }
+            <Footer.Copyright>
+              © {new Date().getFullYear()} WSO2 LLC.
+            </Footer.Copyright>
+            <Footer.Divider />
+            {
+              globalConfig.ampVersion && (
+                <Footer.Version>
+                  {
+                    (
+                      `${globalConfig.ampVersion}`
+                    )
+                  }
+                </Footer.Version>
+              )
+            }
+            {
+              externalBottomLeftComponentModules?.map((module) => (
+                <div key={module.moduleName}>
+                  <module.component />
+                </div>
+              ))
+            }
+            {
+              externalBottomRightComponentModules?.map((module) => (
+                <div key={module.moduleName}>
+                  <module.component />
+                </div>
+              ))
+            }
 
-          {globalConfig.docsUrl && (
-            <Footer.Link href={globalConfig.docsUrl + "/overview/what-is-amp/"} target="_blank" rel="noopener noreferrer">Documentation</Footer.Link>
-          )}
-          {globalConfig.footerLinks?.termsOfUseUrl && (
-            <Footer.Link href={globalConfig.footerLinks.termsOfUseUrl} target="_blank" rel="noopener noreferrer">Terms & Conditions</Footer.Link>
-          )}
-          {globalConfig.footerLinks?.privacyPolicyUrl && (
-            <Footer.Link href={globalConfig.footerLinks.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">Privacy Policy</Footer.Link>
-          )}
-        </Footer>
-      </AppShell.Footer>
-    </AppShell>
-  );
-}
+            {globalConfig.docsUrl && (
+              <Footer.Link href={globalConfig.docsUrl + "/overview/what-is-amp/"} target="_blank" rel="noopener noreferrer">Documentation</Footer.Link>
+            )}
+            {globalConfig.footerLinks?.termsOfUseUrl && (
+              <Footer.Link href={globalConfig.footerLinks.termsOfUseUrl} target="_blank" rel="noopener noreferrer">Terms & Conditions</Footer.Link>
+            )}
+            {globalConfig.footerLinks?.privacyPolicyUrl && (
+              <Footer.Link href={globalConfig.footerLinks.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">Privacy Policy</Footer.Link>
+            )}
+          </Footer>
+        </AppShell.Footer>
+      </AppShell>
 
-export function OxygenLayout() {
-  return (
-    <ProfileDrawerProvider>
-      <OxygenLayoutInner />
-    </ProfileDrawerProvider>
+      <ProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
+    </>
   );
 }

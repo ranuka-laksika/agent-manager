@@ -122,8 +122,6 @@ export const GroupEditPage: React.FC = () => {
       )
     : "#";
 
-  const pageTitle = groupData?.name ?? "Edit Group";
-
   const membersTotal = membersData?.total ?? 0;
 
   const pageMembers = useMemo(

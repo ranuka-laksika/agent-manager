@@ -15,70 +15,26 @@
  * under the License.
  */
 
-import React, {
-  createContext,
-  lazy,
-  type ReactNode,
-  Suspense,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-} from "react";
 import { User } from "@wso2/oxygen-ui-icons-react";
 import {
   DrawerWrapper,
   DrawerHeader,
   DrawerContent,
 } from "@agent-management-platform/views";
+import { ProfilePage } from "./ProfilePage";
 
-const ProfilePage = lazy(() =>
-  import("@agent-management-platform/profile-settings").then((m) => ({
-    default: m.ProfilePage,
-  }))
-);
-
-interface ProfileDrawerContextValue {
-  openProfileDrawer: () => void;
-  closeProfileDrawer: () => void;
+export interface ProfileDrawerProps {
+  open: boolean;
+  onClose: () => void;
 }
 
-const ProfileDrawerContext = createContext<ProfileDrawerContextValue | null>(null);
-
-export const ProfileDrawerProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => {
-  const [open, setOpen] = useState(false);
-
-  const openProfileDrawer = useCallback(() => setOpen(true), []);
-  const closeProfileDrawer = useCallback(() => setOpen(false), []);
-
-  const ctx = useMemo(
-    () => ({ openProfileDrawer, closeProfileDrawer }),
-    [openProfileDrawer, closeProfileDrawer],
-  );
-
+export function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
   return (
-    <ProfileDrawerContext.Provider value={ctx}>
-      {children}
-      <DrawerWrapper open={open} onClose={closeProfileDrawer} minWidth={560} maxWidth={700}>
-        <DrawerHeader
-          icon={<User size={20} />}
-          title="Profile Settings"
-          onClose={closeProfileDrawer}
-        />
-        <DrawerContent>
-          <Suspense fallback={null}>
-            <ProfilePage />
-          </Suspense>
-        </DrawerContent>
-      </DrawerWrapper>
-    </ProfileDrawerContext.Provider>
+    <DrawerWrapper open={open} onClose={onClose} minWidth={560} maxWidth={700}>
+      <DrawerHeader icon={<User size={20} />} title="Profile Settings" onClose={onClose} />
+      <DrawerContent>
+        {open && <ProfilePage />}
+      </DrawerContent>
+    </DrawerWrapper>
   );
-};
-
-export const useProfileDrawer = (): ProfileDrawerContextValue => {
-  const ctx = useContext(ProfileDrawerContext);
-  if (!ctx) throw new Error("useProfileDrawer must be used within ProfileDrawerProvider");
-  return ctx;
-};
+}

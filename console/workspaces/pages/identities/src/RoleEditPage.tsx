@@ -187,8 +187,6 @@ export const RoleEditPage: React.FC = () => {
       )
     : "#";
 
-  const pageTitle = roleData?.name ?? "Edit Role";
-
   // --- Derived displayed lists (users / groups) ---
   const displayedUsers = useMemo(() => {
     const base = initialUsers.filter((u) => !removedUserIds.has(u.id));

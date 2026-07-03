@@ -27,7 +27,7 @@ import {
   ListSubheader,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Folder, Palette, Shield, Users } from "@wso2/oxygen-ui-icons-react";
+import { Folder, Shield, Users } from "@wso2/oxygen-ui-icons-react";
 import {
   generatePath,
   matchPath,
@@ -63,7 +63,6 @@ export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
   const identityVisibility = useIdentityVisibility();
 
   const identityNode = settingsRoute.children.identities.children;
-  const appearanceNode = settingsRoute.children.appearance.children;
 
   const sections: SubNavSection[] = [
     {
@@ -88,17 +87,6 @@ export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
           icon: <Shield size={18} />,
         },
       ].filter(Boolean) as SubNavItem[],
-    },
-    {
-      title: "Appearance",
-      items: [
-        {
-          label: "Theme",
-          href: generatePath(appearanceNode.theme.path, { orgId }),
-          wildPath: appearanceNode.theme.wildPath,
-          icon: <Palette size={18} />,
-        },
-      ],
     },
   ].filter((section) => section.items.length > 0);
 
