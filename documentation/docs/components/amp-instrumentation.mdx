@@ -40,6 +40,27 @@ export AMP_OTEL_ENDPOINT="https://amp-otel-endpoint.com" # AMP OTEL endpoint
 export AMP_AGENT_API_KEY="your-agent-api-key" # Agent-specific key generated after registration
 ```
 
+:::note These must be shell variables, not a `.env` file
+`amp-instrument` reads `AMP_OTEL_ENDPOINT` and `AMP_AGENT_API_KEY` from the process environment at launch and it does not load a `.env` file. If you keep these values in a `.env` file, export them into the shell before running `amp-instrument`:
+
+```bash
+set -a && source .env && set +a
+amp-instrument python my_script.py
+```
+:::
+
+:::note Using Pydantic Settings
+AMP puts extra variables in the environment at runtime (`AMP_OTEL_ENDPOINT`, `AMP_AGENT_API_KEY`). Pydantic Settings reads the whole process environment, so with its default `extra="forbid"` these undeclared variables raise an `extra_forbidden` validation error. Set `extra="ignore"` on your settings model (or scope it to your own variables with an `env_prefix`) so it leaves variables it doesn't own alone:
+
+```python
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+    # your fields...
+```
+:::
+
 ### 3. Run Your Application
 
 Use the `amp-instrument` command to wrap your application run command:
@@ -57,6 +78,10 @@ amp-instrument uv run python script.py
 ```
 
 That's it! Your application is now instrumented and sending traces to the WSO2 Agent Manager.
+
+:::note What auto-instrumentation captures
+The Traceloop SDK generates GenAI spans by patching recognized LLM and framework SDKs (OpenAI, Anthropic, LangChain, LlamaIndex, CrewAI, and more). It does **not** trace raw HTTP calls. If your agent calls an LLM by hand with `httpx`, `requests`, or `urllib`, either call the model through a supported SDK - for example, the OpenAI SDK pointed at an OpenAI-compatible endpoint with `base_url` - or emit the spans yourself with [manual instrumentation](#manual-instrumentation).
+:::
 
 ## Manual instrumentation
 
