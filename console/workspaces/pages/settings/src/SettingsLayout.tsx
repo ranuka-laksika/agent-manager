@@ -64,31 +64,35 @@ export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
 
   const identityNode = settingsRoute.children.identities.children;
 
-  const sections: SubNavSection[] = [
-    {
-      title: "User Management",
-      items: [
-        identityVisibility.users && {
-          label: "Users",
-          href: generatePath(identityNode.users.path, { orgId }),
-          wildPath: identityNode.users.wildPath,
-          icon: <Users size={18} />,
-        },
-        identityVisibility.groups && {
-          label: "Groups",
-          href: generatePath(identityNode.groups.path, { orgId }),
-          wildPath: identityNode.groups.wildPath,
-          icon: <Folder size={18} />,
-        },
-        identityVisibility.roles && {
-          label: "Roles",
-          href: generatePath(identityNode.roles.path, { orgId }),
-          wildPath: identityNode.roles.wildPath,
-          icon: <Shield size={18} />,
-        },
-      ].filter((item): item is SubNavItem => Boolean(item)),
-    },
-  ].filter((section) => section.items.length > 0);
+  const userMgmtItems: SubNavItem[] = [];
+  if (identityVisibility.users) {
+    userMgmtItems.push({
+      label: "Users",
+      href: generatePath(identityNode.users.path, { orgId }),
+      wildPath: identityNode.users.wildPath,
+      icon: <Users size={18} />,
+    });
+  }
+  if (identityVisibility.groups) {
+    userMgmtItems.push({
+      label: "Groups",
+      href: generatePath(identityNode.groups.path, { orgId }),
+      wildPath: identityNode.groups.wildPath,
+      icon: <Folder size={18} />,
+    });
+  }
+  if (identityVisibility.roles) {
+    userMgmtItems.push({
+      label: "Roles",
+      href: generatePath(identityNode.roles.path, { orgId }),
+      wildPath: identityNode.roles.wildPath,
+      icon: <Shield size={18} />,
+    });
+  }
+
+  const sections: SubNavSection[] = userMgmtItems.length > 0
+    ? [{ title: "User Management", items: userMgmtItems }]
+    : [];
 
   return (
     <PageLayout title="Settings" disableIcon>

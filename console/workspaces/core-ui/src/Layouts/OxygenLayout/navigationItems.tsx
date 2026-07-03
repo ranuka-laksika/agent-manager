@@ -22,8 +22,21 @@ import {
   Binoculars as ObservabilityOutline,
   Settings2 as EvaluationOutline,
   Settings,
+  Home,
+  Wrench,
+  FlaskConical,
+  Workflow,
+  Logs,
+  Rocket,
+  Code,
+  MonitorCheck,
+  BrainCircuit,
+  Package,
+  DoorClosedLocked,
+  ServerCrash,
+  Server,
+  ShieldCheck,
 } from "@wso2/oxygen-ui-icons-react";
-
 import {
   generatePath,
   matchPath,
@@ -37,28 +50,36 @@ import {
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useGetAgent } from "@agent-management-platform/api-client";
 import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
-import { metaData as overviewMetadata } from "@agent-management-platform/overview";
-import { metaData as buildMetadata } from "@agent-management-platform/build";
-import { metaData as testMetadata } from "@agent-management-platform/test";
-import { metaData as tracesMetadata } from "@agent-management-platform/traces";
-import { metaData as logsMetadata } from "@agent-management-platform/logs";
-import { metaData as metricsMetadata } from "@agent-management-platform/metrics";
-import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
-import { metaData as evalMetadata } from "@agent-management-platform/eval";
-import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm-providers";
-import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
-import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
-import { gatewaysMetadata } from "@agent-management-platform/gateways";
 import { thunderInstancesMetadata } from "@agent-management-platform/env-thunders/metadata";
-import { settingsMetadata } from "@agent-management-platform/settings";
-import {
-  metaData as deploymentPipelinesMetadata,
-  environmentsMetaData,
-} from "@agent-management-platform/deployment-pipelines";
-import type { NavigationItem, NavigationSection } from "./LeftNavigation";
-import { metaData as configureAgentMetadata } from "@agent-management-platform/configure-agent";
-import { metaData as agentSecurityMetadata } from "@agent-management-platform/agent-security";
 import { useExternalNavItems } from "@agent-management-platform/views";
+import type { NavigationItem, NavigationSection } from "./LeftNavigation";
+
+// MCP logo inlined here so mcp-proxies package stays in its own async chunk.
+const MCP_LOGO_MASK =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAYAAAA9zQYyAAAAAXNSR0IArs4c6QAAAERlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKACAAQAAAABAAAAtKADAAQAAAABAAAAtAAAAABW1ZZ5AAAPtElEQVR4Ae2dC/BuUxnGD45cIo5LicGHTgYRxshfOKYpNCSjMak0ZZTURKVG5ZJUU5mpIXJPRnTTVBppSuqENLnUyOQyueYyIXFCOuGo5zFWs32+y3rXu/Zee3/7WTPvf+9v77Xetdazft/6773W2vubN09BCkgBKSAFpIAUkAJSQApIASkgBaSAFJACUkAKSAEpIAWkgBSQAlJACkiB/imwXP+q3Moar4BSDWAbwlZ73pZh+wTsn7A7YQ/AFKYoIKCnCFTT6XXgdw/YItgusIWwFWGTwuM4eSPsStgVsMWwp2AKUqCIAvOR6ztgl8Kehv3XaY8g/TmwOZiCFGhMgVWQ00dh98C8EI9LfxV87w1TkAK1KrA/vN8NGwdi7uOXI68tYQpSIKsCvEa+BJYb2Bh/vJz5DGx5mIIUcCuwCB7uh8XAV2ecxSjDK921kYNeK3AQas+RhzpBtfjmdfsWvW4RVT5ZgSOR8lmYBbgm4v4DZXpdcq2UsJcKfBq1bgLO1Dw4xLdVL1tGlTYr0HaYw5fgPtSMM5EzHTRT6GtewvxFn4v/pyZ4vJn8K4xT3pwOXxO2GWwBLEe4Bk44M/lMDmfyMVsK5OiZeSlwNoyTImtMkGdjnHsvLMcs44kT8tGpnipAhfmBOgc6IMwN6DPgXMFBWgBSMcaMEFBzp9a2BzFPLSPuNe2QccBBZYFh+lZcadAW7aWMF8DGHWnhgABHMLtv2jCSwPJc0BzUNtaZ4K1AqwK7oeYnPFvYQWOQFUetMeQm8yYrexP3g2gHzWABXO46bvmIJ+4HXaGnFGH0+aAo4xp1pqOQ60rQpMIJi7p2YnxMNe";
+
+const MCPLogo = ({ size = 20, className }: { size?: number | string; className?: string }) => (
+  <span
+    aria-hidden="true"
+    className={className}
+    style={{
+      backgroundColor: "currentColor",
+      color: "inherit",
+      display: "inline-block",
+      height: size,
+      maskImage: `url(${MCP_LOGO_MASK})`,
+      maskPosition: "center",
+      maskRepeat: "no-repeat",
+      maskSize: "contain",
+      WebkitMaskImage: `url(${MCP_LOGO_MASK})`,
+      WebkitMaskPosition: "center",
+      WebkitMaskRepeat: "no-repeat",
+      WebkitMaskSize: "contain",
+      verticalAlign: "middle",
+      width: size,
+    }}
+  />
+);
 
 /**
  * TODO: Use nav bar instead of navigate to the items.
@@ -186,9 +207,9 @@ export function useNavigationItems(): Array<
   ) {
     return [
       {
-        label: overviewMetadata.title,
+        label: "Overview",
         type: "item",
-        icon: <overviewMetadata.icon size={20} />,
+        icon: <Home size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents.path,
           pathname,
@@ -208,9 +229,9 @@ export function useNavigationItems(): Array<
           href: generatePath(item.route, { orgId, projectId, agentId }),
         })),
       {
-        label: configureAgentMetadata.title,
+        label: "Configure",
         type: "item",
-        icon: <configureAgentMetadata.icon size={20} />,
+        icon: <Settings size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.configure.wildPath,
@@ -228,9 +249,9 @@ export function useNavigationItems(): Array<
         icon: <AutoGraphOutlined />,
         items: [
           {
-            label: tracesMetadata.title,
+            label: "Traces",
             type: "item",
-            icon: <tracesMetadata.icon size={20} />,
+            icon: <Workflow size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.traces
@@ -252,11 +273,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.organization.evalMonitors.title,
+            label: "Monitors",
             type: "item",
-            icon: (
-              <evalMetadata.pages.organization.evalMonitors.icon size={20} />
-            ),
+            icon: <MonitorCheck size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor
@@ -277,9 +296,9 @@ export function useNavigationItems(): Array<
   if (orgId && projectId && agentId && defaultEnv && agent?.kindName) {
     return [
       {
-        label: overviewMetadata.title,
+        label: "Overview",
         type: "item",
-        icon: <overviewMetadata.icon size={20} />,
+        icon: <Home size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents.path,
           pathname,
@@ -290,9 +309,9 @@ export function useNavigationItems(): Array<
         ),
       },
       {
-        label: configureAgentMetadata.title,
+        label: "Configure",
         type: "item",
-        icon: <configureAgentMetadata.icon size={20} />,
+        icon: <Settings size={20} />,
         isActive: !!matchPath(
           agentsChildren.configure?.wildPath ?? "",
           pathname,
@@ -304,9 +323,9 @@ export function useNavigationItems(): Array<
         }),
       },
       {
-        label: deploymentMetadata.title,
+        label: "Deploy",
         type: "item",
-        icon: <deploymentMetadata.icon size={20} />,
+        icon: <Rocket size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.deployment.wildPath,
@@ -319,9 +338,9 @@ export function useNavigationItems(): Array<
         ),
       },
       {
-        label: testMetadata.title,
+        label: "Try It",
         type: "item",
-        icon: <testMetadata.icon size={20} />,
+        icon: <FlaskConical size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.environment.children.tryOut.wildPath,
@@ -338,12 +357,12 @@ export function useNavigationItems(): Array<
             {
               title: "Security",
               type: "section" as const,
-              icon: <agentSecurityMetadata.icon />,
+              icon: <ShieldCheck />,
               items: [
                 {
                   label: "Credentials",
                   type: "item" as const,
-                  icon: <agentSecurityMetadata.icon size={20} />,
+                  icon: <ShieldCheck size={20} />,
                   isActive: !!matchPath(
                     absoluteRouteMap.children.org.children.projects.children
                       .agents.children.environment.children.security.wildPath,
@@ -365,9 +384,9 @@ export function useNavigationItems(): Array<
         icon: <ObservabilityOutline />,
         items: [
           {
-            label: tracesMetadata.title,
+            label: "Traces",
             type: "item",
-            icon: <tracesMetadata.icon size={20} />,
+            icon: <Workflow size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.traces
@@ -382,9 +401,9 @@ export function useNavigationItems(): Array<
             ),
           },
           {
-            label: logsMetadata.title,
+            label: "Runtime Logs",
             type: "item",
-            icon: <logsMetadata.icon size={20} />,
+            icon: <Logs size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.logs
@@ -398,9 +417,9 @@ export function useNavigationItems(): Array<
             ),
           },
           {
-            label: metricsMetadata.title,
+            label: "System Metrics",
             type: "item",
-            icon: <metricsMetadata.icon size={20} />,
+            icon: <AutoGraphOutlined size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.metrics
@@ -422,11 +441,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.organization.evalMonitors.title,
+            label: "Monitors",
             type: "item",
-            icon: (
-              <evalMetadata.pages.organization.evalMonitors.icon size={20} />
-            ),
+            icon: <MonitorCheck size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor
@@ -455,9 +472,9 @@ export function useNavigationItems(): Array<
   if (orgId && projectId && agentId && defaultEnv && !agent?.kindName) {
     return [
       {
-        label: overviewMetadata.title,
+        label: "Overview",
         type: "item",
-        icon: <overviewMetadata.icon size={20} />,
+        icon: <Home size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents.path,
           pathname,
@@ -468,9 +485,9 @@ export function useNavigationItems(): Array<
         ),
       },
       {
-        label: buildMetadata.title,
+        label: "Build",
         type: "item",
-        icon: <buildMetadata.icon size={20} />,
+        icon: <Wrench size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.build.wildPath,
@@ -483,9 +500,9 @@ export function useNavigationItems(): Array<
         ),
       },
       {
-        label: configureAgentMetadata.title,
+        label: "Configure",
         type: "item",
-        icon: <configureAgentMetadata.icon size={20} />,
+        icon: <Settings size={20} />,
         isActive: !!matchPath(
           agentsChildren.configure?.wildPath ?? "",
           pathname,
@@ -497,9 +514,9 @@ export function useNavigationItems(): Array<
         }),
       },
       {
-        label: deploymentMetadata.title,
+        label: "Deploy",
         type: "item",
-        icon: <deploymentMetadata.icon size={20} />,
+        icon: <Rocket size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.deployment.wildPath,
@@ -514,7 +531,7 @@ export function useNavigationItems(): Array<
       {
         label: "Publish",
         type: "item",
-        icon: <agentKindMetadata.icon size={20} />,
+        icon: <Package size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.publish.wildPath,
@@ -527,9 +544,9 @@ export function useNavigationItems(): Array<
         ),
       },
       {
-        label: testMetadata.title,
+        label: "Try It",
         type: "item",
-        icon: <testMetadata.icon size={20} />,
+        icon: <FlaskConical size={20} />,
         isActive: !!matchPath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.environment.children.tryOut.wildPath,
@@ -546,12 +563,12 @@ export function useNavigationItems(): Array<
             {
               title: "Security",
               type: "section" as const,
-              icon: <agentSecurityMetadata.icon />,
+              icon: <ShieldCheck />,
               items: [
                 {
                   label: "Credentials",
                   type: "item" as const,
-                  icon: <agentSecurityMetadata.icon size={20} />,
+                  icon: <ShieldCheck size={20} />,
                   isActive: !!matchPath(
                     absoluteRouteMap.children.org.children.projects.children
                       .agents.children.environment.children.security.wildPath,
@@ -573,9 +590,9 @@ export function useNavigationItems(): Array<
         icon: <ObservabilityOutline />,
         items: [
           {
-            label: tracesMetadata.title,
+            label: "Traces",
             type: "item",
-            icon: <tracesMetadata.icon size={20} />,
+            icon: <Workflow size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.traces
@@ -590,9 +607,9 @@ export function useNavigationItems(): Array<
             ),
           },
           {
-            label: logsMetadata.title,
+            label: "Runtime Logs",
             type: "item",
-            icon: <logsMetadata.icon size={20} />,
+            icon: <Logs size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.logs
@@ -606,9 +623,9 @@ export function useNavigationItems(): Array<
             ),
           },
           {
-            label: metricsMetadata.title,
+            label: "System Metrics",
             type: "item",
-            icon: <metricsMetadata.icon size={20} />,
+            icon: <AutoGraphOutlined size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.observability.children.metrics
@@ -630,11 +647,9 @@ export function useNavigationItems(): Array<
         icon: <EvaluationOutline />,
         items: [
           {
-            label: evalMetadata.pages.organization.evalMonitors.title,
+            label: "Monitors",
             type: "item",
-            icon: (
-              <evalMetadata.pages.organization.evalMonitors.icon size={20} />
-            ),
+            icon: <MonitorCheck size={20} />,
             isActive: !!matchPath(
               absoluteRouteMap.children.org.children.projects.children.agents
                 .children.environment.children.evaluation.children.monitor
@@ -665,7 +680,7 @@ export function useNavigationItems(): Array<
       {
         label: "Agents",
         type: "item",
-        icon: <overviewMetadata.icon size={20} />,
+        icon: <Home size={20} />,
         href: generatePath(
           absoluteRouteMap.children.org.children.projects.path,
           { orgId, projectId },
@@ -688,14 +703,14 @@ export function useNavigationItems(): Array<
       {
         label: "Projects",
         type: "item",
-        icon: <overviewMetadata.icon size={20} />,
+        icon: <Home size={20} />,
         href: generatePath(absoluteRouteMap.children.org.path, { orgId }),
         isActive: !!matchPath(absoluteRouteMap.children.org.path, pathname),
       },
       {
         label: "Agent Catalog",
         type: "item",
-        icon: <agentKindMetadata.icon size={20} />,
+        icon: <Package size={20} />,
         href: generatePath(
           absoluteRouteMap.children.org.children.catalog.path,
           { orgId },
@@ -710,9 +725,9 @@ export function useNavigationItems(): Array<
       navVisibility.identityGroups
         ? [
             {
-              label: settingsMetadata.title,
+              label: "Settings",
               type: "item" as const,
-              icon: <settingsMetadata.icon size={20} />,
+              icon: <Settings size={20} />,
               href: generatePath(settingsOrgRoute.path, { orgId }),
               isActive: !!matchPath(settingsOrgRoute.wildPath, pathname),
               pinBottom: true,
@@ -727,9 +742,9 @@ export function useNavigationItems(): Array<
               icon: <Settings size={20} />,
               items: [
                 {
-                  label: llmProvidersMetadata.title,
+                  label: "LLM Service Providers",
                   type: "item" as const,
-                  icon: <llmProvidersMetadata.icon size={20} />,
+                  icon: <BrainCircuit size={20} />,
                   href: generatePath(llmProvidersOrgRoute.path, { orgId }),
                   isActive: !!matchPath(
                     llmProvidersOrgRoute.wildPath,
@@ -737,9 +752,9 @@ export function useNavigationItems(): Array<
                   ),
                 },
                 {
-                  label: mcpProxiesMetadata.title,
+                  label: "MCP Proxies",
                   type: "item" as const,
-                  icon: <mcpProxiesMetadata.icon size={20} />,
+                  icon: <MCPLogo size={20} />,
                   href: generatePath(mcpProxiesOrgRoute.path, { orgId }),
                   isActive: !!matchPath(mcpProxiesOrgRoute.wildPath, pathname),
                 },
@@ -755,13 +770,9 @@ export function useNavigationItems(): Array<
               icon: <EvaluationOutline />,
               items: [
                 {
-                  label: evalMetadata.pages.organization.evalEvaluators.title,
+                  label: "Evaluators",
                   type: "item" as const,
-                  icon: (
-                    <evalMetadata.pages.organization.evalEvaluators.icon
-                      size={20}
-                    />
-                  ),
+                  icon: <Code size={20} />,
                   isActive: !!matchPath(evaluatorsOrgRoute.wildPath, pathname),
                   href: generatePath(evaluatorsOrgRoute.path, { orgId }),
                 },
@@ -774,19 +785,19 @@ export function useNavigationItems(): Array<
             {
               title: "Infrastructure",
               type: "section" as const,
-              icon: <gatewaysMetadata.icon />,
+              icon: <DoorClosedLocked />,
               items: [
                 {
-                  label: gatewaysMetadata.title,
+                  label: "Gateways",
                   type: "item" as const,
-                  icon: <gatewaysMetadata.icon size={20} />,
+                  icon: <DoorClosedLocked size={20} />,
                   href: generatePath(gatewaysOrgRoute.path, { orgId }),
                   isActive: !!matchPath(gatewaysOrgRoute.wildPath, pathname),
                 },
                 {
-                  label: deploymentPipelinesMetadata.title,
+                  label: "Deployment Pipelines",
                   type: "item" as const,
-                  icon: <deploymentPipelinesMetadata.icon size={20} />,
+                  icon: <ServerCrash size={20} />,
                   href: generatePath(deploymentPipelinesOrgRoute.path, {
                     orgId,
                   }),
@@ -796,9 +807,9 @@ export function useNavigationItems(): Array<
                   ),
                 },
                 {
-                  label: environmentsMetaData.title,
+                  label: "Environments",
                   type: "item" as const,
-                  icon: <environmentsMetaData.icon size={20} />,
+                  icon: <Server size={20} />,
                   href: generatePath(environmentsOrgRoute.path, { orgId }),
                   isActive: !!matchPath(
                     environmentsOrgRoute.wildPath,
