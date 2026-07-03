@@ -121,7 +121,13 @@ function GuardedOutlet({
   if (isError) {
     return <ErrorPages.CustomError title={title} message={message} />;
   }
-  return <Outlet />;
+  // Suspense boundary for the lazy route components rendered below this
+  // guard, so every lazy import gets a loading fallback.
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 function OrgGuard() {

@@ -33,7 +33,7 @@ export function ProfileDrawer({ open, onClose }: ProfileDrawerProps) {
     <DrawerWrapper open={open} onClose={onClose} minWidth={560} maxWidth={700}>
       <DrawerHeader icon={<User size={20} />} title="Profile Settings" onClose={onClose} />
       <DrawerContent>
-        {open && <ProfilePage />}
+        <ProfilePage />
       </DrawerContent>
     </DrawerWrapper>
   );
