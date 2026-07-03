@@ -9,15 +9,13 @@ body:
       label: Please select the area the issue is related to
       multiple: true
       options:
-        - Area/AgentManagement (Agents, agent configurations, kinds, agent API keys)
-        - Area/Console (Web UI, portal, frontend)
-        - Area/Deployments (Deployments, environments, infra resources)
-        - Area/LLMProviders (LLM providers, LLM proxy, LLM configuration)
-        - Area/Gateways (Gateway integration, API catalog, routing)
-        - Area/Observability (Traces observer, telemetry, instrumentation runtime)
+        - Area/Agent Lifecycle (Agent create, configure, kinds, build, test, deploy, keys/tokens)
+        - Area/Observability (Traces, metrics, logs, monitors, scores)
+        - Area/Infrastructure (Environments, deployment pipelines, infra resources, gateway integration)
+        - Area/LLM & MCP Governance (LLM providers, LLM proxy, MCP proxy, provider keys)
+        - Area/Org & User Management (Projects, organizations, identities, RBAC, multi-tenancy)
+        - Area/Console (Web UI shell, navigation, cross-cutting frontend)
         - Area/Evaluation (Evaluation jobs, evaluators)
-        - Area/ProjectsOrgs (Projects, organizations, multi-tenancy, RBAC)
-        - Area/Instrumentation (AMP instrumentation libs, auto-instrumentation)
         - Area/Other (Anything else which does not match above categories)
     validations:
       required: true
@@ -27,16 +25,19 @@ body:
       label: Please select the aspect the issue is related to
       multiple: true
       options:
-        - Aspect/API (API backends, definitions, contracts, interfaces, OpenAPI)
-        - Aspect/UI (Frontend layouts, components, styling)
-        - Aspect/Configuration (Config files, settings, env vars, defaults)
-        - Aspect/Logging (Log formats, instrumentation, improvements)
-        - Aspect/Monitoring (Metrics, observability, health checks, alerts)
-        - Aspect/Performance (Latency, optimizations, load issues)
-        - Aspect/Security (AuthN/AuthZ, secrets, tenant isolation, vulnerabilities)
-        - Aspect/Testing (Test coverage, integration tests)
-        - Aspect/AI (AI/LLM integration, MCP, AI readiness)
-        - Aspect/UX (User experience, flows, usability, clarity)
+        - Aspect/Agent Configuration (Agent configuration, kinds, build options)
+        - Aspect/Build & Deploy (Agent build, test, deploy, keys/tokens, agent security)
+        - Aspect/Traces (Distributed traces)
+        - Aspect/Metrics & Logs (Metrics, dashboards, logs)
+        - Aspect/Monitors & Scores (Monitors and scores)
+        - Aspect/Environments & Pipelines (Environments and deployment pipelines)
+        - Aspect/Infra Resources (Infrastructure resources)
+        - Aspect/Gateway (Gateway catalog sync, routing, gateway IdPs)
+        - Aspect/LLM & MCP (LLM providers, LLM proxy, provider keys, MCP proxy)
+        - Aspect/Projects & Orgs (Projects and organizations)
+        - Aspect/Identity & Access (Identities, identity providers, roles, permissions, tenancy)
+        - Aspect/UI (Layouts, navigation, components, styling)
+        - Aspect/Evaluation (Evaluators and evaluation jobs)
         - Aspect/Other (Anything else which does not match above categories)
     validations:
       required: true

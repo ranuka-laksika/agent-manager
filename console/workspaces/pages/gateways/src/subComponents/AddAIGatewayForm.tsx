@@ -151,27 +151,18 @@ export const AddAIGatewayForm: React.FC<AddAIGatewayFormProps> = ({
           </Form.ElementWrapper>
           {environments.length > 1 && (
             <Form.ElementWrapper
-              label="Environments"
+              label="Environment"
               name="environmentIds"
             >
               <Select
-                multiple
-                value={formData.environmentIds ?? []}
+                value={formData.environmentIds?.[0] ?? ""}
                 onChange={(e: { target: { value: unknown } }) => {
-                  const v = e.target.value;
+                  const v = e.target.value as string;
                   handleFieldChange(
                     "environmentIds",
-                    Array.isArray(v) ? v : [v]
+                    v ? [v] : []
                   );
                 }}
-                renderValue={(selected) =>
-                  (selected as string[])
-                    .map((id) => {
-                      const env = environments.find((e) => e.id === id);
-                      return env?.displayName || env?.name || id;
-                    })
-                    .join(", ")
-                }
                 fullWidth
                 displayEmpty
               >

@@ -268,3 +268,9 @@ export interface CreateEnvironmentRequest {
 }
 
 export type CreateEnvironmentPathParams = { orgName: string | undefined };
+
+// Delete Environment
+export type DeleteEnvironmentPathParams = {
+  orgName: string | undefined;
+  envName: string | undefined;
+};

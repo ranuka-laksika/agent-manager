@@ -42,7 +42,8 @@ permissions:
 
 jobs:
   verify-contract-and-manifest:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/setup-go
@@ -54,7 +55,8 @@ jobs:
       - run: make check-matrix-manifest
 
   default-cell-required:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: verify-contract-and-manifest
     steps:
       - uses: actions/checkout@v6
@@ -87,7 +89,8 @@ jobs:
           path: test/instrumentation-matrix/reports/
 
   full-emission-matrix:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: verify-contract-and-manifest
     steps:
       - uses: actions/checkout@v6
@@ -113,7 +116,8 @@ jobs:
           path: test/instrumentation-matrix/reports/
 
   publish-matrix-summary:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     needs: [full-emission-matrix, default-cell-required]
     # Run on success AND on advisory cell failures (so the summary still
     # posts when cells go red), but NOT during cancellation — a bare
@@ -144,7 +148,8 @@ jobs:
         run: cat reports/summary.md >> "$GITHUB_STEP_SUMMARY"
 
   scan-cassettes-for-secrets:
-    runs-on: ubuntu-latest
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v6
       - run: ./scripts/check-cassettes.py

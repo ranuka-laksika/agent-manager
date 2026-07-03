@@ -63,6 +63,10 @@ func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.Gateway
 func (s *environmentService) CreateEnvironment(ctx context.Context, orgName string, req *models.CreateEnvironmentRequest) (*models.GatewayEnvironmentResponse, error) {
 	s.logger.Info("Creating environment in OpenChoreo", "name", req.Name, "orgName", orgName)
 
+	if req.DataplaneRef == "" {
+		s.logger.Warn("No dataplaneRef provided", "name", req.Name, "orgName", orgName)
+	}
+
 	ocReq := occlient.CreateEnvironmentRequest{
 		Name:         req.Name,
 		DisplayName:  req.DisplayName,

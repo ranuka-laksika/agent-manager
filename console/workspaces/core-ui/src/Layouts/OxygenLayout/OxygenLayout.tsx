@@ -99,7 +99,7 @@ export function OxygenLayout() {
           />
           <Header.Brand onClick={() => navigate(homePath)}>
             <Header.BrandLogo>
-              <Logo width={192}/>
+              <Logo width={192} />
               {externalLogoComponentModules?.map((module) => (
                 <div key={module.moduleName}>
                   <module.component />
@@ -173,9 +173,22 @@ export function OxygenLayout() {
 
       <AppShell.Footer>
         <Footer>
+
           <Footer.Copyright>
-            © {new Date().getFullYear()} WSO2 LLC. All rights reserved.
+            © {new Date().getFullYear()} WSO2 LLC.
           </Footer.Copyright>
+          <Footer.Divider />
+          {
+            globalConfig.ampVersion && (
+              <Footer.Version>
+                {
+                  (
+                    `${globalConfig.ampVersion}`
+                  )
+                }
+              </Footer.Version>
+            )
+          }
           {
             externalBottomLeftComponentModules?.map((module) => (
               <div key={module.moduleName}>
@@ -190,6 +203,7 @@ export function OxygenLayout() {
               </div>
             ))
           }
+
           {globalConfig.docsUrl && (
             <Footer.Link href={globalConfig.docsUrl + "/overview/what-is-amp/"} target="_blank" rel="noopener noreferrer">Documentation</Footer.Link>
           )}

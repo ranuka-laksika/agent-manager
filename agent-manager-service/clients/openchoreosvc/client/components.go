@@ -94,7 +94,17 @@ func buildInternalAgentFromKindComponentRequestBody(namespaceName, projectName s
 	}
 
 	componentTypeKind := gen.ComponentSpecComponentTypeKindComponentType
-	defaultParams := ComponentParameters{Exposed: true}
+	// The kind's source component build (incl. buildpack language) is resolved
+	// upstream and carried on req.Build, so resource parameters are derived the
+	// same way as source-based agents.
+	resourceParams, err := buildpackResourceParameters(req.Build)
+	if err != nil {
+		return gen.CreateComponentJSONRequestBody{}, fmt.Errorf("failed to determine resource parameters: %w", err)
+	}
+	defaultParams := ComponentParameters{
+		Exposed:   true,
+		Resources: resourceParams,
+	}
 	parameters, err := structToMap(defaultParams)
 	if err != nil {
 		return gen.CreateComponentJSONRequestBody{}, fmt.Errorf("failed to convert parameters to map: %w", err)
@@ -203,8 +213,13 @@ func buildInternalAgentFromSourceComponentRequestBody(namespaceName, projectName
 	}
 
 	// Create default parameters
+	resourceParams, err := buildpackResourceParameters(req.Build)
+	if err != nil {
+		return gen.CreateComponentJSONRequestBody{}, fmt.Errorf("failed to determine resource parameters: %w", err)
+	}
 	defaultParams := ComponentParameters{
-		Exposed: true,
+		Exposed:   true,
+		Resources: resourceParams,
 	}
 
 	// Convert struct to map for OpenChoreo API
@@ -263,6 +278,45 @@ func getOpenChoreoComponentType(provisioningType string, agentType string) (stri
 // -----------------------------------------------------------------------------
 // Workflow parameter builders
 // -----------------------------------------------------------------------------
+
+// defaultResourceParameters returns the platform default resource requests/limits.
+func defaultResourceParameters() *ResourceConfig {
+	return &ResourceConfig{
+		Requests: &ResourceRequests{
+			CPU:    DefaultCPURequest,
+			Memory: DefaultMemoryRequest,
+		},
+		Limits: &ResourceLimits{
+			CPU:    DefaultCPULimit,
+			Memory: DefaultMemoryLimit,
+		},
+	}
+}
+
+// buildpackResourceParameters returns the component-level resource parameters to
+// pin at creation time for the given build. Ballerina agents need a higher
+// baseline than the platform defaults, so their requests/limits are set
+// explicitly. Docker builds and all other buildpack languages get the platform
+// defaults. Returns an error if the build has neither buildpack nor docker
+// configuration.
+func buildpackResourceParameters(build *BuildConfig) (*ResourceConfig, error) {
+	if build == nil || (build.Buildpack == nil && build.Docker == nil) {
+		return nil, fmt.Errorf("build configuration is required to determine resource parameters")
+	}
+	if build.Buildpack != nil && build.Buildpack.Language == string(utils.LanguageBallerina) {
+		return &ResourceConfig{
+			Requests: &ResourceRequests{
+				CPU:    BallerinaCPURequest,
+				Memory: BallerinaMemoryRequest,
+			},
+			Limits: &ResourceLimits{
+				CPU:    BallerinaCPULimit,
+				Memory: BallerinaMemoryLimit,
+			},
+		}, nil
+	}
+	return defaultResourceParameters(), nil
+}
 
 func getWorkflowName(build *BuildConfig) (string, error) {
 	if build == nil {

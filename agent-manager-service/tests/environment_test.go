@@ -104,7 +104,7 @@ func TestCreateEnvironment(t *testing.T) {
 			Name:         "staging",
 			DisplayName:  "Staging",
 			Description:  stringPtr("Staging environment"),
-			DataplaneRef: "default-dataplane",
+			DataplaneRef: stringPtr("default-dataplane"),
 			DnsPrefix:    "staging",
 			IsProduction: boolPtr(false),
 		}
@@ -129,7 +129,7 @@ func TestCreateEnvironment(t *testing.T) {
 		call := ocClient.CreateEnvironmentCalls()[0]
 		require.Equal(t, testEnvOrgName, call.NamespaceName)
 		require.Equal(t, payload.Name, call.Req.Name)
-		require.Equal(t, payload.DataplaneRef, call.Req.DataplaneRef)
+		require.Equal(t, *payload.DataplaneRef, call.Req.DataplaneRef)
 	})
 
 	t.Run("creating an environment with a gateway spec forwards it to OpenChoreo", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestCreateEnvironment(t *testing.T) {
 		payload := spec.CreateEnvironmentRequest{
 			Name:         "edge",
 			DisplayName:  "Edge",
-			DataplaneRef: "default-dataplane",
+			DataplaneRef: stringPtr("default-dataplane"),
 			DnsPrefix:    "edge",
 			Gateway: &spec.GatewaySpec{
 				Ingress: &spec.GatewayNetworkSpec{
@@ -213,7 +213,7 @@ func TestCreateEnvironment(t *testing.T) {
 		}
 		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
 
-		payload := spec.CreateEnvironmentRequest{Name: "staging", DisplayName: "Staging", DataplaneRef: "default-dataplane", DnsPrefix: "staging"}
+		payload := spec.CreateEnvironmentRequest{Name: "staging", DisplayName: "Staging", DataplaneRef: stringPtr("default-dataplane"), DnsPrefix: "staging"}
 		body, _ := json.Marshal(payload)
 		url := fmt.Sprintf("/api/v1/orgs/%s/environments", testEnvOrgName)
 		req := httptest.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))

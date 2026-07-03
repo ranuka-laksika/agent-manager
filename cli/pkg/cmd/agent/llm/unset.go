@@ -29,11 +29,13 @@ import (
 	"github.com/wso2/agent-manager/cli/pkg/clierr"
 	"github.com/wso2/agent-manager/cli/pkg/cmdutil"
 	"github.com/wso2/agent-manager/cli/pkg/iostreams"
+	"github.com/wso2/agent-manager/cli/pkg/prompter"
 	"github.com/wso2/agent-manager/cli/pkg/render"
 )
 
 type UnsetOptions struct {
 	IO           *iostreams.IOStreams
+	Prompter     prompter.Prompter
 	Client       func(context.Context) (*amsvc.ClientWithResponses, error)
 	ResolveScope func(*cobra.Command, bool, bool) (string, string, error)
 	MakeScope    func(org, proj, agent string) render.Scope
@@ -46,6 +48,7 @@ type UnsetOptions struct {
 
 	Name string
 	Env  string
+	Yes  bool
 }
 
 // UnsetResult is the JSON envelope payload for a full-config delete.
@@ -57,6 +60,7 @@ type UnsetResult struct {
 func NewUnsetCmd(f *cmdutil.Factory) *cobra.Command {
 	opts := &UnsetOptions{
 		IO:           f.IOStreams,
+		Prompter:     f.Prompter,
 		Client:       f.AgentManager,
 		ResolveScope: f.ResolveOrgProject,
 		MakeScope:    f.AgentScope,
@@ -86,6 +90,7 @@ func NewUnsetCmd(f *cmdutil.Factory) *cobra.Command {
 	}
 	cmd.Flags().StringVar(&opts.Name, "name", "", "Name of the LLM configuration (required)")
 	cmd.Flags().StringVar(&opts.Env, "env", "", "Environment binding to remove (default: remove the whole configuration)")
+	cmd.Flags().BoolVarP(&opts.Yes, "yes", "y", false, "Skip confirmation prompt")
 	_ = cmd.MarkFlagRequired("name")
 	return cmd
 }
@@ -94,6 +99,15 @@ func runUnset(ctx context.Context, o *UnsetOptions) error {
 	if err := cmdutil.ValidatePathParam("agent name", o.AgentName); err != nil {
 		return render.Error(o.IO, o.Scope, err)
 	}
+	if o.Env == "" && !o.Yes {
+		if !o.IO.CanPrompt() {
+			return render.Error(o.IO, o.Scope, clierr.New(clierr.ConfirmationRequired, "deletion requires --yes when stdin is not a terminal"))
+		}
+		if err := o.Prompter.ConfirmDeletion(o.Name); err != nil {
+			return render.Error(o.IO, o.Scope, clierr.Newf(clierr.ConfirmationRequired, "%v", err))
+		}
+	}
+
 	client, err := o.Client(ctx)
 	if err != nil {
 		return render.Error(o.IO, o.Scope, err)

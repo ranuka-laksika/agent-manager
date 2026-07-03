@@ -161,5 +161,5 @@ export function useExternalComponentModulesByMountPoint(mountPoint: string) {
       (module) => module.kind === 'component'
     );
   }, [externalPageModules, mountPoint]);
-  return modules;
+  return modules as ExternalComponentModule[];
 }

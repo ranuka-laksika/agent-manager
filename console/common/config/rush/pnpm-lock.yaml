@@ -263,6 +263,9 @@ importers:
       react-router-dom:
         specifier: 6.28.0
         version: 6.28.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      rollup-plugin-dts:
+        specifier: ~6.4.1
+        version: 6.4.1(rollup@4.62.2)(typescript@5.9.3)
       ts-node:
         specifier: 10.9.2
         version: 10.9.2(@types/node@24.6.0)(typescript@5.9.3)
@@ -2219,6 +2222,9 @@ importers:
       '@agent-management-platform/api-client':
         specifier: workspace:*
         version: link:../../libs/api-client
+      '@agent-management-platform/llm-providers':
+        specifier: workspace:*
+        version: link:../llm-providers
       '@agent-management-platform/shared-component':
         specifier: workspace:*
         version: link:../../libs/shared-component
@@ -8768,6 +8774,13 @@ packages:
     resolution: {integrity: sha512-1F1eEtUBtFvcGm1HQ9TiUIUHPQG7mSAODrhIzjxoUEFuo8OcbrGLiVLkevNgj84TE4lnHvnumwFjhJO5Eu135g==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
+
+  rollup-plugin-dts@6.4.1:
+    resolution: {integrity: sha512-l//F3Zf7ID5GoOfLfD8kroBjQKEKpy1qfhtAdnpibFZMffPaylrg1CoDC2vGkPeTeyxUe4bVFCln2EFuL7IGGg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      rollup: ^3.29.4 || ^4
+      typescript: ^4.5 || ^5.0 || ^6.0
 
   rollup@4.62.2:
     resolution: {integrity: sha512-RFnrW4lhXA3s3eqHDZvN654g8OTjzRfqpIRJYczCGB6HzphckVAi/Qh4tbPUbRuDi7s1Llv8g/NspLkttY3gTA==}
@@ -15534,6 +15547,17 @@ snapshots:
       '@rolldown/binding-wasm32-wasi': 1.1.3
       '@rolldown/binding-win32-arm64-msvc': 1.1.3
       '@rolldown/binding-win32-x64-msvc': 1.1.3
+
+  rollup-plugin-dts@6.4.1(rollup@4.62.2)(typescript@5.9.3):
+    dependencies:
+      '@jridgewell/remapping': 2.3.5
+      '@jridgewell/sourcemap-codec': 1.5.5
+      convert-source-map: 2.0.0
+      magic-string: 0.30.21
+      rollup: 4.62.2
+      typescript: 5.9.3
+    optionalDependencies:
+      '@babel/code-frame': 7.29.7
 
   rollup@4.62.2:
     dependencies:

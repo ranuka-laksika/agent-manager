@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { GitBranch, Server } from "@wso2/oxygen-ui-icons-react";
+import { Server, ServerCrash } from "@wso2/oxygen-ui-icons-react";
 import type { PageMetadata } from "@agent-management-platform/types";
 import { DeploymentPipelinesOrganization } from "./DeploymentPipelines.Organization";
 import { EnvironmentsOrganization } from "./Environments.Organization";
@@ -23,7 +23,7 @@ import { EnvironmentsOrganization } from "./Environments.Organization";
 export const metaData: PageMetadata = {
   title: "Deployment Pipelines",
   description: "A page component for Deployment Pipeline and Environment management",
-  icon: GitBranch,
+  icon: ServerCrash,
   path: "/deployment-pipelines",
   component: DeploymentPipelinesOrganization,
   levels: {

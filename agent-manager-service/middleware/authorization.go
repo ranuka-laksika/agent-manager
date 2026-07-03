@@ -18,6 +18,7 @@ package middleware
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
@@ -52,14 +53,33 @@ func NewResolverForbiddenError(msg string) *ResolverError {
 //  2. Validates path {orgName} parameter matches token's OuHandle.
 //  3. Injects ResolvedOrg into the request context for handlers to use.
 func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFunc {
+	return requireOrgMatch(resolver, false)
+}
+
+// RequireOrgMatchAllowRootOU behaves like RequireOrgMatch but additionally allows
+// a client-credentials token issued to the configured root/admin OU
+// (config.RootOUHandle) to access any org's route, for any path org — this is a
+// system client, not scoped to a specific tenant, so its OUID is not resolved.
+// ResolvedOrg.OuHandle is set to the PATH org (not the token's admin OU) so
+// downstream handlers operate on the correct tenant; ResolvedOrg.OUID is left
+// empty since gateway registration does not consume it. Use only for
+// system-client endpoints (currently: gateway registration during org
+// bootstrap) — do not apply broadly to user-facing routes.
+func RequireOrgMatchAllowRootOU(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFunc {
+	return requireOrgMatch(resolver, true)
+}
+
+func requireOrgMatch(resolver OrgResolver, allowRootOU bool) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			claims := jwtassertion.GetTokenClaims(r.Context())
 			if claims == nil {
+				slog.Warn("RequireOrgMatch rejected", "reason", "missing token claims", "path", r.URL.Path)
 				utils.WriteErrorResponse(w, http.StatusForbidden, "missing token claims")
 				return
 			}
 			if claims.OuId == "" || claims.OuHandle == "" {
+				slog.Warn("RequireOrgMatch rejected", "reason", "missing ou identity in token", "sub", claims.Sub, "path", r.URL.Path)
 				utils.WriteErrorResponse(w, http.StatusForbidden, "missing ou identity in token")
 				return
 			}
@@ -67,6 +87,15 @@ func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFu
 			// Validate path orgName matches token's OuHandle
 			pathOrg := r.PathValue(utils.PathParamOrgName)
 			if pathOrg != claims.OuHandle {
+				if allowRootOU && claims.OuHandle == config.GetConfig().RootOUHandle {
+					slog.Info("RequireOrgMatch: root OU token granted cross-org access", "sub", claims.Sub, "pathOrg", pathOrg)
+					ctx := WithResolvedOrg(r.Context(), ResolvedOrg{
+						OuHandle: pathOrg,
+					})
+					next(w, r.WithContext(ctx))
+					return
+				}
+				slog.Warn("RequireOrgMatch rejected", "reason", "invalid organization access", "sub", claims.Sub, "tokenOu", claims.OuHandle, "pathOrg", pathOrg)
 				utils.WriteErrorResponse(w, http.StatusForbidden, "invalid organization access")
 				return
 			}
@@ -84,11 +113,30 @@ func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFu
 // required amp: scope. When RBAC_ENABLED=false the check is skipped entirely,
 // allowing zero-downtime rollout.
 func RequirePermission(perm rbac.Permission) func(http.HandlerFunc) http.HandlerFunc {
+	return requirePermission(perm, false)
+}
+
+// RequirePermissionAllowRootOU behaves like RequirePermission but additionally
+// allows a client-credentials token issued to the configured root/admin OU
+// (config.RootOUHandle) through regardless of scope. Use only for system-client
+// endpoints (currently: gateway registration during org bootstrap) — do not
+// apply broadly to user-facing routes.
+func RequirePermissionAllowRootOU(perm rbac.Permission) func(http.HandlerFunc) http.HandlerFunc {
+	return requirePermission(perm, true)
+}
+
+func requirePermission(perm rbac.Permission, allowRootOU bool) func(http.HandlerFunc) http.HandlerFunc {
 	return func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if !config.GetConfig().RBACEnabled {
 				next(w, r)
 				return
+			}
+			if allowRootOU {
+				if claims := jwtassertion.GetTokenClaims(r.Context()); claims != nil && claims.OuHandle == config.GetConfig().RootOUHandle {
+					next(w, r)
+					return
+				}
 			}
 			if !jwtassertion.HasAllScopes(r.Context(), []string{perm.Scope()}) {
 				utils.WriteErrorResponse(w, http.StatusForbidden, "insufficient permissions")

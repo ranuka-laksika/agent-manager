@@ -25,8 +25,8 @@ type CreateEnvironmentRequest struct {
 	DisplayName string `json:"displayName"`
 	// Optional description of the environment
 	Description *string `json:"description,omitempty"`
-	// Reference to the dataplane
-	DataplaneRef string `json:"dataplaneRef"`
+	// Optional reference to the dataplane. When omitted, the default dataplane is used.
+	DataplaneRef *string `json:"dataplaneRef,omitempty"`
 	// DNS prefix for the environment
 	DnsPrefix string `json:"dnsPrefix"`
 	// Whether this is a production environment
@@ -38,11 +38,10 @@ type CreateEnvironmentRequest struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCreateEnvironmentRequest(name string, displayName string, dataplaneRef string, dnsPrefix string) *CreateEnvironmentRequest {
+func NewCreateEnvironmentRequest(name string, displayName string, dnsPrefix string) *CreateEnvironmentRequest {
 	this := CreateEnvironmentRequest{}
 	this.Name = name
 	this.DisplayName = displayName
-	this.DataplaneRef = dataplaneRef
 	this.DnsPrefix = dnsPrefix
 	return &this
 }
@@ -135,28 +134,36 @@ func (o *CreateEnvironmentRequest) SetDescription(v string) {
 	o.Description = &v
 }
 
-// GetDataplaneRef returns the DataplaneRef field value
+// GetDataplaneRef returns the DataplaneRef field value if set, zero value otherwise.
 func (o *CreateEnvironmentRequest) GetDataplaneRef() string {
-	if o == nil {
+	if o == nil || IsNil(o.DataplaneRef) {
 		var ret string
 		return ret
 	}
-
-	return o.DataplaneRef
+	return *o.DataplaneRef
 }
 
-// GetDataplaneRefOk returns a tuple with the DataplaneRef field value
+// GetDataplaneRefOk returns a tuple with the DataplaneRef field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *CreateEnvironmentRequest) GetDataplaneRefOk() (*string, bool) {
-	if o == nil {
+	if o == nil || IsNil(o.DataplaneRef) {
 		return nil, false
 	}
-	return &o.DataplaneRef, true
+	return o.DataplaneRef, true
 }
 
-// SetDataplaneRef sets field value
+// HasDataplaneRef returns a boolean if a field has been set.
+func (o *CreateEnvironmentRequest) HasDataplaneRef() bool {
+	if o != nil && !IsNil(o.DataplaneRef) {
+		return true
+	}
+
+	return false
+}
+
+// SetDataplaneRef gets a reference to the given string and assigns it to the DataplaneRef field.
 func (o *CreateEnvironmentRequest) SetDataplaneRef(v string) {
-	o.DataplaneRef = v
+	o.DataplaneRef = &v
 }
 
 // GetDnsPrefix returns the DnsPrefix field value
@@ -262,7 +269,9 @@ func (o CreateEnvironmentRequest) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
 	}
-	toSerialize["dataplaneRef"] = o.DataplaneRef
+	if !IsNil(o.DataplaneRef) {
+		toSerialize["dataplaneRef"] = o.DataplaneRef
+	}
 	toSerialize["dnsPrefix"] = o.DnsPrefix
 	if !IsNil(o.IsProduction) {
 		toSerialize["isProduction"] = o.IsProduction
