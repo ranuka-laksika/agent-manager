@@ -58,11 +58,13 @@ func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFu
 
 // RequireOrgMatchAllowRootOU behaves like RequireOrgMatch but additionally allows
 // a client-credentials token issued to the configured root/admin OU
-// (config.RootOUHandle) to access any org's route. ResolvedOrg is set to the
-// PATH org (resolved via OrgResolver), not the token's admin OU, so downstream
-// handlers operate on the correct tenant. Use only for system-client
-// endpoints (currently: gateway registration during org bootstrap) — do not
-// apply broadly to user-facing routes.
+// (config.RootOUHandle) to access any org's route, for any path org — this is a
+// system client, not scoped to a specific tenant, so its OUID is not resolved.
+// ResolvedOrg.OuHandle is set to the PATH org (not the token's admin OU) so
+// downstream handlers operate on the correct tenant; ResolvedOrg.OUID is left
+// empty since gateway registration does not consume it. Use only for
+// system-client endpoints (currently: gateway registration during org
+// bootstrap) — do not apply broadly to user-facing routes.
 func RequireOrgMatchAllowRootOU(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFunc {
 	return requireOrgMatch(resolver, true)
 }
@@ -86,20 +88,9 @@ func requireOrgMatch(resolver OrgResolver, allowRootOU bool) func(http.HandlerFu
 			pathOrg := r.PathValue(utils.PathParamOrgName)
 			if pathOrg != claims.OuHandle {
 				if allowRootOU && claims.OuHandle == config.GetConfig().RootOUHandle {
-					ouid, err := resolver.ResolveOUID(r.Context(), pathOrg)
-					if err != nil {
-						var re *ResolverError
-						if errors.As(err, &re) {
-							utils.WriteErrorResponse(w, re.StatusCode, re.Message)
-						} else {
-							utils.WriteErrorResponse(w, http.StatusInternalServerError, "internal error resolving organization")
-						}
-						return
-					}
 					slog.Info("RequireOrgMatch: root OU token granted cross-org access", "sub", claims.Sub, "pathOrg", pathOrg)
 					ctx := WithResolvedOrg(r.Context(), ResolvedOrg{
 						OuHandle: pathOrg,
-						OUID:     ouid,
 					})
 					next(w, r.WithContext(ctx))
 					return
