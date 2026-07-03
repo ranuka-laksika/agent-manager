@@ -19,9 +19,7 @@ import React from "react";
 import { ListingTable, Skeleton, Stack } from "@wso2/oxygen-ui";
 
 interface ListingSkeletonRowsProps {
-  /** Number of placeholder rows to render. Defaults to 5. */
   rows?: number;
-  /** Number of data columns before the actions cell. 1 = icon+text only (Roles/Groups); 2 = icon+text + a second text column (Users). Defaults to 2. */
   columns?: 1 | 2;
 }
 

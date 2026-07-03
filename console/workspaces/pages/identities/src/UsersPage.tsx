@@ -148,7 +148,7 @@ export const UsersPage: React.FC = () => {
               title="No users yet"
               description='Click "Add User" to create one or "Invite User" to invite someone.'
             />
-          ) : filteredUsers.length === 0 ? (
+          ) : !isLoading && filteredUsers.length === 0 ? (
             <ListingTable.EmptyState
               illustration={<Users size={64} />}
               title="No users found"

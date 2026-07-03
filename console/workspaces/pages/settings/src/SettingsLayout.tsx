@@ -50,9 +50,9 @@ interface SubNavSection {
   items: SubNavItem[];
 }
 
-const ICON_SX_ACTIVE   = { minWidth: 36, color: "primary.main" } as const;
+const ICON_SX_ACTIVE = { minWidth: 36, color: "primary.main" } as const;
 const ICON_SX_INACTIVE = { minWidth: 36, color: "inherit" } as const;
-const TEXT_SX_ACTIVE   = { color: "text.secondary" } as const;
+const TEXT_SX_ACTIVE = { color: "text.secondary" } as const;
 const TEXT_SX_INACTIVE = { color: "inherit" } as const;
 
 export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
@@ -120,7 +120,10 @@ export const SettingsLayout: React.FC<{ children: ReactNode }> = ({
                       <ListItemIcon sx={isActive ? ICON_SX_ACTIVE : ICON_SX_INACTIVE}>
                         {item.icon}
                       </ListItemIcon>
-                      <ListItemText primary={item.label} sx={isActive ? TEXT_SX_ACTIVE : TEXT_SX_INACTIVE} />
+                      <ListItemText
+                        primary={item.label}
+                        sx={isActive ? TEXT_SX_ACTIVE : TEXT_SX_INACTIVE}
+                      />
                     </ListItemButton>
                   </Link>
                 );
