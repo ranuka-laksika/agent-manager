@@ -65,6 +65,23 @@ func (rr *RouteRegistrar) HandleFuncWithValidationAndAuthz(pattern string, perm 
 	rr.mux.HandleFunc(pattern, handler)
 }
 
+// HandleFuncWithValidationAndAuthzAllowRootOU is identical to
+// HandleFuncWithValidationAndAuthz except it also permits the configured
+// root OU (system clients) to access the route for any org, and bypasses
+// scope checks for that same root-OU token. Use only for system-client
+// bootstrap endpoints — see RequireOrgMatchAllowRootOU / RequirePermissionAllowRootOU.
+func (rr *RouteRegistrar) HandleFuncWithValidationAndAuthzAllowRootOU(pattern string, perm rbac.Permission, handler http.HandlerFunc) {
+	params := extractPathParams(pattern)
+	if len(params) > 0 {
+		handler = WithPathParamValidation(handler, params...)
+	}
+	handler = RequirePermissionAllowRootOU(perm)(handler)
+	if strings.Contains(pattern, orgNamePlaceholder) {
+		handler = RequireOrgMatchAllowRootOU(rr.orgResolver)(handler)
+	}
+	rr.mux.HandleFunc(pattern, handler)
+}
+
 func (rr *RouteRegistrar) HandleFuncWithValidationAndAnyAuthz(pattern string, handler http.HandlerFunc, perms ...rbac.Permission) {
 	params := extractPathParams(pattern)
 	if len(params) > 0 {

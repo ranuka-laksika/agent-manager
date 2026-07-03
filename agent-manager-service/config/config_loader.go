@@ -235,6 +235,7 @@ func loadEnvs() {
 	}
 
 	config.RBACEnabled = r.readOptionalBool("RBAC_ENABLED", false)
+	config.RootOUHandle = r.readOptionalString("ROOT_OU_HANDLE", "admin")
 
 	// Resource limits for agent resource configurations (operator-controlled ceilings)
 	config.PerAgentResourceLimits = ResourceLimitsConfig{
