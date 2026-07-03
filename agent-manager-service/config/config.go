@@ -108,6 +108,13 @@ type Config struct {
 	// Flip to true after roles are assigned to users in Thunder.
 	RBACEnabled bool
 
+	// RootOUHandle identifies the root/admin Organization Unit in Thunder.
+	// Client-credentials tokens issued to this OU are allowed to access any
+	// org's gateway-registration route (see RequireOrgMatchAllowRootOU /
+	// RequirePermissionAllowRootOU in middleware/authorization.go), since
+	// system clients always carry the root OU rather than a specific tenant's OU.
+	RootOUHandle string
+
 	// TLS Configurations
 	TLSConfig TLSConfig
 
