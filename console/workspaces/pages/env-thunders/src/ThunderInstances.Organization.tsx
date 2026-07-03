@@ -32,7 +32,7 @@ export const ThunderInstancesOrganization: React.FC = () => {
         index
         element={
           <PageLayout
-            title="Identity"
+            title="Identity Providers"
             description="Environment-scoped OAuth2 identity providers for agent authentication"
             disableIcon
           >

@@ -63,7 +63,7 @@ export const ViewThunderInstance: React.FC = () => {
       <PageLayout
         title={displayName}
         backHref={backHref}
-        backLabel="Back to Identity"
+        backLabel="Back to Identity Providers"
         disableIcon
         isLoading={isLoading}
       >

@@ -38,7 +38,9 @@ _sha6() {
 
 # thunder_release_name ORG ENV -> helm release name, <=53 chars, collision-safe.
 thunder_release_name() {
-  local org="$1" env="$2" full hash prefix
+  local org env full hash prefix
+  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
   full="amp-thunder-${org}-${env}"
   if [ "${#full}" -le 53 ]; then
     printf '%s' "${full%-}"

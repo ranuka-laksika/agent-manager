@@ -23,6 +23,6 @@
 import { KeyRound } from "@wso2/oxygen-ui-icons-react";
 
 export const thunderInstancesMetadata = {
-  title: "Identity",
+  title: "Identity Providers",
   icon: KeyRound,
 };

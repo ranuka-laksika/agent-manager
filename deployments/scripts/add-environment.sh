@@ -138,7 +138,9 @@ _thunder_sha6() {
 
 # _thunder_release_name ORG ENV -> Helm release name <=53 chars, collision-safe.
 _thunder_release_name() {
-  local org="$1" env="$2" full hash prefix
+  local org env full hash prefix
+  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
   full="amp-thunder-${org}-${env}"
   if [ "${#full}" -le 53 ]; then
     printf '%s' "${full%-}"
@@ -152,7 +154,9 @@ _thunder_release_name() {
 
 # _thunder_host ORG ENV -> wildcard-cert-friendly hostname under thunder.amp.localhost.
 _thunder_host() {
-  local org="$1" env="$2" label hash prefix
+  local org env label hash prefix
+  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
   label="${org}-${env}"
   if [ "${#label}" -le 63 ]; then
     printf '%s.thunder.amp.localhost' "${label%-}"

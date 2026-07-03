@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/google/uuid"
 
@@ -43,17 +44,19 @@ type EnvironmentService interface {
 }
 
 type environmentService struct {
-	logger      *slog.Logger
-	ocClient    occlient.OpenChoreoClient
-	gatewayRepo repositories.GatewayRepository
+	logger        *slog.Logger
+	ocClient      occlient.OpenChoreoClient
+	gatewayRepo   repositories.GatewayRepository
+	thunderProber thundersvc.Prober
 }
 
 // NewEnvironmentService creates a new environment service
-func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient) EnvironmentService {
+func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober) EnvironmentService {
 	return &environmentService{
-		logger:      logger,
-		gatewayRepo: gatewayRepo,
-		ocClient:    ocClient,
+		logger:        logger,
+		gatewayRepo:   gatewayRepo,
+		ocClient:      ocClient,
+		thunderProber: thunderProber,
 	}
 }
 
@@ -425,17 +428,33 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, orgName s
 		return nil, fmt.Errorf("list environments for org %s: %w", orgName, err)
 	}
 
+	// Probe every environment's env-Thunder JWKS endpoint concurrently. Each probe can take
+	// up to ~8s in the worst case (ThunderProbe's 4-step fallback chain, 2s timeout each), so
+	// probing sequentially would scale request latency linearly with environment count.
+	reachable := make([]bool, len(envs))
+	var wg sync.WaitGroup
+	for i, env := range envs {
+		if env == nil || env.Name == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, envName string) {
+			defer wg.Done()
+			reachable[idx] = s.thunderProber.Probe(ctx, orgName, envName)
+		}(i, env.Name)
+	}
+	wg.Wait()
+
 	instances := make([]models.ThunderInstanceResponse, 0, len(envs))
-	for _, env := range envs {
+	for i, env := range envs {
 		if env == nil || env.Name == "" {
 			continue
 		}
 
-		// Probe the env-Thunder JWKS endpoint to confirm the instance is live.
-		// This is the only reliable signal: environments created with PROVISION_THUNDER=false,
+		// Reachability is the only reliable signal: environments created with PROVISION_THUNDER=false,
 		// environments whose provisioning failed silently (non-fatal by design), and
 		// pre-PR environments all pass the gateway-mappings check but have no Thunder instance.
-		if !thundersvc.ThunderProbe(ctx, orgName, env.Name) {
+		if !reachable[i] {
 			s.logger.Debug("env-Thunder not reachable, skipping", "envName", env.Name)
 			continue
 		}
