@@ -1,9 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# Removes an environment: deprovisions its Thunder ID instance, uninstalls its
-# API Platform Gateway helm release, then deletes the Environment via the Agent
-# Manager API (which in turn deletes it in OpenChoreo and cleans up link tables).
+# Removes an environment: deletes it via the Agent Manager API, then
+# deprovisions its Thunder ID instance, then uninstalls the API Platform
+# Gateway helm release. Thunder teardown runs only after a confirmed
+# 204/404 from AMS — tearing it down earlier would leave the environment
+# live in AMS while its identity layer is permanently gone.
 #
 # All inputs are provided via environment variables so the script can be piped
 # directly into bash:
@@ -45,30 +47,11 @@ RELEASE_NAME=$(echo "$RELEASE_NAME" | head -c 53 | sed 's/-*$//')
 echo "=== Removing Environment: ${ENV_NAME} ==="
 echo ""
 
-# --- Step 0: Deprovision the environment's Thunder ID instance ---
-# Thunder is removed first (LIFO — last provisioned, first deprovisioned).
-# Failure is non-fatal: the gateway and environment removal proceed regardless.
-if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
-    echo "🔐 Removing Thunder ID instance for '${ENV_NAME}'..."
-    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
-    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
-    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
-    script_tmp="$(mktemp)"
-    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
-      if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash "$script_tmp"; then
-        echo "✅ Thunder ID instance removed"
-      else
-        echo "⚠️  Thunder ID removal failed — continuing with gateway and environment removal."
-        echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} ORG_NAME=${ORG_NAME} bash"
-      fi
-    else
-      echo "⚠️  Failed to fetch Thunder ID removal script from ${THUNDER_SCRIPT_URL}"
-    fi
-    rm -f "$script_tmp"
-    echo ""
-fi
-
 # --- Step 1: Delete the environment via Agent Manager API ---
+# Thunder is deprovisioned ONLY after a successful 204/404 below.
+# Tearing it down first would permanently destroy the identity layer
+# (Thunder DB, OAuth clients, JWKS) while the environment is still
+# live in AMS/OpenChoreo — with no restore path if the DELETE fails.
 echo "⏳ Checking Agent Manager is healthy..."
 MAX_WAIT=30
 ELAPSED=0
@@ -103,7 +86,29 @@ case "$DEL_HTTP_CODE" in
         ;;
 esac
 
-# --- Step 2: Uninstall the gateway helm release ---
+# --- Step 2: Deprovision the environment's Thunder ID instance ---
+# Runs only after the environment is confirmed gone from AMS (204/404 above).
+# Failure is non-fatal: gateway removal proceeds regardless.
+if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
+    echo ""
+    echo "🔐 Removing Thunder ID instance for '${ENV_NAME}'..."
+    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
+    THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
+    script_tmp="$(mktemp)"
+    if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
+      if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash "$script_tmp"; then
+        echo "✅ Thunder ID instance removed"
+      else
+        echo "⚠️  Thunder ID removal failed — continuing with gateway removal."
+        echo "    Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} ORG_NAME=${ORG_NAME} bash"
+      fi
+    else
+      echo "⚠️  Failed to fetch Thunder ID removal script from ${THUNDER_SCRIPT_URL}"
+    fi
+    rm -f "$script_tmp"
+fi
+
+# --- Step 3: Uninstall the gateway helm release ---
 echo ""
 echo "🌐 Uninstalling API Platform Gateway..."
 if helm status "${RELEASE_NAME}" --namespace "${GATEWAY_NAMESPACE}" > /dev/null 2>&1; then
@@ -126,3 +131,4 @@ fi
 echo ""
 echo "=== Environment '${ENV_NAME}' removed ==="
 echo ""
+

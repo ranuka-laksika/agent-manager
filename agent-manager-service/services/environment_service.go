@@ -411,7 +411,14 @@ func toOCClientGatewayListenerSpec(l *models.GatewayListenerSpec) *occlient.Gate
 }
 
 // ListThunderInstances returns the Thunder OAuth2 identity provider info for every
-// environment in the org that has been provisioned (i.e. has active gateway mappings).
+// environment in the org whose env-Thunder instance is reachable.
+//
+// Reachability is determined by a live HTTP probe to the environment's JWKS endpoint,
+// NOT by inferring from gateway mappings. Gateway mappings only prove a gateway was
+// provisioned — not that Thunder was ever deployed (e.g. PROVISION_THUNDER=false,
+// a failed provision, or an environment created before this feature was added all have
+// mappings but no Thunder instance). Advertising dead endpoints would cause the console
+// Identity page to show broken issuer/token/JWKS URLs.
 func (s *environmentService) ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error) {
 	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
 	if err != nil {
@@ -424,25 +431,27 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, orgName s
 			continue
 		}
 
-		// Verify the environment has been provisioned (i.e. has gateway mappings in our DB).
-		// Environments without gateway mappings do not have a corresponding Thunder ID instance.
-		mappings, err := s.gatewayRepo.GetEnvironmentMappingsByEnvironmentID(env.UUID)
-		if err != nil {
-			s.logger.Warn("Failed to check gateway mappings for environment", "envName", env.Name, "envUUID", env.UUID, "error", err)
-			continue
-		}
-		if len(mappings) == 0 {
-			// Skip advertising Thunder for unprovisioned environments.
+		// Probe the env-Thunder JWKS endpoint to confirm the instance is live.
+		// This is the only reliable signal: environments created with PROVISION_THUNDER=false,
+		// environments whose provisioning failed silently (non-fatal by design), and
+		// pre-PR environments all pass the gateway-mappings check but have no Thunder instance.
+		if !thundersvc.ThunderProbe(ctx, orgName, env.Name) {
+			s.logger.Debug("env-Thunder not reachable, skipping", "envName", env.Name)
 			continue
 		}
 
+		// All three URLs must be externally reachable — this response is developer-facing
+		// (console Identity page, copy-buttons). The internal svc.cluster.local addresses
+		// only resolve inside the cluster and would cause DNS failures for developers.
+		// The env-Thunder HTTPRoute routes http://<org>-<env>.thunder.amp.localhost:8080
+		// to the Thunder service, so all /oauth2/* paths are reachable via ThunderHost.
 		instances = append(instances, models.ThunderInstanceResponse{
 			EnvName:      env.Name,
 			DisplayName:  env.DisplayName,
 			IsProduction: env.IsProduction,
 			IssuerURL:    thundersvc.ThunderIssuerURL(orgName, env.Name),
-			TokenURL:     thundersvc.ThunderTokenURL(orgName, env.Name),
-			JWKSURL:      thundersvc.ThunderJWKSURL(orgName, env.Name),
+			TokenURL:     thundersvc.ThunderExternalTokenURL(orgName, env.Name),
+			JWKSURL:      thundersvc.ThunderExternalJWKSURL(orgName, env.Name),
 			Namespace:    thundersvc.ThunderNamespace(orgName, env.Name),
 		})
 	}

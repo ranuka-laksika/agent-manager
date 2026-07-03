@@ -26,14 +26,10 @@ set -euo pipefail
 #   - CHART_VERSION: gateway-extension chart version, pinned to the platform
 #     release so an added env runs the same chart. Injected by the console.
 # Optional:
-#   - CHART_VERSION: published gateway-extension chart version (e.g. 0.15.0).
-#     When unset (the default), the latest published version is resolved from
-#     oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension so new
-#     environments always get the newest gateway chart. Set it only to pin a
-#     specific version.
+#   - CHART_VERSION: gateway-extension chart version (e.g. 0.15.0). Injected by the console.
+#   - THUNDER_CHART_VERSION: ThunderID chart version for the per-env instance (default: 0.45.0).
 #   - GATEWAY_CHART: path to a local chart directory or tarball (e.g. ./deployments/helm-charts/wso2-amp-api-platform-gateway-extension).
 #     When set, CHART_VERSION is ignored and the local chart is used directly.
-#     Useful for testing uncommitted gateway chart changes without publishing to OCI.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
 #   - AGENT_MANAGER_URL (default: http://localhost:9000)
@@ -120,6 +116,12 @@ AGENT_MANAGER_INTERNAL_BASE_URL="${AGENT_MANAGER_INTERNAL_BASE_URL:-http://host.
 AGENT_MANAGER_INTERNAL_CP="${AGENT_MANAGER_INTERNAL_CP:-host.docker.internal:9243}"
 AGENT_MANAGER_INTERNAL_API="${AGENT_MANAGER_INTERNAL_BASE_URL}/api/v1"
 AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_BASE_URL}/auth/external/jwks.json"
+
+# Platform Thunder (shared) identity — matches the chart's built-in defaults.
+# Must always be re-asserted alongside keymanagers[0] because helm --set on
+# an indexed array replaces the entire list, not just the specified element.
+PLATFORM_THUNDER_ISSUER="${PLATFORM_THUNDER_ISSUER:-http://thunder.amp.localhost:8080}"
+PLATFORM_THUNDER_JWKS="${PLATFORM_THUNDER_JWKS:-http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks}"
 
 # ---------------------------------------------------------------------------
 # Thunder naming helpers — mirror add-environment-thunder.sh and naming.go.
@@ -244,27 +246,49 @@ THUNDER_PROVISIONED=false
 if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
     echo ""
     echo "🔐 Provisioning Thunder ID instance for '${ENV_NAME}'..."
-    # THUNDER_SCRIPT_URL can be set by the caller to pin a specific release ref.
-    # The console sets it via getRawScriptUrl; the default follows main (latest).
+
+    # Compute the release name using the same helper used for gateway wiring below,
+    # then check the cluster for an existing Helm release. This is the only reliable
+    # source of truth: THUNDER_PROVISIONED must reflect cluster state, not just whether
+    # this run's curl/execute succeeded. A transient fetch failure on a re-run must NOT
+    # silently revert the gateway's JWKS back to platform Thunder while a live env-Thunder
+    # instance still exists and agents are minting tokens against it.
+    THUNDER_RELEASE_NAME="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+    THUNDER_NS="${THUNDER_RELEASE_NAME}"
+    if helm status "${THUNDER_RELEASE_NAME}" --namespace "${THUNDER_NS}" > /dev/null 2>&1; then
+        echo "✅ Thunder ID instance already exists (Helm release: ${THUNDER_RELEASE_NAME})"
+        THUNDER_PROVISIONED=true
+    fi
+
     SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
     script_tmp="$(mktemp)"
     if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
+      # Reset CHART_VERSION so the AMP release version doesn't bleed into the ThunderID chart install.
       if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
           DATAPLANE_REF="${DATAPLANE_REF}" THUNDER_CHART="${THUNDER_CHART:-}" \
+          CHART_VERSION="${THUNDER_CHART_VERSION:-}" \
           bash "$script_tmp"; then
         echo "✅ Thunder ID instance provisioned"
         THUNDER_PROVISIONED=true
       else
         echo "⚠️  Thunder ID provisioning failed."
-        echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)"
-        echo "    instead of an address that doesn't exist. To fix:"
-        echo "    1) Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
-        echo "    2) Re-run this add-environment.sh with the same ENV_NAME (idempotent) to re-wire the gateway"
+        if [ "$THUNDER_PROVISIONED" = "true" ]; then
+          echo "    Existing Thunder instance retained — gateway wiring will use it."
+        else
+          echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)"
+          echo "    instead of an address that doesn't exist. To fix:"
+          echo "    1) Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
+          echo "    2) Re-run this add-environment.sh with the same ENV_NAME (idempotent) to re-wire the gateway"
+        fi
       fi
     else
       echo "⚠️  Failed to fetch Thunder ID provisioning script from ${THUNDER_SCRIPT_URL}"
-      echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)."
+      if [ "$THUNDER_PROVISIONED" = "true" ]; then
+        echo "    Existing Thunder instance retained — gateway wiring will use it."
+      else
+        echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)."
+      fi
     fi
     rm -f "$script_tmp"
 else
@@ -323,8 +347,15 @@ if [ "$THUNDER_PROVISIONED" = "true" ]; then
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
     )
 else
-    echo "ℹ️  Per-env Thunder not provisioned in this run — gateway keeps the chart's"
-    echo "    default ThunderKeyManager (shared platform Thunder)."
+    # Re-assert the platform Thunder keymanager explicitly. Helm --set on an indexed array
+    # replaces the whole list, so keymanagers[0] above already dropped the chart default.
+    HELM_ARGS+=(
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${PLATFORM_THUNDER_ISSUER}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${PLATFORM_THUNDER_JWKS}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
+    )
+    echo "ℹ️  Per-env Thunder not provisioned — gateway will use shared platform Thunder."
 fi
 
 helm "${HELM_ARGS[@]}"

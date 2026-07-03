@@ -149,6 +149,17 @@ platform_thunder_ca_cert() {
     printf '%s' "$PLATFORM_THUNDER_CA_PEM"
     return 0
   fi
+
+  # Wait for platform Thunder's TLS cert to be ready so we avoid racing with cert-manager.
+  # Redirect output to stderr (>&2) to prevent polluting the stdout captured by the caller.
+  if kubectl get certificate amp-thunder-extension-local-tls -n openchoreo-control-plane >/dev/null 2>&1; then
+    echo "⏳ Waiting for platform Thunder TLS certificate to be issued by cert-manager..." >&2
+    kubectl wait --for=condition=Ready certificate/amp-thunder-extension-local-tls \
+      -n openchoreo-control-plane --timeout=300s >&2 || {
+        echo "⚠️  Platform Thunder TLS certificate not yet ready — trusted issuer may not be configured." >&2
+      }
+  fi
+
   local b64
   b64="$(kubectl get secret amp-local-root-ca-secret -n cert-manager \
     -o jsonpath='{.data.ca\.crt}' 2>/dev/null || true)"
@@ -664,8 +675,7 @@ main() {
   #      to the combined file so Go's TLS stack trusts both commercial CAs and
   #      the self-signed CA.
   # ---------------------------------------------------------------------------
-  local ca_pem ca_bundle mozilla_bundle tmp_bundle expected_sha actual_sha
-  local ca_cm_name="amp-thunder-platform-ca"
+  local ca_pem
 
   # Fetch platform Thunder CA. Missing cert is fatal to prevent silent auth failures.
   if ! ca_pem="$(platform_thunder_ca_cert)" || [ -z "$ca_pem" ]; then
@@ -680,51 +690,94 @@ main() {
   # remains additive and compatible with any base image (Debian/Alpine).
   # The bundle is built on the operator's machine (not inside the pod), so we
   # cannot rely on the pod's /etc/ssl — we need a portable external source.
-  echo "🔐 Fetching Mozilla CA bundle from curl.se..."
-  tmp_bundle="$(mktemp)"
-  local attempt
-  for attempt in 1 2 3; do
-    if ! curl -fsSL --connect-timeout 30 https://curl.se/ca/cacert.pem -o "$tmp_bundle" 2>/dev/null \
-        || ! grep -q "BEGIN CERTIFICATE" "$tmp_bundle"; then
-      rm -f "$tmp_bundle"
-      echo "❌ Could not fetch Mozilla CA bundle from https://curl.se/ca/cacert.pem"
-      echo "   Download it on a machine with internet access, then re-run:"
-      echo "     curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem"
-      echo "     ENV_NAME=... bash $(basename "$0")"
-      exit 1
-    fi
-    # Verify against the published checksum to detect download corruption.
-    if expected_sha="$(curl -fsSL --connect-timeout 15 https://curl.se/ca/cacert.pem.sha256 2>/dev/null | awk '{print $1}')" \
-        && [ -n "$expected_sha" ]; then
-      actual_sha="$(_sha256 "$tmp_bundle")"
-      if [ "$expected_sha" != "$actual_sha" ]; then
-        if [ "$attempt" -lt 3 ]; then
-          echo "⚠️  Checksum mismatch on attempt ${attempt}/3 — retrying..."
-          sleep 2
-          continue
-        fi
-        rm -f "$tmp_bundle"
-        echo "❌ Mozilla CA bundle checksum mismatch after 3 attempts — download may be corrupt."
-        echo "   Expected: $expected_sha"
-        echo "   Got:      $actual_sha"
+  local ca_bundle mozilla_bundle
+  local ca_cm_name="amp-thunder-platform-ca"
+
+  # Short-circuit: if the ConfigMap already exists in the cluster (e.g. a re-run
+  # or an idempotent apply), skip the 230KB download entirely.
+  if kubectl get configmap "$ca_cm_name" -n "$ns" &>/dev/null 2>&1; then
+    echo "🔐 CA bundle ConfigMap ${ns}/${ca_cm_name} already exists — skipping download"
+    ca_bundle=""  # not used below when ConfigMap already present; set_args still queued
+  else
+    # Allow pre-downloading the bundle and pointing at it via MOZILLA_CA_BUNDLE.
+    # Useful in air-gapped envs or when curl.se is unreachable.
+    #   curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem
+    #   MOZILLA_CA_BUNDLE=/tmp/cacert.pem ENV_NAME=... bash add-environment-thunder.sh
+    if [ -n "${MOZILLA_CA_BUNDLE:-}" ] && [ -f "$MOZILLA_CA_BUNDLE" ]; then
+      echo "🔐 Using pre-downloaded Mozilla CA bundle from ${MOZILLA_CA_BUNDLE}"
+      mozilla_bundle="$(cat "$MOZILLA_CA_BUNDLE")"
+      if ! grep -q "BEGIN CERTIFICATE" <<< "$mozilla_bundle"; then
+        echo "❌ MOZILLA_CA_BUNDLE file does not look like a PEM certificate bundle: ${MOZILLA_CA_BUNDLE}"
         exit 1
       fi
-      echo "   ✓ Checksum verified (SHA-256: ${actual_sha:0:16}...)"
+    else
+      echo "🔐 Fetching Mozilla CA bundle from curl.se..."
+      local tmp_bundle attempt download_ok
+      tmp_bundle="$(mktemp)"
+      download_ok=false
+      for attempt in 1 2 3; do
+        # Retry both download failures AND checksum mismatches — the old code only
+        # retried the latter, causing the loop to be dead code on a network failure.
+        if ! curl -fsSL --connect-timeout 30 https://curl.se/ca/cacert.pem -o "$tmp_bundle" 2>/dev/null; then
+          if [ "$attempt" -lt 3 ]; then
+            echo "⚠️  Download failed on attempt ${attempt}/3 — retrying in 5s..."
+            sleep 5
+            continue
+          fi
+          rm -f "$tmp_bundle"
+          echo "❌ Could not fetch Mozilla CA bundle from https://curl.se/ca/cacert.pem after 3 attempts."
+          echo "   Download it on a machine with internet access and set the path via MOZILLA_CA_BUNDLE:"
+          echo "     curl -fsSL https://curl.se/ca/cacert.pem -o /tmp/cacert.pem"
+          echo "     MOZILLA_CA_BUNDLE=/tmp/cacert.pem ENV_NAME=${ENV_NAME} ORG_NAME=${ORG_NAME} bash $(basename "$0")"
+          exit 1
+        fi
+        if ! grep -q "BEGIN CERTIFICATE" "$tmp_bundle"; then
+          if [ "$attempt" -lt 3 ]; then
+            echo "⚠️  Downloaded file does not look like a PEM bundle on attempt ${attempt}/3 — retrying in 5s..."
+            sleep 5
+            continue
+          fi
+          rm -f "$tmp_bundle"
+          echo "❌ Mozilla CA bundle download produced an unexpected response after 3 attempts."
+          exit 1
+        fi
+        # Verify against the published checksum to detect download corruption.
+        local expected_sha actual_sha
+        if expected_sha="$(curl -fsSL --connect-timeout 15 https://curl.se/ca/cacert.pem.sha256 2>/dev/null | awk '{print $1}')" \
+            && [ -n "$expected_sha" ]; then
+          actual_sha="$(_sha256 "$tmp_bundle")"
+          if [ "$expected_sha" != "$actual_sha" ]; then
+            if [ "$attempt" -lt 3 ]; then
+              echo "⚠️  Checksum mismatch on attempt ${attempt}/3 — retrying in 5s..."
+              sleep 5
+              continue
+            fi
+            rm -f "$tmp_bundle"
+            echo "❌ Mozilla CA bundle checksum mismatch after 3 attempts — download may be corrupt."
+            echo "   Expected: $expected_sha"
+            echo "   Got:      $actual_sha"
+            exit 1
+          fi
+          echo "   ✓ Checksum verified (SHA-256: ${actual_sha:0:16}...)"
+        fi
+        download_ok=true
+        break
+      done
+      mozilla_bundle="$(cat "$tmp_bundle")"
+      rm -f "$tmp_bundle"
+      [ "$download_ok" = "true" ] || { echo "❌ CA bundle fetch failed unexpectedly"; exit 1; }
     fi
-    break
-  done
-  mozilla_bundle="$(cat "$tmp_bundle")"
-  rm -f "$tmp_bundle"
-  ca_bundle="${mozilla_bundle}
+
+    ca_bundle="${mozilla_bundle}
 ${ca_pem}"
 
-  kubectl create namespace "$ns" --dry-run=client -o yaml | kubectl apply -f - >/dev/null 2>&1 || true
+    # Store the combined bundle as a ConfigMap.
+    kubectl create configmap "$ca_cm_name" -n "$ns" \
+      --from-literal=ca-bundle.crt="${ca_bundle}" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    echo "🔐 Combined CA bundle (Mozilla + platform Thunder CA) stored in ${ns}/${ca_cm_name}"
+  fi
 
-  # Store the combined bundle as a ConfigMap.
-  kubectl create configmap "$ca_cm_name" -n "$ns" \
-    --from-literal=ca-bundle.crt="${ca_bundle}" \
-    --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  echo "🔐 Combined CA bundle (Mozilla + platform Thunder CA) stored in ${ns}/${ca_cm_name}"
 
   set_args+=(
     # Configure the trusted issuer endpoints. (CA bundle mounting is done via a

@@ -654,7 +654,7 @@ func TestEnvironmentService_GetEnvironmentGateways(t *testing.T) {
 
 // -----------------------------------------------------------------------------
 // ListThunderInstances — gates returning Thunder instance info on whether
-// the environment is actually provisioned with a gateway mapping in the local DB.
+// the env-Thunder JWKS endpoint is actually reachable (live HTTP probe).
 // -----------------------------------------------------------------------------
 
 func TestEnvironmentService_ListThunderInstances(t *testing.T) {
@@ -675,41 +675,45 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 		assert.ErrorIs(t, err, boom)
 	})
 
-	t.Run("gates instances on presence of gateway mappings in local DB", func(t *testing.T) {
+	t.Run("skips environments with unreachable Thunder (connection refused)", func(t *testing.T) {
+		// All env-Thunder instances are unreachable in unit tests (cluster-internal DNS
+		// doesn't resolve outside a cluster). The probe returns false for every env,
+		// so the result list must be empty — proving that gateway mappings alone are NOT
+		// sufficient to advertise Thunder endpoints.
 		oc := &clientmocks.OpenChoreoClientMock{
 			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
 				return []*models.EnvironmentResponse{
-					{UUID: "u1", Name: "dev-provisioned", DisplayName: "Dev", IsProduction: false},
-					{UUID: "u2", Name: "staging-unprovisioned", DisplayName: "Staging", IsProduction: false},
+					{UUID: "u1", Name: "dev", DisplayName: "Dev", IsProduction: false},
+					{UUID: "u2", Name: "staging", DisplayName: "Staging", IsProduction: false},
 				}, nil
 			},
 		}
-
-		repo := &repomocks.GatewayRepositoryMock{
-			GetEnvironmentMappingsByEnvironmentIDFunc: func(id string) ([]models.GatewayEnvironmentMapping, error) {
-				if id == "u1" {
-					return []models.GatewayEnvironmentMapping{{GatewayUUID: uuid.New()}}, nil
-				}
-				// u2 has no mappings
-				return []models.GatewayEnvironmentMapping{}, nil
-			},
-		}
-
-		svc := newEnvService(repo, oc)
+		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
 
 		resp, err := svc.ListThunderInstances(context.Background(), org)
 
 		require.NoError(t, err)
 		require.NotNil(t, resp)
-		require.Len(t, resp.ThunderInstances, 1)
+		// Both envs are skipped because amp-thunder-acme-dev.svc.cluster.local is
+		// not resolvable in a unit test context — proving dead endpoints are not advertised.
+		assert.Empty(t, resp.ThunderInstances)
+	})
 
-		inst := resp.ThunderInstances[0]
-		assert.Equal(t, "dev-provisioned", inst.EnvName)
-		assert.Equal(t, "Dev", inst.DisplayName)
-		assert.False(t, inst.IsProduction)
-		assert.Equal(t, "http://acme-dev-provisioned.thunder.amp.localhost:8080", inst.IssuerURL)
-		assert.Equal(t, "http://amp-thunder-acme-dev-provisioned-service.amp-thunder-acme-dev-provisioned.svc.cluster.local:8090/oauth2/token", inst.TokenURL)
-		assert.Equal(t, "http://amp-thunder-acme-dev-provisioned-service.amp-thunder-acme-dev-provisioned.svc.cluster.local:8090/oauth2/jwks", inst.JWKSURL)
-		assert.Equal(t, "amp-thunder-acme-dev-provisioned", inst.Namespace)
+	t.Run("skips nil and empty-name environments", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{
+					nil,
+					{UUID: "u1", Name: ""},
+				}, nil
+			},
+		}
+		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
+
+		resp, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Empty(t, resp.ThunderInstances)
 	})
 }

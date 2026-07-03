@@ -15,7 +15,6 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-
 import React, { useCallback, useState } from "react";
 import {
   Alert,
@@ -24,38 +23,33 @@ import {
   Divider,
   Grid,
   Skeleton,
-  Snackbar,
   Stack,
   Tab,
   Tabs,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Folder, Shield, Users } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useParams } from "react-router-dom";
 import { useListThunderInstances } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
-import { PageLayout } from "@agent-management-platform/views";
-import { ThunderInstanceGroupsTab } from "./ThunderInstanceGroupsTab";
+import { PageLayout, useSnackBar } from "@agent-management-platform/views";
+import { ThunderInstanceComingSoonTab } from "./ThunderInstanceComingSoonTab";
 import { ThunderInstanceOverviewTab } from "./ThunderInstanceOverviewTab";
-import { ThunderInstanceRolesTab } from "./ThunderInstanceRolesTab";
-import { ThunderInstanceUsersTab } from "./ThunderInstanceUsersTab";
 
 const TABS = ["Overview", "Users", "Roles", "Groups"] as const;
 
 export const ViewThunderInstance: React.FC = () => {
   const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
   const [tabIndex, setTabIndex] = useState(0);
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState("");
+  const { pushSnackBar } = useSnackBar();
 
   const { data, isLoading, error } = useListThunderInstances({ orgName: orgId });
   const instance = data?.thunderInstances.find((i) => i.envName === envName);
 
   const handleCopy = useCallback((value: string, label: string) => {
     navigator.clipboard.writeText(value).then(() => {
-      setSnackbarMessage(`${label} copied to clipboard`);
-      setSnackbarOpen(true);
+      pushSnackBar({ message: `${label} copied to clipboard`, type: "success" });
     }).catch(() => {});
-  }, []);
+  }, [pushSnackBar]);
 
   const displayName = instance?.displayName || instance?.envName || envName || "";
 
@@ -120,20 +114,19 @@ export const ViewThunderInstance: React.FC = () => {
               {tabIndex === 0 && (
                 <ThunderInstanceOverviewTab instance={instance} onCopy={handleCopy} />
               )}
-              {tabIndex === 1 && <ThunderInstanceUsersTab />}
-              {tabIndex === 2 && <ThunderInstanceRolesTab />}
-              {tabIndex === 3 && <ThunderInstanceGroupsTab />}
+              {tabIndex === 1 && (
+                <ThunderInstanceComingSoonTab illustration={<Users size={48} />} title="Users" />
+              )}
+              {tabIndex === 2 && (
+                <ThunderInstanceComingSoonTab illustration={<Shield size={48} />} title="Roles" />
+              )}
+              {tabIndex === 3 && (
+                <ThunderInstanceComingSoonTab illustration={<Folder size={48} />} title="Groups" />
+              )}
             </Box>
           </Card>
         )}
       </PageLayout>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        message={snackbarMessage}
-      />
     </>
   );
 };

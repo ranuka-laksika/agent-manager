@@ -17,9 +17,12 @@
 package thundersvc
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
+	"net/http"
 	"strings"
+	"time"
 )
 
 const (
@@ -80,6 +83,7 @@ func ThunderInternalURL(org, env string) string {
 
 // ThunderJWKSURL returns the cluster-internal URL for fetching the env-Thunder's JWKS.
 // Used by the API gateway's ThunderKeyManager to validate agent tokens.
+// INTERNAL ONLY — not reachable outside the cluster; use ThunderExternalJWKSURL for developer-facing output.
 func ThunderJWKSURL(org, env string) string {
 	return ThunderInternalURL(org, env) + "/oauth2/jwks"
 }
@@ -92,9 +96,25 @@ func ThunderSystemClientSecretName(org, env string) string {
 }
 
 // ThunderTokenURL returns the OAuth2 token endpoint for the env-Thunder instance.
-// Reachable only inside the cluster (internal K8s DNS).
+// INTERNAL ONLY — uses cluster-internal K8s DNS (svc.cluster.local:8090); not reachable
+// outside the cluster. Use ThunderExternalTokenURL for developer-facing output.
 func ThunderTokenURL(org, env string) string {
 	return ThunderInternalURL(org, env) + "/oauth2/token"
+}
+
+// ThunderExternalTokenURL returns the public OAuth2 token endpoint for the env-Thunder instance.
+// Reachable from outside the cluster via the HTTPRoute that maps
+// http://<org>-<env>.thunder.amp.localhost:8080 -> the Thunder service.
+// Use this in developer-facing API responses (console copy-buttons, Identity page, etc.).
+func ThunderExternalTokenURL(org, env string) string {
+	return fmt.Sprintf("http://%s:8080/oauth2/token", ThunderHost(org, env))
+}
+
+// ThunderExternalJWKSURL returns the public JWKS endpoint for the env-Thunder instance.
+// Reachable from outside the cluster via the same HTTPRoute as ThunderExternalTokenURL.
+// Use this in developer-facing API responses.
+func ThunderExternalJWKSURL(org, env string) string {
+	return fmt.Sprintf("http://%s:8080/oauth2/jwks", ThunderHost(org, env))
 }
 
 // ThunderHost returns the wildcard-cert-friendly hostname under thunder.amp.localhost for the env-Thunder instance.
@@ -121,6 +141,56 @@ func ThunderHost(org, env string) string {
 // This is what Thunder stamps into the JWT iss claim.
 func ThunderIssuerURL(org, env string) string {
 	return fmt.Sprintf("http://%s:8080", ThunderHost(org, env))
+}
+
+// ThunderProbe checks whether an env-Thunder instance is reachable by performing a
+// HTTP GET to its JWKS endpoint. It tries the cluster-internal URL first, falling
+// back to the public URL, and finally host-header resolved fallbacks (e.g. host.docker.internal)
+// to support local development inside Docker containers. Callers treat a negative probe
+// as "not provisioned" and skip the env.
+//
+// A 2-second timeout avoids blocking the ListThunderInstances hot path on unreachable
+// instances while still being generous enough for a slow cold start.
+func ThunderProbe(ctx context.Context, org, env string) bool {
+	const probeTimeout = 2 * time.Second
+	probe := func(url string, resolveToHost string) bool {
+		reqCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+		defer cancel()
+		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
+		if err != nil {
+			return false
+		}
+		if resolveToHost != "" {
+			req.Host = req.URL.Host
+			req.URL.Host = resolveToHost
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}
+
+	// 1. Try K8s cluster-internal URL first (production/in-cluster)
+	if probe(ThunderJWKSURL(org, env), "") {
+		return true
+	}
+
+	// 2. Try public/external URL (development on host machine)
+	externalURL := ThunderExternalJWKSURL(org, env)
+	if probe(externalURL, "") {
+		return true
+	}
+
+	// 3. Fallback for Docker container development (macOS / host.docker.internal)
+	host := ThunderHost(org, env)
+	if probe("http://"+host+":8080/oauth2/jwks", "host.docker.internal:8080") {
+		return true
+	}
+
+	// 4. Fallback for Linux containers / host networking (127.0.0.1)
+	return probe("http://"+host+":8080/oauth2/jwks", "127.0.0.1:8080")
 }
 
 const maxAgentAppNameLen = 100

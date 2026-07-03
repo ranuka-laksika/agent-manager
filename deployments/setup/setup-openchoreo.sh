@@ -467,17 +467,7 @@ echo "✅ All AMP extensions installed successfully"
 echo ""
 
 # Provision default env-Thunder after parallel extensions to avoid racing default env creation.
-# Wait for platform Thunder's TLS cert to be ready so env-Thunder can fetch the JWKS.
-# Non-fatal: failure to provision env-Thunder should not abort the rest of the setup.
-echo "⏳ Waiting for platform Thunder TLS certificate to be issued by cert-manager..."
-if kubectl wait --for=condition=Ready certificate/amp-thunder-extension-local-tls \
-    -n openchoreo-control-plane --timeout=300s 2>/dev/null; then
-    echo "✅ Platform Thunder TLS certificate is ready"
-else
-    echo "⚠️  Platform Thunder TLS certificate not yet ready — trusted issuer may not be configured."
-    echo "   Continuing anyway; re-run add-environment-thunder.sh once cert-manager has issued the cert."
-fi
-echo ""
+# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
 
 if install_default_env_thunder; then
     echo ""
@@ -613,7 +603,8 @@ while IFS= read -r _ns; do
   fi
   _host="$(kubectl get httproute "$_ns" -n openchoreo-control-plane -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null || echo "")"
   if [ -z "$_host" ]; then
-    _host="${_ns#amp-thunder-}.thunder.amp.localhost"
+    # Skip advertising URL details if the routing HTTPRoute is not yet created.
+    continue
   fi
   _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)"
   echo "  ${_ns#amp-thunder-}:"

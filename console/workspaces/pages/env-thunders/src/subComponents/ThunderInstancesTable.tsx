@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { type MouseEvent, useState } from "react";
+import { type MouseEvent } from "react";
 import {
   Alert,
   Avatar,
@@ -24,7 +24,6 @@ import {
   IconButton,
   ListingTable,
   Skeleton,
-  Snackbar,
   Stack,
   Tooltip,
   Typography,
@@ -33,18 +32,21 @@ import { AlertTriangle, ChevronRight, Copy, KeyRound } from "@wso2/oxygen-ui-ico
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListThunderInstances } from "@agent-management-platform/api-client";
 import { absoluteRouteMap, type ThunderInstanceResponse } from "@agent-management-platform/types";
+import { useSnackBar } from "@agent-management-platform/views";
 
 export function ThunderInstancesTable() {
   const navigate = useNavigate();
   const { orgId } = useParams<{ orgId: string }>();
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const { pushSnackBar } = useSnackBar();
 
   const { data, isLoading, error } = useListThunderInstances({ orgName: orgId });
   const instances = data?.thunderInstances ?? [];
 
   const handleCopy = (e: MouseEvent<HTMLButtonElement>, value: string) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(value).then(() => setSnackbarOpen(true)).catch(() => {});
+    navigator.clipboard.writeText(value).then(() => {
+      pushSnackBar({ message: "Token endpoint copied to clipboard", type: "success" });
+    }).catch(() => {});
   };
 
   const handleRowClick = (instance: ThunderInstanceResponse) => {
@@ -100,7 +102,7 @@ export function ThunderInstancesTable() {
         <ListingTable.EmptyState
           illustration={<KeyRound size={64} />}
           title="No identity providers"
-          description="Add an environment first. Each environment automatically gets a Thunder OAuth2 identity provider."
+          description="Add an environment first. Each environment automatically gets a Thunder identity provider."
         />
       </ListingTable.Container>
     );
@@ -187,13 +189,6 @@ export function ThunderInstancesTable() {
         </ListingTable.Body>
       </ListingTable>
     </ListingTable.Container>
-
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={3000}
-        onClose={() => setSnackbarOpen(false)}
-        message="Token endpoint copied to clipboard"
-      />
     </>
   );
 }

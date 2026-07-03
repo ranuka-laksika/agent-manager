@@ -1508,23 +1508,15 @@ echo ""
 
 # Provision per-environment Thunder instance for the default environment.
 # Mirrors setup-openchoreo.sh:install_default_env_thunder().
-# Must run after the platform Thunder TLS cert is issued (cert-manager) and
-# after the default environment exists (created by platform-resources above).
-log_info "Waiting for platform Thunder TLS certificate to be issued by cert-manager..."
-if kubectl wait --for=condition=Ready certificate/amp-thunder-extension-local-tls \
-        -n amp-thunder --timeout=120s 2>/dev/null; then
-    log_success "Platform Thunder TLS certificate is ready"
-else
-    log_warning "Platform Thunder TLS certificate not yet ready — env-Thunder trusted issuer may not be configured."
-    log_info "Continuing; re-run add-environment-thunder.sh once cert-manager has issued the cert."
-fi
+# Must run after the default environment exists (created by platform-resources above).
+# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
 
 log_info "Provisioning Thunder identity provider for the default environment..."
 ENV_THUNDER_PROVISIONED=false
 if ! install_default_env_thunder; then
     log_warning "Default environment Thunder provisioning failed (non-fatal)"
     echo "Re-run manually once the platform is ready:"
-    echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default CHART_VERSION=${VERSION} \\"
+    echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
     echo "  bash <(curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh)"
 else
     log_success "Default environment Thunder identity provider provisioned"
@@ -1631,11 +1623,19 @@ fi
 # to disk by add-environment-thunder.sh), so it's fetched fresh here rather than
 # re-printed from that script's own (long since scrolled-past) console output.
 if [[ "${ENV_THUNDER_PROVISIONED}" == "true" ]]; then
-  ENV_THUNDER_ADMIN_PASSWORD="$(kubectl get secret amp-thunder-default-default-admin-credentials \
-    -n amp-thunder-default-default -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  # Dynamically derive the coordinates using the shared naming helper.
+  # Avoids hardcoded literals which would break if custom org/env names are used
+  # or if the derived names are hash-truncated (natural names > 53 chars).
+  default_org="default"
+  default_env="default"
+  default_release="$(thunder_release_name "${default_org}" "${default_env}")"
+  default_ns="${default_release}"
+
+  ENV_THUNDER_ADMIN_PASSWORD="$(kubectl get secret "${default_release}-admin-credentials" \
+    -n "${default_ns}" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
   if [[ -n "${ENV_THUNDER_ADMIN_PASSWORD}" ]]; then
     log_step "Default Environment Thunder ID Console"
-    log_info "URL:      http://default-default.thunder.amp.localhost:8080/console"
+    log_info "URL:      http://${default_org}-${default_env}.thunder.amp.localhost:8080/console"
     log_info "Username: admin"
     log_info "Password: ${ENV_THUNDER_ADMIN_PASSWORD}"
   fi

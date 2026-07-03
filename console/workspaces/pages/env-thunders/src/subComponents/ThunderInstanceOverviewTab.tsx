@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { Alert, Card, CardContent, Grid, IconButton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
+import { Card, CardContent, Grid, IconButton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
 import { CheckCircle, Copy } from "@wso2/oxygen-ui-icons-react";
 import type { ThunderInstanceResponse } from "@agent-management-platform/types";
 

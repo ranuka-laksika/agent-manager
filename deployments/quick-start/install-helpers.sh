@@ -373,3 +373,28 @@ install_gateway_extension() {
 
     return 0
 }
+
+# ---------------------------------------------------------------------------
+# Thunder naming helpers — keeps naming aligned with add-environment-thunder.sh
+# ---------------------------------------------------------------------------
+_sha6() {
+  if command -v shasum >/dev/null 2>&1; then
+    printf '%s' "$1" | shasum -a 256 | cut -c1-6
+  else
+    printf '%s' "$1" | sha256sum | cut -c1-6
+  fi
+}
+
+thunder_release_name() {
+  local org="$1" env="$2" full hash prefix
+  full="amp-thunder-${org}-${env}"
+  if [ "${#full}" -le 53 ]; then
+    printf '%s' "${full%-}"
+    return 0
+  fi
+  hash="$(_sha6 "${org}/${env}")"
+  prefix="${full:0:46}"
+  prefix="${prefix%-}"
+  printf '%s-%s' "$prefix" "$hash"
+}
+
