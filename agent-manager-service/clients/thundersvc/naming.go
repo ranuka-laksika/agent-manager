@@ -255,7 +255,8 @@ func ThunderProbe(ctx context.Context, org, env string) bool {
 	}
 	if config.GetConfig().IsLocalDevEnv {
 		host := ThunderHost(org, env)
-		attempts = append(attempts,
+		attempts = append(
+			attempts,
 			probeAttempt{"http://" + host + ":8080/oauth2/jwks", "host.docker.internal:8080"}, // 3. local dev: agent-manager-service as a Docker container
 			probeAttempt{"http://" + host + ":8080/oauth2/jwks", "127.0.0.1:8080"},            // 4. local dev: host networking
 		)

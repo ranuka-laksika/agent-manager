@@ -61,6 +61,10 @@ ACME_EMAIL=ops@mycompany.com       # ACME contact (recommended)
 # The cert MUST carry SANs covering *.<DOMAIN_BASE> AND *.<AGENTS_BASE>.
 # TLS_CERT_FILE=/opt/amp/certs/fullchain.pem
 # TLS_KEY_FILE=/opt/amp/certs/privkey.pem
+# If this cert is signed by an internal/private CA (not a public one like Let's
+# Encrypt or a commercial CA), set TLS_CA_FILE so env-Thunder can trust it when
+# fetching platform Thunder's HTTPS JWKS. Leave unset for a publicly-trusted cert.
+# TLS_CA_FILE=/opt/amp/certs/internal-ca.crt
 
 # --- upstream mode (TLS terminated by a cloud LB / proxy in front of the VM) ---
 # The LB must forward each hostname to the VM and set X-Forwarded-Proto: https.
@@ -250,12 +254,18 @@ run_advanced_install() {
   export PLATFORM_THUNDER_ISSUER="https://${AMP_HOST_THUNDER}"
   export PLATFORM_THUNDER_JWKS_URL="https://${AMP_HOST_THUNDER}/oauth2/jwks"
   case "$TLS_MODE" in
-    letsencrypt|letsencrypt-dns|upstream|byoc)
-      # Assumed backed by a publicly-trusted CA (Let's Encrypt, an upstream LB's own
-      # cert, or an operator-supplied "bring your own cert" — which is normally from
-      # a real CA; selfsigned mode below is the explicit opt-in for a self-signed one).
-      # The container's default trust store already covers it, so env-Thunder
-      # doesn't need a custom CA bundle mounted.
+    byoc)
+      if [[ -n "${TLS_CA_FILE:-}" ]]; then
+        # Operator flagged this cert as internally-signed — mount its CA for env-Thunder.
+        export PLATFORM_THUNDER_CA_PEM
+        PLATFORM_THUNDER_CA_PEM="$(cat "$TLS_CA_FILE")"
+      else
+        # No TLS_CA_FILE -> assume a publicly-trusted CA, already in the container's trust store.
+        export SKIP_CA_BUNDLE_TRUST=true
+      fi
+      ;;
+    letsencrypt|letsencrypt-dns|upstream)
+      # Publicly-trusted CA, already in the container's default trust store.
       export SKIP_CA_BUNDLE_TRUST=true
       ;;
     selfsigned)
