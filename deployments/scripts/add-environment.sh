@@ -1,4 +1,5 @@
 #!/bin/bash
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 # Creates a new environment and installs its API Platform Gateway.
@@ -45,6 +46,18 @@ set -euo pipefail
 : "${AGENT_MANAGER_TOKEN:?AGENT_MANAGER_TOKEN is required (bearer token)}"
 # CHART_VERSION is required when pulling from OCI but ignored when GATEWAY_CHART is set.
 CHART_VERSION="${CHART_VERSION:-}"
+
+# CHART_VERSION carries the Agent Manager release version here (console sets
+# it from ampVersion, see getAmpVersionHelm()), so pin script fetches (below,
+# and the chained add-environment-thunder.sh) to that release tag instead of
+# `main` — same convention as getScriptRef(). Falls back to main when
+# unset/dev (no matching tag). Computed early so both this script's own
+# thunder-naming.sh fetch and the later Thunder-provisioning fetch agree.
+script_ref="main"
+if [ -n "$CHART_VERSION" ] && [[ "$CHART_VERSION" != *dev* ]]; then
+    script_ref="amp/v${CHART_VERSION#v}"
+fi
+SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/${script_ref}/deployments/scripts}"
 
 IS_PRODUCTION="${IS_PRODUCTION:-false}"
 case "$IS_PRODUCTION" in
@@ -123,50 +136,30 @@ AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_BASE_URL}/auth/external/jw
 PLATFORM_THUNDER_ISSUER="${PLATFORM_THUNDER_ISSUER:-http://thunder.amp.localhost:8080}"
 PLATFORM_THUNDER_JWKS="${PLATFORM_THUNDER_JWKS:-http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks}"
 
-# ---------------------------------------------------------------------------
-# Thunder naming helpers — mirror add-environment-thunder.sh and naming.go.
-# Computes per-env Thunder coordinates so the gateway ThunderKeyManager points
-# at THIS environment's Thunder, not the shared platform Thunder instance.
-# ---------------------------------------------------------------------------
-_thunder_sha6() {
-  if command -v shasum >/dev/null 2>&1; then
-    printf '%s' "$1" | shasum -a 256 | cut -c1-6
-  else
-    printf '%s' "$1" | sha256sum | cut -c1-6
+# Load the shared Thunder naming helpers (thunder_release_name/thunder_host/
+# thunder_issuer/etc.) — the single source of truth for this derivation, see
+# deployments/scripts/thunder-naming.sh. Computes per-env Thunder coordinates
+# so the gateway ThunderKeyManager points at THIS environment's Thunder (and
+# respects THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED on non-local deployments), not
+# a stale hardcoded amp.localhost address. Prefers a local sibling file
+# (checked-out repo); falls back to fetching it from the same ref this script
+# itself would be fetched from when piped via curl | bash.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh" ]; then
+  # shellcheck source=thunder-naming.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh"
+else
+  _naming_lib_url="${THUNDER_NAMING_LIB_URL:-${SCRIPT_BASE_URL}/thunder-naming.sh}"
+  _naming_lib_tmp="$(mktemp)"
+  if ! curl -fsSL "${_naming_lib_url}" -o "${_naming_lib_tmp}"; then
+    echo "❌ Failed to fetch Thunder naming helpers from ${_naming_lib_url}" >&2
+    rm -f "${_naming_lib_tmp}"
+    exit 1
   fi
-}
-
-# _thunder_release_name ORG ENV -> Helm release name <=53 chars, collision-safe.
-_thunder_release_name() {
-  local org env full hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  full="amp-thunder-${org}-${env}"
-  if [ "${#full}" -le 53 ]; then
-    printf '%s' "${full%-}"
-    return 0
-  fi
-  hash="$(_thunder_sha6 "${org}/${env}")"
-  prefix="${full:0:46}"
-  prefix="${prefix%-}"
-  printf '%s-%s' "$prefix" "$hash"
-}
-
-# _thunder_host ORG ENV -> wildcard-cert-friendly hostname under thunder.amp.localhost.
-_thunder_host() {
-  local org env label hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  label="${org}-${env}"
-  if [ "${#label}" -le 63 ]; then
-    printf '%s.thunder.amp.localhost' "${label%-}"
-    return 0
-  fi
-  hash="$(_thunder_sha6 "${org}/${env}")"
-  prefix="${label:0:56}"
-  prefix="${prefix%-}"
-  printf '%s-%s.thunder.amp.localhost' "$prefix" "$hash"
-}
+  # shellcheck source=/dev/null
+  source "${_naming_lib_tmp}"
+  rm -f "${_naming_lib_tmp}"
+  unset _naming_lib_url _naming_lib_tmp
+fi
 
 echo "=== Adding Environment: ${DISPLAY_NAME} (${ENV_NAME}) ==="
 echo ""
@@ -246,32 +239,34 @@ fi
 # then provisioned Thunder as a non-fatal afterthought — if that step failed (or was
 # skipped via PROVISION_THUNDER=false), the gateway was left permanently pointed at a
 # per-env Thunder instance that was never created, silently breaking agent JWT validation.
+# Check the cluster for an existing Thunder Helm release UNCONDITIONALLY — this is
+# the only reliable source of truth for THUNDER_PROVISIONED, and must run whether or
+# not PROVISION_THUNDER is true. Otherwise re-running with PROVISION_THUNDER=false
+# against an environment that already has a live env-Thunder skips this check
+# entirely, THUNDER_PROVISIONED stays false, and the gateway below gets rewired back
+# to platform Thunder's issuer/JWKS — invalidating every JWT the still-running
+# env-Thunder already issued.
+THUNDER_RELEASE_NAME="$(thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+THUNDER_NS="${THUNDER_RELEASE_NAME}"
 THUNDER_PROVISIONED=false
+if helm status "${THUNDER_RELEASE_NAME}" --namespace "${THUNDER_NS}" > /dev/null 2>&1; then
+    echo "✅ Thunder ID instance already exists (Helm release: ${THUNDER_RELEASE_NAME})"
+    THUNDER_PROVISIONED=true
+fi
+
 if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
     echo ""
     echo "🔐 Provisioning Thunder ID instance for '${ENV_NAME}'..."
 
-    # Compute the release name using the same helper used for gateway wiring below,
-    # then check the cluster for an existing Helm release. This is the only reliable
-    # source of truth: THUNDER_PROVISIONED must reflect cluster state, not just whether
-    # this run's curl/execute succeeded. A transient fetch failure on a re-run must NOT
-    # silently revert the gateway's JWKS back to platform Thunder while a live env-Thunder
-    # instance still exists and agents are minting tokens against it.
-    THUNDER_RELEASE_NAME="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
-    THUNDER_NS="${THUNDER_RELEASE_NAME}"
-    if helm status "${THUNDER_RELEASE_NAME}" --namespace "${THUNDER_NS}" > /dev/null 2>&1; then
-        echo "✅ Thunder ID instance already exists (Helm release: ${THUNDER_RELEASE_NAME})"
-        THUNDER_PROVISIONED=true
-    fi
-
-    SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/add-environment-thunder.sh}"
     script_tmp="$(mktemp)"
     if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
-      # Reset CHART_VERSION so the AMP release version doesn't bleed into the ThunderID chart install.
+      # Reset CHART_VERSION so the AMP release version doesn't bleed into the ThunderID chart
+      # install. SCRIPT_BASE_URL IS forwarded (unlike CHART_VERSION) so the chained script
+      # fetches thunder-naming.sh from the same git ref as this one — see thunder-naming.sh.
       if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
           DATAPLANE_REF="${DATAPLANE_REF}" THUNDER_CHART="${THUNDER_CHART:-}" \
-          CHART_VERSION="${THUNDER_CHART_VERSION:-}" \
+          CHART_VERSION="${THUNDER_CHART_VERSION:-}" SCRIPT_BASE_URL="${SCRIPT_BASE_URL}" \
           bash "$script_tmp"; then
         echo "✅ Thunder ID instance provisioned"
         THUNDER_PROVISIONED=true
@@ -341,8 +336,8 @@ if [ "$THUNDER_PROVISIONED" = "true" ]; then
     #   issuer        = Thunder's publicUrl / jwt.issuer (what it stamps into the JWT iss claim)
     #   internal_jwks = Thunder's K8s service DNS — avoids routing through the ingress
     #                   Service name follows the chart template: {{ .Release.Name }}-service
-    THUNDER_RELEASE="$(_thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
-    THUNDER_ISSUER="http://$(_thunder_host "${ORG_NAME}" "${ENV_NAME}"):8080"
+    THUNDER_RELEASE="$(thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+    THUNDER_ISSUER="$(thunder_issuer "${ORG_NAME}" "${ENV_NAME}")"
     THUNDER_INTERNAL_JWKS="http://${THUNDER_RELEASE}-service.${THUNDER_RELEASE}.svc.cluster.local:8090/oauth2/jwks"
     HELM_ARGS+=(
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"

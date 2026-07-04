@@ -62,6 +62,15 @@ type Config struct {
 	IsOnPremDeployment       bool
 	ServerPublicURL          string
 
+	// ThunderHostBaseDomain is the domain suffix env-Thunder's developer-facing
+	// hostnames are built from: "<org>-<env>.thunder.<ThunderHostBaseDomain>".
+	// Default "amp.localhost" matches local dev (k3d + the *.amp.localhost wildcard
+	// cert). VM/production deployments set this to their own base domain (e.g. a
+	// sslip.io address) — see deployments/vm/lib-vm.sh, which sets the identical
+	// value when provisioning env-Thunder so the Go-reported URLs and the actually
+	// deployed Thunder instance's own self-configured issuer never diverge.
+	ThunderHostBaseDomain string
+
 	// OAuthAuthorizationServers is the list of OAuth 2.0 authorization server URLs
 	// advertised in the RFC 9728 protected resource metadata document. Each entry
 	// MUST be an absolute http/https URL (validated at config load). Required for

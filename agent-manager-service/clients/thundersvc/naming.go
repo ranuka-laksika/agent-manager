@@ -19,10 +19,14 @@ package thundersvc
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 )
 
 const (
@@ -37,19 +41,28 @@ const (
 	thunderInternalPort = 8090
 	maxReleaseNameLen   = 53
 	truncatePrefixLen   = 46
+
+	// maxJWKSProbeBodyBytes caps how much of a probe response ThunderProbe reads
+	// before validating it as JWKS — a real JWKS document is a few KB at most; this
+	// just guards against an unrelated server on a fallback address streaming an
+	// unbounded body.
+	maxJWKSProbeBodyBytes = 64 * 1024
 )
 
 // ThunderReleaseName returns the Helm release name (and namespace) for an env-Thunder instance.
-// Mirrors thunder_release_name() in add-environment-thunder.sh — must stay in sync.
+// Mirrors thunder_release_name() in deployments/scripts/thunder-naming.sh — must stay in sync.
+// That file is the single source of truth for the bash side of this derivation (sourced by
+// every script that provisions, removes, or wires the gateway to env-Thunder); this function
+// is the one Go-side copy, since Go can't source bash.
 //
 // Format: amp-thunder-<org>-<env>, capped at 53 characters.
 // If the natural name exceeds 53 chars, it is truncated to 46 characters (trailing "-" stripped)
 // and a 6-char hex hash of "org/env" is appended for collision safety.
 //
 // Deliberately lowercases only — does NOT collapse consecutive hyphens like slugify() does.
-// The bash scripts that actually provision Thunder (add-environment.sh, add-environment-thunder.sh)
-// use org/env raw, with no hyphen-collapsing. Slugifying here would let this function compute a
-// different address than what was actually deployed for any org/env containing "--".
+// The bash scripts that actually provision Thunder use org/env raw, with no hyphen-collapsing.
+// Slugifying here would let this function compute a different address than what was actually
+// deployed for any org/env containing "--".
 func ThunderReleaseName(org, env string) string {
 	org = strings.ToLower(org)
 	env = strings.ToLower(env)
@@ -103,22 +116,29 @@ func ThunderTokenURL(org, env string) string {
 }
 
 // ThunderExternalTokenURL returns the public OAuth2 token endpoint for the env-Thunder instance.
-// Reachable from outside the cluster via the HTTPRoute that maps
-// http://<org>-<env>.thunder.amp.localhost:8080 -> the Thunder service.
+// Reachable from outside the cluster via the HTTPRoute that maps ThunderHost -> the
+// Thunder service (locally through the k3d gateway; on a VM through the Caddy
+// wildcard site — see deployments/vm/lib-vm.sh).
 // Use this in developer-facing API responses (console copy-buttons, Identity page, etc.).
 func ThunderExternalTokenURL(org, env string) string {
-	return fmt.Sprintf("http://%s:8080/oauth2/token", ThunderHost(org, env))
+	return thunderExternalOrigin(org, env) + "/oauth2/token"
 }
 
 // ThunderExternalJWKSURL returns the public JWKS endpoint for the env-Thunder instance.
-// Reachable from outside the cluster via the same HTTPRoute as ThunderExternalTokenURL.
+// Reachable from outside the cluster via the same route as ThunderExternalTokenURL.
 // Use this in developer-facing API responses.
 func ThunderExternalJWKSURL(org, env string) string {
-	return fmt.Sprintf("http://%s:8080/oauth2/jwks", ThunderHost(org, env))
+	return thunderExternalOrigin(org, env) + "/oauth2/jwks"
 }
 
-// ThunderHost returns the wildcard-cert-friendly hostname under thunder.amp.localhost for the env-Thunder instance.
-// Capped at 63 characters for the DNS label limit.
+// ThunderHost returns the wildcard-cert-friendly hostname
+// "<org>-<env>.thunder.<config.ThunderHostBaseDomain>" for the env-Thunder instance,
+// capped at 63 characters for the DNS label limit. ThunderHostBaseDomain defaults to
+// "amp.localhost" (local dev, k3d's *.amp.localhost wildcard) and is overridden
+// deployment-wide (never per call — see deployments/scripts/thunder-naming.sh's
+// THUNDER_HOST_BASE_DOMAIN, which must be set to the identical value everywhere
+// env-Thunder is provisioned on a given deployment, so this function's output always
+// matches what was actually deployed).
 //
 // Deliberately lowercases only — see ThunderReleaseName for why slugify()'s hyphen-collapsing
 // is not applied here (must match the un-collapsed bash implementation byte-for-byte).
@@ -128,32 +148,82 @@ func ThunderHost(org, env string) string {
 	if org == "" || env == "" {
 		panic("org and env names must be valid alphanumeric slugs and not empty")
 	}
+	baseDomain := config.GetConfig().ThunderHostBaseDomain
 	label := fmt.Sprintf("%s-%s", org, env)
 	if len(label) <= 63 {
-		return fmt.Sprintf("%s.thunder.amp.localhost", strings.TrimSuffix(label, "-"))
+		return fmt.Sprintf("%s.thunder.%s", strings.TrimSuffix(label, "-"), baseDomain)
 	}
 	hash := thunderSHA6(org + "/" + env)
 	prefix := strings.TrimSuffix(label[:56], "-")
-	return fmt.Sprintf("%s-%s.thunder.amp.localhost", prefix, hash)
+	return fmt.Sprintf("%s-%s.thunder.%s", prefix, hash, baseDomain)
+}
+
+// thunderExternalOrigin returns "<scheme>://<ThunderHost>[:8080]" — the externally
+// reachable origin for an env-Thunder instance. Local dev (config.TLSConfig.EnableTLS
+// == false, the default) reaches env-Thunder directly on the k3d gateway's plain-HTTP
+// port 8080. VM/production deployments (TLS_ENABLED=true — the same flag
+// deployments/vm/lib-vm.sh already sets for platform Thunder's own advertised URLs)
+// front env-Thunder with Caddy on the standard HTTPS port instead, so no port is
+// appended: deployments/scripts/thunder-naming.sh's thunder_issuer() must produce the
+// SAME scheme/port shape when TLS_ENABLED=true, or the URL reported here won't match
+// what env-Thunder itself self-configured as its issuer/publicUrl.
+func thunderExternalOrigin(org, env string) string {
+	if config.GetConfig().TLSConfig.EnableTLS {
+		return fmt.Sprintf("https://%s", ThunderHost(org, env))
+	}
+	return fmt.Sprintf("http://%s:8080", ThunderHost(org, env))
 }
 
 // ThunderIssuerURL returns the public issuer URL for the env-Thunder instance.
 // This is what Thunder stamps into the JWT iss claim.
 func ThunderIssuerURL(org, env string) string {
-	return fmt.Sprintf("http://%s:8080", ThunderHost(org, env))
+	return thunderExternalOrigin(org, env)
+}
+
+// isValidJWKS reports whether body is a syntactically valid JWKS document (a JSON
+// object with a non-empty "keys" array). An HTTP 200 alone is not sufficient evidence
+// of a live Thunder instance — any unrelated server answering on a probed
+// address/port (e.g. a stray dev server bound to the same fallback address) would
+// otherwise be misreported as a reachable env-Thunder.
+func isValidJWKS(body []byte) bool {
+	var doc struct {
+		Keys []json.RawMessage `json:"keys"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return false
+	}
+	return len(doc.Keys) > 0
+}
+
+// probeAttempt is one candidate (URL, Host-header override) pair ThunderProbe tries.
+type probeAttempt struct {
+	url           string
+	resolveToHost string
 }
 
 // ThunderProbe checks whether an env-Thunder instance is reachable by performing a
-// HTTP GET to its JWKS endpoint. It tries the cluster-internal URL first, falling
-// back to the public URL, and finally host-header resolved fallbacks (e.g. host.docker.internal)
-// to support local development inside Docker containers. Callers treat a negative probe
-// as "not provisioned" and skip the env.
+// HTTP GET to its JWKS endpoint and validating the response is actually a JWKS
+// document. Two network topologies are always tried — the cluster-internal URL
+// (the real address in any Kubernetes deployment) and the public URL. Two more,
+// host-header-resolved fallbacks targeting fixed local addresses
+// (host.docker.internal / 127.0.0.1), are tried ONLY when config.IsLocalDevEnv is
+// set: they exist purely to compensate for agent-manager-service running as a plain
+// Docker container (docker-compose) rather than a Kubernetes pod in local dev, where
+// neither of the two real probes can resolve. They must never run outside that
+// context — in-cluster, the cluster-internal probe always succeeds when Thunder is
+// actually reachable, and probing 127.0.0.1 there would hit agent-manager-service's
+// own pod rather than Thunder, which is both pointless and a latent false-positive
+// risk if anything ever answers on that port.
 //
-// A 2-second timeout avoids blocking the ListThunderInstances hot path on unreachable
-// instances while still being generous enough for a slow cold start.
+// All attempts run concurrently (rather than tried one after another) so latency is
+// bounded by a single probe's timeout, not the sum of however many are tried.
+// Callers treat a negative probe as "not provisioned" and skip the env.
+//
+// A 2-second per-probe timeout avoids blocking the ListThunderInstances hot path on
+// unreachable instances while still being generous enough for a slow cold start.
 func ThunderProbe(ctx context.Context, org, env string) bool {
 	const probeTimeout = 2 * time.Second
-	probe := func(url string, resolveToHost string) bool {
+	probe := func(ctx context.Context, url string, resolveToHost string) bool {
 		reqCtx, cancel := context.WithTimeout(ctx, probeTimeout)
 		defer cancel()
 		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
@@ -168,29 +238,44 @@ func ThunderProbe(ctx context.Context, org, env string) bool {
 		if err != nil {
 			return false
 		}
-		_ = resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			return false
+		}
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxJWKSProbeBodyBytes))
+		if err != nil {
+			return false
+		}
+		return isValidJWKS(body)
 	}
 
-	// 1. Try K8s cluster-internal URL first (production/in-cluster)
-	if probe(ThunderJWKSURL(org, env), "") {
-		return true
+	attempts := []probeAttempt{
+		{ThunderJWKSURL(org, env), ""},         // 1. cluster-internal (the real address in any k8s deployment)
+		{ThunderExternalJWKSURL(org, env), ""}, // 2. public URL
+	}
+	if config.GetConfig().IsLocalDevEnv {
+		host := ThunderHost(org, env)
+		attempts = append(attempts,
+			probeAttempt{"http://" + host + ":8080/oauth2/jwks", "host.docker.internal:8080"}, // 3. local dev: agent-manager-service as a Docker container
+			probeAttempt{"http://" + host + ":8080/oauth2/jwks", "127.0.0.1:8080"},            // 4. local dev: host networking
+		)
 	}
 
-	// 2. Try public/external URL (development on host machine)
-	externalURL := ThunderExternalJWKSURL(org, env)
-	if probe(externalURL, "") {
-		return true
+	probeCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	results := make(chan bool, len(attempts))
+	for _, a := range attempts {
+		go func(url, resolveToHost string) {
+			results <- probe(probeCtx, url, resolveToHost)
+		}(a.url, a.resolveToHost)
 	}
 
-	// 3. Fallback for Docker container development (macOS / host.docker.internal)
-	host := ThunderHost(org, env)
-	if probe("http://"+host+":8080/oauth2/jwks", "host.docker.internal:8080") {
-		return true
+	for range attempts {
+		if <-results {
+			return true
+		}
 	}
-
-	// 4. Fallback for Linux containers / host networking (127.0.0.1)
-	return probe("http://"+host+":8080/oauth2/jwks", "127.0.0.1:8080")
+	return false
 }
 
 const maxAgentAppNameLen = 100
@@ -213,7 +298,7 @@ func AgentThunderAppName(org, project, agent string) string {
 }
 
 // thunderSHA6 returns the first 6 hex characters of the SHA-256 hash of s.
-// Produces the same output as _sha6() in add-environment-thunder.sh.
+// Produces the same output as _sha6() in deployments/scripts/thunder-naming.sh.
 func thunderSHA6(s string) string {
 	h := sha256.Sum256([]byte(s))
 	return fmt.Sprintf("%x", h[:])[:6]

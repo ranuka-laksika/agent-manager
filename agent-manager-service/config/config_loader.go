@@ -153,6 +153,7 @@ func loadEnvs() {
 	}
 	config.IsOnPremDeployment = r.readOptionalBool("IS_ON_PREM_DEPLOYMENT", true)
 	config.ServerPublicURL = r.readOptionalString("SERVER_PUBLIC_URL", "")
+	config.ThunderHostBaseDomain = r.readOptionalString("THUNDER_HOST_BASE_DOMAIN", "amp.localhost")
 	config.OAuthAuthorizationServers = r.readOptionalStringList("OAUTH_AUTHORIZATION_SERVERS", "")
 	config.OAuthScopesSupported = r.readOptionalStringList("OAUTH_SCOPES_SUPPORTED", "")
 

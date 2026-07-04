@@ -595,18 +595,23 @@ while IFS= read -r _ns; do
   [ -n "$_ns" ] || continue
   _secret="${_ns}-admin-credentials"
   kubectl get secret "$_secret" -n "$_ns" &>/dev/null 2>&1 || continue
+  _host="$(kubectl get httproute "$_ns" -n openchoreo-control-plane -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null || echo "")"
+  if [ -z "$_host" ]; then
+    # Skip advertising URL details if the routing HTTPRoute is not yet created.
+    # Checked BEFORE counting/printing the header so a skipped instance never
+    # inflates _active_count or opens the banner with nothing under it.
+    continue
+  fi
   _active_count=$((_active_count + 1))
   if [ "$_active_count" -eq 1 ]; then
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  Thunder ID — Provisioned Instances (save these credentials!)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   fi
-  _host="$(kubectl get httproute "$_ns" -n openchoreo-control-plane -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null || echo "")"
-  if [ -z "$_host" ]; then
-    # Skip advertising URL details if the routing HTTPRoute is not yet created.
-    continue
-  fi
-  _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)"
+  # Guarded: this is the final summary step after a successful install, so a
+  # missing/undecodable password key or a transient kubectl blip here must not
+  # abort the whole script under set -e.
+  _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)" || _pass="<unavailable>"
   echo "  ${_ns#amp-thunder-}:"
   echo "    URL:      http://${_host}:8080/console"
   echo "    Username: admin"

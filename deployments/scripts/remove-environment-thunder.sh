@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 # Removes the dedicated Thunder ID instance for ONE environment.
@@ -20,42 +21,34 @@ set -euo pipefail
 #   - ORG_NAME (default: default)
 
 # ---------------------------------------------------------------------------
-# Pure helpers (re-defined here for standalone use; kept in sync with
-# add-environment-thunder.sh).
+# Pure helpers
 # ---------------------------------------------------------------------------
 
 validate_name() {
   printf '%s' "${1:-}" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 }
 
-_sha6() {
-  if command -v shasum >/dev/null 2>&1; then
-    printf '%s' "$1" | shasum -a 256 | cut -c1-6
-  else
-    printf '%s' "$1" | sha256sum | cut -c1-6
+# Load the shared Thunder naming helpers (thunder_release_name/thunder_namespace)
+# — the single source of truth for this derivation, see
+# deployments/scripts/thunder-naming.sh. Prefers a local sibling file
+# (checked-out repo); falls back to fetching it from the same ref this script
+# itself would be fetched from when piped via curl | bash.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh" ]; then
+  # shellcheck source=thunder-naming.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh"
+else
+  _naming_lib_url="${THUNDER_NAMING_LIB_URL:-${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}/thunder-naming.sh}"
+  _naming_lib_tmp="$(mktemp)"
+  if ! curl -fsSL "${_naming_lib_url}" -o "${_naming_lib_tmp}"; then
+    echo "❌ Failed to fetch Thunder naming helpers from ${_naming_lib_url}" >&2
+    rm -f "${_naming_lib_tmp}"
+    exit 1
   fi
-}
-
-# thunder_release_name ORG ENV -> helm release name, <=53 chars, collision-safe.
-thunder_release_name() {
-  local org env full hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  full="amp-thunder-${org}-${env}"
-  if [ "${#full}" -le 53 ]; then
-    printf '%s' "${full%-}"
-    return 0
-  fi
-  hash="$(_sha6 "${org}/${env}")"
-  prefix="${full:0:46}"
-  prefix="${prefix%-}"
-  printf '%s-%s' "$prefix" "$hash"
-}
-
-# thunder_namespace ORG ENV -> dedicated namespace (mirrors the release name).
-thunder_namespace() {
-  thunder_release_name "$1" "$2"
-}
+  # shellcheck source=/dev/null
+  source "${_naming_lib_tmp}"
+  rm -f "${_naming_lib_tmp}"
+  unset _naming_lib_url _naming_lib_tmp
+fi
 
 # ---------------------------------------------------------------------------
 # main
@@ -132,6 +125,9 @@ main() {
 }
 
 # Run main only when executed directly — not when sourced (e.g. by tests).
-if [ "${BASH_SOURCE[0]:-}" = "${0}" ]; then
+# BASH_SOURCE[0] is unset when the script is piped to bash (curl ... | bash);
+# ${BASH_SOURCE[0]:-$0} falls back to $0 (which equals "bash") so the condition
+# stays true and main runs, while sourced execution still sees the script filename.
+if [ "${BASH_SOURCE[0]:-$0}" = "${0}" ]; then
   main "$@"
 fi

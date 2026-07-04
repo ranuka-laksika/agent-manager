@@ -16,7 +16,59 @@
 
 package thundersvc
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/wso2/agent-manager/agent-manager-service/config"
+)
+
+// TestThunderHost_RespectsBaseDomainConfig locks in that a VM deployment's
+// THUNDER_HOST_BASE_DOMAIN override flows straight through into every URL builder —
+// this is what makes deployments/vm/lib-vm.sh setting the same value (both for
+// add-environment-thunder.sh and this Go config) keep the reported URLs and the
+// actually-deployed Thunder instance's own issuer in sync.
+func TestThunderHost_RespectsBaseDomainConfig(t *testing.T) {
+	orig := config.GetConfig().ThunderHostBaseDomain
+	defer func() { config.GetConfig().ThunderHostBaseDomain = orig }()
+
+	config.GetConfig().ThunderHostBaseDomain = "amp.203.0.113.10.sslip.io"
+	got := ThunderHost("default", "staging")
+	want := "default-staging.thunder.amp.203.0.113.10.sslip.io"
+	if got != want {
+		t.Errorf("ThunderHost with overridden base domain: want %q, got %q", want, got)
+	}
+}
+
+// TestThunderExternalURLs_RespectTLSConfig locks in that TLS_ENABLED (the same flag
+// deployments/vm/lib-vm.sh already sets for platform Thunder's own advertised URLs)
+// switches env-Thunder's reported scheme AND drops the :8080 suffix — matching Caddy
+// terminating on the standard HTTPS port on a VM, rather than the k3d gateway's
+// plain-HTTP :8080 in local dev.
+func TestThunderExternalURLs_RespectTLSConfig(t *testing.T) {
+	origDomain := config.GetConfig().ThunderHostBaseDomain
+	origTLS := config.GetConfig().TLSConfig.EnableTLS
+	defer func() {
+		config.GetConfig().ThunderHostBaseDomain = origDomain
+		config.GetConfig().TLSConfig.EnableTLS = origTLS
+	}()
+	config.GetConfig().ThunderHostBaseDomain = "amp.203.0.113.10.sslip.io"
+
+	config.GetConfig().TLSConfig.EnableTLS = false
+	if got, want := ThunderIssuerURL("default", "staging"), "http://default-staging.thunder.amp.203.0.113.10.sslip.io:8080"; got != want {
+		t.Errorf("ThunderIssuerURL (TLS off): want %q, got %q", want, got)
+	}
+	if got, want := ThunderExternalJWKSURL("default", "staging"), "http://default-staging.thunder.amp.203.0.113.10.sslip.io:8080/oauth2/jwks"; got != want {
+		t.Errorf("ThunderExternalJWKSURL (TLS off): want %q, got %q", want, got)
+	}
+
+	config.GetConfig().TLSConfig.EnableTLS = true
+	if got, want := ThunderIssuerURL("default", "staging"), "https://default-staging.thunder.amp.203.0.113.10.sslip.io"; got != want {
+		t.Errorf("ThunderIssuerURL (TLS on): want %q, got %q", want, got)
+	}
+	if got, want := ThunderExternalTokenURL("default", "staging"), "https://default-staging.thunder.amp.203.0.113.10.sslip.io/oauth2/token"; got != want {
+		t.Errorf("ThunderExternalTokenURL (TLS on): want %q, got %q", want, got)
+	}
+}
 
 // These cases lock in that ThunderReleaseName/ThunderHost do NOT collapse consecutive
 // hyphens, matching the bash implementations in add-environment.sh and
@@ -78,5 +130,32 @@ func TestThunderHost_BasicCases(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("ThunderHost(%q, %q): want %q, got %q", tc.org, tc.env, tc.want, got)
 		}
+	}
+}
+
+// isValidJWKS is ThunderProbe's correctness check on top of an HTTP 200 — these cases
+// lock in that a bare 200 with an unrelated body (e.g. from a stray server on a
+// probed fallback address) is NOT treated as a live env-Thunder.
+func TestIsValidJWKS(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{"real JWKS with one key", `{"keys":[{"kty":"RSA","kid":"abc","use":"sig"}]}`, true},
+		{"real JWKS with multiple keys", `{"keys":[{"kty":"RSA"},{"kty":"EC"}]}`, true},
+		{"empty keys array", `{"keys":[]}`, false},
+		{"missing keys field", `{"foo":"bar"}`, false},
+		{"not JSON", `<html>404 not found</html>`, false},
+		{"empty body", ``, false},
+		{"keys is not an array", `{"keys":"not-an-array"}`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isValidJWKS([]byte(tc.body))
+			if got != tc.want {
+				t.Errorf("isValidJWKS(%q): want %v, got %v", tc.body, tc.want, got)
+			}
+		})
 	}
 }

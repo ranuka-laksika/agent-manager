@@ -235,6 +235,38 @@ run_advanced_install() {
   export VERSION="$AMP_VERSION"
   export SHOW_LOCALHOST_URLS=false
 
+  # Env-Thunder deployment-wide config, inherited by install_default_env_thunder()
+  # (called from install.sh, sourced below) as exported env vars — see
+  # add-environment-thunder.sh's THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED/
+  # SKIP_CA_BUNDLE_TRUST/PLATFORM_THUNDER_CA_PEM/PLATFORM_THUNDER_ISSUER/
+  # PLATFORM_THUNDER_JWKS_URL, and agent-manager-service's identical
+  # THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED config (must match on both sides or the
+  # reported and actually-deployed URLs diverge). AMP_HOST_THUNDER is
+  # "thunder.<DOMAIN_BASE>"; stripping the "thunder." prefix gives env-Thunder's
+  # base domain, so "<org>-<env>.thunder.<base>" is a subdomain of it — exactly
+  # what the Caddy wildcard site added for it matches.
+  export THUNDER_HOST_BASE_DOMAIN="${AMP_HOST_THUNDER#thunder.}"
+  export TLS_ENABLED=true
+  export PLATFORM_THUNDER_ISSUER="https://${AMP_HOST_THUNDER}"
+  export PLATFORM_THUNDER_JWKS_URL="https://${AMP_HOST_THUNDER}/oauth2/jwks"
+  case "$TLS_MODE" in
+    letsencrypt|letsencrypt-dns|upstream|byoc)
+      # Assumed backed by a publicly-trusted CA (Let's Encrypt, an upstream LB's own
+      # cert, or an operator-supplied "bring your own cert" — which is normally from
+      # a real CA; selfsigned mode below is the explicit opt-in for a self-signed one).
+      # The container's default trust store already covers it, so env-Thunder
+      # doesn't need a custom CA bundle mounted.
+      export SKIP_CA_BUNDLE_TRUST=true
+      ;;
+    selfsigned)
+      # generate_selfsigned_ca wrote its own root CA alongside the leaf cert — env-
+      # Thunder needs THIS specific CA (not local dev's cert-manager one, which
+      # doesn't exist on a VM) to trust platform Thunder's self-signed cert.
+      export PLATFORM_THUNDER_CA_PEM
+      PLATFORM_THUNDER_CA_PEM="$(cat "$(dirname "$TLS_CERT_FILE")/ca.crt")"
+      ;;
+  esac
+
   render_k3d_vm_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
   export K3D_CONFIG=/tmp/k3d-config-vm.yaml
   render_coredns_vm_config "k3d-amp-local-server-0" >/tmp/coredns-amp-vm.yaml

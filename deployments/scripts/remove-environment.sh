@@ -96,7 +96,9 @@ if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
     script_tmp="$(mktemp)"
     if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
-      if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" bash "$script_tmp"; then
+      # SCRIPT_BASE_URL is forwarded so the chained script fetches
+      # thunder-naming.sh from the same git ref as this one (see thunder-naming.sh).
+      if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" SCRIPT_BASE_URL="${SCRIPT_BASE_URL}" bash "$script_tmp"; then
         echo "✅ Thunder ID instance removed"
       else
         echo "⚠️  Thunder ID removal failed — continuing with gateway removal."
