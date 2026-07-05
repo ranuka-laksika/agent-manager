@@ -107,31 +107,38 @@ func (s *agentThunderReconcilerService) runCycle(ctx context.Context) {
 		s.logger.Error("Failed to begin transaction for agent thunder reconciler advisory lock", "error", tx.Error)
 		return
 	}
-	defer tx.Rollback()
 
 	var locked bool
 	if err := tx.Raw("SELECT pg_try_advisory_xact_lock(?)", reconcilerLockID).Scan(&locked).Error; err != nil {
 		s.logger.Error("Failed to try agent thunder reconciler advisory lock", "error", err)
+		tx.Rollback()
 		return
 	}
 	if !locked {
 		s.logger.Debug("Another instance is running the agent thunder reconciler, skipping cycle")
+		tx.Rollback()
 		return
 	}
 
-	due, err := s.repo.FindDue(time.Now(), reconcilerBatchSize)
+	due, err := s.repo.FindDue(ctx, time.Now(), reconcilerBatchSize)
 	if err != nil {
 		s.logger.Error("Failed to query due agent thunder bindings", "error", err)
+		tx.Rollback()
 		return
 	}
+
+	// Release the lock/connection now — ClaimForAttempt already guards each
+	// binding individually, so the lock only needs to cover the FindDue scan,
+	// not the slow Thunder/OpenBao calls below.
+	if err := tx.Commit().Error; err != nil {
+		s.logger.Error("Failed to commit agent thunder reconciler advisory lock transaction", "error", err)
+		return
+	}
+
 	if len(due) > 0 {
 		s.logger.Info("Retrying due agent thunder bindings", "count", len(due))
 	}
 	for _, binding := range due {
 		s.provisioning.AttemptProvision(ctx, binding)
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		s.logger.Error("Failed to commit agent thunder reconciler advisory lock transaction", "error", err)
 	}
 }

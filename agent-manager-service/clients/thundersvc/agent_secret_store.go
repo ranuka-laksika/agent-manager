@@ -65,9 +65,27 @@ type agentSecretStore struct {
 	openBaoPath string
 }
 
+// validateOpenBaoConfig fails fast on a missing OPENBAO_* value instead of
+// letting it silently build a client that only errors on first actual use.
+func validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath string) error {
+	if openBaoURL == "" {
+		return errors.New("openbao url is required")
+	}
+	if openBaoToken == "" {
+		return errors.New("openbao token is required")
+	}
+	if openBaoPath == "" {
+		return errors.New("openbao path is required")
+	}
+	return nil
+}
+
 // NewAgentSecretStore creates an AgentSecretStore backed by a real OpenBao
 // server at openBaoURL, authenticating with openBaoToken.
 func NewAgentSecretStore(openBaoURL, openBaoToken, openBaoPath string) (AgentSecretStore, error) {
+	if err := validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath); err != nil {
+		return nil, err
+	}
 	cfg := vault.DefaultConfig()
 	cfg.Address = openBaoURL
 	client, err := vault.NewClient(cfg)
@@ -89,10 +107,13 @@ func newAgentSecretStoreWithReadWriter(rw openBaoReadWriter, openBaoPath string)
 // arrives as a bare path parameter with no validation in this service at
 // all) — so every segment is checked here rather than assuming upstream
 // safety, mirroring secretmanagersvc's own sanitizeSegment guard.
+//
+// Also rejects "", ".", and ".." — path.Join would otherwise silently clean
+// those out of the resulting path.
 func (s *agentSecretStore) key(orgName, projectName, envName, agentName string) (string, error) {
 	for _, seg := range []string{orgName, projectName, envName, agentName} {
-		if strings.Contains(seg, "/") {
-			return "", fmt.Errorf("agent secret path segment %q contains invalid character '/'", seg)
+		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "/") {
+			return "", fmt.Errorf("agent secret path segment %q is empty or contains an invalid character", seg)
 		}
 	}
 	return path.Join("agent-thunder-clients", orgName, projectName, envName, agentName), nil

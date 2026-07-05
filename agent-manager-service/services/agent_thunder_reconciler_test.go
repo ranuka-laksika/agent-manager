@@ -122,13 +122,13 @@ func TestAgentThunderReconciler_RunCycle_RetriesDueBindings(t *testing.T) {
 	ctx := context.Background()
 	repo := repositories.NewAgentThunderClientRepo(db.GetDB())
 	const org, project, agent = "test-org", "test-proj", "reconciler-cycle-agent"
-	t.Cleanup(func() { _ = repo.DeleteByAgent(org, project, agent) })
+	t.Cleanup(func() { _ = repo.DeleteByAgent(ctx, org, project, agent) })
 
 	due := &models.AgentThunderClient{
 		OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: "dev",
 		ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
 	}
-	require.NoError(t, repo.Upsert(due))
+	require.NoError(t, repo.Upsert(ctx, due))
 
 	notYetDue := &models.AgentThunderClient{
 		OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: "staging",
@@ -136,7 +136,7 @@ func TestAgentThunderReconciler_RunCycle_RetriesDueBindings(t *testing.T) {
 	}
 	future := time.Now().Add(1 * time.Hour)
 	notYetDue.NextRetryAt = &future
-	require.NoError(t, repo.Upsert(notYetDue))
+	require.NoError(t, repo.Upsert(ctx, notYetDue))
 
 	var attempted []string
 	provisioning := &fakeProvisioningService{
@@ -179,6 +179,9 @@ func (f *fakeProvisioningService) RevokeSecret(context.Context, string, string, 
 func (f *fakeProvisioningService) DeleteAllBindings(context.Context, string, string, string) {}
 func (f *fakeProvisioningService) GetIdentityViews(context.Context, string, string, string) ([]models.AgentIdentityEnvironmentView, error) {
 	return nil, nil
+}
+func (f *fakeProvisioningService) ClaimSecret(context.Context, string, string, string, string) (string, string, string, error) {
+	return "", "", "", nil
 }
 
 // compile-time interface check

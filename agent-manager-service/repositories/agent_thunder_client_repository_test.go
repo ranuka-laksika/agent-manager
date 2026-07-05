@@ -19,6 +19,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -44,7 +45,7 @@ func newTestAgentThunderClient(org, project, agent, env string) *models.AgentThu
 func cleanupAgentThunderClients(t *testing.T, repo AgentThunderClientRepository, org, project, agent string) {
 	t.Helper()
 	t.Cleanup(func() {
-		_ = repo.DeleteByAgent(org, project, agent)
+		_ = repo.DeleteByAgent(context.Background(), org, project, agent)
 	})
 }
 
@@ -54,9 +55,9 @@ func TestAgentThunderClientRepo_UpsertAndGet(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
+	require.NoError(t, repo.Upsert(context.Background(), c))
 
-	got, err := repo.Get(org, project, agent, env)
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, models.AgentThunderStatusPending, got.Status)
 	assert.Equal(t, models.AgentProvisioningTypeExternal, got.ProvisioningType)
@@ -69,9 +70,9 @@ func TestAgentThunderClientRepo_UpsertAndGet(t *testing.T) {
 	// untouched, not an overwrite — silently clobbering an already-completed
 	// Thunder identity/secret reference back to blank would orphan it.
 	c.ProvisioningType = models.AgentProvisioningTypeInternal
-	require.NoError(t, repo.Upsert(c))
+	require.NoError(t, repo.Upsert(context.Background(), c))
 
-	rows, err := repo.FindByAgent(org, project, agent)
+	rows, err := repo.FindByAgent(context.Background(), org, project, agent)
 	require.NoError(t, err)
 	require.Len(t, rows, 1, "a conflicting upsert must not insert a second row")
 	assert.Equal(t, models.AgentProvisioningTypeExternal, rows[0].ProvisioningType,
@@ -85,24 +86,24 @@ func TestAgentThunderClientRepo_Upsert_PersistsRequestedBy(t *testing.T) {
 
 	c := newTestAgentThunderClient(org, project, agent, env)
 	c.RequestedBy = "platform-thunder-subject-abc123"
-	require.NoError(t, repo.Upsert(c))
+	require.NoError(t, repo.Upsert(context.Background(), c))
 
-	got, err := repo.Get(org, project, agent, env)
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, "platform-thunder-subject-abc123", got.RequestedBy)
 
 	// A conflicting upsert (see the comment in TestAgentThunderClientRepo_UpsertAndGet
 	// for why this must be a no-op) must not overwrite the original requester.
 	c.RequestedBy = "platform-thunder-subject-xyz789"
-	require.NoError(t, repo.Upsert(c))
-	updated, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	updated, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, "platform-thunder-subject-abc123", updated.RequestedBy)
 }
 
 func TestAgentThunderClientRepo_Get_NotFound(t *testing.T) {
 	repo := NewAgentThunderClientRepo(db.GetDB())
-	_, err := repo.Get("test-org", "test-proj", "atc-missing-agent", "dev")
+	_, err := repo.Get(context.Background(), "test-org", "test-proj", "atc-missing-agent", "dev")
 	assert.True(t, errors.Is(err, ErrAgentThunderClientNotFound))
 }
 
@@ -112,10 +113,10 @@ func TestAgentThunderClientRepo_FindByAgent_MultipleEnvironments(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	for _, env := range []string{"dev", "staging", "prod"} {
-		require.NoError(t, repo.Upsert(newTestAgentThunderClient(org, project, agent, env)))
+		require.NoError(t, repo.Upsert(context.Background(), newTestAgentThunderClient(org, project, agent, env)))
 	}
 
-	rows, err := repo.FindByAgent(org, project, agent)
+	rows, err := repo.FindByAgent(context.Background(), org, project, agent)
 	require.NoError(t, err)
 	require.Len(t, rows, 3)
 	envs := []string{rows[0].EnvironmentName, rows[1].EnvironmentName, rows[2].EnvironmentName}
@@ -129,26 +130,26 @@ func TestAgentThunderClientRepo_FindDue(t *testing.T) {
 
 	// A brand-new write-ahead row (no next_retry_at yet) is due immediately.
 	fresh := newTestAgentThunderClient(org, project, agent, "dev")
-	require.NoError(t, repo.Upsert(fresh))
+	require.NoError(t, repo.Upsert(context.Background(), fresh))
 
 	// A row scheduled in the future is not due yet.
 	future := newTestAgentThunderClient(org, project, agent, "staging")
 	nextRetry := time.Now().Add(1 * time.Hour)
 	future.NextRetryAt = &nextRetry
-	require.NoError(t, repo.Upsert(future))
+	require.NoError(t, repo.Upsert(context.Background(), future))
 
 	// A row scheduled in the past is due.
 	past := newTestAgentThunderClient(org, project, agent, "prod")
 	pastRetry := time.Now().Add(-1 * time.Minute)
 	past.NextRetryAt = &pastRetry
-	require.NoError(t, repo.Upsert(past))
+	require.NoError(t, repo.Upsert(context.Background(), past))
 
 	// A completed row must never be picked up regardless of next_retry_at.
 	completed := newTestAgentThunderClient(org, project, agent, "qa")
 	completed.Status = models.AgentThunderStatusCompleted
-	require.NoError(t, repo.Upsert(completed))
+	require.NoError(t, repo.Upsert(context.Background(), completed))
 
-	due, err := repo.FindDue(time.Now(), 100)
+	due, err := repo.FindDue(context.Background(), time.Now(), 100)
 	require.NoError(t, err)
 
 	dueEnvs := make(map[string]bool)
@@ -169,18 +170,18 @@ func TestAgentThunderClientRepo_UpdateAfterAttempt_Success(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 
-	err = repo.UpdateAfterAttempt(got.ID, AgentThunderAttemptUpdate{
+	err = repo.UpdateAfterAttempt(context.Background(), got.ID, AgentThunderAttemptUpdate{
 		Status:          models.AgentThunderStatusCompleted,
 		ThunderAgentID:  "thunder-agent-uuid",
 		ThunderClientID: "client-id-123",
 	})
 	require.NoError(t, err)
 
-	updated, err := repo.Get(org, project, agent, env)
+	updated, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, models.AgentThunderStatusCompleted, updated.Status)
 	assert.Equal(t, "thunder-agent-uuid", updated.ThunderAgentID)
@@ -196,19 +197,19 @@ func TestAgentThunderClientRepo_UpdateAfterAttempt_FailureSchedulesRetry(t *test
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 
 	next := time.Now().Add(1 * time.Minute)
-	err = repo.UpdateAfterAttempt(got.ID, AgentThunderAttemptUpdate{
+	err = repo.UpdateAfterAttempt(context.Background(), got.ID, AgentThunderAttemptUpdate{
 		Status:      models.AgentThunderStatusPending,
 		LastError:   "thunder instance unreachable",
 		NextRetryAt: &next,
 	})
 	require.NoError(t, err)
 
-	updated, err := repo.Get(org, project, agent, env)
+	updated, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, models.AgentThunderStatusPending, updated.Status)
 	assert.Equal(t, "thunder instance unreachable", updated.LastError)
@@ -230,17 +231,17 @@ func TestAgentThunderClientRepo_MarkClaimed(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Nil(t, got.ClaimedAt)
 
 	claimedAt := time.Now()
-	claimed, err := repo.MarkClaimed(got.ID, claimedAt)
+	claimed, err := repo.MarkClaimed(context.Background(), got.ID, claimedAt)
 	require.NoError(t, err)
 	assert.True(t, claimed, "the first claim on an unclaimed binding must succeed")
 
-	updated, err := repo.Get(org, project, agent, env)
+	updated, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	require.NotNil(t, updated.ClaimedAt)
 	assert.WithinDuration(t, claimedAt, *updated.ClaimedAt, time.Second)
@@ -252,18 +253,18 @@ func TestAgentThunderClientRepo_MarkClaimed_SecondClaimFails(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 
-	firstClaimed, err := repo.MarkClaimed(got.ID, time.Now())
+	firstClaimed, err := repo.MarkClaimed(context.Background(), got.ID, time.Now())
 	require.NoError(t, err)
 	require.True(t, firstClaimed)
 
 	// A second claim attempt on the same already-claimed binding must fail —
 	// this is the compare-and-swap that makes the one-time secret claim
 	// actually atomic against a concurrent duplicate request.
-	secondClaimed, err := repo.MarkClaimed(got.ID, time.Now())
+	secondClaimed, err := repo.MarkClaimed(context.Background(), got.ID, time.Now())
 	require.NoError(t, err)
 	assert.False(t, secondClaimed, "a binding that is already claimed must not be claimable again")
 }
@@ -274,20 +275,20 @@ func TestAgentThunderClientRepo_ClearClaim(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
-	wasClaimed, err := repo.MarkClaimed(got.ID, time.Now())
+	wasClaimed, err := repo.MarkClaimed(context.Background(), got.ID, time.Now())
 	require.NoError(t, err)
 	require.True(t, wasClaimed)
 
-	claimed, err := repo.Get(org, project, agent, env)
+	claimed, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	require.NotNil(t, claimed.ClaimedAt, "precondition: must actually be claimed before clearing")
 
-	require.NoError(t, repo.ClearClaim(got.ID))
+	require.NoError(t, repo.ClearClaim(context.Background(), got.ID))
 
-	cleared, err := repo.Get(org, project, agent, env)
+	cleared, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Nil(t, cleared.ClaimedAt, "a regenerated secret must be eligible for the one-time claim again")
 }
@@ -298,18 +299,18 @@ func TestAgentThunderClientRepo_UpdateSecretRef(t *testing.T) {
 	cleanupAgentThunderClients(t, repo, org, project, agent)
 
 	c := newTestAgentThunderClient(org, project, agent, env)
-	require.NoError(t, repo.Upsert(c))
-	got, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.Upsert(context.Background(), c))
+	got, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 
-	require.NoError(t, repo.UpdateSecretRef(got.ID, "agent-thunder-clients/test-org/test-proj/dev/atc-secretref-agent"))
-	updated, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.UpdateSecretRef(context.Background(), got.ID, "agent-thunder-clients/test-org/test-proj/dev/atc-secretref-agent"))
+	updated, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Equal(t, "agent-thunder-clients/test-org/test-proj/dev/atc-secretref-agent", updated.SecretRefPath)
 
 	// Clearing it back to "" (the revoke case) must work too.
-	require.NoError(t, repo.UpdateSecretRef(got.ID, ""))
-	cleared, err := repo.Get(org, project, agent, env)
+	require.NoError(t, repo.UpdateSecretRef(context.Background(), got.ID, ""))
+	cleared, err := repo.Get(context.Background(), org, project, agent, env)
 	require.NoError(t, err)
 	assert.Empty(t, cleared.SecretRefPath)
 }
@@ -318,12 +319,12 @@ func TestAgentThunderClientRepo_DeleteByAgent(t *testing.T) {
 	repo := NewAgentThunderClientRepo(db.GetDB())
 	const org, project, agent = "test-org", "test-proj", "atc-delete-agent"
 
-	require.NoError(t, repo.Upsert(newTestAgentThunderClient(org, project, agent, "dev")))
-	require.NoError(t, repo.Upsert(newTestAgentThunderClient(org, project, agent, "prod")))
+	require.NoError(t, repo.Upsert(context.Background(), newTestAgentThunderClient(org, project, agent, "dev")))
+	require.NoError(t, repo.Upsert(context.Background(), newTestAgentThunderClient(org, project, agent, "prod")))
 
-	require.NoError(t, repo.DeleteByAgent(org, project, agent))
+	require.NoError(t, repo.DeleteByAgent(context.Background(), org, project, agent))
 
-	rows, err := repo.FindByAgent(org, project, agent)
+	rows, err := repo.FindByAgent(context.Background(), org, project, agent)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 }

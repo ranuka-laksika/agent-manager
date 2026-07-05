@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"strings"
 	"sync"
 
 	vault "github.com/hashicorp/vault/api"
+	"golang.org/x/sync/singleflight"
 )
 
 // ErrThunderNotProvisioned is returned when no env-Thunder system-client secret
@@ -74,11 +76,15 @@ type envThunderResolver struct {
 
 	mu    sync.RWMutex
 	cache map[string]ThunderClient // keyed by "org/env"
+	sfg   singleflight.Group       // dedupes concurrent cache-miss resolves per key
 }
 
 // NewEnvThunderResolver creates an EnvThunderResolver backed by a real OpenBao
 // server at openBaoURL, authenticating with openBaoToken.
 func NewEnvThunderResolver(openBaoURL, openBaoToken, openBaoPath string) (EnvThunderResolver, error) {
+	if err := validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath); err != nil {
+		return nil, err
+	}
 	cfg := vault.DefaultConfig()
 	cfg.Address = openBaoURL
 	client, err := vault.NewClient(cfg)
@@ -106,6 +112,13 @@ func newEnvThunderResolverWithReader(reader openBaoReader, openBaoPath string, r
 // ThunderClient already caches its own system token, so caching the client itself
 // avoids re-reading OpenBao on every call.
 func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error) {
+	// Reject path-breaking segments before they ever reach path.Join below.
+	for _, seg := range []string{orgName, envName} {
+		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "/") {
+			return nil, fmt.Errorf("invalid org or environment name segment %q", seg)
+		}
+	}
+
 	cacheKey := orgName + "/" + envName
 
 	r.mu.RLock()
@@ -115,32 +128,47 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 	}
 	r.mu.RUnlock()
 
-	secretPath := path.Join(r.openBaoPath, "data", "thunder-system-clients", orgName, envName)
-	secret, err := r.reader.ReadWithContext(ctx, secretPath)
+	// Singleflight so concurrent first-time resolves for the same key share one
+	// OpenBao read and base-URL probe instead of each paying the cost independently.
+	result, err, _ := r.sfg.Do(cacheKey, func() (any, error) {
+		r.mu.RLock()
+		if client, ok := r.cache[cacheKey]; ok {
+			r.mu.RUnlock()
+			return client, nil
+		}
+		r.mu.RUnlock()
+
+		secretPath := path.Join(r.openBaoPath, "data", "thunder-system-clients", orgName, envName)
+		secret, err := r.reader.ReadWithContext(ctx, secretPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+		}
+		if secret == nil || secret.Data == nil {
+			return nil, ErrThunderNotProvisioned
+		}
+		dataMap, ok := secret.Data["data"].(map[string]any)
+		if !ok {
+			return nil, ErrThunderNotProvisioned
+		}
+		clientSecret, _ := dataMap[thunderSystemClientSecretKey].(string)
+		if clientSecret == "" {
+			return nil, ErrThunderNotProvisioned
+		}
+
+		baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgName, envName)
+		if !ok {
+			return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgName, envName)
+		}
+		client := newThunderClientWithDialOverride(baseURL, thunderSystemClientID, clientSecret, resolveToHost)
+
+		r.mu.Lock()
+		r.cache[cacheKey] = client
+		r.mu.Unlock()
+
+		return client, nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+		return nil, err
 	}
-	if secret == nil || secret.Data == nil {
-		return nil, ErrThunderNotProvisioned
-	}
-	dataMap, ok := secret.Data["data"].(map[string]any)
-	if !ok {
-		return nil, ErrThunderNotProvisioned
-	}
-	clientSecret, _ := dataMap[thunderSystemClientSecretKey].(string)
-	if clientSecret == "" {
-		return nil, ErrThunderNotProvisioned
-	}
-
-	baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgName, envName)
-	if !ok {
-		return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgName, envName)
-	}
-	client := newThunderClientWithDialOverride(baseURL, thunderSystemClientID, clientSecret, resolveToHost)
-
-	r.mu.Lock()
-	r.cache[cacheKey] = client
-	r.mu.Unlock()
-
-	return client, nil
+	return result.(ThunderClient), nil
 }

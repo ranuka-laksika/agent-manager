@@ -19,7 +19,10 @@ package thundersvc
 import (
 	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	vault "github.com/hashicorp/vault/api"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +44,11 @@ func (f *fakeOpenBaoReader) ReadWithContext(ctx context.Context, path string) (*
 // with no dial override.
 func fakeResolveBaseURL(_ context.Context, _, _ string) (string, string, bool) {
 	return "http://fake-thunder:8090", "", true
+}
+
+func TestNewEnvThunderResolver_RejectsMissingConfig(t *testing.T) {
+	_, err := NewEnvThunderResolver("http://openbao:8200", "", "secret")
+	require.Error(t, err)
 }
 
 func TestEnvThunderResolver_Resolve_Success(t *testing.T) {
@@ -65,6 +73,31 @@ func TestEnvThunderResolver_Resolve_Success(t *testing.T) {
 	assert.Equal(t, "secret/data/thunder-system-clients/acme/staging", capturedPath)
 }
 
+// TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments guards against a
+// path.Join subtlety: it cleans its result, so a ".." segment silently escapes
+// the "thunder-system-clients" prefix even though it contains no "/".
+func TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments(t *testing.T) {
+	reader := &fakeOpenBaoReader{
+		ReadWithContextFunc: func(context.Context, string) (*vault.Secret, error) {
+			t.Fatal("must not read OpenBao when a segment is invalid")
+			return nil, nil
+		},
+	}
+	resolver := newEnvThunderResolverWithReader(reader, "secret", fakeResolveBaseURL)
+
+	cases := []struct{ org, env string }{
+		{"..", "staging"},
+		{"acme", ".."},
+		{".", "staging"},
+		{"acme", ""},
+		{"acme/evil", "staging"},
+	}
+	for _, tc := range cases {
+		_, err := resolver.Resolve(context.Background(), tc.org, tc.env)
+		require.Error(t, err)
+	}
+}
+
 func TestEnvThunderResolver_Resolve_Caches(t *testing.T) {
 	calls := 0
 	reader := &fakeOpenBaoReader{
@@ -84,6 +117,48 @@ func TestEnvThunderResolver_Resolve_Caches(t *testing.T) {
 
 	assert.Same(t, c1, c2, "a resolved client for the same org/env must be cached, not rebuilt")
 	assert.Equal(t, 1, calls, "the OpenBao secret must only be fetched once per org/env")
+}
+
+// TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight guards
+// against a thundering-herd on cold cache: many concurrent first-time Resolve calls
+// for the same org/env must share one OpenBao read and one base-URL probe, not each
+// pay that cost independently.
+func TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight(t *testing.T) {
+	var readCalls, probeCalls int64
+	reader := &fakeOpenBaoReader{
+		ReadWithContextFunc: func(_ context.Context, _ string) (*vault.Secret, error) {
+			atomic.AddInt64(&readCalls, 1)
+			time.Sleep(20 * time.Millisecond) // widen the race window
+			return &vault.Secret{
+				Data: map[string]any{"data": map[string]any{"client-secret": "s3cr3t"}},
+			}, nil
+		},
+	}
+	probeFn := func(_ context.Context, _, _ string) (string, string, bool) {
+		atomic.AddInt64(&probeCalls, 1)
+		return "http://fake-thunder:8090", "", true
+	}
+	resolver := newEnvThunderResolverWithReader(reader, "secret", probeFn)
+
+	const goroutines = 20
+	clients := make([]ThunderClient, goroutines)
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for i := range goroutines {
+		go func(idx int) {
+			defer wg.Done()
+			c, err := resolver.Resolve(context.Background(), "acme", "staging")
+			require.NoError(t, err)
+			clients[idx] = c
+		}(i)
+	}
+	wg.Wait()
+
+	assert.EqualValues(t, 1, atomic.LoadInt64(&readCalls), "concurrent cache misses for the same key must share one OpenBao read")
+	assert.EqualValues(t, 1, atomic.LoadInt64(&probeCalls), "concurrent cache misses for the same key must share one base-URL probe")
+	for i := 1; i < goroutines; i++ {
+		assert.Same(t, clients[0], clients[i], "all concurrent resolvers for the same key must get the identical client")
+	}
 }
 
 func TestEnvThunderResolver_Resolve_DifferentEnvironmentsAreNotCachedTogether(t *testing.T) {

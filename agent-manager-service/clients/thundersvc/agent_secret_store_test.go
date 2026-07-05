@@ -41,6 +41,27 @@ func (f *fakeOpenBaoReadWriter) DeleteWithContext(ctx context.Context, path stri
 	return f.DeleteWithContextFunc(ctx, path)
 }
 
+func TestValidateOpenBaoConfig_RejectsMissingFields(t *testing.T) {
+	cases := []struct {
+		name, url, token, path string
+	}{
+		{"empty url", "", "token", "secret"},
+		{"empty token", "http://openbao:8200", "", "secret"},
+		{"empty path", "http://openbao:8200", "token", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Error(t, validateOpenBaoConfig(tc.url, tc.token, tc.path))
+		})
+	}
+	assert.NoError(t, validateOpenBaoConfig("http://openbao:8200", "token", "secret"))
+}
+
+func TestNewAgentSecretStore_RejectsMissingConfig(t *testing.T) {
+	_, err := NewAgentSecretStore("", "token", "secret")
+	require.Error(t, err)
+}
+
 func TestAgentSecretStore_StoreAndGet(t *testing.T) {
 	var writtenPath string
 	var writtenData map[string]interface{}
@@ -62,6 +83,41 @@ func TestAgentSecretStore_StoreAndGet(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "client-abc", inner["client_id"])
 	assert.Equal(t, "secret-xyz", inner["client_secret"])
+}
+
+// TestAgentSecretStore_Store_RejectsPathBreakingSegments guards against a
+// path.Join subtlety: it cleans its result, so a ".." segment silently
+// cancels out the "agent-thunder-clients" prefix (or a sibling segment) even
+// though it contains no "/", and an empty segment is silently dropped. Both
+// would relocate or collide the resulting OpenBao path outside the intended
+// per-agent namespace, so key() must reject them explicitly rather than only
+// checking for a literal "/".
+func TestAgentSecretStore_Store_RejectsPathBreakingSegments(t *testing.T) {
+	rw := &fakeOpenBaoReadWriter{
+		WriteWithContextFunc: func(context.Context, string, map[string]interface{}) (*vault.Secret, error) {
+			t.Fatal("must not write to OpenBao when a path segment is invalid")
+			return nil, nil
+		},
+	}
+	store := newAgentSecretStoreWithReadWriter(rw, "secret")
+
+	cases := []struct {
+		name, org, project, env, agent string
+	}{
+		{"org is ..", "..", "proj1", "staging", "my-agent"},
+		{"project is ..", "acme", "..", "staging", "my-agent"},
+		{"env is ..", "acme", "proj1", "..", "my-agent"},
+		{"agent is ..", "acme", "proj1", "staging", ".."},
+		{"org is .", ".", "proj1", "staging", "my-agent"},
+		{"env is empty", "acme", "proj1", "", "my-agent"},
+		{"org contains slash", "acme/evil", "proj1", "staging", "my-agent"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := store.Store(context.Background(), tc.org, tc.project, tc.env, tc.agent, "client-abc", "secret-xyz")
+			require.Error(t, err)
+		})
+	}
 }
 
 func TestAgentSecretStore_Get_Success(t *testing.T) {

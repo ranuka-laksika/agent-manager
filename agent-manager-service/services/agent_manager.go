@@ -64,6 +64,7 @@ type AgentManagerService interface {
 	UpdateAgentDeploySettings(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentDeploySettingsRequest) error
 	UpdateAgentConfigurations(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentConfigurationsRequest) error
 	GetAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error)
+	ClaimAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error)
 	RegenerateAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error)
 	RevokeAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error)
 	ProvisionAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (view models.AgentIdentityEnvironmentView, alreadyExisted bool, err error)
@@ -2873,7 +2874,9 @@ func allPipelineEnvironmentNames(promotionPaths []models.PromotionPath) map[stri
 // this project's deployment pipeline. AgentIDs are provisioned across every
 // org-level environment (Section 2.1 of the AgentID architecture doc), but a
 // project only ever shows the bindings for environments in its own pipeline —
-// this filters the org-wide result down to that visibility rule.
+// this filters the org-wide result down to that visibility rule. A safe GET:
+// it never returns or destroys a secret. Use ClaimAgentIdentitySecret to
+// actually retrieve an unclaimed External agent's secret.
 func (s *agentManagerService) GetAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
 	views, err := s.agentThunderProvisioning.GetIdentityViews(ctx, orgName, projectName, agentName)
 	if err != nil {
@@ -2894,6 +2897,25 @@ func (s *agentManagerService) GetAgentIdentity(ctx context.Context, orgName stri
 		}
 	}
 	return filtered, nil
+}
+
+// ClaimAgentIdentitySecret performs the one-time claim of an External agent's
+// secret for one environment. Unlike GetAgentIdentity (a safe GET), calling
+// this IS the claim — the first successful call returns and permanently
+// destroys the stored secret. Internal agents are rejected; use
+// GetAgentCredentials instead.
+func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error) {
+	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.ClaimSecret(ctx, orgName, projectName, agentName, environmentName)
+	if err != nil {
+		return nil, err
+	}
+	return &models.AgentClaimSecretResponse{
+		EnvironmentName: environmentName,
+		AgentID:         agentID,
+		ClientID:        clientID,
+		ClientSecret:    clientSecret,
+		Status:          models.AgentClaimSecretStatus,
+	}, nil
 }
 
 // RegenerateAgentIdentitySecret rotates the AgentID secret for one environment.
@@ -2989,12 +3011,12 @@ func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, orgNam
 
 // GetAgentCredentials returns the current client ID and secret for an Internal
 // agent in one environment — repeatable, unlike the External agent's one-time
-// claim via GetAgentIdentity. Internal agents have no other way to retrieve
-// their own credential today; Gateway Binding (automatically injecting it into
-// the workload) is a later phase. Rejects External agents outright — they
-// already have their own retrieval path (GetAgentIdentity's one-time claim,
-// or RegenerateAgentIdentitySecret), and letting them use this endpoint too
-// would defeat the point of that one-time claim design.
+// claim via ClaimAgentIdentitySecret. Internal agents have no other way to
+// retrieve their own credential today; Gateway Binding (automatically injecting
+// it into the workload) is a later phase. Rejects External agents outright —
+// they already have their own retrieval path (ClaimAgentIdentitySecret's
+// one-time claim, or RegenerateAgentIdentitySecret), and letting them use this
+// endpoint too would defeat the point of that one-time claim design.
 func (s *agentManagerService) GetAgentCredentials(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error) {
 	agent, err := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
 	if err != nil {
@@ -3003,7 +3025,7 @@ func (s *agentManagerService) GetAgentCredentials(ctx context.Context, orgName s
 	}
 	if agent.Provisioning.Type != string(utils.InternalAgent) {
 		return models.AgentCredentialsResponse{}, fmt.Errorf(
-			"%w: agent %q is an external agent — external agent credentials are retrieved via GET .../identity (one-time) or POST .../identity/regenerate, not this endpoint",
+			"%w: agent %q is an external agent — external agent credentials are retrieved via POST .../identity/claim (one-time) or POST .../identity/regenerate, not this endpoint",
 			utils.ErrInvalidInput, agentName)
 	}
 

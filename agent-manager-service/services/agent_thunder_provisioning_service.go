@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
@@ -82,7 +83,7 @@ type AgentThunderProvisioningService interface {
 	ProvisionForEnvironmentIfMissing(ctx context.Context, orgName, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string) (alreadyExisted bool, err error)
 
 	// GetCredentials returns the current client ID and secret for one binding
-	// WITHOUT destroying the stored copy — repeatable, unlike GetIdentityViews'
+	// WITHOUT destroying the stored copy — repeatable, unlike ClaimSecret's
 	// one-time External claim. For Internal agents, which have no other way to
 	// retrieve their credential today (Gateway Binding — automatically injecting
 	// it into the workload — is a later phase). Returns
@@ -109,20 +110,30 @@ type AgentThunderProvisioningService interface {
 	DeleteAllBindings(ctx context.Context, orgName, projectName, agentName string)
 
 	// GetIdentityViews returns the current binding for every environment this
-	// agent has been provisioned in, applying secret exposure rules: an
-	// External agent's secret is included at most once — the first time it is
-	// retrieved after becoming available — and is then permanently destroyed
-	// so it can never be served again. An Internal agent's secret is never
-	// included. Callers needing project-level visibility filtering (Section 2.1
-	// of the architecture doc) apply it on top of this org-wide result.
+	// agent has been provisioned in. A safe, side-effect-free read: it never
+	// returns or destroys a secret, even for an unclaimed External binding —
+	// each view's HasUnclaimedSecret flag reports whether one is available,
+	// and ClaimSecret is the only way to actually retrieve and consume it.
+	// Callers needing project-level visibility filtering (Section 2.1 of the
+	// architecture doc) apply it on top of this org-wide result.
 	GetIdentityViews(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error)
+
+	// ClaimSecret performs the one-time claim of an External agent's secret
+	// for one environment: the first successful call destroys the stored copy
+	// and returns it; every call after that fails with
+	// utils.ErrAgentCredentialNotAvailable. This is the only endpoint-facing
+	// operation that actually exposes an External agent's secret — GetIdentityViews
+	// never does. Internal agents are rejected with utils.ErrInvalidInput;
+	// they have no claim state, and use GetCredentials instead.
+	ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
 }
 
 type agentThunderProvisioningService struct {
-	repo        repositories.AgentThunderClientRepository
-	envResolver thundersvc.EnvThunderResolver
-	secretStore thundersvc.AgentSecretStore
-	logger      *slog.Logger
+	repo         repositories.AgentThunderClientRepository
+	envResolver  thundersvc.EnvThunderResolver
+	secretStore  thundersvc.AgentSecretStore
+	logger       *slog.Logger
+	bindingLocks keyedMutex
 }
 
 // NewAgentThunderProvisioningService creates a new AgentThunderProvisioningService.
@@ -140,6 +151,36 @@ func NewAgentThunderProvisioningService(
 	}
 }
 
+// keyedMutex serializes RegenerateSecret/RevokeSecret per binding within this
+// process, so two concurrent rotations for the same binding can't interleave
+// their Thunder call and OpenBao write and leave the stored secret mismatched
+// with what Thunder actually considers active. In-process only — it does not
+// protect across multiple replicas of this service.
+type keyedMutex struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+func (m *keyedMutex) Lock(key string) func() {
+	m.mu.Lock()
+	if m.locks == nil {
+		m.locks = make(map[string]*sync.Mutex)
+	}
+	l, ok := m.locks[key]
+	if !ok {
+		l = &sync.Mutex{}
+		m.locks[key] = l
+	}
+	m.mu.Unlock()
+
+	l.Lock()
+	return l.Unlock
+}
+
+func bindingLockKey(orgName, projectName, agentName, envName string) string {
+	return orgName + "|" + projectName + "|" + agentName + "|" + envName
+}
+
 func (s *agentThunderProvisioningService) ProvisionForAgent(
 	ctx context.Context, orgName, projectName, agentName string, ownership models.AgentProvisioningType, envNames []string, requestedBy string,
 ) {
@@ -154,7 +195,7 @@ func (s *agentThunderProvisioningService) ProvisionForAgent(
 			Status:           models.AgentThunderStatusPending,
 			RequestedBy:      requestedBy,
 		}
-		if err := s.repo.Upsert(&b); err != nil {
+		if err := s.repo.Upsert(ctx, &b); err != nil {
 			s.logger.Error("Failed to write-ahead agent thunder binding", "agentName", agentName, "env", env, "error", err)
 			continue
 		}
@@ -176,7 +217,7 @@ func (s *agentThunderProvisioningService) attemptAll(ctx context.Context, bindin
 func (s *agentThunderProvisioningService) ProvisionForEnvironmentIfMissing(
 	ctx context.Context, orgName, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string,
 ) (bool, error) {
-	_, err := s.repo.Get(orgName, projectName, agentName, envName)
+	_, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
 	if err == nil {
 		return true, nil
 	}
@@ -198,7 +239,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 	// on the same row. claimed=false means someone else already holds this
 	// binding (or it raced past being pending/stale) — skip silently rather
 	// than duplicate the work.
-	claimed, claimErr := s.repo.ClaimForAttempt(binding.ID)
+	claimed, claimErr := s.repo.ClaimForAttempt(ctx, binding.ID)
 	if claimErr != nil {
 		s.logger.Error("Failed to claim agent thunder binding for attempt", "bindingID", binding.ID, "error", claimErr)
 		return
@@ -210,7 +251,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 
 	thunderClient, err := s.envResolver.Resolve(ctx, binding.OrgName, binding.EnvironmentName)
 	if err != nil {
-		s.recordFailure(binding, "", "", err)
+		s.recordFailure(ctx, binding, "", "", err)
 		return
 	}
 
@@ -221,7 +262,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 	if thunderAgentID == "" {
 		ouID, err := thunderClient.GetDefaultOUID(ctx)
 		if err != nil {
-			s.recordFailure(binding, "", "", fmt.Errorf("get default OU: %w", err))
+			s.recordFailure(ctx, binding, "", "", fmt.Errorf("get default OU: %w", err))
 			return
 		}
 
@@ -229,7 +270,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		var created bool
 		thunderAgentID, clientID, clientSecret, created, err = thunderClient.CreateAgentIdentity(ctx, ouID, appName, "")
 		if err != nil {
-			s.recordFailure(binding, "", "", fmt.Errorf("create agent identity: %w", err))
+			s.recordFailure(ctx, binding, "", "", fmt.Errorf("create agent identity: %w", err))
 			return
 		}
 
@@ -245,7 +286,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 				// thunderAgentID/clientID are already resolved at this point —
 				// pass them through so a failure here doesn't lose them (see
 				// the identical reasoning on the secretStore.Store failure below).
-				s.recordFailure(binding, thunderAgentID, clientID, fmt.Errorf("recover secret for existing agent identity: %w", err))
+				s.recordFailure(ctx, binding, thunderAgentID, clientID, fmt.Errorf("recover secret for existing agent identity: %w", err))
 				return
 			}
 		}
@@ -261,12 +302,12 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 			// see ThunderAgentID=="" and call CreateAgentIdentity again for a
 			// name that already exists, hitting the 409 fallback and forcing
 			// an unnecessary secret rotation.
-			s.recordFailure(binding, thunderAgentID, clientID, fmt.Errorf("store agent secret: %w", err))
+			s.recordFailure(ctx, binding, thunderAgentID, clientID, fmt.Errorf("store agent secret: %w", err))
 			return
 		}
 	}
 
-	if err := s.repo.UpdateAfterAttempt(binding.ID, repositories.AgentThunderAttemptUpdate{
+	if err := s.repo.UpdateAfterAttempt(ctx, binding.ID, repositories.AgentThunderAttemptUpdate{
 		Status:          models.AgentThunderStatusCompleted,
 		ThunderAgentID:  thunderAgentID,
 		ThunderClientID: clientID,
@@ -285,7 +326,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 // passing "" for either is correct when nothing was resolved yet.
 // UpdateAfterAttempt only writes a non-empty field, so this never clobbers an
 // already-stored value with a blank one.
-func (s *agentThunderProvisioningService) recordFailure(binding models.AgentThunderClient, resolvedAgentID, resolvedClientID string, cause error) {
+func (s *agentThunderProvisioningService) recordFailure(ctx context.Context, binding models.AgentThunderClient, resolvedAgentID, resolvedClientID string, cause error) {
 	attemptsSoFar := binding.AttemptCount + 1
 	permanent := errors.Is(cause, thundersvc.ErrThunderNotProvisioned)
 	exhausted := attemptsSoFar >= maxProvisionAttempts
@@ -303,13 +344,15 @@ func (s *agentThunderProvisioningService) recordFailure(binding models.AgentThun
 		update.NextRetryAt = &next
 	}
 
-	if err := s.repo.UpdateAfterAttempt(binding.ID, update); err != nil {
+	if err := s.repo.UpdateAfterAttempt(ctx, binding.ID, update); err != nil {
 		s.logger.Error("Failed to record agent thunder provisioning failure", "bindingID", binding.ID, "error", err)
 	}
 }
 
 func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
-	binding, err := s.repo.Get(orgName, projectName, agentName, envName)
+	defer s.bindingLocks.Lock(bindingLockKey(orgName, projectName, agentName, envName))()
+
+	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -334,13 +377,13 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 	if err != nil {
 		return "", "", "", fmt.Errorf("store regenerated secret: %w", err)
 	}
-	if err := s.repo.UpdateSecretRef(binding.ID, secretPath); err != nil {
+	if err := s.repo.UpdateSecretRef(ctx, binding.ID, secretPath); err != nil {
 		return "", "", "", fmt.Errorf("record regenerated secret location: %w", err)
 	}
 	// A prior claim (if any) was for the OLD secret, which no longer exists —
-	// this new one has never been shown to anyone via GetIdentityViews' one-time
-	// claim, so it must not inherit a stale "already claimed" flag from before.
-	if err := s.repo.ClearClaim(binding.ID); err != nil {
+	// this new one has never been shown to anyone via ClaimSecret, so it must
+	// not inherit a stale "already claimed" flag from before.
+	if err := s.repo.ClearClaim(ctx, binding.ID); err != nil {
 		s.logger.Warn("Failed to clear claim state after regenerate", "bindingID", binding.ID, "error", err)
 	}
 
@@ -348,7 +391,7 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 }
 
 func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
-	binding, err := s.repo.Get(orgName, projectName, agentName, envName)
+	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -373,7 +416,9 @@ func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, or
 }
 
 func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
-	binding, err := s.repo.Get(orgName, projectName, agentName, envName)
+	defer s.bindingLocks.Lock(bindingLockKey(orgName, projectName, agentName, envName))()
+
+	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -403,21 +448,21 @@ func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, orgN
 		}
 	}
 
-	if err := s.repo.UpdateSecretRef(binding.ID, ""); err != nil {
+	if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
 		return "", err
 	}
 	return binding.ThunderClientID, nil
 }
 
 func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
-	bindings, err := s.repo.FindByAgent(orgName, projectName, agentName)
+	bindings, err := s.repo.FindByAgent(ctx, orgName, projectName, agentName)
 	if err != nil {
 		return nil, err
 	}
 
 	views := make([]models.AgentIdentityEnvironmentView, 0, len(bindings))
 	for _, b := range bindings {
-		view := models.AgentIdentityEnvironmentView{
+		views = append(views, models.AgentIdentityEnvironmentView{
 			EnvironmentName:  b.EnvironmentName,
 			ProvisioningType: b.ProvisioningType,
 			Status:           b.Status,
@@ -425,53 +470,66 @@ func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, 
 			ClientID:         b.ThunderClientID,
 			LastError:        b.LastError,
 			RequestedBy:      b.RequestedBy,
-		}
-
-		canClaim := b.ProvisioningType == models.AgentProvisioningTypeExternal &&
-			b.SecretRefPath != "" &&
-			b.ClaimedAt == nil
-		if canClaim {
-			// MarkClaimed is a compare-and-swap (claimed_at IS NULL) and is the
-			// sole gate for "shown exactly once": it must run BEFORE reading the
-			// secret, not after. Two concurrent GetIdentityViews calls for the
-			// same unclaimed binding (a double-click, a client retry after a
-			// lost response, two backend replicas) both pass the canClaim check
-			// above on their own in-memory snapshot — only the claim-first CAS
-			// stops both from then reading and returning the same secret.
-			claimed, claimErr := s.repo.MarkClaimed(b.ID, time.Now())
-			if claimErr != nil {
-				s.logger.Warn("Failed to mark external agent secret as claimed", "bindingID", b.ID, "error", claimErr)
-			} else if claimed {
-				_, secret, getErr := s.secretStore.Get(ctx, b.SecretRefPath)
-				if getErr != nil {
-					s.logger.Warn("Failed to read external agent secret after claim; rolling back claim so a retry can still see it", "bindingID", b.ID, "error", getErr)
-					if clearErr := s.repo.ClearClaim(b.ID); clearErr != nil {
-						s.logger.Warn("Failed to roll back claim after secret read failure", "bindingID", b.ID, "error", clearErr)
-					}
-				} else {
-					view.ClientSecret = secret
-
-					if delErr := s.secretStore.Delete(ctx, b.SecretRefPath); delErr != nil {
-						s.logger.Warn("Failed to destroy claimed external agent secret", "bindingID", b.ID, "error", delErr)
-					}
-					if err := s.repo.UpdateSecretRef(b.ID, ""); err != nil {
-						s.logger.Warn("Failed to clear claimed external agent secret reference", "bindingID", b.ID, "error", err)
-					}
-				}
-			}
-			// claimed == false means a concurrent caller already won the claim
-			// between our read of b.ClaimedAt and now — correctly serve no
-			// secret here.
-		}
-
-		views = append(views, view)
+			HasUnclaimedSecret: b.ProvisioningType == models.AgentProvisioningTypeExternal &&
+				b.SecretRefPath != "" && b.ClaimedAt == nil,
+		})
 	}
 
 	return views, nil
 }
 
+func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
+	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+	if err != nil {
+		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
+			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+		}
+		return "", "", "", err
+	}
+	if binding.ProvisioningType != models.AgentProvisioningTypeExternal {
+		return "", "", "", fmt.Errorf("%w: agent %q is an internal agent — internal agent credentials are retrieved via GetAgentCredentials, not claim", utils.ErrInvalidInput, agentName)
+	}
+	if binding.ThunderAgentID == "" {
+		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+	}
+	if binding.SecretRefPath == "" {
+		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
+	}
+
+	// MarkClaimed is a compare-and-swap (claimed_at IS NULL) and is the sole
+	// gate for "shown exactly once": it must run BEFORE reading the secret,
+	// not after, so two concurrent claims for the same binding can't both
+	// read and return the same secret.
+	claimed, claimErr := s.repo.MarkClaimed(ctx, binding.ID, time.Now())
+	if claimErr != nil {
+		return "", "", "", fmt.Errorf("mark agent secret as claimed: %w", claimErr)
+	}
+	if !claimed {
+		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
+	}
+
+	_, secret, getErr := s.secretStore.Get(ctx, binding.SecretRefPath)
+	if getErr != nil {
+		// Roll back the claim so a retry can still see this secret — the read
+		// failure means it was never actually shown to anyone.
+		if clearErr := s.repo.ClearClaim(ctx, binding.ID); clearErr != nil {
+			s.logger.Warn("Failed to roll back claim after secret read failure", "bindingID", binding.ID, "error", clearErr)
+		}
+		return "", "", "", fmt.Errorf("read claimed agent secret: %w", getErr)
+	}
+
+	if delErr := s.secretStore.Delete(ctx, binding.SecretRefPath); delErr != nil {
+		s.logger.Warn("Failed to destroy claimed external agent secret", "bindingID", binding.ID, "error", delErr)
+	}
+	if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
+		s.logger.Warn("Failed to clear claimed external agent secret reference", "bindingID", binding.ID, "error", err)
+	}
+
+	return binding.ThunderAgentID, binding.ThunderClientID, secret, nil
+}
+
 func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context, orgName, projectName, agentName string) {
-	bindings, err := s.repo.FindByAgent(orgName, projectName, agentName)
+	bindings, err := s.repo.FindByAgent(ctx, orgName, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent thunder bindings for deletion", "agentName", agentName, "error", err)
 		return
@@ -496,7 +554,7 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		}
 	}
 
-	if err := s.repo.DeleteByAgent(orgName, projectName, agentName); err != nil {
+	if err := s.repo.DeleteByAgent(ctx, orgName, projectName, agentName); err != nil {
 		s.logger.Error("Failed to delete agent thunder client rows", "agentName", agentName, "error", err)
 	}
 }

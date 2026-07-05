@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -73,8 +75,8 @@ func TestAttemptProvision_Success_CreatesIdentityAndStoresSecret(t *testing.T) {
 	var recorded repositories.AgentThunderAttemptUpdate
 	var recordedID uuid.UUID
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpdateAfterAttemptFunc: func(id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 			recordedID = id
 			recorded = fields
 			return nil
@@ -110,8 +112,8 @@ func TestAttemptProvision_AlreadyHasThunderAgentID_SkipsCreate(t *testing.T) {
 	store := &clientmocks.AgentSecretStoreMock{}
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpdateAfterAttemptFunc: func(_ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 			recorded = fields
 			return nil
 		},
@@ -155,8 +157,8 @@ func TestAttemptProvision_ConflictFallback_RegeneratesSecretToRecover(t *testing
 	}
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpdateAfterAttemptFunc: func(_ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 			recorded = fields
 			return nil
 		},
@@ -198,8 +200,8 @@ func TestAttemptProvision_TransientFailure_SchedulesRetryWithBackoff(t *testing.
 		t.Run(tt.name, func(t *testing.T) {
 			var recorded repositories.AgentThunderAttemptUpdate
 			repo := &repomocks.AgentThunderClientRepositoryMock{
-				ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-				UpdateAfterAttemptFunc: func(_ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+				ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+				UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 					recorded = fields
 					return nil
 				},
@@ -235,8 +237,8 @@ func TestAttemptProvision_FifthFailure_MarksFailedNoMoreRetries(t *testing.T) {
 
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpdateAfterAttemptFunc: func(_ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 			recorded = fields
 			return nil
 		},
@@ -277,8 +279,8 @@ func TestAttemptProvision_ThunderNotProvisioned_MarksFailedImmediately(t *testin
 	store := &clientmocks.AgentSecretStoreMock{}
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpdateAfterAttemptFunc: func(_ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 			recorded = fields
 			return nil
 		},
@@ -317,8 +319,8 @@ func TestAttemptProvision_ClaimFails_SkipsWithoutTouchingThunder(t *testing.T) {
 	}
 	store := &clientmocks.AgentSecretStoreMock{}
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return false, nil },
-		UpdateAfterAttemptFunc: func(_ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return false, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error {
 			t.Fatal("UpdateAfterAttempt must not be called when the claim was not won")
 			return nil
 		},
@@ -335,8 +337,8 @@ func TestAttemptProvision_ClaimFails_SkipsWithoutTouchingThunder(t *testing.T) {
 func TestProvisionForAgent_WritesAheadPendingForEveryEnvironment(t *testing.T) {
 	var upserted []models.AgentThunderClient
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		ClaimForAttemptFunc: func(uuid.UUID) (bool, error) { return true, nil },
-		UpsertFunc: func(c *models.AgentThunderClient) error {
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpsertFunc: func(_ context.Context, c *models.AgentThunderClient) error {
 			upserted = append(upserted, *c)
 			return nil
 		},
@@ -350,7 +352,7 @@ func TestProvisionForAgent_WritesAheadPendingForEveryEnvironment(t *testing.T) {
 		},
 	}
 	store := &clientmocks.AgentSecretStoreMock{}
-	repo.UpdateAfterAttemptFunc = func(_ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error { return nil }
+	repo.UpdateAfterAttemptFunc = func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error { return nil }
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	svc.ProvisionForAgent(context.Background(), "acme", "proj1", "my-agent", models.AgentProvisioningTypeInternal, []string{"dev", "staging", "prod"}, "platform-thunder-subject-abc123")
@@ -388,17 +390,17 @@ func TestRegenerateSecret_Success(t *testing.T) {
 	clearClaimCalled := false
 	bindingID := uuid.New()
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{
 				ID: bindingID, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
 				ProvisioningType: models.AgentProvisioningTypeExternal,
 			}, nil
 		},
-		UpdateSecretRefFunc: func(_ uuid.UUID, secretRefPath string) error {
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error {
 			updatedPath = secretRefPath
 			return nil
 		},
-		ClearClaimFunc: func(id uuid.UUID) error {
+		ClearClaimFunc: func(_ context.Context, id uuid.UUID) error {
 			clearClaimCalled = true
 			clearedClaimForID = id
 			return nil
@@ -416,6 +418,63 @@ func TestRegenerateSecret_Success(t *testing.T) {
 	assert.Equal(t, storedPath, updatedPath)
 	assert.True(t, clearClaimCalled, "regenerate must clear any prior claim so the new secret is eligible for the one-time claim again — otherwise GetIdentityViews will never show it, even though it's a valid, never-before-seen secret")
 	assert.Equal(t, bindingID, clearedClaimForID)
+}
+
+// TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized guards against
+// interleaving two rotations of the same binding: without a per-binding lock,
+// two concurrent RegenerateSecret calls could rotate Thunder in one order but
+// write to OpenBao in the other, leaving the stored secret mismatched with
+// whatever Thunder actually considers active.
+func TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized(t *testing.T) {
+	var inFlight int32
+	var maxObservedInFlight int32
+	tc := fakeThunderClientMock()
+	tc.RegenerateAgentSecretFunc = func(_ context.Context, _ string) (string, error) {
+		n := atomic.AddInt32(&inFlight, 1)
+		for {
+			max := atomic.LoadInt32(&maxObservedInFlight)
+			if n <= max || atomic.CompareAndSwapInt32(&maxObservedInFlight, max, n) {
+				break
+			}
+		}
+		time.Sleep(10 * time.Millisecond) // widen the race window
+		atomic.AddInt32(&inFlight, -1)
+		return "rotated-secret", nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		StoreFunc: func(_ context.Context, _, _, _, _, _, clientSecret string) (string, error) {
+			return "agent-thunder-clients/acme/proj1/staging/my-agent", nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
+				ID: uuid.New(), ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
+				ProvisioningType: models.AgentProvisioningTypeExternal,
+			}, nil
+		},
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+		ClearClaimFunc:      func(_ context.Context, _ uuid.UUID) error { return nil },
+	}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	const goroutines = 10
+	var wg sync.WaitGroup
+	wg.Add(goroutines)
+	for range goroutines {
+		go func() {
+			defer wg.Done()
+			_, _, _, err := svc.RegenerateSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+			assert.NoError(t, err)
+		}()
+	}
+	wg.Wait()
+
+	assert.EqualValues(t, 1, atomic.LoadInt32(&maxObservedInFlight),
+		"concurrent RegenerateSecret calls for the same binding must be serialized, not interleaved")
 }
 
 // TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain is an
@@ -436,23 +495,23 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 	var currentClaimedAt *time.Time = &alreadyClaimedAt
 
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{
 				ID: bindingID, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
 				ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusCompleted,
 				SecretRefPath: currentSecretRef, ClaimedAt: currentClaimedAt,
 			}, nil
 		},
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
 			return []models.AgentThunderClient{{
 				ID: bindingID, EnvironmentName: "staging", ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
 				ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusCompleted,
 				SecretRefPath: currentSecretRef, ClaimedAt: currentClaimedAt,
 			}}, nil
 		},
-		UpdateSecretRefFunc: func(_ uuid.UUID, secretRefPath string) error { currentSecretRef = secretRefPath; return nil },
-		ClearClaimFunc:      func(uuid.UUID) error { currentClaimedAt = nil; return nil },
-		MarkClaimedFunc: func(_ uuid.UUID, t time.Time) (bool, error) {
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error { currentSecretRef = secretRefPath; return nil },
+		ClearClaimFunc:      func(_ context.Context, _ uuid.UUID) error { currentClaimedAt = nil; return nil },
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, t time.Time) (bool, error) {
 			if currentClaimedAt != nil {
 				return false, nil
 			}
@@ -479,13 +538,17 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
 	require.NoError(t, err)
 	require.Len(t, views, 1)
-	assert.Equal(t, "brand-new-secret", views[0].ClientSecret,
-		"the regenerated secret must be shown — a stale claim from the OLD secret must not suppress it")
+	assert.True(t, views[0].HasUnclaimedSecret,
+		"the regenerated secret must be claimable — a stale claim from the OLD secret must not suppress it")
+
+	_, _, claimedSecret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.NoError(t, err)
+	assert.Equal(t, "brand-new-secret", claimedSecret)
 }
 
 func TestRegenerateSecret_NotYetProvisioned_Errors(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New()}, nil // ThunderAgentID empty
 		},
 	}
@@ -507,7 +570,7 @@ func TestRegenerateSecret_NotYetProvisioned_Errors(t *testing.T) {
 // after CreateAgent, before the async provisioning goroutine has run).
 func TestRegenerateSecret_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return nil, repositories.ErrAgentThunderClientNotFound
 		},
 	}
@@ -541,12 +604,12 @@ func TestRevokeSecret_RotatesAndClearsStoredCopy(t *testing.T) {
 	var clearedTo string
 	clearedToSet := false
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{
 				ID: uuid.New(), ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc", SecretRefPath: "existing/path",
 			}, nil
 		},
-		UpdateSecretRefFunc: func(_ uuid.UUID, secretRefPath string) error {
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error {
 			clearedTo = secretRefPath
 			clearedToSet = true
 			return nil
@@ -566,7 +629,7 @@ func TestRevokeSecret_RotatesAndClearsStoredCopy(t *testing.T) {
 
 func TestRevokeSecret_NotYetProvisioned_Errors(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New()}, nil // ThunderAgentID empty
 		},
 	}
@@ -586,7 +649,7 @@ func TestRevokeSecret_NotYetProvisioned_Errors(t *testing.T) {
 // previously unhandled.
 func TestRevokeSecret_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return nil, repositories.ErrAgentThunderClientNotFound
 		},
 	}
@@ -600,7 +663,42 @@ func TestRevokeSecret_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
 	assert.Empty(t, clientID)
 }
 
-func TestGetIdentityViews_ExternalUnclaimedSecret_ReturnedOnceThenDestroyed(t *testing.T) {
+func TestGetIdentityViews_ExternalUnclaimed_IsSafeRead(t *testing.T) {
+	store := &clientmocks.AgentSecretStoreMock{
+		GetFunc: func(context.Context, string) (string, string, error) {
+			t.Fatal("GetIdentityViews must never read the secret store — it is a safe, non-destructive read")
+			return "", "", nil
+		},
+		DeleteFunc: func(context.Context, string) error {
+			t.Fatal("GetIdentityViews must never destroy a secret — that is ClaimSecret's job")
+			return nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
+			return []models.AgentThunderClient{{
+				ID: uuid.New(), EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
+				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-uuid-1", ThunderClientID: "client-abc",
+				SecretRefPath: "some/path", ClaimedAt: nil,
+			}}, nil
+		},
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) {
+			t.Fatal("GetIdentityViews must never claim a secret")
+			return false, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
+
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	assert.Equal(t, "thunder-agent-uuid-1", views[0].AgentID, "the view must expose Thunder's own identity UUID, not just the OAuth client_id")
+	assert.True(t, views[0].HasUnclaimedSecret)
+}
+
+func TestClaimSecret_ExternalUnclaimedSecret_ReturnedOnceThenDestroyed(t *testing.T) {
 	claimedAt := (*time.Time)(nil)
 	getCalls := 0
 	deleteCalls := 0
@@ -617,40 +715,41 @@ func TestGetIdentityViews_ExternalUnclaimedSecret_ReturnedOnceThenDestroyed(t *t
 		},
 	}
 	var markClaimedCalled, clearedSecretRef bool
+	bindingID := uuid.New()
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
-			return []models.AgentThunderClient{{
-				ID: uuid.New(), EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
+				ID: bindingID, EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
 				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-uuid-1", ThunderClientID: "client-abc",
 				SecretRefPath: "some/path", ClaimedAt: claimedAt,
-			}}, nil
+			}, nil
 		},
-		MarkClaimedFunc:     func(_ uuid.UUID, _ time.Time) (bool, error) { markClaimedCalled = true; return true, nil },
-		UpdateSecretRefFunc: func(_ uuid.UUID, secretRefPath string) error { clearedSecretRef = secretRefPath == ""; return nil },
+		MarkClaimedFunc:     func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) { markClaimedCalled = true; return true, nil },
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error { clearedSecretRef = secretRefPath == ""; return nil },
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{}
 
 	svc := newTestProvisioningService(repo, resolver, store)
-	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
+	agentID, clientID, secret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
 
 	require.NoError(t, err)
-	require.Len(t, views, 1)
-	assert.Equal(t, "thunder-agent-uuid-1", views[0].AgentID, "the view must expose Thunder's own identity UUID, not just the OAuth client_id")
-	assert.Equal(t, "one-time-secret", views[0].ClientSecret)
+	assert.Equal(t, "thunder-agent-uuid-1", agentID, "the claim response must expose Thunder's own identity UUID, not just the OAuth client_id")
+	assert.Equal(t, "client-abc", clientID)
+	assert.Equal(t, "one-time-secret", secret)
 	assert.Equal(t, 1, getCalls)
 	assert.Equal(t, 1, deleteCalls, "the secret must be destroyed immediately after being claimed")
 	assert.True(t, markClaimedCalled)
 	assert.True(t, clearedSecretRef)
 }
 
-// TestGetIdentityViews_ConcurrentClaim_SecretNotDoubleServed guards the fix
-// for the one-time-claim race: MarkClaimed is now the atomic compare-and-swap
-// gate, checked BEFORE reading the secret, not after. This test simulates the
+// TestClaimSecret_ConcurrentClaim_SecretNotDoubleServed guards the fix for
+// the one-time-claim race: MarkClaimed is the atomic compare-and-swap gate,
+// checked BEFORE reading the secret, not after. This test simulates the
 // concurrent caller having already won the claim between this call's read of
 // b.ClaimedAt (nil, so canClaim==true) and its own MarkClaimed attempt — the
 // mock's MarkClaimedFunc returns claimed=false to model that race outcome.
 // The secret must not be read from the store or returned in that case.
-func TestGetIdentityViews_ConcurrentClaim_SecretNotDoubleServed(t *testing.T) {
+func TestClaimSecret_ConcurrentClaim_SecretNotDoubleServed(t *testing.T) {
 	store := &clientmocks.AgentSecretStoreMock{
 		GetFunc: func(context.Context, string) (string, string, error) {
 			t.Fatal("must not read the secret store when the claim CAS was lost to a concurrent caller")
@@ -658,33 +757,33 @@ func TestGetIdentityViews_ConcurrentClaim_SecretNotDoubleServed(t *testing.T) {
 		},
 	}
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
-			return []models.AgentThunderClient{{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
 				ID: uuid.New(), EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
-				Status: models.AgentThunderStatusCompleted, ThunderClientID: "client-abc",
+				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
 				SecretRefPath: "some/path", ClaimedAt: nil, // looks unclaimed from this call's own read
-			}}, nil
+			}, nil
 		},
-		MarkClaimedFunc: func(_ uuid.UUID, _ time.Time) (bool, error) {
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) {
 			return false, nil // a concurrent caller already won the CAS
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{}
 
 	svc := newTestProvisioningService(repo, resolver, store)
-	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
+	_, _, secret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
 
-	require.NoError(t, err)
-	require.Len(t, views, 1)
-	assert.Empty(t, views[0].ClientSecret, "the losing side of a claim race must not also receive the secret")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentCredentialNotAvailable, "the losing side of a claim race must not also receive the secret")
+	assert.Empty(t, secret)
 }
 
-// TestGetIdentityViews_ClaimSucceeds_ButSecretReadFails_RollsBackClaim
-// guards a property that predates this fix and must survive it: if the vault
-// read fails after the claim itself succeeded, the claim is rolled back
-// (ClearClaim) so a future retry can still see the secret, rather than
-// permanently losing it to a claim nobody was actually shown.
-func TestGetIdentityViews_ClaimSucceeds_ButSecretReadFails_RollsBackClaim(t *testing.T) {
+// TestClaimSecret_SucceedsButSecretReadFails_RollsBackClaim guards a property
+// that predates this fix and must survive it: if the vault read fails after
+// the claim itself succeeded, the claim is rolled back (ClearClaim) so a
+// future retry can still see the secret, rather than permanently losing it
+// to a claim nobody was actually shown.
+func TestClaimSecret_SucceedsButSecretReadFails_RollsBackClaim(t *testing.T) {
 	boom := errors.New("openbao unreachable")
 	store := &clientmocks.AgentSecretStoreMock{
 		GetFunc: func(context.Context, string) (string, string, error) {
@@ -694,24 +793,23 @@ func TestGetIdentityViews_ClaimSucceeds_ButSecretReadFails_RollsBackClaim(t *tes
 	var clearClaimCalledFor uuid.UUID
 	bindingID := uuid.New()
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
-			return []models.AgentThunderClient{{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
 				ID: bindingID, EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
-				Status: models.AgentThunderStatusCompleted, ThunderClientID: "client-abc",
+				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
 				SecretRefPath: "some/path", ClaimedAt: nil,
-			}}, nil
+			}, nil
 		},
-		MarkClaimedFunc: func(_ uuid.UUID, _ time.Time) (bool, error) { return true, nil },
-		ClearClaimFunc:  func(id uuid.UUID) error { clearClaimCalledFor = id; return nil },
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) { return true, nil },
+		ClearClaimFunc:  func(_ context.Context, id uuid.UUID) error { clearClaimCalledFor = id; return nil },
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{}
 
 	svc := newTestProvisioningService(repo, resolver, store)
-	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
+	_, _, secret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
 
-	require.NoError(t, err)
-	require.Len(t, views, 1)
-	assert.Empty(t, views[0].ClientSecret)
+	require.Error(t, err)
+	assert.Empty(t, secret)
 	assert.Equal(t, bindingID, clearClaimCalledFor, "the claim must be rolled back so a future call can still retrieve this secret")
 }
 
@@ -724,7 +822,7 @@ func TestGetIdentityViews_ExternalAlreadyClaimed_SecretNotReturnedAgain(t *testi
 		},
 	}
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
 			return []models.AgentThunderClient{{
 				ID: uuid.New(), EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
 				Status: models.AgentThunderStatusCompleted, ThunderClientID: "client-abc",
@@ -739,8 +837,35 @@ func TestGetIdentityViews_ExternalAlreadyClaimed_SecretNotReturnedAgain(t *testi
 
 	require.NoError(t, err)
 	require.Len(t, views, 1)
-	assert.Empty(t, views[0].ClientSecret)
+	assert.False(t, views[0].HasUnclaimedSecret)
 	assert.Equal(t, "client-abc", views[0].ClientID)
+}
+
+func TestClaimSecret_AlreadyClaimed_ReturnsCredentialNotAvailable(t *testing.T) {
+	claimedAt := time.Now().Add(-1 * time.Hour)
+	store := &clientmocks.AgentSecretStoreMock{
+		GetFunc: func(context.Context, string) (string, string, error) {
+			t.Fatal("must not read the secret store once a secret has already been claimed")
+			return "", "", nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
+				ID: uuid.New(), EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
+				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-abc",
+				SecretRefPath: "", ClaimedAt: &claimedAt,
+			}, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, _, secret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentCredentialNotAvailable)
+	assert.Empty(t, secret)
 }
 
 func TestGetIdentityViews_Internal_SecretNeverReturned(t *testing.T) {
@@ -751,7 +876,7 @@ func TestGetIdentityViews_Internal_SecretNeverReturned(t *testing.T) {
 		},
 	}
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
 			return []models.AgentThunderClient{{
 				ID: uuid.New(), EnvironmentName: "prod", ProvisioningType: models.AgentProvisioningTypeInternal,
 				Status: models.AgentThunderStatusCompleted, ThunderClientID: "client-xyz",
@@ -766,10 +891,36 @@ func TestGetIdentityViews_Internal_SecretNeverReturned(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, views, 1)
-	assert.Empty(t, views[0].ClientSecret)
+	assert.False(t, views[0].HasUnclaimedSecret)
 	assert.Equal(t, "client-xyz", views[0].ClientID)
 	assert.Equal(t, "platform-thunder-subject-abc123", views[0].RequestedBy,
 		"the audit trail must be visible via GET .../identity regardless of ownership type")
+}
+
+func TestClaimSecret_Internal_RejectedAsInvalidInput(t *testing.T) {
+	store := &clientmocks.AgentSecretStoreMock{
+		GetFunc: func(context.Context, string) (string, string, error) {
+			t.Fatal("an internal agent's secret must never be read via claim")
+			return "", "", nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{
+				ID: uuid.New(), EnvironmentName: "prod", ProvisioningType: models.AgentProvisioningTypeInternal,
+				Status: models.AgentThunderStatusCompleted, ThunderAgentID: "thunder-agent-1", ThunderClientID: "client-xyz",
+				SecretRefPath: "internal/secret/path",
+			}, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, _, secret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "prod")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrInvalidInput)
+	assert.Empty(t, secret)
 }
 
 func TestDeleteAllBindings_DeletesThunderIdentitiesSecretsAndRows(t *testing.T) {
@@ -791,14 +942,14 @@ func TestDeleteAllBindings_DeletesThunderIdentitiesSecretsAndRows(t *testing.T) 
 	}
 	deleteByAgentCalled := false
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByAgentFunc: func(_, _, _ string) ([]models.AgentThunderClient, error) {
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
 			return []models.AgentThunderClient{
 				{ThunderAgentID: "agent-in-dev", EnvironmentName: "dev", SecretRefPath: "path/dev"},
 				{ThunderAgentID: "agent-in-prod", EnvironmentName: "prod", SecretRefPath: "path/prod"},
 				{ThunderAgentID: "", EnvironmentName: "never-provisioned"}, // never made it to Thunder — nothing to delete there
 			}, nil
 		},
-		DeleteByAgentFunc: func(_, _, _ string) error {
+		DeleteByAgentFunc: func(_ context.Context, _, _, _ string) error {
 			deleteByAgentCalled = true
 			return nil
 		},
@@ -820,7 +971,7 @@ func TestDeleteAllBindings_DeletesThunderIdentitiesSecretsAndRows(t *testing.T) 
 func TestProvisionForEnvironmentIfMissing_AlreadyExists_LeavesBindingUntouched(t *testing.T) {
 	getCalled := false
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(org, project, agent, env string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, org, project, agent, env string) (*models.AgentThunderClient, error) {
 			getCalled = true
 			assert.Equal(t, "acme", org)
 			assert.Equal(t, "proj1", project)
@@ -828,7 +979,7 @@ func TestProvisionForEnvironmentIfMissing_AlreadyExists_LeavesBindingUntouched(t
 			assert.Equal(t, "new-env", env)
 			return &models.AgentThunderClient{ID: uuid.New(), Status: models.AgentThunderStatusCompleted}, nil
 		},
-		UpsertFunc: func(*models.AgentThunderClient) error {
+		UpsertFunc: func(_ context.Context, _ *models.AgentThunderClient) error {
 			t.Fatal("must not write a new binding when one already exists")
 			return nil
 		},
@@ -847,13 +998,13 @@ func TestProvisionForEnvironmentIfMissing_AlreadyExists_LeavesBindingUntouched(t
 
 func TestProvisionForEnvironmentIfMissing_Missing_WritesAheadAndAttempts(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return nil, repositories.ErrAgentThunderClientNotFound
 		},
 	}
 	var upserted *models.AgentThunderClient
 	upsertDone := make(chan struct{})
-	repo.UpsertFunc = func(c *models.AgentThunderClient) error {
+	repo.UpsertFunc = func(_ context.Context, c *models.AgentThunderClient) error {
 		upserted = c
 		close(upsertDone)
 		return nil
@@ -861,8 +1012,8 @@ func TestProvisionForEnvironmentIfMissing_Missing_WritesAheadAndAttempts(t *test
 	// The background attempt (triggered by the missing-binding path) will run and
 	// fail fast against the resolver below — give it somewhere harmless to land
 	// instead of panicking on a nil mock function.
-	repo.ClaimForAttemptFunc = func(uuid.UUID) (bool, error) { return true, nil }
-	repo.UpdateAfterAttemptFunc = func(uuid.UUID, repositories.AgentThunderAttemptUpdate) error { return nil }
+	repo.ClaimForAttemptFunc = func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil }
+	repo.UpdateAfterAttemptFunc = func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error { return nil }
 	resolver := &clientmocks.EnvThunderResolverMock{
 		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
 			return nil, thundersvc.ErrThunderNotProvisioned // attempt fails fast; not under test here
@@ -891,7 +1042,7 @@ func TestProvisionForEnvironmentIfMissing_Missing_WritesAheadAndAttempts(t *test
 func TestProvisionForEnvironmentIfMissing_RepoErrorPropagates(t *testing.T) {
 	boom := errors.New("connection refused")
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return nil, boom
 		},
 	}
@@ -914,7 +1065,7 @@ func TestProvisionForEnvironmentIfMissing_RepoErrorPropagates(t *testing.T) {
 
 func TestGetCredentials_Success_DoesNotDestroyStoredSecret(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(org, project, agent, env string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, org, project, agent, env string) (*models.AgentThunderClient, error) {
 			assert.Equal(t, "acme", org)
 			assert.Equal(t, "proj1", project)
 			assert.Equal(t, "my-agent", agent)
@@ -949,7 +1100,7 @@ func TestGetCredentials_Success_DoesNotDestroyStoredSecret(t *testing.T) {
 
 func TestGetCredentials_CalledTwice_BothCallsSucceed(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1", SecretRefPath: "path/to/secret"}, nil
 		},
 	}
@@ -973,7 +1124,7 @@ func TestGetCredentials_CalledTwice_BothCallsSucceed(t *testing.T) {
 
 func TestGetCredentials_NotYetProvisioned_NoBindingRow(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return nil, repositories.ErrAgentThunderClientNotFound
 		},
 	}
@@ -988,7 +1139,7 @@ func TestGetCredentials_NotYetProvisioned_NoBindingRow(t *testing.T) {
 
 func TestGetCredentials_NotYetProvisioned_EmptyThunderAgentID(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New()}, nil // ThunderAgentID empty — still pending
 		},
 	}
@@ -1003,7 +1154,7 @@ func TestGetCredentials_NotYetProvisioned_EmptyThunderAgentID(t *testing.T) {
 
 func TestGetCredentials_NoCredentialAvailable_AfterRevoke(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1", SecretRefPath: ""}, nil
 		},
 	}
@@ -1025,7 +1176,7 @@ func TestGetCredentials_NoCredentialAvailable_AfterRevoke(t *testing.T) {
 func TestGetCredentials_SecretStoreErrorPropagates(t *testing.T) {
 	boom := errors.New("openbao unreachable")
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1", SecretRefPath: "path/to/secret"}, nil
 		},
 	}
@@ -1054,7 +1205,7 @@ func TestGetCredentials_SecretStoreErrorPropagates(t *testing.T) {
 // ("nothing usable is stored right now").
 func TestGetCredentials_SecretMissingFromStore_ReturnsCredentialNotAvailable(t *testing.T) {
 	repo := &repomocks.AgentThunderClientRepositoryMock{
-		GetFunc: func(_, _, _, _ string) (*models.AgentThunderClient, error) {
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
 			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1", SecretRefPath: "path/to/secret"}, nil
 		},
 	}

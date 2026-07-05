@@ -4,6 +4,7 @@
 package repomocks
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -18,34 +19,34 @@ import (
 //
 //		// make and configure a mocked repositories.AgentThunderClientRepository
 //		mockedAgentThunderClientRepository := &AgentThunderClientRepositoryMock{
-//			ClaimForAttemptFunc: func(id uuid.UUID) (bool, error) {
+//			ClaimForAttemptFunc: func(ctx context.Context, id uuid.UUID) (bool, error) {
 //				panic("mock out the ClaimForAttempt method")
 //			},
-//			ClearClaimFunc: func(id uuid.UUID) error {
+//			ClearClaimFunc: func(ctx context.Context, id uuid.UUID) error {
 //				panic("mock out the ClearClaim method")
 //			},
-//			DeleteByAgentFunc: func(orgName string, projectName string, agentName string) error {
+//			DeleteByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) error {
 //				panic("mock out the DeleteByAgent method")
 //			},
-//			FindByAgentFunc: func(orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error) {
+//			FindByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error) {
 //				panic("mock out the FindByAgent method")
 //			},
-//			FindDueFunc: func(now time.Time, limit int) ([]models.AgentThunderClient, error) {
+//			FindDueFunc: func(ctx context.Context, now time.Time, limit int) ([]models.AgentThunderClient, error) {
 //				panic("mock out the FindDue method")
 //			},
-//			GetFunc: func(orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
+//			GetFunc: func(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
 //				panic("mock out the Get method")
 //			},
-//			MarkClaimedFunc: func(id uuid.UUID, claimedAt time.Time) (bool, error) {
+//			MarkClaimedFunc: func(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error) {
 //				panic("mock out the MarkClaimed method")
 //			},
-//			UpdateAfterAttemptFunc: func(id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+//			UpdateAfterAttemptFunc: func(ctx context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 //				panic("mock out the UpdateAfterAttempt method")
 //			},
-//			UpdateSecretRefFunc: func(id uuid.UUID, secretRefPath string) error {
+//			UpdateSecretRefFunc: func(ctx context.Context, id uuid.UUID, secretRefPath string) error {
 //				panic("mock out the UpdateSecretRef method")
 //			},
-//			UpsertFunc: func(client *models.AgentThunderClient) error {
+//			UpsertFunc: func(ctx context.Context, client *models.AgentThunderClient) error {
 //				panic("mock out the Upsert method")
 //			},
 //		}
@@ -56,49 +57,55 @@ import (
 //	}
 type AgentThunderClientRepositoryMock struct {
 	// ClaimForAttemptFunc mocks the ClaimForAttempt method.
-	ClaimForAttemptFunc func(id uuid.UUID) (bool, error)
+	ClaimForAttemptFunc func(ctx context.Context, id uuid.UUID) (bool, error)
 
 	// ClearClaimFunc mocks the ClearClaim method.
-	ClearClaimFunc func(id uuid.UUID) error
+	ClearClaimFunc func(ctx context.Context, id uuid.UUID) error
 
 	// DeleteByAgentFunc mocks the DeleteByAgent method.
-	DeleteByAgentFunc func(orgName string, projectName string, agentName string) error
+	DeleteByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) error
 
 	// FindByAgentFunc mocks the FindByAgent method.
-	FindByAgentFunc func(orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error)
+	FindByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error)
 
 	// FindDueFunc mocks the FindDue method.
-	FindDueFunc func(now time.Time, limit int) ([]models.AgentThunderClient, error)
+	FindDueFunc func(ctx context.Context, now time.Time, limit int) ([]models.AgentThunderClient, error)
 
 	// GetFunc mocks the Get method.
-	GetFunc func(orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error)
+	GetFunc func(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error)
 
 	// MarkClaimedFunc mocks the MarkClaimed method.
-	MarkClaimedFunc func(id uuid.UUID, claimedAt time.Time) (bool, error)
+	MarkClaimedFunc func(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error)
 
 	// UpdateAfterAttemptFunc mocks the UpdateAfterAttempt method.
-	UpdateAfterAttemptFunc func(id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error
+	UpdateAfterAttemptFunc func(ctx context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error
 
 	// UpdateSecretRefFunc mocks the UpdateSecretRef method.
-	UpdateSecretRefFunc func(id uuid.UUID, secretRefPath string) error
+	UpdateSecretRefFunc func(ctx context.Context, id uuid.UUID, secretRefPath string) error
 
 	// UpsertFunc mocks the Upsert method.
-	UpsertFunc func(client *models.AgentThunderClient) error
+	UpsertFunc func(ctx context.Context, client *models.AgentThunderClient) error
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// ClaimForAttempt holds details about calls to the ClaimForAttempt method.
 		ClaimForAttempt []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 		}
 		// ClearClaim holds details about calls to the ClearClaim method.
 		ClearClaim []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 		}
 		// DeleteByAgent holds details about calls to the DeleteByAgent method.
 		DeleteByAgent []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
@@ -108,6 +115,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// FindByAgent holds details about calls to the FindByAgent method.
 		FindByAgent []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
@@ -117,6 +126,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// FindDue holds details about calls to the FindDue method.
 		FindDue []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// Now is the now argument value.
 			Now time.Time
 			// Limit is the limit argument value.
@@ -124,6 +135,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// Get holds details about calls to the Get method.
 		Get []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
@@ -135,6 +148,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// MarkClaimed holds details about calls to the MarkClaimed method.
 		MarkClaimed []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 			// ClaimedAt is the claimedAt argument value.
@@ -142,6 +157,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// UpdateAfterAttempt holds details about calls to the UpdateAfterAttempt method.
 		UpdateAfterAttempt []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 			// Fields is the fields argument value.
@@ -149,6 +166,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// UpdateSecretRef holds details about calls to the UpdateSecretRef method.
 		UpdateSecretRef []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ID is the id argument value.
 			ID uuid.UUID
 			// SecretRefPath is the secretRefPath argument value.
@@ -156,6 +175,8 @@ type AgentThunderClientRepositoryMock struct {
 		}
 		// Upsert holds details about calls to the Upsert method.
 		Upsert []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// Client is the client argument value.
 			Client *models.AgentThunderClient
 		}
@@ -173,19 +194,21 @@ type AgentThunderClientRepositoryMock struct {
 }
 
 // ClaimForAttempt calls ClaimForAttemptFunc.
-func (mock *AgentThunderClientRepositoryMock) ClaimForAttempt(id uuid.UUID) (bool, error) {
+func (mock *AgentThunderClientRepositoryMock) ClaimForAttempt(ctx context.Context, id uuid.UUID) (bool, error) {
 	if mock.ClaimForAttemptFunc == nil {
 		panic("AgentThunderClientRepositoryMock.ClaimForAttemptFunc: method is nil but AgentThunderClientRepository.ClaimForAttempt was just called")
 	}
 	callInfo := struct {
-		ID uuid.UUID
+		Ctx context.Context
+		ID  uuid.UUID
 	}{
-		ID: id,
+		Ctx: ctx,
+		ID:  id,
 	}
 	mock.lockClaimForAttempt.Lock()
 	mock.calls.ClaimForAttempt = append(mock.calls.ClaimForAttempt, callInfo)
 	mock.lockClaimForAttempt.Unlock()
-	return mock.ClaimForAttemptFunc(id)
+	return mock.ClaimForAttemptFunc(ctx, id)
 }
 
 // ClaimForAttemptCalls gets all the calls that were made to ClaimForAttempt.
@@ -193,10 +216,12 @@ func (mock *AgentThunderClientRepositoryMock) ClaimForAttempt(id uuid.UUID) (boo
 //
 //	len(mockedAgentThunderClientRepository.ClaimForAttemptCalls())
 func (mock *AgentThunderClientRepositoryMock) ClaimForAttemptCalls() []struct {
-	ID uuid.UUID
+	Ctx context.Context
+	ID  uuid.UUID
 } {
 	var calls []struct {
-		ID uuid.UUID
+		Ctx context.Context
+		ID  uuid.UUID
 	}
 	mock.lockClaimForAttempt.RLock()
 	calls = mock.calls.ClaimForAttempt
@@ -205,19 +230,21 @@ func (mock *AgentThunderClientRepositoryMock) ClaimForAttemptCalls() []struct {
 }
 
 // ClearClaim calls ClearClaimFunc.
-func (mock *AgentThunderClientRepositoryMock) ClearClaim(id uuid.UUID) error {
+func (mock *AgentThunderClientRepositoryMock) ClearClaim(ctx context.Context, id uuid.UUID) error {
 	if mock.ClearClaimFunc == nil {
 		panic("AgentThunderClientRepositoryMock.ClearClaimFunc: method is nil but AgentThunderClientRepository.ClearClaim was just called")
 	}
 	callInfo := struct {
-		ID uuid.UUID
+		Ctx context.Context
+		ID  uuid.UUID
 	}{
-		ID: id,
+		Ctx: ctx,
+		ID:  id,
 	}
 	mock.lockClearClaim.Lock()
 	mock.calls.ClearClaim = append(mock.calls.ClearClaim, callInfo)
 	mock.lockClearClaim.Unlock()
-	return mock.ClearClaimFunc(id)
+	return mock.ClearClaimFunc(ctx, id)
 }
 
 // ClearClaimCalls gets all the calls that were made to ClearClaim.
@@ -225,10 +252,12 @@ func (mock *AgentThunderClientRepositoryMock) ClearClaim(id uuid.UUID) error {
 //
 //	len(mockedAgentThunderClientRepository.ClearClaimCalls())
 func (mock *AgentThunderClientRepositoryMock) ClearClaimCalls() []struct {
-	ID uuid.UUID
+	Ctx context.Context
+	ID  uuid.UUID
 } {
 	var calls []struct {
-		ID uuid.UUID
+		Ctx context.Context
+		ID  uuid.UUID
 	}
 	mock.lockClearClaim.RLock()
 	calls = mock.calls.ClearClaim
@@ -237,15 +266,17 @@ func (mock *AgentThunderClientRepositoryMock) ClearClaimCalls() []struct {
 }
 
 // DeleteByAgent calls DeleteByAgentFunc.
-func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(orgName string, projectName string, agentName string) error {
+func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(ctx context.Context, orgName string, projectName string, agentName string) error {
 	if mock.DeleteByAgentFunc == nil {
 		panic("AgentThunderClientRepositoryMock.DeleteByAgentFunc: method is nil but AgentThunderClientRepository.DeleteByAgent was just called")
 	}
 	callInfo := struct {
+		Ctx         context.Context
 		OrgName     string
 		ProjectName string
 		AgentName   string
 	}{
+		Ctx:         ctx,
 		OrgName:     orgName,
 		ProjectName: projectName,
 		AgentName:   agentName,
@@ -253,7 +284,7 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(orgName string, proj
 	mock.lockDeleteByAgent.Lock()
 	mock.calls.DeleteByAgent = append(mock.calls.DeleteByAgent, callInfo)
 	mock.lockDeleteByAgent.Unlock()
-	return mock.DeleteByAgentFunc(orgName, projectName, agentName)
+	return mock.DeleteByAgentFunc(ctx, orgName, projectName, agentName)
 }
 
 // DeleteByAgentCalls gets all the calls that were made to DeleteByAgent.
@@ -261,11 +292,13 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(orgName string, proj
 //
 //	len(mockedAgentThunderClientRepository.DeleteByAgentCalls())
 func (mock *AgentThunderClientRepositoryMock) DeleteByAgentCalls() []struct {
+	Ctx         context.Context
 	OrgName     string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
+		Ctx         context.Context
 		OrgName     string
 		ProjectName string
 		AgentName   string
@@ -277,15 +310,17 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgentCalls() []struct {
 }
 
 // FindByAgent calls FindByAgentFunc.
-func (mock *AgentThunderClientRepositoryMock) FindByAgent(orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error) {
+func (mock *AgentThunderClientRepositoryMock) FindByAgent(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error) {
 	if mock.FindByAgentFunc == nil {
 		panic("AgentThunderClientRepositoryMock.FindByAgentFunc: method is nil but AgentThunderClientRepository.FindByAgent was just called")
 	}
 	callInfo := struct {
+		Ctx         context.Context
 		OrgName     string
 		ProjectName string
 		AgentName   string
 	}{
+		Ctx:         ctx,
 		OrgName:     orgName,
 		ProjectName: projectName,
 		AgentName:   agentName,
@@ -293,7 +328,7 @@ func (mock *AgentThunderClientRepositoryMock) FindByAgent(orgName string, projec
 	mock.lockFindByAgent.Lock()
 	mock.calls.FindByAgent = append(mock.calls.FindByAgent, callInfo)
 	mock.lockFindByAgent.Unlock()
-	return mock.FindByAgentFunc(orgName, projectName, agentName)
+	return mock.FindByAgentFunc(ctx, orgName, projectName, agentName)
 }
 
 // FindByAgentCalls gets all the calls that were made to FindByAgent.
@@ -301,11 +336,13 @@ func (mock *AgentThunderClientRepositoryMock) FindByAgent(orgName string, projec
 //
 //	len(mockedAgentThunderClientRepository.FindByAgentCalls())
 func (mock *AgentThunderClientRepositoryMock) FindByAgentCalls() []struct {
+	Ctx         context.Context
 	OrgName     string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
+		Ctx         context.Context
 		OrgName     string
 		ProjectName string
 		AgentName   string
@@ -317,21 +354,23 @@ func (mock *AgentThunderClientRepositoryMock) FindByAgentCalls() []struct {
 }
 
 // FindDue calls FindDueFunc.
-func (mock *AgentThunderClientRepositoryMock) FindDue(now time.Time, limit int) ([]models.AgentThunderClient, error) {
+func (mock *AgentThunderClientRepositoryMock) FindDue(ctx context.Context, now time.Time, limit int) ([]models.AgentThunderClient, error) {
 	if mock.FindDueFunc == nil {
 		panic("AgentThunderClientRepositoryMock.FindDueFunc: method is nil but AgentThunderClientRepository.FindDue was just called")
 	}
 	callInfo := struct {
+		Ctx   context.Context
 		Now   time.Time
 		Limit int
 	}{
+		Ctx:   ctx,
 		Now:   now,
 		Limit: limit,
 	}
 	mock.lockFindDue.Lock()
 	mock.calls.FindDue = append(mock.calls.FindDue, callInfo)
 	mock.lockFindDue.Unlock()
-	return mock.FindDueFunc(now, limit)
+	return mock.FindDueFunc(ctx, now, limit)
 }
 
 // FindDueCalls gets all the calls that were made to FindDue.
@@ -339,10 +378,12 @@ func (mock *AgentThunderClientRepositoryMock) FindDue(now time.Time, limit int) 
 //
 //	len(mockedAgentThunderClientRepository.FindDueCalls())
 func (mock *AgentThunderClientRepositoryMock) FindDueCalls() []struct {
+	Ctx   context.Context
 	Now   time.Time
 	Limit int
 } {
 	var calls []struct {
+		Ctx   context.Context
 		Now   time.Time
 		Limit int
 	}
@@ -353,16 +394,18 @@ func (mock *AgentThunderClientRepositoryMock) FindDueCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *AgentThunderClientRepositoryMock) Get(orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
+func (mock *AgentThunderClientRepositoryMock) Get(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
 	if mock.GetFunc == nil {
 		panic("AgentThunderClientRepositoryMock.GetFunc: method is nil but AgentThunderClientRepository.Get was just called")
 	}
 	callInfo := struct {
+		Ctx             context.Context
 		OrgName         string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string
 	}{
+		Ctx:             ctx,
 		OrgName:         orgName,
 		ProjectName:     projectName,
 		AgentName:       agentName,
@@ -371,7 +414,7 @@ func (mock *AgentThunderClientRepositoryMock) Get(orgName string, projectName st
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(orgName, projectName, agentName, environmentName)
+	return mock.GetFunc(ctx, orgName, projectName, agentName, environmentName)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -379,12 +422,14 @@ func (mock *AgentThunderClientRepositoryMock) Get(orgName string, projectName st
 //
 //	len(mockedAgentThunderClientRepository.GetCalls())
 func (mock *AgentThunderClientRepositoryMock) GetCalls() []struct {
+	Ctx             context.Context
 	OrgName         string
 	ProjectName     string
 	AgentName       string
 	EnvironmentName string
 } {
 	var calls []struct {
+		Ctx             context.Context
 		OrgName         string
 		ProjectName     string
 		AgentName       string
@@ -397,21 +442,23 @@ func (mock *AgentThunderClientRepositoryMock) GetCalls() []struct {
 }
 
 // MarkClaimed calls MarkClaimedFunc.
-func (mock *AgentThunderClientRepositoryMock) MarkClaimed(id uuid.UUID, claimedAt time.Time) (bool, error) {
+func (mock *AgentThunderClientRepositoryMock) MarkClaimed(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error) {
 	if mock.MarkClaimedFunc == nil {
 		panic("AgentThunderClientRepositoryMock.MarkClaimedFunc: method is nil but AgentThunderClientRepository.MarkClaimed was just called")
 	}
 	callInfo := struct {
+		Ctx       context.Context
 		ID        uuid.UUID
 		ClaimedAt time.Time
 	}{
+		Ctx:       ctx,
 		ID:        id,
 		ClaimedAt: claimedAt,
 	}
 	mock.lockMarkClaimed.Lock()
 	mock.calls.MarkClaimed = append(mock.calls.MarkClaimed, callInfo)
 	mock.lockMarkClaimed.Unlock()
-	return mock.MarkClaimedFunc(id, claimedAt)
+	return mock.MarkClaimedFunc(ctx, id, claimedAt)
 }
 
 // MarkClaimedCalls gets all the calls that were made to MarkClaimed.
@@ -419,10 +466,12 @@ func (mock *AgentThunderClientRepositoryMock) MarkClaimed(id uuid.UUID, claimedA
 //
 //	len(mockedAgentThunderClientRepository.MarkClaimedCalls())
 func (mock *AgentThunderClientRepositoryMock) MarkClaimedCalls() []struct {
+	Ctx       context.Context
 	ID        uuid.UUID
 	ClaimedAt time.Time
 } {
 	var calls []struct {
+		Ctx       context.Context
 		ID        uuid.UUID
 		ClaimedAt time.Time
 	}
@@ -433,21 +482,23 @@ func (mock *AgentThunderClientRepositoryMock) MarkClaimedCalls() []struct {
 }
 
 // UpdateAfterAttempt calls UpdateAfterAttemptFunc.
-func (mock *AgentThunderClientRepositoryMock) UpdateAfterAttempt(id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+func (mock *AgentThunderClientRepositoryMock) UpdateAfterAttempt(ctx context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 	if mock.UpdateAfterAttemptFunc == nil {
 		panic("AgentThunderClientRepositoryMock.UpdateAfterAttemptFunc: method is nil but AgentThunderClientRepository.UpdateAfterAttempt was just called")
 	}
 	callInfo := struct {
+		Ctx    context.Context
 		ID     uuid.UUID
 		Fields repositories.AgentThunderAttemptUpdate
 	}{
+		Ctx:    ctx,
 		ID:     id,
 		Fields: fields,
 	}
 	mock.lockUpdateAfterAttempt.Lock()
 	mock.calls.UpdateAfterAttempt = append(mock.calls.UpdateAfterAttempt, callInfo)
 	mock.lockUpdateAfterAttempt.Unlock()
-	return mock.UpdateAfterAttemptFunc(id, fields)
+	return mock.UpdateAfterAttemptFunc(ctx, id, fields)
 }
 
 // UpdateAfterAttemptCalls gets all the calls that were made to UpdateAfterAttempt.
@@ -455,10 +506,12 @@ func (mock *AgentThunderClientRepositoryMock) UpdateAfterAttempt(id uuid.UUID, f
 //
 //	len(mockedAgentThunderClientRepository.UpdateAfterAttemptCalls())
 func (mock *AgentThunderClientRepositoryMock) UpdateAfterAttemptCalls() []struct {
+	Ctx    context.Context
 	ID     uuid.UUID
 	Fields repositories.AgentThunderAttemptUpdate
 } {
 	var calls []struct {
+		Ctx    context.Context
 		ID     uuid.UUID
 		Fields repositories.AgentThunderAttemptUpdate
 	}
@@ -469,21 +522,23 @@ func (mock *AgentThunderClientRepositoryMock) UpdateAfterAttemptCalls() []struct
 }
 
 // UpdateSecretRef calls UpdateSecretRefFunc.
-func (mock *AgentThunderClientRepositoryMock) UpdateSecretRef(id uuid.UUID, secretRefPath string) error {
+func (mock *AgentThunderClientRepositoryMock) UpdateSecretRef(ctx context.Context, id uuid.UUID, secretRefPath string) error {
 	if mock.UpdateSecretRefFunc == nil {
 		panic("AgentThunderClientRepositoryMock.UpdateSecretRefFunc: method is nil but AgentThunderClientRepository.UpdateSecretRef was just called")
 	}
 	callInfo := struct {
+		Ctx           context.Context
 		ID            uuid.UUID
 		SecretRefPath string
 	}{
+		Ctx:           ctx,
 		ID:            id,
 		SecretRefPath: secretRefPath,
 	}
 	mock.lockUpdateSecretRef.Lock()
 	mock.calls.UpdateSecretRef = append(mock.calls.UpdateSecretRef, callInfo)
 	mock.lockUpdateSecretRef.Unlock()
-	return mock.UpdateSecretRefFunc(id, secretRefPath)
+	return mock.UpdateSecretRefFunc(ctx, id, secretRefPath)
 }
 
 // UpdateSecretRefCalls gets all the calls that were made to UpdateSecretRef.
@@ -491,10 +546,12 @@ func (mock *AgentThunderClientRepositoryMock) UpdateSecretRef(id uuid.UUID, secr
 //
 //	len(mockedAgentThunderClientRepository.UpdateSecretRefCalls())
 func (mock *AgentThunderClientRepositoryMock) UpdateSecretRefCalls() []struct {
+	Ctx           context.Context
 	ID            uuid.UUID
 	SecretRefPath string
 } {
 	var calls []struct {
+		Ctx           context.Context
 		ID            uuid.UUID
 		SecretRefPath string
 	}
@@ -505,19 +562,21 @@ func (mock *AgentThunderClientRepositoryMock) UpdateSecretRefCalls() []struct {
 }
 
 // Upsert calls UpsertFunc.
-func (mock *AgentThunderClientRepositoryMock) Upsert(client *models.AgentThunderClient) error {
+func (mock *AgentThunderClientRepositoryMock) Upsert(ctx context.Context, client *models.AgentThunderClient) error {
 	if mock.UpsertFunc == nil {
 		panic("AgentThunderClientRepositoryMock.UpsertFunc: method is nil but AgentThunderClientRepository.Upsert was just called")
 	}
 	callInfo := struct {
+		Ctx    context.Context
 		Client *models.AgentThunderClient
 	}{
+		Ctx:    ctx,
 		Client: client,
 	}
 	mock.lockUpsert.Lock()
 	mock.calls.Upsert = append(mock.calls.Upsert, callInfo)
 	mock.lockUpsert.Unlock()
-	return mock.UpsertFunc(client)
+	return mock.UpsertFunc(ctx, client)
 }
 
 // UpsertCalls gets all the calls that were made to Upsert.
@@ -525,9 +584,11 @@ func (mock *AgentThunderClientRepositoryMock) Upsert(client *models.AgentThunder
 //
 //	len(mockedAgentThunderClientRepository.UpsertCalls())
 func (mock *AgentThunderClientRepositoryMock) UpsertCalls() []struct {
+	Ctx    context.Context
 	Client *models.AgentThunderClient
 } {
 	var calls []struct {
+		Ctx    context.Context
 		Client *models.AgentThunderClient
 	}
 	mock.lockUpsert.RLock()

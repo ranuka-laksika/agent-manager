@@ -84,10 +84,10 @@ type AgentThunderClient struct {
 func (AgentThunderClient) TableName() string { return "agent_thunder_clients" }
 
 // AgentIdentityEnvironmentView is one environment's AgentID binding, shaped for
-// display to a caller. ClientSecret is populated only for an External agent's
-// secret that has not yet been claimed once (Section 6.7 of the AgentID
-// architecture doc) — never for an Internal agent, and never after the first
-// successful claim.
+// display to a caller. This is a safe, side-effect-free read: it never carries
+// a secret, even for an unclaimed External binding — HasUnclaimedSecret only
+// reports whether one is available. ClaimSecret (via the dedicated claim
+// endpoint) is the only way to actually retrieve and consume it.
 type AgentIdentityEnvironmentView struct {
 	EnvironmentName  string                `json:"environmentName"`
 	ProvisioningType AgentProvisioningType `json:"provisioningType"`
@@ -95,14 +95,36 @@ type AgentIdentityEnvironmentView struct {
 	// AgentID is Thunder's own UUID for this identity (the /agents resource ID) —
 	// distinct from ClientID, which is the OAuth2 client_id. Empty until
 	// provisioning actually reaches Thunder (status pending with no attempt yet).
-	AgentID      string `json:"agentId,omitempty"`
-	ClientID     string `json:"clientId,omitempty"`
-	ClientSecret string `json:"clientSecret,omitempty"`
-	LastError    string `json:"lastError,omitempty"`
+	AgentID   string `json:"agentId,omitempty"`
+	ClientID  string `json:"clientId,omitempty"`
+	LastError string `json:"lastError,omitempty"`
+	// HasUnclaimedSecret is true only for a completed External binding whose
+	// secret has never been claimed. Internal agents and already-claimed
+	// External bindings are always false.
+	HasUnclaimedSecret bool `json:"hasUnclaimedSecret"`
 	// RequestedBy is AMS's own record of who triggered this binding — see the
 	// field doc on AgentThunderClient.RequestedBy for why this is tracked here
 	// rather than via Thunder's own owner field.
 	RequestedBy string `json:"requestedBy,omitempty"`
+}
+
+// AgentClaimSecretStatus is the fixed value of AgentClaimSecretResponse.Status —
+// claim has exactly one successful outcome, so this isn't an enum in practice,
+// just a named constant so the literal string exists in one place.
+const AgentClaimSecretStatus = "claimed"
+
+// AgentClaimSecretResponse is returned by the explicit one-time-claim endpoint
+// for an External agent's secret. Calling this endpoint IS the claim: the
+// first successful call returns and permanently destroys the stored secret;
+// every subsequent call fails with a 404 (see utils.ErrAgentCredentialNotAvailable).
+type AgentClaimSecretResponse struct {
+	EnvironmentName string `json:"environmentName"`
+	// AgentID is Thunder's own UUID for this identity (the /agents resource ID) —
+	// distinct from ClientID, which is the OAuth2 client_id.
+	AgentID      string `json:"agentId"`
+	ClientID     string `json:"clientId"`
+	ClientSecret string `json:"clientSecret"`
+	Status       string `json:"status"`
 }
 
 // AgentRegenerateSecretStatus is the fixed value of AgentRegenerateSecretResponse.Status —
