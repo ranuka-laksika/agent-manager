@@ -53,3 +53,13 @@ export {
   type ResourceListShellProps,
   type ResourceListEmptyState,
 } from "./ResourceListShell/ResourceListShell";
+export {
+  APIKeysManager,
+  isApiKeyAuthEnabled,
+  type APIKeysManagerProps,
+  type CreateAPIKeyInput,
+} from "./APIKeysManager/APIKeysManager";
+export {
+  SingleAPIKeyManager,
+  type SingleAPIKeyManagerProps,
+} from "./APIKeysManager/SingleAPIKeyManager";

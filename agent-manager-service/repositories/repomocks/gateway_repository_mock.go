@@ -4,6 +4,7 @@
 package repomocks
 
 import (
+	"context"
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -55,7 +56,7 @@ import (
 //			GetByNameAndOrgIDFunc: func(name string, orgName string) (*models.Gateway, error) {
 //				panic("mock out the GetByNameAndOrgID method")
 //			},
-//			GetByOrganizationIDFunc: func(orgName string) ([]*models.Gateway, error) {
+//			GetByOrganizationIDFunc: func(ctx context.Context, orgName string) ([]*models.Gateway, error) {
 //				panic("mock out the GetByOrganizationID method")
 //			},
 //			GetByUUIDFunc: func(gatewayId string) (*models.Gateway, error) {
@@ -156,7 +157,7 @@ type GatewayRepositoryMock struct {
 	GetByNameAndOrgIDFunc func(name string, orgName string) (*models.Gateway, error)
 
 	// GetByOrganizationIDFunc mocks the GetByOrganizationID method.
-	GetByOrganizationIDFunc func(orgName string) ([]*models.Gateway, error)
+	GetByOrganizationIDFunc func(ctx context.Context, orgName string) ([]*models.Gateway, error)
 
 	// GetByUUIDFunc mocks the GetByUUID method.
 	GetByUUIDFunc func(gatewayId string) (*models.Gateway, error)
@@ -288,6 +289,8 @@ type GatewayRepositoryMock struct {
 		}
 		// GetByOrganizationID holds details about calls to the GetByOrganizationID method.
 		GetByOrganizationID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 		}
@@ -853,19 +856,21 @@ func (mock *GatewayRepositoryMock) GetByNameAndOrgIDCalls() []struct {
 }
 
 // GetByOrganizationID calls GetByOrganizationIDFunc.
-func (mock *GatewayRepositoryMock) GetByOrganizationID(orgName string) ([]*models.Gateway, error) {
+func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error) {
 	if mock.GetByOrganizationIDFunc == nil {
 		panic("GatewayRepositoryMock.GetByOrganizationIDFunc: method is nil but GatewayRepository.GetByOrganizationID was just called")
 	}
 	callInfo := struct {
+		Ctx     context.Context
 		OrgName string
 	}{
+		Ctx:     ctx,
 		OrgName: orgName,
 	}
 	mock.lockGetByOrganizationID.Lock()
 	mock.calls.GetByOrganizationID = append(mock.calls.GetByOrganizationID, callInfo)
 	mock.lockGetByOrganizationID.Unlock()
-	return mock.GetByOrganizationIDFunc(orgName)
+	return mock.GetByOrganizationIDFunc(ctx, orgName)
 }
 
 // GetByOrganizationIDCalls gets all the calls that were made to GetByOrganizationID.
@@ -873,9 +878,11 @@ func (mock *GatewayRepositoryMock) GetByOrganizationID(orgName string) ([]*model
 //
 //	len(mockedGatewayRepository.GetByOrganizationIDCalls())
 func (mock *GatewayRepositoryMock) GetByOrganizationIDCalls() []struct {
+	Ctx     context.Context
 	OrgName string
 } {
 	var calls []struct {
+		Ctx     context.Context
 		OrgName string
 	}
 	mock.lockGetByOrganizationID.RLock()

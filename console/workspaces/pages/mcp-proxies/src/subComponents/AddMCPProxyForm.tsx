@@ -61,10 +61,7 @@ import {
   HelpCircle,
 } from "@wso2/oxygen-ui-icons-react";
 import { useSnackBar } from "@agent-management-platform/views";
-import {
-  normalizeVersion,
-  validateEndpointUrl,
-} from "@agent-management-platform/shared-component";
+import { validateEndpointUrl } from "@agent-management-platform/shared-component";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
 import { MCP_SPEC_VERSION } from "../constants";
 
@@ -185,12 +182,10 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
         setFetchedInfo(result);
         const nextName =
           getServerInfoValue(result.serverInfo, "name") || "mcp-proxy";
-        const nextVersion =
-          normalizeVersion(extractVersionFromUrl(url)) ||
-          normalizeVersion(getServerInfoValue(result.serverInfo, "version")) ||
-          "v1.0";
         setProxyName(nextName);
-        setProxyVersion(nextVersion);
+        setProxyVersion(
+          getServerInfoValue(result.serverInfo, "version") || "v1.0.0",
+        );
         setProxyDescription("");
         setProxyContext(`/default/${nextName}`);
         setProxyTarget(url);
@@ -623,17 +618,6 @@ function getServerInfoValue(
 ): string | undefined {
   const value = serverInfo?.[key];
   return typeof value === "string" ? value : undefined;
-}
-
-function extractVersionFromUrl(value: string): string | undefined {
-  try {
-    const segments = new URL(value).pathname.split("/").filter(Boolean);
-    return [...segments]
-      .reverse()
-      .find((segment) => /^v?\d+(\.\d+)*$/i.test(segment));
-  } catch {
-    return undefined;
-  }
 }
 
 function toHandle(value: string): string {

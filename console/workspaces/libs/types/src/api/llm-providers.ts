@@ -214,7 +214,7 @@ export interface LLMRateLimitingConfig {
   consumerLevel?: RateLimitingScopeConfig;
 }
 
-export type APIKeyLocation = "header" | "query" | "cookie";
+export type APIKeyLocation = "header" | "query";
 
 export interface APIKeySecurity {
   enabled?: boolean;
@@ -487,6 +487,7 @@ export interface LLMProviderAPIKeyPathParams extends LLMProviderPathParams {
 export type CreateLLMProviderAPIKeyPathParams = LLMProviderPathParams;
 export type RotateLLMProviderAPIKeyPathParams = LLMProviderAPIKeyPathParams;
 export type RevokeLLMProviderAPIKeyPathParams = LLMProviderAPIKeyPathParams;
+export type ListLLMProviderAPIKeysPathParams = LLMProviderPathParams;
 
 // -----------------------------------------------------------------------------
 // LLM API keys (proxy)
@@ -499,6 +500,7 @@ export interface LLMProxyAPIKeyPathParams extends LLMProxyPathParams {
 export type CreateLLMProxyAPIKeyPathParams = LLMProxyPathParams;
 export type RotateLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
 export type RevokeLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
+export type ListLLMProxyAPIKeysPathParams = LLMProxyPathParams;
 
 // -----------------------------------------------------------------------------
 // LLM provider consumers

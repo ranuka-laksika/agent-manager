@@ -16,6 +16,13 @@
  * under the License.
  */
 
+import type { AgentPathParams } from "./common";
+import type {
+  CreateLLMAPIKeyRequest,
+  CreateLLMAPIKeyResponse,
+  RotateLLMAPIKeyRequest,
+  RotateLLMAPIKeyResponse,
+} from "./llm-providers";
 import type {
   AgentModelConfigListResponse,
   AgentModelConfigPathParams,
@@ -66,3 +73,26 @@ export type GetAgentMCPConfigPathParams = AgentMCPConfigRequiredPathParams;
 export type UpdateAgentMCPConfigPathParams = UpdateAgentModelConfigPathParams;
 export type DeleteAgentMCPConfigPathParams = DeleteAgentModelConfigPathParams;
 export type ListAgentMCPConfigsQuery = ListAgentModelConfigsQuery;
+
+// -----------------------------------------------------------------------------
+// Per-config MCP API keys (external agents) — keyed by configuration + environment
+// -----------------------------------------------------------------------------
+
+export interface MCPConfigAPIKeysPathParams extends AgentPathParams {
+  configId: string | undefined;
+  envName: string | undefined;
+}
+
+export interface MCPConfigAPIKeyPathParams extends MCPConfigAPIKeysPathParams {
+  keyName: string | undefined;
+}
+
+export type ListMCPConfigAPIKeysPathParams = MCPConfigAPIKeysPathParams;
+export type CreateMCPConfigAPIKeyPathParams = MCPConfigAPIKeysPathParams;
+export type RotateMCPConfigAPIKeyPathParams = MCPConfigAPIKeyPathParams;
+export type RevokeMCPConfigAPIKeyPathParams = MCPConfigAPIKeyPathParams;
+
+export type CreateMCPConfigAPIKeyRequest = CreateLLMAPIKeyRequest;
+export type CreateMCPConfigAPIKeyResponse = CreateLLMAPIKeyResponse;
+export type RotateMCPConfigAPIKeyRequest = RotateLLMAPIKeyRequest;
+export type RotateMCPConfigAPIKeyResponse = RotateLLMAPIKeyResponse;

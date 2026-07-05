@@ -23,7 +23,7 @@ type SecuritySummary struct {
 	Enabled *bool `json:"enabled,omitempty"`
 	// Whether API key security is enabled
 	ApiKeyEnabled *bool `json:"apiKeyEnabled,omitempty"`
-	// Where the API key is located (header/query/cookie)
+	// Where the API key is located (header/query)
 	ApiKeyIn *string `json:"apiKeyIn,omitempty"`
 }
 

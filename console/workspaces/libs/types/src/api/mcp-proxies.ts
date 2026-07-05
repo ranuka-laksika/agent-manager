@@ -123,6 +123,7 @@ export interface MCPProxyAPIKeyPathParams extends GetMCPProxyPathParams {
 export type CreateMCPProxyAPIKeyPathParams = GetMCPProxyPathParams;
 export type RotateMCPProxyAPIKeyPathParams = MCPProxyAPIKeyPathParams;
 export type RevokeMCPProxyAPIKeyPathParams = MCPProxyAPIKeyPathParams;
+export type ListMCPProxyAPIKeysPathParams = GetMCPProxyPathParams;
 export type CreateMCPProxyAPIKeyRequest = CreateLLMAPIKeyRequest;
 export type CreateMCPProxyAPIKeyResponse = CreateLLMAPIKeyResponse;
 export type RotateMCPProxyAPIKeyRequest = RotateLLMAPIKeyRequest;

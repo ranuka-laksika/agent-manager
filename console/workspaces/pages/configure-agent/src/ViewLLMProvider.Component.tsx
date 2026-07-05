@@ -62,6 +62,7 @@ import { ProviderDisplay } from "./AddLLMProvider.Component";
 import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
 import { EmptyConfigCard } from "./Configure/subComponents/EmptyConfigCard";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
+import { LLMProxyAPIKeysSection } from "./Configure/subComponents/LLMProxyAPIKeysSection";
 
 function generateDisplayName(key: string): string {
   switch (key) {
@@ -972,6 +973,16 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
           </Stack>
         </Form.Section>
+
+        {isExternal && providerConfig && (
+          <LLMProxyAPIKeysSection
+            orgName={orgId}
+            projName={projectId}
+            agentName={agentId}
+            configId={configId}
+            envName={selectedEnvName}
+          />
+        )}
 
       </Stack>
 

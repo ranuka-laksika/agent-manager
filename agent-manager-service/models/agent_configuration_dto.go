@@ -75,7 +75,8 @@ type LLMProxyInfo struct {
 	APIKey         *string     `json:"apiKey,omitempty"`   // Only during creation for external agents
 	AuthHeaderName *string     `json:"authHeaderName,omitempty"`
 	ProxyUUID      *string     `json:"proxyUuid"`
-	ProviderName   *string     `json:"providerName"` // Handle/name of the provider
+	ProxyName      *string     `json:"proxyName,omitempty"` // Handle of the LLM proxy (used to manage proxy API keys)
+	ProviderName   *string     `json:"providerName"`        // Handle/name of the provider
 	Policies       []LLMPolicy `json:"policies,omitempty"`
 }
 

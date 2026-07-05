@@ -235,6 +235,7 @@ func (p *LLMProxyProvisioner) ProvisionProxy(ctx context.Context, params Provisi
 			apiKey, err := p.llmProviderAPIKeyService.CreateAPIKey(ctx, params.OrgName, provider.UUID.String(), &models.CreateAPIKeyRequest{
 				Name:        params.ProxyName,
 				DisplayName: params.ProxyName,
+				Purpose:     models.APIKeyPurposeConsoleManaged,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("failed to create provider API key: %w", err)
@@ -291,7 +292,8 @@ func (p *LLMProxyProvisioner) ProvisionProxy(ctx context.Context, params Provisi
 	rb.GatewayUUID = params.Gateway.UUID
 
 	proxyAPIKey, err := p.llmProxyAPIKeyService.CreateAPIKey(ctx, params.OrgName, proxy.Handle, &models.CreateAPIKeyRequest{
-		Name: k8sNameWithSuffix(baseName, "-key"),
+		Name:    k8sNameWithSuffix(baseName, "-key"),
+		Purpose: models.APIKeyPurposeConsoleManaged,
 	})
 	if err != nil {
 		p.RollbackProxy(ctx, rb, params.OrgName)

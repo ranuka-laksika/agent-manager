@@ -17,7 +17,13 @@
  */
 
 import type { AgentPathParams, ListQuery } from "./common";
-import type { LLMPolicy } from "./llm-providers";
+import type {
+  CreateLLMAPIKeyRequest,
+  CreateLLMAPIKeyResponse,
+  LLMPolicy,
+  RotateLLMAPIKeyRequest,
+  RotateLLMAPIKeyResponse,
+} from "./llm-providers";
 
 // -----------------------------------------------------------------------------
 // Agent Model Config - Environment mappings
@@ -150,3 +156,26 @@ export type DeleteAgentModelConfigPathParams =
   AgentModelConfigRequiredPathParams;
 
 export type ListAgentModelConfigsQuery = ListQuery;
+
+// -----------------------------------------------------------------------------
+// Per-config LLM API keys (external agents) — keyed by configuration + environment
+// -----------------------------------------------------------------------------
+
+export interface LLMConfigAPIKeysPathParams extends AgentPathParams {
+  configId: string | undefined;
+  envName: string | undefined;
+}
+
+export interface LLMConfigAPIKeyPathParams extends LLMConfigAPIKeysPathParams {
+  keyName: string | undefined;
+}
+
+export type ListLLMConfigAPIKeysPathParams = LLMConfigAPIKeysPathParams;
+export type CreateLLMConfigAPIKeyPathParams = LLMConfigAPIKeysPathParams;
+export type RotateLLMConfigAPIKeyPathParams = LLMConfigAPIKeyPathParams;
+export type RevokeLLMConfigAPIKeyPathParams = LLMConfigAPIKeyPathParams;
+
+export type CreateLLMConfigAPIKeyRequest = CreateLLMAPIKeyRequest;
+export type CreateLLMConfigAPIKeyResponse = CreateLLMAPIKeyResponse;
+export type RotateLLMConfigAPIKeyRequest = RotateLLMAPIKeyRequest;
+export type RotateLLMConfigAPIKeyResponse = RotateLLMAPIKeyResponse;

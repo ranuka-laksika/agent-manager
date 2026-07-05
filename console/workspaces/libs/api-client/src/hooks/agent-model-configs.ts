@@ -21,9 +21,13 @@ import { useAuthHooks } from "@agent-management-platform/auth";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
 import {
   createAgentModelConfig,
+  createLLMConfigAPIKey,
   deleteAgentModelConfig,
   getAgentModelConfig,
   listAgentModelConfigs,
+  listLLMConfigAPIKeys,
+  revokeLLMConfigAPIKey,
+  rotateLLMConfigAPIKey,
   updateAgentModelConfig,
 } from "../apis/agent-model-configs";
 import type {
@@ -32,9 +36,18 @@ import type {
   AgentModelConfigResponse,
   CreateAgentModelConfigPathParams,
   CreateAgentModelConfigRequest,
+  CreateLLMConfigAPIKeyPathParams,
+  CreateLLMConfigAPIKeyRequest,
+  CreateLLMConfigAPIKeyResponse,
   DeleteAgentModelConfigPathParams,
   ListAgentModelConfigsPathParams,
   ListAgentModelConfigsQuery,
+  ListAPIKeysResponse,
+  ListLLMConfigAPIKeysPathParams,
+  RevokeLLMConfigAPIKeyPathParams,
+  RotateLLMConfigAPIKeyPathParams,
+  RotateLLMConfigAPIKeyRequest,
+  RotateLLMConfigAPIKeyResponse,
   UpdateAgentModelConfigPathParams,
   UpdateAgentModelConfigRequest,
 } from "@agent-management-platform/types";
@@ -121,6 +134,86 @@ export function useDeleteAgentModelConfig() {
     mutationFn: (params) => deleteAgentModelConfig(params, getToken),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY] });
+    },
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Per-config LLM API keys (external agents)
+// -----------------------------------------------------------------------------
+
+const LLM_CONFIG_API_KEY_QUERY_KEY = "llm-config-api-keys";
+
+export function useListLLMConfigAPIKeys(params: ListLLMConfigAPIKeysPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ListAPIKeysResponse>({
+    queryKey: [
+      LLM_CONFIG_API_KEY_QUERY_KEY,
+      params.orgName,
+      params.projName,
+      params.agentName,
+      params.configId,
+      params.envName,
+    ],
+    queryFn: () => listLLMConfigAPIKeys(params, getToken),
+    enabled: !!(
+      params.orgName &&
+      params.projName &&
+      params.agentName &&
+      params.configId &&
+      params.envName
+    ),
+  });
+}
+
+export function useCreateLLMConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    CreateLLMConfigAPIKeyResponse,
+    unknown,
+    { params: CreateLLMConfigAPIKeyPathParams; body: CreateLLMConfigAPIKeyRequest }
+  >({
+    action: { verb: "create", target: "LLM config api key" },
+    mutationFn: ({ params, body }) =>
+      createLLMConfigAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [LLM_CONFIG_API_KEY_QUERY_KEY],
+      });
+    },
+  });
+}
+
+export function useRotateLLMConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    RotateLLMConfigAPIKeyResponse,
+    unknown,
+    { params: RotateLLMConfigAPIKeyPathParams; body: RotateLLMConfigAPIKeyRequest }
+  >({
+    action: { verb: "rotate", target: "LLM config api key" },
+    mutationFn: ({ params, body }) =>
+      rotateLLMConfigAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [LLM_CONFIG_API_KEY_QUERY_KEY],
+      });
+    },
+  });
+}
+
+export function useRevokeLLMConfigAPIKey() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<void, unknown, RevokeLLMConfigAPIKeyPathParams>({
+    action: { verb: "revoke", target: "LLM config api key" },
+    mutationFn: (params) => revokeLLMConfigAPIKey(params, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: [LLM_CONFIG_API_KEY_QUERY_KEY],
+      });
     },
   });
 }

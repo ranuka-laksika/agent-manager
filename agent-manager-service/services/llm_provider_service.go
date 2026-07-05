@@ -65,6 +65,7 @@ type LLMProviderService struct {
 	gatewayRepo        repositories.GatewayRepository
 	agentMappingRepo   repositories.EnvAgentModelMappingRepository
 	monitorMappingRepo repositories.MonitorLLMMappingRepository
+	apiKeyService      *LLMProviderAPIKeyService
 }
 
 // NewLLMProviderService creates a new LLM provider service
@@ -79,6 +80,7 @@ func NewLLMProviderService(
 	gatewayRepo repositories.GatewayRepository,
 	agentMappingRepo repositories.EnvAgentModelMappingRepository,
 	monitorMappingRepo repositories.MonitorLLMMappingRepository,
+	apiKeyService *LLMProviderAPIKeyService,
 ) *LLMProviderService {
 	return &LLMProviderService{
 		db:                 db,
@@ -91,6 +93,7 @@ func NewLLMProviderService(
 		gatewayRepo:        gatewayRepo,
 		agentMappingRepo:   agentMappingRepo,
 		monitorMappingRepo: monitorMappingRepo,
+		apiKeyService:      apiKeyService,
 	}
 }
 
@@ -388,6 +391,25 @@ func (s *LLMProviderService) Update(ctx context.Context, providerID, orgName str
 		updates.Configuration.Upstream.Main.Auth.Value = nil
 	}
 
+	// Snapshot whether API key auth was enabled before this update, so we can revoke
+	// user-managed keys below if the user is turning it off. The read must succeed: a
+	// swallowed error here would leave the snapshot at false and silently skip revocation,
+	// so surface it to the caller instead of proceeding with a stale snapshot.
+	existing, err := s.resolveProvider(providerID, orgName)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			slog.Warn("LLMProviderService.Update: provider not found", "orgName", orgName, "providerID", providerID)
+			return nil, utils.ErrLLMProviderNotFound
+		}
+		slog.Error("LLMProviderService.Update: failed to read provider before update", "orgName", orgName, "providerID", providerID, "error", err)
+		return nil, fmt.Errorf("failed to read provider before update: %w", err)
+	}
+	if existing == nil {
+		slog.Warn("LLMProviderService.Update: provider not found", "orgName", orgName, "providerID", providerID)
+		return nil, utils.ErrLLMProviderNotFound
+	}
+	apiKeyAuthWasEnabled := isAPIKeyAuthEnabled(existing.Configuration.Security)
+
 	// Update provider
 	slog.Info("LLMProviderService.Update: updating provider in database", "orgName", orgName, "providerID", providerID)
 	if err := s.providerRepo.Update(updates, providerID, orgName); err != nil {
@@ -417,6 +439,15 @@ func (s *LLMProviderService) Update(ctx context.Context, providerID, orgName str
 		if err := json.Unmarshal([]byte(updated.ModelList), &updated.ModelProviders); err != nil {
 			slog.Error("LLMProviderService.Update: failed to parse model providers", "orgName", orgName, "providerID", providerID, "error", err)
 			return nil, fmt.Errorf("failed to parse model providers: %w", err)
+		}
+	}
+
+	// If API key authentication was just turned off, revoke all user-managed API keys for
+	// this provider. Best-effort: log and continue so a revoke failure doesn't fail the update.
+	if apiKeyAuthWasEnabled && !isAPIKeyAuthEnabled(updated.Configuration.Security) && s.apiKeyService != nil {
+		if err := s.apiKeyService.RevokeAllUserManagedKeys(ctx, orgName, providerID); err != nil {
+			slog.Warn("LLMProviderService.Update: failed to revoke user-managed API keys after disabling API key security",
+				"orgName", orgName, "providerID", providerID, "error", err)
 		}
 	}
 

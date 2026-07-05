@@ -18,16 +18,21 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
+	"gorm.io/gorm"
 )
 
 // LLMProxyAPIKeyService handles API key management for LLM proxies
 type LLMProxyAPIKeyService struct {
 	proxyRepo   repositories.LLMProxyRepository
+	apiKeyRepo  repositories.APIKeyRepository
+	ocClient    client.OpenChoreoClient
 	broadcaster apiKeyBroadcaster
 }
 
@@ -37,15 +42,70 @@ func NewLLMProxyAPIKeyService(
 	gatewayRepo repositories.GatewayRepository,
 	gatewayService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
+	ocClient client.OpenChoreoClient,
 ) *LLMProxyAPIKeyService {
 	return &LLMProxyAPIKeyService{
-		proxyRepo: proxyRepo,
+		proxyRepo:  proxyRepo,
+		apiKeyRepo: apiKeyRepo,
+		ocClient:   ocClient,
 		broadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
 			gatewayService: gatewayService,
 			apiKeyRepo:     apiKeyRepo,
 		},
 	}
+}
+
+// resolveProjectScopedProxy looks up an LLM proxy and validates that it belongs
+// to the caller's project. The project name is resolved to its UUID via
+// OpenChoreo, then the proxy lookup is scoped to org + project + proxy so a
+// proxy owned by a different project is reported as not found rather than being
+// treated as a wildcard match.
+func (s *LLMProxyAPIKeyService) resolveProjectScopedProxy(
+	ctx context.Context,
+	orgID, projName, proxyID string,
+) (*models.LLMProxy, error) {
+	project, err := s.ocClient.GetProject(ctx, orgID, projName)
+	if err != nil {
+		if errors.Is(err, utils.ErrProjectNotFound) {
+			return nil, utils.ErrProjectNotFound
+		}
+		return nil, fmt.Errorf("failed to resolve project: %w", err)
+	}
+	if project == nil {
+		return nil, utils.ErrProjectNotFound
+	}
+
+	proxy, err := s.proxyRepo.GetByIDAndProject(proxyID, orgID, project.UUID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, utils.ErrLLMProxyNotFound
+		}
+		return nil, fmt.Errorf("failed to get LLM proxy: %w", err)
+	}
+	if proxy == nil {
+		return nil, utils.ErrLLMProxyNotFound
+	}
+	return proxy, nil
+}
+
+// ListAPIKeys returns the masked, user-managed (permanent) API keys for an LLM proxy.
+// The plain key value is never returned — only the masked representation.
+func (s *LLMProxyAPIKeyService) ListAPIKeys(
+	ctx context.Context,
+	orgID, projName, proxyID string,
+) (*models.ListAPIKeysResponse, error) {
+	proxy, err := s.resolveProjectScopedProxy(ctx, orgID, projName, proxyID)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := s.apiKeyRepo.ListByArtifact(ctx, proxy.UUID.String())
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API keys: %w", err)
+	}
+
+	return &models.ListAPIKeysResponse{Keys: models.ToUserManagedAPIKeyInfos(stored)}, nil
 }
 
 // CreateAPIKey generates an API key for an LLM proxy and broadcasts it to all gateways
@@ -61,7 +121,7 @@ func (s *LLMProxyAPIKeyService) CreateAPIKey(
 	if proxy == nil {
 		return nil, utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastCreate(orgID, proxyID, proxy.UUID.String(), req)
+	return s.broadcaster.broadcastCreate(ctx, orgID, proxyID, proxy.UUID.String(), req)
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to all gateways for this organization.
@@ -76,7 +136,7 @@ func (s *LLMProxyAPIKeyService) RevokeAPIKey(
 	if proxy == nil {
 		return utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastRevoke(orgID, proxyID, proxy.UUID.String(), keyName)
+	return s.broadcaster.broadcastRevoke(ctx, orgID, proxyID, proxy.UUID.String(), keyName)
 }
 
 // RotateAPIKey generates a new API key value and broadcasts the update to all gateways.
@@ -93,5 +153,5 @@ func (s *LLMProxyAPIKeyService) RotateAPIKey(
 	if proxy == nil {
 		return nil, utils.ErrLLMProxyNotFound
 	}
-	return s.broadcaster.broadcastRotate(orgID, proxyID, proxy.UUID.String(), keyName, req)
+	return s.broadcaster.broadcastRotate(ctx, orgID, proxyID, proxy.UUID.String(), keyName, req)
 }

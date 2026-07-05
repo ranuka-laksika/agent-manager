@@ -25,8 +25,10 @@ import type {
   DeleteMCPProxyPathParams,
   FetchMCPProxyServerInfoPathParams,
   GetMCPProxyPathParams,
+  ListAPIKeysResponse,
   ListMCPProxiesPathParams,
   ListMCPProxiesQuery,
+  ListMCPProxyAPIKeysPathParams,
   MCPProxy,
   MCPProxyListResponse,
   MCPServerInfoFetchRequest,
@@ -44,6 +46,7 @@ import {
   fetchMCPProxyServerInfo,
   getMCPProxy,
   listMCPProxies,
+  listMCPProxyAPIKeys,
   revokeMCPProxyAPIKey,
   rotateMCPProxyAPIKey,
   updateMCPProxy,
@@ -132,8 +135,18 @@ export function useFetchMCPProxyServerInfo() {
   });
 }
 
+export function useListMCPProxyAPIKeys(params: ListMCPProxyAPIKeysPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<ListAPIKeysResponse>({
+    queryKey: ["mcp-proxy-api-keys", params.orgName, params.proxyId],
+    queryFn: () => listMCPProxyAPIKeys(params, getToken),
+    enabled: !!(params.orgName && params.proxyId),
+  });
+}
+
 export function useCreateMCPProxyAPIKey() {
   const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
   return useApiMutation<
     CreateMCPProxyAPIKeyResponse,
     unknown,
@@ -142,11 +155,15 @@ export function useCreateMCPProxyAPIKey() {
     action: { verb: "create", target: "mcp proxy api key" },
     mutationFn: ({ params, body }) =>
       createMCPProxyAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxy-api-keys"] });
+    },
   });
 }
 
 export function useRotateMCPProxyAPIKey() {
   const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
   return useApiMutation<
     RotateMCPProxyAPIKeyResponse,
     unknown,
@@ -155,13 +172,20 @@ export function useRotateMCPProxyAPIKey() {
     action: { verb: "rotate", target: "mcp proxy api key" },
     mutationFn: ({ params, body }) =>
       rotateMCPProxyAPIKey(params, body, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxy-api-keys"] });
+    },
   });
 }
 
 export function useRevokeMCPProxyAPIKey() {
   const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
   return useApiMutation<void, unknown, RevokeMCPProxyAPIKeyPathParams>({
     action: { verb: "revoke", target: "mcp proxy api key" },
     mutationFn: (params) => revokeMCPProxyAPIKey(params, getToken),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcp-proxy-api-keys"] });
+    },
   });
 }
