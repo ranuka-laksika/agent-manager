@@ -229,7 +229,8 @@ func thunderBaseURLCandidates(org, env string) []thunderURLCandidate {
 		{baseURL: externalBaseURL},
 	}
 	if config.GetConfig().IsLocalDevEnv {
-		candidates = append(candidates,
+		candidates = append(
+			candidates,
 			thunderURLCandidate{baseURL: externalBaseURL, resolveToHost: "host.docker.internal:8080"},
 			thunderURLCandidate{baseURL: externalBaseURL, resolveToHost: "127.0.0.1:8080"},
 		)

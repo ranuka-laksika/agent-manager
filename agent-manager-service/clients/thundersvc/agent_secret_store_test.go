@@ -34,9 +34,11 @@ type fakeOpenBaoReadWriter struct {
 func (f *fakeOpenBaoReadWriter) ReadWithContext(ctx context.Context, path string) (*vault.Secret, error) {
 	return f.ReadWithContextFunc(ctx, path)
 }
+
 func (f *fakeOpenBaoReadWriter) WriteWithContext(ctx context.Context, path string, data map[string]interface{}) (*vault.Secret, error) {
 	return f.WriteWithContextFunc(ctx, path, data)
 }
+
 func (f *fakeOpenBaoReadWriter) DeleteWithContext(ctx context.Context, path string) (*vault.Secret, error) {
 	return f.DeleteWithContextFunc(ctx, path)
 }
@@ -96,7 +98,7 @@ func TestAgentSecretStore_Store_RejectsPathBreakingSegments(t *testing.T) {
 	rw := &fakeOpenBaoReadWriter{
 		WriteWithContextFunc: func(context.Context, string, map[string]interface{}) (*vault.Secret, error) {
 			t.Fatal("must not write to OpenBao when a path segment is invalid")
-			return nil, nil
+			return &vault.Secret{}, nil
 		},
 	}
 	store := newAgentSecretStoreWithReadWriter(rw, "secret")
@@ -145,7 +147,7 @@ func TestAgentSecretStore_Get_Success(t *testing.T) {
 func TestAgentSecretStore_Get_NotFound(t *testing.T) {
 	rw := &fakeOpenBaoReadWriter{
 		ReadWithContextFunc: func(_ context.Context, _ string) (*vault.Secret, error) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // simulates OpenBao's real (nil, nil) response for a missing secret
 		},
 	}
 	store := newAgentSecretStoreWithReadWriter(rw, "secret")
@@ -160,7 +162,7 @@ func TestAgentSecretStore_Delete(t *testing.T) {
 	rw := &fakeOpenBaoReadWriter{
 		DeleteWithContextFunc: func(_ context.Context, p string) (*vault.Secret, error) {
 			deletedPath = p
-			return nil, nil
+			return nil, nil //nolint:nilnil // matches OpenBao's real DeleteWithContext return shape on success
 		},
 	}
 	store := newAgentSecretStoreWithReadWriter(rw, "secret")

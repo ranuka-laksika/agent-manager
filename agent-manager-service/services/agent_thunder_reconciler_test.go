@@ -161,18 +161,23 @@ type fakeProvisioningService struct {
 
 func (f *fakeProvisioningService) ProvisionForAgent(context.Context, string, string, string, models.AgentProvisioningType, []string, string) {
 }
+
 func (f *fakeProvisioningService) ProvisionForEnvironmentIfMissing(context.Context, string, string, string, string, models.AgentProvisioningType, string) (bool, error) {
 	return false, nil
 }
+
 func (f *fakeProvisioningService) AttemptProvision(ctx context.Context, binding models.AgentThunderClient) {
 	f.attemptFunc(ctx, binding)
 }
+
 func (f *fakeProvisioningService) GetCredentials(context.Context, string, string, string, string) (string, string, string, error) {
 	return "", "", "", nil
 }
+
 func (f *fakeProvisioningService) RegenerateSecret(context.Context, string, string, string, string) (models.AgentProvisioningType, string, string, error) {
 	return "", "", "", nil
 }
+
 func (f *fakeProvisioningService) RevokeSecret(context.Context, string, string, string, string) (string, error) {
 	return "", nil
 }
@@ -180,6 +185,7 @@ func (f *fakeProvisioningService) DeleteAllBindings(context.Context, string, str
 func (f *fakeProvisioningService) GetIdentityViews(context.Context, string, string, string) ([]models.AgentIdentityEnvironmentView, error) {
 	return nil, nil
 }
+
 func (f *fakeProvisioningService) ClaimSecret(context.Context, string, string, string, string) (string, string, string, error) {
 	return "", "", "", nil
 }

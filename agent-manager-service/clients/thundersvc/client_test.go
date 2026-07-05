@@ -54,7 +54,7 @@ func TestNewThunderClientWithDialOverride_UsesOverrideAddress(t *testing.T) {
 	require.NoError(t, err)
 	resp, err := tc.httpClient.Do(req)
 	require.NoError(t, err, "must actually connect via the override address, not the unreachable base URL host")
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Equal(t, "unreachable.invalid:9999", gotHostHeader, "Host header must stay the base URL's host for ingress routing")
@@ -77,7 +77,7 @@ func TestNewThunderClientWithDialOverride_EmptyOverrideDialsBaseURLDirectly(t *t
 	require.NoError(t, err)
 	resp, err := tc.httpClient.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 }

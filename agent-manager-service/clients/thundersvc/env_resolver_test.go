@@ -80,7 +80,7 @@ func TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments(t *testing.T) {
 	reader := &fakeOpenBaoReader{
 		ReadWithContextFunc: func(context.Context, string) (*vault.Secret, error) {
 			t.Fatal("must not read OpenBao when a segment is invalid")
-			return nil, nil
+			return &vault.Secret{}, nil
 		},
 	}
 	resolver := newEnvThunderResolverWithReader(reader, "secret", fakeResolveBaseURL)
@@ -142,18 +142,22 @@ func TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight(t
 
 	const goroutines = 20
 	clients := make([]ThunderClient, goroutines)
+	errs := make([]error, goroutines)
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 	for i := range goroutines {
 		go func(idx int) {
 			defer wg.Done()
 			c, err := resolver.Resolve(context.Background(), "acme", "staging")
-			require.NoError(t, err)
+			errs[idx] = err
 			clients[idx] = c
 		}(i)
 	}
 	wg.Wait()
 
+	for i, err := range errs {
+		require.NoError(t, err, "goroutine %d", i)
+	}
 	assert.EqualValues(t, 1, atomic.LoadInt64(&readCalls), "concurrent cache misses for the same key must share one OpenBao read")
 	assert.EqualValues(t, 1, atomic.LoadInt64(&probeCalls), "concurrent cache misses for the same key must share one base-URL probe")
 	for i := 1; i < goroutines; i++ {
@@ -180,7 +184,7 @@ func TestEnvThunderResolver_Resolve_DifferentEnvironmentsAreNotCachedTogether(t 
 func TestEnvThunderResolver_Resolve_NotProvisioned_NilSecret(t *testing.T) {
 	reader := &fakeOpenBaoReader{
 		ReadWithContextFunc: func(_ context.Context, _ string) (*vault.Secret, error) {
-			return nil, nil
+			return nil, nil //nolint:nilnil // simulates OpenBao's real (nil, nil) response for a missing secret
 		},
 	}
 	resolver := newEnvThunderResolverWithReader(reader, "secret", fakeResolveBaseURL)

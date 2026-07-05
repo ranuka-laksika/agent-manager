@@ -2905,6 +2905,18 @@ func (s *agentManagerService) GetAgentIdentity(ctx context.Context, orgName stri
 // destroys the stored secret. Internal agents are rejected; use
 // GetAgentCredentials instead.
 func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error) {
+	agent, err := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to fetch agent for identity secret claim", "agentName", agentName, "error", err)
+		return nil, translateAgentError(err)
+	}
+	if agent.Provisioning.Type != string(utils.ExternalAgent) {
+		return nil, fmt.Errorf(
+			"%w: agent %q is an internal agent — internal agent credentials are retrieved via GetAgentCredentials, not claim",
+			utils.ErrInvalidInput, agentName,
+		)
+	}
+
 	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.ClaimSecret(ctx, orgName, projectName, agentName, environmentName)
 	if err != nil {
 		return nil, err
@@ -2976,7 +2988,8 @@ func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, orgNam
 	if agent.Provisioning.Type != string(utils.ExternalAgent) {
 		return models.AgentIdentityEnvironmentView{}, false, fmt.Errorf(
 			"%w: agent %q is an internal agent — internal agents receive an AgentID automatically when promoted to a new environment, not via this endpoint",
-			utils.ErrInvalidInput, agentName)
+			utils.ErrInvalidInput, agentName,
+		)
 	}
 
 	if _, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName); err != nil {
@@ -2990,7 +3003,8 @@ func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, orgNam
 	}
 
 	alreadyExisted, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
-		ctx, orgName, projectName, agentName, environmentName, models.AgentProvisioningTypeExternal, requestedBy)
+		ctx, orgName, projectName, agentName, environmentName, models.AgentProvisioningTypeExternal, requestedBy,
+	)
 	if err != nil {
 		return models.AgentIdentityEnvironmentView{}, false, err
 	}
@@ -3026,7 +3040,8 @@ func (s *agentManagerService) GetAgentCredentials(ctx context.Context, orgName s
 	if agent.Provisioning.Type != string(utils.InternalAgent) {
 		return models.AgentCredentialsResponse{}, fmt.Errorf(
 			"%w: agent %q is an external agent — external agent credentials are retrieved via POST .../identity/claim (one-time) or POST .../identity/regenerate, not this endpoint",
-			utils.ErrInvalidInput, agentName)
+			utils.ErrInvalidInput, agentName,
+		)
 	}
 
 	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.GetCredentials(ctx, orgName, projectName, agentName, environmentName)

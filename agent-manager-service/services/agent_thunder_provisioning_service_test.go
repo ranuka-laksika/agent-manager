@@ -490,9 +490,9 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 	}
 
 	bindingID := uuid.New()
-	alreadyClaimedAt := time.Now().Add(-1 * time.Hour) // simulates a prior GetIdentityViews claim
+	alreadyClaimedAt := time.Now().Add(-1 * time.Hour) // simulates a prior ClaimSecret claim
 	var currentSecretRef string
-	var currentClaimedAt *time.Time = &alreadyClaimedAt
+	currentClaimedAt := &alreadyClaimedAt
 
 	repo := &repomocks.AgentThunderClientRepositoryMock{
 		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
@@ -509,8 +509,11 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 				SecretRefPath: currentSecretRef, ClaimedAt: currentClaimedAt,
 			}}, nil
 		},
-		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error { currentSecretRef = secretRefPath; return nil },
-		ClearClaimFunc:      func(_ context.Context, _ uuid.UUID) error { currentClaimedAt = nil; return nil },
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error {
+			currentSecretRef = secretRefPath
+			return nil
+		},
+		ClearClaimFunc: func(_ context.Context, _ uuid.UUID) error { currentClaimedAt = nil; return nil },
 		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, t time.Time) (bool, error) {
 			if currentClaimedAt != nil {
 				return false, nil
@@ -724,8 +727,14 @@ func TestClaimSecret_ExternalUnclaimedSecret_ReturnedOnceThenDestroyed(t *testin
 				SecretRefPath: "some/path", ClaimedAt: claimedAt,
 			}, nil
 		},
-		MarkClaimedFunc:     func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) { markClaimedCalled = true; return true, nil },
-		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error { clearedSecretRef = secretRefPath == ""; return nil },
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) {
+			markClaimedCalled = true
+			return true, nil
+		},
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, secretRefPath string) error {
+			clearedSecretRef = secretRefPath == ""
+			return nil
+		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{}
 
@@ -989,7 +998,8 @@ func TestProvisionForEnvironmentIfMissing_AlreadyExists_LeavesBindingUntouched(t
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	alreadyExisted, err := svc.ProvisionForEnvironmentIfMissing(
-		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeExternal, "user-1")
+		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeExternal, "user-1",
+	)
 
 	require.NoError(t, err)
 	assert.True(t, alreadyExisted)
@@ -1023,7 +1033,8 @@ func TestProvisionForEnvironmentIfMissing_Missing_WritesAheadAndAttempts(t *test
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	alreadyExisted, err := svc.ProvisionForEnvironmentIfMissing(
-		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeInternal, "user-1")
+		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeInternal, "user-1",
+	)
 
 	require.NoError(t, err)
 	assert.False(t, alreadyExisted)
@@ -1051,7 +1062,8 @@ func TestProvisionForEnvironmentIfMissing_RepoErrorPropagates(t *testing.T) {
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	_, err := svc.ProvisionForEnvironmentIfMissing(
-		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeExternal, "user-1")
+		context.Background(), "acme", "proj1", "my-agent", "new-env", models.AgentProvisioningTypeExternal, "user-1",
+	)
 
 	require.Error(t, err)
 	assert.False(t, errors.Is(err, repositories.ErrAgentThunderClientNotFound), "a real repo error must not be mistaken for not-found")

@@ -166,7 +166,8 @@ func TestAgentThunderAppName_DifferentEnvsProduceDifferentNames(t *testing.T) {
 
 func TestAgentThunderAppName_TruncatesAt100Chars(t *testing.T) {
 	got := AgentThunderAppName(
-		strings.Repeat("o", 40), strings.Repeat("e", 40), strings.Repeat("p", 40), strings.Repeat("a", 40))
+		strings.Repeat("o", 40), strings.Repeat("e", 40), strings.Repeat("p", 40), strings.Repeat("a", 40),
+	)
 	if len(got) > 100 {
 		t.Errorf("expected app name truncated to 100 chars, got %d chars: %q", len(got), got)
 	}

@@ -18,15 +18,19 @@ package services
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
+	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 // stubAgentThunderProvisioning implements AgentThunderProvisioningService by
@@ -36,10 +40,15 @@ import (
 type stubAgentThunderProvisioning struct {
 	AgentThunderProvisioningService
 	RegenerateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
+	ClaimFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
 }
 
 func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
 	return s.RegenerateFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
+	return s.ClaimFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
@@ -196,4 +205,71 @@ func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testin
 		"an Internal agent must ALSO get its freshly regenerated secret back — regenerate is not the "+
 			"one-time-claim endpoint, withholding it here would just force a second call to see it")
 	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
+}
+
+func TestClaimAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.ExternalAgent)}}, nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
+			return "agent-uuid", "client-abc", "claimed-secret-xyz", nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	resp, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err)
+	assert.Equal(t, "dev", resp.EnvironmentName)
+	assert.Equal(t, "agent-uuid", resp.AgentID)
+	assert.Equal(t, "client-abc", resp.ClientID)
+	assert.Equal(t, "claimed-secret-xyz", resp.ClientSecret)
+	assert.Equal(t, models.AgentClaimSecretStatus, resp.Status)
+}
+
+func TestClaimAgentIdentitySecret_InternalAgent_RejectedBeforeClaim(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.InternalAgent)}}, nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
+			t.Fatal("must not attempt to claim a secret for an internal agent")
+			return "", "", "", nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrInvalidInput)
+}
+
+// TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError guards against a
+// stale local binding surviving a best-effort cleanup: the claim must be
+// rejected as soon as the agent's own source-of-truth record (OpenChoreo) is
+// missing, without ever reaching the Thunder provisioning layer.
+func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
+	boom := errors.New("component not found")
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return nil, boom
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
+			t.Fatal("must not attempt to claim a secret when the agent itself cannot be fetched")
+			return "", "", "", nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.Error(t, err)
 }
