@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck source-path=SCRIPTDIR
 set -euo pipefail
 
 # Provisions a dedicated Thunder ID instance for ONE environment (the home of that
@@ -57,6 +58,26 @@ set -euo pipefail
 #     tokens carry once any amp:* scope is requested, since ThunderID composes aud from
 #     the resource server(s) resolved via the granted scopes. A scopeless
 #     client_credentials token instead carries the calling client's own ID as aud.)
+#   Non-local-dev deployments (e.g. a VM — see deployments/vm/lib-vm.sh, which sets
+#   all three of these together, deployment-wide, whenever it provisions env-Thunder):
+#   - THUNDER_HOST_BASE_DOMAIN (default: amp.localhost) — the domain suffix env-Thunder's
+#     hostnames are built from ("<org>-<env>.thunder.<this>"). MUST be set to the
+#     identical value in agent-manager-service's own config (same env var name) on
+#     any given deployment — see clients/thundersvc/naming.go's ThunderHost, which
+#     independently computes the same value and has no way to learn about a
+#     one-off override here.
+#   - TLS_ENABLED (default: false) — when true, the issuer/publicUrl become
+#     https://<host> with no explicit port (a VM's Caddy terminates TLS on the
+#     standard HTTPS port) instead of http://<host>:8080 (the k3d gateway's
+#     plain-HTTP port used in local dev). Same flag agent-manager-service and the
+#     VM's own platform-Thunder Helm args already use for this exact purpose.
+#   - SKIP_CA_BUNDLE_TRUST (default: false) — skip fetching/mounting a custom CA
+#     bundle for the platform-Thunder trusted-issuer JWKS fetch. Set this when
+#     platform Thunder's issuer is already backed by a real, publicly-trusted CA
+#     (e.g. Let's Encrypt via a VM's Caddy) — the container's default trust store
+#     already covers it, so there's nothing custom to mount. Leave false for local
+#     dev, where platform Thunder's HTTPS gateway uses a self-signed CA that
+#     nothing trusts by default.
 
 # ---------------------------------------------------------------------------
 # Pure helpers (sourced by the test suite; keep free of side effects).
@@ -76,60 +97,28 @@ _sha256() {
   fi
 }
 
-# _sha6 STRING -> first 6 hex chars of its sha256 (portable: shasum or sha256sum).
-_sha6() {
-  if command -v shasum >/dev/null 2>&1; then
-    printf '%s' "$1" | shasum -a 256 | cut -c1-6
-  else
-    printf '%s' "$1" | sha256sum | cut -c1-6
+# Load the shared Thunder naming helpers (_sha6/thunder_release_name/
+# thunder_namespace/thunder_host/thunder_issuer) — the single source of truth
+# for this derivation, see deployments/scripts/thunder-naming.sh. Prefers a
+# local sibling file (checked-out repo, or the test suite sourcing this
+# script); falls back to fetching it from the same ref this script itself
+# would be fetched from when piped via curl | bash.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh" ]; then
+  # shellcheck source=thunder-naming.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/thunder-naming.sh"
+else
+  _naming_lib_url="${THUNDER_NAMING_LIB_URL:-${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}/thunder-naming.sh}"
+  _naming_lib_tmp="$(mktemp)"
+  if ! curl -fsSL "${_naming_lib_url}" -o "${_naming_lib_tmp}"; then
+    echo "❌ Failed to fetch Thunder naming helpers from ${_naming_lib_url}" >&2
+    rm -f "${_naming_lib_tmp}"
+    exit 1
   fi
-}
-
-# thunder_release_name ORG ENV -> helm release name, <=53 chars, collision-safe.
-# Twin of the gateway release `amp-thunder-<org>-<env>`.
-thunder_release_name() {
-  local org env full hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  full="amp-thunder-${org}-${env}"
-  if [ "${#full}" -le 53 ]; then
-    printf '%s' "${full%-}"
-    return 0
-  fi
-  # Truncate the readable part and append a deterministic hash of the FULL input
-  # so distinct environments never collapse into one shared instance.
-  hash="$(_sha6 "${org}/${env}")"
-  prefix="${full:0:46}"
-  prefix="${prefix%-}"
-  printf '%s-%s' "$prefix" "$hash"
-}
-
-# thunder_namespace ORG ENV -> dedicated namespace (mirrors the release name).
-thunder_namespace() {
-  thunder_release_name "$1" "$2"
-}
-
-# thunder_host ORG ENV -> single DNS label under thunder.amp.localhost
-# (wildcard-cert friendly: *.thunder.amp.localhost), capped at 63 characters.
-thunder_host() {
-  local org env label hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  label="${org}-${env}"
-  if [ "${#label}" -le 63 ]; then
-    printf '%s.thunder.amp.localhost' "${label%-}"
-    return 0
-  fi
-  hash="$(_sha6 "${org}/${env}")"
-  prefix="${label:0:56}"
-  prefix="${prefix%-}"
-  printf '%s-%s.thunder.amp.localhost' "$prefix" "$hash"
-}
-
-# thunder_issuer ORG ENV -> the OIDC issuer / publicUrl (immutable once minting).
-thunder_issuer() {
-  printf 'http://%s:8080' "$(thunder_host "$1" "$2")"
-}
+  # shellcheck source=/dev/null
+  source "${_naming_lib_tmp}"
+  rm -f "${_naming_lib_tmp}"
+  unset _naming_lib_url _naming_lib_tmp
+fi
 
 # platform_thunder_issuer -> OIDC issuer of the shared platform Thunder instance.
 # Env-Thunder trusts tokens bearing this issuer so callers can authenticate with
@@ -541,7 +530,7 @@ main() {
   release="$(thunder_release_name "$org" "$ENV_NAME")"
   ns="$(thunder_namespace "$org" "$ENV_NAME")"
   host="$(thunder_host "$org" "$ENV_NAME")"
-  issuer="http://${host}:8080"
+  issuer="$(thunder_issuer "$org" "$ENV_NAME")"
   chart="${THUNDER_CHART:-oci://ghcr.io/thunder-id/helm-charts/thunderid}"
   secret_name="${release}-system-client"
   thunder_port=8090
@@ -678,8 +667,20 @@ main() {
   #      support, see patch_ca_bundle_mount below for why) and set SSL_CERT_FILE
   #      to the combined file so Go's TLS stack trusts both commercial CAs and
   #      the self-signed CA.
+  #
+  # Set SKIP_CA_BUNDLE_TRUST=true to skip this whole flow when platform Thunder's
+  # issuer is ALREADY backed by a real, publicly-trusted CA (e.g. a VM deployment
+  # where Caddy terminates TLS with a Let's Encrypt cert — see
+  # deployments/vm/lib-vm.sh) — the container's default system trust store already
+  # trusts that CA, so there is nothing custom to fetch or mount. The trustedIssuer
+  # --set-string args below (the actual trust decision) still apply either way;
+  # only the custom-CA-bundle mechanics are skipped.
   # ---------------------------------------------------------------------------
-  local ca_pem
+  local ca_pem ca_cm_name=""
+  if [ "${SKIP_CA_BUNDLE_TRUST:-false}" = "true" ]; then
+    echo "🔐 SKIP_CA_BUNDLE_TRUST=true — platform Thunder's issuer is assumed to already be"
+    echo "   backed by a publicly-trusted CA; skipping the custom CA bundle fetch/mount."
+  else
 
   # Fetch platform Thunder CA. Missing cert is fatal to prevent silent auth failures.
   if ! ca_pem="$(platform_thunder_ca_cert)" || [ -z "$ca_pem" ]; then
@@ -695,7 +696,7 @@ main() {
   # The bundle is built on the operator's machine (not inside the pod), so we
   # cannot rely on the pod's /etc/ssl — we need a portable external source.
   local ca_bundle mozilla_bundle
-  local ca_cm_name="amp-thunder-platform-ca"
+  ca_cm_name="amp-thunder-platform-ca"
 
   # Short-circuit: if the ConfigMap already exists in the cluster (e.g. a re-run
   # or an idempotent apply), skip the 230KB download entirely.
@@ -781,7 +782,7 @@ ${ca_pem}"
       --dry-run=client -o yaml | kubectl apply -f - >/dev/null
     echo "🔐 Combined CA bundle (Mozilla + platform Thunder CA) stored in ${ns}/${ca_cm_name}"
   fi
-
+  fi # SKIP_CA_BUNDLE_TRUST
 
   set_args+=(
     # Configure the trusted issuer endpoints. (CA bundle mounting is done via a
@@ -798,9 +799,11 @@ ${ca_pem}"
     --namespace "$ns" --create-namespace \
     "${set_args[@]}"
 
-  echo ""
-  echo "🔐 Mounting platform CA bundle into the Deployment (post-install patch)..."
-  patch_ca_bundle_mount "$release" "$ns" "$ca_cm_name"
+  if [ "${SKIP_CA_BUNDLE_TRUST:-false}" != "true" ]; then
+    echo ""
+    echo "🔐 Mounting platform CA bundle into the Deployment (post-install patch)..."
+    patch_ca_bundle_mount "$release" "$ns" "$ca_cm_name"
+  fi
 
   echo ""
   echo "🌐 Routing ${host}:8080 to ${release}..."

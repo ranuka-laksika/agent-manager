@@ -375,28 +375,12 @@ install_gateway_extension() {
 }
 
 # ---------------------------------------------------------------------------
-# Thunder naming helpers — keeps naming aligned with add-environment-thunder.sh
+# Load the shared Thunder naming helpers (thunder_release_name/etc.) — the
+# single source of truth for this derivation, see
+# deployments/scripts/thunder-naming.sh. Always run from a checked-out repo
+# (install.sh sources this file locally, never via curl | bash), so a plain
+# relative source is enough — no network-fetch fallback needed here.
 # ---------------------------------------------------------------------------
-_sha6() {
-  if command -v shasum >/dev/null 2>&1; then
-    printf '%s' "$1" | shasum -a 256 | cut -c1-6
-  else
-    printf '%s' "$1" | sha256sum | cut -c1-6
-  fi
-}
-
-thunder_release_name() {
-  local org env full hash prefix
-  org="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
-  env="$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')"
-  full="amp-thunder-${org}-${env}"
-  if [ "${#full}" -le 53 ]; then
-    printf '%s' "${full%-}"
-    return 0
-  fi
-  hash="$(_sha6 "${org}/${env}")"
-  prefix="${full:0:46}"
-  prefix="${prefix%-}"
-  printf '%s-%s' "$prefix" "$hash"
-}
+# shellcheck source=../scripts/thunder-naming.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/thunder-naming.sh"
 

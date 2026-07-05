@@ -23,6 +23,10 @@ tls_san_list() {
   printf '%s\n' "$AMP_HOST_CONSOLE" "$AMP_HOST_API" "$AMP_HOST_THUNDER" \
     "$AMP_HOST_OBSERVER" "$AMP_HOST_GATEWAY"
   [[ -n "${AMP_HOST_CP:-}" ]] && printf '%s\n' "$AMP_HOST_CP"
+  # Env-Thunder instances (one per org/environment, created dynamically after
+  # initial install) are wildcard-matched under the same host as platform Thunder —
+  # see the Caddy site render_caddyfile/caddyfile adds right after AMP_HOST_THUNDER.
+  printf '*.%s\n' "$AMP_HOST_THUNDER"
   printf '*.%s\n' "$AMP_AGENTS_BASE"
 }
 

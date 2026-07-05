@@ -102,6 +102,25 @@ run_install() {
   # (k3d ports are loopback-bound). This script prints the public sslip.io URLs below.
   export SHOW_LOCALHOST_URLS=false
 
+  # Env-Thunder deployment-wide config, inherited by install_default_env_thunder()
+  # (called from install.sh, sourced below) as exported env vars — see
+  # add-environment-thunder.sh's THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED/
+  # SKIP_CA_BUNDLE_TRUST/PLATFORM_THUNDER_ISSUER/PLATFORM_THUNDER_JWKS_URL, and
+  # agent-manager-service's identical THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED config
+  # (must match on both sides or the reported and actually-deployed URLs diverge).
+  # vm_host("thunder", ip) is "thunder.amp.<ip>.sslip.io"; stripping the "thunder."
+  # prefix gives env-Thunder's base domain, so "<org>-<env>.thunder.<base>" is a
+  # subdomain of it — exactly what the Caddy wildcard site added for it matches.
+  local thunder_host_full; thunder_host_full="$(vm_host thunder "$VM_IP")"
+  export THUNDER_HOST_BASE_DOMAIN="${thunder_host_full#thunder.}"
+  export TLS_ENABLED=true
+  # Caddy terminates real Let's Encrypt TLS here (same as platform Thunder's own
+  # advertised issuer), so env-Thunder doesn't need a custom CA bundle mounted to
+  # trust it — the container's default trust store already covers it.
+  export SKIP_CA_BUNDLE_TRUST=true
+  export PLATFORM_THUNDER_ISSUER="https://${thunder_host_full}"
+  export PLATFORM_THUNDER_JWKS_URL="https://${thunder_host_full}/oauth2/jwks"
+
   # Loopback-bound k3d config.
   render_k3d_vm_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
   export K3D_CONFIG=/tmp/k3d-config-vm.yaml

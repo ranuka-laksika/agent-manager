@@ -134,6 +134,11 @@ validate_cert() {
   # The deployed-agent tier needs the *.<AGENTS_BASE> wildcard explicitly.
   grep -qxF "*.${AMP_AGENTS_BASE}" <<<"$sans" \
     || CERT_ERRORS+=("cert is missing the deployed-agent wildcard SAN: *.${AMP_AGENTS_BASE}")
+  # Env-Thunder instances (one per org/environment, created dynamically after
+  # initial install) are wildcard-matched under AMP_HOST_THUNDER — see the Caddy
+  # site render_caddyfile/caddyfile adds right after the platform Thunder site.
+  grep -qxF "*.${AMP_HOST_THUNDER}" <<<"$sans" \
+    || CERT_ERRORS+=("cert is missing the env-Thunder wildcard SAN: *.${AMP_HOST_THUNDER}")
   unset -f _san_covers
 
   (( ${#CERT_ERRORS[@]} == 0 ))

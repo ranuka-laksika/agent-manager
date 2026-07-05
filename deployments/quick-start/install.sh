@@ -1619,7 +1619,7 @@ fi
 # Print the default environment's Thunder ID console + admin credentials — the
 # release/namespace/host follow the fixed ENV_NAME=default ORG_NAME=default naming
 # convention (see thunder_release_name/thunder_namespace/thunder_host in
-# add-environment-thunder.sh). The password lives only in a K8s Secret (never written
+# deployments/scripts/thunder-naming.sh). The password lives only in a K8s Secret (never written
 # to disk by add-environment-thunder.sh), so it's fetched fresh here rather than
 # re-printed from that script's own (long since scrolled-past) console output.
 if [[ "${ENV_THUNDER_PROVISIONED}" == "true" ]]; then

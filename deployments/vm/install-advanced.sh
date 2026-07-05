@@ -61,6 +61,10 @@ ACME_EMAIL=ops@mycompany.com       # ACME contact (recommended)
 # The cert MUST carry SANs covering *.<DOMAIN_BASE> AND *.<AGENTS_BASE>.
 # TLS_CERT_FILE=/opt/amp/certs/fullchain.pem
 # TLS_KEY_FILE=/opt/amp/certs/privkey.pem
+# If this cert is signed by an internal/private CA (not a public one like Let's
+# Encrypt or a commercial CA), set TLS_CA_FILE so env-Thunder can trust it when
+# fetching platform Thunder's HTTPS JWKS. Leave unset for a publicly-trusted cert.
+# TLS_CA_FILE=/opt/amp/certs/internal-ca.crt
 
 # --- upstream mode (TLS terminated by a cloud LB / proxy in front of the VM) ---
 # The LB must forward each hostname to the VM and set X-Forwarded-Proto: https.
@@ -234,6 +238,44 @@ run_advanced_install() {
   DP_EXTERNAL_INGRESS="$(dataplane_external_ingress)"; export DP_EXTERNAL_INGRESS
   export VERSION="$AMP_VERSION"
   export SHOW_LOCALHOST_URLS=false
+
+  # Env-Thunder deployment-wide config, inherited by install_default_env_thunder()
+  # (called from install.sh, sourced below) as exported env vars — see
+  # add-environment-thunder.sh's THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED/
+  # SKIP_CA_BUNDLE_TRUST/PLATFORM_THUNDER_CA_PEM/PLATFORM_THUNDER_ISSUER/
+  # PLATFORM_THUNDER_JWKS_URL, and agent-manager-service's identical
+  # THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED config (must match on both sides or the
+  # reported and actually-deployed URLs diverge). AMP_HOST_THUNDER is
+  # "thunder.<DOMAIN_BASE>"; stripping the "thunder." prefix gives env-Thunder's
+  # base domain, so "<org>-<env>.thunder.<base>" is a subdomain of it — exactly
+  # what the Caddy wildcard site added for it matches.
+  export THUNDER_HOST_BASE_DOMAIN="${AMP_HOST_THUNDER#thunder.}"
+  export TLS_ENABLED=true
+  export PLATFORM_THUNDER_ISSUER="https://${AMP_HOST_THUNDER}"
+  export PLATFORM_THUNDER_JWKS_URL="https://${AMP_HOST_THUNDER}/oauth2/jwks"
+  case "$TLS_MODE" in
+    byoc)
+      if [[ -n "${TLS_CA_FILE:-}" ]]; then
+        # Operator flagged this cert as internally-signed — mount its CA for env-Thunder.
+        export PLATFORM_THUNDER_CA_PEM
+        PLATFORM_THUNDER_CA_PEM="$(cat "$TLS_CA_FILE")"
+      else
+        # No TLS_CA_FILE -> assume a publicly-trusted CA, already in the container's trust store.
+        export SKIP_CA_BUNDLE_TRUST=true
+      fi
+      ;;
+    letsencrypt|letsencrypt-dns|upstream)
+      # Publicly-trusted CA, already in the container's default trust store.
+      export SKIP_CA_BUNDLE_TRUST=true
+      ;;
+    selfsigned)
+      # generate_selfsigned_ca wrote its own root CA alongside the leaf cert — env-
+      # Thunder needs THIS specific CA (not local dev's cert-manager one, which
+      # doesn't exist on a VM) to trust platform Thunder's self-signed cert.
+      export PLATFORM_THUNDER_CA_PEM
+      PLATFORM_THUNDER_CA_PEM="$(cat "$(dirname "$TLS_CERT_FILE")/ca.crt")"
+      ;;
+  esac
 
   render_k3d_vm_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
   export K3D_CONFIG=/tmp/k3d-config-vm.yaml
