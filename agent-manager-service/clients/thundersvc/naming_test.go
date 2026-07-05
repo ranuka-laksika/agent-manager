@@ -218,7 +218,17 @@ func TestResolveThunderBaseURL_FallsBackToExternalIngress(t *testing.T) {
 	}
 }
 
+// The Docker Desktop / loopback candidates are only ever generated when
+// config.IsLocalDevEnv is set (see thunderBaseURLCandidates) — they exist purely to
+// compensate for agent-manager-service running as a plain Docker container in local
+// dev, and must never be probed in-cluster. Both tests below flip that flag for their
+// duration to exercise the fallback path.
+
 func TestResolveThunderBaseURL_FallsBackToDockerDesktop(t *testing.T) {
+	orig := config.GetConfig().IsLocalDevEnv
+	defer func() { config.GetConfig().IsLocalDevEnv = orig }()
+	config.GetConfig().IsLocalDevEnv = true
+
 	prober := func(_ context.Context, c thunderURLCandidate) bool {
 		return c.resolveToHost == "host.docker.internal:8080"
 	}
@@ -233,6 +243,10 @@ func TestResolveThunderBaseURL_FallsBackToDockerDesktop(t *testing.T) {
 }
 
 func TestResolveThunderBaseURL_FallsBackToLoopback(t *testing.T) {
+	orig := config.GetConfig().IsLocalDevEnv
+	defer func() { config.GetConfig().IsLocalDevEnv = orig }()
+	config.GetConfig().IsLocalDevEnv = true
+
 	prober := func(_ context.Context, c thunderURLCandidate) bool {
 		return c.resolveToHost == "127.0.0.1:8080"
 	}
