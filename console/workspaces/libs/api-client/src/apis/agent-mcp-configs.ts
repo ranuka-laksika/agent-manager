@@ -31,13 +31,22 @@ import type {
   AgentMCPConfigResponse,
   CreateAgentMCPConfigPathParams,
   CreateAgentMCPConfigRequest,
+  CreateMCPConfigAPIKeyPathParams,
+  CreateMCPConfigAPIKeyRequest,
+  CreateMCPConfigAPIKeyResponse,
   DeleteAgentMCPConfigPathParams,
   EnvMCPProxyConfigRequest,
   EnvProviderConfigMappings,
   GetAgentMCPConfigPathParams,
   ListAgentMCPConfigsPathParams,
   ListAgentMCPConfigsQuery,
+  ListAPIKeysResponse,
+  ListMCPConfigAPIKeysPathParams,
   ProviderConfig,
+  RevokeMCPConfigAPIKeyPathParams,
+  RotateMCPConfigAPIKeyPathParams,
+  RotateMCPConfigAPIKeyRequest,
+  RotateMCPConfigAPIKeyResponse,
   UpdateAgentMCPConfigPathParams,
   UpdateAgentMCPConfigRequest,
 } from "@agent-management-platform/types";
@@ -197,5 +206,71 @@ export async function deleteAgentMCPConfig(
   const token = getToken ? await getToken() : undefined;
 
   const res = await httpDELETE(baseUrl, { token });
+  if (!res.ok) throw await res.json();
+}
+
+// -----------------------------------------------------------------------------
+// Per-config MCP API keys (external agents)
+// -----------------------------------------------------------------------------
+
+function mcpConfigAPIKeysUrl(params: {
+  orgName?: string;
+  projName?: string;
+  agentName?: string;
+  configId?: string;
+  envName?: string;
+}): string {
+  const configId = encodeRequired(params.configId, "configId");
+  const envName = encodeRequired(params.envName, "envName");
+  return `${buildBaseUrl(params)}/${configId}/environments/${envName}/api-keys`;
+}
+
+export async function listMCPConfigAPIKeys(
+  params: ListMCPConfigAPIKeysPathParams,
+  getToken?: () => Promise<string>,
+): Promise<ListAPIKeysResponse> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(mcpConfigAPIKeysUrl(params), { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function createMCPConfigAPIKey(
+  params: CreateMCPConfigAPIKeyPathParams,
+  body: CreateMCPConfigAPIKeyRequest,
+  getToken?: () => Promise<string>,
+): Promise<CreateMCPConfigAPIKeyResponse> {
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPOST(mcpConfigAPIKeysUrl(params), body, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function rotateMCPConfigAPIKey(
+  params: RotateMCPConfigAPIKeyPathParams,
+  body: RotateMCPConfigAPIKeyRequest,
+  getToken?: () => Promise<string>,
+): Promise<RotateMCPConfigAPIKeyResponse> {
+  const keyName = encodeRequired(params.keyName, "keyName");
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPUT(
+    `${mcpConfigAPIKeysUrl(params)}/${keyName}`,
+    body,
+    { token },
+  );
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function revokeMCPConfigAPIKey(
+  params: RevokeMCPConfigAPIKeyPathParams,
+  getToken?: () => Promise<string>,
+): Promise<void> {
+  const keyName = encodeRequired(params.keyName, "keyName");
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpDELETE(
+    `${mcpConfigAPIKeysUrl(params)}/${keyName}`,
+    { token },
+  );
   if (!res.ok) throw await res.json();
 }

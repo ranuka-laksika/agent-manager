@@ -17,6 +17,8 @@
 package repositories
 
 import (
+	"context"
+
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -28,7 +30,7 @@ import (
 type APIKeyRepository interface {
 	Upsert(key *models.StoredAPIKey) error
 	Delete(artifactUUID, name string) error
-	ListByArtifact(artifactUUID string) ([]models.StoredAPIKey, error)
+	ListByArtifact(ctx context.Context, artifactUUID string) ([]models.StoredAPIKey, error)
 	ListByArtifactKind(orgName, kind string) ([]models.StoredAPIKey, error)
 	// ListByArtifactKindAndEnvs returns all active API keys for artifacts of a given kind
 	// whose handle encodes one of the supplied environment UUIDs (handle format: "project/agent/<envUUID>").
@@ -69,9 +71,9 @@ func (r *APIKeyRepo) Delete(artifactUUID, name string) error {
 }
 
 // ListByArtifact returns all persisted API keys for a single artifact UUID.
-func (r *APIKeyRepo) ListByArtifact(artifactUUID string) ([]models.StoredAPIKey, error) {
+func (r *APIKeyRepo) ListByArtifact(ctx context.Context, artifactUUID string) ([]models.StoredAPIKey, error) {
 	var keys []models.StoredAPIKey
-	err := r.db.Where("artifact_uuid = ?", artifactUUID).Find(&keys).Error
+	err := r.db.WithContext(ctx).Where("artifact_uuid = ?", artifactUUID).Find(&keys).Error
 	return keys, err
 }
 
@@ -114,7 +116,7 @@ func (r *APIKeyRepo) ListPermanentByArtifactKind(orgName, kind string) ([]models
 	err := r.db.
 		Joins("JOIN artifacts a ON api_keys.artifact_uuid = a.uuid").
 		Where("a.organization_name = ? AND a.kind = ? AND api_keys.purpose = ?",
-			orgName, kind, models.APIKeyPurposePermanent).
+			orgName, kind, models.APIKeyPurposeUserManaged).
 		Find(&keys).Error
 	return keys, err
 }

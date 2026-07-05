@@ -217,6 +217,7 @@ thunder:
       - "amp:mcp-server:delete"
       - "amp:mcp-server:configure-guardrail"
       - "amp:mcp-server:connect"
+      - "amp:mcp-server:api-key-manage"
       - "amp:llm-proxy:create"
       - "amp:llm-proxy:read"
       - "amp:llm-proxy:update"

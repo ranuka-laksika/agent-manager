@@ -17,6 +17,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"time"
 
@@ -54,7 +55,7 @@ type GatewayRepository interface {
 	// Gateway operations
 	Create(gateway *models.Gateway) error
 	GetByUUID(gatewayId string) (*models.Gateway, error)
-	GetByOrganizationID(orgName string) ([]*models.Gateway, error)
+	GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error)
 	GetByNameAndOrgID(name, orgName string) (*models.Gateway, error)
 	List() ([]*models.Gateway, error)
 	ListWithFilters(filters GatewayFilterOptions) ([]*models.Gateway, error)
@@ -127,9 +128,9 @@ func (r *GatewayRepo) GetByUUID(gatewayId string) (*models.Gateway, error) {
 }
 
 // GetByOrganizationID retrieves all gateways for an organization
-func (r *GatewayRepo) GetByOrganizationID(orgName string) ([]*models.Gateway, error) {
+func (r *GatewayRepo) GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error) {
 	var gateways []*models.Gateway
-	err := r.db.Where("organization_name = ?", orgName).
+	err := r.db.WithContext(ctx).Where("organization_name = ?", orgName).
 		Order("created_at DESC").
 		Find(&gateways).Error
 	return gateways, err

@@ -24,6 +24,7 @@ import (
 
 // RegisterLLMProxyAPIKeyRoutes registers API key routes for LLM proxies
 func RegisterLLMProxyAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.LLMProxyAPIKeyController) {
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys", rbac.LLMProxyAPIKeyManage, ctrl.ListAPIKeys)
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys", rbac.LLMProxyAPIKeyManage, ctrl.CreateAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", rbac.LLMProxyAPIKeyManage, ctrl.RevokeAPIKey)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys/{keyName}", rbac.LLMProxyAPIKeyManage, ctrl.RotateAPIKey)

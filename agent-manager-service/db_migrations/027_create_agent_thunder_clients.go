@@ -18,8 +18,8 @@ package dbmigrations
 
 import "gorm.io/gorm"
 
-var migration026 = migration{
-	ID: 26,
+var migration027 = migration{
+	ID: 27,
 	Migrate: func(db *gorm.DB) error {
 		sql := `
 			CREATE TABLE agent_thunder_clients (

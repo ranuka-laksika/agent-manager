@@ -18,15 +18,15 @@ package dbmigrations
 
 import "gorm.io/gorm"
 
-// migration027 adds requested_by: the calling user's own subject (from AMS's
+// migration028 adds requested_by: the calling user's own subject (from AMS's
 // existing incoming-request auth), captured for audit purposes only. Thunder's
 // own "owner" field on an AgentID cannot carry this — each env-Thunder is a
 // fully isolated instance with its own entity store, so a platform-Thunder
 // user ID does not resolve there (confirmed live: env-Thunder rejects it with
 // AGT-1039 "owner not found"). This column is AMS's own record of who asked,
 // independent of what Thunder's API will accept.
-var migration027 = migration{
-	ID: 27,
+var migration028 = migration{
+	ID: 28,
 	Migrate: func(db *gorm.DB) error {
 		sql := `
 			ALTER TABLE agent_thunder_clients

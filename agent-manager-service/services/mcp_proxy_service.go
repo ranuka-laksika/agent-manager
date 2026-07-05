@@ -324,6 +324,10 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 	upstream := req.Upstream
 
+	// Track whether this update turns OFF API key authentication so we can revoke
+	// user-managed keys after the change is committed.
+	apiKeyAuthDisabled := false
+
 	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		proxy, err := s.repo.GetByHandleForUpdate(ctx, tx, handle, orgUUID)
 		if err != nil {
@@ -344,6 +348,8 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 			}
 			upstream.Main.Auth = auth
 		}
+
+		apiKeyAuthDisabled = isAPIKeyAuthEnabled(proxy.Configuration.Security) && !isAPIKeyAuthEnabled(req.Security)
 
 		proxy.Description = valueOrEmpty(req.Description)
 		proxy.Name = name
@@ -378,6 +384,16 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 	if err := s.redeployMCPProxyToCurrentGateways(ctx, updated, orgUUID); err != nil {
 		s.logger.Warn("Failed to redeploy updated MCP proxy", "proxyID", updated.UUID, "orgName", orgUUID, "error", err)
+	}
+
+	// If API key authentication was just turned off, revoke all user-managed API keys for
+	// this proxy. Best-effort: log and continue so a revoke failure doesn't fail the update.
+	if apiKeyAuthDisabled {
+		proxyUUID := updated.UUID.String()
+		if err := s.apiKeyBroadcaster.broadcastRevokeUserManaged(ctx, orgUUID, proxyUUID, proxyUUID); err != nil {
+			s.logger.Warn("Failed to revoke user-managed API keys after disabling API key security",
+				"proxyID", updated.UUID, "orgName", orgUUID, "error", err)
+		}
 	}
 
 	return convertModelMCPProxyToSpec(updated), updated, nil
@@ -424,51 +440,6 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 
 	s.broadcastMCPProxyDeletion(ctx, proxy, proxyGatewayIDs)
 	return nil
-}
-
-// CreateAPIKey generates an API key for a source MCP proxy and broadcasts it to all gateways.
-func (s *MCPProxyService) CreateAPIKey(ctx context.Context, orgUUID, proxyID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
-	proxy, err := s.getMCPProxyByID(ctx, orgUUID, proxyID)
-	if err != nil {
-		return nil, err
-	}
-	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastCreate(orgUUID, proxyUUID, proxyUUID, req)
-}
-
-// RevokeAPIKey revokes an API key for a source MCP proxy and broadcasts the revocation.
-func (s *MCPProxyService) RevokeAPIKey(ctx context.Context, orgUUID, proxyID, keyName string) error {
-	proxy, err := s.getMCPProxyByID(ctx, orgUUID, proxyID)
-	if err != nil {
-		return err
-	}
-	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastRevoke(orgUUID, proxyUUID, proxyUUID, keyName)
-}
-
-// RotateAPIKey rotates an API key for a source MCP proxy and broadcasts the new hash.
-func (s *MCPProxyService) RotateAPIKey(ctx context.Context, orgUUID, proxyID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
-	proxy, err := s.getMCPProxyByID(ctx, orgUUID, proxyID)
-	if err != nil {
-		return nil, err
-	}
-	proxyUUID := proxy.UUID.String()
-	return s.apiKeyBroadcaster.broadcastRotate(orgUUID, proxyUUID, proxyUUID, keyName, req)
-}
-
-func (s *MCPProxyService) getMCPProxyByID(ctx context.Context, orgUUID, proxyID string) (*models.MCPProxy, error) {
-	handle := strings.TrimSpace(proxyID)
-	if handle == "" {
-		return nil, utils.ErrInvalidInput
-	}
-	proxy, err := s.repo.GetByHandle(ctx, handle, orgUUID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, utils.ErrMCPProxyNotFound
-		}
-		return nil, fmt.Errorf("failed to get MCP proxy: %w", err)
-	}
-	return proxy, nil
 }
 
 func extractGatewayPolicyManifestItems(value interface{}) []models.MCPPolicyAvailableItem {

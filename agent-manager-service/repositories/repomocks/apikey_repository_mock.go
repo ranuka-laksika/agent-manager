@@ -4,6 +4,7 @@
 package repomocks
 
 import (
+	"context"
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -24,7 +25,7 @@ import (
 //			ListByApplicationUUIDFunc: func(applicationUUID string) ([]models.StoredAPIKey, error) {
 //				panic("mock out the ListByApplicationUUID method")
 //			},
-//			ListByArtifactFunc: func(artifactUUID string) ([]models.StoredAPIKey, error) {
+//			ListByArtifactFunc: func(ctx context.Context, artifactUUID string) ([]models.StoredAPIKey, error) {
 //				panic("mock out the ListByArtifact method")
 //			},
 //			ListByArtifactKindFunc: func(orgName string, kind string) ([]models.StoredAPIKey, error) {
@@ -56,7 +57,7 @@ type APIKeyRepositoryMock struct {
 	ListByApplicationUUIDFunc func(applicationUUID string) ([]models.StoredAPIKey, error)
 
 	// ListByArtifactFunc mocks the ListByArtifact method.
-	ListByArtifactFunc func(artifactUUID string) ([]models.StoredAPIKey, error)
+	ListByArtifactFunc func(ctx context.Context, artifactUUID string) ([]models.StoredAPIKey, error)
 
 	// ListByArtifactKindFunc mocks the ListByArtifactKind method.
 	ListByArtifactKindFunc func(orgName string, kind string) ([]models.StoredAPIKey, error)
@@ -93,6 +94,8 @@ type APIKeyRepositoryMock struct {
 		}
 		// ListByArtifact holds details about calls to the ListByArtifact method.
 		ListByArtifact []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// ArtifactUUID is the artifactUUID argument value.
 			ArtifactUUID string
 		}
@@ -240,19 +243,21 @@ func (mock *APIKeyRepositoryMock) ListByApplicationUUIDCalls() []struct {
 }
 
 // ListByArtifact calls ListByArtifactFunc.
-func (mock *APIKeyRepositoryMock) ListByArtifact(artifactUUID string) ([]models.StoredAPIKey, error) {
+func (mock *APIKeyRepositoryMock) ListByArtifact(ctx context.Context, artifactUUID string) ([]models.StoredAPIKey, error) {
 	if mock.ListByArtifactFunc == nil {
 		panic("APIKeyRepositoryMock.ListByArtifactFunc: method is nil but APIKeyRepository.ListByArtifact was just called")
 	}
 	callInfo := struct {
+		Ctx          context.Context
 		ArtifactUUID string
 	}{
+		Ctx:          ctx,
 		ArtifactUUID: artifactUUID,
 	}
 	mock.lockListByArtifact.Lock()
 	mock.calls.ListByArtifact = append(mock.calls.ListByArtifact, callInfo)
 	mock.lockListByArtifact.Unlock()
-	return mock.ListByArtifactFunc(artifactUUID)
+	return mock.ListByArtifactFunc(ctx, artifactUUID)
 }
 
 // ListByArtifactCalls gets all the calls that were made to ListByArtifact.
@@ -260,9 +265,11 @@ func (mock *APIKeyRepositoryMock) ListByArtifact(artifactUUID string) ([]models.
 //
 //	len(mockedAPIKeyRepository.ListByArtifactCalls())
 func (mock *APIKeyRepositoryMock) ListByArtifactCalls() []struct {
+	Ctx          context.Context
 	ArtifactUUID string
 } {
 	var calls []struct {
+		Ctx          context.Context
 		ArtifactUUID string
 	}
 	mock.lockListByArtifact.RLock()

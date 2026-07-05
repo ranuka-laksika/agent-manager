@@ -168,7 +168,7 @@ export function MCPProxySecurityTab({
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 5 }}>
           <FormControl fullWidth disabled={isDisabled}>
-            <FormLabel>Authentication</FormLabel>
+            <FormLabel>Authentication Method</FormLabel>
             <Select
               size="small"
               value={authenticationType || ""}
@@ -181,52 +181,54 @@ export function MCPProxySecurityTab({
             </Select>
           </FormControl>
         </Grid>
-
-        {authenticationType === "apiKey" && (
-          <>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <FormControl
-                fullWidth
-                disabled={isDisabled}
-                error={!!fieldErrors.keyValue}
-              >
-                <FormLabel>Header Key</FormLabel>
-                <TextField
-                  size="small"
-                  value={keyValue}
-                  onChange={(e) => {
-                    setKeyValue(e.target.value);
-                    if (fieldErrors.keyValue) setFieldErrors({});
-                  }}
-                  error={!!fieldErrors.keyValue}
-                  helperText={fieldErrors.keyValue}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontFamily: "monospace",
-                    },
-                  }}
-                />
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <FormControl fullWidth disabled={isDisabled}>
-                <FormLabel>Key Location</FormLabel>
-                <Select
-                  size="small"
-                  value={keyIn}
-                  onChange={(e) => setKeyIn(e.target.value as APIKeyLocation)}
-                >
-                  {KEY_LOCATION_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </>
-        )}
       </Grid>
+
+      {authenticationType === "apiKey" && (
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <FormControl fullWidth disabled={isDisabled}>
+              <FormLabel>Key Location</FormLabel>
+              <Select
+                size="small"
+                value={keyIn}
+                onChange={(e) => setKeyIn(e.target.value as APIKeyLocation)}
+              >
+                {KEY_LOCATION_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <FormControl
+              fullWidth
+              disabled={isDisabled}
+              error={!!fieldErrors.keyValue}
+            >
+              <FormLabel>
+                {keyIn === "query" ? "Query Param Key" : "Header Key"}
+              </FormLabel>
+              <TextField
+                size="small"
+                value={keyValue}
+                onChange={(e) => {
+                  setKeyValue(e.target.value);
+                  if (fieldErrors.keyValue) setFieldErrors({});
+                }}
+                error={!!fieldErrors.keyValue}
+                helperText={fieldErrors.keyValue}
+                sx={{
+                  "& .MuiInputBase-input": {
+                    fontFamily: "monospace",
+                  },
+                }}
+              />
+            </FormControl>
+          </Grid>
+        </Grid>
+      )}
 
       <Stack spacing={1.5} width="100%">
         <Collapse in={!!status && !isDirty} timeout={300}>
