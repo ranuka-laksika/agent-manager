@@ -1647,7 +1647,7 @@ data:
       fi
     }
 
-    assign_user_to_role "admin" "$ADMIN_ID" "Agent Manager Admin"
+    assign_user_to_role "{{ .Values.thunder.setup.admin.username }}" "$ADMIN_ID" "admin"
 
     # ===========================================================================
     # Assign ampApiClient app to Agent Manager Admin role so it gets all scopes in M2M tokens
@@ -1789,7 +1789,7 @@ data:
       exit 1
     fi
 
-    ADMIN_USER_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"username":"admin"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ADMIN_USER_ID=$(echo "$BODY" | sed 's/},{/}\n{/g' | grep '"username":"{{ .Values.thunder.setup.admin.username }}"' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
     if [[ -z "$ADMIN_USER_ID" ]]; then
       log_warning "admin user not found, skipping group assignment"
     else

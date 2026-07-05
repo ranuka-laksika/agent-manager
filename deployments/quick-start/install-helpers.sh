@@ -237,6 +237,33 @@ install_observability_extension() {
     return 0
 }
 
+# Provision a per-environment Thunder instance for the default environment.
+# Downloads add-environment-thunder.sh from the published release and runs it using
+# ITS OWN default chart: the upstream ThunderID release chart
+# (oci://ghcr.io/thunder-id/helm-charts/thunderid), NOT the agent-manager
+# wso2-amp-thunder-extension chart. CHART_VERSION is intentionally left unset here
+# so the script pins its own validated ThunderID version — the agent-manager
+# release VERSION has no bearing on which ThunderID release env-Thunder runs.
+install_default_env_thunder() {
+    local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
+    local tmp_script
+    tmp_script="$(mktemp)"
+
+    if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
+        echo "Failed to download add-environment-thunder.sh from ${script_url}"
+        rm -f "${tmp_script}"
+        return 1
+    fi
+
+    ENV_NAME=default \
+        DISPLAY_NAME="Default" \
+        ORG_NAME=default \
+        bash "${tmp_script}"
+    local status=$?
+    rm -f "${tmp_script}"
+    return $status
+}
+
 # Install AMP Thunder Extension
 install_amp_thunder_extension() {
     local chart_ref="oci://${HELM_CHART_REGISTRY}/${THUNDER_EXTENSION_CHART_NAME}"
@@ -346,3 +373,14 @@ install_gateway_extension() {
 
     return 0
 }
+
+# ---------------------------------------------------------------------------
+# Load the shared Thunder naming helpers (thunder_release_name/etc.) — the
+# single source of truth for this derivation, see
+# deployments/scripts/thunder-naming.sh. Always run from a checked-out repo
+# (install.sh sources this file locally, never via curl | bash), so a plain
+# relative source is enough — no network-fetch fallback needed here.
+# ---------------------------------------------------------------------------
+# shellcheck source=../scripts/thunder-naming.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/thunder-naming.sh"
+

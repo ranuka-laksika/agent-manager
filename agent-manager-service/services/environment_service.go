@@ -21,10 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/google/uuid"
 
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -38,20 +40,23 @@ type EnvironmentService interface {
 	UpdateEnvironment(ctx context.Context, orgName string, envID string, req *models.UpdateEnvironmentRequest) (*models.GatewayEnvironmentResponse, error)
 	DeleteEnvironment(ctx context.Context, orgName string, envID string) error
 	GetEnvironmentGateways(ctx context.Context, orgName string, envID string) ([]models.GatewayResponse, error)
+	ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error)
 }
 
 type environmentService struct {
-	logger      *slog.Logger
-	ocClient    occlient.OpenChoreoClient
-	gatewayRepo repositories.GatewayRepository
+	logger        *slog.Logger
+	ocClient      occlient.OpenChoreoClient
+	gatewayRepo   repositories.GatewayRepository
+	thunderProber thundersvc.Prober
 }
 
 // NewEnvironmentService creates a new environment service
-func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient) EnvironmentService {
+func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober) EnvironmentService {
 	return &environmentService{
-		logger:      logger,
-		gatewayRepo: gatewayRepo,
-		ocClient:    ocClient,
+		logger:        logger,
+		gatewayRepo:   gatewayRepo,
+		ocClient:      ocClient,
+		thunderProber: thunderProber,
 	}
 }
 
@@ -410,4 +415,68 @@ func toOCClientGatewayListenerSpec(l *models.GatewayListenerSpec) *occlient.Gate
 		return nil
 	}
 	return &occlient.GatewayListenerSpec{Port: l.Port, Host: l.Host}
+}
+
+// ListThunderInstances returns the Thunder OAuth2 identity provider info for every
+// environment in the org whose env-Thunder instance is reachable.
+//
+// Reachability is determined by a live HTTP probe to the environment's JWKS endpoint,
+// NOT by inferring from gateway mappings. Gateway mappings only prove a gateway was
+// provisioned — not that Thunder was ever deployed (e.g. PROVISION_THUNDER=false,
+// a failed provision, or an environment created before this feature was added all have
+// mappings but no Thunder instance). Advertising dead endpoints would cause the console
+// Identity page to show broken issuer/token/JWKS URLs.
+func (s *environmentService) ListThunderInstances(ctx context.Context, orgName string) (*models.ThunderInstanceListResponse, error) {
+	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
+	if err != nil {
+		return nil, fmt.Errorf("list environments for org %s: %w", orgName, err)
+	}
+
+	// Probe every environment's env-Thunder JWKS endpoint concurrently. Each probe can take
+	// up to ~8s in the worst case (ThunderProbe's 4-step fallback chain, 2s timeout each), so
+	// probing sequentially would scale request latency linearly with environment count.
+	reachable := make([]bool, len(envs))
+	var wg sync.WaitGroup
+	for i, env := range envs {
+		if env == nil || env.Name == "" {
+			continue
+		}
+		wg.Add(1)
+		go func(idx int, envName string) {
+			defer wg.Done()
+			reachable[idx] = s.thunderProber.Probe(ctx, orgName, envName)
+		}(i, env.Name)
+	}
+	wg.Wait()
+
+	instances := make([]models.ThunderInstanceResponse, 0, len(envs))
+	for i, env := range envs {
+		if env == nil || env.Name == "" {
+			continue
+		}
+
+		// Reachability is the only reliable signal: environments created with PROVISION_THUNDER=false,
+		// environments whose provisioning failed silently (non-fatal by design), and
+		// pre-PR environments all pass the gateway-mappings check but have no Thunder instance.
+		if !reachable[i] {
+			s.logger.Debug("env-Thunder not reachable, skipping", "envName", env.Name)
+			continue
+		}
+
+		// All three URLs must be externally reachable — this response is developer-facing
+		// (console Identity page, copy-buttons). The internal svc.cluster.local addresses
+		// only resolve inside the cluster and would cause DNS failures for developers.
+		// The env-Thunder HTTPRoute routes http://<org>-<env>.thunder.amp.localhost:8080
+		// to the Thunder service, so all /oauth2/* paths are reachable via ThunderHost.
+		instances = append(instances, models.ThunderInstanceResponse{
+			EnvName:      env.Name,
+			DisplayName:  env.DisplayName,
+			IsProduction: env.IsProduction,
+			IssuerURL:    thundersvc.ThunderIssuerURL(orgName, env.Name),
+			TokenURL:     thundersvc.ThunderExternalTokenURL(orgName, env.Name),
+			JWKSURL:      thundersvc.ThunderExternalJWKSURL(orgName, env.Name),
+			Namespace:    thundersvc.ThunderNamespace(orgName, env.Name),
+		})
+	}
+	return &models.ThunderInstanceListResponse{ThunderInstances: instances}, nil
 }

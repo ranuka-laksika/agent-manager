@@ -58,6 +58,7 @@ var clientProviderSet = wire.NewSet(
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
 	ProvideOrgResolver,
+	thundersvc.NewProber,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -135,6 +136,7 @@ var testClientProviderSet = wire.NewSet(
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
 	ProvideOrgResolver,
+	thundersvc.NewProber,
 )
 
 // ProvideLogger provides the configured slog.Logger instance

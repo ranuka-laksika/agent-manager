@@ -100,7 +100,8 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
 	agentTokenController := controllers.NewAgentTokenController(agentTokenManagerService)
 	repositoryController := controllers.NewRepositoryController(repositoryService)
-	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient)
+	prober := thundersvc.NewProber()
+	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient, prober)
 	environmentController := controllers.NewEnvironmentController(environmentService)
 	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository, gatewayApplier)
 	gatewayController := controllers.NewGatewayController(platformGatewayService, openChoreoClient)
@@ -260,7 +261,8 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
 	agentTokenController := controllers.NewAgentTokenController(agentTokenManagerService)
 	repositoryController := controllers.NewRepositoryController(repositoryService)
-	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient)
+	prober := thundersvc.NewProber()
+	environmentService := services.NewEnvironmentService(logger, gatewayRepository, openChoreoClient, prober)
 	environmentController := controllers.NewEnvironmentController(environmentService)
 	platformGatewayService := services.NewPlatformGatewayService(gatewayRepository, gatewayApplier)
 	gatewayController := controllers.NewGatewayController(platformGatewayService, openChoreoClient)
@@ -374,7 +376,7 @@ var clientProviderSet = wire.NewSet(
 	ProvideSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
-	ProvideOrgResolver,
+	ProvideOrgResolver, thundersvc.NewProber,
 )
 
 var serviceProviderSet = wire.NewSet(services.NewAgentManagerService, services.NewAgentKindService, services.NewInfraResourceManager, services.NewAgentTokenManagerService, ProvideGitCredentialsService, services.NewRepositoryService, services.NewMonitorExecutor, services.NewMonitorManagerService, ProvideThunderConfig, services.NewMonitorSchedulerService, services.NewEvaluatorManagerService, services.NewEnvironmentService, services.NewPlatformGatewayService, services.NewLLMProviderTemplateService, services.NewLLMProviderService, services.NewLLMProxyService, services.NewLLMProviderDeploymentService, services.NewLLMProviderAPIKeyService, services.NewLLMProxyAPIKeyService, services.NewAgentAPIKeyService, services.NewLLMProxyDeploymentService, services.NewMCPProxyService, services.NewGatewayInternalAPIService, services.NewMonitorScoresService, services.NewCatalogService, services.NewLLMProxyProvisioner, services.NewAgentConfigurationService, services.NewLLMTemplateStore, services.NewGitSecretService, services.NewAIApplicationService)
@@ -394,7 +396,7 @@ var testClientProviderSet = wire.NewSet(
 	ProvideTestSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
-	ProvideOrgResolver,
+	ProvideOrgResolver, thundersvc.NewProber,
 )
 
 // ProvideLogger provides the configured slog.Logger instance

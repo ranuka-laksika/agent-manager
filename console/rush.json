@@ -425,6 +425,10 @@
       "projectFolder": "workspaces/pages/gateways"
     },
     {
+      "packageName": "@agent-management-platform/env-thunders",
+      "projectFolder": "workspaces/pages/env-thunders"
+    },
+    {
       "packageName": "@agent-management-platform/identities",
       "projectFolder": "workspaces/pages/identities"
     },

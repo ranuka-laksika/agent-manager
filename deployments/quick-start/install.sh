@@ -1506,6 +1506,24 @@ fi
 log_success "Platform Resources Extension installed successfully"
 echo ""
 
+# Provision per-environment Thunder instance for the default environment.
+# Mirrors setup-openchoreo.sh:install_default_env_thunder().
+# Must run after the default environment exists (created by platform-resources above).
+# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
+
+log_info "Provisioning Thunder identity provider for the default environment..."
+ENV_THUNDER_PROVISIONED=false
+if ! install_default_env_thunder; then
+    log_warning "Default environment Thunder provisioning failed (non-fatal)"
+    echo "Re-run manually once the platform is ready:"
+    echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
+    echo "  bash <(curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh)"
+else
+    log_success "Default environment Thunder identity provider provisioned"
+    ENV_THUNDER_PROVISIONED=true
+fi
+echo ""
+
 # Install observability extension
 log_info "Installing Observability Extension (Traces Observer)..."
 if ! install_observability_extension; then
@@ -1597,6 +1615,32 @@ if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
   log_info "Agent Management Platform Console: http://localhost:3000"
   log_info "Observability Gateway (for traces): http://localhost:22893/otel"
 fi
+
+# Print the default environment's Thunder ID console + admin credentials — the
+# release/namespace/host follow the fixed ENV_NAME=default ORG_NAME=default naming
+# convention (see thunder_release_name/thunder_namespace/thunder_host in
+# deployments/scripts/thunder-naming.sh). The password lives only in a K8s Secret (never written
+# to disk by add-environment-thunder.sh), so it's fetched fresh here rather than
+# re-printed from that script's own (long since scrolled-past) console output.
+if [[ "${ENV_THUNDER_PROVISIONED}" == "true" ]]; then
+  # Dynamically derive the coordinates using the shared naming helper.
+  # Avoids hardcoded literals which would break if custom org/env names are used
+  # or if the derived names are hash-truncated (natural names > 53 chars).
+  default_org="default"
+  default_env="default"
+  default_release="$(thunder_release_name "${default_org}" "${default_env}")"
+  default_ns="${default_release}"
+
+  ENV_THUNDER_ADMIN_PASSWORD="$(kubectl get secret "${default_release}-admin-credentials" \
+    -n "${default_ns}" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+  if [[ -n "${ENV_THUNDER_ADMIN_PASSWORD}" ]]; then
+    log_step "Default Environment Thunder ID Console"
+    log_info "URL:      http://${default_org}-${default_env}.thunder.amp.localhost:8080/console"
+    log_info "Username: admin"
+    log_info "Password: ${ENV_THUNDER_ADMIN_PASSWORD}"
+  fi
+fi
+
 echo ""
 echo ""
 log_info "To check status: kubectl get pods -A"

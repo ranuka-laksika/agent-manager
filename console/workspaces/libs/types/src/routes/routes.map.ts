@@ -32,7 +32,19 @@ export const rootRouteMap: AppRoute = {
             children: {
                 profile: {
                     path: 'profile',
+                    index: true,
                     children: {},
+                },
+                thunderInstances: {
+                    path: 'thunder-instances',
+                    index: true,
+                    children: {
+                        view: {
+                            path: 'view/:envName',
+                            index: true,
+                            children: {},
+                        },
+                    },
                 },
                 gateways: {
                     path: 'gateways',

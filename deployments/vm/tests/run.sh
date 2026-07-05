@@ -196,7 +196,12 @@ cf="$(render_caddyfile 203.0.113.10 "ops@example.com" false)"
 assert_eq "caddy email block" "	email ops@example.com" "$(grep -F 'email ops@example.com' <<<"$cf")"
 assert_eq "caddy console site" "console.amp.203.0.113.10.sslip.io {" "$(grep -F 'console.amp' <<<"$cf" | head -1)"
 assert_eq "caddy console upstream" "	reverse_proxy 127.0.0.1:3000" "$(grep -F '127.0.0.1:3000' <<<"$cf")"
-assert_eq "caddy thunder upstream" "	reverse_proxy 127.0.0.1:8080" "$(grep -F '127.0.0.1:8080' <<<"$cf")"
+# Two sites proxy to 8080: the fixed platform-Thunder host, and the env-Thunder
+# wildcard (*.thunder.<domain>) added right after it — kgateway itself
+# discriminates by Host header from there (see add-environment-thunder.sh).
+assert_eq "caddy thunder upstream" "2" "$(grep -cF '127.0.0.1:8080' <<<"$cf")"
+assert_eq "caddy env-thunder wildcard site" "*.thunder.amp.203.0.113.10.sslip.io {" \
+  "$(grep -F '*.thunder.amp' <<<"$cf" | head -1)"
 # gateway host routes through the kgateway data plane (19080), not the ClusterIP
 # runtime (22893) which is not node-published; scope the grep to the gateway block
 # since 19080 is shared with the agents site.
@@ -214,8 +219,9 @@ assert_eq "global disable_redirects"   "yes" "$(has "$cf_tls" 'auto_https disabl
 assert_eq "issuer acme"                "yes" "$(has "$cf_tls" 'issuer acme')"
 assert_eq "disable_http_challenge"     "yes" "$(has "$cf_tls" 'disable_http_challenge')"
 assert_eq "keeps email"                "yes" "$(has "$cf_tls" 'email ops@example.com')"
-# per-site tls block on each public host incl. cp (6) + the agent wildcard (1) = 7
-assert_eq "tls block per site (7)"     "7"   "$(grep -cF 'issuer acme' <<<"$cf_tls")"
+# per-site tls block on each public host incl. cp (6) + the env-Thunder wildcard (1)
+# + the agent wildcard (1) = 8
+assert_eq "tls block per site (8)"     "8"   "$(grep -cF 'issuer acme' <<<"$cf_tls")"
 # never serves plain http / disables auto-https
 assert_eq "no auto_https off"          "no"  "$(has "$cf_tls" 'auto_https off')"
 assert_eq "no http:// public site"     "no"  "$(has "$cf_tls" 'http://console')"
@@ -580,6 +586,7 @@ rm -f "$tmp_cfg"
   assert_eq "san list has api"      "yes" "$(has "$sans" 'api.amp.example.com')"
   assert_eq "san list has cp"       "yes" "$(has "$sans" 'cp.amp.example.com')"
   assert_eq "san list has agents wildcard" "yes" "$(has "$sans" '*.agents.amp.example.com')"
+  assert_eq "san list has env-thunder wildcard" "yes" "$(has "$sans" '*.thunder.amp.example.com')"
 )
 (
   AMP_HOST_CONSOLE=console.amp.example.com

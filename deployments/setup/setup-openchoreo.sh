@@ -241,12 +241,30 @@ install_observability_plane() {
 
     # Prometheus based metrics module
     echo "Installing Prometheus based metrics module..."
-    helm upgrade --install observability-metrics-prometheus \
-      oci://ghcr.io/openchoreo/helm-charts/observability-metrics-prometheus \
-      --create-namespace \
-      --namespace openchoreo-observability-plane \
-      --version "${OBSERVABILITY_METRICS_PROMETHEUS_VERSION}" \
-      --set adapter.image.tag=""
+    install_metrics_prometheus() {
+        helm upgrade --install observability-metrics-prometheus \
+          oci://ghcr.io/openchoreo/helm-charts/observability-metrics-prometheus \
+          --create-namespace \
+          --namespace openchoreo-observability-plane \
+          --version "${OBSERVABILITY_METRICS_PROMETHEUS_VERSION}" \
+          --set adapter.image.tag="" \
+          --timeout 10m
+    }
+    if ! metrics_output=$(install_metrics_prometheus 2>&1); then
+        echo "$metrics_output"
+        if echo "$metrics_output" | grep -q "ensure CRDs are installed first"; then
+            echo "⚠️  Prometheus CRDs not yet established. Waiting for them and retrying once..."
+            kubectl wait --for=condition=established --timeout=120s \
+                crd/servicemonitors.monitoring.coreos.com \
+                crd/podmonitors.monitoring.coreos.com \
+                crd/prometheuses.monitoring.coreos.com \
+                crd/alertmanagers.monitoring.coreos.com 2>/dev/null || true
+            install_metrics_prometheus
+        else
+            echo "❌ Prometheus based metrics module install failed"
+            return 1
+        fi
+    fi
     echo "✅ Prometheus based metrics module installed"
 
     echo "⏳ Waiting for Observability Plane pods to be ready..."
@@ -349,6 +367,7 @@ echo ""
 echo "5️⃣  AMP Extensions (parallel)"
 echo "   Updating Helm dependencies..."
 helm dependency update "${SCRIPT_DIR}/../helm-charts/wso2-amp-thunder-extension"
+
 echo "✅ Helm dependencies updated"
 echo ""
 
@@ -421,6 +440,20 @@ install_platform_resources() {
     echo "✅ Default Platform Resources installed/upgraded successfully"
 }
 
+install_default_env_thunder() {
+    echo "📦 Provisioning Thunder ID instance for the default environment..."
+    # The default environment (created by Platform Resources above) is the birthplace
+    # of agent identities, so it gets its own Thunder instance — separate from the
+    # platform Thunder (amp-thunder) used for console login. Installs the upstream
+    # ThunderID release chart directly (add-environment-thunder.sh's own default),
+    # NOT the wso2-amp-thunder-extension chart platform Thunder uses above — this
+    # keeps env-Thunder's version independent of whatever platform Thunder runs.
+    ENV_NAME=default DISPLAY_NAME="Default" ORG_NAME=default \
+        WAIT_TIMEOUT=300s \
+        bash "${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
+    echo "✅ Default environment Thunder ID instance provisioned"
+}
+
 echo "🚀 Starting PARALLEL installation of AMP extensions..."
 echo ""
 
@@ -432,6 +465,18 @@ run_parallel_tasks \
 
 echo "✅ All AMP extensions installed successfully"
 echo ""
+
+# Provision default env-Thunder after parallel extensions to avoid racing default env creation.
+# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
+
+if install_default_env_thunder; then
+    echo ""
+else
+    echo "⚠️  Default-env Thunder provisioning failed — continuing with remaining setup steps."
+    echo "    Re-run manually: ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
+    echo "      bash ${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
+    echo ""
+fi
 
 # ============================================================================
 # Step 6: Install Observability Extension (Traces Observer Service)
@@ -543,3 +588,38 @@ echo ""
 
 echo "✅ OpenChoreo installation complete!"
 echo ""
+
+# Print a credential summary — env-Thunder instances (generated passwords).
+_active_count=0
+while IFS= read -r _ns; do
+  [ -n "$_ns" ] || continue
+  _secret="${_ns}-admin-credentials"
+  kubectl get secret "$_secret" -n "$_ns" &>/dev/null 2>&1 || continue
+  _host="$(kubectl get httproute "$_ns" -n openchoreo-control-plane -o jsonpath='{.spec.hostnames[0]}' 2>/dev/null || echo "")"
+  if [ -z "$_host" ]; then
+    # Skip advertising URL details if the routing HTTPRoute is not yet created.
+    # Checked BEFORE counting/printing the header so a skipped instance never
+    # inflates _active_count or opens the banner with nothing under it.
+    continue
+  fi
+  _active_count=$((_active_count + 1))
+  if [ "$_active_count" -eq 1 ]; then
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  Thunder ID — Provisioned Instances (save these credentials!)"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  fi
+  # Guarded: this is the final summary step after a successful install, so a
+  # missing/undecodable password key or a transient kubectl blip here must not
+  # abort the whole script under set -e.
+  _pass="$(kubectl get secret "$_secret" -n "$_ns" -o jsonpath='{.data.password}' 2>/dev/null | base64 -d)" || _pass="<unavailable>"
+  echo "  ${_ns#amp-thunder-}:"
+  echo "    URL:      http://${_host}:8080/console"
+  echo "    Username: admin"
+  echo "    Password: ${_pass}"
+  echo ""
+done < <(kubectl get namespaces -o name 2>/dev/null | sed 's|^namespace/||' | grep '^amp-thunder-')
+if [ "$_active_count" -gt 0 ]; then
+  echo "  💡 Retrieve credentials anytime with the kubectl command above."
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo ""
+fi

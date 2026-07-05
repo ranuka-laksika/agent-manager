@@ -49,6 +49,15 @@ thunder:
     enabled: false
   ocIngress:
     hostname: "thunder.amp.localhost"
+    https:
+      # Enable a dedicated HTTPS Gateway (port 8443) and cert-manager TLS certificate
+      # for thunder.amp.localhost so env-Thunder instances can wire it as a trusted issuer.
+      # Requires cert-manager to be installed in the cluster.
+      enabled: true
+      port: 8443
+      # Set to true to create the local ClusterIssuer and Root CA. Only one instance
+      # in the cluster (typically the platform-wide instance) should create these.
+      createIssuer: true
   configuration:
     server:
       port: 8090
@@ -542,3 +551,4 @@ thunder:
         password: "admin"
         givenName: "Admin"
         familyName: "User"
+        groups: []

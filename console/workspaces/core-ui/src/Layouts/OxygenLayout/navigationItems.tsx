@@ -52,6 +52,7 @@ import { metaData as llmProvidersMetadata } from "@agent-management-platform/llm
 import { metaData as mcpProxiesMetadata } from "@agent-management-platform/mcp-proxies";
 import { metaData as agentKindMetadata } from "@agent-management-platform/agent-kind";
 import { gatewaysMetadata } from "@agent-management-platform/gateways";
+import { thunderInstancesMetadata } from "@agent-management-platform/env-thunders/metadata";
 import { identitiesMetadata } from "@agent-management-platform/identities";
 import {
   metaData as deploymentPipelinesMetadata,
@@ -856,6 +857,21 @@ export function useNavigationItems(): Array<
                   href: generatePath(environmentsOrgRoute.path, { orgId }),
                   isActive: !!matchPath(
                     environmentsOrgRoute.wildPath,
+                    pathname,
+                  ),
+                },
+                {
+                  label: thunderInstancesMetadata.title,
+                  type: "item" as const,
+                  icon: <thunderInstancesMetadata.icon size={20} />,
+                  href: generatePath(
+                    absoluteRouteMap.children.org.children.thunderInstances
+                      .path,
+                    { orgId },
+                  ),
+                  isActive: !!matchPath(
+                    absoluteRouteMap.children.org.children.thunderInstances
+                      .wildPath,
                     pathname,
                   ),
                 },

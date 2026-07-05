@@ -365,6 +365,18 @@ caddyfile() {
   _site "$AMP_HOST_CONSOLE"  3000   # console UI
   _site "$AMP_HOST_API"      9000   # agent-manager REST API
   _site "$AMP_HOST_THUNDER"  8080   # Thunder OAuth (OC kgateway, host-routed)
+
+  # Env-Thunder instances: one per org/environment, created dynamically after
+  # initial install (not just at install time) — <org>-<env>.$AMP_HOST_THUNDER,
+  # wildcard-matched and proxied to the SAME kgateway listener as platform Thunder
+  # above (port 8080; kgateway itself discriminates by Host header via each
+  # env-Thunder's own HTTPRoute — see add-environment-thunder.sh's apply_httproute).
+  # A real wildcard cert can't be issued via TLS-ALPN-01, so — like the agents site
+  # below — this needs on-demand TLS (one concrete cert per hostname, issued the
+  # first time it's actually requested).
+  printf '%s*.%s%s {\n%s\treverse_proxy 127.0.0.1:8080\n}\n\n' \
+    "$([[ "$scheme" == http ]] && printf 'http://')" "$AMP_HOST_THUNDER" "$addr_suffix" "$agent_tls"
+
   _site "$AMP_HOST_OBSERVER" 9098   # traces observer
   # The api-platform gateway runtime is a ClusterIP service (ports 22893/22894 are
   # not node-published), so it is reached through the kgateway data plane on 19080 —
@@ -383,7 +395,8 @@ caddyfile() {
   fi
 
   # On-demand TLS ask endpoint exists only in letsencrypt mode (always-allow; Caddy
-  # only triggers on-demand for SNI matching the *.agents wildcard).
+  # only triggers on-demand for SNI matching a wildcard site — both the *.agents
+  # wildcard below and the *.$AMP_HOST_THUNDER env-Thunder wildcard above).
   [[ "$tls_mode" == letsencrypt ]] && printf 'http://127.0.0.1:9753 {\n\trespond 200\n}\n\n'
 
   # Deployed-agent endpoints: <org>-<project>.<AGENTS_BASE> (one host per org/project,

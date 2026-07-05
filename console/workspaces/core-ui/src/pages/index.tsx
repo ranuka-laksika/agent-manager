@@ -23,7 +23,13 @@ import {
   environmentsMetaData,
 } from "@agent-management-platform/deployment-pipelines";
 import { metaData as agentSecurityMetadata } from "@agent-management-platform/agent-security";
-import { metaData as configureAgentMetadata, AddLLMProviderComponent, ViewLLMProviderComponent, AddMCPServerComponent, ViewMCPServerComponent } from "@agent-management-platform/configure-agent";
+import {
+  metaData as configureAgentMetadata,
+  AddLLMProviderComponent,
+  ViewLLMProviderComponent,
+  AddMCPServerComponent,
+  ViewMCPServerComponent,
+} from "@agent-management-platform/configure-agent";
 import { metaData as deploymentMetadata } from "@agent-management-platform/deploy";
 import { metaData as evalMetadata } from "@agent-management-platform/eval";
 import { metaData as gatewaysMetadata } from "@agent-management-platform/gateways";
@@ -37,7 +43,7 @@ import { metaData as overviewMetadata } from "@agent-management-platform/overvie
 import { metaData as testMetadata } from "@agent-management-platform/test";
 import { metaData as tracesMetadata } from "@agent-management-platform/traces";
 
-export * from './Login';
+export * from "./Login";
 
 // Overview
 export const LazyOverviewOrg = overviewMetadata.levels!.organization as FC;
@@ -48,7 +54,8 @@ export const LazyOverviewComponent = overviewMetadata.levels!.component as FC;
 export const LazyBuildComponent = buildMetadata.levels!.component as FC;
 
 // Security
-export const LazySecurityComponent = agentSecurityMetadata.levels!.component as FC;
+export const LazySecurityComponent = agentSecurityMetadata.levels!
+  .component as FC;
 
 // Configure Agent
 export const LazyConfigureComponent = configureAgentMetadata.component as FC;
@@ -58,7 +65,8 @@ export const LazyAddMCPServerComponent = AddMCPServerComponent as FC;
 export const LazyViewMCPServerComponent = ViewMCPServerComponent as FC;
 
 // Deploy
-export const LazyDeploymentComponent = deploymentMetadata.levels!.component as FC;
+export const LazyDeploymentComponent = deploymentMetadata.levels!
+  .component as FC;
 
 // Test
 export const LazyTestComponent = testMetadata.levels!.component as FC;
@@ -69,30 +77,32 @@ export const LazyLogsComponent = logsMetadata.levels!.component as FC;
 export const LazyMetricsComponent = metricsMetadata.levels!.component as FC;
 
 // Evaluation
-export const LazyEvalEvaluatorsOrg =
-  evalMetadata.pages.organization.evalEvaluators.component as FC;
-export const LazyCreateEvaluatorOrg =
-  evalMetadata.pages.organization.createEvaluator.component as FC;
-export const LazyViewEvaluatorOrg =
-  evalMetadata.pages.organization.viewEvaluator.component as FC;
-export const LazyEditEvaluatorOrg =
-  evalMetadata.pages.organization.editEvaluator.component as FC;
-export const LazyEvalMonitorsComponent =
-  evalMetadata.pages.organization.evalMonitors.component as FC;
-export const LazyCreateMonitorComponent =
-  evalMetadata.pages.organization.createMonitor.component as FC;
-export const LazyEditMonitorComponent =
-  evalMetadata.pages.organization.editMonitor.component as FC;
-export const LazyViewMonitorComponent =
-  evalMetadata.pages.organization.viewMonitor.component as FC;
-export const LazyCompareMonitorComponent =
-  evalMetadata.pages.organization.compareMonitor.component as FC;
+export const LazyEvalEvaluatorsOrg = evalMetadata.pages.organization
+  .evalEvaluators.component as FC;
+export const LazyCreateEvaluatorOrg = evalMetadata.pages.organization
+  .createEvaluator.component as FC;
+export const LazyViewEvaluatorOrg = evalMetadata.pages.organization
+  .viewEvaluator.component as FC;
+export const LazyEditEvaluatorOrg = evalMetadata.pages.organization
+  .editEvaluator.component as FC;
+export const LazyEvalMonitorsComponent = evalMetadata.pages.organization
+  .evalMonitors.component as FC;
+export const LazyCreateMonitorComponent = evalMetadata.pages.organization
+  .createMonitor.component as FC;
+export const LazyEditMonitorComponent = evalMetadata.pages.organization
+  .editMonitor.component as FC;
+export const LazyViewMonitorComponent = evalMetadata.pages.organization
+  .viewMonitor.component as FC;
+export const LazyCompareMonitorComponent = evalMetadata.pages.organization
+  .compareMonitor.component as FC;
 
 // LLM Providers
-export const LazyLLMProvidersOrg = llmProvidersMetadata.levels!.organization as FC;
-export const LazyLLMProvidersComponent = llmProvidersMetadata.levels!.component as FC;
-export const LazyAddLLMProvidersOrg =
-  llmProvidersMetadata.levels!.addLLMProvidersOrganization as FC;
+export const LazyLLMProvidersOrg = llmProvidersMetadata.levels!
+  .organization as FC;
+export const LazyLLMProvidersComponent = llmProvidersMetadata.levels!
+  .component as FC;
+export const LazyAddLLMProvidersOrg = llmProvidersMetadata.levels!
+  .addLLMProvidersOrganization as FC;
 
 // MCP Proxies
 export const LazyMCPProxiesOrg = mcpProxiesMetadata.levels!.organization as FC;
@@ -104,33 +114,43 @@ export const LazyGatewaysOrg = gatewaysMetadata.levels!.organization as FC;
 export const LazyIdentitiesOrg = identitiesMetadata.levels!.organization as FC;
 
 // Deployment Pipelines
-export const LazyDeploymentPipelinesOrg = deploymentPipelinesMetadata.levels!.organization as FC;
+export const LazyDeploymentPipelinesOrg = deploymentPipelinesMetadata.levels!
+  .organization as FC;
 
 // Environments
-export const LazyEnvironmentsOrg = environmentsMetaData.levels!.organization as FC;
+export const LazyEnvironmentsOrg = environmentsMetaData.levels!
+  .organization as FC;
 
 // Agent Kind
 export const LazyCatalogOrg = agentKindMetadata.levels!.organization as FC;
 export const LazyPublishComponent = agentKindMetadata.levels!.component as FC;
-export const LazyPublishOrg = agentKindMetadata.levels!.publishOrganization as FC;
+export const LazyPublishOrg = agentKindMetadata.levels!
+  .publishOrganization as FC;
+
+// Identity (Environment Thunder Instances) — code-split into its own chunk
+export const LazyThunderInstancesOrg = lazy(() =>
+  import("@agent-management-platform/env-thunders").then((module) => ({
+    default: module.thunderInstancesMetaData.levels!
+      .organization as ComponentType,
+  })),
+);
 
 // Lazy-loaded create pages (only needed when user creates something)
 export const LazyAddNewAgent = lazy(() =>
   import("@agent-management-platform/add-new-agent").then((module) => ({
     default: module.metaData.component as ComponentType,
-  }))
+  })),
 );
 
 export const LazyAddNewProject = lazy(() =>
   import("@agent-management-platform/add-new-project").then((module) => ({
     default: module.metaData.component as ComponentType,
-  }))
+  })),
 );
 
 // Profile Settings
 export const LazyProfilePage = lazy(() =>
   import("@agent-management-platform/profile-settings").then((module) => ({
     default: module.ProfilePage as ComponentType,
-  }))
+  })),
 );
-
