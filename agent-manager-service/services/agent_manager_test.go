@@ -17,12 +17,30 @@
 package services
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 )
+
+// stubAgentThunderProvisioning implements AgentThunderProvisioningService by
+// embedding the (nil) interface and overriding only RegenerateFunc — any
+// other method call panics on the nil embed, which is fine since tests using
+// this stub never call them.
+type stubAgentThunderProvisioning struct {
+	AgentThunderProvisioningService
+	RegenerateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
+}
+
+func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
+	return s.RegenerateFunc(ctx, orgName, projectName, agentName, envName)
+}
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
 	instrumentation.SetCatalog(instrumentation.NewForTest(
@@ -141,4 +159,41 @@ func TestValidateEffectivePair_NoPythonIsNoOp(t *testing.T) {
 	if err := s.validateEffectivePythonInstrumentationPair("", nil); err != nil {
 		t.Errorf("empty python should be a no-op: %v", err)
 	}
+}
+
+func TestRegenerateAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RegenerateFunc: func(_ context.Context, _, _, _, _ string) (models.AgentProvisioningType, string, string, error) {
+			return models.AgentProvisioningTypeExternal, "client-abc", "fresh-secret-xyz", nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub}
+
+	resp, err := s.RegenerateAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err)
+	assert.Equal(t, "dev", resp.EnvironmentName)
+	assert.Equal(t, models.AgentProvisioningTypeExternal, resp.ProvisioningType)
+	assert.Equal(t, "client-abc", resp.ClientID)
+	assert.Equal(t, "fresh-secret-xyz", resp.ClientSecret,
+		"an External agent must get its freshly regenerated secret back")
+	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
+}
+
+func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RegenerateFunc: func(_ context.Context, _, _, _, _ string) (models.AgentProvisioningType, string, string, error) {
+			return models.AgentProvisioningTypeInternal, "client-def", "fresh-secret-internal", nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub}
+
+	resp, err := s.RegenerateAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err)
+	assert.Equal(t, models.AgentProvisioningTypeInternal, resp.ProvisioningType)
+	assert.Equal(t, "fresh-secret-internal", resp.ClientSecret,
+		"an Internal agent must ALSO get its freshly regenerated secret back — regenerate is not the "+
+			"one-time-claim endpoint, withholding it here would just force a second call to see it")
+	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
 }

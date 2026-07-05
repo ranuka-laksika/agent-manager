@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -35,6 +36,8 @@ import (
 )
 
 // ThunderClient encapsulates the Thunder API calls needed to create OAuth2 applications.
+//
+//go:generate moq -rm -fmt goimports -skip-ensure -pkg clientmocks -out ../clientmocks/thunder_client_fake.go . ThunderClient:ThunderClientMock
 type ThunderClient interface {
 	// EnsurePublisherApp creates an OAuth2 app named "amp-publisher-{orgName}" in Thunder
 	// if it doesn't already exist. orgUUID is the Thunder organization unit UUID to assign
@@ -51,6 +54,24 @@ type ThunderClient interface {
 	// named "amp-publisher-{orgName}". Returns the new client secret.
 	// Use this when the app exists but the secret has been lost (e.g. not in the local DB).
 	RegenerateClientSecret(ctx context.Context, orgName string) (clientSecret string, err error)
+
+	// CreateAgentIdentity creates a client_credentials AgentID via Thunder's /agents
+	// endpoint (a distinct resource from /applications — see agent_client.go).
+	// Idempotent: a 409 name conflict is resolved by looking up the existing agent;
+	// created is false and clientSecret is empty in that case (Thunder only returns
+	// a secret at creation time).
+	CreateAgentIdentity(ctx context.Context, ouID, name, owner string) (thunderAgentID, clientID, clientSecret string, created bool, err error)
+
+	// RegenerateAgentSecret generates and applies a new client secret for the
+	// AgentID identified by thunderAgentID. Returns the new secret.
+	RegenerateAgentSecret(ctx context.Context, thunderAgentID string) (clientSecret string, err error)
+
+	// DeleteAgentIdentity deletes the AgentID by its Thunder internal ID.
+	// Returns false (no error) if it did not exist.
+	DeleteAgentIdentity(ctx context.Context, thunderAgentID string) (bool, error)
+
+	// GetDefaultOUID returns the default organization unit ID from Thunder.
+	GetDefaultOUID(ctx context.Context) (string, error)
 }
 
 type thunderClient struct {
@@ -76,6 +97,31 @@ func NewThunderClient(baseURL, clientID, clientSecret string) ThunderClient {
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		httpClient:   &http.Client{Timeout: httpClientTimeout},
+	}
+}
+
+// newThunderClientWithDialOverride creates a Thunder API client that connects to
+// resolveToHost instead of baseURL's own host, while every request still carries
+// baseURL's host as the HTTP Host header — so Kgateway's host-based routing still
+// selects the right env-Thunder backend. Used by EnvThunderResolver when the
+// direct base URL (cluster-internal DNS or the public ingress hostname) isn't
+// dialable from the caller's network, e.g. a docker-compose container that can't
+// resolve either. An empty resolveToHost behaves exactly like NewThunderClient.
+func newThunderClientWithDialOverride(baseURL, clientID, clientSecret, resolveToHost string) ThunderClient {
+	httpClient := &http.Client{Timeout: httpClientTimeout}
+	if resolveToHost != "" {
+		httpClient.Transport = &http.Transport{
+			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				var d net.Dialer
+				return d.DialContext(ctx, network, resolveToHost)
+			},
+		}
+	}
+	return &thunderClient{
+		baseURL:      baseURL,
+		clientID:     clientID,
+		clientSecret: clientSecret,
+		httpClient:   httpClient,
 	}
 }
 

@@ -143,69 +143,117 @@ func ThunderIssuerURL(org, env string) string {
 	return fmt.Sprintf("http://%s:8080", ThunderHost(org, env))
 }
 
-// ThunderProbe checks whether an env-Thunder instance is reachable by performing a
-// HTTP GET to its JWKS endpoint. It tries the cluster-internal URL first, falling
-// back to the public URL, and finally host-header resolved fallbacks (e.g. host.docker.internal)
-// to support local development inside Docker containers. Callers treat a negative probe
-// as "not provisioned" and skip the env.
-//
-// A 2-second timeout avoids blocking the ListThunderInstances hot path on unreachable
-// instances while still being generous enough for a slow cold start.
-func ThunderProbe(ctx context.Context, org, env string) bool {
-	const probeTimeout = 2 * time.Second
-	probe := func(url string, resolveToHost string) bool {
-		reqCtx, cancel := context.WithTimeout(ctx, probeTimeout)
-		defer cancel()
-		req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
-		if err != nil {
-			return false
-		}
-		if resolveToHost != "" {
-			req.Host = req.URL.Host
-			req.URL.Host = resolveToHost
-		}
-		resp, err := http.DefaultClient.Do(req)
-		if err != nil {
-			return false
-		}
-		_ = resp.Body.Close()
-		return resp.StatusCode == http.StatusOK
-	}
+// thunderURLCandidate pairs a candidate base URL for an env-Thunder instance with
+// the actual host:port a caller should connect to in order to reach it. resolveToHost
+// is empty when the base URL's own host is directly dialable; when set, callers must
+// dial resolveToHost while keeping the base URL's host as the HTTP Host header, so
+// Kgateway's host-based routing still selects the right backend.
+type thunderURLCandidate struct {
+	baseURL       string
+	resolveToHost string
+}
 
-	// 1. Try K8s cluster-internal URL first (production/in-cluster)
-	if probe(ThunderJWKSURL(org, env), "") {
-		return true
-	}
-
-	// 2. Try public/external URL (development on host machine)
-	externalURL := ThunderExternalJWKSURL(org, env)
-	if probe(externalURL, "") {
-		return true
-	}
-
-	// 3. Fallback for Docker container development (macOS / host.docker.internal)
+// thunderBaseURLCandidates returns, in preference order, every base URL an env-Thunder
+// instance might be reachable at: cluster-internal DNS (production/in-cluster callers),
+// the public ingress hostname (development on the host machine), and two Docker-container
+// fallbacks (Docker Desktop's host.docker.internal, then plain Linux host networking)
+// for callers running inside a container that can't resolve *.thunder.amp.localhost itself.
+func thunderBaseURLCandidates(org, env string) []thunderURLCandidate {
 	host := ThunderHost(org, env)
-	if probe("http://"+host+":8080/oauth2/jwks", "host.docker.internal:8080") {
-		return true
+	externalBaseURL := fmt.Sprintf("http://%s:8080", host)
+	return []thunderURLCandidate{
+		{baseURL: ThunderInternalURL(org, env)},
+		{baseURL: externalBaseURL},
+		{baseURL: externalBaseURL, resolveToHost: "host.docker.internal:8080"},
+		{baseURL: externalBaseURL, resolveToHost: "127.0.0.1:8080"},
 	}
+}
 
-	// 4. Fallback for Linux containers / host networking (127.0.0.1)
-	return probe("http://"+host+":8080/oauth2/jwks", "127.0.0.1:8080")
+// probeThunderURL reports whether a GET to url succeeds, optionally dialing
+// resolveToHost instead of the URL's own host (see thunderURLCandidate).
+func probeThunderURL(ctx context.Context, url, resolveToHost string) bool {
+	const probeTimeout = 2 * time.Second
+	reqCtx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	if resolveToHost != "" {
+		req.Host = req.URL.Host
+		req.URL.Host = resolveToHost
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
+}
+
+// thunderURLProber checks whether a candidate base URL is reachable — its JWKS
+// endpoint is used as the health check since it requires no authentication.
+// Injectable so callers can test the candidate-selection cascade without real
+// network access.
+type thunderURLProber func(ctx context.Context, candidate thunderURLCandidate) bool
+
+// defaultThunderURLProber is the real, network-probing implementation used outside tests.
+func defaultThunderURLProber(ctx context.Context, candidate thunderURLCandidate) bool {
+	return probeThunderURL(ctx, candidate.baseURL+"/oauth2/jwks", candidate.resolveToHost)
+}
+
+// resolveThunderBaseURL returns the first candidate base URL that prober reports as
+// reachable, trying them in thunderBaseURLCandidates' preference order. ok is false
+// if none respond.
+func resolveThunderBaseURL(ctx context.Context, org, env string, prober thunderURLProber) (candidate thunderURLCandidate, ok bool) {
+	for _, c := range thunderBaseURLCandidates(org, env) {
+		if prober(ctx, c) {
+			return c, true
+		}
+	}
+	return thunderURLCandidate{}, false
+}
+
+// ResolveThunderBaseURL returns the first reachable base URL for an env-Thunder
+// instance, trying cluster-internal DNS, the external ingress hostname, then
+// Docker Desktop/Linux host-networking fallbacks — the same cascade ThunderProbe
+// uses. Callers that build an HTTP client against the result must dial
+// resolveToHost (when non-empty) instead of the base URL's own host, while still
+// sending the base URL's host as the Host header.
+func ResolveThunderBaseURL(ctx context.Context, org, env string) (baseURL, resolveToHost string, ok bool) {
+	c, ok := resolveThunderBaseURL(ctx, org, env, defaultThunderURLProber)
+	return c.baseURL, c.resolveToHost, ok
+}
+
+// ThunderProbe checks whether an env-Thunder instance is reachable by trying the
+// same candidate cascade as ResolveThunderBaseURL. Callers treat a negative probe
+// as "not provisioned" and skip the env.
+func ThunderProbe(ctx context.Context, org, env string) bool {
+	_, ok := resolveThunderBaseURL(ctx, org, env, defaultThunderURLProber)
+	return ok
 }
 
 const maxAgentAppNameLen = 100
 
 // AgentThunderAppName returns the OAuth app name to use in Thunder for a per-agent client.
-// Format: amp-agent-<org>-<project>-<agent>, truncated to 100 chars, trailing hyphen stripped.
-// The name mirrors amp-publisher-<org> but is fully scoped to project + agent to avoid collisions.
-func AgentThunderAppName(org, project, agent string) string {
+// Format: amp-agent-<org>-<env>-<project>-<agent>, truncated to 100 chars, trailing
+// hyphen stripped. The name mirrors amp-publisher-<org> but is fully scoped to
+// env + project + agent to avoid collisions.
+//
+// env is included even though each env already has its own physically separate
+// Thunder instance (so it isn't needed for uniqueness there): without it, every
+// env-Thunder's agent list looks identical — e.g. "amp-agent-default-default-x" in
+// both the "stage" and "testing" instances — with nothing in the name itself
+// showing which environment you're looking at from inside Thunder's own console.
+func AgentThunderAppName(org, env, project, agent string) string {
 	org = slugify(org)
+	env = slugify(env)
 	project = slugify(project)
 	agent = slugify(agent)
-	if org == "" || project == "" || agent == "" {
-		panic("org, project, and agent names must be valid alphanumeric slugs and not empty")
+	if org == "" || env == "" || project == "" || agent == "" {
+		panic("org, env, project, and agent names must be valid alphanumeric slugs and not empty")
 	}
-	name := fmt.Sprintf("amp-agent-%s-%s-%s", org, project, agent)
+	name := fmt.Sprintf("amp-agent-%s-%s-%s-%s", org, env, project, agent)
 	if len(name) <= maxAgentAppNameLen {
 		return strings.TrimSuffix(name, "-")
 	}

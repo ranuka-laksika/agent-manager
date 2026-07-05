@@ -8,9 +8,6 @@ package wiring
 
 import (
 	"fmt"
-	"log/slog"
-	"time"
-
 	"github.com/google/wire"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
@@ -28,6 +25,8 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
+	"log/slog"
+	"time"
 )
 
 // Injectors from wire.go:
@@ -94,7 +93,17 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	agentKindRepository := ProvideAgentKindRepository(db)
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
-	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, logger)
+	agentThunderClientRepository := ProvideAgentThunderClientRepository(db)
+	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	agentSecretStore, err := ProvideAgentSecretStore(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	agentThunderProvisioningService := services.NewAgentThunderProvisioningService(agentThunderClientRepository, envThunderResolver, agentSecretStore, logger)
+	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioningService, logger)
 	agentController := controllers.NewAgentController(agentManagerService, agentKindService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
@@ -156,6 +165,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
 	identityController := controllers.NewIdentityController(identityClient)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
+	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioningService, agentThunderClientRepository, logger)
 	traceObserverSvcClient, err := ProvideTraceObserverClient(configConfig, authProvider)
 	if err != nil {
 		return nil, err
@@ -190,6 +200,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 		GitSecretController:              gitSecretController,
 		IdentityController:               identityController,
 		MonitorScheduler:                 monitorSchedulerService,
+		AgentThunderReconciler:           agentThunderReconcilerService,
 		LLMTemplateStore:                 llmTemplateStore,
 		InfraResourceManager:             infraResourceManager,
 		AgentManagerService:              agentManagerService,
@@ -255,7 +266,17 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentKindRepository := ProvideAgentKindRepository(db)
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
-	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, logger)
+	agentThunderClientRepository := ProvideAgentThunderClientRepository(db)
+	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	agentSecretStore, err := ProvideAgentSecretStore(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	agentThunderProvisioningService := services.NewAgentThunderProvisioningService(agentThunderClientRepository, envThunderResolver, agentSecretStore, logger)
+	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioningService, logger)
 	agentController := controllers.NewAgentController(agentManagerService, agentKindService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
@@ -317,6 +338,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
 	identityController := controllers.NewIdentityController(identityClient)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
+	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioningService, agentThunderClientRepository, logger)
 	traceObserverSvcClient := ProvideTestTraceObserverClient(testClients)
 	appParams := &AppParams{
 		AuthMiddleware:                   authMiddleware,
@@ -348,6 +370,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		GitSecretController:              gitSecretController,
 		IdentityController:               identityController,
 		MonitorScheduler:                 monitorSchedulerService,
+		AgentThunderReconciler:           agentThunderReconcilerService,
 		LLMTemplateStore:                 llmTemplateStore,
 		InfraResourceManager:             infraResourceManager,
 		AgentManagerService:              agentManagerService,
@@ -376,10 +399,11 @@ var clientProviderSet = wire.NewSet(
 	ProvideSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
-	ProvideOrgResolver, thundersvc.NewProber,
+	ProvideOrgResolver, thundersvc.NewProber, ProvideEnvThunderResolver,
+	ProvideAgentSecretStore,
 )
 
-var serviceProviderSet = wire.NewSet(services.NewAgentManagerService, services.NewAgentKindService, services.NewInfraResourceManager, services.NewAgentTokenManagerService, ProvideGitCredentialsService, services.NewRepositoryService, services.NewMonitorExecutor, services.NewMonitorManagerService, ProvideThunderConfig, services.NewMonitorSchedulerService, services.NewEvaluatorManagerService, services.NewEnvironmentService, services.NewPlatformGatewayService, services.NewLLMProviderTemplateService, services.NewLLMProviderService, services.NewLLMProxyService, services.NewLLMProviderDeploymentService, services.NewLLMProviderAPIKeyService, services.NewLLMProxyAPIKeyService, services.NewAgentAPIKeyService, services.NewLLMProxyDeploymentService, services.NewMCPProxyService, services.NewGatewayInternalAPIService, services.NewMonitorScoresService, services.NewCatalogService, services.NewLLMProxyProvisioner, services.NewAgentConfigurationService, services.NewLLMTemplateStore, services.NewGitSecretService, services.NewAIApplicationService)
+var serviceProviderSet = wire.NewSet(services.NewAgentManagerService, services.NewAgentKindService, services.NewInfraResourceManager, services.NewAgentTokenManagerService, ProvideGitCredentialsService, services.NewRepositoryService, services.NewMonitorExecutor, services.NewMonitorManagerService, ProvideThunderConfig, services.NewMonitorSchedulerService, services.NewAgentThunderProvisioningService, services.NewAgentThunderReconcilerService, services.NewEvaluatorManagerService, services.NewEnvironmentService, services.NewPlatformGatewayService, services.NewLLMProviderTemplateService, services.NewLLMProviderService, services.NewLLMProxyService, services.NewLLMProviderDeploymentService, services.NewLLMProviderAPIKeyService, services.NewLLMProxyAPIKeyService, services.NewAgentAPIKeyService, services.NewLLMProxyDeploymentService, services.NewMCPProxyService, services.NewGatewayInternalAPIService, services.NewMonitorScoresService, services.NewCatalogService, services.NewLLMProxyProvisioner, services.NewAgentConfigurationService, services.NewLLMTemplateStore, services.NewGitSecretService, services.NewAIApplicationService)
 
 var instrumentationProviderSet = wire.NewSet(
 	ProvideInstrumentationCatalog,
@@ -396,7 +420,8 @@ var testClientProviderSet = wire.NewSet(
 	ProvideTestSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
-	ProvideOrgResolver, thundersvc.NewProber,
+	ProvideOrgResolver, thundersvc.NewProber, ProvideEnvThunderResolver,
+	ProvideAgentSecretStore,
 )
 
 // ProvideLogger provides the configured slog.Logger instance
@@ -582,6 +607,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideCustomEvaluatorRepository,
 	ProvideAPIKeyRepository, repositories.NewAgentConfigurationRepository, repositories.NewEnvAgentModelMappingRepository, repositories.NewEnvAgentMCPMappingRepository, repositories.NewAgentEnvConfigVariableRepository, repositories.NewMonitorLLMMappingRepository, ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
+	ProvideAgentThunderClientRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -709,6 +735,24 @@ func ProvideAgentKindRepository(db *gorm.DB) repositories.AgentKindRepository {
 
 func ProvideAIApplicationRepository(db *gorm.DB) repositories.AIApplicationRepository {
 	return repositories.NewAIApplicationRepository(db)
+}
+
+func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderClientRepository {
+	return repositories.NewAgentThunderClientRepo(db)
+}
+
+// ProvideEnvThunderResolver creates the resolver that maps (org, environment) to an
+// authenticated ThunderClient for that environment's Thunder instance, reading the
+// system-client secret that add-environment-thunder.sh already wrote to OpenBao.
+func ProvideEnvThunderResolver(cfg config.Config) (thundersvc.EnvThunderResolver, error) {
+	return thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+}
+
+// ProvideAgentSecretStore creates the raw OpenBao-backed store for AgentID
+// client credentials (see agent_secret_store.go for why this bypasses the
+// SecretManagementClient/SecretReference machinery).
+func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, error) {
+	return thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {
