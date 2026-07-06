@@ -271,5 +271,5 @@ func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
 
 	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
 
-	require.Error(t, err)
+	require.ErrorIs(t, err, boom)
 }
