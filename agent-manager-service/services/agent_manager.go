@@ -3039,7 +3039,7 @@ func (s *agentManagerService) GetAgentCredentials(ctx context.Context, orgName s
 	}
 	if agent.Provisioning.Type != string(utils.InternalAgent) {
 		return models.AgentCredentialsResponse{}, fmt.Errorf(
-			"%w: agent %q is an external agent — external agent credentials are retrieved via POST .../identity/claim (one-time) or POST .../identity/regenerate, not this endpoint",
+			"%w: agent %q is an external agent — external agent credentials are retrieved via DELETE .../identities/secrets (one-time claim) or POST .../identities (regenerate), not this endpoint",
 			utils.ErrInvalidInput, agentName,
 		)
 	}

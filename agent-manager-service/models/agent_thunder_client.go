@@ -108,6 +108,13 @@ type AgentIdentityEnvironmentView struct {
 	RequestedBy string `json:"requestedBy,omitempty"`
 }
 
+// AgentIdentityActionRequest is the request body for POST .../identities
+// (regenerate). Unlike the GET/PUT/DELETE identity endpoints, which take
+// ?environment= since they carry no body, POST parameters live in the body.
+type AgentIdentityActionRequest struct {
+	Environment string `json:"environment"`
+}
+
 // AgentClaimSecretStatus is the fixed value of AgentClaimSecretResponse.Status —
 // claim has exactly one successful outcome, so this isn't an enum in practice,
 // just a named constant so the literal string exists in one place.
