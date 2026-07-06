@@ -450,8 +450,8 @@ func TestRegenerateSecret_Success(t *testing.T) {
 		},
 	}
 	var updatedPath string
-	var clearedClaimForID uuid.UUID
-	clearClaimCalled := false
+	var markedClaimedForID uuid.UUID
+	markClaimedCalled := false
 	bindingID := uuid.New()
 	repo := &repomocks.AgentThunderClientRepositoryMock{
 		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
@@ -464,10 +464,10 @@ func TestRegenerateSecret_Success(t *testing.T) {
 			updatedPath = secretRefPath
 			return nil
 		},
-		ClearClaimFunc: func(_ context.Context, id uuid.UUID) error {
-			clearClaimCalled = true
-			clearedClaimForID = id
-			return nil
+		MarkClaimedFunc: func(_ context.Context, id uuid.UUID, _ time.Time) (bool, error) {
+			markClaimedCalled = true
+			markedClaimedForID = id
+			return true, nil
 		},
 	}
 
@@ -480,8 +480,8 @@ func TestRegenerateSecret_Success(t *testing.T) {
 	assert.Equal(t, "new-secret", newSecret)
 	assert.Equal(t, "new-secret", storedSecret)
 	assert.Equal(t, storedPath, updatedPath)
-	assert.True(t, clearClaimCalled, "regenerate must clear any prior claim so the new secret is eligible for the one-time claim again — otherwise GetIdentityViews will never show it, even though it's a valid, never-before-seen secret")
-	assert.Equal(t, bindingID, clearedClaimForID)
+	assert.True(t, markClaimedCalled, "regenerate must mark the new secret as claimed — its own response already showed it to the caller directly, so it must not also appear as unclaimed via GetIdentityViews")
+	assert.Equal(t, bindingID, markedClaimedForID)
 }
 
 // TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized guards against
@@ -521,7 +521,7 @@ func TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized(t *testing.T)
 			}, nil
 		},
 		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
-		ClearClaimFunc:      func(_ context.Context, _ uuid.UUID) error { return nil },
+		MarkClaimedFunc:     func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) { return true, nil },
 	}
 
 	svc := newTestProvisioningService(repo, resolver, store)
@@ -541,12 +541,15 @@ func TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized(t *testing.T)
 		"concurrent RegenerateSecret calls for the same binding must be serialized, not interleaved")
 }
 
-// TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain is an
-// end-to-end regression test for the exact bug found live: regenerating an
-// already-once-claimed External environment's secret, then immediately
-// checking identity, must show the NEW secret — not silently omit it because
-// a stale claimed_at from the OLD secret survived the regenerate.
-func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *testing.T) {
+// TestRegenerateSecret_ThenGetIdentityViews_SecretAlreadyShownIsNotUnclaimed
+// is an end-to-end regression test: RegenerateAgentIdentitySecret's own HTTP
+// response already hands the new secret directly to the caller, so it must
+// not ALSO show up as unclaimed afterward — that would tell the frontend a
+// secret is still available to claim when it has already been displayed.
+// This holds whether the environment was previously claimed, never claimed,
+// or previously unclaimed-but-stale: regenerate must leave claimed_at
+// non-nil in every case, and a subsequent ClaimSecret call must fail.
+func TestRegenerateSecret_ThenGetIdentityViews_SecretAlreadyShownIsNotUnclaimed(t *testing.T) {
 	tc := fakeThunderClientMock()
 	tc.RegenerateAgentSecretFunc = func(context.Context, string) (string, error) { return "brand-new-secret", nil }
 	resolver := &clientmocks.EnvThunderResolverMock{
@@ -577,7 +580,6 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 			currentSecretRef = secretRefPath
 			return nil
 		},
-		ClearClaimFunc: func(_ context.Context, _ uuid.UUID) error { currentClaimedAt = nil; return nil },
 		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, t time.Time) (bool, error) {
 			if currentClaimedAt != nil {
 				return false, nil
@@ -605,12 +607,12 @@ func TestRegenerateSecret_ThenGetIdentityViews_NewSecretIsClaimableAgain(t *test
 	views, err := svc.GetIdentityViews(context.Background(), "acme", "proj1", "my-agent")
 	require.NoError(t, err)
 	require.Len(t, views, 1)
-	assert.True(t, views[0].HasUnclaimedSecret,
-		"the regenerated secret must be claimable — a stale claim from the OLD secret must not suppress it")
+	assert.False(t, views[0].HasUnclaimedSecret,
+		"regenerate's response already showed this secret to the caller — it must not also appear as unclaimed")
 
-	_, _, claimedSecret, err := svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
-	require.NoError(t, err)
-	assert.Equal(t, "brand-new-secret", claimedSecret)
+	_, _, _, err = svc.ClaimSecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.Error(t, err, "the regenerated secret was already shown via regenerate's own response, so claim must not hand it out again")
+	assert.ErrorIs(t, err, utils.ErrAgentCredentialNotAvailable)
 }
 
 func TestRegenerateSecret_NotYetProvisioned_Errors(t *testing.T) {

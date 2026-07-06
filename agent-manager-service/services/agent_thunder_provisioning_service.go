@@ -387,11 +387,12 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 	if err := s.repo.UpdateSecretRef(ctx, binding.ID, secretPath); err != nil {
 		return "", "", "", fmt.Errorf("record regenerated secret location: %w", err)
 	}
-	// A prior claim (if any) was for the OLD secret, which no longer exists —
-	// this new one has never been shown to anyone via ClaimSecret, so it must
-	// not inherit a stale "already claimed" flag from before.
-	if err := s.repo.ClearClaim(ctx, binding.ID); err != nil {
-		s.logger.Warn("Failed to clear claim state after regenerate", "bindingID", binding.ID, "error", err)
+	// Regenerate's own response already hands the caller this secret directly
+	// (see RegenerateAgentIdentitySecret), so it must not also show up as
+	// unclaimed — mark it claimed now rather than leaving/reopening a claim
+	// for a secret that's already been shown.
+	if _, err := s.repo.MarkClaimed(ctx, binding.ID, time.Now()); err != nil {
+		s.logger.Warn("Failed to mark claim state after regenerate", "bindingID", binding.ID, "error", err)
 	}
 
 	return binding.ProvisioningType, binding.ThunderClientID, newSecret, nil
