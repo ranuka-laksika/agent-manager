@@ -18,6 +18,7 @@
 import React, { useCallback, useState } from "react";
 import {
   getErrorMessage,
+  GatewayTypeChip,
   useConfirmationDialog,
 } from "@agent-management-platform/shared-component";
 import {
@@ -45,6 +46,7 @@ import {
 } from "@agent-management-platform/types";
 import { PageLayout } from "@agent-management-platform/views";
 import { GatewayIdentityProvidersCard } from "./GatewayIdentityProvidersCard";
+import { GatewayReconfigureCard } from "./GatewayReconfigureCard";
 import { ViewGatewayGetStarted } from "./ViewGatewayGetStarted";
 
 export const ViewGateway: React.FC = () => {
@@ -214,6 +216,16 @@ export const ViewGateway: React.FC = () => {
 
         {gateway && !error && (
           <Stack spacing={3}>
+            {isActive && (
+              <GatewayReconfigureCard
+                registrationToken={registrationToken}
+                hasJustRegeneratedToken={hasJustRegeneratedToken}
+                onReconfigure={handleRegenerateToken}
+                isReconfiguring={isRotating}
+                onCopy={handleCopy}
+              />
+            )}
+
             <Grid container spacing={2}>
               <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
@@ -244,13 +256,7 @@ export const ViewGateway: React.FC = () => {
                     >
                       Type
                     </Typography>
-                    <Chip
-                      label={gateway.gatewayType?.toUpperCase() === "AI" ? "AI" : "Regular"}
-                      size="small"
-                      variant="outlined"
-                      color={gateway.gatewayType?.toUpperCase() === "AI" ? "info" : "default"}
-                      sx={{ width: "fit-content" }}
-                    />
+                    <GatewayTypeChip type={gateway.gatewayType} />
                   </Stack>
                 </Card>
               </Grid>
@@ -297,14 +303,16 @@ export const ViewGateway: React.FC = () => {
               environments={gateway.environments ?? []}
             />
 
-            <ViewGatewayGetStarted
-              isConfigured={isConfigured}
-              registrationToken={registrationToken}
-              hasJustRegeneratedToken={hasJustRegeneratedToken}
-              onRegenerateToken={handleRegenerateToken}
-              isRegeneratingToken={isRotating}
-              onCopy={handleCopy}
-            />
+            {!isActive && (
+              <ViewGatewayGetStarted
+                isConfigured={isConfigured}
+                registrationToken={registrationToken}
+                hasJustRegeneratedToken={hasJustRegeneratedToken}
+                onRegenerateToken={handleRegenerateToken}
+                isRegeneratingToken={isRotating}
+                onCopy={handleCopy}
+              />
+            )}
           </Stack>
         )}
       </PageLayout>

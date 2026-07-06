@@ -45,7 +45,7 @@ import {
   useDeleteGateway,
   useListGateways,
 } from "@agent-management-platform/api-client";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { GatewayTypeChip, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import {
   absoluteRouteMap,
   type GatewayResponse,
@@ -255,7 +255,7 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
             <ListingTable.Head>
               <ListingTable.Row>
                 <ListingTable.Cell width="300px">Name</ListingTable.Cell>
-                <ListingTable.Cell align="center" width="120px">
+                <ListingTable.Cell align="left" width="120px">
                   Type
                 </ListingTable.Cell>
                 <ListingTable.Cell align="center" width="120px">
@@ -339,13 +339,8 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
                       </Stack>
                     </ListingTable.Cell>
 
-                    <ListingTable.Cell align="center">
-                      <Chip
-                        label={gateway.gatewayType === "AI" ? "AI" : "Regular"}
-                        size="small"
-                        variant="outlined"
-                        color={gateway.gatewayType === "AI" ? "info" : "default"}
-                      />
+                    <ListingTable.Cell align="left">
+                      <GatewayTypeChip type={gateway.gatewayType} />
                     </ListingTable.Cell>
 
                     <ListingTable.Cell align="center">

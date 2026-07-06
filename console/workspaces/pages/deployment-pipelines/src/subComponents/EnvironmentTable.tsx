@@ -33,8 +33,9 @@ import {
 } from "@wso2/oxygen-ui";
 import { AlertTriangle, Edit, Plus, Search, Server, Trash } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
-import { useParams } from "react-router-dom";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
+import { getErrorMessage } from "@agent-management-platform/shared-component";
 import type { Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
 
@@ -48,16 +49,19 @@ export function EnvironmentTable(
   { onEditEnvironment, onCreateEnvironment, onDeleteEnvironment }: EnvironmentTableProps,
 ) {
   const { orgId } = useParams<{ orgId: string }>();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  const envViewPath = (envName: string) =>
+    orgId ? generatePath("/org/:orgId/environments/:envName", { orgId, envName }) : "#";
+
   const { data: environments, isLoading, error } = useListEnvironments({ orgName: orgId });
 
-  const items = environments ?? [];
-
   const filtered = useMemo(() => {
+    const items = environments ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(
@@ -65,7 +69,9 @@ export function EnvironmentTable(
         e.name.toLowerCase().includes(q) ||
         (e.displayName ?? "").toLowerCase().includes(q),
     );
-  }, [items, search]);
+  }, [environments, search]);
+
+  const items = environments ?? [];
 
   useEffect(() => {
     if (page !== 0 && page * rowsPerPage >= filtered.length) setPage(0);
@@ -102,7 +108,7 @@ export function EnvironmentTable(
         <ListingTable.Container>
           <Alert severity="error" icon={<AlertTriangle size={18} />} sx={{ alignSelf: "stretch" }}>
             Failed to load environments.{" "}
-            {error instanceof Error ? error.message : "Please try again."}
+            {getErrorMessage(error) || "Please try again."}
           </Alert>
         </ListingTable.Container>
       </Stack>
@@ -208,6 +214,8 @@ export function EnvironmentTable(
                   key={env.name}
                   variant="card"
                   hover
+                  clickable
+                  onClick={() => navigate(envViewPath(env.name))}
                   onMouseEnter={() => setHoveredId(env.name)}
                   onMouseLeave={() => setHoveredId(null)}
                   onFocus={() => setHoveredId(env.name)}
@@ -248,7 +256,7 @@ export function EnvironmentTable(
                     />
                   </ListingTable.Cell>
 
-                  <ListingTable.Cell align="right" onClick={(e) => e.stopPropagation()}>
+                  <ListingTable.Cell align="right" sx={{ cursor: "default" }} onClick={(e) => e.stopPropagation()}>
                     <Stack direction="row" justifyContent="flex-end" alignItems="center" spacing={1}>
                       {hoveredId === env.name ? (
                         <FadeIn>
