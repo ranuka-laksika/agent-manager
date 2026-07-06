@@ -24,7 +24,7 @@ import {
 import { getErrorMessage } from "@agent-management-platform/shared-component";
 import { Alert, Box, Skeleton, Typography } from "@wso2/oxygen-ui";
 import { useParams } from "react-router-dom";
-import { useMemo, lazy, Suspense } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 
 const SwaggerUI = lazy(() => import("swagger-ui-react"));
 
@@ -70,11 +70,13 @@ export function Swagger() {
     isLoading: isLoadingTestKey,
     isError: isTestKeyError,
     error: testKeyError,
+    refetch: refetchTestKey,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
     { enabled: securityEnabled && !oauthOnly },
   );
   const testApiKey = testKey?.apiKey;
+  const [keyRefreshed, setKeyRefreshed] = useState(false);
 
   const endpoint = useMemo(() => Object.keys(data ?? {})?.[0] ?? "", [data]);
   const requestInterceptor = useMemo(
@@ -103,6 +105,20 @@ export function Swagger() {
       return req;
     },
     [data, endpoint, securityEnabled, testApiKey]
+  );
+
+  // swagger-ui cannot replay a request, so on a 401 (usually a test key the
+  // gateway hasn't loaded yet, or one superseded by another session) refresh
+  // the key and ask the user to execute the request again.
+  const responseInterceptor = useMemo(
+    () => (res: any) => {
+      if (securityEnabled && res?.status === 401) {
+        refetchTestKey();
+        setKeyRefreshed(true);
+      }
+      return res;
+    },
+    [securityEnabled, refetchTestKey]
   );
 
   if (isLoading || (securityEnabled && isLoadingTestKey)) {
@@ -139,6 +155,16 @@ export function Swagger() {
           </Typography>
         </Alert>
       )}
+      {keyRefreshed && (
+        <Alert
+          severity="info"
+          onClose={() => setKeyRefreshed(false)}
+          sx={{ mb: 2 }}
+        >
+          The test API key was refreshed after an authorization failure.
+          Execute the request again.
+        </Alert>
+      )}
       <Box sx={{ "& .swagger-ui .wrapper": { padding: 0 } }}>
         <SwaggerUI
           spec={data?.[endpoint].schema.content}
@@ -146,6 +172,7 @@ export function Swagger() {
           plugins={[disableAuthorizeAndInfoPluginCustomSecuritySchema]}
           docExpansion="list"
           requestInterceptor={requestInterceptor}
+          responseInterceptor={responseInterceptor}
           supportedSubmitMethods={oauthOnly ? [] : undefined}
         />
       </Box>
