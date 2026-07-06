@@ -57,18 +57,38 @@ func okOrg() func(context.Context, string) (*models.OrganizationResponse, error)
 }
 
 // -----------------------------------------------------------------------------
-// ListOrganizations — static stub; asserts the hard-coded default response.
+// ListOrganizations — OpenChoreo-backed list with in-memory pagination.
 // -----------------------------------------------------------------------------
 
 func TestInfraResourceManager_ListOrganizations(t *testing.T) {
-	svc := newInfraManager(&clientmocks.OpenChoreoClientMock{})
+	t.Run("lists all orgs with pagination", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+				return []*models.OrganizationResponse{{Name: "a"}, {Name: "b"}, {Name: "c"}}, nil
+			},
+		}
 
-	orgs, total, err := svc.ListOrganizations(context.Background(), 10, 0)
+		orgs, total, err := newInfraManager(oc).ListOrganizations(context.Background(), 2, 1)
 
-	require.NoError(t, err)
-	assert.Equal(t, int32(1), total)
-	require.Len(t, orgs, 1)
-	assert.Equal(t, "default", orgs[0].Name)
+		require.NoError(t, err)
+		assert.Equal(t, int32(3), total)
+		require.Len(t, orgs, 2)
+		assert.Equal(t, "b", orgs[0].Name)
+		assert.Equal(t, "c", orgs[1].Name)
+	})
+
+	t.Run("propagates ListOrganizations error", func(t *testing.T) {
+		boom := errors.New("oc down")
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+				return nil, boom
+			},
+		}
+
+		_, _, err := newInfraManager(oc).ListOrganizations(context.Background(), 10, 0)
+
+		assert.ErrorIs(t, err, boom)
+	})
 }
 
 // -----------------------------------------------------------------------------
