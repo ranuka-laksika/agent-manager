@@ -24,6 +24,7 @@ import (
 	"regexp"
 
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -261,9 +262,9 @@ func (c *agentAPIKeyController) RotateAPIKey(w http.ResponseWriter, r *http.Requ
 
 // IssueTestAPIKey handles POST /api/v1/orgs/{ouID}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys/test
 //
-// Issues (or rotates) the single short-lived test API key for the agent.
-// Used by the console Try-It flow. The key is test-scoped, scoped to the
-// fixed name "console-test", and never appears in the user-facing list.
+// Issues (or rotates) a short-lived test API key scoped to the calling user
+// (derived from the JWT subject). Used by the console Try-It flow; test keys
+// never appear in the user-facing list.
 func (c *agentAPIKeyController) IssueTestAPIKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -275,7 +276,14 @@ func (c *agentAPIKeyController) IssueTestAPIKey(w http.ResponseWriter, r *http.R
 
 	log.Info("IssueTestAPIKey: starting", "ouID", ouID, "projName", projName, "agentName", agentName, "envID", envID)
 
-	response, err := c.apiKeyService.IssueTestAPIKey(ctx, ouID, projName, agentName, envID)
+	claims := jwtassertion.GetTokenClaims(ctx)
+	if claims == nil || claims.Sub == "" {
+		log.Warn("IssueTestAPIKey: missing token claims")
+		utils.WriteErrorResponse(w, http.StatusUnauthorized, "Missing token claims")
+		return
+	}
+
+	response, err := c.apiKeyService.IssueTestAPIKey(ctx, ouID, projName, agentName, envID, claims.Sub)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrArtifactNotFound):
