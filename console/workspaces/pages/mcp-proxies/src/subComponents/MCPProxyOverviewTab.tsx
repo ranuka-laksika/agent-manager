@@ -60,6 +60,10 @@ export function MCPProxyOverviewTab({
     (policy) => policy.name === ACL_POLICY_NAME,
   );
 
+  // Whether this environment's single gateway artifact is currently deployed. The backend
+  // computes it per environment from the artifact's deployment records.
+  const isDeployed = config?.deploymentStatus === "Deployed";
+
   // Auth Type reflects the proxy's inbound security (the Security tab), i.e. whether
   // clients must present an API key — not the upstream auth used to reach the backend.
   const apiKeySecurityEnabled =
@@ -140,6 +144,26 @@ export function MCPProxyOverviewTab({
                 size="small"
                 variant="outlined"
                 color={accessControlConfigured ? "success" : "default"}
+                sx={{ width: "fit-content" }}
+              />
+            </Stack>
+          </Card>
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+          <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
+            <Stack spacing={0.5}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ fontWeight: 500 }}
+              >
+                Deployment
+              </Typography>
+              <Chip
+                label={isDeployed ? "Deployed" : "Undeployed"}
+                size="small"
+                variant="outlined"
+                color={isDeployed ? "success" : "default"}
                 sx={{ width: "fit-content" }}
               />
             </Stack>

@@ -137,13 +137,13 @@ type EnvAgentMCPMappingRepositoryMock struct {
 			Mapping *models.EnvAgentMCPMapping
 		}
 	}
-	lockCreate         sync.RWMutex
-	lockDelete         sync.RWMutex
-	lockDeleteByConfig sync.RWMutex
+	lockCreate            sync.RWMutex
+	lockDelete            sync.RWMutex
+	lockDeleteByConfig    sync.RWMutex
 	lockListByConfig      sync.RWMutex
 	lockListByEnvironment sync.RWMutex
 	lockListByMCPProxy    sync.RWMutex
-	lockUpdate         sync.RWMutex
+	lockUpdate            sync.RWMutex
 }
 
 // Create calls CreateFunc.

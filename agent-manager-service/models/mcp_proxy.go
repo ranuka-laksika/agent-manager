@@ -88,12 +88,33 @@ type MCPProxyConfig struct {
 // MCPEnvironmentConfig is one per-environment blueprint block on a source MCPProxy,
 // stored in MCPProxyConfig.Environments keyed by environment UUID. Upstream holds the
 // single backend endpoint (URL + auth) for that environment.
+//
+// ArtifactUUID is the stable identity of the single gateway artifact this environment
+// deploys. The MCP proxy owns and deploys exactly one artifact per configured
+// environment (to that environment's gateway); it is generated when the block is first
+// stored and preserved across updates. Agent MCP configurations do not deploy their own
+// artifacts — they reference this shared per-environment artifact: its context becomes
+// the injected proxy URL, and per-agent inbound API keys are minted against it (as the
+// gateway-facing apiID) so the gateway validates them against the shared deployment.
 type MCPEnvironmentConfig struct {
+	ArtifactUUID *uuid.UUID            `json:"artifactUuid,omitempty"`
 	Upstream     *UpstreamEndpoint     `json:"upstream,omitempty"`
 	Policies     []MCPPolicy           `json:"policies,omitempty"`
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
+
+	// DeploymentStatus is a response-only indicator of whether this environment's single
+	// gateway artifact is currently deployed ("Deployed") or not ("Undeployed"). It is
+	// computed on read and never persisted (buildMCPEnvironmentsForStorage rebuilds blocks
+	// without it).
+	DeploymentStatus string `json:"deploymentStatus,omitempty"`
 }
+
+// MCP proxy per-environment deployment status values reported on read.
+const (
+	MCPDeploymentStatusDeployed   = "Deployed"
+	MCPDeploymentStatusUndeployed = "Undeployed"
+)
 
 // MCPPolicy represents a policy attached to an MCP proxy.
 type MCPPolicy struct {

@@ -56,6 +56,11 @@ export interface MCPEnvironmentConfig {
   policies?: MCPProxyPolicy[];
   capabilities?: MCPProxyCapabilities;
   security?: SecurityConfig;
+  /**
+   * Response-only indicator of whether this environment's single gateway artifact is
+   * currently deployed ("Deployed") or not ("Undeployed"). Computed on read; never sent.
+   */
+  deploymentStatus?: string;
 }
 
 /**
