@@ -567,19 +567,8 @@ func buildpackPythonVersion(b *spec.Build) string {
 	if bp.LanguageVersion == nil {
 		return ""
 	}
-	raw := strings.TrimSpace(*bp.LanguageVersion)
-	if raw == "" {
-		return ""
-	}
-	parts := strings.SplitN(raw, ".", 3)
-	if len(parts) < 2 {
-		return ""
-	}
-	major, minor := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-	if major == "" || minor == "" {
-		return ""
-	}
-	return major + "." + minor
+	// Single source of the major.minor normalisation rule.
+	return normalizePythonMinor(*bp.LanguageVersion)
 }
 
 // validateEffectivePythonInstrumentationPair resolves the instrumentation
@@ -617,6 +606,90 @@ func (s *agentManagerService) validatePythonInstrumentationPair(pythonVersion, i
 	}
 	return fmt.Errorf("%w: instrumentation %q does not support python %q (supports: %v)",
 		utils.ErrInvalidInput, instrumentationVersion, pythonVersion, entry.PythonVersions)
+}
+
+// normalizePythonMinor collapses a Python runtime version to its bare
+// major.minor form ("3.11.4" -> "3.11"), matching the shape stored in the
+// instrumentation catalog. Returns "" when the value has fewer than two
+// dot-separated components.
+func normalizePythonMinor(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.SplitN(raw, ".", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	major, minor := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	if major == "" || minor == "" {
+		return ""
+	}
+	return major + "." + minor
+}
+
+// resolveInstrumentationImageOverride resolves the per-environment
+// instrumentationImage override for a Python buildpack agent. Precedence for the
+// effective version is: request override -> existing pin. When a version is
+// requested it is validated against the deployment catalog and the agent's Python
+// version; the existing pin is trusted (it validated at creation) so a redeploy
+// never fails on a catalog that has since changed.
+//
+// It returns the version to persist (nil when nothing is pinned) and the image to
+// write into the OTEL trait's per-environment config ("" when no version is
+// pinned, meaning the Component's create-time default stands). For non-Python
+// agents it is a no-op that echoes the existing pin.
+func (s *agentManagerService) resolveInstrumentationImageOverride(isPythonBuildpack bool, languageVersion string, requested, existing *string) (*string, string, error) {
+	if !isPythonBuildpack {
+		return existing, "", nil
+	}
+	pyMinor := normalizePythonMinor(languageVersion)
+	version := existing
+	if requested != nil {
+		if err := s.validateInstrumentationVersion(*requested); err != nil {
+			return nil, "", err
+		}
+		if err := s.validateEffectivePythonInstrumentationPair(pyMinor, requested); err != nil {
+			return nil, "", err
+		}
+		version = requested
+	}
+	if version == nil || *version == "" {
+		return version, "", nil
+	}
+	// For an existing (not freshly-requested) pin, guard against a Python
+	// version that changed since the pin was set — build-parameters only
+	// re-validates the lowest environment's pin, so a non-lowest env's pin can
+	// silently become Python-incompatible. Building the image from an
+	// incompatible pair (or an unparseable Python version) would yield an
+	// init-container tag that doesn't exist (ImagePullBackOff). Keep the
+	// persisted pin but skip the per-env image override so the deployment falls
+	// back to the Component's image instead of a broken tag. A freshly-requested
+	// version is already strictly validated above.
+	if requested == nil {
+		if pyMinor == "" {
+			s.logger.Warn("Cannot determine Python version for instrumentation image; keeping component default",
+				"languageVersion", languageVersion, "instrumentationVersion", *version)
+			return version, "", nil
+		}
+		if err := s.validatePythonInstrumentationPair(pyMinor, *version); err != nil {
+			s.logger.Warn("Pinned instrumentation version is not compatible with the current Python version; keeping component default",
+				"languageVersion", languageVersion, "instrumentationVersion", *version, "error", err)
+			return version, "", nil
+		}
+	}
+	image, err := client.BuildInstrumentationImage(languageVersion, *version)
+	if err != nil {
+		if requested != nil {
+			return nil, "", fmt.Errorf("%w: %s", utils.ErrInvalidInput, err.Error())
+		}
+		// Defensive: the compatibility guard above should already have caught
+		// this; keep the Component default rather than failing a valid redeploy.
+		s.logger.Warn("Failed to build instrumentation image from existing pin; keeping component default",
+			"languageVersion", languageVersion, "instrumentationVersion", *version, "error", err)
+		return version, "", nil
+	}
+	return version, image, nil
 }
 
 // persistInstrumentationConfig saves the instrumentation config to the database.
@@ -2407,7 +2480,18 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	policies := buildPolicies(apiCfg)
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, isBallerinaBuildpack, enableAutoInstrumentation)
+	// Re-apply the agent's pinned instrumentation version as a per-env image
+	// override so a redeploy doesn't drop a version set via deploy-settings/promote
+	// back to the Component default. Deploy carries no version override of its own.
+	deployLanguageVersion := ""
+	if agent.Build != nil && agent.Build.Buildpack != nil {
+		deployLanguageVersion = agent.Build.Buildpack.LanguageVersion
+	}
+	_, deployInstrumentationImage, err := s.resolveInstrumentationImageOverride(isPythonBuildpack, deployLanguageVersion, nil, existingInstrumentationVersion)
+	if err != nil {
+		return "", err
+	}
+	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, isBallerinaBuildpack, enableAutoInstrumentation, deployInstrumentationImage)
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2761,7 +2845,10 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 // For Python buildpack agents, instrumentationEnabled is set per-environment on the OTEL trait;
 // for Ballerina buildpack agents it is set on the ballerina-config-file trait. In both cases the
 // 'where' clause on patches enables/disables instrumentation independently per environment.
-func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack, isBallerinaBuildpack bool, autoInstrumentation bool) map[string]interface{} {
+// instrumentationImage, when non-empty, pins the OTEL init-container image for this environment
+// (overriding the Component's create-time default) so the AMP instrumentation version can be
+// changed per-environment on deploy/promote without re-attaching the Component trait.
+func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack, isBallerinaBuildpack bool, autoInstrumentation bool, instrumentationImage string) map[string]interface{} {
 	instanceName := func(traitType client.TraitType) string {
 		return agentName + "-" + string(traitType)
 	}
@@ -2775,9 +2862,13 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 		instanceName(client.TraitAPIManagement): apiTraitCfg,
 	}
 	if isPythonBuildpack {
-		traitEnvConfigs[instanceName(client.TraitOTELInstrumentation)] = map[string]interface{}{
+		otelCfg := map[string]interface{}{
 			"instrumentationEnabled": autoInstrumentation,
 		}
+		if instrumentationImage != "" {
+			otelCfg["instrumentationImage"] = instrumentationImage
+		}
+		traitEnvConfigs[instanceName(client.TraitOTELInstrumentation)] = otelCfg
 	}
 	if isBallerinaBuildpack {
 		traitEnvConfigs[instanceName(client.TraitBallerinaOTELInstrumentation)] = map[string]interface{}{
@@ -2989,7 +3080,24 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		targetArtifactID := artifact.UUID.String()
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 		promoteBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
+		// Resolve the instrumentation version for the target env: request override
+		// (validated) -> source env's pinned version. The resolved version is
+		// persisted below and its image is written as a per-env override.
+		promoteLanguageVersion := ""
+		if agent.Build != nil && agent.Build.Buildpack != nil {
+			promoteLanguageVersion = agent.Build.Buildpack.LanguageVersion
+		}
+		var existingInstrumentationVersion *string
+		if existingConfig != nil {
+			existingInstrumentationVersion = existingConfig.InstrumentationVersion
+		}
+		resolvedInstrumentationVersion, promoteInstrumentationImage, resolveErr := s.resolveInstrumentationImageOverride(
+			promotePythonBuildpack, promoteLanguageVersion, req.InstrumentationVersion.Get(), existingInstrumentationVersion,
+		)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, promoteInstrumentationImage)
 
 		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
 		if apiKeyErr != nil {
@@ -3018,6 +3126,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			AgentName:                 agentName,
 			EnvironmentName:           req.TargetEnvironment,
 			EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+			InstrumentationVersion:    resolvedInstrumentationVersion,
 			EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
 			CORSEnabled:               apiCfg.CORSEnabled,
 			CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
@@ -3103,7 +3212,24 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 	}
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
+	// Resolve the instrumentation version: request override (validated) -> the
+	// env's currently-pinned version. The resolved version is persisted below and
+	// its image is written as a per-env override on the OTEL trait.
+	languageVersion := ""
+	if agent.Build != nil && agent.Build.Buildpack != nil {
+		languageVersion = agent.Build.Buildpack.LanguageVersion
+	}
+	var existingInstrumentationVersion *string
+	if existingConfig != nil {
+		existingInstrumentationVersion = existingConfig.InstrumentationVersion
+	}
+	resolvedInstrumentationVersion, instrumentationImage, resolveErr := s.resolveInstrumentationImageOverride(
+		isPythonBuildpack, languageVersion, req.InstrumentationVersion.Get(), existingInstrumentationVersion,
+	)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, instrumentationImage)
 
 	// Apply to the release binding (atomic: trait configs + restartedAt in a single update).
 	if updateErr := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, orgName, agentName, req.EnvironmentName, traitEnvConfigs); updateErr != nil {
@@ -3118,6 +3244,7 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		AgentName:                 agentName,
 		EnvironmentName:           req.EnvironmentName,
 		EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+		InstrumentationVersion:    resolvedInstrumentationVersion,
 		EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
 		CORSEnabled:               apiCfg.CORSEnabled,
 		CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
@@ -3130,10 +3257,6 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		OAuthHeaderName:           apiCfg.OAuthHeaderName,
 		OAuthAuthHeaderPrefix:     apiCfg.OAuthAuthHeaderPrefix,
 		OAuthForwardToken:         apiCfg.OAuthForwardToken,
-	}
-	if existingConfig != nil {
-		// Preserve any pinned instrumentation_version that wasn't part of this request.
-		agentConfig.InstrumentationVersion = existingConfig.InstrumentationVersion
 	}
 	if upsertErr := s.agentConfigRepo.Upsert(agentConfig); upsertErr != nil {
 		s.logger.Error("Failed to persist agent deploy settings", "agentName", agentName, "environment", req.EnvironmentName, "error", upsertErr)

@@ -19,7 +19,41 @@ package utils
 import (
 	"strings"
 	"testing"
+
+	"github.com/wso2/agent-manager/agent-manager-service/spec"
 )
+
+func TestValidatePromoteAgentRequest_UseSourceExcludesInstrumentationVersion(t *testing.T) {
+	useSource := true
+	req := &spec.PromoteAgentRequest{
+		SourceEnvironment:      "dev",
+		TargetEnvironment:      "staging",
+		UseConfigFromSourceEnv: &useSource,
+	}
+	req.InstrumentationVersion.Set(strPtrForTest("0.4.0"))
+
+	err := ValidatePromoteAgentRequest(req)
+	if err == nil {
+		t.Fatal("expected error: instrumentationVersion is mutually exclusive with useConfigFromSourceEnv=true")
+	}
+	if !strings.Contains(err.Error(), "instrumentationVersion") {
+		t.Errorf("error %q should mention instrumentationVersion", err)
+	}
+}
+
+func TestValidatePromoteAgentRequest_InstrumentationVersionAllowedWithoutUseSource(t *testing.T) {
+	req := &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	}
+	req.InstrumentationVersion.Set(strPtrForTest("0.4.0"))
+
+	if err := ValidatePromoteAgentRequest(req); err != nil {
+		t.Errorf("instrumentationVersion should be allowed when useConfigFromSourceEnv is unset: %v", err)
+	}
+}
+
+func strPtrForTest(s string) *string { return &s }
 
 func TestValidateTemplateHandle(t *testing.T) {
 	tests := []struct {

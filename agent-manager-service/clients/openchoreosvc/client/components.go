@@ -2393,6 +2393,14 @@ func (c *openChoreoClient) buildBallerinaConfigFileTraitParameters(opts ...Trait
 	return params
 }
 
+// BuildInstrumentationImage is the exported wrapper around getInstrumentationImage
+// so callers outside this package (e.g. the service layer) can compute the
+// init-container image reference for a per-environment instrumentationImage
+// override without re-deriving the registry/name/tag convention.
+func BuildInstrumentationImage(languageVersion, instrumentationVersion string) (string, error) {
+	return getInstrumentationImage(languageVersion, instrumentationVersion)
+}
+
 // getInstrumentationImage builds the pre-built init-container image reference for
 // the given AMP instrumentation version and the agent's Python runtime version,
 // e.g. ghcr.io/wso2/amp-python-instrumentation-provider:0.3.0-python3.11.

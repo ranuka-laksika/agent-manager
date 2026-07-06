@@ -34,6 +34,11 @@ export interface DeployAgentRequest {
 export interface UpdateAgentDeploySettingsRequest {
   environmentName: string;
   enableAutoInstrumentation?: boolean;
+  /**
+   * AMP instrumentation version to pin for this Python buildpack agent in this
+   * environment. Omit to keep the currently-pinned version.
+   */
+  instrumentationVersion?: string;
   enableApiKeySecurity?: boolean;
   enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
@@ -201,6 +206,11 @@ export interface PromoteAgentRequest {
   env?: EnvironmentVariable[];
   files?: FileMount[];
   enableAutoInstrumentation?: boolean;
+  /**
+   * AMP instrumentation version to pin for this Python buildpack agent in the
+   * target environment. Omit to inherit the currently-pinned version.
+   */
+  instrumentationVersion?: string;
   enableApiKeySecurity?: boolean;
   enableOAuthSecurity?: boolean;
   corsConfig?: CorsConfig;
