@@ -66,13 +66,13 @@ type AgentConfigurationService interface {
 	// identify which component env var secretRefs are system-managed (LLM config) vs user-provided.
 	ListAgentLLMConfigSecretReferences(ctx context.Context, agentID, orgName, environmentName string) (map[string]struct{}, error)
 	// ListSystemManagedEnvVarKeys returns the set of env var keys that are system-managed
-	// (i.e. injected by LLM configurations) for the given agent and environment.
+	// (i.e. injected by agent LLM/MCP configurations) for the given agent and environment.
 	// Used during promote to strip these keys from inherited workload overrides.
-	ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error)
-	// BuildSystemManagedEnvVarsFromConfig constructs the LLM env vars for a given agent
-	// and environment from the DB config. Used during promotion when the target environment's
-	// ReleaseBinding doesn't have these vars yet.
-	BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error)
+	ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, projectName, environmentName string) (map[string]bool, error)
+	// BuildSystemManagedEnvVarsFromConfig constructs system-managed env vars for a given
+	// agent and environment from all DB configs. Used during promotion when the target
+	// environment's ReleaseBinding doesn't have these vars yet.
+	BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, projectName, environmentName string) ([]client.EnvVar, error)
 	// RedeployMCPMappingsForSourceProxy refreshes every agent-scoped MCP mapping artifact derived
 	// from the given source proxy. Called by the MCP proxy controller after a successful proxy
 	// update so each derived artifact picks up new upstream URL / policies on its gateways.
@@ -5269,7 +5269,9 @@ func (s *agentConfigurationService) ListAgentLLMConfigSecretReferences(ctx conte
 	return result, nil
 }
 
-func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error) {
+func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(
+	ctx context.Context, agentID, orgName, projectName, environmentName string,
+) (map[string]bool, error) {
 	env, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment %q: %w", environmentName, err)
@@ -5279,31 +5281,30 @@ func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Cont
 		return nil, fmt.Errorf("invalid environment UUID %q: %w", env.UUID, err)
 	}
 
-	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
+	configs, err := s.agentConfigRepo.ListByAgent(ctx, orgName, projectName, agentID, 1000, 0)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// No LLM configuration exists for this agent — no system-managed keys
-			return map[string]bool{}, nil
+		return nil, fmt.Errorf("failed to list agent configurations: %w", err)
+	}
+
+	keys := make(map[string]bool)
+	for _, config := range configs {
+		vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, config.UUID, envUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list env config variables for config %s: %w", config.UUID, err)
 		}
-		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
-	}
-
-	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list env config variables: %w", err)
-	}
-
-	keys := make(map[string]bool, len(vars))
-	for _, v := range vars {
-		keys[v.VariableName] = true
+		for _, v := range vars {
+			keys[v.VariableName] = true
+		}
 	}
 	return keys, nil
 }
 
-// BuildSystemManagedEnvVarsFromConfig constructs the LLM env vars (URL + API key ref)
-// for a given agent and environment from the DB config. Used during promotion when
+// BuildSystemManagedEnvVarsFromConfig constructs system-managed env vars for a given
+// agent and environment from every DB-backed agent config. Used during promotion when
 // the target environment's ReleaseBinding doesn't have these vars yet.
-func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error) {
+func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(
+	ctx context.Context, agentID, orgName, projectName, environmentName string,
+) ([]client.EnvVar, error) {
 	env, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment %q: %w", environmentName, err)
@@ -5313,59 +5314,105 @@ func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(ctx cont
 		return nil, fmt.Errorf("invalid environment UUID %q: %w", env.UUID, err)
 	}
 
-	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
+	configs, err := s.agentConfigRepo.ListByAgent(ctx, orgName, projectName, agentID, 1000, 0)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
+		return nil, fmt.Errorf("failed to list agent configurations: %w", err)
 	}
 
-	// Get the env-agent mapping for this environment to find the proxy
-	mapping, err := s.envMappingRepo.GetByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get env mapping for %s: %w", environmentName, err)
-	}
-
-	// Use preloaded proxy from the mapping
-	proxy := mapping.LLMProxy
-	if proxy == nil {
-		return nil, fmt.Errorf("LLM proxy not found for mapping in environment %s", environmentName)
-	}
-
-	// Resolve gateway for the proxy URL
-	gateway, err := s.resolveGatewayForProxy(ctx, proxy.Handle, orgName, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve gateway: %w", err)
-	}
-	proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true)
-
-	// Get the env config variables to find the secret reference and variable names
-	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list env config variables: %w", err)
-	}
-
-	// Build env vars from the DB config
 	var result []client.EnvVar
-	for _, v := range vars {
-		if v.SecretReference != "" {
-			result = append(result, client.EnvVar{
-				Key: v.VariableName,
-				ValueFrom: &client.EnvVarValueFrom{
+	for i := range configs {
+		config := &configs[i]
+		vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, config.UUID, envUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list env config variables for config %s: %w", config.UUID, err)
+		}
+		if len(vars) == 0 {
+			continue
+		}
+
+		urlValue := ""
+		switch config.TypeID {
+		case models.AgentConfigTypeIDLLM:
+			urlValue, err = s.systemManagedLLMURL(ctx, config, orgName, environmentName, envUUID)
+		case models.AgentConfigTypeIDMCP:
+			urlValue, err = s.systemManagedMCPURL(ctx, config, orgName, environmentName, envUUID)
+		default:
+			err = nil
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range vars {
+			envVar := client.EnvVar{Key: v.VariableName}
+			switch {
+			case v.SecretReference != "":
+				envVar.ValueFrom = &client.EnvVarValueFrom{
 					SecretKeyRef: &client.SecretKeyRef{
 						Name: v.SecretReference,
 						Key:  secretmanagersvc.SecretKeyAPIKey,
 					},
-				},
-			})
-		} else {
-			result = append(result, client.EnvVar{
-				Key:   v.VariableName,
-				Value: proxyURL,
-			})
+				}
+			case v.VariableKey == "url":
+				envVar.Value = urlValue
+			default:
+				envVar.Value = ""
+			}
+			result = append(result, envVar)
 		}
 	}
 
 	return result, nil
+}
+
+func (s *agentConfigurationService) systemManagedLLMURL(
+	ctx context.Context, config *models.AgentConfiguration, orgName, environmentName string, envUUID uuid.UUID,
+) (string, error) {
+	mapping, err := s.envMappingRepo.GetByConfigAndEnv(ctx, config.UUID, envUUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get LLM env mapping for %s: %w", environmentName, err)
+	}
+	if mapping.LLMProxy == nil {
+		return "", fmt.Errorf("LLM proxy not found for mapping in environment %s", environmentName)
+	}
+
+	proxyHandle := strings.TrimSpace(mapping.LLMProxy.Handle)
+	if proxyHandle == "" {
+		proxyHandle = strings.TrimSpace(mapping.LLMProxy.Configuration.Name)
+	}
+	if proxyHandle == "" {
+		return "", fmt.Errorf("LLM proxy handle not found for mapping in environment %s", environmentName)
+	}
+
+	gateway, err := s.resolveGatewayForProxy(ctx, proxyHandle, orgName, envUUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve gateway for LLM proxy in %s: %w", environmentName, err)
+	}
+	return buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true), nil
+}
+
+func (s *agentConfigurationService) systemManagedMCPURL(
+	ctx context.Context, config *models.AgentConfiguration, orgName, environmentName string, envUUID uuid.UUID,
+) (string, error) {
+	mappings, err := s.envMCPMappingRepo.ListByConfig(ctx, config.UUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to list MCP env mappings for config %s: %w", config.UUID, err)
+	}
+	for i := range mappings {
+		mapping := &mappings[i]
+		if mapping.EnvironmentUUID != envUUID {
+			continue
+		}
+		if mapping.MCPProxy == nil {
+			return "", fmt.Errorf("MCP proxy not found for mapping in environment %s", environmentName)
+		}
+		gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, orgName, envUUID)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve gateway for MCP proxy in %s: %w", environmentName, err)
+		}
+		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, environmentName)
+		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, environmentName, orgName, handle)
+		return buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), nil
+	}
+	return "", fmt.Errorf("MCP env mapping not found for config %s in environment %s", config.UUID, environmentName)
 }
