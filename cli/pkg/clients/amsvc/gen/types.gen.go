@@ -4029,6 +4029,15 @@ type PromoteAgentRequest struct {
 	// Files Environment-specific file mounts for the target environment.
 	Files *[]FileMount `json:"files,omitempty"`
 
+	// InstrumentationVersion AMP instrumentation version to pin for the agent in the target
+	// environment. Selects the pre-built init-container image
+	// (`amp-python-instrumentation-provider:<version>-python<X.Y>`) and the
+	// `traceloop-sdk` it bundles. Applies only to Python buildpack agents
+	// with auto-instrumentation enabled. Omit (or send null) to inherit the
+	// currently-pinned version. Must be one of the versions supported by
+	// the deployment; unknown or python-incompatible values are rejected.
+	InstrumentationVersion *string `json:"instrumentationVersion,omitempty"`
+
 	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
 	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 
@@ -4597,6 +4606,15 @@ type UpdateAgentDeploySettingsRequest struct {
 
 	// EnvironmentName Name of the environment whose deploy settings to update.
 	EnvironmentName string `json:"environmentName"`
+
+	// InstrumentationVersion AMP instrumentation version to pin for this agent. Selects the
+	// pre-built init-container image
+	// (`amp-python-instrumentation-provider:<version>-python<X.Y>`) and the
+	// `traceloop-sdk` it bundles. Applies only to Python buildpack agents
+	// with auto-instrumentation enabled. Omit (or send null) to keep the
+	// currently-pinned version. Must be one of the versions supported by
+	// the deployment; unknown or python-incompatible values are rejected.
+	InstrumentationVersion *string `json:"instrumentationVersion,omitempty"`
 
 	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
 	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`

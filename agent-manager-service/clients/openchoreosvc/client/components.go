@@ -2405,11 +2405,15 @@ func BuildInstrumentationImage(languageVersion, instrumentationVersion string) (
 // the given AMP instrumentation version and the agent's Python runtime version,
 // e.g. ghcr.io/wso2/amp-python-instrumentation-provider:0.3.0-python3.11.
 func getInstrumentationImage(languageVersion, instrumentationVersion string) (string, error) {
-	parts := strings.Split(languageVersion, ".")
+	// Trim before splitting so the built tag matches the trimmed major.minor the
+	// service validates against the catalog (normalizePythonMinor also trims);
+	// otherwise a value like "  3.11  " would validate yet produce a malformed
+	// image tag with embedded whitespace.
+	parts := strings.Split(strings.TrimSpace(languageVersion), ".")
 	if len(parts) < 2 {
 		return "", fmt.Errorf("invalid languageVersion format: expected 'major.minor' but got '%s'", languageVersion)
 	}
-	pythonMajorMinor := parts[0] + "." + parts[1]
+	pythonMajorMinor := strings.TrimSpace(parts[0]) + "." + strings.TrimSpace(parts[1])
 	return fmt.Sprintf("%s/%s:%s-python%s", InstrumentationImageRegistry, InstrumentationImageName, instrumentationVersion, pythonMajorMinor), nil
 }
 
