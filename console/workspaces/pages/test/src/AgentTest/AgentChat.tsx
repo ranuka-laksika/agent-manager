@@ -55,6 +55,7 @@ export function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRetryingAuth, setIsRetryingAuth] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { agentId, orgId, projectId, envId } = useParams();
   const { data: endpoints, isLoading: isEndpointsLoading } =
@@ -82,6 +83,7 @@ export function AgentChat() {
     data: testKey,
     isLoading: isLoadingTestKey,
     error: testKeyError,
+    refetch: refetchTestKey,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
     { enabled: securityEnabled && !oauthOnly },
@@ -128,19 +130,48 @@ export function AgentChat() {
         message: userMessage.content,
       };
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+      const sendChatRequest = (apiKey?: string) => {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (securityEnabled && apiKey) {
+          headers["X-API-Key"] = apiKey;
+        }
+        return fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          referrerPolicy: "",
+        });
       };
-      if (securityEnabled && testKey?.apiKey) {
-        headers["X-API-Key"] = testKey.apiKey;
-      }
+      const sleep = (ms: number) =>
+        new Promise((resolve) => setTimeout(resolve, ms));
 
-      const apiResponse = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        referrerPolicy: "",
-      });
+      let apiResponse = await sendChatRequest(testKey?.apiKey);
+
+      // A 401 usually means the gateway has not finished loading a freshly
+      // issued test key (propagation takes a few seconds) or our cached key
+      // was superseded. Retry with the same key first, then once more with a
+      // newly issued key, instead of surfacing the error to the user.
+      if (securityEnabled && apiResponse.status === 401) {
+        setIsRetryingAuth(true);
+        try {
+          for (const delayMs of [1000, 2500]) {
+            await sleep(delayMs);
+            apiResponse = await sendChatRequest(testKey?.apiKey);
+            if (apiResponse.status !== 401) break;
+          }
+          if (apiResponse.status === 401) {
+            const freshKey = (await refetchTestKey()).data?.apiKey;
+            if (freshKey) {
+              await sleep(4000);
+              apiResponse = await sendChatRequest(freshKey);
+            }
+          }
+        } finally {
+          setIsRetryingAuth(false);
+        }
+      }
 
       let responseData: any;
       const contentType = apiResponse.headers.get("content-type");
@@ -324,7 +355,9 @@ export function AgentChat() {
                   color="text.secondary"
                   sx={{ fontSize: "0.875rem" }}
                 >
-                  Loading...
+                  {isRetryingAuth
+                    ? "Waiting for the test API key to become active..."
+                    : "Loading..."}
                 </Typography>
               </Box>
             </Box>
