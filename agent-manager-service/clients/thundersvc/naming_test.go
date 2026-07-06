@@ -176,6 +176,29 @@ func TestAgentThunderAppName_TruncatesAt100Chars(t *testing.T) {
 	}
 }
 
+// TestAgentThunderAppName_TruncationDoesNotCollide guards against two distinct
+// agents producing the identical Thunder app name: without a collision-avoidance
+// hash, two names sharing the same first 100 characters (and differing only
+// beyond that cutoff) would truncate to the exact same string, causing Thunder's
+// 409 fallback (findAgentByName) to hand the second agent's binding the first
+// agent's Thunder identity — so regenerating or revoking one silently rotates or
+// kills the other's credential.
+func TestAgentThunderAppName_TruncationDoesNotCollide(t *testing.T) {
+	sharedPrefix := strings.Repeat("x", 200)
+	agentA := sharedPrefix + "aaa"
+	agentB := sharedPrefix + "bbb"
+
+	nameA := AgentThunderAppName("acme", "staging", "proj1", agentA)
+	nameB := AgentThunderAppName("acme", "staging", "proj1", agentB)
+
+	if nameA == nameB {
+		t.Fatalf("two distinct agents truncated to the same Thunder app name: %q", nameA)
+	}
+	if len(nameA) > 100 || len(nameB) > 100 {
+		t.Errorf("truncated names must still respect the 100-char limit: %d, %d", len(nameA), len(nameB))
+	}
+}
+
 // These lock in resolveThunderBaseURL's candidate cascade — the mechanism that lets
 // AMS reach env-Thunder both when running in-cluster (production) and when running
 // via docker-compose outside the cluster (local dev), where *.svc.cluster.local
@@ -216,6 +239,31 @@ func TestResolveThunderBaseURL_FallsBackToExternalIngress(t *testing.T) {
 	}
 	if got.baseURL != externalBaseURL || got.resolveToHost != "" {
 		t.Errorf("want external ingress candidate with no dial override, got %+v", got)
+	}
+}
+
+// TestResolveThunderBaseURL_ExternalIngressCandidate_RespectsTLSConfig guards a
+// regression: the external ingress candidate must match thunderExternalOrigin's
+// TLS-aware scheme/port (what env-Thunder itself advertises as its issuer/JWKS),
+// not a hardcoded http://...:8080 — otherwise a VM/production deployment
+// (TLS_ENABLED=true) falling back to this candidate probes the wrong scheme and
+// port entirely, and reports a live env-Thunder as unreachable.
+func TestResolveThunderBaseURL_ExternalIngressCandidate_RespectsTLSConfig(t *testing.T) {
+	origTLS := config.GetConfig().TLSConfig.EnableTLS
+	defer func() { config.GetConfig().TLSConfig.EnableTLS = origTLS }()
+	config.GetConfig().TLSConfig.EnableTLS = true
+
+	wantBaseURL := "https://acme-staging.thunder.amp.localhost"
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		return c.baseURL == wantBaseURL && c.resolveToHost == ""
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when the TLS-aware external ingress candidate is reachable")
+	}
+	if got.baseURL != wantBaseURL || got.resolveToHost != "" {
+		t.Errorf("want TLS-aware external ingress candidate %q, got %+v", wantBaseURL, got)
 	}
 }
 

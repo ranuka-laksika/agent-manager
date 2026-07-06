@@ -222,8 +222,7 @@ type thunderURLCandidate struct {
 // env-Thunder's admin API for per-agent client provisioning) build their attempts from
 // this same list, so the two can never drift out of sync with each other.
 func thunderBaseURLCandidates(org, env string) []thunderURLCandidate {
-	host := ThunderHost(org, env)
-	externalBaseURL := fmt.Sprintf("http://%s:8080", host)
+	externalBaseURL := thunderExternalOrigin(org, env)
 	candidates := []thunderURLCandidate{
 		{baseURL: ThunderInternalURL(org, env)},
 		{baseURL: externalBaseURL},
@@ -329,12 +328,19 @@ func ThunderProbe(ctx context.Context, org, env string) bool {
 	return false
 }
 
-const maxAgentAppNameLen = 100
+const (
+	maxAgentAppNameLen = 100
+	// agentAppNameTruncatePrefixLen leaves room for "-" + a 6-char thunderSHA6
+	// suffix (7 chars) within maxAgentAppNameLen, mirroring ThunderReleaseName/
+	// ThunderHost's truncation scheme below.
+	agentAppNameTruncatePrefixLen = maxAgentAppNameLen - 7
+)
 
 // AgentThunderAppName returns the OAuth app name to use in Thunder for a per-agent client.
-// Format: amp-agent-<org>-<env>-<project>-<agent>, truncated to 100 chars, trailing
-// hyphen stripped. The name mirrors amp-publisher-<org> but is fully scoped to
-// env + project + agent to avoid collisions.
+// Format: amp-agent-<org>-<env>-<project>-<agent>, truncated to 100 chars with a
+// collision-safe hash suffix (see ThunderReleaseName). The name mirrors
+// amp-publisher-<org> but is fully scoped to env + project + agent to avoid
+// collisions.
 //
 // env is included even though each env already has its own physically separate
 // Thunder instance (so it isn't needed for uniqueness there): without it, every
@@ -353,7 +359,9 @@ func AgentThunderAppName(org, env, project, agent string) string {
 	if len(name) <= maxAgentAppNameLen {
 		return strings.TrimSuffix(name, "-")
 	}
-	return strings.TrimRight(name[:maxAgentAppNameLen], "-")
+	hash := thunderSHA6(org + "/" + env + "/" + project + "/" + agent)
+	prefix := strings.TrimRight(name[:agentAppNameTruncatePrefixLen], "-")
+	return fmt.Sprintf("%s-%s", prefix, hash)
 }
 
 // thunderSHA6 returns the first 6 hex characters of the SHA-256 hash of s.

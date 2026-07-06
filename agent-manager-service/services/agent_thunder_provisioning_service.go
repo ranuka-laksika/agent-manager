@@ -290,6 +290,13 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 				return
 			}
 		}
+	} else if binding.SecretRefPath == "" {
+		// Retry of an attempt that created the identity but failed before storing a secret.
+		clientSecret, err = thunderClient.RegenerateAgentSecret(ctx, thunderAgentID)
+		if err != nil {
+			s.recordFailure(ctx, binding, thunderAgentID, clientID, fmt.Errorf("recover secret for existing agent identity: %w", err))
+			return
+		}
 	}
 
 	secretRefPath := binding.SecretRefPath

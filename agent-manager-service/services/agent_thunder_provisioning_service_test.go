@@ -106,10 +106,20 @@ func TestAttemptProvision_AlreadyHasThunderAgentID_SkipsCreate(t *testing.T) {
 		t.Fatal("CreateAgentIdentity must not be called when the binding already has a thunderAgentID")
 		return "", "", "", false, nil
 	}
+	tc.RegenerateAgentSecretFunc = func(_ context.Context, thunderAgentID string) (string, error) {
+		assert.Equal(t, "already-created", thunderAgentID)
+		return "recovered-secret", nil
+	}
 	resolver := &clientmocks.EnvThunderResolverMock{
 		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
-	store := &clientmocks.AgentSecretStoreMock{}
+	var storedSecret string
+	store := &clientmocks.AgentSecretStoreMock{
+		StoreFunc: func(_ context.Context, _, _, _, _, _, clientSecret string) (string, error) {
+			storedSecret = clientSecret
+			return "some/path", nil
+		},
+	}
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo := &repomocks.AgentThunderClientRepositoryMock{
 		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
@@ -123,10 +133,64 @@ func TestAttemptProvision_AlreadyHasThunderAgentID_SkipsCreate(t *testing.T) {
 	binding := models.AgentThunderClient{
 		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 		ThunderAgentID: "already-created", ThunderClientID: "already-client-id",
+		// SecretRefPath deliberately empty: models a binding whose identity was
+		// created on a prior attempt, but that attempt failed before a secret
+		// was ever stored for it.
 	}
 
 	svc.AttemptProvision(context.Background(), binding)
+
 	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status)
+	assert.Equal(t, "recovered-secret", storedSecret,
+		"a binding with a Thunder identity but no stored secret must recover one before completing")
+	assert.Equal(t, "some/path", recorded.SecretRefPath,
+		"the recovered secret's storage location must be persisted, not left empty")
+}
+
+// TestAttemptProvision_AlreadyHasSecretRef_SkipsRecovery guards the inverse of
+// the recovery case above: a binding that already has both a Thunder identity
+// AND a previously stored secret must not regenerate or re-store on a
+// subsequent attempt (e.g. a retry triggered by an unrelated transient
+// failure elsewhere) — that would needlessly invalidate a secret that is
+// already valid and possibly already in use.
+func TestAttemptProvision_AlreadyHasSecretRef_SkipsRecovery(t *testing.T) {
+	tc := fakeThunderClientMock()
+	tc.CreateAgentIdentityFunc = func(_ context.Context, _, _, _ string) (string, string, string, bool, error) {
+		t.Fatal("CreateAgentIdentity must not be called when the binding already has a thunderAgentID")
+		return "", "", "", false, nil
+	}
+	tc.RegenerateAgentSecretFunc = func(_ context.Context, _ string) (string, error) {
+		t.Fatal("must not regenerate a secret when one is already stored")
+		return "", nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		StoreFunc: func(context.Context, string, string, string, string, string, string) (string, error) {
+			t.Fatal("must not store a new secret when one is already stored")
+			return "", nil
+		},
+	}
+	var recorded repositories.AgentThunderAttemptUpdate
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+			recorded = fields
+			return nil
+		},
+	}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	binding := models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ThunderAgentID: "already-created", ThunderClientID: "already-client-id", SecretRefPath: "existing/path",
+	}
+
+	svc.AttemptProvision(context.Background(), binding)
+
+	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status)
+	assert.Equal(t, "existing/path", recorded.SecretRefPath, "an already-stored secret ref must be left untouched")
 }
 
 func TestAttemptProvision_ConflictFallback_RegeneratesSecretToRecover(t *testing.T) {
