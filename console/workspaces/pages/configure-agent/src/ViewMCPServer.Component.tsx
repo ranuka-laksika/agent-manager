@@ -43,7 +43,11 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, BookOpen, ExternalLink } from "@wso2/oxygen-ui-icons-react";
+import {
+  AlertTriangle,
+  BookOpen,
+  ExternalLink,
+} from "@wso2/oxygen-ui-icons-react";
 import {
   useGetAgent,
   useGetAgentMCPConfig,
@@ -77,11 +81,12 @@ type AuthInfoEntry = {
 
 const STATUS_CHIP: Record<
   MCPDeploymentStatus,
-  { label: string; color: "success" | "warning" | "default" }
+  { label: string; color: "success" | "warning" | "default" | "info" }
 > = {
   DEPLOYED: { label: "Deployed", color: "success" },
   PENDING: { label: "Pending", color: "warning" },
   NOT_DEPLOYED: { label: "Not deployed", color: "default" },
+  NOT_CONFIGURED: { label: "Not configured", color: "info" },
 };
 
 export const ViewMCPServerComponent = () => {
@@ -168,21 +173,6 @@ export const ViewMCPServerComponent = () => {
     pipelineEnvs.find((e) => e.name === name)?.displayName ??
     name;
 
-  const statusForEnv = (name: string): MCPDeploymentStatus =>
-    config?.envMappings?.[name]?.deploymentStatus ?? "NOT_DEPLOYED";
-
-  const renderStatusChip = (name: string) => {
-    const meta = STATUS_CHIP[statusForEnv(name)];
-    return (
-      <Chip
-        label={meta.label}
-        color={meta.color}
-        size="small"
-        variant="outlined"
-      />
-    );
-  };
-
   // The tool config references a single, environment-agnostic MCP proxy. Derive it
   // from any environment that has a mapping.
   const configProxyName = useMemo(() => {
@@ -228,6 +218,33 @@ export const ViewMCPServerComponent = () => {
     ? sourceProxyDetails?.environments?.[selectedEnvUuid]?.security
     : undefined;
   const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
+
+  const statusForEnv = (name: string): MCPDeploymentStatus => {
+    // "Not configured" is blueprint-driven: once the source proxy has loaded, an
+    // environment with no per-env block on it is unconfigured regardless of any
+    // (possibly stale) mapping. Until it loads, fall back to the mapping status.
+    const envUuid = environments.find((e) => e.name === name)?.id;
+    if (
+      sourceProxyDetails &&
+      envUuid &&
+      !sourceProxyDetails.environments?.[envUuid]
+    ) {
+      return "NOT_CONFIGURED";
+    }
+    return config?.envMappings?.[name]?.deploymentStatus ?? "NOT_DEPLOYED";
+  };
+
+  const renderStatusChip = (name: string) => {
+    const meta = STATUS_CHIP[statusForEnv(name)];
+    return (
+      <Chip
+        label={meta.label}
+        color={meta.color}
+        size="small"
+        variant="outlined"
+      />
+    );
+  };
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
@@ -391,8 +408,8 @@ export const ViewMCPServerComponent = () => {
                 ) : (
                   <Alert severity="info">
                     <Typography variant="body2">
-                      The endpoint is available below. If the MCP server requires
-                      an API key, the key was only displayed when this
+                      The endpoint is available below. If the MCP server
+                      requires an API key, the key was only displayed when this
                       configuration was created.
                     </Typography>
                   </Alert>
@@ -430,7 +447,11 @@ export const ViewMCPServerComponent = () => {
                   <FormLabel sx={{ display: "block", mb: 0.5 }}>
                     Example cURL
                   </FormLabel>
-                  <CodeBlock code={curlCode} language="bash" fieldId="mcp-curl" />
+                  <CodeBlock
+                    code={curlCode}
+                    language="bash"
+                    fieldId="mcp-curl"
+                  />
                 </Box>
               </Stack>
             );
@@ -468,8 +489,8 @@ export const ViewMCPServerComponent = () => {
               Integration Guide
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Copy this pattern into your agent code to load MCP tools through the
-              injected proxy URL and API key.
+              Copy this pattern into your agent code to load MCP tools through
+              the injected proxy URL and API key.
             </Typography>
           </Stack>
           <CodeBlock
@@ -538,7 +559,7 @@ export const ViewMCPServerComponent = () => {
         <Form.Section>
           <Form.Subheader>Environments</Form.Subheader>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Whether the MCP proxy is deployed for each of this agent's
+            Whether the MCP proxy is deployed for each of this agent&apos;s
             environments. Deployment is managed by the org-level MCP proxy and
             its gateways.
           </Typography>
@@ -613,9 +634,10 @@ function getMCPProxyName(
   );
 }
 
-function getMCPAPIKeyHeaderName(
-  security?: { enabled?: boolean; apiKey?: { enabled?: boolean; key?: string } },
-): string | undefined {
+function getMCPAPIKeyHeaderName(security?: {
+  enabled?: boolean;
+  apiKey?: { enabled?: boolean; key?: string };
+}): string | undefined {
   if (security?.enabled === false || security?.apiKey?.enabled === false) {
     return undefined;
   }
@@ -627,7 +649,9 @@ function describeMCPEnvVar(key: string): string {
   if (/url/i.test(key)) return "Base URL of the MCP server endpoint";
   if (/api[-_]?key/i.test(key))
     return "API key for authenticating with the MCP server endpoint";
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase());
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase());
 }
 
 function buildMCPPythonSnippet(rows: { key: string; name: string }[]): string {

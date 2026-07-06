@@ -42,7 +42,12 @@ import {
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, Clock, Edit } from "@wso2/oxygen-ui-icons-react";
+import {
+  AlertTriangle,
+  Clock,
+  Edit,
+  Settings,
+} from "@wso2/oxygen-ui-icons-react";
 import { useParams } from "react-router-dom";
 import {
   formatRelativeTime,
@@ -56,6 +61,7 @@ import { MCPProxyOverviewTab } from "./MCPProxyOverviewTab";
 import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
 import { MCPProxyRewriteTab } from "./MCPProxyRewriteTab";
 import { MCPProxySecurityTab } from "./MCPProxySecurityTab";
+import { ManageEndpointsDialog } from "./ManageEndpointsDialog";
 
 const TABS = [
   "Overview",
@@ -73,6 +79,7 @@ export function ViewMCPProxy() {
   const [tabIndex, setTabIndex] = useState(0);
   const [selectedEnvId, setSelectedEnvId] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
+  const [manageEndpointsOpen, setManageEndpointsOpen] = useState(false);
   const [name, setName] = useState("");
   const [version, setVersion] = useState("");
   const [context, setContext] = useState("");
@@ -376,27 +383,43 @@ export function ViewMCPProxy() {
           </Stack>
         </Card>
 
-        {hasEnvironments ? (
-          <Stack direction="row" spacing={2} alignItems="center">
-            <Typography variant="body2" color="text.secondary">
-              Environment
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <Select
-                value={selectedEnvId}
-                onChange={(event) =>
-                  setSelectedEnvId(event.target.value as string)
-                }
-              >
-                {environmentOptions.map((option) => (
-                  <MenuItem key={option.id} value={option.id}>
-                    {option.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-        ) : null}
+        <Stack
+          direction="row"
+          spacing={2}
+          alignItems="center"
+          justifyContent="space-between"
+        >
+          {hasEnvironments ? (
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                Environment
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 260 }}>
+                <Select
+                  value={selectedEnvId}
+                  onChange={(event) =>
+                    setSelectedEnvId(event.target.value as string)
+                  }
+                >
+                  {environmentOptions.map((option) => (
+                    <MenuItem key={option.id} value={option.id}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+          ) : (
+            <span />
+          )}
+          <Button
+            variant="outlined"
+            startIcon={<Settings size={16} />}
+            onClick={() => setManageEndpointsOpen(true)}
+          >
+            Manage Endpoints
+          </Button>
+        </Stack>
 
         {hasEnvironments ? (
           <Card variant="outlined">
@@ -508,6 +531,16 @@ export function ViewMCPProxy() {
           </Card>
         ) : null}
       </Stack>
+
+      {proxy ? (
+        <ManageEndpointsDialog
+          open={manageEndpointsOpen}
+          orgId={orgId ?? ""}
+          proxy={proxy}
+          environments={environments}
+          onClose={() => setManageEndpointsOpen(false)}
+        />
+      ) : null}
     </PageContent>
   );
 }

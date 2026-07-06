@@ -69,13 +69,21 @@ export interface EndpointDraft {
   serverVersion?: string;
 }
 
+// Sentinel shown in place of a stored auth value (never returned by the API). While
+// this is present untouched, the endpoint keeps its existing credential.
+const MASKED_CREDENTIAL_VALUE = "••••••••••••";
+
 interface AddEndpointDialogProps {
   open: boolean;
   orgId: string;
   // Environments not yet claimed by another endpoint. One environment can be used once.
+  // In edit mode this must also include the edited endpoint's own environments.
   availableEnvironments: Environment[];
   onClose: () => void;
   onAdd: (endpoint: Omit<EndpointDraft, "id">) => void;
+  // When provided, the dialog edits an existing endpoint: fields are pre-filled and
+  // its stored (unreadable) credential is masked until the user replaces it.
+  initialDraft?: EndpointDraft;
 }
 
 export function AddEndpointDialog({
@@ -84,13 +92,17 @@ export function AddEndpointDialog({
   availableEnvironments,
   onClose,
   onAdd,
+  initialDraft,
 }: AddEndpointDialogProps) {
   const fetchServerInfo = useFetchMCPProxyServerInfo();
   const { pushSnackBar } = useSnackBar();
 
+  const isEditing = Boolean(initialDraft);
+
   const [url, setUrl] = useState("");
   const [authHeader, setAuthHeader] = useState("");
   const [authValue, setAuthValue] = useState("");
+  const [isCredentialMasked, setIsCredentialMasked] = useState(false);
   const [showAuthValue, setShowAuthValue] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [selectedEnvIds, setSelectedEnvIds] = useState<string[]>([]);
@@ -100,18 +112,30 @@ export function AddEndpointDialog({
   const [authError, setAuthError] = useState<string | null>(null);
 
   const resetState = useCallback(() => {
-    setUrl("");
-    setAuthHeader("");
-    setAuthValue("");
+    if (initialDraft) {
+      const hasStoredCredential = Boolean(initialDraft.authHeader);
+      setUrl(initialDraft.url);
+      setAuthHeader(initialDraft.authHeader);
+      setAuthValue(hasStoredCredential ? MASKED_CREDENTIAL_VALUE : "");
+      setIsCredentialMasked(hasStoredCredential);
+      setAdvancedOpen(hasStoredCredential);
+      setSelectedEnvIds(initialDraft.environments);
+      setFetchedInfo(initialDraft.fetchedInfo);
+    } else {
+      setUrl("");
+      setAuthHeader("");
+      setAuthValue("");
+      setIsCredentialMasked(false);
+      setAdvancedOpen(false);
+      setSelectedEnvIds([]);
+      setFetchedInfo(null);
+    }
     setShowAuthValue(false);
-    setAdvancedOpen(false);
-    setSelectedEnvIds([]);
-    setFetchedInfo(null);
     setUrlError(null);
     setAuthError(null);
-  }, []);
+  }, [initialDraft]);
 
-  // Start from a clean slate each time the dialog is opened.
+  // Start from a clean slate (or the edited endpoint) each time the dialog is opened.
   useEffect(() => {
     if (open) resetState();
   }, [open, resetState]);
@@ -138,6 +162,17 @@ export function AddEndpointDialog({
     setUrlError(null);
 
     const header = authHeader.trim();
+    // The stored credential is never returned, so it can't be replayed to the
+    // live fetch — ask the user to re-enter it before re-fetching.
+    if (header && isCredentialMasked) {
+      setIsCredentialMasked(false);
+      setAuthValue("");
+      setAdvancedOpen(true);
+      setAuthError(
+        "Re-enter the authentication value to re-fetch server info.",
+      );
+      return;
+    }
     const value = authValue.trim();
     if (Boolean(header) !== Boolean(value)) {
       setAdvancedOpen(true);
@@ -180,20 +215,29 @@ export function AddEndpointDialog({
 
   const handleAdd = useCallback(() => {
     if (!fetchedInfo || selectedEnvIds.length === 0) return;
+    // An untouched masked credential means "keep the stored value" — emit an empty
+    // authValue so the save path omits it and the backend preserves the secret.
+    const resolvedAuthValue = isCredentialMasked ? "" : authValue.trim();
     onAdd({
       url: trimmedUrl,
       authHeader: authHeader.trim(),
-      authValue: authValue.trim(),
+      authValue: resolvedAuthValue,
       environments: selectedEnvIds,
       fetchedInfo,
-      serverName: getServerInfoValue(fetchedInfo.serverInfo, "name"),
-      serverVersion: getServerInfoValue(fetchedInfo.serverInfo, "version"),
+      serverName:
+        getServerInfoValue(fetchedInfo.serverInfo, "name") ??
+        initialDraft?.serverName,
+      serverVersion:
+        getServerInfoValue(fetchedInfo.serverInfo, "version") ??
+        initialDraft?.serverVersion,
     });
     resetState();
   }, [
     authHeader,
     authValue,
     fetchedInfo,
+    initialDraft,
+    isCredentialMasked,
     onAdd,
     resetState,
     selectedEnvIds,
@@ -215,7 +259,7 @@ export function AddEndpointDialog({
 
   return (
     <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Add Endpoint</DialogTitle>
+      <DialogTitle>{isEditing ? "Edit Endpoint" : "Add Endpoint"}</DialogTitle>
       <DialogContent>
         <Form.Stack spacing={2.5} sx={{ mt: 1 }}>
           <Typography variant="body2" color="text.secondary">
@@ -284,14 +328,29 @@ export function AddEndpointDialog({
                     <TextField
                       fullWidth
                       value={authValue}
+                      onFocus={() => {
+                        // Reveal a blank field so the user replaces the hidden
+                        // stored credential rather than editing the mask.
+                        if (isCredentialMasked) {
+                          setAuthValue("");
+                          setIsCredentialMasked(false);
+                          clearFetched();
+                        }
+                      }}
                       onChange={(event) => {
                         setAuthValue(event.target.value);
+                        setIsCredentialMasked(false);
                         clearFetched();
                         setAuthError(null);
                       }}
                       placeholder="Value"
                       error={Boolean(authError)}
-                      helperText={authError}
+                      helperText={
+                        authError ??
+                        (isCredentialMasked
+                          ? "Leave unchanged to keep the stored value."
+                          : undefined)
+                      }
                       type={showAuthValue ? "text" : "password"}
                       slotProps={{
                         input: {
@@ -303,7 +362,9 @@ export function AddEndpointDialog({
                                     ? "Hide header value"
                                     : "Show header value"
                                 }
-                                onClick={() => setShowAuthValue((prev) => !prev)}
+                                onClick={() =>
+                                  setShowAuthValue((prev) => !prev)
+                                }
                                 edge="end"
                               >
                                 {showAuthValue ? (
@@ -354,7 +415,11 @@ export function AddEndpointDialog({
               disabled={availableEnvironments.length === 0}
               sx={{ mt: 0.5 }}
             />
-            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ mt: 0.5 }}
+            >
               An environment can be assigned to only one endpoint.
             </Typography>
           </FormControl>
@@ -395,7 +460,7 @@ export function AddEndpointDialog({
         </Button>
         {isFetched ? (
           <Button variant="contained" onClick={handleAdd} disabled={!canAdd}>
-            Add
+            {isEditing ? "Save" : "Add"}
           </Button>
         ) : (
           <Button

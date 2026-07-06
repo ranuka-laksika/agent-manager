@@ -29,20 +29,19 @@ import {
 import {
   Box,
   Button,
-  Chip,
   CircularProgress,
-  Divider,
   Form,
   FormControl,
   FormLabel,
-  IconButton,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Lock, Plus, Trash2 } from "@wso2/oxygen-ui-icons-react";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
+import { EndpointRow } from "./EndpointRow";
+import { DEFAULT_ENDPOINT_SECURITY } from "./mcpEndpoints";
 import { MCP_SPEC_VERSION } from "../constants";
 
 interface AddMCPProxyFormProps {
@@ -157,14 +156,7 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
                   resources: endpoint.fetchedInfo.resources,
                   prompts: endpoint.fetchedInfo.prompts,
                 },
-                security: {
-                  enabled: true,
-                  apiKey: {
-                    enabled: true,
-                    key: "X-API-Key",
-                    in: "header" as const,
-                  },
-                },
+                security: DEFAULT_ENDPOINT_SECURITY,
               },
             ],
           ),
@@ -352,93 +344,6 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
         onAdd={handleAddEndpoint}
       />
     </>
-  );
-}
-
-interface EndpointRowProps {
-  endpoint: EndpointDraft;
-  environmentLabels: Map<string, string>;
-  onRemove: () => void;
-}
-
-function EndpointRow({
-  endpoint,
-  environmentLabels,
-  onRemove,
-}: EndpointRowProps) {
-  const toolCount = endpoint.fetchedInfo.tools?.length ?? 0;
-  const resourceCount = endpoint.fetchedInfo.resources?.length ?? 0;
-  const promptCount = endpoint.fetchedInfo.prompts?.length ?? 0;
-  const hasAuth = Boolean(endpoint.authHeader && endpoint.authValue);
-
-  return (
-    <Box
-      sx={{
-        border: "1px solid",
-        borderColor: "divider",
-        borderRadius: 1,
-        p: 2,
-      }}
-    >
-      <Stack
-        direction="row"
-        spacing={2}
-        alignItems="flex-start"
-        justifyContent="space-between"
-      >
-        <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-            {endpoint.environments.map((envId) => (
-              <Chip
-                key={envId}
-                label={environmentLabels.get(envId) || envId}
-                size="small"
-                color="primary"
-                variant="outlined"
-              />
-            ))}
-            {hasAuth ? (
-              <Tooltip title={`Authenticated via ${endpoint.authHeader}`}>
-                <Chip
-                  icon={<Lock size={12} />}
-                  label="Auth"
-                  size="small"
-                  variant="outlined"
-                />
-              </Tooltip>
-            ) : null}
-          </Stack>
-
-          <Typography
-            variant="body2"
-            sx={{ wordBreak: "break-all", fontFamily: "monospace" }}
-          >
-            {endpoint.url}
-          </Typography>
-
-          <Divider flexItem />
-
-          <Stack direction="row" spacing={2} alignItems="center">
-            {endpoint.serverName ? (
-              <Typography variant="caption" color="text.secondary">
-                {endpoint.serverName}
-                {endpoint.serverVersion ? ` · ${endpoint.serverVersion}` : ""}
-              </Typography>
-            ) : null}
-            <Typography variant="caption" color="text.secondary">
-              {toolCount} tools · {resourceCount} resources · {promptCount}{" "}
-              prompts
-            </Typography>
-          </Stack>
-        </Stack>
-
-        <Tooltip title="Remove endpoint">
-          <IconButton size="small" onClick={onRemove} aria-label="Remove endpoint">
-            <Trash2 size={16} />
-          </IconButton>
-        </Tooltip>
-      </Stack>
-    </Box>
   );
 }
 
