@@ -101,7 +101,7 @@ export const TestComponent: React.FC = () => {
       {isLoading ? (
         <SkeletonTestPageLayout />
       ) : (
-        <>{isChatAgent ? <AgentChat /> : <Swagger />}</>
+        <>{isChatAgent ? <AgentChat key={agentId} /> : <Swagger key={agentId} />}</>
       )}
     </PageLayout>
   );

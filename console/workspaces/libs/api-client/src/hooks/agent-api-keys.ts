@@ -100,9 +100,11 @@ export function useRevokeAgentAPIKey() {
 }
 
 // useTestAgentAPIKey issues (or rotates) a 10-minute test API key for the
-// agent's Try-It flow. Each refetch rotates the same logical row on the
-// backend (same name, new hash + expiry), so callers can rely on the cached
-// value being valid until staleTime elapses.
+// agent's Try-It flow. Keys are per-user on the backend (name derived from
+// the JWT subject), so a refetch only rotates the calling user's own row and
+// never invalidates other users' keys. refetchOnWindowFocus respects
+// staleTime, so returning to a long-idle tab picks up a fresh key without
+// rotating on every focus.
 export function useTestAgentAPIKey(
   params: IssueTestAgentAPIKeyPathParams,
   options: { enabled: boolean },
@@ -122,6 +124,6 @@ export function useTestAgentAPIKey(
       && !!(params.orgName && params.projName && params.agentName && params.envId),
     staleTime: 9 * 60 * 1000,
     refetchInterval: 9 * 60 * 1000,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
   });
 }
