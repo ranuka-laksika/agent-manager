@@ -81,10 +81,10 @@ type MCPProxyUpstream struct {
 	URL string `yaml:"url" json:"url"`
 }
 
-// deployMCPProxyToGateway deploys a single MCP artifact to one gateway. The source
-// org-level proxy is a blueprint and never deploys itself; this is invoked only by the
-// agent-configuration flow to deploy per-environment mapping artifacts (which carry the
-// flat, single-environment config flattened from the blueprint).
+// deployMCPProxyToGateway deploys a single MCP artifact to one gateway. It is used by
+// deployMCPProxyEnvironments for the proxy-owned per-environment artifacts and by the
+// agent-configuration flow for agent-scoped mapping artifacts; callers pass the already
+// flattened single-environment artifact to deploy.
 func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *models.MCPProxy, orgName string, gateway *models.Gateway) error {
 	_ = ctx
 	deploymentYAML, err := s.generateMCPProxyDeploymentYAML(proxy)
@@ -129,9 +129,6 @@ func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *mo
 // artifacts, so the pair satisfies the artifacts table's UNIQUE(handle, org) constraint.
 func mcpProxyEnvArtifactHandle(proxyHandle, envID string) string {
 	suffix := strings.ReplaceAll(strings.TrimSpace(envID), "-", "")
-	if len(suffix) > 8 {
-		suffix = suffix[:8]
-	}
 	return fmt.Sprintf("%s-%s", proxyHandle, suffix)
 }
 

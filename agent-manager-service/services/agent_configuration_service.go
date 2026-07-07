@@ -5310,5 +5310,5 @@ func (s *agentConfigurationService) systemManagedMCPURL(
 		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, environmentName, orgName, handle)
 		return buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), nil
 	}
-	return "", fmt.Errorf("MCP env mapping not found for config %s in environment %s", config.UUID, environmentName)
+	return "", nil
 }

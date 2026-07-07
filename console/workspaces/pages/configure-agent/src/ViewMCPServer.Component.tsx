@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   DrawerContent,
   DrawerHeader,
@@ -88,6 +88,8 @@ export const ViewMCPServerComponent = () => {
     proxyId: string;
   }>();
   const decodedConfigId = useMemo(() => decodeRouteParam(proxyId), [proxyId]);
+  const environmentSelectId = useId();
+  const environmentSelectLabelId = useId();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -518,11 +520,17 @@ export const ViewMCPServerComponent = () => {
         {isExternal && providerConfig && (
           <Stack spacing={2}>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                id={environmentSelectLabelId}
+                variant="body2"
+                color="text.secondary"
+              >
                 Environment
               </Typography>
               <FormControl size="small" sx={{ minWidth: 260 }}>
                 <Select
+                  id={environmentSelectId}
+                  labelId={environmentSelectLabelId}
                   value={selectedEnvName}
                   onChange={(event) =>
                     setSelectedEnvName(event.target.value as string)
