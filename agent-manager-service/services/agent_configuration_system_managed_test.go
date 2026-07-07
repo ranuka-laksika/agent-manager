@@ -24,14 +24,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
-	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 )
 
 func TestSystemManagedMCPURLReturnsProxyURLForMatchingMapping(t *testing.T) {
 	configUUID := uuid.New()
 	envUUID := uuid.New()
-	artifactUUID := uuid.New()
+	mappingArtifactUUID := uuid.New()
+	sharedArtifactUUID := uuid.New()
+	gatewayUUID := uuid.New()
 	contextPath := "/shared-mcp"
 	svc := &agentConfigurationService{
 		envMCPMappingRepo: &repomocks.EnvAgentMCPMappingRepositoryMock{
@@ -42,19 +43,37 @@ func TestSystemManagedMCPURLReturnsProxyURLForMatchingMapping(t *testing.T) {
 						ConfigUUID:      configUUID,
 						EnvironmentUUID: envUUID,
 						MCPProxyUUID:    uuid.New(),
-						ArtifactUUID:    artifactUUID,
+						ArtifactUUID:    mappingArtifactUUID,
 						MCPProxy: &models.MCPProxy{
 							Configuration: models.MCPProxyConfig{
 								Context: &contextPath,
+								Environments: map[string]models.MCPEnvironmentConfig{
+									envUUID.String(): {ArtifactUUID: &sharedArtifactUUID},
+								},
 							},
 						},
 					},
 				}, nil
 			},
 		},
+		mcpProxyService: &MCPProxyService{
+			deploymentRepo: &repomocks.DeploymentRepositoryMock{
+				GetDeployedGatewaysByProviderFunc: func(gotArtifactUUID uuid.UUID, gotOrg string) ([]string, error) {
+					require.Equal(t, sharedArtifactUUID, gotArtifactUUID)
+					require.Equal(t, "org", gotOrg)
+					return []string{gatewayUUID.String()}, nil
+				},
+			},
+		},
 		gatewayRepo: &repomocks.GatewayRepositoryMock{
-			ListWithFiltersFunc: func(_ repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
-				return []*models.Gateway{{Vhost: "https://gateway.example.com"}}, nil
+			EnvironmentMappingExistsFunc: func(gotGatewayID string, gotEnvID string) (bool, error) {
+				require.Equal(t, gatewayUUID.String(), gotGatewayID)
+				require.Equal(t, envUUID.String(), gotEnvID)
+				return true, nil
+			},
+			GetByUUIDFunc: func(gotGatewayID string) (*models.Gateway, error) {
+				require.Equal(t, gatewayUUID.String(), gotGatewayID)
+				return &models.Gateway{UUID: gatewayUUID, Vhost: "https://gateway.example.com"}, nil
 			},
 		},
 	}
@@ -68,6 +87,40 @@ func TestSystemManagedMCPURLReturnsProxyURLForMatchingMapping(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, "https://gateway.example.com/shared-mcp/mcp", url)
+}
+
+func TestSystemManagedMCPURLMissingSharedArtifactReturnsError(t *testing.T) {
+	configUUID := uuid.New()
+	envUUID := uuid.New()
+	svc := &agentConfigurationService{
+		envMCPMappingRepo: &repomocks.EnvAgentMCPMappingRepositoryMock{
+			ListByConfigFunc: func(_ context.Context, gotConfigUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
+				require.Equal(t, configUUID, gotConfigUUID)
+				return []models.EnvAgentMCPMapping{
+					{
+						ConfigUUID:      configUUID,
+						EnvironmentUUID: envUUID,
+						MCPProxyUUID:    uuid.New(),
+						ArtifactUUID:    uuid.New(),
+						MCPProxy: &models.MCPProxy{
+							Configuration: models.MCPProxyConfig{
+								Environments: map[string]models.MCPEnvironmentConfig{
+									envUUID.String(): {},
+								},
+							},
+						},
+					},
+				}, nil
+			},
+		},
+	}
+
+	url, err := svc.systemManagedMCPURL(context.Background(), &models.AgentConfiguration{
+		UUID: configUUID,
+	}, "org", "dev", envUUID)
+
+	require.ErrorContains(t, err, "MCP proxy shared artifact not found")
+	require.Empty(t, url)
 }
 
 func TestSystemManagedMCPURLMissingEnvMappingReturnsEmptyURL(t *testing.T) {
