@@ -144,6 +144,18 @@ export function AddEndpointDialog({
   const isFetched = Boolean(fetchedInfo);
   const isFetching = fetchServerInfo.isPending;
   const canAdd = isFetched && selectedEnvIds.length > 0;
+  // In edit mode, Save stays disabled until the user actually changes something; a
+  // brand-new endpoint (no initialDraft) is always a change. The credential counts as
+  // changed only once the masked stored value has been replaced, and a re-fetch counts
+  // when it returns different capabilities (e.g. newly added tools).
+  const hasChanges =
+    !initialDraft ||
+    trimmedUrl !== initialDraft.url ||
+    authHeader.trim() !== initialDraft.authHeader ||
+    (!isCredentialMasked && authValue.trim().length > 0) ||
+    !sameIdSet(selectedEnvIds, initialDraft.environments) ||
+    capabilitiesChanged(fetchedInfo, initialDraft.fetchedInfo);
+  const canSave = canAdd && hasChanges;
 
   const clearFetched = useCallback(() => {
     setFetchedInfo(null);
@@ -458,26 +470,35 @@ export function AddEndpointDialog({
         <Button variant="outlined" onClick={handleClose} disabled={isFetching}>
           Cancel
         </Button>
-        {isFetched ? (
-          <Button variant="contained" onClick={handleAdd} disabled={!canAdd}>
-            {isEditing ? "Save" : "Add"}
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            onClick={performFetch}
-            disabled={!trimmedUrl || isFetching}
-            startIcon={
-              isFetching ? (
-                <Box component="span" sx={{ display: "inline-flex" }}>
-                  <CircularProgress size={16} color="inherit" />
-                </Box>
-              ) : undefined
-            }
-          >
-            {isFetching ? "Fetching" : "Fetch Server Info"}
-          </Button>
-        )}
+        {/* Fetch stays available even after a successful fetch so users can
+            re-fetch to pick up newly added tools without changing anything. */}
+        <Button
+          variant="outlined"
+          onClick={performFetch}
+          disabled={!trimmedUrl || isFetching}
+          startIcon={
+            isFetching ? (
+              <Box component="span" sx={{ display: "inline-flex" }}>
+                <CircularProgress size={16} color="inherit" />
+              </Box>
+            ) : undefined
+          }
+        >
+          {isFetching
+            ? "Fetching"
+            : isFetched
+              ? "Re-fetch Server Info"
+              : "Fetch Server Info"}
+        </Button>
+        {/* Saving requires a completed fetch (canAdd depends on isFetched), so
+            any field change that clears the fetch disables Save until re-fetch. */}
+        <Button
+          variant="contained"
+          onClick={handleAdd}
+          disabled={!canSave || isFetching}
+        >
+          {isEditing ? "Save" : "Add"}
+        </Button>
       </DialogActions>
     </Dialog>
   );
@@ -489,4 +510,28 @@ function getServerInfoValue(
 ): string | undefined {
   const value = serverInfo?.[key];
   return typeof value === "string" ? value : undefined;
+}
+
+// Order-insensitive equality for the selected environment IDs.
+function sameIdSet(a: string[], b: string[]): boolean {
+  if (a.length !== b.length) return false;
+  const setB = new Set(b);
+  return a.every((id) => setB.has(id));
+}
+
+// Whether a re-fetch produced capabilities that differ from the stored ones. Only the
+// tool/resource/prompt lists are compared, since those are what gets persisted.
+function capabilitiesChanged(
+  current: MCPServerInfoFetchResponse | null,
+  original: MCPServerInfoFetchResponse,
+): boolean {
+  if (!current) return false;
+  return (
+    JSON.stringify(current.tools ?? []) !==
+      JSON.stringify(original.tools ?? []) ||
+    JSON.stringify(current.resources ?? []) !==
+      JSON.stringify(original.resources ?? []) ||
+    JSON.stringify(current.prompts ?? []) !==
+      JSON.stringify(original.prompts ?? [])
+  );
 }
