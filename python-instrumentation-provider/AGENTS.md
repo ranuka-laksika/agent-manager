@@ -2,16 +2,19 @@
 
 A **Kubernetes init container** (Docker image only — no Python package) that injects Python auto-instrumentation into application pods. It copies the instrumentation packages into a shared volume that the app pod mounts onto its `PYTHONPATH`, so the app is instrumented with zero code change.
 
-## Files (6 total)
+## Files
 
 | File | Role |
 |---|---|
-| `Dockerfile` | builds the init-container image; runs `setup-instrumentation.py` |
+| `Dockerfile` | builds the init-container image; installs the matching `locks/` file, runs `setup-instrumentation.py` |
 | `setup-instrumentation.py` | copies packages from `/instrumentations/{INSTRUMENTATION_PROVIDER}` → shared volume `/otel-tracing-sdk`, incl. `sitecustomize.py` |
 | `sitecustomize.py` | minimal bootstrap auto-imported by the app's Python: sets Traceloop env vars and calls `Traceloop.init()` |
-| `Makefile` | build / load image |
-| `requirements.txt` | deps for the setup script |
-| `RELEASING.md` | release notes |
+| `Makefile` | build / load image; `make lock` (regenerate locks) / `make check-locks` (hermetic verify) |
+| `requirements.in` | loose dependency inputs (extras beyond `traceloop-sdk`); compiled into `locks/` |
+| `locks/traceloop-<T>-python<X.Y>.txt` | fully-pinned dependency tree per `(traceloop × python)`; the image installs these |
+| `scripts/gen-locks.sh` | regenerates `locks/` (re-resolves live PyPI in `python:<X.Y>-slim`) |
+| `scripts/check-locks.sh` | hermetic CI check that committed locks cover the release-config matrix |
+| `RELEASING.md` | release runbook |
 
 ## How injection works
 
