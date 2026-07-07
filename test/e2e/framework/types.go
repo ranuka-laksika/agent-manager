@@ -628,37 +628,46 @@ type MCPProxyCapabilities struct {
 	Resources []map[string]any `json:"resources,omitempty"`
 }
 
+// MCPEnvironmentConfig is one per-environment blueprint block on an MCP proxy, keyed by
+// environment UUID in the proxy's Environments map. Each block carries the single upstream
+// endpoint (plus policies/capabilities/security) for that environment; the proxy deploys
+// exactly one gateway artifact per configured environment. DeploymentStatus is response-only
+// ("Deployed"/"Undeployed") and computed on read.
+type MCPEnvironmentConfig struct {
+	Upstream         *UpstreamEndpoint     `json:"upstream,omitempty"`
+	Policies         []MCPPolicy           `json:"policies,omitempty"`
+	Capabilities     *MCPProxyCapabilities `json:"capabilities,omitempty"`
+	Security         *SecurityConfig       `json:"security,omitempty"`
+	DeploymentStatus string                `json:"deploymentStatus,omitempty"`
+}
+
 type CreateMCPProxyRequest struct {
-	ID             string                `json:"id"`
-	Name           string                `json:"name"`
-	Version        string                `json:"version"`
-	Description    *string               `json:"description,omitempty"`
-	Context        *string               `json:"context,omitempty"`
-	Vhost          *string               `json:"vhost,omitempty"`
-	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
-	Upstream       UpstreamConfig        `json:"upstream"`
-	Policies       []MCPPolicy           `json:"policies,omitempty"`
-	Capabilities   *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Security       *SecurityConfig       `json:"security,omitempty"`
-	Gateways       []string              `json:"gateways,omitempty"`
+	ID             string                          `json:"id"`
+	Name           string                          `json:"name"`
+	Version        string                          `json:"version"`
+	Description    *string                         `json:"description,omitempty"`
+	Context        *string                         `json:"context,omitempty"`
+	Vhost          *string                         `json:"vhost,omitempty"`
+	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
+	// Environments maps an environment UUID to its per-environment blueprint block. The
+	// proxy deploys one gateway artifact per configured environment on create/update.
+	Environments map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
 }
 
 type MCPProxyResponse struct {
-	ID             string                `json:"id"`
-	Name           string                `json:"name"`
-	Version        string                `json:"version"`
-	Description    *string               `json:"description,omitempty"`
-	Context        *string               `json:"context,omitempty"`
-	Vhost          *string               `json:"vhost,omitempty"`
-	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
-	InCatalog      bool                  `json:"inCatalog"`
-	Gateways       []string              `json:"gateways,omitempty"`
-	Upstream       UpstreamConfig        `json:"upstream"`
-	Policies       []MCPPolicy           `json:"policies,omitempty"`
-	Capabilities   *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Security       *SecurityConfig       `json:"security,omitempty"`
-	CreatedBy      *string               `json:"createdBy,omitempty"`
-	CreatedAt      *time.Time            `json:"createdAt,omitempty"`
+	ID             string                          `json:"id"`
+	Name           string                          `json:"name"`
+	Version        string                          `json:"version"`
+	Description    *string                         `json:"description,omitempty"`
+	Context        *string                         `json:"context,omitempty"`
+	Vhost          *string                         `json:"vhost,omitempty"`
+	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
+	InCatalog      bool                            `json:"inCatalog"`
+	// Gateways aggregates the gateways across all per-environment artifacts currently deployed.
+	Gateways     []string                        `json:"gateways,omitempty"`
+	Environments map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	CreatedBy    *string                         `json:"createdBy,omitempty"`
+	CreatedAt    *time.Time                      `json:"createdAt,omitempty"`
 }
 
 type MCPProxyListItem struct {

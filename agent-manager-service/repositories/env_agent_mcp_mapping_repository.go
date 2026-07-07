@@ -37,6 +37,10 @@ type EnvAgentMCPMappingRepository interface {
 	// Used by the redeploy-on-update cascade so agent-scoped artifacts pick up new
 	// upstream/auth/policies on their respective gateways.
 	ListByMCPProxy(ctx context.Context, mcpProxyUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
+	// ListByEnvironment returns every mapping deployed into the given environment,
+	// across all agent configs. Used by the environment-deletion cascade to tear down
+	// all agent-scoped MCP artifacts for a disappearing environment.
+	ListByEnvironment(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
 	Update(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping) error
 	Delete(ctx context.Context, tx *gorm.DB, mappingID uint) error
 	DeleteByConfig(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID) error
@@ -119,6 +123,21 @@ func (r *envAgentMCPMappingRepository) ListByMCPProxy(ctx context.Context, mcpPr
 		Preload("MCPProxyMapping.SourceMCPProxy").
 		Preload("MCPProxyMapping.SourceMCPProxy.Artifact").
 		Where("mcp_proxy_uuid = ?", mcpProxyUUID).
+		Find(&mappings).Error
+	return mappings, err
+}
+
+func (r *envAgentMCPMappingRepository) ListByEnvironment(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
+	var mappings []models.EnvAgentMCPMapping
+	err := r.db.WithContext(ctx).
+		Preload("Artifact").
+		Preload("MCPProxy").
+		Preload("MCPProxy.Artifact").
+		Preload("MCPProxyMapping").
+		Preload("MCPProxyMapping.Artifact").
+		Preload("MCPProxyMapping.SourceMCPProxy").
+		Preload("MCPProxyMapping.SourceMCPProxy.Artifact").
+		Where("environment_uuid = ?", envUUID).
 		Find(&mappings).Error
 	return mappings, err
 }

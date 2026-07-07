@@ -30,6 +30,7 @@ import {
   AgentConfigTableSection,
   type AgentConfigTableLabels,
 } from "./Configure/subComponents/AgentConfigTableSection";
+import { AddMCPToolConfigPanel } from "./Configure/subComponents/AddMCPToolConfigPanel";
 
 const configureRoutes =
   absoluteRouteMap.children.org.children.projects.children.agents.children
@@ -86,6 +87,7 @@ function TabPanel({ value, index, children }: TabPanelProps) {
 
 export const ConfigureComponent: React.FC = () => {
   const [tabIndex, setTabIndex] = useState(0);
+  const [isAddingMcp, setIsAddingMcp] = useState(false);
   const { orgId, projectId, agentId } = useParams<{
     orgId: string;
     projectId: string;
@@ -130,14 +132,6 @@ export const ConfigureComponent: React.FC = () => {
         agentId,
       })
     : "#";
-  const mcpAddPath = hasParams
-    ? generatePath(configureRoutes.mcpProxies.children.add.path, {
-        orgId,
-        projectId,
-        agentId,
-      })
-    : "#";
-
   const getLlmViewPath = (configId: string) =>
     hasParams
       ? generatePath(configureRoutes.llmProviders.children.view.path, {
@@ -196,7 +190,7 @@ export const ConfigureComponent: React.FC = () => {
             isLoading={isLoadingMCP}
             error={mcpError}
             labels={mcpLabels}
-            addPath={mcpAddPath}
+            onAdd={() => setIsAddingMcp(true)}
             getViewPath={getMcpViewPath}
             isRemoving={isRemovingMCP}
             showTitle={false}
@@ -206,6 +200,14 @@ export const ConfigureComponent: React.FC = () => {
                 configId,
               })
             }
+          />
+          {/* Single right-side drawer overlay; does not shrink the table. */}
+          <AddMCPToolConfigPanel
+            open={isAddingMcp}
+            orgId={orgId}
+            projectId={projectId}
+            agentId={agentId}
+            onClose={() => setIsAddingMcp(false)}
           />
         </TabPanel>
       </Card>

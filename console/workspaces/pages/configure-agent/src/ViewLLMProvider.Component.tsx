@@ -425,11 +425,19 @@ export const ViewLLMProviderComponent: React.FC = () => {
       }
     > = {};
 
-    // Cover both environments that already have a mapping and ones that only
+    // Cover active environments that already have a mapping and ones that only
     // gained a provider in this session (newly selected for an empty env).
+    // Deleted environments are returned by the backend under their UUID as a
+    // fallback key; sending that UUID back as an environment name makes update
+    // fail before reconciliation can remove the stale mapping.
+    const activeEnvNames = new Set(environments.map((env) => env.name));
     const editedEnvNames = new Set([
-      ...Object.keys(config.envMappings ?? {}),
-      ...Object.keys(pendingProviderByEnv),
+      ...Object.keys(config.envMappings ?? {}).filter((envName) =>
+        activeEnvNames.has(envName),
+      ),
+      ...Object.keys(pendingProviderByEnv).filter((envName) =>
+        activeEnvNames.has(envName),
+      ),
     ]);
 
     for (const envName of editedEnvNames) {
@@ -517,9 +525,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
     envVarNames,
     pendingProviderByEnv,
     providers,
+    environments,
     updateConfig,
-    navigate,
-    backHref,
   ]);
 
   if (isLoading) {

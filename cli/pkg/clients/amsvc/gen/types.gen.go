@@ -5410,12 +5410,6 @@ type FetchMCPProxyServerInfoJSONRequestBody = MCPServerInfoFetchRequest
 // UpdateMCPProxyJSONRequestBody defines body for UpdateMCPProxy for application/json ContentType.
 type UpdateMCPProxyJSONRequestBody = MCPProxyRequest
 
-// CreateMCPProxyAPIKeyJSONRequestBody defines body for CreateMCPProxyAPIKey for application/json ContentType.
-type CreateMCPProxyAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
-
-// RotateMCPProxyAPIKeyJSONRequestBody defines body for RotateMCPProxyAPIKey for application/json ContentType.
-type RotateMCPProxyAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
-
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 

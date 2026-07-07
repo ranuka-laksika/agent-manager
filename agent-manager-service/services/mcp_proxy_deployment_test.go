@@ -665,3 +665,22 @@ func TestNormalizeMCPUpstreamURLForDeployment(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T) {
+	const proxyHandle = "shared-mcp-proxy"
+	envID1 := "12345678-0000-0000-0000-000000000001"
+	envID2 := "12345678-ffff-ffff-ffff-ffffffffffff"
+
+	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, envID1)
+	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, envID2)
+
+	if handle1 == handle2 {
+		t.Fatalf("expected distinct handles for environments with the same first 8 UUID characters")
+	}
+	if !strings.HasSuffix(handle1, "-12345678000000000000000000000001") {
+		t.Fatalf("expected full compacted UUID suffix, got %q", handle1)
+	}
+	if !strings.HasSuffix(handle2, "-12345678ffffffffffffffffffffffff") {
+		t.Fatalf("expected full compacted UUID suffix, got %q", handle2)
+	}
+}

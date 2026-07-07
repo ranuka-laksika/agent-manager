@@ -44,19 +44,21 @@ type EnvironmentService interface {
 }
 
 type environmentService struct {
-	logger        *slog.Logger
-	ocClient      occlient.OpenChoreoClient
-	gatewayRepo   repositories.GatewayRepository
-	thunderProber thundersvc.Prober
+	logger             *slog.Logger
+	ocClient           occlient.OpenChoreoClient
+	gatewayRepo        repositories.GatewayRepository
+	thunderProber      thundersvc.Prober
+	agentConfigService AgentConfigurationService
 }
 
 // NewEnvironmentService creates a new environment service
-func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober) EnvironmentService {
+func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober, agentConfigService AgentConfigurationService) EnvironmentService {
 	return &environmentService{
-		logger:        logger,
-		gatewayRepo:   gatewayRepo,
-		ocClient:      ocClient,
-		thunderProber: thunderProber,
+		logger:             logger,
+		gatewayRepo:        gatewayRepo,
+		ocClient:           ocClient,
+		thunderProber:      thunderProber,
+		agentConfigService: agentConfigService,
 	}
 }
 
@@ -278,6 +280,16 @@ func (s *environmentService) DeleteEnvironment(ctx context.Context, orgName stri
 				"orgName", orgName, "envID", envID, "envUUID", envUUID)
 		} else {
 			return fmt.Errorf("failed to delete environment in OpenChoreo: %w", err)
+		}
+	}
+
+	// Cascade MCP-proxy cleanup: tear down every agent-scoped MCP mapping deployed into this
+	// env and strip the env block from every org-level MCP proxy blueprint. Best-effort — the
+	// environment is already gone from OpenChoreo, so cleanup errors are logged, not fatal.
+	if s.agentConfigService != nil {
+		if err := s.agentConfigService.CleanupEnvironmentMCPArtifacts(ctx, orgName, envUUID, env.Name); err != nil {
+			s.logger.Warn("environment deleted; MCP artifact cleanup had errors",
+				"orgName", orgName, "envID", envID, "envUUID", envUUID, "error", err)
 		}
 	}
 

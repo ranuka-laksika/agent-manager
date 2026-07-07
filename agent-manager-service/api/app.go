@@ -75,7 +75,6 @@ func MakeHTTPHandler(params *wiring.AppParams, extraAPIRoutes func(*http.ServeMu
 	RegisterAgentAPIKeyRoutes(rr, params.AgentAPIKeyController)
 	RegisterLLMProxyDeploymentRoutes(rr, params.LLMProxyDeploymentController)
 	RegisterMCPProxyRoutes(rr, params.MCPProxyController)
-	RegisterMCPProxyAPIKeyRoutes(rr, params.MCPProxyAPIKeyController)
 	RegisterAgentConfigRoutes(rr, params.AgentConfigurationController)
 	RegisterMonitorPublisherRoutes(rr, params.MonitorScoresPublisherController)
 	RegisterGitSecretRoutes(rr, params.GitSecretController)

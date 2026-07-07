@@ -66,17 +66,19 @@ type AgentConfigurationService interface {
 	// identify which component env var secretRefs are system-managed (LLM config) vs user-provided.
 	ListAgentLLMConfigSecretReferences(ctx context.Context, agentID, orgName, environmentName string) (map[string]struct{}, error)
 	// ListSystemManagedEnvVarKeys returns the set of env var keys that are system-managed
-	// (i.e. injected by LLM configurations) for the given agent and environment.
+	// (i.e. injected by agent LLM/MCP configurations) for the given agent and environment.
 	// Used during promote to strip these keys from inherited workload overrides.
-	ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error)
-	// BuildSystemManagedEnvVarsFromConfig constructs the LLM env vars for a given agent
-	// and environment from the DB config. Used during promotion when the target environment's
-	// ReleaseBinding doesn't have these vars yet.
-	BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error)
-	// RedeployMCPMappingsForSourceProxy refreshes every agent-scoped MCP mapping artifact derived
-	// from the given source proxy. Called by the MCP proxy controller after a successful proxy
-	// update so each derived artifact picks up new upstream URL / policies on its gateways.
-	RedeployMCPMappingsForSourceProxy(ctx context.Context, source *models.MCPProxy, orgName string) error
+	ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, projectName, environmentName string) (map[string]bool, error)
+	// BuildSystemManagedEnvVarsFromConfig constructs system-managed env vars for a given
+	// agent and environment from all DB configs. Used during promotion when the target
+	// environment's ReleaseBinding doesn't have these vars yet.
+	BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, projectName, environmentName string) ([]client.EnvVar, error)
+
+	// CleanupEnvironmentMCPArtifacts tears down all MCP-proxy data tied to a deleted
+	// environment: every agent-scoped mapping/deployment/artifact/secret/key/env-var row
+	// for that env, plus the environment's block in every org-level MCP proxy blueprint.
+	// Best-effort: aggregates errors, never rolls back the environment deletion.
+	CleanupEnvironmentMCPArtifacts(ctx context.Context, orgName string, envUUID uuid.UUID, envName string) error
 
 	// MCP config API keys — the per-config, per-environment API key an external
 	// agent uses to call its MCP server through the gateway. Keyed by the env
@@ -301,6 +303,18 @@ func buildMCPEnvVars(templates []EnvConfigTemplate, proxyURL, secretRefName stri
 	return envVars
 }
 
+// buildEmptyMCPEnvVars emits every env var template (url and apikey) with an empty
+// string value. It is used for an environment the MCP proxy is not configured for, so
+// the agent still has the variable names defined but blank. Unlike buildMCPEnvVars it
+// never uses a SecretKeyRef — there is no secret for an unconfigured environment.
+func buildEmptyMCPEnvVars(templates []EnvConfigTemplate) []client.EnvVar {
+	envVars := make([]client.EnvVar, 0, len(templates))
+	for _, t := range templates {
+		envVars = append(envVars, client.EnvVar{Key: t.Name, Value: ""})
+	}
+	return envVars
+}
+
 func buildMCPProxyURL(vhost string, contextPath *string) string {
 	base := strings.TrimRight(strings.TrimSpace(vhost), "/")
 	path := "/mcp"
@@ -311,48 +325,103 @@ func buildMCPProxyURL(vhost string, contextPath *string) string {
 }
 
 // mcpProxyAPIKeySecurityEnabled reports whether the source MCP proxy requires API
-// key security. When it returns false, agent mappings derived from the proxy are
-// deployed without minting a gateway key, binding an app key, or injecting the
-// apikey env var — mirroring how an LLM provider with security disabled yields
-// proxies with no API key wired in the gateway.
-func mcpProxyAPIKeySecurityEnabled(proxy *models.MCPProxy) bool {
-	if proxy == nil {
-		return false
-	}
-	security := proxy.Configuration.Security
+// key security for the given environment. When it returns false, agent mappings
+// derived from the proxy are deployed without minting a gateway key, binding an app
+// key, or injecting the apikey env var — mirroring how an LLM provider with security
+// disabled yields proxies with no API key wired in the gateway. Security is stored
+// per-environment on the blueprint, so the environment UUID selects the block.
+func mcpProxyAPIKeySecurityEnabled(proxy *models.MCPProxy, envID string) bool {
+	security := mcpProxySecurityForEnv(proxy, envID)
 	if security == nil || !isBoolTrue(security.Enabled) {
 		return false
 	}
 	return security.APIKey != nil && isBoolTrue(security.APIKey.Enabled)
 }
 
-func mcpProxyAPIKeyHeaderName(proxy *models.MCPProxy) string {
-	if proxy == nil || proxy.Configuration.Security == nil || proxy.Configuration.Security.APIKey == nil {
+func mcpProxyAPIKeyHeaderName(proxy *models.MCPProxy, envID string) string {
+	security := mcpProxySecurityForEnv(proxy, envID)
+	if security == nil || security.APIKey == nil {
 		return "X-API-Key"
 	}
-	header := strings.TrimSpace(proxy.Configuration.Security.APIKey.Key)
+	header := strings.TrimSpace(security.APIKey.Key)
 	if header == "" {
 		return "X-API-Key"
 	}
 	return header
 }
 
-func (s *agentConfigurationService) createMCPMappingAPIKey(ctx context.Context, orgName string, mappingUUID uuid.UUID, keyName string) (*models.CreateAPIKeyResponse, error) {
+// mcpProxySecurityForEnv returns the security config from the source proxy's blueprint
+// block for the given environment, or nil when there is no block for that environment.
+func mcpProxySecurityForEnv(proxy *models.MCPProxy, envID string) *models.SecurityConfig {
+	if proxy == nil {
+		return nil
+	}
+	envCfg := findMCPEnvironmentConfig(proxy.Configuration.Environments, envID)
+	if envCfg == nil {
+		return nil
+	}
+	return envCfg.Security
+}
+
+// mcpProxyEnvArtifactUUID returns the stable per-environment gateway artifact UUID for the
+// given environment from the source proxy's blueprint, or uuid.Nil when the proxy has no
+// block for that environment. This UUID is the gateway-facing apiID that per-agent inbound
+// API keys are minted against, so the gateway validates them against the single shared
+// artifact the proxy deployed for that environment.
+func mcpProxyEnvArtifactUUID(proxy *models.MCPProxy, envID string) uuid.UUID {
+	if proxy == nil {
+		return uuid.Nil
+	}
+	env := findMCPEnvironmentConfig(proxy.Configuration.Environments, envID)
+	if env == nil || env.ArtifactUUID == nil {
+		return uuid.Nil
+	}
+	return *env.ArtifactUUID
+}
+
+// resolveMCPMappingAPIID resolves the shared per-environment artifact UUID that a mapping's
+// inbound API key must target on the gateway (the apiID). It prefers the mapping's preloaded
+// source proxy and falls back to loading the proxy by UUID.
+func (s *agentConfigurationService) resolveMCPMappingAPIID(ctx context.Context, mapping *models.EnvAgentMCPMapping, orgName string) uuid.UUID {
+	if id := mcpProxyEnvArtifactUUID(mapping.MCPProxy, mapping.EnvironmentUUID.String()); id != uuid.Nil {
+		return id
+	}
+	if s.mcpProxyRepo != nil && mapping.MCPProxyUUID != uuid.Nil {
+		if proxy, err := s.mcpProxyRepo.GetByUUID(ctx, mapping.MCPProxyUUID.String(), orgName); err == nil {
+			return mcpProxyEnvArtifactUUID(proxy, mapping.EnvironmentUUID.String())
+		}
+	}
+	return uuid.Nil
+}
+
+// createMCPMappingAPIKey mints a per-agent inbound API key. apiID is the shared
+// per-environment proxy artifact the gateway validates the key against; storageUUID is the
+// per-agent key-holder artifact under which the key is persisted and later listed/revoked.
+// Keeping them distinct lets many agents share one gateway artifact while retaining
+// per-agent key issuance and revocation.
+func (s *agentConfigurationService) createMCPMappingAPIKey(ctx context.Context, orgName string, apiID, storageUUID uuid.UUID, keyName string) (*models.CreateAPIKeyResponse, error) {
 	if s.apiKeyBroadcaster == nil {
 		return nil, fmt.Errorf("API key service is not configured")
 	}
-	mappingID := mappingUUID.String()
-	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, &models.CreateAPIKeyRequest{
+	if apiID == uuid.Nil {
+		return nil, fmt.Errorf("MCP proxy shared artifact not found")
+	}
+	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, apiID.String(), storageUUID.String(), &models.CreateAPIKeyRequest{
 		Name: keyName,
 	})
 }
 
-func (s *agentConfigurationService) revokeMCPMappingAPIKey(ctx context.Context, orgName string, mappingUUID uuid.UUID, keyName string) error {
+func (s *agentConfigurationService) revokeMCPMappingAPIKey(ctx context.Context, orgName string, apiID, storageUUID uuid.UUID, keyName string) error {
 	if s.apiKeyBroadcaster == nil {
 		return fmt.Errorf("API key service is not configured")
 	}
-	mappingID := mappingUUID.String()
-	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
+	if apiID == uuid.Nil {
+		if s.apiKeyBroadcaster.apiKeyRepo == nil {
+			return nil
+		}
+		return s.apiKeyBroadcaster.apiKeyRepo.Delete(storageUUID.String(), keyName)
+	}
+	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, apiID.String(), storageUUID.String(), keyName)
 }
 
 func mcpMappingScopedID(config *models.AgentConfiguration, envName string) string {
@@ -390,11 +459,15 @@ func (s *agentConfigurationService) mcpMappingAPIKeyExists(mappingUUID uuid.UUID
 	return false, err
 }
 
-func (s *agentConfigurationService) revokeStaleMCPMappingAPIKeys(ctx context.Context, orgName string, mappingUUID uuid.UUID, keepName string) error {
+// revokeStaleMCPMappingAPIKeys revokes every key persisted under the per-agent key-holder
+// artifact (storageUUID) except keepName, broadcasting revocation against the shared
+// gateway artifact (apiID). storageUUID scopes the listing to this agent's keys; apiID
+// tells the gateway which deployed artifact to drop the key from.
+func (s *agentConfigurationService) revokeStaleMCPMappingAPIKeys(ctx context.Context, orgName string, apiID, storageUUID uuid.UUID, keepName string) error {
 	if s.apiKeyBroadcaster == nil || s.apiKeyBroadcaster.apiKeyRepo == nil {
 		return nil
 	}
-	keys, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(ctx, mappingUUID.String())
+	keys, err := s.apiKeyBroadcaster.apiKeyRepo.ListByArtifact(ctx, storageUUID.String())
 	if err != nil {
 		return err
 	}
@@ -403,15 +476,15 @@ func (s *agentConfigurationService) revokeStaleMCPMappingAPIKeys(ctx context.Con
 		if key.Name == keepName {
 			continue
 		}
-		if err := s.revokeMCPMappingAPIKey(ctx, orgName, mappingUUID, key.Name); err != nil {
+		if err := s.revokeMCPMappingAPIKey(ctx, orgName, apiID, storageUUID, key.Name); err != nil {
 			errs = append(errs, fmt.Errorf("key %s: %w", key.Name, err))
 		}
 	}
 	return errors.Join(errs...)
 }
 
-func (s *agentConfigurationService) revokeAllMCPMappingAPIKeys(ctx context.Context, orgName string, mappingUUID uuid.UUID) error {
-	return s.revokeStaleMCPMappingAPIKeys(ctx, orgName, mappingUUID, "")
+func (s *agentConfigurationService) revokeAllMCPMappingAPIKeys(ctx context.Context, orgName string, apiID, storageUUID uuid.UUID) error {
+	return s.revokeStaleMCPMappingAPIKeys(ctx, orgName, apiID, storageUUID, "")
 }
 
 // resolveConfigAndEnvUUID loads an agent configuration, validates it belongs to
@@ -463,6 +536,30 @@ func (s *agentConfigurationService) resolveMCPMappingArtifactUUID(
 	return uuid.Nil, utils.ErrAgentConfigNotFound
 }
 
+// resolveMCPMappingKeyBinding resolves both the per-agent key-holder artifact UUID
+// (storageUUID, under which the key is persisted/listed) and the shared per-environment
+// proxy artifact UUID (apiID, which the gateway validates the key against) for an
+// external agent's MCP configuration in the given environment.
+func (s *agentConfigurationService) resolveMCPMappingKeyBinding(
+	ctx context.Context, orgName, projectName, agentName string, configUUID uuid.UUID, envName string,
+) (storageUUID, apiID uuid.UUID, err error) {
+	config, envUUID, err := s.resolveConfigAndEnvUUID(ctx, orgName, projectName, agentName, configUUID, envName)
+	if err != nil {
+		return uuid.Nil, uuid.Nil, err
+	}
+	for i := range config.EnvMCPMappings {
+		mapping := &config.EnvMCPMappings[i]
+		if mapping.EnvironmentUUID.String() == envUUID {
+			apiID = s.resolveMCPMappingAPIID(ctx, mapping, orgName)
+			if apiID == uuid.Nil {
+				return uuid.Nil, uuid.Nil, fmt.Errorf("MCP proxy shared artifact not found for environment %s", envName)
+			}
+			return mapping.ArtifactUUID, apiID, nil
+		}
+	}
+	return uuid.Nil, uuid.Nil, utils.ErrAgentConfigNotFound
+}
+
 // ListMCPConfigAPIKeys returns the masked, user-managed API key(s) for an external
 // agent's MCP configuration in the given environment.
 func (s *agentConfigurationService) ListMCPConfigAPIKeys(
@@ -495,12 +592,11 @@ func (s *agentConfigurationService) CreateMCPConfigAPIKey(
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
 		return nil, err
 	}
-	mappingUUID, err := s.resolveMCPMappingArtifactUUID(ctx, orgName, projectName, agentName, configUUID, envName)
+	storageUUID, apiID, err := s.resolveMCPMappingKeyBinding(ctx, orgName, projectName, agentName, configUUID, envName)
 	if err != nil {
 		return nil, err
 	}
-	mappingID := mappingUUID.String()
-	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, mappingID, mappingID, req)
+	return s.apiKeyBroadcaster.broadcastCreate(ctx, orgName, apiID.String(), storageUUID.String(), req)
 }
 
 // RotateMCPConfigAPIKey revokes the current per-config MCP API key and generates a
@@ -514,12 +610,11 @@ func (s *agentConfigurationService) RotateMCPConfigAPIKey(
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
 		return nil, err
 	}
-	mappingUUID, err := s.resolveMCPMappingArtifactUUID(ctx, orgName, projectName, agentName, configUUID, envName)
+	storageUUID, apiID, err := s.resolveMCPMappingKeyBinding(ctx, orgName, projectName, agentName, configUUID, envName)
 	if err != nil {
 		return nil, err
 	}
-	mappingID := mappingUUID.String()
-	return s.apiKeyBroadcaster.broadcastRotate(ctx, orgName, mappingID, mappingID, keyName, req)
+	return s.apiKeyBroadcaster.broadcastRotate(ctx, orgName, apiID.String(), storageUUID.String(), keyName, req)
 }
 
 // RevokeMCPConfigAPIKey revokes and removes the per-config MCP API key.
@@ -532,12 +627,11 @@ func (s *agentConfigurationService) RevokeMCPConfigAPIKey(
 	if err := s.ensureExternalAgentForAPIKey(ctx, orgName, projectName, agentName); err != nil {
 		return err
 	}
-	mappingUUID, err := s.resolveMCPMappingArtifactUUID(ctx, orgName, projectName, agentName, configUUID, envName)
+	storageUUID, apiID, err := s.resolveMCPMappingKeyBinding(ctx, orgName, projectName, agentName, configUUID, envName)
 	if err != nil {
 		return err
 	}
-	mappingID := mappingUUID.String()
-	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, mappingID, mappingID, keyName)
+	return s.apiKeyBroadcaster.broadcastRevoke(ctx, orgName, apiID.String(), storageUUID.String(), keyName)
 }
 
 // resolveLLMProxyHandleForConfig resolves the LLM proxy handle backing an external
@@ -1191,6 +1285,41 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 			return nil, fmt.Errorf("invalid environment id %q: %w", envName, err)
 		}
 		sourceProxy := proxiesByEnv[envName]
+
+		envTemplates, err := s.buildMCPMappingEnvironmentVariables(config.Name, req.EnvironmentVariables)
+		if err != nil {
+			s.cleanupMCPConfig(ctx, config.UUID, orgName)
+			return nil, fmt.Errorf("failed to build MCP environment variables for %s: %w", envName, err)
+		}
+
+		// The proxy is selected for the agent regardless of environment, but it is only
+		// deployable when the proxy has a configured environment block, that block owns a
+		// shared gateway artifact, and the environment has an active gateway. For any
+		// other environment, create no mapping/deployment and inject empty env vars.
+		configured := findMCPEnvironmentConfig(sourceProxy.Configuration.Environments, env.UUID) != nil
+		sharedArtifactUUID := mcpProxyEnvArtifactUUID(sourceProxy, env.UUID)
+		var gateway *models.Gateway
+		if configured && sharedArtifactUUID == uuid.Nil {
+			s.logger.Warn("Skipping MCP mapping for environment with missing shared artifact",
+				"environment", envName, "mcpProxyUUID", sourceProxy.UUID)
+		}
+		if configured && sharedArtifactUUID != uuid.Nil {
+			gw, gwErr := s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
+			if gwErr != nil && !errors.Is(gwErr, errNoActiveGatewayForEnvironment) {
+				s.cleanupMCPConfig(ctx, config.UUID, orgName)
+				return nil, fmt.Errorf("failed to resolve gateway for MCP environment %s: %w", envName, gwErr)
+			}
+			gateway = gw // nil when the environment has no active gateway
+		}
+		if gateway == nil {
+			if err := s.provisionUnconfiguredMCPEnv(ctx, config, envUUID, envName, orgName, projectName, agentID,
+				envTemplates, isExternalAgent, firstEnvName, envCredentials); err != nil {
+				s.cleanupMCPConfig(ctx, config.UUID, orgName)
+				return nil, err
+			}
+			continue
+		}
+
 		handle := mcpMappingProxyName(projectName, agentID, config.Name, envName)
 		artifactName := handle
 		sourceProxyVersion := sourceProxy.Version
@@ -1208,11 +1337,6 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 		}
 		deployedProxy := buildAgentMCPConfigProxy(config, mapping, sourceProxy, envName, orgName, handle)
 		proxyMapping := buildMCPProxyMapping(sourceProxy.UUID, deployedProxy)
-		envTemplates, err := s.buildMCPMappingEnvironmentVariables(config.Name, req.EnvironmentVariables)
-		if err != nil {
-			s.cleanupMCPConfig(ctx, config.UUID, orgName)
-			return nil, fmt.Errorf("failed to build MCP environment variables for %s: %w", envName, err)
-		}
 		if err := s.db.Transaction(func(tx *gorm.DB) error {
 			if err := s.envMCPMappingRepo.Create(ctx, tx, mapping, proxyMapping, handle, artifactName, sourceProxyVersion, orgName); err != nil {
 				return err
@@ -1223,27 +1347,20 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 			return nil, err
 		}
 
-		gateway, err := s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
-		if err != nil {
-			s.cleanupMCPConfig(ctx, config.UUID, orgName)
-			return nil, fmt.Errorf("failed to resolve gateway for MCP environment %s: %w", envName, err)
-		}
-		if err := s.mcpProxyService.deployMCPProxyToGateway(ctx, deployedProxy, orgName, gateway); err != nil {
-			s.cleanupMCPConfig(ctx, config.UUID, orgName)
-			return nil, fmt.Errorf("failed to deploy MCP proxy for environment %s: %w", envName, err)
-		}
-
+		// The agent configuration deploys nothing: the proxy already deployed the single
+		// gateway artifact for this environment. We only mint the per-agent inbound key
+		// (against the shared artifact) and inject the env vars pointing at its URL.
 		scopedID := scopedProxyIdentifier(config.ProjectName, config.AgentID, config.Name, env.Name)
 		// Only provision an inbound API key when the source MCP proxy has api-key
-		// security enabled. When disabled, the mapping is deployed without a gateway
-		// key / app binding and no apikey env var is injected (only the URL).
-		secured := mcpProxyAPIKeySecurityEnabled(sourceProxy)
+		// security enabled. When disabled, no gateway key / app binding is created and no
+		// apikey env var is injected (only the URL).
+		secured := mcpProxyAPIKeySecurityEnabled(sourceProxy, mapping.EnvironmentUUID.String())
 		var proxyAPIKey *models.CreateAPIKeyResponse
 		var proxySecretLoc secretmanagersvc.SecretLocation
 		secretRefName := ""
 		if secured {
 			var err error
-			proxyAPIKey, err = s.createMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, fmt.Sprintf("%s-key", scopedID))
+			proxyAPIKey, err = s.createMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, fmt.Sprintf("%s-key", scopedID))
 			if err != nil {
 				s.cleanupMCPConfig(ctx, config.UUID, orgName)
 				return nil, fmt.Errorf("failed to generate MCP API key for environment %s: %w", envName, err)
@@ -1256,7 +1373,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 				proxyAPIKey.KeyID,
 			)
 			if err != nil {
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after AI application failure", "environment", envName, "err", revokeErr)
 				}
 				s.cleanupMCPConfig(ctx, config.UUID, orgName)
@@ -1274,7 +1391,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 			secretRefName, err = s.secretClient.CreateSecret(ctx, proxySecretLoc,
 				map[string]string{secretmanagersvc.SecretKeyAPIKey: proxyAPIKey.APIKey})
 			if err != nil {
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after secret persistence failure", "environment", envName, "err", revokeErr)
 				}
 				s.cleanupMCPConfig(ctx, config.UUID, orgName)
@@ -1302,7 +1419,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, orgName
 				if delErr := s.secretClient.DeleteSecret(ctx, proxySecretLoc, secretRefName); delErr != nil {
 					s.logger.Warn("failed to delete MCP API key secret after env var persistence failure", "environment", envName, "err", delErr)
 				}
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after env var persistence failure", "environment", envName, "err", revokeErr)
 				}
 			}
@@ -2109,27 +2226,73 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		handle := mcpMappingProxyName(projectName, agentName, existingConfig.Name, envName)
 		artifactName := handle
 		sourceVersion := mcpProxyArtifactVersion(sourceProxy)
+		// An environment is deployable only if the proxy is configured for it, the proxy
+		// environment owns a shared gateway artifact, and it has an active gateway.
+		// Otherwise the mapping is torn down / never created and the env vars are
+		// injected empty.
+		configured := findMCPEnvironmentConfig(sourceProxy.Configuration.Environments, env.UUID) != nil
+		sharedArtifactUUID := mcpProxyEnvArtifactUUID(sourceProxy, env.UUID)
+		deployable := false
+		if configured && sharedArtifactUUID == uuid.Nil {
+			s.logger.Warn("Treating MCP environment as non-deployable; missing shared artifact",
+				"environment", envName, "mcpProxyUUID", sourceProxy.UUID)
+		}
+		if configured && sharedArtifactUUID != uuid.Nil {
+			_, gwErr := s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
+			if gwErr != nil && !errors.Is(gwErr, errNoActiveGatewayForEnvironment) {
+				return nil, fmt.Errorf("failed to resolve gateway for MCP environment %s: %w", envName, gwErr)
+			}
+			deployable = gwErr == nil
+		}
 
 		if mapping, ok := existingEnvMap[envName]; ok {
-			sourceChanged := mapping.MCPProxyUUID != sourceProxy.UUID
-			shouldRedeploy := sourceChanged || nameChanged
-			if err := s.updateExistingMCPMapping(ctx, existingConfig, mapping, sourceProxy, envName, orgName, handle, artifactName, sourceVersion, false); err != nil {
-				return nil, err
-			}
-			if err := s.reconcileMCPMappingCredentials(ctx, existingConfig, mapping, sourceProxy, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
-				return nil, err
-			}
-			if shouldRedeploy {
-				if err := s.deployMCPMapping(ctx, existingConfig, mapping, sourceProxy, envName, orgName, handle); err != nil {
+			if deployable {
+				sourceChanged := mapping.MCPProxyUUID != sourceProxy.UUID
+				shouldRefresh := sourceChanged || nameChanged
+				if err := s.updateExistingMCPMapping(ctx, existingConfig, mapping, sourceProxy, envName, orgName, handle, artifactName, sourceVersion, false); err != nil {
 					return nil, err
 				}
-			}
-			if shouldRedeploy && !isExternalAgent {
-				if err := s.injectMCPMappingEnvVars(ctx, existingConfig, mapping, sourceProxy, envName, orgName, envTemplates, firstEnvName); err != nil {
-					s.logger.Warn("failed to inject updated MCP mapping env vars", "environment", envName, "err", err)
+				if err := s.reconcileMCPMappingCredentials(ctx, existingConfig, mapping, sourceProxy, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
+					return nil, err
+				}
+				// No per-agent deployment; refresh the injected env vars when the proxy or
+				// its name changed so the URL / api key reference stays correct.
+				if shouldRefresh && !isExternalAgent {
+					if err := s.injectMCPMappingEnvVars(ctx, existingConfig, mapping, sourceProxy, envName, orgName, envTemplates, firstEnvName); err != nil {
+						s.logger.Warn("failed to inject updated MCP mapping env vars", "environment", envName, "err", err)
+					}
+				}
+			} else {
+				// The environment is no longer deployable (the proxy blueprint no longer
+				// configures it, or it has no active gateway): tear down the deployment/
+				// credentials but keep the env var names, re-pointed to empty.
+				if err := s.teardownMCPMappingKeepEnvVars(ctx, existingConfig, mapping, envName, orgName); err != nil {
+					return nil, err
+				}
+				if !isExternalAgent {
+					if err := s.updateMCPMappingSecretReference(ctx, existingConfig.UUID, mapping.EnvironmentUUID, ""); err != nil {
+						s.logger.Warn("failed to clear MCP secret reference after teardown", "environment", envName, "err", err)
+					}
+					emptyVars := buildEmptyMCPEnvVars(envTemplates)
+					if err := s.ocClient.UpdateReleaseBindingEnvVars(ctx, orgName, projectName, agentName, envName, emptyVars); err != nil {
+						s.logger.Warn("failed to inject empty MCP env vars after teardown", "environment", envName, "err", err)
+					}
+					if firstEnvName != "" && envName == firstEnvName {
+						if err := s.ocClient.UpdateComponentEnvVars(ctx, orgName, projectName, agentName, emptyVars); err != nil {
+							s.logger.Warn("failed to bootstrap empty MCP env vars after teardown", "environment", envName, "err", err)
+						}
+					}
 				}
 			}
 			delete(existingEnvMap, envName)
+			continue
+		}
+
+		if !deployable {
+			if err := s.provisionUnconfiguredMCPEnv(ctx, existingConfig, envUUID, envName, orgName, projectName, agentName,
+				envTemplates, isExternalAgent, firstEnvName, nil); err != nil {
+				return nil, err
+			}
 			continue
 		}
 
@@ -2149,20 +2312,17 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		}); err != nil {
 			return nil, fmt.Errorf("failed to create MCP mapping for environment %s: %w", envName, err)
 		}
-		if err := s.deployMCPMapping(ctx, existingConfig, mapping, sourceProxy, envName, orgName, handle); err != nil {
-			s.cleanupNewMCPMapping(ctx, existingConfig, mapping, envName, orgName)
-			return nil, err
-		}
 		scopedID := scopedProxyIdentifier(existingConfig.ProjectName, existingConfig.AgentID, existingConfig.Name, envName)
-		// Mirror the create flow: only provision an inbound API key when the source
-		// MCP proxy has api-key security enabled.
-		secured := mcpProxyAPIKeySecurityEnabled(sourceProxy)
+		// The agent configuration deploys nothing: the proxy already deployed the single
+		// gateway artifact for this environment. Mirror the create flow: only provision an
+		// inbound API key (against the shared artifact) when api-key security is enabled.
+		secured := mcpProxyAPIKeySecurityEnabled(sourceProxy, mapping.EnvironmentUUID.String())
 		var proxyAPIKey *models.CreateAPIKeyResponse
 		var proxySecretLoc secretmanagersvc.SecretLocation
 		secretRefName := ""
 		if secured {
 			var err error
-			proxyAPIKey, err = s.createMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, fmt.Sprintf("%s-key", scopedID))
+			proxyAPIKey, err = s.createMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, fmt.Sprintf("%s-key", scopedID))
 			if err != nil {
 				s.cleanupNewMCPMapping(ctx, existingConfig, mapping, envName, orgName)
 				return nil, fmt.Errorf("failed to generate MCP API key for environment %s: %w", envName, err)
@@ -2175,7 +2335,7 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 				proxyAPIKey.KeyID,
 			)
 			if err != nil {
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after AI application failure", "environment", envName, "err", revokeErr)
 				}
 				s.cleanupNewMCPMapping(ctx, existingConfig, mapping, envName, orgName)
@@ -2193,7 +2353,7 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 			secretRefName, err = s.secretClient.CreateSecret(ctx, proxySecretLoc,
 				map[string]string{secretmanagersvc.SecretKeyAPIKey: proxyAPIKey.APIKey})
 			if err != nil {
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after secret persistence failure", "environment", envName, "err", revokeErr)
 				}
 				s.cleanupNewMCPMapping(ctx, existingConfig, mapping, envName, orgName)
@@ -2221,7 +2381,7 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 				if delErr := s.secretClient.DeleteSecret(ctx, proxySecretLoc, secretRefName); delErr != nil {
 					s.logger.Warn("failed to delete MCP API key secret after env var persistence failure", "environment", envName, "err", delErr)
 				}
-				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
+				if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, sharedArtifactUUID, mapping.ArtifactUUID, proxyAPIKey.KeyID); revokeErr != nil {
 					s.logger.Warn("failed to revoke MCP API key after env var persistence failure", "environment", envName, "err", revokeErr)
 				}
 			}
@@ -2325,7 +2485,12 @@ func (s *agentConfigurationService) updateMCPConfigEnvironmentVariableNames(
 		if envName == "" || mapping.MCPProxy == nil {
 			continue
 		}
-		gateway, gwErr := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, orgName, mapping.EnvironmentUUID)
+		sharedArtifactUUID := mcpProxyEnvArtifactUUID(mapping.MCPProxy, mapping.EnvironmentUUID.String())
+		if sharedArtifactUUID == uuid.Nil {
+			s.logger.Warn("failed to resolve MCP gateway for env var rename; missing shared artifact", "environment", envName)
+			continue
+		}
+		gateway, gwErr := s.resolveGatewayForMCPArtifact(ctx, sharedArtifactUUID, orgName, mapping.EnvironmentUUID)
 		if gwErr != nil {
 			s.logger.Warn("failed to resolve MCP gateway for env var rename", "environment", envName, "err", gwErr)
 			continue
@@ -2359,6 +2524,10 @@ func (s *agentConfigurationService) refreshAllMCPMappings(ctx context.Context, c
 		if envName == "" || mapping.MCPProxy == nil {
 			continue
 		}
+		if mcpProxyEnvArtifactUUID(mapping.MCPProxy, mapping.EnvironmentUUID.String()) == uuid.Nil {
+			s.logger.Warn("skipping MCP mapping refresh; missing shared artifact", "environment", envName)
+			continue
+		}
 		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 		artifactName := handle
 		version := mcpProxyArtifactVersion(mapping.MCPProxy)
@@ -2368,9 +2537,8 @@ func (s *agentConfigurationService) refreshAllMCPMappings(ctx context.Context, c
 		if err := s.reconcileMCPMappingCredentials(ctx, config, mapping, mapping.MCPProxy, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
 			return err
 		}
-		if err := s.deployMCPMapping(ctx, config, mapping, mapping.MCPProxy, envName, orgName, handle); err != nil {
-			return err
-		}
+		// No per-agent gateway deployment: the proxy owns the single per-environment
+		// artifact. We only refresh the injected env vars (URL / api key reference).
 		if !isExternalAgent {
 			if err := s.injectMCPMappingEnvVars(ctx, config, mapping, mapping.MCPProxy, envName, orgName, envTemplates, firstEnvName); err != nil {
 				s.logger.Warn("failed to inject refreshed MCP mapping env vars", "environment", envName, "err", err)
@@ -2384,6 +2552,7 @@ func (s *agentConfigurationService) updateExistingMCPMapping(ctx context.Context
 	sourceProxy *models.MCPProxy, envName, orgName, handle, artifactName, version string, redeploy bool,
 ) error {
 	mapping.MCPProxyUUID = sourceProxy.UUID
+	mapping.MCPProxy = sourceProxy
 	deployedProxy := buildAgentMCPConfigProxy(config, mapping, sourceProxy, envName, orgName, handle)
 	proxyMapping := buildMCPProxyMapping(sourceProxy.UUID, deployedProxy)
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
@@ -2420,30 +2589,20 @@ func (s *agentConfigurationService) updateExistingMCPMapping(ctx context.Context
 	}); err != nil {
 		return fmt.Errorf("failed to update MCP mapping for environment %s: %w", envName, err)
 	}
-	if redeploy {
-		return s.deployMCPMapping(ctx, config, mapping, sourceProxy, envName, orgName, handle)
-	}
-	return nil
-}
-
-func (s *agentConfigurationService) deployMCPMapping(ctx context.Context, config *models.AgentConfiguration, mapping *models.EnvAgentMCPMapping,
-	sourceProxy *models.MCPProxy, envName, orgName, handle string,
-) error {
-	gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, orgName, mapping.EnvironmentUUID)
-	if err != nil {
-		return fmt.Errorf("failed to resolve gateway for MCP environment %s: %w", envName, err)
-	}
-	deployedProxy := buildAgentMCPConfigProxy(config, mapping, sourceProxy, envName, orgName, handle)
-	if err := s.mcpProxyService.deployMCPProxyToGateway(ctx, deployedProxy, orgName, gateway); err != nil {
-		return fmt.Errorf("failed to deploy MCP mapping for environment %s: %w", envName, err)
-	}
+	// redeploy is retained for signature compatibility; agent configurations no longer
+	// deploy their own gateway artifacts (the proxy owns the per-environment artifact).
+	_ = redeploy
 	return nil
 }
 
 func (s *agentConfigurationService) injectMCPMappingEnvVars(ctx context.Context, config *models.AgentConfiguration, mapping *models.EnvAgentMCPMapping,
 	sourceProxy *models.MCPProxy, envName, orgName string, envTemplates []EnvConfigTemplate, firstEnvName string,
 ) error {
-	gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, orgName, mapping.EnvironmentUUID)
+	sharedArtifactUUID := mcpProxyEnvArtifactUUID(sourceProxy, mapping.EnvironmentUUID.String())
+	if sharedArtifactUUID == uuid.Nil {
+		return fmt.Errorf("MCP proxy shared artifact not found for environment %s", envName)
+	}
+	gateway, err := s.resolveGatewayForMCPArtifact(ctx, sharedArtifactUUID, orgName, mapping.EnvironmentUUID)
 	if err != nil {
 		return err
 	}
@@ -2463,6 +2622,45 @@ func (s *agentConfigurationService) injectMCPMappingEnvVars(ctx context.Context,
 	return nil
 }
 
+// provisionUnconfiguredMCPEnv handles an environment the selected MCP proxy has no
+// blueprint block for: no mapping is created, nothing is deployed and no API key is
+// minted. It persists the per-environment env var name rows (with empty secret
+// references) and injects the URL + API-key env vars as empty strings for internal
+// agents, or records empty credentials for external agents — so the agent still has the
+// variable names defined but blank in that environment. Env var name persistence is
+// hard (returns an error); the runtime injection is best-effort (logged and continued),
+// mirroring the configured path.
+func (s *agentConfigurationService) provisionUnconfiguredMCPEnv(ctx context.Context,
+	config *models.AgentConfiguration, envUUID uuid.UUID, envName, orgName, projectName, agentID string,
+	envTemplates []EnvConfigTemplate, isExternalAgent bool, firstEnvName string,
+	envCredentials map[string]envCredentialData,
+) error {
+	// Reuse the idempotent row-creation helper so repeated updateMCPConfig calls for an
+	// unconfigured environment do not accumulate duplicate env var rows for the same
+	// config/environment pair.
+	if err := s.ensureMCPEnvVarRows(ctx, config.UUID, envUUID, envTemplates); err != nil {
+		return fmt.Errorf("failed to create MCP environment variables for %s: %w", envName, err)
+	}
+
+	if isExternalAgent {
+		if envCredentials != nil {
+			envCredentials[envUUID.String()] = envCredentialData{apiKey: "", proxyURL: ""}
+		}
+		return nil
+	}
+
+	envVarsToInject := buildEmptyMCPEnvVars(envTemplates)
+	if err := s.ocClient.UpdateReleaseBindingEnvVars(ctx, orgName, projectName, agentID, envName, envVarsToInject); err != nil {
+		s.logger.Warn("failed to patch ReleaseBinding for empty MCP env var injection", "environment", envName, "err", err)
+	}
+	if firstEnvName != "" && envName == firstEnvName {
+		if err := s.ocClient.UpdateComponentEnvVars(ctx, orgName, projectName, agentID, envVarsToInject); err != nil {
+			s.logger.Warn("failed to patch Component for empty MCP env var bootstrap", "environment", envName, "err", err)
+		}
+	}
+	return nil
+}
+
 func (s *agentConfigurationService) cleanupMCPMappingCredentials(ctx context.Context, config *models.AgentConfiguration, mapping *models.EnvAgentMCPMapping, envName, orgName string) {
 	if config == nil || mapping == nil || envName == "" {
 		return
@@ -2470,7 +2668,7 @@ func (s *agentConfigurationService) cleanupMCPMappingCredentials(ctx context.Con
 	handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
 	scopedID := scopedProxyIdentifier(config.ProjectName, config.AgentID, config.Name, envName)
 	keyName := fmt.Sprintf("%s-key", scopedID)
-	if err := s.revokeAllMCPMappingAPIKeys(ctx, orgName, mapping.ArtifactUUID); err != nil {
+	if err := s.revokeAllMCPMappingAPIKeys(ctx, orgName, s.resolveMCPMappingAPIID(ctx, mapping, orgName), mapping.ArtifactUUID); err != nil {
 		s.logger.Warn("failed to revoke MCP mapping API key", "mappingHandle", handle, "keyName", keyName, "err", err)
 	}
 
@@ -2524,6 +2722,34 @@ func (s *agentConfigurationService) removeMCPMappingEnvironment(ctx context.Cont
 		if err := s.envVariableRepo.DeleteByConfigAndEnv(ctx, tx, config.UUID, mapping.EnvironmentUUID); err != nil {
 			return err
 		}
+		if err := s.envMCPMappingRepo.Delete(ctx, tx, mapping.ID); err != nil {
+			return err
+		}
+		if err := tx.Where("artifact_uuid = ? AND organization_name = ?", mapping.ArtifactUUID, orgName).
+			Delete(&models.DeploymentStatusRecord{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("artifact_uuid = ? AND organization_name = ?", mapping.ArtifactUUID, orgName).
+			Delete(&models.Deployment{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("uuid = ?", mapping.ArtifactUUID).Delete(&models.Artifact{}).Error
+	})
+}
+
+// teardownMCPMappingKeepEnvVars removes an MCP mapping's gateway deployment and
+// credentials for an environment whose proxy blueprint no longer has a block, but KEEPS
+// the env var name rows (the caller re-points their values to empty). It mirrors
+// removeMCPMappingEnvironment minus the ReleaseBinding/Component env var removal and
+// minus deleting the env var rows.
+func (s *agentConfigurationService) teardownMCPMappingKeepEnvVars(ctx context.Context, config *models.AgentConfiguration,
+	mapping *models.EnvAgentMCPMapping, envName, orgName string,
+) error {
+	if s.mcpProxyService != nil {
+		s.mcpProxyService.BroadcastMCPArtifactDeletion(ctx, mapping.ArtifactUUID, orgName)
+	}
+	s.cleanupMCPMappingCredentials(ctx, config, mapping, envName, orgName)
+	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := s.envMCPMappingRepo.Delete(ctx, tx, mapping.ID); err != nil {
 			return err
 		}
@@ -3739,6 +3965,11 @@ func (s *agentConfigurationService) resolveGatewayForMCPArtifact(ctx context.Con
 	return s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
 }
 
+// errNoActiveGatewayForEnvironment is returned by resolveGatewayForEnvironment when the
+// environment has no active gateway. MCP config creation/update treats this like an
+// environment the proxy is not configured for: no deployment, empty env vars.
+var errNoActiveGatewayForEnvironment = errors.New("no active gateway found for environment")
+
 // resolveGatewayForEnvironment selects gateway with AI-first preference
 func (s *agentConfigurationService) resolveGatewayForEnvironment(ctx context.Context, envUUID uuid.UUID, orgName string) (*models.Gateway, error) {
 	envIDStr := envUUID.String()
@@ -3768,7 +3999,7 @@ func (s *agentConfigurationService) resolveGatewayForEnvironment(ctx context.Con
 		return nil, fmt.Errorf("failed to find gateway: %w", err)
 	}
 	if len(gateways) == 0 {
-		return nil, errors.New("no active gateway found for environment")
+		return nil, errNoActiveGatewayForEnvironment
 	}
 
 	return gateways[0], nil
@@ -4049,7 +4280,14 @@ func buildAgentMCPConfigProxy(
 	orgName string,
 	handle string,
 ) *models.MCPProxy {
-	context := agentMCPMappingContext(source.Configuration.Context, scopedProxyIdentifier(config.ProjectName, config.AgentID, config.Name, envName))
+	// The agent configuration no longer deploys its own artifact: it reuses the single
+	// gateway artifact the proxy deployed for this environment. That artifact lives at the
+	// proxy's base context, so the injected proxy URL derived from this value is the shared
+	// per-environment URL (identical for every agent that references the proxy).
+	context := ""
+	if source.Configuration.Context != nil {
+		context = *source.Configuration.Context
+	}
 	name := handle
 	version := source.Version
 	if source.Artifact != nil && source.Artifact.Version != "" {
@@ -4058,6 +4296,26 @@ func buildAgentMCPConfigProxy(
 	if version == "" {
 		version = source.Configuration.Version
 	}
+
+	// The source proxy is a per-environment blueprint. Flatten the block for this
+	// mapping's environment into the flat, single-environment config that the deployment
+	// YAML builder consumes. If the blueprint has no block for this environment the
+	// upstream stays empty and deployment fails clearly ("upstream URL is required").
+	envCfg := findMCPEnvironmentConfig(source.Configuration.Environments, mapping.EnvironmentUUID.String())
+	var upstream models.UpstreamConfig
+	var policies []models.MCPPolicy
+	var capabilities *models.MCPProxyCapabilities
+	var security *models.SecurityConfig
+	if envCfg != nil {
+		if envCfg.Upstream != nil {
+			endpoint := *envCfg.Upstream
+			upstream.Main = &endpoint
+		}
+		policies = envCfg.Policies
+		capabilities = envCfg.Capabilities
+		security = envCfg.Security
+	}
+
 	return &models.MCPProxy{
 		UUID:        mapping.ArtifactUUID,
 		Description: config.Description,
@@ -4068,10 +4326,10 @@ func buildAgentMCPConfigProxy(
 			Context:      &context,
 			Vhost:        source.Configuration.Vhost,
 			SpecVersion:  source.Configuration.SpecVersion,
-			Upstream:     source.Configuration.Upstream,
-			Policies:     source.Configuration.Policies,
-			Capabilities: source.Configuration.Capabilities,
-			Security:     source.Configuration.Security,
+			Upstream:     upstream,
+			Policies:     policies,
+			Capabilities: capabilities,
+			Security:     security,
 		},
 		OrganizationName: orgName,
 		ID:               handle,
@@ -4079,6 +4337,19 @@ func buildAgentMCPConfigProxy(
 		Handle:           handle,
 		Version:          version,
 	}
+}
+
+// findMCPEnvironmentConfig returns the blueprint block configuring the given environment
+// UUID, or nil when the source proxy has no block for that environment.
+func findMCPEnvironmentConfig(environments map[string]models.MCPEnvironmentConfig, envID string) *models.MCPEnvironmentConfig {
+	envID = strings.TrimSpace(envID)
+	if envID == "" {
+		return nil
+	}
+	if env, ok := environments[envID]; ok {
+		return &env
+	}
+	return nil
 }
 
 func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPProxy) *models.MCPProxyMapping {
@@ -4091,46 +4362,44 @@ func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPPr
 	}
 }
 
-// RedeployMCPMappingsForSourceProxy redeploys every agent-scoped MCP mapping artifact
-// that derives from the given source MCP proxy. Invoked by MCPProxyService.Update after
-// the source proxy itself has been redeployed, so each agent-specific artifact picks up
-// the new upstream URL, auth header/value, and policies on the gateway(s) where it
-// currently lives. Best-effort: per-mapping failures are aggregated and returned so the
-// caller can log without rolling back the proxy update.
-func (s *agentConfigurationService) RedeployMCPMappingsForSourceProxy(ctx context.Context, source *models.MCPProxy, orgName string) error {
-	if source == nil || s.envMCPMappingRepo == nil || s.mcpProxyService == nil {
-		return nil
+// ensureMCPEnvVarRows creates the per-environment MCP env var name rows (with empty secret
+// references) for a config/environment. The repository uses ON CONFLICT DO NOTHING on
+// the config/environment/name/key unique constraint, so concurrent callers race safely.
+func (s *agentConfigurationService) ensureMCPEnvVarRows(ctx context.Context, configUUID, envUUID uuid.UUID, envTemplates []EnvConfigTemplate) error {
+	variables := make([]models.AgentEnvConfigVariable, 0, len(envTemplates))
+	for _, envTemplate := range envTemplates {
+		variables = append(variables, models.AgentEnvConfigVariable{
+			ConfigUUID:      configUUID,
+			EnvironmentUUID: envUUID,
+			VariableName:    envTemplate.Name,
+			VariableKey:     envTemplate.Key,
+			SecretReference: "",
+		})
 	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		return s.envVariableRepo.CreateBatch(ctx, tx, variables)
+	})
+}
 
-	mappings, err := s.envMCPMappingRepo.ListByMCPProxy(ctx, source.UUID)
-	if err != nil {
-		return fmt.Errorf("list MCP mappings: %w", err)
-	}
-	if len(mappings) == 0 {
+// CleanupEnvironmentMCPArtifacts removes all MCP-proxy data tied to a deleted environment.
+// (a) Every agent-scoped MCP mapping deployed into the env is fully torn down (gateway
+// artifact deletion broadcast, credential/secret cleanup, and DB rows). (b) The env's block
+// is stripped from every org-level MCP proxy blueprint. Best-effort: per-item transactions,
+// errors aggregated and returned but never fatal to the caller.
+func (s *agentConfigurationService) CleanupEnvironmentMCPArtifacts(ctx context.Context, orgName string, envUUID uuid.UUID, envName string) error {
+	if s.envMCPMappingRepo == nil {
 		return nil
-	}
-
-	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
-	if err != nil {
-		return fmt.Errorf("list environments: %w", err)
-	}
-	envNameByUUID := make(map[string]string, len(envs))
-	for _, env := range envs {
-		if env == nil {
-			continue
-		}
-		envNameByUUID[env.UUID] = env.Name
 	}
 
 	var errs []error
+
+	// (a) Agent-scoped mappings deployed into this environment.
+	mappings, err := s.envMCPMappingRepo.ListByEnvironment(ctx, envUUID)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("list MCP mappings for environment %s: %w", envUUID, err))
+	}
 	for i := range mappings {
 		mapping := &mappings[i]
-		envName, ok := envNameByUUID[mapping.EnvironmentUUID.String()]
-		if !ok || envName == "" {
-			errs = append(errs, fmt.Errorf("mapping %s: environment %s not found", mapping.ArtifactUUID, mapping.EnvironmentUUID))
-			continue
-		}
-
 		config, err := s.agentConfigRepo.GetByUUID(ctx, mapping.ConfigUUID, orgName)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("mapping %s: load config %s: %w", mapping.ArtifactUUID, mapping.ConfigUUID, err))
@@ -4140,19 +4409,14 @@ func (s *agentConfigurationService) RedeployMCPMappingsForSourceProxy(ctx contex
 			errs = append(errs, fmt.Errorf("mapping %s: config %s not found", mapping.ArtifactUUID, mapping.ConfigUUID))
 			continue
 		}
-		agentComp, agentErr := s.ocClient.GetComponent(ctx, orgName, config.ProjectName, config.AgentID)
+
 		isExternalAgent := false
-		if agentErr != nil {
-			s.logger.Warn("failed to determine agent type during MCP mapping redeploy, assuming internal", "configUUID", config.UUID, "err", agentErr)
+		if agentComp, agentErr := s.ocClient.GetComponent(ctx, orgName, config.ProjectName, config.AgentID); agentErr != nil {
+			s.logger.Warn("failed to determine agent type during MCP env cleanup, assuming internal", "configUUID", config.UUID, "err", agentErr)
 		} else {
 			isExternalAgent = agentComp.Provisioning.Type == string(utils.ExternalAgent)
 		}
-		firstEnvName := ""
-		if !isExternalAgent {
-			if pipeline, pipelineErr := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, config.ProjectName); pipelineErr == nil && pipeline != nil {
-				firstEnvName = client.FindFirstEnvironment(pipeline.PromotionPaths)
-			}
-		}
+
 		existingVarNames, err := s.loadExistingVarNames(ctx, config.UUID)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("mapping %s: load env var names: %w", mapping.ArtifactUUID, err))
@@ -4164,67 +4428,64 @@ func (s *agentConfigurationService) RedeployMCPMappingsForSourceProxy(ctx contex
 			continue
 		}
 
-		gateways, err := s.trackedGatewaysForMCPArtifact(mapping.ArtifactUUID, orgName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: resolve gateways: %w", mapping.ArtifactUUID, err))
-			continue
-		}
-		if len(gateways) == 0 {
-			// Artifact has never been pushed to any gateway; nothing to refresh.
-			s.logger.Info("Skipping MCP mapping redeploy; artifact has no tracked deployments",
-				"mappingArtifactUUID", mapping.ArtifactUUID, "configUUID", config.UUID, "envName", envName)
-			continue
-		}
-
-		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
-		derived := buildAgentMCPConfigProxy(config, mapping, source, envName, orgName, handle)
-		if err := s.reconcileMCPMappingCredentials(ctx, config, mapping, source, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: reconcile credentials: %w", mapping.ArtifactUUID, err))
-			continue
-		}
-		for _, gateway := range gateways {
-			if err := s.mcpProxyService.deployMCPProxyToGateway(ctx, derived, orgName, gateway); err != nil {
-				errs = append(errs, fmt.Errorf("mapping %s on gateway %s: %w", mapping.ArtifactUUID, gateway.UUID, err))
+		// isLastEnv: only strip the shared Component-CR env vars when this env was the
+		// config's last remaining MCP mapping.
+		isLastEnv := true
+		if siblings, listErr := s.envMCPMappingRepo.ListByConfig(ctx, config.UUID); listErr != nil {
+			s.logger.Warn("failed to list sibling MCP mappings during env cleanup; treating as last env", "configUUID", config.UUID, "err", listErr)
+		} else {
+			for j := range siblings {
+				if siblings[j].EnvironmentUUID != envUUID {
+					isLastEnv = false
+					break
+				}
 			}
 		}
-		if !isExternalAgent {
-			if err := s.injectMCPMappingEnvVars(ctx, config, mapping, source, envName, orgName, envTemplates, firstEnvName); err != nil {
-				s.logger.Warn("failed to inject redeployed MCP mapping env vars", "mappingArtifactUUID", mapping.ArtifactUUID, "environment", envName, "err", err)
+
+		if err := s.removeMCPMappingEnvironment(ctx, config, mapping, envName, orgName, config.ProjectName, config.AgentID, envTemplates, isExternalAgent, isLastEnv); err != nil {
+			errs = append(errs, fmt.Errorf("mapping %s: teardown: %w", mapping.ArtifactUUID, err))
+		}
+	}
+
+	// (b) Org-level MCP proxy blueprints — strip the env block.
+	if s.mcpProxyRepo != nil {
+		const pageSize = 100
+		envKey := envUUID.String()
+		for offset := 0; ; offset += pageSize {
+			proxies, listErr := s.mcpProxyRepo.List(ctx, orgName, pageSize, offset)
+			if listErr != nil {
+				errs = append(errs, fmt.Errorf("list MCP proxies (offset %d): %w", offset, listErr))
+				break
+			}
+			for _, proxy := range proxies {
+				if proxy == nil {
+					continue
+				}
+				envBlock, ok := proxy.Configuration.Environments[envKey]
+				if !ok {
+					continue
+				}
+				// Tear down the single gateway artifact this proxy deployed for the vanished
+				// environment before stripping the block from the blueprint.
+				if s.mcpProxyService != nil && envBlock.ArtifactUUID != nil && *envBlock.ArtifactUUID != uuid.Nil {
+					if err := s.mcpProxyService.deleteMCPProxyEnvironmentArtifacts(ctx, []uuid.UUID{*envBlock.ArtifactUUID}, orgName); err != nil {
+						errs = append(errs, fmt.Errorf("delete env %s artifact for proxy %s: %w", envKey, proxy.UUID, err))
+					}
+				}
+				delete(proxy.Configuration.Environments, envKey)
+				if err := s.db.Transaction(func(tx *gorm.DB) error {
+					return s.mcpProxyRepo.Update(ctx, tx, proxy, orgName)
+				}); err != nil {
+					errs = append(errs, fmt.Errorf("strip env %s from proxy %s: %w", envKey, proxy.UUID, err))
+				}
+			}
+			if len(proxies) < pageSize {
+				break
 			}
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to redeploy %d MCP mapping artifact(s): %w", len(errs), errors.Join(errs...))
-	}
-	return nil
-}
 
-// trackedGatewaysForMCPArtifact resolves every gateway that has a deployment_status row
-// for the given MCP mapping artifact — including UNDEPLOYED ones whose last deploy ack
-// failed. We only redeploy where the artifact has previously been pushed; a brand-new
-// gateway destination should go through the normal config-create path, not this cascade.
-func (s *agentConfigurationService) trackedGatewaysForMCPArtifact(artifactUUID uuid.UUID, orgName string) ([]*models.Gateway, error) {
-	if s.mcpProxyService == nil || s.mcpProxyService.deploymentRepo == nil {
-		return nil, nil
-	}
-	gatewayIDs, err := s.mcpProxyService.deploymentRepo.GetTrackedGatewaysByProvider(artifactUUID, orgName)
-	if err != nil {
-		return nil, err
-	}
-	gateways := make([]*models.Gateway, 0, len(gatewayIDs))
-	for _, gwID := range gatewayIDs {
-		if strings.TrimSpace(gwID) == "" {
-			continue
-		}
-		gw, err := s.gatewayRepo.GetByUUID(gwID)
-		if err != nil || gw == nil {
-			s.logger.Warn("Skipping tracked gateway for MCP mapping redeploy",
-				"gatewayID", gwID, "artifactUUID", artifactUUID, "error", err)
-			continue
-		}
-		gateways = append(gateways, gw)
-	}
-	return gateways, nil
+	return errors.Join(errs...)
 }
 
 // varNamesToOverrides converts a key→name map to a slice of EnvironmentVariableConfig.
@@ -4328,22 +4589,29 @@ func (s *agentConfigurationService) removeMCPMappingAPIKeyEnvVar(ctx context.Con
 
 func (s *agentConfigurationService) ensureMCPMappingCredentials(ctx context.Context, config *models.AgentConfiguration, mapping *models.EnvAgentMCPMapping, envName, orgName string) (string, error) {
 	keyName := mcpMappingAPIKeyName(config, envName)
+	// storageUUID scopes the key to this agent (persistence + listing); apiID is the shared
+	// per-environment proxy artifact the gateway validates the key against.
+	storageUUID := mapping.ArtifactUUID
+	apiID := s.resolveMCPMappingAPIID(ctx, mapping, orgName)
+	if apiID == uuid.Nil {
+		return "", fmt.Errorf("MCP proxy shared artifact not found for environment %s", envName)
+	}
 	secretRefName, err := s.loadSecretRefForConfigEnv(ctx, config.UUID, mapping.EnvironmentUUID)
 	if err != nil {
 		return "", err
 	}
-	keyExists, err := s.mcpMappingAPIKeyExists(mapping.ArtifactUUID, keyName)
+	keyExists, err := s.mcpMappingAPIKeyExists(storageUUID, keyName)
 	if err != nil {
 		return "", fmt.Errorf("failed to inspect MCP API key for environment %s: %w", envName, err)
 	}
 	if secretRefName != "" && keyExists {
-		if err := s.revokeStaleMCPMappingAPIKeys(ctx, orgName, mapping.ArtifactUUID, keyName); err != nil {
+		if err := s.revokeStaleMCPMappingAPIKeys(ctx, orgName, apiID, storageUUID, keyName); err != nil {
 			return "", fmt.Errorf("failed to revoke stale MCP API keys for environment %s: %w", envName, err)
 		}
 		return secretRefName, nil
 	}
 
-	proxyAPIKey, err := s.createMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, keyName)
+	proxyAPIKey, err := s.createMCPMappingAPIKey(ctx, orgName, apiID, storageUUID, keyName)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate MCP API key for environment %s: %w", envName, err)
 	}
@@ -4356,7 +4624,7 @@ func (s *agentConfigurationService) ensureMCPMappingCredentials(ctx context.Cont
 		fmt.Sprintf("%s Application", config.AgentID),
 		proxyAPIKey.KeyID,
 	); err != nil {
-		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, createdKeyName); revokeErr != nil {
+		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, apiID, storageUUID, createdKeyName); revokeErr != nil {
 			s.logger.Warn("failed to revoke MCP API key after AI application failure", "environment", envName, "err", revokeErr)
 		}
 		return "", fmt.Errorf("failed to ensure AI application for MCP environment %s: %w", envName, err)
@@ -4366,7 +4634,7 @@ func (s *agentConfigurationService) ensureMCPMappingCredentials(ctx context.Cont
 	newSecretRefName, err := s.secretClient.CreateSecret(ctx, secretLoc,
 		map[string]string{secretmanagersvc.SecretKeyAPIKey: proxyAPIKey.APIKey})
 	if err != nil {
-		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, createdKeyName); revokeErr != nil {
+		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, apiID, storageUUID, createdKeyName); revokeErr != nil {
 			s.logger.Warn("failed to revoke MCP API key after secret persistence failure", "environment", envName, "err", revokeErr)
 		}
 		return "", fmt.Errorf("failed to store MCP API key in KV for environment %s: %w", envName, err)
@@ -4376,7 +4644,7 @@ func (s *agentConfigurationService) ensureMCPMappingCredentials(ctx context.Cont
 		if delErr := s.secretClient.DeleteSecret(ctx, secretLoc, newSecretRefName); delErr != nil {
 			s.logger.Warn("failed to delete MCP API key secret after env var update failure", "environment", envName, "err", delErr)
 		}
-		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, mapping.ArtifactUUID, createdKeyName); revokeErr != nil {
+		if revokeErr := s.revokeMCPMappingAPIKey(ctx, orgName, apiID, storageUUID, createdKeyName); revokeErr != nil {
 			s.logger.Warn("failed to revoke MCP API key after env var update failure", "environment", envName, "err", revokeErr)
 		}
 		return "", fmt.Errorf("failed to update MCP API key env reference for %s: %w", envName, err)
@@ -4384,14 +4652,14 @@ func (s *agentConfigurationService) ensureMCPMappingCredentials(ctx context.Cont
 	if secretRefName != "" && secretRefName != newSecretRefName {
 		s.logger.Info("MCP mapping SecretReference replaced", "environment", envName, "oldSecretRef", secretRefName, "newSecretRef", newSecretRefName)
 	}
-	if err := s.revokeStaleMCPMappingAPIKeys(ctx, orgName, mapping.ArtifactUUID, keyName); err != nil {
+	if err := s.revokeStaleMCPMappingAPIKeys(ctx, orgName, apiID, storageUUID, keyName); err != nil {
 		return "", fmt.Errorf("failed to revoke stale MCP API keys for environment %s: %w", envName, err)
 	}
 	return newSecretRefName, nil
 }
 
 func (s *agentConfigurationService) reconcileMCPMappingCredentials(ctx context.Context, config *models.AgentConfiguration, mapping *models.EnvAgentMCPMapping, sourceProxy *models.MCPProxy, envName, orgName string, envTemplates []EnvConfigTemplate, isExternalAgent bool, firstEnvName string) error {
-	if mcpProxyAPIKeySecurityEnabled(sourceProxy) {
+	if mcpProxyAPIKeySecurityEnabled(sourceProxy, mapping.EnvironmentUUID.String()) {
 		if _, err := s.ensureMCPMappingCredentials(ctx, config, mapping, envName, orgName); err != nil {
 			return err
 		}
@@ -4676,7 +4944,7 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 			proxyInfo = &models.LLMProxyInfo{
 				ProxyUUID:      utils.StrAsStrPointer(mapping.ArtifactUUID.String()),
 				ProviderName:   utils.StrAsStrPointer(proxyName),
-				AuthHeaderName: utils.StrAsStrPointer(mcpProxyAPIKeyHeaderName(mapping.MCPProxy)),
+				AuthHeaderName: utils.StrAsStrPointer(mcpProxyAPIKeyHeaderName(mapping.MCPProxy, mapping.EnvironmentUUID.String())),
 			}
 			if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OrganizationName, mapping.EnvironmentUUID); err == nil {
 				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OrganizationName,
@@ -4811,7 +5079,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 			proxyInfo = &models.LLMProxyInfo{
 				ProxyUUID:      utils.StrAsStrPointer(mapping.ArtifactUUID.String()),
 				ProviderName:   utils.StrAsStrPointer(proxyName),
-				AuthHeaderName: utils.StrAsStrPointer(mcpProxyAPIKeyHeaderName(mapping.MCPProxy)),
+				AuthHeaderName: utils.StrAsStrPointer(mcpProxyAPIKeyHeaderName(mapping.MCPProxy, mapping.EnvironmentUUID.String())),
 			}
 			if creds, ok := envCredentials[envUUID]; ok {
 				proxyInfo.URL = &creds.proxyURL
@@ -4928,7 +5196,9 @@ func (s *agentConfigurationService) ListAgentLLMConfigSecretReferences(ctx conte
 	return result, nil
 }
 
-func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error) {
+func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(
+	ctx context.Context, agentID, orgName, projectName, environmentName string,
+) (map[string]bool, error) {
 	env, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment %q: %w", environmentName, err)
@@ -4938,31 +5208,30 @@ func (s *agentConfigurationService) ListSystemManagedEnvVarKeys(ctx context.Cont
 		return nil, fmt.Errorf("invalid environment UUID %q: %w", env.UUID, err)
 	}
 
-	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
+	configs, err := s.agentConfigRepo.ListByAgent(ctx, orgName, projectName, agentID, 1000, 0)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// No LLM configuration exists for this agent — no system-managed keys
-			return map[string]bool{}, nil
+		return nil, fmt.Errorf("failed to list agent configurations: %w", err)
+	}
+
+	keys := make(map[string]bool)
+	for _, config := range configs {
+		vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, config.UUID, envUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list env config variables for config %s: %w", config.UUID, err)
 		}
-		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
-	}
-
-	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list env config variables: %w", err)
-	}
-
-	keys := make(map[string]bool, len(vars))
-	for _, v := range vars {
-		keys[v.VariableName] = true
+		for _, v := range vars {
+			keys[v.VariableName] = true
+		}
 	}
 	return keys, nil
 }
 
-// BuildSystemManagedEnvVarsFromConfig constructs the LLM env vars (URL + API key ref)
-// for a given agent and environment from the DB config. Used during promotion when
+// BuildSystemManagedEnvVarsFromConfig constructs system-managed env vars for a given
+// agent and environment from every DB-backed agent config. Used during promotion when
 // the target environment's ReleaseBinding doesn't have these vars yet.
-func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error) {
+func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(
+	ctx context.Context, agentID, orgName, projectName, environmentName string,
+) ([]client.EnvVar, error) {
 	env, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment %q: %w", environmentName, err)
@@ -4972,59 +5241,109 @@ func (s *agentConfigurationService) BuildSystemManagedEnvVarsFromConfig(ctx cont
 		return nil, fmt.Errorf("invalid environment UUID %q: %w", env.UUID, err)
 	}
 
-	agentConfig, err := s.agentConfigRepo.GetByAgentID(ctx, agentID, orgName)
+	configs, err := s.agentConfigRepo.ListByAgent(ctx, orgName, projectName, agentID, 1000, 0)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get agent configuration: %w", err)
+		return nil, fmt.Errorf("failed to list agent configurations: %w", err)
 	}
 
-	// Get the env-agent mapping for this environment to find the proxy
-	mapping, err := s.envMappingRepo.GetByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get env mapping for %s: %w", environmentName, err)
-	}
-
-	// Use preloaded proxy from the mapping
-	proxy := mapping.LLMProxy
-	if proxy == nil {
-		return nil, fmt.Errorf("LLM proxy not found for mapping in environment %s", environmentName)
-	}
-
-	// Resolve gateway for the proxy URL
-	gateway, err := s.resolveGatewayForProxy(ctx, proxy.Handle, orgName, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve gateway: %w", err)
-	}
-	proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true)
-
-	// Get the env config variables to find the secret reference and variable names
-	vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, agentConfig.UUID, envUUID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list env config variables: %w", err)
-	}
-
-	// Build env vars from the DB config
 	var result []client.EnvVar
-	for _, v := range vars {
-		if v.SecretReference != "" {
-			result = append(result, client.EnvVar{
-				Key: v.VariableName,
-				ValueFrom: &client.EnvVarValueFrom{
+	for i := range configs {
+		config := &configs[i]
+		vars, err := s.envVariableRepo.ListByConfigAndEnv(ctx, config.UUID, envUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list env config variables for config %s: %w", config.UUID, err)
+		}
+		if len(vars) == 0 {
+			continue
+		}
+
+		urlValue := ""
+		switch config.TypeID {
+		case models.AgentConfigTypeIDLLM:
+			urlValue, err = s.systemManagedLLMURL(ctx, config, orgName, environmentName, envUUID)
+		case models.AgentConfigTypeIDMCP:
+			urlValue, err = s.systemManagedMCPURL(ctx, config, orgName, environmentName, envUUID)
+		default:
+			err = nil
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		for _, v := range vars {
+			envVar := client.EnvVar{Key: v.VariableName}
+			switch {
+			case v.SecretReference != "":
+				envVar.ValueFrom = &client.EnvVarValueFrom{
 					SecretKeyRef: &client.SecretKeyRef{
 						Name: v.SecretReference,
 						Key:  secretmanagersvc.SecretKeyAPIKey,
 					},
-				},
-			})
-		} else {
-			result = append(result, client.EnvVar{
-				Key:   v.VariableName,
-				Value: proxyURL,
-			})
+				}
+			case v.VariableKey == "url":
+				envVar.Value = urlValue
+			default:
+				envVar.Value = ""
+			}
+			result = append(result, envVar)
 		}
 	}
 
 	return result, nil
+}
+
+func (s *agentConfigurationService) systemManagedLLMURL(
+	ctx context.Context, config *models.AgentConfiguration, orgName, environmentName string, envUUID uuid.UUID,
+) (string, error) {
+	mapping, err := s.envMappingRepo.GetByConfigAndEnv(ctx, config.UUID, envUUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get LLM env mapping for %s: %w", environmentName, err)
+	}
+	if mapping.LLMProxy == nil {
+		return "", fmt.Errorf("LLM proxy not found for mapping in environment %s", environmentName)
+	}
+
+	proxyHandle := strings.TrimSpace(mapping.LLMProxy.Handle)
+	if proxyHandle == "" {
+		proxyHandle = strings.TrimSpace(mapping.LLMProxy.Configuration.Name)
+	}
+	if proxyHandle == "" {
+		return "", fmt.Errorf("LLM proxy handle not found for mapping in environment %s", environmentName)
+	}
+
+	gateway, err := s.resolveGatewayForProxy(ctx, proxyHandle, orgName, envUUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve gateway for LLM proxy in %s: %w", environmentName, err)
+	}
+	return buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true), nil
+}
+
+func (s *agentConfigurationService) systemManagedMCPURL(
+	ctx context.Context, config *models.AgentConfiguration, orgName, environmentName string, envUUID uuid.UUID,
+) (string, error) {
+	mappings, err := s.envMCPMappingRepo.ListByConfig(ctx, config.UUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to list MCP env mappings for config %s: %w", config.UUID, err)
+	}
+	for i := range mappings {
+		mapping := &mappings[i]
+		if mapping.EnvironmentUUID != envUUID {
+			continue
+		}
+		if mapping.MCPProxy == nil {
+			return "", fmt.Errorf("MCP proxy not found for mapping in environment %s", environmentName)
+		}
+		sharedArtifactUUID := s.resolveMCPMappingAPIID(ctx, mapping, orgName)
+		if sharedArtifactUUID == uuid.Nil {
+			return "", fmt.Errorf("MCP proxy shared artifact not found for mapping in environment %s", environmentName)
+		}
+		gateway, err := s.resolveGatewayForMCPArtifact(ctx, sharedArtifactUUID, orgName, envUUID)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve gateway for MCP proxy in %s: %w", environmentName, err)
+		}
+		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, environmentName)
+		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, environmentName, orgName, handle)
+		return buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), nil
+	}
+	return "", nil
 }

@@ -53,8 +53,9 @@ var _ = Describe("amctl agent mcp (CLI-owned agent)", Label("cli", "agent", "mcp
 	BeforeAll(func() {
 		// The agent's mcp config can only bind a catalog proxy, which requires a
 		// gateway deployment — provision one over HTTP (the CLI can't).
-		gatewayUUID := gateway.WaitForActiveGatewayForEnv(apiClient, H.Org(), cfg.DefaultEnv, 3*time.Minute)
+		gatewayUUID, envUUID := gateway.WaitForActiveGatewayForEnvWithEnvUUID(apiClient, H.Org(), cfg.DefaultEnv, 3*time.Minute)
 		Expect(gatewayUUID).NotTo(BeEmpty())
+		Expect(envUUID).NotTo(BeEmpty(), "expected an environment UUID for %s", cfg.DefaultEnv)
 
 		proxyID = framework.E2EMCPProxyPrefix + uuid.New().String()[:8]
 		upstreamURL := framework.TestMCPServerURL
@@ -65,18 +66,21 @@ var _ = Describe("amctl agent mcp (CLI-owned agent)", Label("cli", "agent", "mcp
 				Name:    "CLI E2E MCP Proxy " + proxyID[len(proxyID)-8:],
 				Version: "v1.0",
 				Context: &ctx,
-				Upstream: framework.UpstreamConfig{
-					Main: &framework.UpstreamEndpoint{URL: &upstreamURL},
-				},
-				Security: &framework.SecurityConfig{
-					Enabled: true,
-					APIKey: &framework.SecurityAPIKey{
-						Enabled: true,
-						Key:     "X-API-Key",
-						In:      "header",
+				// Per-environment blueprint keyed by environment UUID; the DefaultEnv block
+				// deploys the gateway artifact that makes the proxy catalog-eligible.
+				Environments: map[string]framework.MCPEnvironmentConfig{
+					envUUID: {
+						Upstream: &framework.UpstreamEndpoint{URL: &upstreamURL},
+						Security: &framework.SecurityConfig{
+							Enabled: true,
+							APIKey: &framework.SecurityAPIKey{
+								Enabled: true,
+								Key:     "X-API-Key",
+								In:      "header",
+							},
+						},
 					},
 				},
-				Gateways: []string{gatewayUUID},
 			})
 		Expect(proxy.ID).To(Equal(proxyID))
 

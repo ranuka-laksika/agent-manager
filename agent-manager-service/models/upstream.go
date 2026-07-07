@@ -18,7 +18,12 @@ package models
 
 import "fmt"
 
-// UpstreamConfig represents the upstream configuration with main and sandbox endpoints
+// UpstreamConfig represents the upstream configuration.
+//
+// Main/Sandbox model the classic single-endpoint shape used by deployable
+// entities (LLM providers, and the flattened MCP proxy mappings that deploy to
+// gateways). MCP proxy blueprints store their per-environment upstreams in
+// MCPEnvironmentConfig instead of here.
 type UpstreamConfig struct {
 	Main    *UpstreamEndpoint `json:"main,omitempty"`
 	Sandbox *UpstreamEndpoint `json:"sandbox,omitempty"`

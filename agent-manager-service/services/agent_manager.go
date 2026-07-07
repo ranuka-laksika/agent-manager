@@ -3191,14 +3191,14 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	// System-managed env vars (LLM provider URL/key, MCP, etc.) live per-environment in
 	// agent_env_config_variables_mapping. Promotion must enforce this invariant: if the
 	// SOURCE environment has any system-managed vars, the TARGET environment must also
-	// have its own — otherwise the agent would silently lose its LLM. This check runs in
+	// have its own — otherwise the agent would silently lose those managed bindings. This check runs in
 	// both useConfigFromSourceEnv branches so the rule is uniform.
-	srcSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.SourceEnvironment)
+	srcSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, projectName, req.SourceEnvironment)
 	if err != nil {
 		s.logger.Error("Failed to fetch source env system-managed env var keys for promotion", "agentName", agentName, "error", err)
 		return fmt.Errorf("failed to fetch source env system-managed keys: %w", err)
 	}
-	tgtSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.TargetEnvironment)
+	tgtSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, projectName, req.TargetEnvironment)
 	if err != nil {
 		s.logger.Error("Failed to fetch target env system-managed env var keys for promotion", "agentName", agentName, "error", err)
 		return fmt.Errorf("failed to fetch target env system-managed keys: %w", err)
@@ -3213,7 +3213,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	// whether we're cloning from source or taking user overrides.
 	var tgtSystemEnvVars []client.EnvVar
 	if len(tgtSystemKeys) > 0 {
-		tgtSystemEnvVars, err = s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, req.TargetEnvironment)
+		tgtSystemEnvVars, err = s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, projectName, req.TargetEnvironment)
 		if err != nil {
 			s.logger.Error("Failed to build target env system-managed vars from config", "agentName", agentName, "error", err)
 			return fmt.Errorf("failed to build target env system-managed vars: %w", err)
@@ -4186,7 +4186,7 @@ func (s *agentManagerService) GetAgentConfigurations(ctx context.Context, orgNam
 	// boot-time vars (OTEL, agent API key).
 	systemKeys := map[string]bool{}
 	if agent, agentErr := s.ocClient.GetComponent(ctx, orgName, projectName, agentName); agentErr == nil && agent != nil && agent.UUID != "" {
-		if dbKeys, listErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agent.Name, orgName, environment); listErr == nil {
+		if dbKeys, listErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agent.Name, orgName, projectName, environment); listErr == nil {
 			systemKeys = dbKeys
 		} else {
 			s.logger.Warn("Failed to list system-managed env var keys; falling back to allowlist only", "agentName", agentName, "environment", environment, "error", listErr)

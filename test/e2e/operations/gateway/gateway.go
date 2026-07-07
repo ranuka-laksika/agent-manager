@@ -32,6 +32,15 @@ import (
 // invocation through that environment on this readiness check. Returns the
 // gateway UUID.
 func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName string, timeout time.Duration) string {
+	gatewayUUID, _ := WaitForActiveGatewayForEnvWithEnvUUID(client, orgName, envName, timeout)
+	return gatewayUUID
+}
+
+// WaitForActiveGatewayForEnvWithEnvUUID behaves like WaitForActiveGatewayForEnv but also
+// returns the environment UUID for the matched gateway. Callers that key resources by
+// environment UUID (e.g. MCP proxy per-environment blueprints) need both values, and the
+// gateways list already carries the environment id alongside its name.
+func WaitForActiveGatewayForEnvWithEnvUUID(client *framework.AMPClient, orgName, envName string, timeout time.Duration) (string, string) {
 	if timeout == 0 {
 		timeout = 3 * time.Minute
 	}
@@ -43,6 +52,7 @@ func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName st
 	framework.AttachOnFailure("env-gateway: last poll result", func() string { return lastDiag })
 
 	var gatewayUUID string
+	var envUUID string
 	Eventually(func(g Gomega) {
 		resp, err := client.Get(path)
 		g.Expect(err).NotTo(HaveOccurred(), "list gateways request failed (%s)", scope)
@@ -66,6 +76,7 @@ func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName st
 						envName, gw.Name, gw.UUID, gw.Status)
 					g.Expect(gw.Status).To(Equal("ACTIVE"), "gateway %q for env %q exists but is not ACTIVE yet (status=%s)", gw.Name, envName, gw.Status)
 					gatewayUUID = gw.UUID
+					envUUID = env.ID
 					found = true
 					break
 				}
@@ -80,5 +91,5 @@ func WaitForActiveGatewayForEnv(client *framework.AMPClient, orgName, envName st
 		g.Expect(found).To(BeTrue(), "no gateway found for environment %q among %d gateway(s)", envName, len(gateways.Gateways))
 	}).WithTimeout(timeout).WithPolling(10 * time.Second).Should(Succeed())
 
-	return gatewayUUID
+	return gatewayUUID, envUUID
 }

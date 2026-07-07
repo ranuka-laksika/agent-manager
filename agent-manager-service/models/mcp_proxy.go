@@ -64,17 +64,57 @@ func (MCPProxyMapping) TableName() string {
 }
 
 // MCPProxyConfig represents the MCP proxy configuration stored in JSON.
+//
+// The config carries two shapes. The source org-level MCPProxy is a blueprint: it
+// populates Environments (keyed by environment UUID) and leaves the flat root-level
+// Upstream/Policies/Capabilities/Security empty — it deploys nothing. An agent-scoped
+// MCPProxyMapping is an actual gateway-deployable entity: it populates the flat
+// root-level fields (flattened from the selected environment's blueprint block by
+// buildAgentMCPConfigProxy) and leaves Environments empty. The deployment YAML builder
+// reads only the flat root-level fields.
 type MCPProxyConfig struct {
-	Name         string                `json:"name,omitempty"`
-	Version      string                `json:"version,omitempty"`
-	Context      *string               `json:"context,omitempty"`
-	Vhost        *string               `json:"vhost,omitempty"`
-	SpecVersion  string                `json:"specVersion,omitempty"`
-	Upstream     UpstreamConfig        `json:"upstream,omitempty"`
+	Name         string                          `json:"name,omitempty"`
+	Version      string                          `json:"version,omitempty"`
+	Context      *string                         `json:"context,omitempty"`
+	Vhost        *string                         `json:"vhost,omitempty"`
+	SpecVersion  string                          `json:"specVersion,omitempty"`
+	Upstream     UpstreamConfig                  `json:"upstream,omitempty"`
+	Policies     []MCPPolicy                     `json:"policies,omitempty"`
+	Capabilities *MCPProxyCapabilities           `json:"capabilities,omitempty"`
+	Security     *SecurityConfig                 `json:"security,omitempty"`
+	Environments map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+}
+
+// MCPEnvironmentConfig is one per-environment blueprint block on a source MCPProxy,
+// stored in MCPProxyConfig.Environments keyed by environment UUID. Upstream holds the
+// single backend endpoint (URL + auth) for that environment.
+//
+// ArtifactUUID is the stable identity of the single gateway artifact this environment
+// deploys. The MCP proxy owns and deploys exactly one artifact per configured
+// environment (to that environment's gateway); it is generated when the block is first
+// stored and preserved across updates. Agent MCP configurations do not deploy their own
+// artifacts — they reference this shared per-environment artifact: its context becomes
+// the injected proxy URL, and per-agent inbound API keys are minted against it (as the
+// gateway-facing apiID) so the gateway validates them against the shared deployment.
+type MCPEnvironmentConfig struct {
+	ArtifactUUID *uuid.UUID            `json:"artifactUuid,omitempty"`
+	Upstream     *UpstreamEndpoint     `json:"upstream,omitempty"`
 	Policies     []MCPPolicy           `json:"policies,omitempty"`
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
+
+	// DeploymentStatus is a response-only indicator of whether this environment's single
+	// gateway artifact is currently deployed ("Deployed") or not ("Undeployed"). It is
+	// computed on read and never persisted (buildMCPEnvironmentsForStorage rebuilds blocks
+	// without it).
+	DeploymentStatus string `json:"deploymentStatus,omitempty"`
 }
+
+// MCP proxy per-environment deployment status values reported on read.
+const (
+	MCPDeploymentStatusDeployed   = "Deployed"
+	MCPDeploymentStatusUndeployed = "Undeployed"
+)
 
 // MCPPolicy represents a policy attached to an MCP proxy.
 type MCPPolicy struct {
@@ -94,22 +134,23 @@ type MCPProxyCapabilities struct {
 
 // MCPProxyDTO is the request/response body for an MCP proxy.
 type MCPProxyDTO struct {
-	Capabilities   *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Context        *string               `json:"context,omitempty"`
-	CreatedAt      *time.Time            `json:"createdAt,omitempty"`
-	CreatedBy      *string               `json:"createdBy,omitempty"`
-	Description    *string               `json:"description,omitempty"`
-	Gateways       []string              `json:"gateways,omitempty"`
-	ID             string                `json:"id"`
-	InCatalog      bool                  `json:"inCatalog"`
-	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
-	Name           string                `json:"name"`
-	Policies       *[]MCPPolicy          `json:"policies,omitempty"`
-	Security       *SecurityConfig       `json:"security,omitempty"`
-	Upstream       UpstreamConfig        `json:"upstream"`
-	UpdatedAt      *time.Time            `json:"updatedAt,omitempty"`
-	Version        string                `json:"version"`
-	Vhost          *string               `json:"vhost,omitempty"`
+	Capabilities   *MCPProxyCapabilities           `json:"capabilities,omitempty"`
+	Context        *string                         `json:"context,omitempty"`
+	CreatedAt      *time.Time                      `json:"createdAt,omitempty"`
+	CreatedBy      *string                         `json:"createdBy,omitempty"`
+	Description    *string                         `json:"description,omitempty"`
+	Gateways       []string                        `json:"gateways,omitempty"`
+	ID             string                          `json:"id"`
+	InCatalog      bool                            `json:"inCatalog"`
+	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
+	Name           string                          `json:"name"`
+	Policies       *[]MCPPolicy                    `json:"policies,omitempty"`
+	Security       *SecurityConfig                 `json:"security,omitempty"`
+	Upstream       UpstreamConfig                  `json:"upstream"`
+	Environments   map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	UpdatedAt      *time.Time                      `json:"updatedAt,omitempty"`
+	Version        string                          `json:"version"`
+	Vhost          *string                         `json:"vhost,omitempty"`
 }
 
 // MCPPolicyAvailabilityResponse lists MCP policies reported by active gateways.
