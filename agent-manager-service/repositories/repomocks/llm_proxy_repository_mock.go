@@ -98,20 +98,20 @@ type LLMProxyRepositoryMock struct {
 	calls struct {
 		// Count holds details about calls to the Count method.
 		Count []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// CountByProject holds details about calls to the CountByProject method.
 		CountByProject []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectUUID is the projectUUID argument value.
 			ProjectUUID string
 		}
 		// CountByProvider holds details about calls to the CountByProvider method.
 		CountByProvider []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProviderUUID is the providerUUID argument value.
 			ProviderUUID string
 		}
@@ -125,43 +125,43 @@ type LLMProxyRepositoryMock struct {
 			Name string
 			// Version is the version argument value.
 			Version string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Delete holds details about calls to the Delete method.
 		Delete []struct {
 			// ProxyID is the proxyID argument value.
 			ProxyID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Exists holds details about calls to the Exists method.
 		Exists []struct {
 			// ProxyID is the proxyID argument value.
 			ProxyID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByID holds details about calls to the GetByID method.
 		GetByID []struct {
 			// ProxyID is the proxyID argument value.
 			ProxyID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByIDAndProject holds details about calls to the GetByIDAndProject method.
 		GetByIDAndProject []struct {
 			// ProxyID is the proxyID argument value.
 			ProxyID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectUUID is the projectUUID argument value.
 			ProjectUUID string
 		}
 		// List holds details about calls to the List method.
 		List []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Limit is the limit argument value.
 			Limit int
 			// Offset is the offset argument value.
@@ -169,8 +169,8 @@ type LLMProxyRepositoryMock struct {
 		}
 		// ListByProject holds details about calls to the ListByProject method.
 		ListByProject []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectUUID is the projectUUID argument value.
 			ProjectUUID string
 			// Limit is the limit argument value.
@@ -180,8 +180,8 @@ type LLMProxyRepositoryMock struct {
 		}
 		// ListByProvider holds details about calls to the ListByProvider method.
 		ListByProvider []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProviderUUID is the providerUUID argument value.
 			ProviderUUID string
 			// Limit is the limit argument value.
@@ -195,8 +195,8 @@ type LLMProxyRepositoryMock struct {
 			P *models.LLMProxy
 			// Handle is the handle argument value.
 			Handle string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 	}
 	lockCount             sync.RWMutex
@@ -219,9 +219,9 @@ func (mock *LLMProxyRepositoryMock) Count(ouID string) (int, error) {
 		panic("LLMProxyRepositoryMock.CountFunc: method is nil but LLMProxyRepository.Count was just called")
 	}
 	callInfo := struct {
-		OrgName string
+		OuID string
 	}{
-		OrgName: ouID,
+		OuID: ouID,
 	}
 	mock.lockCount.Lock()
 	mock.calls.Count = append(mock.calls.Count, callInfo)
@@ -234,10 +234,10 @@ func (mock *LLMProxyRepositoryMock) Count(ouID string) (int, error) {
 //
 //	len(mockedLLMProxyRepository.CountCalls())
 func (mock *LLMProxyRepositoryMock) CountCalls() []struct {
-	OrgName string
+	OuID string
 } {
 	var calls []struct {
-		OrgName string
+		OuID string
 	}
 	mock.lockCount.RLock()
 	calls = mock.calls.Count
@@ -251,10 +251,10 @@ func (mock *LLMProxyRepositoryMock) CountByProject(ouID string, projectUUID stri
 		panic("LLMProxyRepositoryMock.CountByProjectFunc: method is nil but LLMProxyRepository.CountByProject was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 	}{
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectUUID: projectUUID,
 	}
 	mock.lockCountByProject.Lock()
@@ -268,11 +268,11 @@ func (mock *LLMProxyRepositoryMock) CountByProject(ouID string, projectUUID stri
 //
 //	len(mockedLLMProxyRepository.CountByProjectCalls())
 func (mock *LLMProxyRepositoryMock) CountByProjectCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjectUUID string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 	}
 	mock.lockCountByProject.RLock()
@@ -287,10 +287,10 @@ func (mock *LLMProxyRepositoryMock) CountByProvider(ouID string, providerUUID st
 		panic("LLMProxyRepositoryMock.CountByProviderFunc: method is nil but LLMProxyRepository.CountByProvider was just called")
 	}
 	callInfo := struct {
-		OrgName      string
+		OuID         string
 		ProviderUUID string
 	}{
-		OrgName:      ouID,
+		OuID:         ouID,
 		ProviderUUID: providerUUID,
 	}
 	mock.lockCountByProvider.Lock()
@@ -304,11 +304,11 @@ func (mock *LLMProxyRepositoryMock) CountByProvider(ouID string, providerUUID st
 //
 //	len(mockedLLMProxyRepository.CountByProviderCalls())
 func (mock *LLMProxyRepositoryMock) CountByProviderCalls() []struct {
-	OrgName      string
+	OuID         string
 	ProviderUUID string
 } {
 	var calls []struct {
-		OrgName      string
+		OuID         string
 		ProviderUUID string
 	}
 	mock.lockCountByProvider.RLock()
@@ -327,13 +327,13 @@ func (mock *LLMProxyRepositoryMock) Create(p *models.LLMProxy, handle string, na
 		Handle  string
 		Name    string
 		Version string
-		OrgName string
+		OuID    string
 	}{
 		P:       p,
 		Handle:  handle,
 		Name:    name,
 		Version: version,
-		OrgName: ouID,
+		OuID:    ouID,
 	}
 	mock.lockCreate.Lock()
 	mock.calls.Create = append(mock.calls.Create, callInfo)
@@ -350,14 +350,14 @@ func (mock *LLMProxyRepositoryMock) CreateCalls() []struct {
 	Handle  string
 	Name    string
 	Version string
-	OrgName string
+	OuID    string
 } {
 	var calls []struct {
 		P       *models.LLMProxy
 		Handle  string
 		Name    string
 		Version string
-		OrgName string
+		OuID    string
 	}
 	mock.lockCreate.RLock()
 	calls = mock.calls.Create
@@ -372,10 +372,10 @@ func (mock *LLMProxyRepositoryMock) Delete(proxyID string, ouID string) error {
 	}
 	callInfo := struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}{
 		ProxyID: proxyID,
-		OrgName: ouID,
+		OuID:    ouID,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
@@ -389,11 +389,11 @@ func (mock *LLMProxyRepositoryMock) Delete(proxyID string, ouID string) error {
 //	len(mockedLLMProxyRepository.DeleteCalls())
 func (mock *LLMProxyRepositoryMock) DeleteCalls() []struct {
 	ProxyID string
-	OrgName string
+	OuID    string
 } {
 	var calls []struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}
 	mock.lockDelete.RLock()
 	calls = mock.calls.Delete
@@ -408,10 +408,10 @@ func (mock *LLMProxyRepositoryMock) Exists(proxyID string, ouID string) (bool, e
 	}
 	callInfo := struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}{
 		ProxyID: proxyID,
-		OrgName: ouID,
+		OuID:    ouID,
 	}
 	mock.lockExists.Lock()
 	mock.calls.Exists = append(mock.calls.Exists, callInfo)
@@ -425,11 +425,11 @@ func (mock *LLMProxyRepositoryMock) Exists(proxyID string, ouID string) (bool, e
 //	len(mockedLLMProxyRepository.ExistsCalls())
 func (mock *LLMProxyRepositoryMock) ExistsCalls() []struct {
 	ProxyID string
-	OrgName string
+	OuID    string
 } {
 	var calls []struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}
 	mock.lockExists.RLock()
 	calls = mock.calls.Exists
@@ -444,10 +444,10 @@ func (mock *LLMProxyRepositoryMock) GetByID(proxyID string, ouID string) (*model
 	}
 	callInfo := struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}{
 		ProxyID: proxyID,
-		OrgName: ouID,
+		OuID:    ouID,
 	}
 	mock.lockGetByID.Lock()
 	mock.calls.GetByID = append(mock.calls.GetByID, callInfo)
@@ -461,11 +461,11 @@ func (mock *LLMProxyRepositoryMock) GetByID(proxyID string, ouID string) (*model
 //	len(mockedLLMProxyRepository.GetByIDCalls())
 func (mock *LLMProxyRepositoryMock) GetByIDCalls() []struct {
 	ProxyID string
-	OrgName string
+	OuID    string
 } {
 	var calls []struct {
 		ProxyID string
-		OrgName string
+		OuID    string
 	}
 	mock.lockGetByID.RLock()
 	calls = mock.calls.GetByID
@@ -480,11 +480,11 @@ func (mock *LLMProxyRepositoryMock) GetByIDAndProject(proxyID string, ouID strin
 	}
 	callInfo := struct {
 		ProxyID     string
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 	}{
 		ProxyID:     proxyID,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectUUID: projectUUID,
 	}
 	mock.lockGetByIDAndProject.Lock()
@@ -499,12 +499,12 @@ func (mock *LLMProxyRepositoryMock) GetByIDAndProject(proxyID string, ouID strin
 //	len(mockedLLMProxyRepository.GetByIDAndProjectCalls())
 func (mock *LLMProxyRepositoryMock) GetByIDAndProjectCalls() []struct {
 	ProxyID     string
-	OrgName     string
+	OuID        string
 	ProjectUUID string
 } {
 	var calls []struct {
 		ProxyID     string
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 	}
 	mock.lockGetByIDAndProject.RLock()
@@ -519,13 +519,13 @@ func (mock *LLMProxyRepositoryMock) List(ouID string, limit int, offset int) ([]
 		panic("LLMProxyRepositoryMock.ListFunc: method is nil but LLMProxyRepository.List was just called")
 	}
 	callInfo := struct {
-		OrgName string
-		Limit   int
-		Offset  int
+		OuID   string
+		Limit  int
+		Offset int
 	}{
-		OrgName: ouID,
-		Limit:   limit,
-		Offset:  offset,
+		OuID:   ouID,
+		Limit:  limit,
+		Offset: offset,
 	}
 	mock.lockList.Lock()
 	mock.calls.List = append(mock.calls.List, callInfo)
@@ -538,14 +538,14 @@ func (mock *LLMProxyRepositoryMock) List(ouID string, limit int, offset int) ([]
 //
 //	len(mockedLLMProxyRepository.ListCalls())
 func (mock *LLMProxyRepositoryMock) ListCalls() []struct {
-	OrgName string
-	Limit   int
-	Offset  int
+	OuID   string
+	Limit  int
+	Offset int
 } {
 	var calls []struct {
-		OrgName string
-		Limit   int
-		Offset  int
+		OuID   string
+		Limit  int
+		Offset int
 	}
 	mock.lockList.RLock()
 	calls = mock.calls.List
@@ -559,12 +559,12 @@ func (mock *LLMProxyRepositoryMock) ListByProject(ouID string, projectUUID strin
 		panic("LLMProxyRepositoryMock.ListByProjectFunc: method is nil but LLMProxyRepository.ListByProject was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 		Limit       int
 		Offset      int
 	}{
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectUUID: projectUUID,
 		Limit:       limit,
 		Offset:      offset,
@@ -580,13 +580,13 @@ func (mock *LLMProxyRepositoryMock) ListByProject(ouID string, projectUUID strin
 //
 //	len(mockedLLMProxyRepository.ListByProjectCalls())
 func (mock *LLMProxyRepositoryMock) ListByProjectCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjectUUID string
 	Limit       int
 	Offset      int
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjectUUID string
 		Limit       int
 		Offset      int
@@ -603,12 +603,12 @@ func (mock *LLMProxyRepositoryMock) ListByProvider(ouID string, providerUUID str
 		panic("LLMProxyRepositoryMock.ListByProviderFunc: method is nil but LLMProxyRepository.ListByProvider was just called")
 	}
 	callInfo := struct {
-		OrgName      string
+		OuID         string
 		ProviderUUID string
 		Limit        int
 		Offset       int
 	}{
-		OrgName:      ouID,
+		OuID:         ouID,
 		ProviderUUID: providerUUID,
 		Limit:        limit,
 		Offset:       offset,
@@ -624,13 +624,13 @@ func (mock *LLMProxyRepositoryMock) ListByProvider(ouID string, providerUUID str
 //
 //	len(mockedLLMProxyRepository.ListByProviderCalls())
 func (mock *LLMProxyRepositoryMock) ListByProviderCalls() []struct {
-	OrgName      string
+	OuID         string
 	ProviderUUID string
 	Limit        int
 	Offset       int
 } {
 	var calls []struct {
-		OrgName      string
+		OuID         string
 		ProviderUUID string
 		Limit        int
 		Offset       int
@@ -647,13 +647,13 @@ func (mock *LLMProxyRepositoryMock) Update(p *models.LLMProxy, handle string, ou
 		panic("LLMProxyRepositoryMock.UpdateFunc: method is nil but LLMProxyRepository.Update was just called")
 	}
 	callInfo := struct {
-		P       *models.LLMProxy
-		Handle  string
-		OrgName string
+		P      *models.LLMProxy
+		Handle string
+		OuID   string
 	}{
-		P:       p,
-		Handle:  handle,
-		OrgName: ouID,
+		P:      p,
+		Handle: handle,
+		OuID:   ouID,
 	}
 	mock.lockUpdate.Lock()
 	mock.calls.Update = append(mock.calls.Update, callInfo)
@@ -666,14 +666,14 @@ func (mock *LLMProxyRepositoryMock) Update(p *models.LLMProxy, handle string, ou
 //
 //	len(mockedLLMProxyRepository.UpdateCalls())
 func (mock *LLMProxyRepositoryMock) UpdateCalls() []struct {
-	P       *models.LLMProxy
-	Handle  string
-	OrgName string
+	P      *models.LLMProxy
+	Handle string
+	OuID   string
 } {
 	var calls []struct {
-		P       *models.LLMProxy
-		Handle  string
-		OrgName string
+		P      *models.LLMProxy
+		Handle string
+		OuID   string
 	}
 	mock.lockUpdate.RLock()
 	calls = mock.calls.Update

@@ -44,8 +44,8 @@ type AgentConfigRepositoryMock struct {
 	calls struct {
 		// DeleteAllByAgent holds details about calls to the DeleteAllByAgent method.
 		DeleteAllByAgent []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -53,8 +53,8 @@ type AgentConfigRepositoryMock struct {
 		}
 		// Get holds details about calls to the Get method.
 		Get []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -79,11 +79,11 @@ func (mock *AgentConfigRepositoryMock) DeleteAllByAgent(ouID string, projectName
 		panic("AgentConfigRepositoryMock.DeleteAllByAgentFunc: method is nil but AgentConfigRepository.DeleteAllByAgent was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
@@ -98,12 +98,12 @@ func (mock *AgentConfigRepositoryMock) DeleteAllByAgent(ouID string, projectName
 //
 //	len(mockedAgentConfigRepository.DeleteAllByAgentCalls())
 func (mock *AgentConfigRepositoryMock) DeleteAllByAgentCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -119,12 +119,12 @@ func (mock *AgentConfigRepositoryMock) Get(ouID string, projectName string, agen
 		panic("AgentConfigRepositoryMock.GetFunc: method is nil but AgentConfigRepository.Get was just called")
 	}
 	callInfo := struct {
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string
 	}{
-		OrgName:         ouID,
+		OuID:            ouID,
 		ProjectName:     projectName,
 		AgentName:       agentName,
 		EnvironmentName: environmentName,
@@ -140,13 +140,13 @@ func (mock *AgentConfigRepositoryMock) Get(ouID string, projectName string, agen
 //
 //	len(mockedAgentConfigRepository.GetCalls())
 func (mock *AgentConfigRepositoryMock) GetCalls() []struct {
-	OrgName         string
+	OuID            string
 	ProjectName     string
 	AgentName       string
 	EnvironmentName string
 } {
 	var calls []struct {
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string

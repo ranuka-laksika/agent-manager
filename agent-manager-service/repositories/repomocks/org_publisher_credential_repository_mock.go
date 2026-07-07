@@ -38,8 +38,8 @@ type OrgPublisherCredentialRepositoryMock struct {
 	calls struct {
 		// GetByOrgName holds details about calls to the GetByOrgName method.
 		GetByOrgName []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Upsert holds details about calls to the Upsert method.
 		Upsert []struct {
@@ -57,9 +57,9 @@ func (mock *OrgPublisherCredentialRepositoryMock) GetByOrgName(ouID string) (*mo
 		panic("OrgPublisherCredentialRepositoryMock.GetByOrgNameFunc: method is nil but OrgPublisherCredentialRepository.GetByOrgName was just called")
 	}
 	callInfo := struct {
-		OrgName string
+		OuID string
 	}{
-		OrgName: ouID,
+		OuID: ouID,
 	}
 	mock.lockGetByOrgName.Lock()
 	mock.calls.GetByOrgName = append(mock.calls.GetByOrgName, callInfo)
@@ -72,10 +72,10 @@ func (mock *OrgPublisherCredentialRepositoryMock) GetByOrgName(ouID string) (*mo
 //
 //	len(mockedOrgPublisherCredentialRepository.GetByOrgNameCalls())
 func (mock *OrgPublisherCredentialRepositoryMock) GetByOrgNameCalls() []struct {
-	OrgName string
+	OuID string
 } {
 	var calls []struct {
-		OrgName string
+		OuID string
 	}
 	mock.lockGetByOrgName.RLock()
 	calls = mock.calls.GetByOrgName

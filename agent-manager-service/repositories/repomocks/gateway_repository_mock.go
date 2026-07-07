@@ -241,8 +241,8 @@ type GatewayRepositoryMock struct {
 		Delete []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// DeleteEnvironmentMapping holds details about calls to the DeleteEnvironmentMapping method.
 		DeleteEnvironmentMapping []struct {
@@ -284,15 +284,15 @@ type GatewayRepositoryMock struct {
 		GetByNameAndOrgID []struct {
 			// Name is the name argument value.
 			Name string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByOrganizationID holds details about calls to the GetByOrganizationID method.
 		GetByOrganizationID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByUUID holds details about calls to the GetByUUID method.
 		GetByUUID []struct {
@@ -323,22 +323,22 @@ type GatewayRepositoryMock struct {
 		HasGatewayAssociations []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// HasGatewayAssociationsOrDeployments holds details about calls to the HasGatewayAssociationsOrDeployments method.
 		HasGatewayAssociationsOrDeployments []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// HasGatewayDeployments holds details about calls to the HasGatewayDeployments method.
 		HasGatewayDeployments []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// List holds details about calls to the List method.
 		List []struct {
@@ -355,8 +355,8 @@ type GatewayRepositoryMock struct {
 		}
 		// ListIdentityProvidersByOrg holds details about calls to the ListIdentityProvidersByOrg method.
 		ListIdentityProvidersByOrg []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// ListWithFilters holds details about calls to the ListWithFilters method.
 		ListWithFilters []struct {
@@ -586,10 +586,10 @@ func (mock *GatewayRepositoryMock) Delete(gatewayID string, ouID string) error {
 	}
 	callInfo := struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   ouID,
+		OuID:      ouID,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
@@ -603,11 +603,11 @@ func (mock *GatewayRepositoryMock) Delete(gatewayID string, ouID string) error {
 //	len(mockedGatewayRepository.DeleteCalls())
 func (mock *GatewayRepositoryMock) DeleteCalls() []struct {
 	GatewayID string
-	OrgName   string
+	OuID      string
 } {
 	var calls []struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}
 	mock.lockDelete.RLock()
 	calls = mock.calls.Delete
@@ -825,11 +825,11 @@ func (mock *GatewayRepositoryMock) GetByNameAndOrgID(name string, ouID string) (
 		panic("GatewayRepositoryMock.GetByNameAndOrgIDFunc: method is nil but GatewayRepository.GetByNameAndOrgID was just called")
 	}
 	callInfo := struct {
-		Name    string
-		OrgName string
+		Name string
+		OuID string
 	}{
-		Name:    name,
-		OrgName: ouID,
+		Name: name,
+		OuID: ouID,
 	}
 	mock.lockGetByNameAndOrgID.Lock()
 	mock.calls.GetByNameAndOrgID = append(mock.calls.GetByNameAndOrgID, callInfo)
@@ -842,12 +842,12 @@ func (mock *GatewayRepositoryMock) GetByNameAndOrgID(name string, ouID string) (
 //
 //	len(mockedGatewayRepository.GetByNameAndOrgIDCalls())
 func (mock *GatewayRepositoryMock) GetByNameAndOrgIDCalls() []struct {
-	Name    string
-	OrgName string
+	Name string
+	OuID string
 } {
 	var calls []struct {
-		Name    string
-		OrgName string
+		Name string
+		OuID string
 	}
 	mock.lockGetByNameAndOrgID.RLock()
 	calls = mock.calls.GetByNameAndOrgID
@@ -861,11 +861,11 @@ func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, ouID
 		panic("GatewayRepositoryMock.GetByOrganizationIDFunc: method is nil but GatewayRepository.GetByOrganizationID was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}{
-		Ctx:     ctx,
-		OrgName: ouID,
+		Ctx:  ctx,
+		OuID: ouID,
 	}
 	mock.lockGetByOrganizationID.Lock()
 	mock.calls.GetByOrganizationID = append(mock.calls.GetByOrganizationID, callInfo)
@@ -878,12 +878,12 @@ func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, ouID
 //
 //	len(mockedGatewayRepository.GetByOrganizationIDCalls())
 func (mock *GatewayRepositoryMock) GetByOrganizationIDCalls() []struct {
-	Ctx     context.Context
-	OrgName string
+	Ctx  context.Context
+	OuID string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}
 	mock.lockGetByOrganizationID.RLock()
 	calls = mock.calls.GetByOrganizationID
@@ -1058,10 +1058,10 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociations(gatewayID string, ouID
 	}
 	callInfo := struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   ouID,
+		OuID:      ouID,
 	}
 	mock.lockHasGatewayAssociations.Lock()
 	mock.calls.HasGatewayAssociations = append(mock.calls.HasGatewayAssociations, callInfo)
@@ -1075,11 +1075,11 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociations(gatewayID string, ouID
 //	len(mockedGatewayRepository.HasGatewayAssociationsCalls())
 func (mock *GatewayRepositoryMock) HasGatewayAssociationsCalls() []struct {
 	GatewayID string
-	OrgName   string
+	OuID      string
 } {
 	var calls []struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}
 	mock.lockHasGatewayAssociations.RLock()
 	calls = mock.calls.HasGatewayAssociations
@@ -1094,10 +1094,10 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeployments(gatewayID
 	}
 	callInfo := struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   ouID,
+		OuID:      ouID,
 	}
 	mock.lockHasGatewayAssociationsOrDeployments.Lock()
 	mock.calls.HasGatewayAssociationsOrDeployments = append(mock.calls.HasGatewayAssociationsOrDeployments, callInfo)
@@ -1111,11 +1111,11 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeployments(gatewayID
 //	len(mockedGatewayRepository.HasGatewayAssociationsOrDeploymentsCalls())
 func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeploymentsCalls() []struct {
 	GatewayID string
-	OrgName   string
+	OuID      string
 } {
 	var calls []struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}
 	mock.lockHasGatewayAssociationsOrDeployments.RLock()
 	calls = mock.calls.HasGatewayAssociationsOrDeployments
@@ -1130,10 +1130,10 @@ func (mock *GatewayRepositoryMock) HasGatewayDeployments(gatewayID string, ouID 
 	}
 	callInfo := struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   ouID,
+		OuID:      ouID,
 	}
 	mock.lockHasGatewayDeployments.Lock()
 	mock.calls.HasGatewayDeployments = append(mock.calls.HasGatewayDeployments, callInfo)
@@ -1147,11 +1147,11 @@ func (mock *GatewayRepositoryMock) HasGatewayDeployments(gatewayID string, ouID 
 //	len(mockedGatewayRepository.HasGatewayDeploymentsCalls())
 func (mock *GatewayRepositoryMock) HasGatewayDeploymentsCalls() []struct {
 	GatewayID string
-	OrgName   string
+	OuID      string
 } {
 	var calls []struct {
 		GatewayID string
-		OrgName   string
+		OuID      string
 	}
 	mock.lockHasGatewayDeployments.RLock()
 	calls = mock.calls.HasGatewayDeployments
@@ -1256,9 +1256,9 @@ func (mock *GatewayRepositoryMock) ListIdentityProvidersByOrg(ouID string) ([]re
 		panic("GatewayRepositoryMock.ListIdentityProvidersByOrgFunc: method is nil but GatewayRepository.ListIdentityProvidersByOrg was just called")
 	}
 	callInfo := struct {
-		OrgName string
+		OuID string
 	}{
-		OrgName: ouID,
+		OuID: ouID,
 	}
 	mock.lockListIdentityProvidersByOrg.Lock()
 	mock.calls.ListIdentityProvidersByOrg = append(mock.calls.ListIdentityProvidersByOrg, callInfo)
@@ -1271,10 +1271,10 @@ func (mock *GatewayRepositoryMock) ListIdentityProvidersByOrg(ouID string) ([]re
 //
 //	len(mockedGatewayRepository.ListIdentityProvidersByOrgCalls())
 func (mock *GatewayRepositoryMock) ListIdentityProvidersByOrgCalls() []struct {
-	OrgName string
+	OuID string
 } {
 	var calls []struct {
-		OrgName string
+		OuID string
 	}
 	mock.lockListIdentityProvidersByOrg.RLock()
 	calls = mock.calls.ListIdentityProvidersByOrg

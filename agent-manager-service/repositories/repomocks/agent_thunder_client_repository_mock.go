@@ -112,8 +112,8 @@ type AgentThunderClientRepositoryMock struct {
 		DeleteByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -130,8 +130,8 @@ type AgentThunderClientRepositoryMock struct {
 		FindByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -150,8 +150,8 @@ type AgentThunderClientRepositoryMock struct {
 		Get []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -286,12 +286,12 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(ctx context.Context,
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
@@ -307,13 +307,13 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgent(ctx context.Context,
 //	len(mockedAgentThunderClientRepository.DeleteByAgentCalls())
 func (mock *AgentThunderClientRepositoryMock) DeleteByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -366,12 +366,12 @@ func (mock *AgentThunderClientRepositoryMock) FindByAgent(ctx context.Context, o
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
@@ -387,13 +387,13 @@ func (mock *AgentThunderClientRepositoryMock) FindByAgent(ctx context.Context, o
 //	len(mockedAgentThunderClientRepository.FindByAgentCalls())
 func (mock *AgentThunderClientRepositoryMock) FindByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -450,13 +450,13 @@ func (mock *AgentThunderClientRepositoryMock) Get(ctx context.Context, ouID stri
 	}
 	callInfo := struct {
 		Ctx             context.Context
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string
 	}{
 		Ctx:             ctx,
-		OrgName:         ouID,
+		OuID:            ouID,
 		ProjectName:     projectName,
 		AgentName:       agentName,
 		EnvironmentName: environmentName,
@@ -473,14 +473,14 @@ func (mock *AgentThunderClientRepositoryMock) Get(ctx context.Context, ouID stri
 //	len(mockedAgentThunderClientRepository.GetCalls())
 func (mock *AgentThunderClientRepositoryMock) GetCalls() []struct {
 	Ctx             context.Context
-	OrgName         string
+	OuID            string
 	ProjectName     string
 	AgentName       string
 	EnvironmentName string
 } {
 	var calls []struct {
 		Ctx             context.Context
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string

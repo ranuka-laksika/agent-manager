@@ -103,15 +103,15 @@ type AgentConfigurationRepositoryMock struct {
 		Count []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// CountByAgent holds details about calls to the CountByAgent method.
 		CountByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -121,8 +121,8 @@ type AgentConfigurationRepositoryMock struct {
 		CountByAgentAndType []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -147,8 +147,8 @@ type AgentConfigurationRepositoryMock struct {
 			Tx *gorm.DB
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Exists holds details about calls to the Exists method.
 		Exists []struct {
@@ -156,8 +156,8 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByAgentID holds details about calls to the GetByAgentID method.
 		GetByAgentID []struct {
@@ -165,8 +165,8 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// AgentID is the agentID argument value.
 			AgentID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// GetByUUID holds details about calls to the GetByUUID method.
 		GetByUUID []struct {
@@ -174,15 +174,15 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// List holds details about calls to the List method.
 		List []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Limit is the limit argument value.
 			Limit int
 			// Offset is the offset argument value.
@@ -192,8 +192,8 @@ type AgentConfigurationRepositoryMock struct {
 		ListByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -207,8 +207,8 @@ type AgentConfigurationRepositoryMock struct {
 		ListByAgentAndType []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -250,11 +250,11 @@ func (mock *AgentConfigurationRepositoryMock) Count(ctx context.Context, ouID st
 		panic("AgentConfigurationRepositoryMock.CountFunc: method is nil but AgentConfigurationRepository.Count was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}{
-		Ctx:     ctx,
-		OrgName: ouID,
+		Ctx:  ctx,
+		OuID: ouID,
 	}
 	mock.lockCount.Lock()
 	mock.calls.Count = append(mock.calls.Count, callInfo)
@@ -267,12 +267,12 @@ func (mock *AgentConfigurationRepositoryMock) Count(ctx context.Context, ouID st
 //
 //	len(mockedAgentConfigurationRepository.CountCalls())
 func (mock *AgentConfigurationRepositoryMock) CountCalls() []struct {
-	Ctx     context.Context
-	OrgName string
+	Ctx  context.Context
+	OuID string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}
 	mock.lockCount.RLock()
 	calls = mock.calls.Count
@@ -287,12 +287,12 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgent(ctx context.Context, 
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
@@ -308,13 +308,13 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgent(ctx context.Context, 
 //	len(mockedAgentConfigurationRepository.CountByAgentCalls())
 func (mock *AgentConfigurationRepositoryMock) CountByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -331,13 +331,13 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Co
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		TypeID      uint
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		TypeID:      typeID,
@@ -354,14 +354,14 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Co
 //	len(mockedAgentConfigurationRepository.CountByAgentAndTypeCalls())
 func (mock *AgentConfigurationRepositoryMock) CountByAgentAndTypeCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 	TypeID      uint
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		TypeID      uint
@@ -421,12 +421,12 @@ func (mock *AgentConfigurationRepositoryMock) Delete(ctx context.Context, tx *go
 		Ctx        context.Context
 		Tx         *gorm.DB
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}{
 		Ctx:        ctx,
 		Tx:         tx,
 		ConfigUUID: configUUID,
-		OrgName:    ouID,
+		OuID:       ouID,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
@@ -442,13 +442,13 @@ func (mock *AgentConfigurationRepositoryMock) DeleteCalls() []struct {
 	Ctx        context.Context
 	Tx         *gorm.DB
 	ConfigUUID uuid.UUID
-	OrgName    string
+	OuID       string
 } {
 	var calls []struct {
 		Ctx        context.Context
 		Tx         *gorm.DB
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}
 	mock.lockDelete.RLock()
 	calls = mock.calls.Delete
@@ -464,11 +464,11 @@ func (mock *AgentConfigurationRepositoryMock) Exists(ctx context.Context, config
 	callInfo := struct {
 		Ctx        context.Context
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}{
 		Ctx:        ctx,
 		ConfigUUID: configUUID,
-		OrgName:    ouID,
+		OuID:       ouID,
 	}
 	mock.lockExists.Lock()
 	mock.calls.Exists = append(mock.calls.Exists, callInfo)
@@ -483,12 +483,12 @@ func (mock *AgentConfigurationRepositoryMock) Exists(ctx context.Context, config
 func (mock *AgentConfigurationRepositoryMock) ExistsCalls() []struct {
 	Ctx        context.Context
 	ConfigUUID uuid.UUID
-	OrgName    string
+	OuID       string
 } {
 	var calls []struct {
 		Ctx        context.Context
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}
 	mock.lockExists.RLock()
 	calls = mock.calls.Exists
@@ -504,11 +504,11 @@ func (mock *AgentConfigurationRepositoryMock) GetByAgentID(ctx context.Context, 
 	callInfo := struct {
 		Ctx     context.Context
 		AgentID string
-		OrgName string
+		OuID    string
 	}{
 		Ctx:     ctx,
 		AgentID: agentID,
-		OrgName: ouID,
+		OuID:    ouID,
 	}
 	mock.lockGetByAgentID.Lock()
 	mock.calls.GetByAgentID = append(mock.calls.GetByAgentID, callInfo)
@@ -523,12 +523,12 @@ func (mock *AgentConfigurationRepositoryMock) GetByAgentID(ctx context.Context, 
 func (mock *AgentConfigurationRepositoryMock) GetByAgentIDCalls() []struct {
 	Ctx     context.Context
 	AgentID string
-	OrgName string
+	OuID    string
 } {
 	var calls []struct {
 		Ctx     context.Context
 		AgentID string
-		OrgName string
+		OuID    string
 	}
 	mock.lockGetByAgentID.RLock()
 	calls = mock.calls.GetByAgentID
@@ -544,11 +544,11 @@ func (mock *AgentConfigurationRepositoryMock) GetByUUID(ctx context.Context, con
 	callInfo := struct {
 		Ctx        context.Context
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}{
 		Ctx:        ctx,
 		ConfigUUID: configUUID,
-		OrgName:    ouID,
+		OuID:       ouID,
 	}
 	mock.lockGetByUUID.Lock()
 	mock.calls.GetByUUID = append(mock.calls.GetByUUID, callInfo)
@@ -563,12 +563,12 @@ func (mock *AgentConfigurationRepositoryMock) GetByUUID(ctx context.Context, con
 func (mock *AgentConfigurationRepositoryMock) GetByUUIDCalls() []struct {
 	Ctx        context.Context
 	ConfigUUID uuid.UUID
-	OrgName    string
+	OuID       string
 } {
 	var calls []struct {
 		Ctx        context.Context
 		ConfigUUID uuid.UUID
-		OrgName    string
+		OuID       string
 	}
 	mock.lockGetByUUID.RLock()
 	calls = mock.calls.GetByUUID
@@ -582,15 +582,15 @@ func (mock *AgentConfigurationRepositoryMock) List(ctx context.Context, ouID str
 		panic("AgentConfigurationRepositoryMock.ListFunc: method is nil but AgentConfigurationRepository.List was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
-		Limit   int
-		Offset  int
+		Ctx    context.Context
+		OuID   string
+		Limit  int
+		Offset int
 	}{
-		Ctx:     ctx,
-		OrgName: ouID,
-		Limit:   limit,
-		Offset:  offset,
+		Ctx:    ctx,
+		OuID:   ouID,
+		Limit:  limit,
+		Offset: offset,
 	}
 	mock.lockList.Lock()
 	mock.calls.List = append(mock.calls.List, callInfo)
@@ -603,16 +603,16 @@ func (mock *AgentConfigurationRepositoryMock) List(ctx context.Context, ouID str
 //
 //	len(mockedAgentConfigurationRepository.ListCalls())
 func (mock *AgentConfigurationRepositoryMock) ListCalls() []struct {
-	Ctx     context.Context
-	OrgName string
-	Limit   int
-	Offset  int
+	Ctx    context.Context
+	OuID   string
+	Limit  int
+	Offset int
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
-		Limit   int
-		Offset  int
+		Ctx    context.Context
+		OuID   string
+		Limit  int
+		Offset int
 	}
 	mock.lockList.RLock()
 	calls = mock.calls.List
@@ -627,14 +627,14 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, o
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		Limit       int
 		Offset      int
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		Limit:       limit,
@@ -652,7 +652,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, o
 //	len(mockedAgentConfigurationRepository.ListByAgentCalls())
 func (mock *AgentConfigurationRepositoryMock) ListByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 	Limit       int
@@ -660,7 +660,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentCalls() []struct {
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		Limit       int
@@ -679,7 +679,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Con
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		TypeID      uint
@@ -687,7 +687,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Con
 		Offset      int
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		TypeID:      typeID,
@@ -706,7 +706,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Con
 //	len(mockedAgentConfigurationRepository.ListByAgentAndTypeCalls())
 func (mock *AgentConfigurationRepositoryMock) ListByAgentAndTypeCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 	TypeID      uint
@@ -715,7 +715,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndTypeCalls() []struct
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		TypeID      uint

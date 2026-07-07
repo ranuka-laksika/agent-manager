@@ -75,8 +75,8 @@ type AIApplicationRepositoryMock struct {
 		DeleteByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -88,8 +88,8 @@ type AIApplicationRepositoryMock struct {
 			Ctx context.Context
 			// Tx is the tx argument value.
 			Tx *gorm.DB
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -101,8 +101,8 @@ type AIApplicationRepositoryMock struct {
 		GetByAgentEnv []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -114,8 +114,8 @@ type AIApplicationRepositoryMock struct {
 		ListByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -125,8 +125,8 @@ type AIApplicationRepositoryMock struct {
 		ListByOrg []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 	}
 	lockCreate           sync.RWMutex
@@ -184,12 +184,12 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgent(ctx context.Context, ouID
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 	}
@@ -205,13 +205,13 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgent(ctx context.Context, ouID
 //	len(mockedAIApplicationRepository.DeleteByAgentCalls())
 func (mock *AIApplicationRepositoryMock) DeleteByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}
@@ -229,14 +229,14 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, t
 	callInfo := struct {
 		Ctx         context.Context
 		Tx          *gorm.DB
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
 	}{
 		Ctx:         ctx,
 		Tx:          tx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 		EnvName:     envName,
@@ -254,7 +254,7 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, t
 func (mock *AIApplicationRepositoryMock) DeleteByAgentEnvCalls() []struct {
 	Ctx         context.Context
 	Tx          *gorm.DB
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 	EnvName     string
@@ -262,7 +262,7 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnvCalls() []struct {
 	var calls []struct {
 		Ctx         context.Context
 		Tx          *gorm.DB
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
@@ -280,13 +280,13 @@ func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, ouID
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 		EnvName:     envName,
@@ -303,14 +303,14 @@ func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, ouID
 //	len(mockedAIApplicationRepository.GetByAgentEnvCalls())
 func (mock *AIApplicationRepositoryMock) GetByAgentEnvCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 	EnvName     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
@@ -328,12 +328,12 @@ func (mock *AIApplicationRepositoryMock) ListByAgent(ctx context.Context, ouID s
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 	}
@@ -349,13 +349,13 @@ func (mock *AIApplicationRepositoryMock) ListByAgent(ctx context.Context, ouID s
 //	len(mockedAIApplicationRepository.ListByAgentCalls())
 func (mock *AIApplicationRepositoryMock) ListByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}
@@ -371,11 +371,11 @@ func (mock *AIApplicationRepositoryMock) ListByOrg(ctx context.Context, ouID str
 		panic("AIApplicationRepositoryMock.ListByOrgFunc: method is nil but AIApplicationRepository.ListByOrg was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}{
-		Ctx:     ctx,
-		OrgName: ouID,
+		Ctx:  ctx,
+		OuID: ouID,
 	}
 	mock.lockListByOrg.Lock()
 	mock.calls.ListByOrg = append(mock.calls.ListByOrg, callInfo)
@@ -388,12 +388,12 @@ func (mock *AIApplicationRepositoryMock) ListByOrg(ctx context.Context, ouID str
 //
 //	len(mockedAIApplicationRepository.ListByOrgCalls())
 func (mock *AIApplicationRepositoryMock) ListByOrgCalls() []struct {
-	Ctx     context.Context
-	OrgName string
+	Ctx  context.Context
+	OuID string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}
 	mock.lockListByOrg.RLock()
 	calls = mock.calls.ListByOrg

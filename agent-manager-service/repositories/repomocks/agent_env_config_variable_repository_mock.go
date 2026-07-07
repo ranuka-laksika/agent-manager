@@ -135,8 +135,8 @@ type AgentEnvConfigVariableRepositoryMock struct {
 			Ctx context.Context
 			// AgentID is the agentID argument value.
 			AgentID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// EnvUUID is the envUUID argument value.
 			EnvUUID uuid.UUID
 		}
@@ -410,12 +410,12 @@ func (mock *AgentEnvConfigVariableRepositoryMock) ListSecretReferencesByAgentAnd
 	callInfo := struct {
 		Ctx     context.Context
 		AgentID string
-		OrgName string
+		OuID    string
 		EnvUUID uuid.UUID
 	}{
 		Ctx:     ctx,
 		AgentID: agentID,
-		OrgName: ouID,
+		OuID:    ouID,
 		EnvUUID: envUUID,
 	}
 	mock.lockListSecretReferencesByAgentAndEnv.Lock()
@@ -431,13 +431,13 @@ func (mock *AgentEnvConfigVariableRepositoryMock) ListSecretReferencesByAgentAnd
 func (mock *AgentEnvConfigVariableRepositoryMock) ListSecretReferencesByAgentAndEnvCalls() []struct {
 	Ctx     context.Context
 	AgentID string
-	OrgName string
+	OuID    string
 	EnvUUID uuid.UUID
 } {
 	var calls []struct {
 		Ctx     context.Context
 		AgentID string
-		OrgName string
+		OuID    string
 		EnvUUID uuid.UUID
 	}
 	mock.lockListSecretReferencesByAgentAndEnv.RLock()

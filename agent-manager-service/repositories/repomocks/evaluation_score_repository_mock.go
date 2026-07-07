@@ -140,8 +140,8 @@ type ScoreRepositoryMock struct {
 		}
 		// GetAgentTraceScores holds details about calls to the GetAgentTraceScores method.
 		GetAgentTraceScores []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjName is the projName argument value.
 			ProjName string
 			// AgentName is the agentName argument value.
@@ -225,8 +225,8 @@ type ScoreRepositoryMock struct {
 		}
 		// GetMonitorID holds details about calls to the GetMonitorID method.
 		GetMonitorID []struct {
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjName is the projName argument value.
 			ProjName string
 			// AgentName is the agentName argument value.
@@ -249,8 +249,8 @@ type ScoreRepositoryMock struct {
 		GetScoresByTraceID []struct {
 			// TraceID is the traceID argument value.
 			TraceID string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjName is the projName argument value.
 			ProjName string
 			// AgentName is the agentName argument value.
@@ -379,7 +379,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScores(ouID string, projName strin
 		panic("ScoreRepositoryMock.GetAgentTraceScoresFunc: method is nil but ScoreRepository.GetAgentTraceScores was just called")
 	}
 	callInfo := struct {
-		OrgName   string
+		OuID      string
 		ProjName  string
 		AgentName string
 		StartTime time.Time
@@ -388,7 +388,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScores(ouID string, projName strin
 		Offset    int
 		SortOrder string
 	}{
-		OrgName:   ouID,
+		OuID:      ouID,
 		ProjName:  projName,
 		AgentName: agentName,
 		StartTime: startTime,
@@ -408,7 +408,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScores(ouID string, projName strin
 //
 //	len(mockedScoreRepository.GetAgentTraceScoresCalls())
 func (mock *ScoreRepositoryMock) GetAgentTraceScoresCalls() []struct {
-	OrgName   string
+	OuID      string
 	ProjName  string
 	AgentName string
 	StartTime time.Time
@@ -418,7 +418,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScoresCalls() []struct {
 	SortOrder string
 } {
 	var calls []struct {
-		OrgName   string
+		OuID      string
 		ProjName  string
 		AgentName string
 		StartTime time.Time
@@ -703,12 +703,12 @@ func (mock *ScoreRepositoryMock) GetMonitorID(ouID string, projName string, agen
 		panic("ScoreRepositoryMock.GetMonitorIDFunc: method is nil but ScoreRepository.GetMonitorID was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjName    string
 		AgentName   string
 		MonitorName string
 	}{
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjName:    projName,
 		AgentName:   agentName,
 		MonitorName: monitorName,
@@ -724,13 +724,13 @@ func (mock *ScoreRepositoryMock) GetMonitorID(ouID string, projName string, agen
 //
 //	len(mockedScoreRepository.GetMonitorIDCalls())
 func (mock *ScoreRepositoryMock) GetMonitorIDCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjName    string
 	AgentName   string
 	MonitorName string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjName    string
 		AgentName   string
 		MonitorName string
@@ -792,12 +792,12 @@ func (mock *ScoreRepositoryMock) GetScoresByTraceID(traceID string, ouID string,
 	}
 	callInfo := struct {
 		TraceID   string
-		OrgName   string
+		OuID      string
 		ProjName  string
 		AgentName string
 	}{
 		TraceID:   traceID,
-		OrgName:   ouID,
+		OuID:      ouID,
 		ProjName:  projName,
 		AgentName: agentName,
 	}
@@ -813,13 +813,13 @@ func (mock *ScoreRepositoryMock) GetScoresByTraceID(traceID string, ouID string,
 //	len(mockedScoreRepository.GetScoresByTraceIDCalls())
 func (mock *ScoreRepositoryMock) GetScoresByTraceIDCalls() []struct {
 	TraceID   string
-	OrgName   string
+	OuID      string
 	ProjName  string
 	AgentName string
 } {
 	var calls []struct {
 		TraceID   string
-		OrgName   string
+		OuID      string
 		ProjName  string
 		AgentName string
 	}

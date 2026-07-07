@@ -85,8 +85,8 @@ type EnvAgentMCPMappingRepositoryMock struct {
 			Name string
 			// Version is the version argument value.
 			Version string
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Delete holds details about calls to the Delete method.
 		Delete []struct {
@@ -159,7 +159,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *go
 		Handle       string
 		Name         string
 		Version      string
-		OrgName      string
+		OuID         string
 	}{
 		Ctx:          ctx,
 		Tx:           tx,
@@ -168,7 +168,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *go
 		Handle:       handle,
 		Name:         name,
 		Version:      version,
-		OrgName:      ouID,
+		OuID:         ouID,
 	}
 	mock.lockCreate.Lock()
 	mock.calls.Create = append(mock.calls.Create, callInfo)
@@ -188,7 +188,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) CreateCalls() []struct {
 	Handle       string
 	Name         string
 	Version      string
-	OrgName      string
+	OuID         string
 } {
 	var calls []struct {
 		Ctx          context.Context
@@ -198,7 +198,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) CreateCalls() []struct {
 		Handle       string
 		Name         string
 		Version      string
-		OrgName      string
+		OuID         string
 	}
 	mock.lockCreate.RLock()
 	calls = mock.calls.Create

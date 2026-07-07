@@ -116,8 +116,8 @@ type AgentKindRepositoryMock struct {
 		DeleteKind []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// KindName is the kindName argument value.
 			KindName string
 		}
@@ -134,8 +134,8 @@ type AgentKindRepositoryMock struct {
 		ExistsBySourceAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -145,8 +145,8 @@ type AgentKindRepositoryMock struct {
 		FindVersionByImageIDInOrg []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ImageID is the imageID argument value.
 			ImageID string
 		}
@@ -154,8 +154,8 @@ type AgentKindRepositoryMock struct {
 		GetKind []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// KindName is the kindName argument value.
 			KindName string
 		}
@@ -181,8 +181,8 @@ type AgentKindRepositoryMock struct {
 		ListKinds []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the ouID argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Limit is the limit argument value.
 			Limit int
 			// Offset is the offset argument value.
@@ -296,11 +296,11 @@ func (mock *AgentKindRepositoryMock) DeleteKind(ctx context.Context, ouID string
 	}
 	callInfo := struct {
 		Ctx      context.Context
-		OrgName  string
+		OuID     string
 		KindName string
 	}{
 		Ctx:      ctx,
-		OrgName:  ouID,
+		OuID:     ouID,
 		KindName: kindName,
 	}
 	mock.lockDeleteKind.Lock()
@@ -315,12 +315,12 @@ func (mock *AgentKindRepositoryMock) DeleteKind(ctx context.Context, ouID string
 //	len(mockedAgentKindRepository.DeleteKindCalls())
 func (mock *AgentKindRepositoryMock) DeleteKindCalls() []struct {
 	Ctx      context.Context
-	OrgName  string
+	OuID     string
 	KindName string
 } {
 	var calls []struct {
 		Ctx      context.Context
-		OrgName  string
+		OuID     string
 		KindName string
 	}
 	mock.lockDeleteKind.RLock()
@@ -376,12 +376,12 @@ func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, ou
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     ouID,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
@@ -397,13 +397,13 @@ func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, ou
 //	len(mockedAgentKindRepository.ExistsBySourceAgentCalls())
 func (mock *AgentKindRepositoryMock) ExistsBySourceAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -420,11 +420,11 @@ func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrg(ctx context.Conte
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		ImageID string
 	}{
 		Ctx:     ctx,
-		OrgName: ouID,
+		OuID:    ouID,
 		ImageID: imageID,
 	}
 	mock.lockFindVersionByImageIDInOrg.Lock()
@@ -439,12 +439,12 @@ func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrg(ctx context.Conte
 //	len(mockedAgentKindRepository.FindVersionByImageIDInOrgCalls())
 func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrgCalls() []struct {
 	Ctx     context.Context
-	OrgName string
+	OuID    string
 	ImageID string
 } {
 	var calls []struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		ImageID string
 	}
 	mock.lockFindVersionByImageIDInOrg.RLock()
@@ -460,11 +460,11 @@ func (mock *AgentKindRepositoryMock) GetKind(ctx context.Context, ouID string, k
 	}
 	callInfo := struct {
 		Ctx      context.Context
-		OrgName  string
+		OuID     string
 		KindName string
 	}{
 		Ctx:      ctx,
-		OrgName:  ouID,
+		OuID:     ouID,
 		KindName: kindName,
 	}
 	mock.lockGetKind.Lock()
@@ -479,12 +479,12 @@ func (mock *AgentKindRepositoryMock) GetKind(ctx context.Context, ouID string, k
 //	len(mockedAgentKindRepository.GetKindCalls())
 func (mock *AgentKindRepositoryMock) GetKindCalls() []struct {
 	Ctx      context.Context
-	OrgName  string
+	OuID     string
 	KindName string
 } {
 	var calls []struct {
 		Ctx      context.Context
-		OrgName  string
+		OuID     string
 		KindName string
 	}
 	mock.lockGetKind.RLock()
@@ -579,15 +579,15 @@ func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string,
 		panic("AgentKindRepositoryMock.ListKindsFunc: method is nil but AgentKindRepository.ListKinds was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
-		Limit   int
-		Offset  int
+		Ctx    context.Context
+		OuID   string
+		Limit  int
+		Offset int
 	}{
-		Ctx:     ctx,
-		OrgName: ouID,
-		Limit:   limit,
-		Offset:  offset,
+		Ctx:    ctx,
+		OuID:   ouID,
+		Limit:  limit,
+		Offset: offset,
 	}
 	mock.lockListKinds.Lock()
 	mock.calls.ListKinds = append(mock.calls.ListKinds, callInfo)
@@ -600,16 +600,16 @@ func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string,
 //
 //	len(mockedAgentKindRepository.ListKindsCalls())
 func (mock *AgentKindRepositoryMock) ListKindsCalls() []struct {
-	Ctx     context.Context
-	OrgName string
-	Limit   int
-	Offset  int
+	Ctx    context.Context
+	OuID   string
+	Limit  int
+	Offset int
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
-		Limit   int
-		Offset  int
+		Ctx    context.Context
+		OuID   string
+		Limit  int
+		Offset int
 	}
 	mock.lockListKinds.RLock()
 	calls = mock.calls.ListKinds
