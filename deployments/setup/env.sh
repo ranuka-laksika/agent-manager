@@ -1,6 +1,6 @@
 # Shared cluster environment variables — sourced by all scripts in this directory.
 OPENCHOREO_VERSION="1.1.1"
-CLUSTER_NAME="openchoreo-local-setup"
+CLUSTER_NAME="${CLUSTER_NAME:-openchoreo-local-setup}"
 CLUSTER_CONTEXT="k3d-${CLUSTER_NAME}"
 
 # WSO2 API Platform / Gateway Operator versions
