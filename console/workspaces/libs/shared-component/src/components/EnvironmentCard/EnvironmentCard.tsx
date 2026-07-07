@@ -53,6 +53,7 @@ import {
 import { NoDataFound, TextInput } from "@agent-management-platform/views";
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, Link } from "react-router-dom";
+import { IsolationTierBadge } from "../IsolationTierIndicator";
 
 export enum DeploymentStatus {
   ACTIVE = "active",
@@ -261,6 +262,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
       <Card variant="outlined" sx={{ "&.MuiCard-root": { backgroundColor: "background.paper" } }}>
         <CardContent>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            <IsolationTierBadge tier={environment?.isolationTier} size={16} />
             <Typography variant="h6">{envTitle}</Typography>
             <EnvStatus status={DeploymentStatus.INACTIVE} />
           </Box>
@@ -291,6 +293,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
           alignItems="center"
         >
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            <IsolationTierBadge tier={environment?.isolationTier} size={16} />
             <Typography variant="h6">
               {environment?.displayName} Environment
             </Typography>
