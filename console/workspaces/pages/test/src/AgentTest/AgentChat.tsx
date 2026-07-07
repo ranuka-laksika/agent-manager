@@ -154,27 +154,44 @@ export function AgentChat() {
           referrerPolicy: "",
         });
       };
-      let apiResponse = await sendChatRequest(testKey?.apiKey);
+      // The gateway strips CORS headers from auth-rejected responses, so a
+      // cross-origin 401 surfaces as a thrown TypeError ("Failed to fetch")
+      // rather than a readable status. While security is enabled, treat both
+      // shapes as a possible auth failure (null = auth-like failure).
+      const attemptSend = async (): Promise<Response | null> => {
+        try {
+          const res = await sendChatRequest(testKey?.apiKey);
+          return securityEnabled && res.status === 401 ? null : res;
+        } catch (err) {
+          if (securityEnabled && err instanceof TypeError) {
+            return null;
+          }
+          throw err;
+        }
+      };
 
-      // Retry once with the same key: a 401 right after key issuance usually
-      // just means the gateway has not finished loading the key. Refetching
-      // here would rotate the key and restart that propagation window.
-      if (securityEnabled && apiResponse.status === 401) {
+      let apiResponse = await attemptSend();
+
+      // Retry once with the same key: an auth failure right after key
+      // issuance usually just means the gateway has not finished loading the
+      // key. Refetching here would rotate the key and restart that
+      // propagation window.
+      if (apiResponse === null) {
         setIsRetryingAuth(true);
         try {
           await new Promise((resolve) =>
             setTimeout(resolve, TEST_KEY_PROPAGATION_RETRY_DELAY_MS),
           );
-          apiResponse = await sendChatRequest(testKey?.apiKey);
+          apiResponse = await attemptSend();
         } finally {
           setIsRetryingAuth(false);
         }
       }
 
-      // Persistent 401: hand control back to the user instead of retrying
-      // blindly — restore the message so it can be resent with one click
-      // after the key is refreshed.
-      if (securityEnabled && apiResponse.status === 401) {
+      // Persistent auth failure: hand control back to the user instead of
+      // retrying blindly — restore the message so it can be resent with one
+      // click after the key is refreshed.
+      if (apiResponse === null) {
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
         setMessage(userMessage.content);
         setKeyAlert("unauthorized");
@@ -255,33 +272,45 @@ export function AgentChat() {
     }
   };
 
-  const keyAlertBanner =
-    keyAlert === "unauthorized" ? (
-      <Alert
-        severity="error"
-        action={
-          <Button
-            color="inherit"
-            size="small"
-            onClick={handleRefreshTestKey}
-            disabled={isRefreshingKey}
-          >
-            {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
-          </Button>
-        }
-        sx={{ borderRadius: 1 }}
-      >
-        The test API key is not authorized on the gateway yet.
-      </Alert>
-    ) : keyAlert === "refreshed" ? (
-      <Alert
-        severity="info"
-        onClose={() => setKeyAlert(null)}
-        sx={{ borderRadius: 1 }}
-      >
-        Test key refreshed. Send your message again.
-      </Alert>
-    ) : null;
+  const keyAlertBanner = (
+    <>
+      {securityEnabled && testKey?.gatewayConnected === false && (
+        <Alert severity="warning" sx={{ borderRadius: 1 }}>
+          The gateway is not connected to the control plane right now. The
+          test API key has been stored but will only work once the gateway
+          reconnects.
+        </Alert>
+      )}
+      {keyAlert === "unauthorized" && (
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={handleRefreshTestKey}
+              disabled={isRefreshingKey}
+            >
+              {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
+            </Button>
+          }
+          sx={{ borderRadius: 1 }}
+        >
+          The request was not authorized. The test API key may not be active
+          on the gateway yet.
+        </Alert>
+      )}
+      {keyAlert === "refreshed" && (
+        <Alert
+          severity="info"
+          onClose={() => setKeyAlert(null)}
+          sx={{ borderRadius: 1 }}
+        >
+          Test key refreshed. Send your message again.
+        </Alert>
+      )}
+    </>
+  );
 
   const inputDisabled =
     oauthOnly ||

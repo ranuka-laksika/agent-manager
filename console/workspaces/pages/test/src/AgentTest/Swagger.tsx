@@ -168,6 +168,13 @@ export function Swagger() {
           </Typography>
         </Alert>
       )}
+      {securityEnabled && testKey?.gatewayConnected === false && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          The gateway is not connected to the control plane right now. The
+          test API key has been stored but will only work once the gateway
+          reconnects.
+        </Alert>
+      )}
       {keyAlert === "unauthorized" && (
         <Alert
           severity="error"
