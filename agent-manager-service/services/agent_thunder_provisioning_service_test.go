@@ -1162,6 +1162,42 @@ func TestDeleteAllBindings_DeletesRowsBeforeSlowThunderCleanup(t *testing.T) {
 		"rows must be deleted before the slow per-environment Thunder cleanup, not after")
 }
 
+// TestDeleteAllBindings_StopsOnDeleteByIDsFailure guards against reopening the
+// same recreate race DeleteByIDs-by-snapshot was introduced to close: if the DB
+// delete fails, the local row is still present, so proceeding to delete the
+// Thunder identity/secret below would leave that row pointing at now-destroyed
+// resources — and a same-named agent recreated afterward would silently no-op
+// against it via Upsert's OnConflict DoNothing.
+func TestDeleteAllBindings_StopsOnDeleteByIDsFailure(t *testing.T) {
+	tc := fakeThunderClientMock()
+	tc.DeleteAgentIdentityFunc = func(_ context.Context, _ string) (bool, error) {
+		t.Fatal("must not delete the Thunder identity when the DB row deletion failed")
+		return false, nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		DeleteFunc: func(context.Context, string) error {
+			t.Fatal("must not delete the stored secret when the DB row deletion failed")
+			return nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
+			return []models.AgentThunderClient{
+				{ID: uuid.New(), ThunderAgentID: "agent-1", EnvironmentName: "dev", SecretRefPath: "path/dev"},
+			}, nil
+		},
+		DeleteByIDsFunc: func(_ context.Context, _ []uuid.UUID) error {
+			return errors.New("transient db error")
+		},
+	}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	svc.DeleteAllBindings(context.Background(), "acme", "proj1", "my-agent")
+}
+
 // TestProvisionForEnvironmentIfMissing_* cover the shared helper behind both the
 // external-agent identity-provision endpoint and PromoteAgent's internal-agent
 // hook: an environment that appeared (or entered the pipeline) after the agent

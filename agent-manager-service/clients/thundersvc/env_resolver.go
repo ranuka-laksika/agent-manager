@@ -153,11 +153,11 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 		r.mu.RUnlock()
 
 		dataMap, err := readOpenBaoKVv2Data(ctx, r.reader, r.openBaoPath, "thunder-system-clients", orgName, envName)
+		if errors.Is(err, errOpenBaoDataNotFound) {
+			return nil, ErrThunderNotProvisioned
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
-		}
-		if dataMap == nil {
-			return nil, ErrThunderNotProvisioned
 		}
 		clientSecret, _ := dataMap[thunderSystemClientSecretKey].(string)
 		if clientSecret == "" {

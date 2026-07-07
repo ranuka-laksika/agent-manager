@@ -30,6 +30,11 @@ import (
 // given path.
 var ErrAgentSecretNotFound = errors.New("agent thunder secret not found")
 
+// errOpenBaoDataNotFound is returned by readOpenBaoKVv2Data when the secret or
+// its data section doesn't exist. Internal to this package — each caller maps
+// it to its own not-found sentinel (ErrAgentSecretNotFound, ErrThunderNotProvisioned).
+var errOpenBaoDataNotFound = errors.New("openbao kv-v2 data not found")
+
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg clientmocks -out ../clientmocks/agent_secret_store_fake.go . AgentSecretStore:AgentSecretStoreMock
 
 // AgentSecretStore stores and retrieves an AgentID's Thunder client credentials
@@ -95,9 +100,9 @@ func newOpenBaoLogical(openBaoURL, openBaoToken string) (*vault.Logical, error) 
 }
 
 // readOpenBaoKVv2Data reads a KV-v2 secret at basePath/data/<keySegments...>
-// and returns its inner "data" map. Returns (nil, nil) — not an error — if
-// the secret or its data section doesn't exist, so callers can map that to
-// their own not-found/not-provisioned sentinel.
+// and returns its inner "data" map. Returns errOpenBaoDataNotFound if the
+// secret or its data section doesn't exist, so callers can map that to their
+// own not-found/not-provisioned sentinel.
 func readOpenBaoKVv2Data(ctx context.Context, r openBaoReader, basePath string, keySegments ...string) (map[string]any, error) {
 	dataPath := path.Join(append([]string{basePath, "data"}, keySegments...)...)
 	secret, err := r.ReadWithContext(ctx, dataPath)
@@ -105,11 +110,11 @@ func readOpenBaoKVv2Data(ctx context.Context, r openBaoReader, basePath string, 
 		return nil, err
 	}
 	if secret == nil || secret.Data == nil {
-		return nil, nil
+		return nil, errOpenBaoDataNotFound
 	}
 	dataMap, ok := secret.Data["data"].(map[string]any)
 	if !ok {
-		return nil, nil
+		return nil, errOpenBaoDataNotFound
 	}
 	return dataMap, nil
 }
@@ -171,11 +176,11 @@ func (s *agentSecretStore) Store(ctx context.Context, orgName, projectName, envN
 
 func (s *agentSecretStore) Get(ctx context.Context, secretPath string) (clientID, clientSecret string, err error) {
 	dataMap, err := readOpenBaoKVv2Data(ctx, s.rw, s.openBaoPath, secretPath)
+	if errors.Is(err, errOpenBaoDataNotFound) {
+		return "", "", ErrAgentSecretNotFound
+	}
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read agent thunder secret at %s: %w", secretPath, err)
-	}
-	if dataMap == nil {
-		return "", "", ErrAgentSecretNotFound
 	}
 	clientID, _ = dataMap["client_id"].(string)
 	clientSecret, _ = dataMap["client_secret"].(string)

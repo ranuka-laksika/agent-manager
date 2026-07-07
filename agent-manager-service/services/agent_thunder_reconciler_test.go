@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -209,6 +208,7 @@ func TestAgentThunderReconciler_RunCycle_AttemptsRunConcurrently(t *testing.T) {
 		t.Fatal("runCycle did not complete — attempts are not running concurrently")
 	}
 }
+
 // TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped verifies that reconciler concurrency
 // is strictly limited to reconcilerConcurrencyLimit (10) even when a large number of
 // bindings (e.g. 15) are due to be reconciled.

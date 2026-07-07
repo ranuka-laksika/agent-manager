@@ -600,6 +600,7 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 	}
 	if err := s.repo.DeleteByIDs(ctx, ids); err != nil {
 		s.logger.Error("Failed to delete agent thunder client rows", "agentName", agentName, "error", err)
+		return
 	}
 
 	for _, b := range bindings {
