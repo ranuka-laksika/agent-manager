@@ -99,7 +99,9 @@ CLUSTER_NAME=amp-local ./deployments/setup/setup-gvisor-node.sh
 
 ## Create a gVisor Environment
 
-Isolation tier is set at environment creation time. Open the **Add Environment** drawer in the console (Deployment Pipelines → Environments), copy the generated command, and add `ISOLATION_TIER=gvisor`:
+Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **gVisor** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=gvisor` automatically.
+
+If you script environment creation directly, set the variable yourself:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v0.0.0-dev/deployments/scripts/add-environment.sh \

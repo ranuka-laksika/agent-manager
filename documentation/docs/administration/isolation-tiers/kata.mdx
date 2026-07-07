@@ -93,7 +93,9 @@ This joins the host itself to the cluster as a real (non-Docker) k3s agent node 
 
 ## Create a Kata Environment
 
-Same as gVisor, with `ISOLATION_TIER=kata`. Open the **Add Environment** drawer in the console, copy the generated command, and add the variable:
+Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **Kata Containers** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=kata` automatically.
+
+If you script environment creation directly, set the variable yourself:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v0.0.0-dev/deployments/scripts/add-environment.sh \
