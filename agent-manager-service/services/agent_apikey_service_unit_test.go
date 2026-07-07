@@ -33,6 +33,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
+	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 )
 
 // stubEventHub is a hand-written EventHub stub (no generated mock exists for
@@ -60,12 +61,25 @@ func (s *stubEventHub) UnsubscribeAll(string) error                     { return
 func (s *stubEventHub) CleanUpEvents() error                            { return nil }
 func (s *stubEventHub) Close() error                                    { return nil }
 
+// stubConnChecker reports a fixed websocket-connectivity state for any gateway.
+type stubConnChecker struct {
+	connected bool
+}
+
+func (s *stubConnChecker) GetConnections(string) []*websocket.Connection {
+	if !s.connected {
+		return nil
+	}
+	return []*websocket.Connection{{}}
+}
+
 // apiKeyServiceFixture bundles the mocked collaborators for AgentAPIKeyService.
 type apiKeyServiceFixture struct {
 	svc          *AgentAPIKeyService
 	apiKeyRepo   *repomocks.APIKeyRepositoryMock
 	upsertedKeys *[]*models.StoredAPIKey
 	lookedUpName *string
+	connChecker  *stubConnChecker
 }
 
 // newAPIKeyServiceFixture wires an AgentAPIKeyService whose artifact/env/gateway
@@ -113,8 +127,15 @@ func newAPIKeyServiceFixture(t *testing.T, existing *models.StoredAPIKey) *apiKe
 		},
 	}
 
-	svc := NewAgentAPIKeyService(artifactRepo, oc, gatewayRepo, NewGatewayEventsService(&stubEventHub{}), apiKeyRepo)
-	return &apiKeyServiceFixture{svc: svc, apiKeyRepo: apiKeyRepo, upsertedKeys: upserted, lookedUpName: lookedUp}
+	connChecker := &stubConnChecker{connected: true}
+	svc := NewAgentAPIKeyService(artifactRepo, oc, gatewayRepo, NewGatewayEventsService(&stubEventHub{}), apiKeyRepo, connChecker)
+	return &apiKeyServiceFixture{
+		svc:          svc,
+		apiKeyRepo:   apiKeyRepo,
+		upsertedKeys: upserted,
+		lookedUpName: lookedUp,
+		connChecker:  connChecker,
+	}
 }
 
 // expectedTestKeyName mirrors the documented naming scheme: the test-key prefix
@@ -175,6 +196,21 @@ func TestAgentAPIKeyService_IssueTestAPIKey_PerUser(t *testing.T) {
 		assert.Equal(t, keyName, (*fx.upsertedKeys)[0].Name)
 	})
 
+	t.Run("reports gateway websocket connectivity in the response", func(t *testing.T) {
+		fx := newAPIKeyServiceFixture(t, nil)
+
+		resp, err := fx.svc.IssueTestAPIKey(context.Background(), org, proj, agent, env, "user-a-sub")
+		require.NoError(t, err)
+		require.NotNil(t, resp.GatewayConnected)
+		assert.True(t, *resp.GatewayConnected)
+
+		fx.connChecker.connected = false
+		resp, err = fx.svc.IssueTestAPIKey(context.Background(), org, proj, agent, env, "user-a-sub")
+		require.NoError(t, err)
+		require.NotNil(t, resp.GatewayConnected)
+		assert.False(t, *resp.GatewayConnected)
+	})
+
 	t.Run("rejects reissue when the existing row is not a test key", func(t *testing.T) {
 		existing := &models.StoredAPIKey{
 			UUID:    uuid.Must(uuid.NewV7()),
@@ -199,5 +235,17 @@ func TestAgentAPIKeyService_CreateAPIKey_ReservedTestKeyPrefix(t *testing.T) {
 			&models.CreateAPIKeyRequest{Name: models.APIKeyTestKeyPrefix + "deadbeef0123"})
 
 		assert.ErrorIs(t, err, utils.ErrBadRequest)
+	})
+
+	t.Run("reports gateway websocket connectivity in the response", func(t *testing.T) {
+		fx := newAPIKeyServiceFixture(t, nil)
+		fx.connChecker.connected = false
+
+		resp, err := fx.svc.CreateAPIKey(context.Background(), org, proj, agent, env,
+			&models.CreateAPIKeyRequest{Name: "my-key"})
+
+		require.NoError(t, err)
+		require.NotNil(t, resp.GatewayConnected)
+		assert.False(t, *resp.GatewayConnected)
 	})
 }
