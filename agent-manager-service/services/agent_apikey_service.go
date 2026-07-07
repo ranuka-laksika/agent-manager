@@ -30,8 +30,15 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
+	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
 )
+
+// GatewayConnectionChecker reports live websocket connections for a gateway.
+// *websocket.Manager satisfies this interface.
+type GatewayConnectionChecker interface {
+	GetConnections(gatewayID string) []*websocket.Connection
+}
 
 // testKeyTTL is the validity window for a console-issued test API key.
 // The console refreshes the key at staleTime well before this elapses.
@@ -65,6 +72,7 @@ type AgentAPIKeyService struct {
 	apiKeyRepo   repositories.APIKeyRepository
 	gatewayRepo  repositories.GatewayRepository
 	broadcaster  apiKeyBroadcaster
+	connChecker  GatewayConnectionChecker
 }
 
 // NewAgentAPIKeyService creates a new agent API key service instance
@@ -74,6 +82,7 @@ func NewAgentAPIKeyService(
 	gatewayRepo repositories.GatewayRepository,
 	gatewayService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
+	connChecker GatewayConnectionChecker,
 ) *AgentAPIKeyService {
 	return &AgentAPIKeyService{
 		artifactRepo: artifactRepo,
@@ -85,7 +94,23 @@ func NewAgentAPIKeyService(
 			gatewayService: gatewayService,
 			apiKeyRepo:     apiKeyRepo,
 		},
+		connChecker: connChecker,
 	}
+}
+
+// gatewaysConnected reports whether every given gateway currently has at
+// least one live websocket connection to this control plane. Key events for
+// a disconnected gateway are queued and only apply after it reconnects, so
+// callers surface this to warn that a fresh key is not yet usable.
+func (s *AgentAPIKeyService) gatewaysConnected(gateways []*models.Gateway) *bool {
+	connected := true
+	for _, gw := range gateways {
+		if len(s.connChecker.GetConnections(gw.UUID.String())) == 0 {
+			connected = false
+			break
+		}
+	}
+	return &connected
 }
 
 func (s *AgentAPIKeyService) resolveAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName, envID string) (*models.Artifact, string, error) {
@@ -142,7 +167,11 @@ func (s *AgentAPIKeyService) CreateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID, req)
+	resp, err := s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID, req)
+	if resp != nil {
+		resp.GatewayConnected = s.gatewaysConnected(gateways)
+	}
+	return resp, err
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to the environment's gateways.
@@ -178,7 +207,11 @@ func (s *AgentAPIKeyService) RotateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName, req)
+	resp, err := s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName, req)
+	if resp != nil {
+		resp.GatewayConnected = s.gatewaysConnected(gateways)
+	}
+	return resp, err
 }
 
 // ListAPIKeys returns API keys for the given agent (masked values only).
@@ -258,10 +291,11 @@ func (s *AgentAPIKeyService) IssueTestAPIKey(
 	}
 
 	return &models.IssueTestAPIKeyResponse{
-		Status:    resp.Status,
-		Message:   resp.Message,
-		KeyID:     resp.KeyID,
-		APIKey:    resp.APIKey,
-		ExpiresAt: expiresAt,
+		Status:           resp.Status,
+		Message:          resp.Message,
+		KeyID:            resp.KeyID,
+		APIKey:           resp.APIKey,
+		ExpiresAt:        expiresAt,
+		GatewayConnected: s.gatewaysConnected(gateways),
 	}, nil
 }

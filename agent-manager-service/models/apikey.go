@@ -95,6 +95,12 @@ type IssueTestAPIKeyResponse struct {
 	KeyID     string `json:"keyId,omitempty"`
 	APIKey    string `json:"apiKey,omitempty"`
 	ExpiresAt string `json:"expiresAt"`
+
+	// GatewayConnected reports whether every gateway serving the agent's
+	// environment had a live websocket connection when the key was issued.
+	// When false, the key is stored but only becomes usable after the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // APIKeyInfo is a masked, read-only view of a stored API key for listing.
@@ -163,6 +169,12 @@ type CreateAPIKeyResponse struct {
 
 	// APIKey is the generated API key value (returned only once)
 	APIKey string `json:"apiKey,omitempty"`
+
+	// GatewayConnected reports whether every target gateway had a live
+	// websocket connection to the control plane when the key was written.
+	// When false, the key is stored but only becomes usable after the gateway
+	// reconnects and syncs. Nil when the issuing path does not check.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // APIKeyCreatedEvent represents the event payload for "apikey.created" event type

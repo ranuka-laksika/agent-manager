@@ -28,6 +28,8 @@ type IssueTestAPIKeyResponse struct {
 	ApiKey *string `json:"apiKey,omitempty"`
 	// Expiry timestamp (RFC3339); the console rotates the key before this elapses.
 	ExpiresAt time.Time `json:"expiresAt"`
+	// Whether every gateway serving the agent's environment had a live websocket connection to the control plane when the key was issued. When false, the key has been stored but will only become usable once the gateway reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // NewIssueTestAPIKeyResponse instantiates a new IssueTestAPIKeyResponse object
@@ -193,6 +195,38 @@ func (o *IssueTestAPIKeyResponse) SetExpiresAt(v time.Time) {
 	o.ExpiresAt = v
 }
 
+// GetGatewayConnected returns the GatewayConnected field value if set, zero value otherwise.
+func (o *IssueTestAPIKeyResponse) GetGatewayConnected() bool {
+	if o == nil || IsNil(o.GatewayConnected) {
+		var ret bool
+		return ret
+	}
+	return *o.GatewayConnected
+}
+
+// GetGatewayConnectedOk returns a tuple with the GatewayConnected field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *IssueTestAPIKeyResponse) GetGatewayConnectedOk() (*bool, bool) {
+	if o == nil || IsNil(o.GatewayConnected) {
+		return nil, false
+	}
+	return o.GatewayConnected, true
+}
+
+// HasGatewayConnected returns a boolean if a field has been set.
+func (o *IssueTestAPIKeyResponse) HasGatewayConnected() bool {
+	if o != nil && !IsNil(o.GatewayConnected) {
+		return true
+	}
+
+	return false
+}
+
+// SetGatewayConnected gets a reference to the given bool and assigns it to the GatewayConnected field.
+func (o *IssueTestAPIKeyResponse) SetGatewayConnected(v bool) {
+	o.GatewayConnected = &v
+}
+
 func (o IssueTestAPIKeyResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -214,6 +248,9 @@ func (o IssueTestAPIKeyResponse) ToMap() (map[string]interface{}, error) {
 		toSerialize["apiKey"] = o.ApiKey
 	}
 	toSerialize["expiresAt"] = o.ExpiresAt
+	if !IsNil(o.GatewayConnected) {
+		toSerialize["gatewayConnected"] = o.GatewayConnected
+	}
 	return toSerialize, nil
 }
 

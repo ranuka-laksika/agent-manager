@@ -9440,6 +9440,13 @@ components:
         apiKey:
           type: string
           description: Generated API key value. Returned only once; store it securely.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every target gateway had a live websocket connection to the
+            control plane when the key was created. When false, the key has
+            been stored but will only become usable once the gateway
+            reconnects and syncs.
 
     ListAPIKeysResponse:
       type: object
@@ -9553,6 +9560,13 @@ components:
           type: string
           format: date-time
           description: Expiry timestamp (RFC3339); the console rotates the key before this elapses.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every gateway serving the agent's environment had a live
+            websocket connection to the control plane when the key was issued.
+            When false, the key has been stored but will only become usable
+            once the gateway reconnects and syncs.
 
     RotateLLMAPIKeyRequest:
       type: object
@@ -9582,6 +9596,13 @@ components:
         apiKey:
           type: string
           description: New API key value. Returned only once; store it securely.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every target gateway had a live websocket connection to the
+            control plane when the key was rotated. When false, the new key has
+            been stored but will only become usable once the gateway
+            reconnects and syncs.
 
     CreateOrganizationRequest:
       type: object

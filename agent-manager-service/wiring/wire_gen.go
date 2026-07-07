@@ -125,11 +125,12 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	llmDeploymentController := controllers.NewLLMDeploymentController(llmProviderDeploymentService)
 	llmProviderAPIKeyController := controllers.NewLLMProviderAPIKeyController(llmProviderAPIKeyService)
 	llmProxyAPIKeyController := controllers.NewLLMProxyAPIKeyController(llmProxyAPIKeyService)
-	agentAPIKeyService := services.NewAgentAPIKeyService(artifactRepository, openChoreoClient, gatewayRepository, gatewayEventsService, apiKeyRepository)
+	manager := ProvideWebSocketManager(configConfig, eventHub)
+	gatewayConnectionChecker := ProvideGatewayConnectionChecker(manager)
+	agentAPIKeyService := services.NewAgentAPIKeyService(artifactRepository, openChoreoClient, gatewayRepository, gatewayEventsService, apiKeyRepository, gatewayConnectionChecker)
 	agentAPIKeyController := controllers.NewAgentAPIKeyController(agentAPIKeyService)
 	llmProxyDeploymentController := controllers.NewLLMProxyDeploymentController(llmProxyDeploymentService)
 	mcpProxyController := controllers.NewMCPProxyController(mcpProxyService)
-	manager := ProvideWebSocketManager(configConfig, eventHub)
 	deploymentAckHandler := ProvideDeploymentAckHandler(deploymentRepository)
 	webSocketController := ProvideWebSocketController(manager, eventHub, platformGatewayService, deploymentAckHandler, configConfig)
 	gatewayInternalAPIService := services.NewGatewayInternalAPIService(llmProviderRepository, llmProxyRepository, deploymentRepository, gatewayRepository, infraResourceManager, v)
@@ -298,11 +299,12 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	llmDeploymentController := controllers.NewLLMDeploymentController(llmProviderDeploymentService)
 	llmProviderAPIKeyController := controllers.NewLLMProviderAPIKeyController(llmProviderAPIKeyService)
 	llmProxyAPIKeyController := controllers.NewLLMProxyAPIKeyController(llmProxyAPIKeyService)
-	agentAPIKeyService := services.NewAgentAPIKeyService(artifactRepository, openChoreoClient, gatewayRepository, gatewayEventsService, apiKeyRepository)
+	manager := ProvideWebSocketManager(configConfig, eventHub)
+	gatewayConnectionChecker := ProvideGatewayConnectionChecker(manager)
+	agentAPIKeyService := services.NewAgentAPIKeyService(artifactRepository, openChoreoClient, gatewayRepository, gatewayEventsService, apiKeyRepository, gatewayConnectionChecker)
 	agentAPIKeyController := controllers.NewAgentAPIKeyController(agentAPIKeyService)
 	llmProxyDeploymentController := controllers.NewLLMProxyDeploymentController(llmProxyDeploymentService)
 	mcpProxyController := controllers.NewMCPProxyController(mcpProxyService)
-	manager := ProvideWebSocketManager(configConfig, eventHub)
 	deploymentAckHandler := ProvideDeploymentAckHandler(deploymentRepository)
 	webSocketController := ProvideWebSocketController(manager, eventHub, platformGatewayService, deploymentAckHandler, configConfig)
 	gatewayInternalAPIService := services.NewGatewayInternalAPIService(llmProviderRepository, llmProxyRepository, deploymentRepository, gatewayRepository, infraResourceManager, v)
@@ -614,8 +616,15 @@ var repositoryProviderSet = wire.NewSet(
 
 var websocketProviderSet = wire.NewSet(
 	ProvideEventHub,
-	ProvideWebSocketManager, services.NewGatewayEventsService, ProvideDeploymentAckHandler,
+	ProvideWebSocketManager,
+	ProvideGatewayConnectionChecker, services.NewGatewayEventsService, ProvideDeploymentAckHandler,
 )
+
+// ProvideGatewayConnectionChecker exposes the websocket manager through the
+// narrow connectivity interface consumed by services.
+func ProvideGatewayConnectionChecker(m *websocket.Manager) services.GatewayConnectionChecker {
+	return m
+}
 
 // Test client providers
 func ProvideTestOpenChoreoClient(testClients TestClients) client.OpenChoreoClient {
