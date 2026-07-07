@@ -22,7 +22,7 @@ import {
   useTestAgentAPIKey,
 } from "@agent-management-platform/api-client";
 import { getErrorMessage } from "@agent-management-platform/shared-component";
-import { Alert, Box, Skeleton, Typography } from "@wso2/oxygen-ui";
+import { Alert, Box, Button, Skeleton, Typography } from "@wso2/oxygen-ui";
 import { useParams } from "react-router-dom";
 import { useMemo, useState, lazy, Suspense } from "react";
 
@@ -76,7 +76,10 @@ export function Swagger() {
     { enabled: securityEnabled && !oauthOnly },
   );
   const testApiKey = testKey?.apiKey;
-  const [keyRefreshed, setKeyRefreshed] = useState(false);
+  const [keyAlert, setKeyAlert] = useState<"unauthorized" | "refreshed" | null>(
+    null,
+  );
+  const [isRefreshingKey, setIsRefreshingKey] = useState(false);
 
   const endpoint = useMemo(() => Object.keys(data ?? {})?.[0] ?? "", [data]);
   const requestInterceptor = useMemo(
@@ -108,18 +111,28 @@ export function Swagger() {
   );
 
   // swagger-ui cannot replay a request, so on a 401 (usually a test key the
-  // gateway hasn't loaded yet, or one superseded by another session) refresh
-  // the key and ask the user to execute the request again.
+  // gateway hasn't loaded yet, or one superseded by another session) surface
+  // an alert with a manual refresh action. Refetching automatically would
+  // rotate the key and restart the gateway propagation window.
   const responseInterceptor = useMemo(
     () => (res: any) => {
       if (securityEnabled && res?.status === 401) {
-        refetchTestKey();
-        setKeyRefreshed(true);
+        setKeyAlert("unauthorized");
       }
       return res;
     },
-    [securityEnabled, refetchTestKey]
+    [securityEnabled]
   );
+
+  const handleRefreshTestKey = async () => {
+    setIsRefreshingKey(true);
+    try {
+      await refetchTestKey();
+      setKeyAlert("refreshed");
+    } finally {
+      setIsRefreshingKey(false);
+    }
+  };
 
   if (isLoading || (securityEnabled && isLoadingTestKey)) {
     return <Skeleton variant="rounded" height={500} />;
@@ -155,14 +168,32 @@ export function Swagger() {
           </Typography>
         </Alert>
       )}
-      {keyRefreshed && (
+      {keyAlert === "unauthorized" && (
         <Alert
-          severity="info"
-          onClose={() => setKeyRefreshed(false)}
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={handleRefreshTestKey}
+              disabled={isRefreshingKey}
+            >
+              {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
+            </Button>
+          }
           sx={{ mb: 2 }}
         >
-          The test API key was refreshed after an authorization failure.
-          Execute the request again.
+          The test API key is not authorized on the gateway yet. Execute the
+          request again, or refresh the test key.
+        </Alert>
+      )}
+      {keyAlert === "refreshed" && (
+        <Alert
+          severity="info"
+          onClose={() => setKeyAlert(null)}
+          sx={{ mb: 2 }}
+        >
+          Test key refreshed. Execute the request again.
         </Alert>
       )}
       <Box sx={{ "& .swagger-ui .wrapper": { padding: 0 } }}>

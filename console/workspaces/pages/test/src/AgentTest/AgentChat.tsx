@@ -42,6 +42,11 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+// A freshly issued test key takes a couple of seconds to reach the gateway's
+// policy engine (control plane -> event hub -> websocket -> policy snapshot),
+// so a single delayed retry with the same key rides out that window.
+const TEST_KEY_PROPAGATION_RETRY_DELAY_MS = 2000;
+
 export function AgentChat() {
   const [endpoint, setEndpoint] = useState("");
   const [message, setMessage] = useState("");
@@ -56,6 +61,10 @@ export function AgentChat() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRetryingAuth, setIsRetryingAuth] = useState(false);
+  const [keyAlert, setKeyAlert] = useState<"unauthorized" | "refreshed" | null>(
+    null,
+  );
+  const [isRefreshingKey, setIsRefreshingKey] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { agentId, orgId, projectId, envId } = useParams();
   const { data: endpoints, isLoading: isEndpointsLoading } =
@@ -122,6 +131,7 @@ export function AgentChat() {
     setMessages((prev) => [...prev, userMessage]);
     setMessage("");
     setError(null);
+    setKeyAlert(null);
     setIsLoading(true);
 
     try {
@@ -144,33 +154,31 @@ export function AgentChat() {
           referrerPolicy: "",
         });
       };
-      const sleep = (ms: number) =>
-        new Promise((resolve) => setTimeout(resolve, ms));
-
       let apiResponse = await sendChatRequest(testKey?.apiKey);
 
-      // A 401 usually means the gateway has not finished loading a freshly
-      // issued test key (propagation takes a few seconds) or our cached key
-      // was superseded. Retry with the same key first, then once more with a
-      // newly issued key, instead of surfacing the error to the user.
+      // Retry once with the same key: a 401 right after key issuance usually
+      // just means the gateway has not finished loading the key. Refetching
+      // here would rotate the key and restart that propagation window.
       if (securityEnabled && apiResponse.status === 401) {
         setIsRetryingAuth(true);
         try {
-          for (const delayMs of [1000, 2500]) {
-            await sleep(delayMs);
-            apiResponse = await sendChatRequest(testKey?.apiKey);
-            if (apiResponse.status !== 401) break;
-          }
-          if (apiResponse.status === 401) {
-            const freshKey = (await refetchTestKey()).data?.apiKey;
-            if (freshKey) {
-              await sleep(4000);
-              apiResponse = await sendChatRequest(freshKey);
-            }
-          }
+          await new Promise((resolve) =>
+            setTimeout(resolve, TEST_KEY_PROPAGATION_RETRY_DELAY_MS),
+          );
+          apiResponse = await sendChatRequest(testKey?.apiKey);
         } finally {
           setIsRetryingAuth(false);
         }
+      }
+
+      // Persistent 401: hand control back to the user instead of retrying
+      // blindly — restore the message so it can be resent with one click
+      // after the key is refreshed.
+      if (securityEnabled && apiResponse.status === 401) {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+        setMessage(userMessage.content);
+        setKeyAlert("unauthorized");
+        return;
       }
 
       let responseData: any;
@@ -237,6 +245,44 @@ export function AgentChat() {
     }
   };
 
+  const handleRefreshTestKey = async () => {
+    setIsRefreshingKey(true);
+    try {
+      await refetchTestKey();
+      setKeyAlert("refreshed");
+    } finally {
+      setIsRefreshingKey(false);
+    }
+  };
+
+  const keyAlertBanner =
+    keyAlert === "unauthorized" ? (
+      <Alert
+        severity="error"
+        action={
+          <Button
+            color="inherit"
+            size="small"
+            onClick={handleRefreshTestKey}
+            disabled={isRefreshingKey}
+          >
+            {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
+          </Button>
+        }
+        sx={{ borderRadius: 1 }}
+      >
+        The test API key is not authorized on the gateway yet.
+      </Alert>
+    ) : keyAlert === "refreshed" ? (
+      <Alert
+        severity="info"
+        onClose={() => setKeyAlert(null)}
+        sx={{ borderRadius: 1 }}
+      >
+        Test key refreshed. Send your message again.
+      </Alert>
+    ) : null;
+
   const inputDisabled =
     oauthOnly ||
     isLoading ||
@@ -280,7 +326,8 @@ export function AgentChat() {
               Send a message to begin chatting with the agent
             </Typography>
           </Box>
-          <Box width="100%" maxWidth={600}>
+          <Box width="100%" maxWidth={600} display="flex" flexDirection="column" gap={1}>
+            {keyAlertBanner}
             <Box
               width="100%"
               display="flex"
@@ -366,6 +413,7 @@ export function AgentChat() {
         </Box>
 
         {/* Error Display */}
+        {keyAlertBanner}
         {error && (
           <Alert
             severity="error"
