@@ -1496,6 +1496,22 @@ fi
 log_success "Agent Management Platform installed successfully"
 echo ""
 
+# Install agent sandbox module (required: agents run as sandboxed pods)
+log_info "Installing Agent Sandbox Module (sandboxed agent runtime)..."
+if ! install_agent_sandbox_module; then
+    log_error "Failed to install Agent Sandbox Module"
+    echo ""
+    echo "Agent deployments cannot work without the Agent Sandbox module."
+    echo ""
+    echo "Troubleshooting steps:"
+    echo "  1. Check Helm release: helm list -n ${DATA_PLANE_NS}"
+    echo "  2. Check controller: kubectl get pods -n agent-sandbox-system"
+    echo "  3. Check CRDs: kubectl get crd | grep agents.x-k8s.io"
+    exit 1
+fi
+log_success "Agent Sandbox Module installed successfully"
+echo ""
+
 # Install platform resources extension
 log_info "Installing Platform Resources Extension (Default Organization, Project, Environment, DeploymentPipeline)..."
 if ! install_platform_resources_extension; then
