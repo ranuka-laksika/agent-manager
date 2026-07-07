@@ -384,27 +384,6 @@ func (e DockerBuildType) Valid() bool {
 	}
 }
 
-// Defines values for EnvProviderConfigMappingsDeploymentStatus.
-const (
-	EnvProviderConfigMappingsDeploymentStatusDEPLOYED    EnvProviderConfigMappingsDeploymentStatus = "DEPLOYED"
-	EnvProviderConfigMappingsDeploymentStatusNOTDEPLOYED EnvProviderConfigMappingsDeploymentStatus = "NOT_DEPLOYED"
-	EnvProviderConfigMappingsDeploymentStatusPENDING     EnvProviderConfigMappingsDeploymentStatus = "PENDING"
-)
-
-// Valid indicates whether the value is a known member of the EnvProviderConfigMappingsDeploymentStatus enum.
-func (e EnvProviderConfigMappingsDeploymentStatus) Valid() bool {
-	switch e {
-	case EnvProviderConfigMappingsDeploymentStatusDEPLOYED:
-		return true
-	case EnvProviderConfigMappingsDeploymentStatusNOTDEPLOYED:
-		return true
-	case EnvProviderConfigMappingsDeploymentStatusPENDING:
-		return true
-	default:
-		return false
-	}
-}
-
 // Defines values for EvaluatorConfigParamType.
 const (
 	Array   EvaluatorConfigParamType = "array"
@@ -1040,19 +1019,19 @@ func (e ListGatewaysParamsStatus) Valid() bool {
 
 // Defines values for GetLLMProviderDeploymentsParamsStatus.
 const (
-	DEPLOYED   GetLLMProviderDeploymentsParamsStatus = "DEPLOYED"
-	FAILED     GetLLMProviderDeploymentsParamsStatus = "FAILED"
-	UNDEPLOYED GetLLMProviderDeploymentsParamsStatus = "UNDEPLOYED"
+	GetLLMProviderDeploymentsParamsStatusDEPLOYED   GetLLMProviderDeploymentsParamsStatus = "DEPLOYED"
+	GetLLMProviderDeploymentsParamsStatusFAILED     GetLLMProviderDeploymentsParamsStatus = "FAILED"
+	GetLLMProviderDeploymentsParamsStatusUNDEPLOYED GetLLMProviderDeploymentsParamsStatus = "UNDEPLOYED"
 )
 
 // Valid indicates whether the value is a known member of the GetLLMProviderDeploymentsParamsStatus enum.
 func (e GetLLMProviderDeploymentsParamsStatus) Valid() bool {
 	switch e {
-	case DEPLOYED:
+	case GetLLMProviderDeploymentsParamsStatusDEPLOYED:
 		return true
-	case FAILED:
+	case GetLLMProviderDeploymentsParamsStatusFAILED:
 		return true
-	case UNDEPLOYED:
+	case GetLLMProviderDeploymentsParamsStatusUNDEPLOYED:
 		return true
 	default:
 		return false
@@ -2429,15 +2408,9 @@ type EnvModelConfigRequest struct {
 type EnvProviderConfigMappings struct {
 	Configuration *ProviderConfig `json:"configuration,omitempty"`
 
-	// DeploymentStatus Per-environment MCP deployment status. Set only for MCP configs.
-	DeploymentStatus *EnvProviderConfigMappingsDeploymentStatus `json:"deploymentStatus,omitempty"`
-
 	// EnvironmentName Name of the environment
 	EnvironmentName string `json:"environmentName"`
 }
-
-// EnvProviderConfigMappingsDeploymentStatus Per-environment MCP deployment status. Set only for MCP configs.
-type EnvProviderConfigMappingsDeploymentStatus string
 
 // EnvProviderConfiguration defines model for EnvProviderConfiguration.
 type EnvProviderConfiguration struct {
