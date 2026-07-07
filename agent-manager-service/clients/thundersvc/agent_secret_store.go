@@ -55,7 +55,7 @@ type AgentSecretStore interface {
 // openBaoReadWriter is the narrow slice of the vault/OpenBao API this store
 // needs — kept minimal so it can be faked in tests without a real OpenBao server.
 type openBaoReadWriter interface {
-	ReadWithContext(ctx context.Context, path string) (*vault.Secret, error)
+	openBaoReader
 	WriteWithContext(ctx context.Context, path string, data map[string]interface{}) (*vault.Secret, error)
 	DeleteWithContext(ctx context.Context, path string) (*vault.Secret, error)
 }
@@ -80,12 +80,10 @@ func validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath string) error {
 	return nil
 }
 
-// NewAgentSecretStore creates an AgentSecretStore backed by a real OpenBao
-// server at openBaoURL, authenticating with openBaoToken.
-func NewAgentSecretStore(openBaoURL, openBaoToken, openBaoPath string) (AgentSecretStore, error) {
-	if err := validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath); err != nil {
-		return nil, err
-	}
+// newOpenBaoLogical builds an authenticated OpenBao/Vault Logical client —
+// the client-construction sequence shared by every OpenBao-backed client in
+// this package (NewAgentSecretStore, NewEnvThunderResolver).
+func newOpenBaoLogical(openBaoURL, openBaoToken string) (*vault.Logical, error) {
 	cfg := vault.DefaultConfig()
 	cfg.Address = openBaoURL
 	client, err := vault.NewClient(cfg)
@@ -93,7 +91,40 @@ func NewAgentSecretStore(openBaoURL, openBaoToken, openBaoPath string) (AgentSec
 		return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
 	}
 	client.SetToken(openBaoToken)
-	return newAgentSecretStoreWithReadWriter(client.Logical(), openBaoPath), nil
+	return client.Logical(), nil
+}
+
+// readOpenBaoKVv2Data reads a KV-v2 secret at basePath/data/<keySegments...>
+// and returns its inner "data" map. Returns (nil, nil) — not an error — if
+// the secret or its data section doesn't exist, so callers can map that to
+// their own not-found/not-provisioned sentinel.
+func readOpenBaoKVv2Data(ctx context.Context, r openBaoReader, basePath string, keySegments ...string) (map[string]any, error) {
+	dataPath := path.Join(append([]string{basePath, "data"}, keySegments...)...)
+	secret, err := r.ReadWithContext(ctx, dataPath)
+	if err != nil {
+		return nil, err
+	}
+	if secret == nil || secret.Data == nil {
+		return nil, nil
+	}
+	dataMap, ok := secret.Data["data"].(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	return dataMap, nil
+}
+
+// NewAgentSecretStore creates an AgentSecretStore backed by a real OpenBao
+// server at openBaoURL, authenticating with openBaoToken.
+func NewAgentSecretStore(openBaoURL, openBaoToken, openBaoPath string) (AgentSecretStore, error) {
+	if err := validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath); err != nil {
+		return nil, err
+	}
+	logical, err := newOpenBaoLogical(openBaoURL, openBaoToken)
+	if err != nil {
+		return nil, err
+	}
+	return newAgentSecretStoreWithReadWriter(logical, openBaoPath), nil
 }
 
 func newAgentSecretStoreWithReadWriter(rw openBaoReadWriter, openBaoPath string) *agentSecretStore {
@@ -139,17 +170,11 @@ func (s *agentSecretStore) Store(ctx context.Context, orgName, projectName, envN
 }
 
 func (s *agentSecretStore) Get(ctx context.Context, secretPath string) (clientID, clientSecret string, err error) {
-	dataPath := path.Join(s.openBaoPath, "data", secretPath)
-
-	secret, err := s.rw.ReadWithContext(ctx, dataPath)
+	dataMap, err := readOpenBaoKVv2Data(ctx, s.rw, s.openBaoPath, secretPath)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read agent thunder secret at %s: %w", secretPath, err)
 	}
-	if secret == nil || secret.Data == nil {
-		return "", "", ErrAgentSecretNotFound
-	}
-	dataMap, ok := secret.Data["data"].(map[string]any)
-	if !ok {
+	if dataMap == nil {
 		return "", "", ErrAgentSecretNotFound
 	}
 	clientID, _ = dataMap["client_id"].(string)

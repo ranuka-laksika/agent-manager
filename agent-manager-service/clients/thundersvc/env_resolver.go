@@ -20,13 +20,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path"
 	"strings"
 	"sync"
+	"time"
 
 	vault "github.com/hashicorp/vault/api"
 	"golang.org/x/sync/singleflight"
 )
+
+// envThunderClientCacheTTL bounds how long a resolved ThunderClient is reused
+// before its system-client secret is re-read from OpenBao. Without this, a
+// rotated env-Thunder secret (e.g. a re-bootstrap) would break provisioning
+// for that environment until the AMS process restarts.
+const envThunderClientCacheTTL = 15 * time.Minute
 
 // ErrThunderNotProvisioned is returned when no env-Thunder system-client secret
 // exists for the given organization/environment — i.e. add-environment-thunder.sh
@@ -73,10 +79,17 @@ type envThunderResolver struct {
 	reader         openBaoReader
 	openBaoPath    string
 	resolveBaseURL resolveBaseURLFunc
+	ttl            time.Duration
+	now            func() time.Time
 
 	mu    sync.RWMutex
-	cache map[string]ThunderClient // keyed by "org/env"
-	sfg   singleflight.Group       // dedupes concurrent cache-miss resolves per key
+	cache map[string]cachedThunderClient // keyed by "org/env"
+	sfg   singleflight.Group             // dedupes concurrent cache-miss resolves per key
+}
+
+type cachedThunderClient struct {
+	client   ThunderClient
+	cachedAt time.Time
 }
 
 // NewEnvThunderResolver creates an EnvThunderResolver backed by a real OpenBao
@@ -85,14 +98,11 @@ func NewEnvThunderResolver(openBaoURL, openBaoToken, openBaoPath string) (EnvThu
 	if err := validateOpenBaoConfig(openBaoURL, openBaoToken, openBaoPath); err != nil {
 		return nil, err
 	}
-	cfg := vault.DefaultConfig()
-	cfg.Address = openBaoURL
-	client, err := vault.NewClient(cfg)
+	logical, err := newOpenBaoLogical(openBaoURL, openBaoToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create OpenBao client: %w", err)
+		return nil, err
 	}
-	client.SetToken(openBaoToken)
-	return newEnvThunderResolverWithReader(client.Logical(), openBaoPath, ResolveThunderBaseURL), nil
+	return newEnvThunderResolverWithReader(logical, openBaoPath, ResolveThunderBaseURL), nil
 }
 
 // newEnvThunderResolverWithReader builds a resolver against an injected reader —
@@ -103,16 +113,20 @@ func newEnvThunderResolverWithReader(reader openBaoReader, openBaoPath string, r
 		reader:         reader,
 		openBaoPath:    openBaoPath,
 		resolveBaseURL: resolveBaseURL,
-		cache:          make(map[string]ThunderClient),
+		ttl:            envThunderClientCacheTTL,
+		now:            time.Now,
+		cache:          make(map[string]cachedThunderClient),
 	}
 }
 
 // Resolve returns a ThunderClient authenticated against the given environment's
-// Thunder instance. Resolved clients are cached per (org, env): the underlying
-// ThunderClient already caches its own system token, so caching the client itself
-// avoids re-reading OpenBao on every call.
+// Thunder instance. Resolved clients are cached per (org, env) for
+// envThunderClientCacheTTL: the underlying ThunderClient already caches its
+// own system token, so caching the client itself avoids re-reading OpenBao on
+// every call, while the TTL still picks up a rotated system-client secret
+// without requiring a process restart.
 func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error) {
-	// Reject path-breaking segments before they ever reach path.Join below.
+	// Reject path-breaking segments before they ever reach readOpenBaoKVv2Data's path.Join.
 	for _, seg := range []string{orgName, envName} {
 		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "/") {
 			return nil, fmt.Errorf("invalid org or environment name segment %q", seg)
@@ -122,9 +136,9 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 	cacheKey := orgName + "/" + envName
 
 	r.mu.RLock()
-	if client, ok := r.cache[cacheKey]; ok {
+	if entry, ok := r.cache[cacheKey]; ok && r.now().Sub(entry.cachedAt) < r.ttl {
 		r.mu.RUnlock()
-		return client, nil
+		return entry.client, nil
 	}
 	r.mu.RUnlock()
 
@@ -132,22 +146,17 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 	// OpenBao read and base-URL probe instead of each paying the cost independently.
 	result, err, _ := r.sfg.Do(cacheKey, func() (any, error) {
 		r.mu.RLock()
-		if client, ok := r.cache[cacheKey]; ok {
+		if entry, ok := r.cache[cacheKey]; ok && r.now().Sub(entry.cachedAt) < r.ttl {
 			r.mu.RUnlock()
-			return client, nil
+			return entry.client, nil
 		}
 		r.mu.RUnlock()
 
-		secretPath := path.Join(r.openBaoPath, "data", "thunder-system-clients", orgName, envName)
-		secret, err := r.reader.ReadWithContext(ctx, secretPath)
+		dataMap, err := readOpenBaoKVv2Data(ctx, r.reader, r.openBaoPath, "thunder-system-clients", orgName, envName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
 		}
-		if secret == nil || secret.Data == nil {
-			return nil, ErrThunderNotProvisioned
-		}
-		dataMap, ok := secret.Data["data"].(map[string]any)
-		if !ok {
+		if dataMap == nil {
 			return nil, ErrThunderNotProvisioned
 		}
 		clientSecret, _ := dataMap[thunderSystemClientSecretKey].(string)
@@ -162,7 +171,7 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 		client := newThunderClientWithDialOverride(baseURL, thunderSystemClientID, clientSecret, resolveToHost)
 
 		r.mu.Lock()
-		r.cache[cacheKey] = client
+		r.cache[cacheKey] = cachedThunderClient{client: client, cachedAt: r.now()}
 		r.mu.Unlock()
 
 		return client, nil

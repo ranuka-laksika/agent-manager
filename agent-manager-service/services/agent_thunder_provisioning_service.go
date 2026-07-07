@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -35,23 +37,22 @@ import (
 // binding is marked FAILED.
 const maxProvisionAttempts = 5
 
-// provisionBackoffSchedule maps "attempts made so far" to the delay before the
-// next attempt — a flat 3 minutes for every retry (no escalation to longer
-// delays; a real outage is retried just as promptly on attempt 4 as attempt
-// 1, since env-Thunder recovering doesn't get less likely over time). Four
-// retries at 3 minutes apart means the 5th and final attempt starts at most
-// 12 minutes after the first, so the whole retry budget for one binding
-// resolves — success or FAILED — within the 15-minute SLA. Index 0 is unused
-// (there is no "0 attempts made" retry); the last entry is reused for any
-// attempt count beyond it, though maxProvisionAttempts stops that from
-// actually happening.
-var provisionBackoffSchedule = []time.Duration{
-	0, // unused
-	3 * time.Minute,
-	3 * time.Minute,
-	3 * time.Minute,
-	3 * time.Minute,
-}
+// writeAheadUpsertAttempts/writeAheadUpsertRetryDelay cover a momentary DB
+// blip on the write-ahead insert itself — there is no row for the reconciler
+// to find and retry later if this insert never lands.
+const (
+	writeAheadUpsertAttempts   = 3
+	writeAheadUpsertRetryDelay = 100 * time.Millisecond
+)
+
+// provisionRetryDelay is the flat delay before every retry (no escalation to
+// longer delays; a real outage is retried just as promptly on attempt 4 as
+// attempt 1, since env-Thunder recovering doesn't get less likely over
+// time). maxProvisionAttempts-1 retries at this interval means the final
+// attempt starts at most (maxProvisionAttempts-1)*provisionRetryDelay after
+// the first, so the whole retry budget for one binding resolves — success or
+// FAILED — within the 15-minute SLA.
+const provisionRetryDelay = 3 * time.Minute
 
 // AgentThunderProvisioningService orchestrates AgentID provisioning: creating,
 // regenerating, revoking, and deleting Thunder identities per agent per
@@ -155,26 +156,42 @@ func NewAgentThunderProvisioningService(
 // process, so two concurrent rotations for the same binding can't interleave
 // their Thunder call and OpenBao write and leave the stored secret mismatched
 // with what Thunder actually considers active. In-process only — it does not
-// protect across multiple replicas of this service.
+// protect across multiple replicas of this service. Entries are refcounted
+// and removed once the last waiter releases, so the map doesn't grow
+// unbounded with every binding ever rotated over a long-lived process.
 type keyedMutex struct {
 	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	locks map[string]*refCountedMutex
+}
+
+type refCountedMutex struct {
+	mu   sync.Mutex
+	refs int
 }
 
 func (m *keyedMutex) Lock(key string) func() {
 	m.mu.Lock()
 	if m.locks == nil {
-		m.locks = make(map[string]*sync.Mutex)
+		m.locks = make(map[string]*refCountedMutex)
 	}
 	l, ok := m.locks[key]
 	if !ok {
-		l = &sync.Mutex{}
+		l = &refCountedMutex{}
 		m.locks[key] = l
 	}
+	l.refs++
 	m.mu.Unlock()
 
-	l.Lock()
-	return l.Unlock
+	l.mu.Lock()
+	return func() {
+		l.mu.Unlock()
+		m.mu.Lock()
+		l.refs--
+		if l.refs == 0 {
+			delete(m.locks, key)
+		}
+		m.mu.Unlock()
+	}
 }
 
 func bindingLockKey(orgName, projectName, agentName, envName string) string {
@@ -195,8 +212,18 @@ func (s *agentThunderProvisioningService) ProvisionForAgent(
 			Status:           models.AgentThunderStatusPending,
 			RequestedBy:      requestedBy,
 		}
-		if err := s.repo.Upsert(ctx, &b); err != nil {
-			s.logger.Error("Failed to write-ahead agent thunder binding", "agentName", agentName, "env", env, "error", err)
+		// Retry a few times before giving up: this row is the ONLY thing the
+		// reconciler can later find and heal, so a momentary DB blip here must
+		// not permanently drop the environment with no path to provisioning.
+		var err error
+		for attempt := 0; attempt < writeAheadUpsertAttempts; attempt++ {
+			if err = s.repo.Upsert(ctx, &b); err == nil {
+				break
+			}
+			time.Sleep(writeAheadUpsertRetryDelay)
+		}
+		if err != nil {
+			s.logger.Error("Failed to write-ahead agent thunder binding after retries", "agentName", agentName, "env", env, "error", err)
 			continue
 		}
 		bindings = append(bindings, b)
@@ -230,6 +257,18 @@ func (s *agentThunderProvisioningService) ProvisionForEnvironmentIfMissing(
 }
 
 func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, binding models.AgentThunderClient) {
+	// A panic here (e.g. AgentThunderAppName's on an invalid slug) would
+	// otherwise crash the whole process — this runs on a detached goroutine
+	// or the reconciler's per-binding goroutine, never the request path.
+	// Recovering isolates it to just this one binding.
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.Error("Recovered from panic during agent thunder provisioning attempt",
+				"bindingID", binding.ID, "agentName", binding.AgentName, "envName", binding.EnvironmentName, "panic", r)
+			s.recordFailure(ctx, binding, "", "", fmt.Errorf("panic during provisioning attempt: %v", r))
+		}
+	}()
+
 	// Atomically claim the binding before doing anything else: the inline
 	// fast-path goroutine (ProvisionForAgent) and the reconciler's sweep can
 	// both land on the same freshly-written binding within the same ~60s
@@ -316,38 +355,42 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 
 	if err := s.repo.UpdateAfterAttempt(ctx, binding.ID, repositories.AgentThunderAttemptUpdate{
 		Status:          models.AgentThunderStatusCompleted,
-		ThunderAgentID:  thunderAgentID,
-		ThunderClientID: clientID,
-		SecretRefPath:   secretRefPath,
+		ThunderAgentID:  &thunderAgentID,
+		ThunderClientID: &clientID,
+		SecretRefPath:   &secretRefPath,
 	}); err != nil {
 		s.logger.Error("Failed to record successful agent thunder provisioning", "bindingID", binding.ID, "error", err)
 	}
 }
 
-// recordFailure classifies cause as permanent or transient and updates the
-// binding accordingly. ErrThunderNotProvisioned is the one permanent case this
-// phase recognizes (Section 6.4) — everything else is retried up to
-// maxProvisionAttempts times before being marked FAILED. resolvedAgentID/
-// resolvedClientID carry through a Thunder identity that was already created
-// before a LATER step in this same attempt failed (e.g. secret storage) —
-// passing "" for either is correct when nothing was resolved yet.
-// UpdateAfterAttempt only writes a non-empty field, so this never clobbers an
+// recordFailure retries cause up to maxProvisionAttempts times before marking
+// the binding FAILED. ErrThunderNotProvisioned is treated the same as any
+// other failure, not as an immediate permanent one — the environment may just
+// be mid-bootstrap (add-environment-thunder.sh still running), a window the
+// existing retry budget already covers. resolvedAgentID/resolvedClientID
+// carry through a Thunder identity that was already created before a LATER
+// step in this same attempt failed (e.g. secret storage) — passing "" for
+// either means nothing was resolved yet, so the update leaves the
+// corresponding field nil (unchanged) rather than clobbering an
 // already-stored value with a blank one.
 func (s *agentThunderProvisioningService) recordFailure(ctx context.Context, binding models.AgentThunderClient, resolvedAgentID, resolvedClientID string, cause error) {
 	attemptsSoFar := binding.AttemptCount + 1
-	permanent := errors.Is(cause, thundersvc.ErrThunderNotProvisioned)
 	exhausted := attemptsSoFar >= maxProvisionAttempts
 
 	update := repositories.AgentThunderAttemptUpdate{
-		LastError:       cause.Error(),
-		ThunderAgentID:  resolvedAgentID,
-		ThunderClientID: resolvedClientID,
+		LastError: cause.Error(),
 	}
-	if permanent || exhausted {
+	if resolvedAgentID != "" {
+		update.ThunderAgentID = &resolvedAgentID
+	}
+	if resolvedClientID != "" {
+		update.ThunderClientID = &resolvedClientID
+	}
+	if exhausted {
 		update.Status = models.AgentThunderStatusFailed
 	} else {
 		update.Status = models.AgentThunderStatusPending
-		next := time.Now().Add(provisionBackoffSchedule[attemptsSoFar])
+		next := time.Now().Add(provisionRetryDelay)
 		update.NextRetryAt = &next
 	}
 
@@ -543,6 +586,22 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		return
 	}
 
+	// Delete the rows right after snapshotting them, by ID — before the slow
+	// per-environment Thunder cleanup below, not after. Upsert's OnConflict
+	// DoNothing means a same-named agent recreated while an old row is still
+	// present silently gets no fresh row at all, not just a wiped one — doing
+	// this late (or by agent name instead of ID) leaves that window open for
+	// as long as the Thunder calls below take. A crash between here and the
+	// Thunder cleanup can orphan a Thunder identity, an accepted, harmless
+	// tradeoff already made elsewhere in this file.
+	ids := make([]uuid.UUID, 0, len(bindings))
+	for _, b := range bindings {
+		ids = append(ids, b.ID)
+	}
+	if err := s.repo.DeleteByIDs(ctx, ids); err != nil {
+		s.logger.Error("Failed to delete agent thunder client rows", "agentName", agentName, "error", err)
+	}
+
 	for _, b := range bindings {
 		if b.ThunderAgentID == "" {
 			continue // never made it to Thunder — nothing to delete there
@@ -560,9 +619,5 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 				s.logger.Warn("Failed to delete stored agent secret", "agentName", agentName, "env", b.EnvironmentName, "error", err)
 			}
 		}
-	}
-
-	if err := s.repo.DeleteByAgent(ctx, orgName, projectName, agentName); err != nil {
-		s.logger.Error("Failed to delete agent thunder client rows", "agentName", agentName, "error", err)
 	}
 }

@@ -85,19 +85,24 @@ type AgentThunderClientRepository interface {
 	// over and make a *different*, never-yet-seen secret look already-claimed).
 	ClearClaim(ctx context.Context, id uuid.UUID) error
 
-	// DeleteByAgent removes every binding for the given agent (used when the agent
-	// itself is deleted).
+	// DeleteByAgent removes every binding for the given agent. Test-cleanup use
+	// only — production deletion goes through DeleteByIDs so a concurrent
+	// recreate of the same agent name can't have its fresh rows swept up too.
 	DeleteByAgent(ctx context.Context, orgName, projectName, agentName string) error
+
+	// DeleteByIDs removes exactly the given binding rows. No-op if ids is empty.
+	DeleteByIDs(ctx context.Context, ids []uuid.UUID) error
 }
 
 // AgentThunderAttemptUpdate carries the fields written after one provisioning
-// attempt. ThunderAgentID/ThunderClientID/SecretRefPath are left as supplied
-// (zero value keeps the existing stored value from being clobbered on failure).
+// attempt. ThunderAgentID/ThunderClientID/SecretRefPath are pointers so
+// "leave the stored value alone" (nil) is explicit and distinct from
+// "overwrite it with an empty string" (a non-nil pointer to "").
 type AgentThunderAttemptUpdate struct {
 	Status          models.AgentThunderStatus
-	ThunderAgentID  string
-	ThunderClientID string
-	SecretRefPath   string
+	ThunderAgentID  *string
+	ThunderClientID *string
+	SecretRefPath   *string
 	LastError       string
 	NextRetryAt     *time.Time
 }
@@ -202,14 +207,14 @@ func (r *AgentThunderClientRepo) UpdateAfterAttempt(ctx context.Context, id uuid
 		"attempt_count":     gorm.Expr("attempt_count + 1"),
 		"updated_at":        clause.Expr{SQL: "NOW()"},
 	}
-	if f.ThunderAgentID != "" {
-		updates["thunder_agent_id"] = f.ThunderAgentID
+	if f.ThunderAgentID != nil {
+		updates["thunder_agent_id"] = *f.ThunderAgentID
 	}
-	if f.ThunderClientID != "" {
-		updates["thunder_client_id"] = f.ThunderClientID
+	if f.ThunderClientID != nil {
+		updates["thunder_client_id"] = *f.ThunderClientID
 	}
-	if f.SecretRefPath != "" {
-		updates["secret_ref_path"] = f.SecretRefPath
+	if f.SecretRefPath != nil {
+		updates["secret_ref_path"] = *f.SecretRefPath
 	}
 	if err := r.db.WithContext(ctx).Model(&models.AgentThunderClient{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return fmt.Errorf("update agent thunder client after attempt: %w", err)
@@ -250,6 +255,16 @@ func (r *AgentThunderClientRepo) DeleteByAgent(ctx context.Context, orgName, pro
 	if err := r.db.WithContext(ctx).Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
 		Delete(&models.AgentThunderClient{}).Error; err != nil {
 		return fmt.Errorf("delete agent thunder clients by agent: %w", err)
+	}
+	return nil
+}
+
+func (r *AgentThunderClientRepo) DeleteByIDs(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Delete(&models.AgentThunderClient{}).Error; err != nil {
+		return fmt.Errorf("delete agent thunder clients by ids: %w", err)
 	}
 	return nil
 }

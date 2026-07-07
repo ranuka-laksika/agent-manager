@@ -120,52 +120,7 @@ func (c *thunderClient) CreateAgentIdentity(ctx context.Context, ouID, name, own
 // findAgentByName looks up an existing agent by exact name match, paginating
 // through /agents. Returns empty strings if no agent with that name exists.
 func (c *thunderClient) findAgentByName(ctx context.Context, token, name string) (thunderAgentID, clientID string, err error) {
-	const (
-		pageSize = 100
-		maxPages = 100
-	)
-	for page := 0; page < maxPages; page++ {
-		offset := page * pageSize
-		reqURL := fmt.Sprintf("%s/agents?offset=%d&limit=%d", c.baseURL, offset, pageSize)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
-		if err != nil {
-			return "", "", err
-		}
-		req.Header.Set("Authorization", "Bearer "+token)
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return "", "", fmt.Errorf("thunder list agents: %w", err)
-		}
-		body, readErr := io.ReadAll(resp.Body)
-		_ = resp.Body.Close()
-		if readErr != nil {
-			return "", "", fmt.Errorf("thunder list agents read body: %w", readErr)
-		}
-		if resp.StatusCode != http.StatusOK {
-			return "", "", fmt.Errorf("thunder list agents returned %d: %s", resp.StatusCode, string(body))
-		}
-
-		var page struct {
-			Agents []struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				ClientID string `json:"clientId"`
-			} `json:"agents"`
-		}
-		if err := json.Unmarshal(body, &page); err != nil {
-			return "", "", fmt.Errorf("thunder list agents decode: %w", err)
-		}
-		for _, a := range page.Agents {
-			if a.Name == name {
-				return a.ID, a.ClientID, nil
-			}
-		}
-		if len(page.Agents) < pageSize {
-			return "", "", nil
-		}
-	}
-	return "", "", fmt.Errorf("thunder list agents exceeded %d pages looking for %s", maxPages, name)
+	return c.findResourceByName(ctx, token, "agents", name)
 }
 
 // RegenerateAgentSecret generates a new client secret and applies it to the
@@ -180,72 +135,13 @@ func (c *thunderClient) RegenerateAgentSecret(ctx context.Context, thunderAgentI
 		return "", fmt.Errorf("failed to get system token: %w", err)
 	}
 
-	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/agents/"+thunderAgentID, nil)
+	secret, err := c.regenerateResourceSecret(ctx, token, "agents", thunderAgentID)
 	if err != nil {
 		return "", err
-	}
-	getReq.Header.Set("Authorization", "Bearer "+token)
-
-	getResp, err := c.httpClient.Do(getReq)
-	if err != nil {
-		return "", fmt.Errorf("thunder get agent for secret regeneration: %w", err)
-	}
-	defer func() { _ = getResp.Body.Close() }()
-
-	getBody, _ := io.ReadAll(getResp.Body)
-	if getResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("thunder get agent returned %d: %s", getResp.StatusCode, string(getBody))
-	}
-
-	var agent map[string]any
-	if err := json.Unmarshal(getBody, &agent); err != nil {
-		return "", fmt.Errorf("thunder get agent decode: %w", err)
-	}
-
-	newSecret, err := generateRandomSecret()
-	if err != nil {
-		return "", fmt.Errorf("failed to generate client secret: %w", err)
-	}
-	if err := setInboundClientSecret(agent, newSecret); err != nil {
-		return "", fmt.Errorf("failed to set client secret in agent payload: %w", err)
-	}
-	delete(agent, "id") // Thunder expects id in the URL, not the body
-
-	putBody, _ := json.Marshal(agent)
-	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/agents/"+thunderAgentID, bytes.NewReader(putBody))
-	if err != nil {
-		return "", err
-	}
-	putReq.Header.Set("Authorization", "Bearer "+token)
-	putReq.Header.Set("Content-Type", "application/json")
-
-	putResp, err := c.httpClient.Do(putReq)
-	if err != nil {
-		return "", fmt.Errorf("thunder put agent for secret regeneration: %w", err)
-	}
-	defer func() { _ = putResp.Body.Close() }()
-
-	putRespBody, _ := io.ReadAll(putResp.Body)
-	if putResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("thunder put agent returned %d: %s", putResp.StatusCode, string(putRespBody))
-	}
-
-	var result struct {
-		InboundAuth []struct {
-			Config struct {
-				ClientSecret string `json:"clientSecret"`
-			} `json:"config"`
-		} `json:"inboundAuthConfig"`
-	}
-	if err := json.Unmarshal(putRespBody, &result); err != nil {
-		return "", fmt.Errorf("thunder put agent response decode: %w", err)
-	}
-	if len(result.InboundAuth) == 0 || result.InboundAuth[0].Config.ClientSecret == "" {
-		return "", fmt.Errorf("thunder put agent response missing clientSecret")
 	}
 
 	slog.Info("Thunder agent client secret regenerated", "thunderAgentID", thunderAgentID)
-	return result.InboundAuth[0].Config.ClientSecret, nil
+	return secret, nil
 }
 
 // DeleteAgentIdentity deletes the AgentID by its Thunder internal ID.
@@ -255,28 +151,7 @@ func (c *thunderClient) DeleteAgentIdentity(ctx context.Context, thunderAgentID 
 	if err != nil {
 		return false, fmt.Errorf("failed to get system token: %w", err)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/agents/"+thunderAgentID, nil)
-	if err != nil {
-		return false, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("thunder delete agent: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return false, fmt.Errorf("thunder delete agent returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	return true, nil
+	return c.deleteThunderResource(ctx, token, "agents", thunderAgentID)
 }
 
 // GetDefaultOUID returns the default organization unit ID from Thunder.

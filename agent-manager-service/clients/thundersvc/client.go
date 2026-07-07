@@ -319,68 +319,48 @@ func (c *thunderClient) RegenerateClientSecret(ctx context.Context, orgName stri
 	return c.regenerateSecret(ctx, token, internalID)
 }
 
-// regenerateSecret regenerates the client secret by fetching the app, generating a new
-// secret, and PUTting the full app payload back to Thunder with the updated secret.
+// regenerateSecret regenerates the client secret for a Thunder application.
 func (c *thunderClient) regenerateSecret(ctx context.Context, token, appID string) (string, error) {
-	// GET the existing app to get the full payload
-	getReq, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/applications/"+appID, nil)
+	secret, err := c.regenerateResourceSecret(ctx, token, "applications", appID)
 	if err != nil {
 		return "", err
 	}
-	getReq.Header.Set("Authorization", "Bearer "+token)
+	slog.Info("Thunder client secret regenerated", "appID", appID)
+	return secret, nil
+}
 
-	getResp, err := c.httpClient.Do(getReq)
+// regenerateResourceSecret regenerates the OAuth2 client secret for a Thunder
+// application or agent (resource is "applications" or "agents"): GET the
+// full payload, inject a new random secret, then PUT it back. Thunder's PUT
+// only auto-regenerates a secret when transitioning from a non-secret auth
+// method, which doesn't apply to an already-secret-based client_credentials
+// resource — so the new value is explicitly supplied.
+func (c *thunderClient) regenerateResourceSecret(ctx context.Context, token, resource, id string) (string, error) {
+	getBody, err := c.doRequest(ctx, http.MethodGet, c.baseURL+"/"+resource+"/"+id, token, nil)
 	if err != nil {
-		return "", fmt.Errorf("thunder get app for secret regeneration: %w", err)
-	}
-	defer func() { _ = getResp.Body.Close() }()
-
-	getBody, _ := io.ReadAll(getResp.Body)
-	if getResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("thunder get app returned %d: %s", getResp.StatusCode, string(getBody))
+		return "", fmt.Errorf("thunder get %s for secret regeneration: %w", resource, err)
 	}
 
 	// Decode into a generic map so we can inject the new secret without losing fields
-	var app map[string]any
-	if err := json.Unmarshal(getBody, &app); err != nil {
-		return "", fmt.Errorf("thunder get app decode: %w", err)
+	var item map[string]any
+	if err := json.Unmarshal(getBody, &item); err != nil {
+		return "", fmt.Errorf("thunder get %s decode: %w", resource, err)
 	}
 
-	// Generate a new random client secret
 	newSecret, err := generateRandomSecret()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate client secret: %w", err)
 	}
-
-	// Inject the new secret into inboundAuthConfig[0].config.clientSecret
-	if err := setInboundClientSecret(app, newSecret); err != nil {
-		return "", fmt.Errorf("failed to set client secret in app payload: %w", err)
+	if err := setInboundClientSecret(item, newSecret); err != nil {
+		return "", fmt.Errorf("failed to set client secret in %s payload: %w", resource, err)
 	}
+	delete(item, "id") // Thunder expects id in the URL, not the body
 
-	// Remove the top-level "id" field — Thunder expects it in the URL, not the body
-	delete(app, "id")
-
-	// PUT the updated app back
-	putBody, _ := json.Marshal(app)
-	putReq, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+"/applications/"+appID, bytes.NewReader(putBody))
+	putBody, err := c.doRequest(ctx, http.MethodPut, c.baseURL+"/"+resource+"/"+id, token, item)
 	if err != nil {
-		return "", err
-	}
-	putReq.Header.Set("Authorization", "Bearer "+token)
-	putReq.Header.Set("Content-Type", "application/json")
-
-	putResp, err := c.httpClient.Do(putReq)
-	if err != nil {
-		return "", fmt.Errorf("thunder put app for secret regeneration: %w", err)
-	}
-	defer func() { _ = putResp.Body.Close() }()
-
-	putRespBody, _ := io.ReadAll(putResp.Body)
-	if putResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("thunder put app returned %d: %s", putResp.StatusCode, string(putRespBody))
+		return "", fmt.Errorf("thunder put %s for secret regeneration: %w", resource, err)
 	}
 
-	// Verify the response contains the new secret
 	var result struct {
 		InboundAuth []struct {
 			Config struct {
@@ -388,15 +368,13 @@ func (c *thunderClient) regenerateSecret(ctx context.Context, token, appID strin
 			} `json:"config"`
 		} `json:"inboundAuthConfig"`
 	}
-	if err := json.Unmarshal(putRespBody, &result); err != nil {
-		return "", fmt.Errorf("thunder put app response decode: %w", err)
+	if err := json.Unmarshal(putBody, &result); err != nil {
+		return "", fmt.Errorf("thunder put %s response decode: %w", resource, err)
 	}
-
 	if len(result.InboundAuth) == 0 || result.InboundAuth[0].Config.ClientSecret == "" {
-		return "", fmt.Errorf("thunder put app response missing clientSecret")
+		return "", fmt.Errorf("thunder put %s response missing clientSecret", resource)
 	}
 
-	slog.Info("Thunder client secret regenerated", "appID", appID)
 	return result.InboundAuth[0].Config.ClientSecret, nil
 }
 
@@ -428,8 +406,9 @@ func generateRandomSecret() (string, error) {
 	return base64.URLEncoding.WithPadding(base64.NoPadding).EncodeToString(b), nil
 }
 
-// thunderApp represents the fields we need from a Thunder application response.
-type thunderApp struct {
+// thunderNamedResource represents the fields needed from one page of a
+// Thunder /applications or /agents list response.
+type thunderNamedResource struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	ClientID string `json:"clientId"`
@@ -437,90 +416,84 @@ type thunderApp struct {
 
 // findApp checks if a Thunder application with the given name exists.
 // Returns the internal ID and clientId of the matching app, or empty strings if not found.
-// Paginates through results since the API does not support filtering.
 func (c *thunderClient) findApp(ctx context.Context, token, appName string) (internalID, clientID string, err error) {
+	return c.findResourceByName(ctx, token, "applications", appName)
+}
+
+// findResourceByName checks if a Thunder application or agent (resource is
+// "applications" or "agents") with the given name exists, paginating through
+// results since the API does not support filtering. Returns the internal ID
+// and clientId of the matching resource, or empty strings if not found.
+func (c *thunderClient) findResourceByName(ctx context.Context, token, resource, name string) (internalID, clientID string, err error) {
 	const (
 		pageSize = 100
-		maxPages = 100 // safety cap: 10k apps max
+		maxPages = 100 // safety cap: 10k items max
 	)
 	for page := 0; page < maxPages; page++ {
 		offset := page * pageSize
-		apps, err := c.listAppsPage(ctx, token, offset, pageSize)
+		items, err := c.listResourcePage(ctx, token, resource, offset, pageSize)
 		if err != nil {
 			return "", "", err
 		}
-		for _, app := range apps {
-			if app.Name == appName {
-				return app.ID, app.ClientID, nil
+		for _, item := range items {
+			if item.Name == name {
+				return item.ID, item.ClientID, nil
 			}
 		}
-		if len(apps) < pageSize {
+		if len(items) < pageSize {
 			return "", "", nil
 		}
 	}
-	return "", "", fmt.Errorf("thunder list apps exceeded %d pages looking for %s", maxPages, appName)
+	return "", "", fmt.Errorf("thunder list %s exceeded %d pages looking for %s", resource, maxPages, name)
 }
 
-// listAppsPage fetches a single page of Thunder applications.
-func (c *thunderClient) listAppsPage(ctx context.Context, token string, offset, limit int) ([]thunderApp, error) {
-	reqURL := fmt.Sprintf("%s/applications?offset=%d&limit=%d", c.baseURL, offset, limit)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
+// listResourcePage fetches a single page of resource ("applications" or
+// "agents"), tolerating both a raw JSON array response and an object with a
+// same-named array field alongside other fields (e.g. {"agents": [...],
+// "totalResults": N, "count": N}) — only that one field is decoded, so
+// unrelated fields of a different shape don't break parsing.
+func (c *thunderClient) listResourcePage(ctx context.Context, token, resource string, offset, limit int) ([]thunderNamedResource, error) {
+	reqURL := fmt.Sprintf("%s/%s?offset=%d&limit=%d", c.baseURL, resource, offset, limit)
+	body, err := c.doRequest(ctx, http.MethodGet, reqURL, token, nil)
 	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("thunder list apps: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("thunder list apps returned %d: %s", resp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("thunder list apps read body: %w", err)
+		return nil, fmt.Errorf("thunder list %s: %w", resource, err)
 	}
 
 	// Try parsing as a direct array first
-	var apps []thunderApp
-	if err := json.Unmarshal(body, &apps); err != nil {
-		// Try parsing as wrapped object
-		var wrapped struct {
-			Applications []thunderApp `json:"applications"`
-		}
-		if err := json.Unmarshal(body, &wrapped); err != nil {
-			return nil, fmt.Errorf("thunder list apps decode: %w", err)
-		}
-		apps = wrapped.Applications
+	var items []thunderNamedResource
+	if err := json.Unmarshal(body, &items); err == nil {
+		return items, nil
 	}
-	return apps, nil
+	// Fall back to a wrapped object; only decode the resource-named field.
+	var wrapped map[string]json.RawMessage
+	if err := json.Unmarshal(body, &wrapped); err != nil {
+		return nil, fmt.Errorf("thunder list %s decode: %w", resource, err)
+	}
+	raw, ok := wrapped[resource]
+	if !ok {
+		return nil, nil
+	}
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("thunder list %s decode: %w", resource, err)
+	}
+	return items, nil
 }
 
 // deleteApp deletes a Thunder application by its internal ID.
 func (c *thunderClient) deleteApp(ctx context.Context, token, appID string) (bool, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.baseURL+"/applications/"+appID, nil)
-	if err != nil {
-		return false, err
-	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	return c.deleteThunderResource(ctx, token, "applications", appID)
+}
 
-	resp, err := c.httpClient.Do(req)
+// deleteThunderResource deletes a Thunder application or agent (resource is
+// "applications" or "agents") by its internal ID. Returns false (no error)
+// if it did not exist — deletion is idempotent.
+func (c *thunderClient) deleteThunderResource(ctx context.Context, token, resource, id string) (bool, error) {
+	_, err := c.doRequest(ctx, http.MethodDelete, c.baseURL+"/"+resource+"/"+id, token, nil)
 	if err != nil {
-		return false, fmt.Errorf("thunder delete app: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode == http.StatusNotFound {
-		return false, nil
-	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp.Body)
-		return false, fmt.Errorf("thunder delete app returned %d: %s", resp.StatusCode, string(body))
+		if IsNotFound(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("thunder delete %s: %w", resource, err)
 	}
 
 	return true, nil

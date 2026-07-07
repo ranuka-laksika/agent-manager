@@ -24,11 +24,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 func newTestAgentThunderClient(org, project, agent, env string) *models.AgentThunderClient {
@@ -176,8 +178,8 @@ func TestAgentThunderClientRepo_UpdateAfterAttempt_Success(t *testing.T) {
 
 	err = repo.UpdateAfterAttempt(context.Background(), got.ID, AgentThunderAttemptUpdate{
 		Status:          models.AgentThunderStatusCompleted,
-		ThunderAgentID:  "thunder-agent-uuid",
-		ThunderClientID: "client-id-123",
+		ThunderAgentID:  utils.StrAsStrPointer("thunder-agent-uuid"),
+		ThunderClientID: utils.StrAsStrPointer("client-id-123"),
 	})
 	require.NoError(t, err)
 
@@ -327,4 +329,39 @@ func TestAgentThunderClientRepo_DeleteByAgent(t *testing.T) {
 	rows, err := repo.FindByAgent(context.Background(), org, project, agent)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
+}
+
+// TestAgentThunderClientRepo_DeleteByIDs_IgnoresConcurrentRecreate reproduces
+// the exact race a blanket delete-by-agent-name is vulnerable to: a same-named
+// agent recreated (fresh row, different ID) while a background deletion for
+// the old generation is still snapshotted and in flight. Deleting by the
+// snapshotted IDs must remove only the old rows and leave the new one intact.
+func TestAgentThunderClientRepo_DeleteByIDs_IgnoresConcurrentRecreate(t *testing.T) {
+	repo := NewAgentThunderClientRepo(db.GetDB())
+	const org, project, agent = "test-org", "test-proj", "atc-delete-by-ids-agent"
+	cleanupAgentThunderClients(t, repo, org, project, agent)
+
+	old1 := newTestAgentThunderClient(org, project, agent, "dev")
+	require.NoError(t, repo.Upsert(context.Background(), old1))
+	old2 := newTestAgentThunderClient(org, project, agent, "prod")
+	require.NoError(t, repo.Upsert(context.Background(), old2))
+
+	// Simulates a background DeleteAllBindings snapshotting these two rows
+	// before doing the (slow) Thunder-side cleanup.
+	snapshotIDs := []uuid.UUID{old1.ID, old2.ID}
+
+	// Simulates the agent being recreated under the same name while that
+	// background cleanup is still in flight — a distinct environment so this
+	// Upsert lands as a genuinely new row rather than conflicting with old1's
+	// still-present "dev" row.
+	recreated := newTestAgentThunderClient(org, project, agent, "staging")
+	require.NoError(t, repo.Upsert(context.Background(), recreated))
+	require.NotEqual(t, uuid.Nil, recreated.ID)
+
+	require.NoError(t, repo.DeleteByIDs(context.Background(), snapshotIDs))
+
+	rows, err := repo.FindByAgent(context.Background(), org, project, agent)
+	require.NoError(t, err)
+	require.Len(t, rows, 1, "the recreated agent's fresh row must survive a delete scoped to the old snapshot")
+	assert.Equal(t, recreated.ID, rows[0].ID)
 }

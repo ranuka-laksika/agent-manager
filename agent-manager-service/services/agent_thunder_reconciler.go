@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/db"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 )
 
@@ -31,8 +32,9 @@ const (
 	// reconcilerLockID is a distinct PostgreSQL advisory lock ID from
 	// schedulerLockID (monitor_scheduler.go) — each background loop in this
 	// service needs its own ID so they don't block each other.
-	reconcilerLockID    = int64(739281457)
-	reconcilerBatchSize = 50
+	reconcilerLockID           = int64(739281457)
+	reconcilerBatchSize        = 50
+	reconcilerConcurrencyLimit = 10
 )
 
 // AgentThunderReconcilerService sweeps PENDING agent Thunder bindings whose
@@ -138,7 +140,22 @@ func (s *agentThunderReconcilerService) runCycle(ctx context.Context) {
 	if len(due) > 0 {
 		s.logger.Info("Retrying due agent thunder bindings", "count", len(due))
 	}
+	// Run attempts concurrently up to reconcilerConcurrencyLimit: ClaimForAttempt
+	// already makes each one safe and independent, so one slow/unreachable
+	// environment's bindings (each up to ~8s just in base-URL probing, see naming.go)
+	// can't serialize behind the rest of a up-to-reconcilerBatchSize batch and
+	// starve everything else's retry schedule. Semaphore limits concurrency to
+	// prevent DB connection pool starvation.
+	sem := make(chan struct{}, reconcilerConcurrencyLimit)
+	var wg sync.WaitGroup
 	for _, binding := range due {
-		s.provisioning.AttemptProvision(ctx, binding)
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(b models.AgentThunderClient) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			s.provisioning.AttemptProvision(ctx, b)
+		}(binding)
 	}
+	wg.Wait()
 }

@@ -28,6 +28,9 @@ import (
 //			DeleteByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) error {
 //				panic("mock out the DeleteByAgent method")
 //			},
+//			DeleteByIDsFunc: func(ctx context.Context, ids []uuid.UUID) error {
+//				panic("mock out the DeleteByIDs method")
+//			},
 //			FindByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error) {
 //				panic("mock out the FindByAgent method")
 //			},
@@ -64,6 +67,9 @@ type AgentThunderClientRepositoryMock struct {
 
 	// DeleteByAgentFunc mocks the DeleteByAgent method.
 	DeleteByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) error
+
+	// DeleteByIDsFunc mocks the DeleteByIDs method.
+	DeleteByIDsFunc func(ctx context.Context, ids []uuid.UUID) error
 
 	// FindByAgentFunc mocks the FindByAgent method.
 	FindByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentThunderClient, error)
@@ -112,6 +118,13 @@ type AgentThunderClientRepositoryMock struct {
 			ProjectName string
 			// AgentName is the agentName argument value.
 			AgentName string
+		}
+		// DeleteByIDs holds details about calls to the DeleteByIDs method.
+		DeleteByIDs []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Ids is the ids argument value.
+			Ids []uuid.UUID
 		}
 		// FindByAgent holds details about calls to the FindByAgent method.
 		FindByAgent []struct {
@@ -184,6 +197,7 @@ type AgentThunderClientRepositoryMock struct {
 	lockClaimForAttempt    sync.RWMutex
 	lockClearClaim         sync.RWMutex
 	lockDeleteByAgent      sync.RWMutex
+	lockDeleteByIDs        sync.RWMutex
 	lockFindByAgent        sync.RWMutex
 	lockFindDue            sync.RWMutex
 	lockGet                sync.RWMutex
@@ -306,6 +320,42 @@ func (mock *AgentThunderClientRepositoryMock) DeleteByAgentCalls() []struct {
 	mock.lockDeleteByAgent.RLock()
 	calls = mock.calls.DeleteByAgent
 	mock.lockDeleteByAgent.RUnlock()
+	return calls
+}
+
+// DeleteByIDs calls DeleteByIDsFunc.
+func (mock *AgentThunderClientRepositoryMock) DeleteByIDs(ctx context.Context, ids []uuid.UUID) error {
+	if mock.DeleteByIDsFunc == nil {
+		panic("AgentThunderClientRepositoryMock.DeleteByIDsFunc: method is nil but AgentThunderClientRepository.DeleteByIDs was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		Ids []uuid.UUID
+	}{
+		Ctx: ctx,
+		Ids: ids,
+	}
+	mock.lockDeleteByIDs.Lock()
+	mock.calls.DeleteByIDs = append(mock.calls.DeleteByIDs, callInfo)
+	mock.lockDeleteByIDs.Unlock()
+	return mock.DeleteByIDsFunc(ctx, ids)
+}
+
+// DeleteByIDsCalls gets all the calls that were made to DeleteByIDs.
+// Check the length with:
+//
+//	len(mockedAgentThunderClientRepository.DeleteByIDsCalls())
+func (mock *AgentThunderClientRepositoryMock) DeleteByIDsCalls() []struct {
+	Ctx context.Context
+	Ids []uuid.UUID
+} {
+	var calls []struct {
+		Ctx context.Context
+		Ids []uuid.UUID
+	}
+	mock.lockDeleteByIDs.RLock()
+	calls = mock.calls.DeleteByIDs
+	mock.lockDeleteByIDs.RUnlock()
 	return calls
 }
 

@@ -20,10 +20,13 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,9 +141,12 @@ func TestAgentThunderReconciler_RunCycle_RetriesDueBindings(t *testing.T) {
 	notYetDue.NextRetryAt = &future
 	require.NoError(t, repo.Upsert(ctx, notYetDue))
 
+	var mu sync.Mutex
 	var attempted []string
 	provisioning := &fakeProvisioningService{
 		attemptFunc: func(_ context.Context, b models.AgentThunderClient) {
+			mu.Lock()
+			defer mu.Unlock()
 			attempted = append(attempted, b.EnvironmentName)
 		},
 	}
@@ -148,8 +154,102 @@ func TestAgentThunderReconciler_RunCycle_RetriesDueBindings(t *testing.T) {
 
 	s.runCycle(ctx)
 
+	mu.Lock()
+	defer mu.Unlock()
 	assert.Contains(t, attempted, "dev")
 	assert.NotContains(t, attempted, "staging", "a binding whose next_retry_at is still in the future must not be retried early")
+}
+
+// TestAgentThunderReconciler_RunCycle_AttemptsRunConcurrently guards against a
+// slow or unreachable environment starving the rest of a batch: if attempts
+// ran sequentially, N bindings each blocking on the barrier below would
+// deadlock (each waits for all N to have started, but the (N+1)th can't start
+// until an earlier one returns). Only passes if every AttemptProvision call
+// starts before any of them returns.
+func TestAgentThunderReconciler_RunCycle_AttemptsRunConcurrently(t *testing.T) {
+	ctx := context.Background()
+	repo := repositories.NewAgentThunderClientRepo(db.GetDB())
+	const org, project, agent = "test-org", "test-proj", "reconciler-concurrency-agent"
+	t.Cleanup(func() { _ = repo.DeleteByAgent(ctx, org, project, agent) })
+
+	const n = 5
+	envs := []string{"env1", "env2", "env3", "env4", "env5"}
+	for _, env := range envs {
+		require.NoError(t, repo.Upsert(ctx, &models.AgentThunderClient{
+			OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
+			ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
+		}))
+	}
+
+	// Other due bindings may exist in the shared test DB from unrelated tests
+	// and would also call attemptFunc — only wait for OUR n known bindings to
+	// arrive, not an exact total, so a stray extra can't deadlock this barrier.
+	var mine atomic.Int32
+	provisioning := &fakeProvisioningService{
+		attemptFunc: func(_ context.Context, b models.AgentThunderClient) {
+			if b.OrgName == org && b.ProjectName == project && b.AgentName == agent {
+				mine.Add(1)
+			}
+			for mine.Load() < n {
+				time.Sleep(time.Millisecond)
+			}
+		},
+	}
+	s := &agentThunderReconcilerService{provisioning: provisioning, repo: repo, logger: slog.Default(), stopCh: make(chan struct{})}
+
+	done := make(chan struct{})
+	go func() {
+		s.runCycle(ctx)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("runCycle did not complete — attempts are not running concurrently")
+	}
+}
+// TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped verifies that reconciler concurrency
+// is strictly limited to reconcilerConcurrencyLimit (10) even when a large number of
+// bindings (e.g. 15) are due to be reconciled.
+func TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped(t *testing.T) {
+	ctx := context.Background()
+	repo := repositories.NewAgentThunderClientRepo(db.GetDB())
+	const org, project, agent = "test-org", "test-proj", "reconciler-cap-concurrency-agent"
+	t.Cleanup(func() { _ = repo.DeleteByAgent(ctx, org, project, agent) })
+
+	const totalBindings = 15
+	for i := range totalBindings {
+		env := fmt.Sprintf("env-%d", i)
+		require.NoError(t, repo.Upsert(ctx, &models.AgentThunderClient{
+			OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
+			ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
+		}))
+	}
+
+	var active int32
+	var maxObservedActive int32
+	provisioning := &fakeProvisioningService{
+		attemptFunc: func(_ context.Context, b models.AgentThunderClient) {
+			if b.OrgName == org && b.ProjectName == project && b.AgentName == agent {
+				n := atomic.AddInt32(&active, 1)
+				for {
+					max := atomic.LoadInt32(&maxObservedActive)
+					if n <= max || atomic.CompareAndSwapInt32(&maxObservedActive, max, n) {
+						break
+					}
+				}
+				time.Sleep(50 * time.Millisecond)
+				atomic.AddInt32(&active, -1)
+			}
+		},
+	}
+	s := &agentThunderReconcilerService{provisioning: provisioning, repo: repo, logger: slog.Default(), stopCh: make(chan struct{})}
+
+	s.runCycle(ctx)
+
+	assert.EqualValues(t, reconcilerConcurrencyLimit, atomic.LoadInt32(&maxObservedActive),
+		"reconciler concurrency must be capped exactly to the reconcilerConcurrencyLimit")
 }
 
 // fakeProvisioningService is a minimal hand-written test double for

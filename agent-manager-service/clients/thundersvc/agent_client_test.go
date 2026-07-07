@@ -220,7 +220,7 @@ func TestRegenerateAgentSecret_NotFound(t *testing.T) {
 	c := NewThunderClient(srv.URL, "sys-client", "sys-secret")
 	_, err := c.RegenerateAgentSecret(context.Background(), "missing-agent-id")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "404")
+	assert.True(t, IsNotFound(err), "a 404 on the underlying GET must surface as a typed not-found error")
 }
 
 func TestDeleteAgentIdentity_Success(t *testing.T) {

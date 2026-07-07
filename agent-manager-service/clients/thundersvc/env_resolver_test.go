@@ -119,6 +119,42 @@ func TestEnvThunderResolver_Resolve_Caches(t *testing.T) {
 	assert.Equal(t, 1, calls, "the OpenBao secret must only be fetched once per org/env")
 }
 
+// TestEnvThunderResolver_Resolve_ExpiresAfterTTL guards against a cached
+// ThunderClient (and the system-client secret baked into it) surviving
+// forever: if that secret is ever rotated (e.g. a re-bootstrap), every call
+// against a never-expiring cache would keep authenticating with the stale
+// secret until the AMS process restarts.
+func TestEnvThunderResolver_Resolve_ExpiresAfterTTL(t *testing.T) {
+	calls := 0
+	reader := &fakeOpenBaoReader{
+		ReadWithContextFunc: func(_ context.Context, _ string) (*vault.Secret, error) {
+			calls++
+			return &vault.Secret{
+				Data: map[string]any{"data": map[string]any{"client-secret": "s3cr3t"}},
+			}, nil
+		},
+	}
+	resolver := newEnvThunderResolverWithReader(reader, "secret", fakeResolveBaseURL)
+	now := time.Now()
+	resolver.now = func() time.Time { return now }
+	resolver.ttl = time.Minute
+
+	c1, err := resolver.Resolve(context.Background(), "acme", "staging")
+	require.NoError(t, err)
+
+	now = now.Add(30 * time.Second)
+	c2, err := resolver.Resolve(context.Background(), "acme", "staging")
+	require.NoError(t, err)
+	assert.Same(t, c1, c2, "still within TTL, must not rebuild")
+	assert.Equal(t, 1, calls)
+
+	now = now.Add(time.Minute)
+	c3, err := resolver.Resolve(context.Background(), "acme", "staging")
+	require.NoError(t, err)
+	assert.NotSame(t, c1, c3, "past TTL, must re-read OpenBao and rebuild so a rotated secret takes effect")
+	assert.Equal(t, 2, calls)
+}
+
 // TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight guards
 // against a thundering-herd on cold cache: many concurrent first-time Resolve calls
 // for the same org/env must share one OpenBao read and one base-URL probe, not each
