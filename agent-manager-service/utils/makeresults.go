@@ -127,6 +127,12 @@ func convertToConfigurations(configs *models.Configurations) *spec.Configuration
 		EnableApiKeySecurity:      configs.EnableApiKeySecurity,
 		EnableOAuthSecurity:       configs.EnableOAuthSecurity,
 	}
+	// Surface the pinned AMP instrumentation version on reads so the deploy/promote
+	// UI shows the currently-applied version instead of falling back to the platform
+	// default. Left unset (omitted) when the agent has no pin.
+	if configs.InstrumentationVersion != nil {
+		result.InstrumentationVersion.Set(configs.InstrumentationVersion)
+	}
 	if configs.CorsConfig != nil {
 		corsConfig := spec.CORSConfig{
 			Enabled:          configs.CorsConfig.Enabled,
