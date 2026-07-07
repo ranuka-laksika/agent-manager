@@ -1,4 +1,4 @@
-.PHONY: help build docker-load-k3d
+.PHONY: help build docker-load-k3d lock
 
 # Variables
 TAG ?= dev-python3.11
@@ -22,3 +22,6 @@ build: ## Build Docker image
 docker-load-k3d: build ## Build and load image into k3d cluster
 	@echo "Loading $(DOCKER_IMAGE) into k3d cluster $(K3D_CLUSTER_NAME)..."
 	@k3d image import $(DOCKER_IMAGE) --cluster $(K3D_CLUSTER_NAME)
+
+lock: ## Regenerate per-(traceloop x python) dependency locks from release-config.json
+	@bash scripts/gen-locks.sh
