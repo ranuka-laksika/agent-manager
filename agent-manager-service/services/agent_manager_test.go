@@ -17,11 +17,13 @@
 package services
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
+	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
@@ -141,4 +143,131 @@ func TestValidateEffectivePair_NoPythonIsNoOp(t *testing.T) {
 	if err := s.validateEffectivePythonInstrumentationPair("", nil); err != nil {
 		t.Errorf("empty python should be a no-op: %v", err)
 	}
+}
+
+func TestNormalizePythonMinor(t *testing.T) {
+	cases := map[string]string{
+		"3.11":     "3.11",
+		"3.11.4":   "3.11",
+		"3.11.x":   "3.11",
+		"  3.11  ": "3.11",
+		"3":        "",
+		"":         "",
+		"   ":      "",
+	}
+	for in, want := range cases {
+		if got := normalizePythonMinor(in); got != want {
+			t.Errorf("normalizePythonMinor(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestResolveInstrumentationImageOverride(t *testing.T) {
+	instrumentation.SetCatalog(instrumentation.NewForTest(
+		[]instrumentation.Version{
+			{Version: "0.2.1", PythonVersions: []string{"3.10", "3.11"}, ImageRepository: "x"},
+			{Version: "0.4.0", PythonVersions: []string{"3.12", "3.13"}, ImageRepository: "x"},
+		},
+		"0.2.1",
+	))
+	strPtr := func(s string) *string { return &s }
+	s := &agentManagerService{logger: discardLogger()}
+
+	t.Run("non-python echoes existing pin, no image", func(t *testing.T) {
+		version, image, err := s.resolveInstrumentationImageOverride(false, "3.11", strPtr("0.4.0"), strPtr("0.2.1"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version == nil || *version != "0.2.1" {
+			t.Errorf("version = %v, want existing 0.2.1", version)
+		}
+		if image != "" {
+			t.Errorf("image = %q, want empty for non-python", image)
+		}
+	})
+
+	t.Run("request override validates and wins", func(t *testing.T) {
+		version, image, err := s.resolveInstrumentationImageOverride(true, "3.11", strPtr("0.2.1"), strPtr("0.4.0"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version == nil || *version != "0.2.1" {
+			t.Errorf("version = %v, want requested 0.2.1", version)
+		}
+		if !strings.HasSuffix(image, "0.2.1-python3.11") {
+			t.Errorf("image = %q, want suffix 0.2.1-python3.11", image)
+		}
+	})
+
+	t.Run("unknown request version is rejected", func(t *testing.T) {
+		_, _, err := s.resolveInstrumentationImageOverride(true, "3.11", strPtr("9.9.9"), nil)
+		if !errors.Is(err, utils.ErrInvalidInput) {
+			t.Fatalf("err = %v, want ErrInvalidInput", err)
+		}
+	})
+
+	t.Run("python-incompatible request version is rejected", func(t *testing.T) {
+		// 0.4.0 supports 3.12/3.13, not 3.11.
+		_, _, err := s.resolveInstrumentationImageOverride(true, "3.11", strPtr("0.4.0"), nil)
+		if !errors.Is(err, utils.ErrInvalidInput) {
+			t.Fatalf("err = %v, want ErrInvalidInput", err)
+		}
+	})
+
+	t.Run("no request preserves existing pin as image", func(t *testing.T) {
+		version, image, err := s.resolveInstrumentationImageOverride(true, "3.11", nil, strPtr("0.2.1"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version == nil || *version != "0.2.1" {
+			t.Errorf("version = %v, want preserved 0.2.1", version)
+		}
+		if !strings.HasSuffix(image, "0.2.1-python3.11") {
+			t.Errorf("image = %q, want suffix 0.2.1-python3.11", image)
+		}
+	})
+
+	t.Run("no request and no existing pin yields no override", func(t *testing.T) {
+		version, image, err := s.resolveInstrumentationImageOverride(true, "3.11", nil, nil)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version != nil {
+			t.Errorf("version = %v, want nil", version)
+		}
+		if image != "" {
+			t.Errorf("image = %q, want empty", image)
+		}
+	})
+
+	t.Run("existing pin incompatible with current python keeps version but skips image", func(t *testing.T) {
+		// Pin 0.2.1 supports 3.10/3.11; the agent's Python is now 3.13. Building
+		// the image would yield a nonexistent 0.2.1-python3.13 tag, so the
+		// override is skipped (empty image) while the DB version is preserved.
+		version, image, err := s.resolveInstrumentationImageOverride(true, "3.13", nil, strPtr("0.2.1"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version == nil || *version != "0.2.1" {
+			t.Errorf("version = %v, want preserved 0.2.1", version)
+		}
+		if image != "" {
+			t.Errorf("image = %q, want empty (incompatible pin, component default kept)", image)
+		}
+	})
+
+	t.Run("existing pin with unparseable python keeps component default", func(t *testing.T) {
+		// No request override + bad language version: don't fail the redeploy,
+		// just skip the per-env image override.
+		version, image, err := s.resolveInstrumentationImageOverride(true, "notaversion", nil, strPtr("0.2.1"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if version == nil || *version != "0.2.1" {
+			t.Errorf("version = %v, want preserved 0.2.1", version)
+		}
+		if image != "" {
+			t.Errorf("image = %q, want empty (component default kept)", image)
+		}
+	})
 }

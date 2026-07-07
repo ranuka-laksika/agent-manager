@@ -43,6 +43,9 @@ spec:
           type: string
           default: "true"
           description: "Flag to enable or disable tracing of content for this environment"
+        instrumentationImage:
+          type: string
+          description: "Per-environment override for the OTEL instrumentation init-container image (pins the AMP instrumentation version). Falls back to the component-level parameters.instrumentationImage when unset."
 
   # Patches to modify the Deployment resource.
   # AMP_OTEL_ENDPOINT and AMP_AGENT_API_KEY are always injected by
@@ -61,7 +64,7 @@ spec:
           path: /spec/template/spec/initContainers/-
           value:
             name: setup-instrumentation
-            image: ${parameters.instrumentationImage}
+            image: "${has(environmentConfigs.instrumentationImage) ? environmentConfigs.instrumentationImage : parameters.instrumentationImage}"
             imagePullPolicy: IfNotPresent
             volumeMounts:
               - name: ${parameters.sdkVolumeName}
