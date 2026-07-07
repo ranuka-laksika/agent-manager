@@ -37,28 +37,7 @@ import { useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
 import type { Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
-
-function isolationTierLabel(tier?: string): string {
-  switch (tier) {
-    case "gvisor":
-      return "gVisor";
-    case "kata":
-      return "Kata";
-    default:
-      return "Runc (default)";
-  }
-}
-
-function isolationTierColor(tier?: string): "default" | "info" | "success" {
-  switch (tier) {
-    case "gvisor":
-      return "info";
-    case "kata":
-      return "success";
-    default:
-      return "default";
-  }
-}
+import { IsolationTierChip } from "@agent-management-platform/shared-component";
 
 interface EnvironmentTableProps {
   onEditEnvironment?: (environment: Environment) => void;
@@ -272,12 +251,7 @@ export function EnvironmentTable(
                   </ListingTable.Cell>
 
                   <ListingTable.Cell align="center">
-                    <Chip
-                      label={isolationTierLabel(env.isolationTier)}
-                      size="small"
-                      variant="outlined"
-                      color={isolationTierColor(env.isolationTier)}
-                    />
+                    <IsolationTierChip tier={env.isolationTier} />
                   </ListingTable.Cell>
 
                   <ListingTable.Cell align="right" onClick={(e) => e.stopPropagation()}>
