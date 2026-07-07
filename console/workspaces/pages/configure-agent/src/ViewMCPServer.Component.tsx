@@ -33,11 +33,13 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   Divider,
   Form,
+  FormControl,
   FormLabel,
   IconButton,
+  MenuItem,
+  Select,
   Skeleton,
   Stack,
   Tooltip,
@@ -60,7 +62,6 @@ import {
   absoluteRouteMap,
   type EnvironmentVariableConfig,
   type EnvProviderConfigMappings,
-  type MCPDeploymentStatus,
 } from "@agent-management-platform/types";
 import {
   generatePath,
@@ -77,16 +78,6 @@ type AuthInfoEntry = {
   in: string;
   name: string;
   value?: string;
-};
-
-const STATUS_CHIP: Record<
-  MCPDeploymentStatus,
-  { label: string; color: "success" | "warning" | "default" | "info" }
-> = {
-  DEPLOYED: { label: "Deployed", color: "success" },
-  PENDING: { label: "Pending", color: "warning" },
-  NOT_DEPLOYED: { label: "Not deployed", color: "default" },
-  NOT_CONFIGURED: { label: "Not configured", color: "info" },
 };
 
 export const ViewMCPServerComponent = () => {
@@ -168,11 +159,6 @@ export const ViewMCPServerComponent = () => {
     return union.length > 0 ? union : configured;
   }, [config, pipelineEnvs]);
 
-  const envDisplayName = (name: string) =>
-    environments.find((e) => e.name === name)?.displayName ??
-    pipelineEnvs.find((e) => e.name === name)?.displayName ??
-    name;
-
   // The tool config references a single, environment-agnostic MCP proxy. Derive it
   // from any environment that has a mapping.
   const configProxyName = useMemo(() => {
@@ -218,33 +204,6 @@ export const ViewMCPServerComponent = () => {
     ? sourceProxyDetails?.environments?.[selectedEnvUuid]?.security
     : undefined;
   const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
-
-  const statusForEnv = (name: string): MCPDeploymentStatus => {
-    // "Not configured" is blueprint-driven: once the source proxy has loaded, an
-    // environment with no per-env block on it is unconfigured regardless of any
-    // (possibly stale) mapping. Until it loads, fall back to the mapping status.
-    const envUuid = environments.find((e) => e.name === name)?.id;
-    if (
-      sourceProxyDetails &&
-      envUuid &&
-      !sourceProxyDetails.environments?.[envUuid]
-    ) {
-      return "NOT_CONFIGURED";
-    }
-    return config?.envMappings?.[name]?.deploymentStatus ?? "NOT_DEPLOYED";
-  };
-
-  const renderStatusChip = (name: string) => {
-    const meta = STATUS_CHIP[statusForEnv(name)];
-    return (
-      <Chip
-        label={meta.label}
-        color={meta.color}
-        size="small"
-        variant="outlined"
-      />
-    );
-  };
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
@@ -556,55 +515,36 @@ export const ViewMCPServerComponent = () => {
           )}
         </Form.Section>
 
-        <Form.Section>
-          <Form.Subheader>Environments</Form.Subheader>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Whether the MCP proxy is deployed for each of this agent&apos;s
-            environments. Deployment is managed by the org-level MCP proxy and
-            its gateways.
-          </Typography>
-          <Stack spacing={1}>
-            {envNames.map((name) => {
-              const isSelected = isExternal && name === selectedEnvName;
-              return (
-                <Card
-                  key={name}
-                  variant="outlined"
-                  onClick={
-                    isExternal ? () => setSelectedEnvName(name) : undefined
-                  }
-                  sx={{
-                    ...(isExternal ? { cursor: "pointer" } : {}),
-                    ...(isSelected ? { borderColor: "primary.main" } : {}),
-                  }}
-                >
-                  <CardContent sx={{ py: 1.5, "&:last-child": { pb: 1.5 } }}>
-                    <Stack
-                      direction="row"
-                      alignItems="center"
-                      justifyContent="space-between"
-                      spacing={2}
-                    >
-                      <Typography variant="body2">
-                        {envDisplayName(name)}
-                      </Typography>
-                      {renderStatusChip(name)}
-                    </Stack>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </Stack>
-        </Form.Section>
-
         {isExternal && providerConfig && (
-          <MCPProxyAPIKeysSection
-            orgName={orgId}
-            projName={projectId}
-            agentName={agentId}
-            configId={decodedConfigId}
-            envName={selectedEnvName}
-          />
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography variant="body2" color="text.secondary">
+                Environment
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 260 }}>
+                <Select
+                  value={selectedEnvName}
+                  onChange={(event) =>
+                    setSelectedEnvName(event.target.value as string)
+                  }
+                >
+                  {envNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {environments.find((e) => e.name === name)?.displayName ??
+                        name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+            <MCPProxyAPIKeysSection
+              orgName={orgId}
+              projName={projectId}
+              agentName={agentId}
+              configId={decodedConfigId}
+              envName={selectedEnvName}
+            />
+          </Stack>
         )}
       </Stack>
 

@@ -15142,14 +15142,6 @@ components:
           example: "development"
         configuration:
           $ref: "#/components/schemas/ProviderConfig"
-        deploymentStatus:
-          type: string
-          description: Per-environment MCP deployment status. Set only for MCP configs.
-          enum:
-            - DEPLOYED
-            - PENDING
-            - NOT_DEPLOYED
-          example: "DEPLOYED"
 
     ProviderConfig:
       type: object

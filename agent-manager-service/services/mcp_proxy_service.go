@@ -314,30 +314,30 @@ func (s *MCPProxyService) Get(ctx context.Context, orgUUID, proxyID string) (*mo
 // Update modifies an existing MCP proxy and redeploys it to active gateways. Returns
 // the DTO for the response and the underlying model so the caller can cascade further
 // work (e.g. redeploying agent-scoped mapping artifacts).
-func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, req *models.MCPProxyDTO) (*models.MCPProxyDTO, *models.MCPProxy, error) {
+func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, req *models.MCPProxyDTO) (*models.MCPProxyDTO, error) {
 	if req == nil {
-		return nil, nil, utils.ErrInvalidInput
+		return nil, utils.ErrInvalidInput
 	}
 
 	handle := strings.TrimSpace(proxyID)
 	if handle == "" {
-		return nil, nil, utils.ErrInvalidInput
+		return nil, utils.ErrInvalidInput
 	}
 	if strings.TrimSpace(req.ID) != "" && strings.TrimSpace(req.ID) != handle {
-		return nil, nil, utils.ErrInvalidInput
+		return nil, utils.ErrInvalidInput
 	}
 
 	name := strings.TrimSpace(req.Name)
 	version := strings.TrimSpace(req.Version)
 	if name == "" || version == "" {
-		return nil, nil, utils.ErrInvalidInput
+		return nil, utils.ErrInvalidInput
 	}
 
 	// Validate the per-environment blueprint (structure + SSRF) outside the transaction
 	// so network checks don't hold the row lock. Auth is encrypted inside the transaction
 	// because it may need to preserve the previously stored secret when the client omits it.
 	if err := validateMCPEnvironments(ctx, req.Environments); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	// Captured inside the transaction so removed-environment artifacts can be torn down
@@ -377,17 +377,17 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 		return s.repo.Update(ctx, tx, proxy, orgUUID)
 	}); err != nil {
 		if errors.Is(err, utils.ErrMCPProxyNotFound) || errors.Is(err, utils.ErrInvalidInput) {
-			return nil, nil, err
+			return nil, err
 		}
-		return nil, nil, fmt.Errorf("failed to update MCP proxy: %w", err)
+		return nil, fmt.Errorf("failed to update MCP proxy: %w", err)
 	}
 
 	updated, err := s.repo.GetByHandle(ctx, handle, orgUUID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil, utils.ErrMCPProxyNotFound
+			return nil, utils.ErrMCPProxyNotFound
 		}
-		return nil, nil, fmt.Errorf("failed to retrieve MCP proxy: %w", err)
+		return nil, fmt.Errorf("failed to retrieve MCP proxy: %w", err)
 	}
 
 	// Redeploy the per-environment artifacts so they pick up the new upstream / auth /
@@ -407,10 +407,10 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 		}
 	}
 
-	// The agent configurations that reference this proxy do not deploy their own
-	// artifacts; the caller still invokes RedeployMCPMappingsForSourceProxy so their
-	// injected env vars and inbound credentials are refreshed against the updated proxy.
-	return convertModelMCPProxyToSpec(updated), updated, nil
+	// The org-level proxy owns and (re)deploys the per-environment gateway artifacts above.
+	// Agents that reference this proxy read its endpoint at their own deploy time via the
+	// stored DB mapping, so nothing needs to be pushed to already-deployed agents here.
+	return convertModelMCPProxyToSpec(updated), nil
 }
 
 // Delete removes an MCP proxy by handle. MCP proxy mappings are deployable artifacts

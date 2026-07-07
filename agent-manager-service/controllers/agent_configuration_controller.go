@@ -663,8 +663,7 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 	envModelConfig := make(map[string]spec.EnvProviderConfigMappings)
 	for envName, envConfig := range modelResp.EnvModelConfig {
 		specEnvConfig := spec.EnvProviderConfigMappings{
-			EnvironmentName:  envConfig.EnvironmentName,
-			DeploymentStatus: envConfig.DeploymentStatus,
+			EnvironmentName: envConfig.EnvironmentName,
 		}
 
 		// Build configuration object with proxy URL and auth info

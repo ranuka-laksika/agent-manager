@@ -90,20 +90,9 @@ export interface AuthInfo {
   value?: string;
 }
 
-// "NOT_CONFIGURED" is a UI-only state (never sent by the backend) for an environment
-// the org-level MCP proxy has no blueprint block for; the others mirror the backend's
-// per-environment deploymentStatus field.
-export type MCPDeploymentStatus =
-  | "DEPLOYED"
-  | "PENDING"
-  | "NOT_DEPLOYED"
-  | "NOT_CONFIGURED";
-
 export interface EnvProviderConfigMappings {
   environmentName: string;
   configuration?: ProviderConfig;
-  /** Per-environment MCP deployment status. Set only for MCP configs. */
-  deploymentStatus?: MCPDeploymentStatus;
 }
 
 export interface AgentModelConfigResponse {

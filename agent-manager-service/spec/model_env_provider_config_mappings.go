@@ -22,8 +22,6 @@ type EnvProviderConfigMappings struct {
 	// Name of the environment
 	EnvironmentName string          `json:"environmentName"`
 	Configuration   *ProviderConfig `json:"configuration,omitempty"`
-	// Per-environment MCP deployment status. Set only for MCP configs.
-	DeploymentStatus *string `json:"deploymentStatus,omitempty"`
 }
 
 // NewEnvProviderConfigMappings instantiates a new EnvProviderConfigMappings object
@@ -100,38 +98,6 @@ func (o *EnvProviderConfigMappings) SetConfiguration(v ProviderConfig) {
 	o.Configuration = &v
 }
 
-// GetDeploymentStatus returns the DeploymentStatus field value if set, zero value otherwise.
-func (o *EnvProviderConfigMappings) GetDeploymentStatus() string {
-	if o == nil || IsNil(o.DeploymentStatus) {
-		var ret string
-		return ret
-	}
-	return *o.DeploymentStatus
-}
-
-// GetDeploymentStatusOk returns a tuple with the DeploymentStatus field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *EnvProviderConfigMappings) GetDeploymentStatusOk() (*string, bool) {
-	if o == nil || IsNil(o.DeploymentStatus) {
-		return nil, false
-	}
-	return o.DeploymentStatus, true
-}
-
-// HasDeploymentStatus returns a boolean if a field has been set.
-func (o *EnvProviderConfigMappings) HasDeploymentStatus() bool {
-	if o != nil && !IsNil(o.DeploymentStatus) {
-		return true
-	}
-
-	return false
-}
-
-// SetDeploymentStatus gets a reference to the given string and assigns it to the DeploymentStatus field.
-func (o *EnvProviderConfigMappings) SetDeploymentStatus(v string) {
-	o.DeploymentStatus = &v
-}
-
 func (o EnvProviderConfigMappings) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -145,9 +111,6 @@ func (o EnvProviderConfigMappings) ToMap() (map[string]interface{}, error) {
 	toSerialize["environmentName"] = o.EnvironmentName
 	if !IsNil(o.Configuration) {
 		toSerialize["configuration"] = o.Configuration
-	}
-	if !IsNil(o.DeploymentStatus) {
-		toSerialize["deploymentStatus"] = o.DeploymentStatus
 	}
 	return toSerialize, nil
 }

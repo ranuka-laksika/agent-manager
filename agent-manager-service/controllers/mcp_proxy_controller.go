@@ -40,16 +40,13 @@ type MCPProxyController interface {
 }
 
 type mcpProxyController struct {
-	mcpProxyService           *services.MCPProxyService
-	agentConfigurationService services.AgentConfigurationService
+	mcpProxyService *services.MCPProxyService
 }
 
-// NewMCPProxyController creates a new MCP proxy controller. agentConfigurationService is
-// used to cascade mapping-artifact redeploys after a successful proxy update.
-func NewMCPProxyController(mcpProxyService *services.MCPProxyService, agentConfigurationService services.AgentConfigurationService) MCPProxyController {
+// NewMCPProxyController creates a new MCP proxy controller.
+func NewMCPProxyController(mcpProxyService *services.MCPProxyService) MCPProxyController {
 	return &mcpProxyController{
-		mcpProxyService:           mcpProxyService,
-		agentConfigurationService: agentConfigurationService,
+		mcpProxyService: mcpProxyService,
 	}
 }
 
@@ -180,7 +177,7 @@ func (c *mcpProxyController) UpdateMCPProxy(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	resp, source, err := c.mcpProxyService.Update(ctx, orgName, proxyID, &req)
+	resp, err := c.mcpProxyService.Update(ctx, orgName, proxyID, &req)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrMCPProxyNotFound):
@@ -196,13 +193,9 @@ func (c *mcpProxyController) UpdateMCPProxy(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Cascade: refresh every agent-scoped MCP mapping artifact derived from this proxy
-	// so they pick up the new upstream / policies. Best-effort — log and continue on
-	// failure, matching the prior hook semantics.
-	if err := c.agentConfigurationService.RedeployMCPMappingsForSourceProxy(ctx, source, orgName); err != nil {
-		log.Warn("UpdateMCPProxy: failed to redeploy MCP mapping artifacts", "orgName", orgName, "proxyID", proxyID, "error", err)
-	}
-
+	// The org-level MCP proxy is deployed directly to the gateway; agents reference it via a
+	// DB mapping and read its endpoint at their own deploy time, so a proxy update requires
+	// no changes to already-deployed agents.
 	log.Info("UpdateMCPProxy: completed", "orgName", orgName, "proxyID", proxyID)
 	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }

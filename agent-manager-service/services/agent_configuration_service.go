@@ -73,10 +73,6 @@ type AgentConfigurationService interface {
 	// agent and environment from all DB configs. Used during promotion when the target
 	// environment's ReleaseBinding doesn't have these vars yet.
 	BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, projectName, environmentName string) ([]client.EnvVar, error)
-	// RedeployMCPMappingsForSourceProxy refreshes every agent-scoped MCP mapping artifact derived
-	// from the given source proxy. Called by the MCP proxy controller after a successful proxy
-	// update so each derived artifact picks up new upstream URL / policies on its gateways.
-	RedeployMCPMappingsForSourceProxy(ctx context.Context, source *models.MCPProxy, orgName string) error
 
 	// CleanupEnvironmentMCPArtifacts tears down all MCP-proxy data tied to a deleted
 	// environment: every agent-scoped mapping/deployment/artifact/secret/key/env-var row
@@ -4330,298 +4326,6 @@ func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPPr
 	}
 }
 
-// RedeployMCPMappingsForSourceProxy redeploys every agent-scoped MCP mapping artifact
-// that derives from the given source MCP proxy. Invoked by MCPProxyService.Update after
-// the source proxy itself has been redeployed, so each agent-specific artifact picks up
-// the new upstream URL, auth header/value, and policies on the gateway(s) where it
-// currently lives. It also backfills environments that became newly configured on the
-// blueprint after the agent config was saved: for each config already using this proxy,
-// any of its targeted environments that now has a blueprint block plus an active gateway
-// but no mapping yet is provisioned and deployed (see backfillNewlyConfiguredMCPEnvs).
-// Best-effort: per-mapping failures are aggregated and returned so the caller can log
-// without rolling back the proxy update.
-func (s *agentConfigurationService) RedeployMCPMappingsForSourceProxy(ctx context.Context, source *models.MCPProxy, orgName string) error {
-	if source == nil || s.envMCPMappingRepo == nil || s.mcpProxyService == nil {
-		return nil
-	}
-
-	mappings, err := s.envMCPMappingRepo.ListByMCPProxy(ctx, source.UUID)
-	if err != nil {
-		return fmt.Errorf("list MCP mappings: %w", err)
-	}
-	if len(mappings) == 0 {
-		return nil
-	}
-
-	envs, err := s.ocClient.ListEnvironments(ctx, orgName)
-	if err != nil {
-		return fmt.Errorf("list environments: %w", err)
-	}
-	envNameByUUID := make(map[string]string, len(envs))
-	for _, env := range envs {
-		if env == nil {
-			continue
-		}
-		envNameByUUID[env.UUID] = env.Name
-	}
-
-	// Track the configs that already reference this proxy and the environments they have
-	// mappings for, so a follow-up pass can backfill their newly-configured environments.
-	mappedEnvsByConfig := make(map[uuid.UUID]map[string]bool)
-	var configOrder []uuid.UUID
-
-	var errs []error
-	for i := range mappings {
-		mapping := &mappings[i]
-		if _, seen := mappedEnvsByConfig[mapping.ConfigUUID]; !seen {
-			mappedEnvsByConfig[mapping.ConfigUUID] = make(map[string]bool)
-			configOrder = append(configOrder, mapping.ConfigUUID)
-		}
-		mappedEnvsByConfig[mapping.ConfigUUID][mapping.EnvironmentUUID.String()] = true
-
-		envName, ok := envNameByUUID[mapping.EnvironmentUUID.String()]
-		if !ok || envName == "" {
-			errs = append(errs, fmt.Errorf("mapping %s: environment %s not found", mapping.ArtifactUUID, mapping.EnvironmentUUID))
-			continue
-		}
-
-		config, err := s.agentConfigRepo.GetByUUID(ctx, mapping.ConfigUUID, orgName)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: load config %s: %w", mapping.ArtifactUUID, mapping.ConfigUUID, err))
-			continue
-		}
-		if config == nil {
-			errs = append(errs, fmt.Errorf("mapping %s: config %s not found", mapping.ArtifactUUID, mapping.ConfigUUID))
-			continue
-		}
-		agentComp, agentErr := s.ocClient.GetComponent(ctx, orgName, config.ProjectName, config.AgentID)
-		isExternalAgent := false
-		if agentErr != nil {
-			s.logger.Warn("failed to determine agent type during MCP mapping redeploy, assuming internal", "configUUID", config.UUID, "err", agentErr)
-		} else {
-			isExternalAgent = agentComp.Provisioning.Type == string(utils.ExternalAgent)
-		}
-		firstEnvName := ""
-		if !isExternalAgent {
-			if pipeline, pipelineErr := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, config.ProjectName); pipelineErr == nil && pipeline != nil {
-				firstEnvName = client.FindFirstEnvironment(pipeline.PromotionPaths)
-			}
-		}
-		existingVarNames, err := s.loadExistingVarNames(ctx, config.UUID)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: load env var names: %w", mapping.ArtifactUUID, err))
-			continue
-		}
-		envTemplates, err := s.buildMCPMappingEnvironmentVariables(config.Name, varNamesToOverrides(existingVarNames))
-		if err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: build env vars: %w", mapping.ArtifactUUID, err))
-			continue
-		}
-
-		// The proxy already redeployed the single per-environment gateway artifact during
-		// its own update. Agent configs deploy nothing; we only reconcile the per-agent
-		// inbound credential (security may have toggled) and refresh the injected env vars
-		// (the URL changes if the proxy's base context changed).
-		if err := s.reconcileMCPMappingCredentials(ctx, config, mapping, source, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
-			errs = append(errs, fmt.Errorf("mapping %s: reconcile credentials: %w", mapping.ArtifactUUID, err))
-			continue
-		}
-		if !isExternalAgent {
-			if err := s.injectMCPMappingEnvVars(ctx, config, mapping, source, envName, orgName, envTemplates, firstEnvName); err != nil {
-				s.logger.Warn("failed to inject refreshed MCP mapping env vars", "mappingArtifactUUID", mapping.ArtifactUUID, "environment", envName, "err", err)
-			}
-		}
-	}
-
-	// Backfill pass: provision environments that the blueprint now configures but that
-	// were left unconfigured (no mapping) when the agent config was saved.
-	for _, configUUID := range configOrder {
-		if err := s.backfillNewlyConfiguredMCPEnvs(ctx, source, orgName, configUUID, mappedEnvsByConfig[configUUID], envNameByUUID); err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to redeploy %d MCP mapping artifact(s): %w", len(errs), errors.Join(errs...))
-	}
-	return nil
-}
-
-// backfillNewlyConfiguredMCPEnvs provisions and deploys the agent-scoped MCP mapping for
-// every environment that (a) the agent's deployment pipeline includes (or the config
-// already has env var rows for), (b) the source proxy now has a blueprint block for,
-// (c) has an active gateway, and (d) does not yet have a mapping. This closes the gap where
-// an environment configured on the blueprint after the agent was saved — including a
-// pipeline environment the config was never provisioned for — would otherwise stay
-// undeployed with empty (or missing) env vars. Env var name rows are created when absent so
-// reconcile/inject can write the real URL/API-key values. Best-effort: per-environment
-// failures are returned aggregated; a mapping whose deploy fails is cleaned up.
-func (s *agentConfigurationService) backfillNewlyConfiguredMCPEnvs(
-	ctx context.Context, source *models.MCPProxy, orgName string, configUUID uuid.UUID,
-	mappedEnvs map[string]bool, envNameByUUID map[string]string,
-) error {
-	config, err := s.agentConfigRepo.GetByUUID(ctx, configUUID, orgName)
-	if err != nil {
-		return fmt.Errorf("backfill: load config %s: %w", configUUID, err)
-	}
-	if config == nil {
-		return fmt.Errorf("backfill: config %s not found", configUUID)
-	}
-
-	agentComp, agentErr := s.ocClient.GetComponent(ctx, orgName, config.ProjectName, config.AgentID)
-	isExternalAgent := false
-	if agentErr != nil {
-		s.logger.Warn("failed to determine agent type during MCP mapping backfill, assuming internal", "configUUID", config.UUID, "err", agentErr)
-	} else {
-		isExternalAgent = agentComp.Provisioning.Type == string(utils.ExternalAgent)
-	}
-
-	// Candidate environments are the union of the agent's pipeline environments and the
-	// environments the config already has env var rows for. The pipeline is authoritative
-	// for a config that was never provisioned for an environment added to it later (the
-	// env has no env var rows yet); the env var rows cover any environment not currently in
-	// the pipeline. Each candidate is still filtered below by blueprint-config, gateway and
-	// mapping checks, so a stale/deleted environment is naturally excluded.
-	firstEnvName := ""
-	candidateEnvUUIDs := make([]string, 0)
-	seenEnv := make(map[string]bool)
-	addCandidate := func(envUUIDStr string) {
-		if envUUIDStr == "" || seenEnv[envUUIDStr] {
-			return
-		}
-		seenEnv[envUUIDStr] = true
-		candidateEnvUUIDs = append(candidateEnvUUIDs, envUUIDStr)
-	}
-
-	envUUIDByName := make(map[string]string, len(envNameByUUID))
-	for envUUID, name := range envNameByUUID {
-		envUUIDByName[name] = envUUID
-	}
-	if pipeline, pipelineErr := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, config.ProjectName); pipelineErr == nil && pipeline != nil {
-		if !isExternalAgent {
-			firstEnvName = client.FindFirstEnvironment(pipeline.PromotionPaths)
-		}
-		for _, envName := range pipelineEnvironmentNames(pipeline.PromotionPaths) {
-			addCandidate(envUUIDByName[envName])
-		}
-	} else if pipelineErr != nil {
-		s.logger.Warn("failed to load deployment pipeline during MCP mapping backfill", "configUUID", config.UUID, "err", pipelineErr)
-	}
-
-	vars, err := s.envVariableRepo.ListByConfig(ctx, configUUID)
-	if err != nil {
-		return fmt.Errorf("backfill: load env vars for config %s: %w", configUUID, err)
-	}
-	for _, v := range vars {
-		addCandidate(v.EnvironmentUUID.String())
-	}
-
-	existingVarNames, err := s.loadExistingVarNames(ctx, config.UUID)
-	if err != nil {
-		return fmt.Errorf("backfill: load env var names for config %s: %w", configUUID, err)
-	}
-	envTemplates, err := s.buildMCPMappingEnvironmentVariables(config.Name, varNamesToOverrides(existingVarNames))
-	if err != nil {
-		return fmt.Errorf("backfill: build env vars for config %s: %w", configUUID, err)
-	}
-
-	var errs []error
-	for _, envUUIDStr := range candidateEnvUUIDs {
-		// Skip environments that already have a mapping (handled by the redeploy loop) or
-		// that the blueprint does not configure.
-		if mappedEnvs[envUUIDStr] {
-			continue
-		}
-		if findMCPEnvironmentConfig(source.Configuration.Environments, envUUIDStr) == nil {
-			continue
-		}
-		envName := envNameByUUID[envUUIDStr]
-		if envName == "" {
-			errs = append(errs, fmt.Errorf("backfill: config %s: environment %s not found", configUUID, envUUIDStr))
-			continue
-		}
-		envUUID, err := uuid.Parse(envUUIDStr)
-		if err != nil {
-			errs = append(errs, fmt.Errorf("backfill: config %s: invalid environment id %q: %w", configUUID, envUUIDStr, err))
-			continue
-		}
-
-		// An environment is deployable only if it has an active gateway.
-		if _, gwErr := s.resolveGatewayForEnvironment(ctx, envUUID, orgName); gwErr != nil {
-			if errors.Is(gwErr, errNoActiveGatewayForEnvironment) {
-				continue
-			}
-			errs = append(errs, fmt.Errorf("backfill: config %s env %s: resolve gateway: %w", configUUID, envName, gwErr))
-			continue
-		}
-
-		// Ensure env var name rows exist before minting credentials: an environment added
-		// to the config after creation (e.g. a new pipeline environment) has none yet, and
-		// reconcile/inject update them in place.
-		if err := s.ensureMCPEnvVarRows(ctx, config.UUID, envUUID, envTemplates); err != nil {
-			errs = append(errs, fmt.Errorf("backfill: config %s env %s: ensure env var rows: %w", configUUID, envName, err))
-			continue
-		}
-
-		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName)
-		artifactName := handle
-		sourceVersion := mcpProxyArtifactVersion(source)
-		mapping := &models.EnvAgentMCPMapping{
-			ConfigUUID:      config.UUID,
-			EnvironmentUUID: envUUID,
-			MCPProxyUUID:    source.UUID,
-			ArtifactUUID:    uuid.New(),
-		}
-		deployedProxy := buildAgentMCPConfigProxy(config, mapping, source, envName, orgName, handle)
-		proxyMapping := buildMCPProxyMapping(source.UUID, deployedProxy)
-		if err := s.db.Transaction(func(tx *gorm.DB) error {
-			return s.envMCPMappingRepo.Create(ctx, tx, mapping, proxyMapping, handle, artifactName, sourceVersion, orgName)
-		}); err != nil {
-			errs = append(errs, fmt.Errorf("backfill: config %s env %s: create mapping: %w", configUUID, envName, err))
-			continue
-		}
-		// No per-agent deployment: the proxy owns the per-environment gateway artifact.
-		// Just mint the inbound credential (against the shared artifact) and inject env vars.
-		if err := s.reconcileMCPMappingCredentials(ctx, config, mapping, source, envName, orgName, envTemplates, isExternalAgent, firstEnvName); err != nil {
-			s.cleanupNewMCPMapping(ctx, config, mapping, envName, orgName)
-			errs = append(errs, fmt.Errorf("backfill: config %s env %s: reconcile credentials: %w", configUUID, envName, err))
-			continue
-		}
-		if !isExternalAgent {
-			if err := s.injectMCPMappingEnvVars(ctx, config, mapping, source, envName, orgName, envTemplates, firstEnvName); err != nil {
-				s.logger.Warn("failed to inject backfilled MCP mapping env vars", "mappingArtifactUUID", mapping.ArtifactUUID, "environment", envName, "err", err)
-			}
-		}
-		s.logger.Info("Backfilled newly-configured MCP mapping", "configUUID", config.UUID, "environment", envName, "sourceProxyUUID", source.UUID)
-	}
-
-	if len(errs) > 0 {
-		return errors.Join(errs...)
-	}
-	return nil
-}
-
-// pipelineEnvironmentNames returns the distinct environment names referenced by a project's
-// promotion paths (both sources and targets), preserving first-seen order.
-func pipelineEnvironmentNames(promotionPaths []models.PromotionPath) []string {
-	names := make([]string, 0)
-	seen := make(map[string]bool)
-	add := func(name string) {
-		if name == "" || seen[name] {
-			return
-		}
-		seen[name] = true
-		names = append(names, name)
-	}
-	for _, path := range promotionPaths {
-		add(path.SourceEnvironmentRef)
-		for _, target := range path.TargetEnvironmentRefs {
-			add(target.Name)
-		}
-	}
-	return names
-}
-
 // ensureMCPEnvVarRows creates the per-environment MCP env var name rows (with empty secret
 // references) for a config/environment when none exist yet. It is a no-op when the rows are
 // already present, so it is safe to call before reconciling credentials for an environment
@@ -5139,37 +4843,6 @@ func (s *agentConfigurationService) rollbackProxies(ctx context.Context, resourc
 	}
 }
 
-// mcpMappingDeploymentStatus returns the per-environment MCP deployment status for a
-// mapping: "DEPLOYED" (the environment's gateway confirms it), "PENDING" (a mapping
-// exists but the gateway hasn't confirmed yet), or "NOT_DEPLOYED" (the environment has
-// no active gateway, or the gateway reports UNDEPLOYED/failed). It resolves the
-// environment's active gateway (not the artifact-deployed gateway, so it can distinguish
-// Pending) and reads the deployment status record. Lookup errors default to PENDING so a
-// status query never fails the GET.
-func (s *agentConfigurationService) mcpMappingDeploymentStatus(ctx context.Context, artifactUUID uuid.UUID, orgName string, envUUID uuid.UUID) string {
-	if s.mcpProxyService == nil || s.mcpProxyService.deploymentRepo == nil {
-		return "PENDING"
-	}
-	gateway, err := s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
-	if errors.Is(err, errNoActiveGatewayForEnvironment) {
-		return "NOT_DEPLOYED"
-	}
-	if err != nil || gateway == nil {
-		return "PENDING" // gateway lookup failed — status unknown
-	}
-	_, status, _, statErr := s.mcpProxyService.deploymentRepo.GetStatus(artifactUUID.String(), orgName, gateway.UUID.String())
-	switch {
-	case statErr != nil:
-		return "PENDING"
-	case status == models.DeploymentStatusDeployed:
-		return "DEPLOYED"
-	case status == "":
-		return "PENDING"
-	default: // UNDEPLOYED / anything else
-		return "NOT_DEPLOYED"
-	}
-}
-
 // buildConfigResponse builds the full configuration response
 func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, config *models.AgentConfiguration, includeProxyURL bool) (*models.AgentModelConfigResponse, error) {
 	// Get environment names from OpenChoreo
@@ -5249,11 +4922,9 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 				proxyInfo.URL = &url
 			}
 		}
-		deploymentStatus := s.mcpMappingDeploymentStatus(ctx, mcpProxyEnvArtifactUUID(mapping.MCPProxy, mapping.EnvironmentUUID.String()), config.OrganizationName, mapping.EnvironmentUUID)
 		envModelConfig[envName] = models.EnvModelConfigResponse{
-			EnvironmentName:  envName,
-			LLMProxy:         proxyInfo,
-			DeploymentStatus: &deploymentStatus,
+			EnvironmentName: envName,
+			LLMProxy:        proxyInfo,
 		}
 	}
 
@@ -5404,11 +5075,9 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 			}
 		}
 
-		deploymentStatus := s.mcpMappingDeploymentStatus(ctx, mcpProxyEnvArtifactUUID(mapping.MCPProxy, mapping.EnvironmentUUID.String()), config.OrganizationName, mapping.EnvironmentUUID)
 		envModelConfig[envName] = models.EnvModelConfigResponse{
-			EnvironmentName:  envName,
-			LLMProxy:         proxyInfo,
-			DeploymentStatus: &deploymentStatus,
+			EnvironmentName: envName,
+			LLMProxy:        proxyInfo,
 		}
 	}
 

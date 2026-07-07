@@ -67,9 +67,6 @@ type AgentModelConfigResponse struct {
 type EnvModelConfigResponse struct {
 	EnvironmentName string        `json:"environmentName"`
 	LLMProxy        *LLMProxyInfo `json:"llmProxy,omitempty"`
-	// DeploymentStatus is the per-environment MCP deployment state:
-	// "DEPLOYED" | "PENDING" | "NOT_DEPLOYED". Set only for MCP configs.
-	DeploymentStatus *string `json:"deploymentStatus,omitempty"`
 }
 
 // LLMProxyInfo contains proxy details exposed in response
