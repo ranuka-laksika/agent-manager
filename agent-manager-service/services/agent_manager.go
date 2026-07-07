@@ -1356,7 +1356,8 @@ func (s *agentManagerService) mergeKindWorkloadLLMEnvVars(
 	}
 	llmEnvVars, err := s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, projectName, firstEnv)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to build system-managed LLM env vars: agentName %s, orgName %s, projectName %s, env %s, error: %w",
+			agentName, orgName, projectName, firstEnv, err)
 	}
 	return append(userEnvVars, llmEnvVars...), nil
 }
