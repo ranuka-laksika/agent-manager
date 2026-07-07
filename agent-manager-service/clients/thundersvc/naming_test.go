@@ -17,7 +17,10 @@
 package thundersvc
 
 import (
+	"context"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 )
@@ -130,6 +133,200 @@ func TestThunderHost_BasicCases(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("ThunderHost(%q, %q): want %q, got %q", tc.org, tc.env, tc.want, got)
 		}
+	}
+}
+
+// TestAgentThunderAppName_IncludesEnv locks in that the Thunder app name embeds
+// the environment name — without it, every env-Thunder's own agent list looks
+// identical (e.g. "amp-agent-default-default-x" in both "stage" and "testing"),
+// with nothing in the name itself showing which environment an operator browsing
+// Thunder's console directly is actually looking at.
+func TestAgentThunderAppName_IncludesEnv(t *testing.T) {
+	cases := []struct {
+		org, env, project, agent, want string
+	}{
+		{"default", "stage", "default", "my-agent", "amp-agent-default-stage-default-my-agent"},
+		{"acme", "production", "proj1", "agent-1", "amp-agent-acme-production-proj1-agent-1"},
+	}
+	for _, tc := range cases {
+		got := AgentThunderAppName(tc.org, tc.env, tc.project, tc.agent)
+		if got != tc.want {
+			t.Errorf("AgentThunderAppName(%q, %q, %q, %q): want %q, got %q", tc.org, tc.env, tc.project, tc.agent, tc.want, got)
+		}
+	}
+}
+
+func TestAgentThunderAppName_DifferentEnvsProduceDifferentNames(t *testing.T) {
+	stage := AgentThunderAppName("default", "stage", "default", "my-agent")
+	testing_ := AgentThunderAppName("default", "testing", "default", "my-agent")
+	if stage == testing_ {
+		t.Errorf("expected different environments to produce different app names, both were %q", stage)
+	}
+}
+
+func TestAgentThunderAppName_TruncatesAt100Chars(t *testing.T) {
+	got := AgentThunderAppName(
+		strings.Repeat("o", 40), strings.Repeat("e", 40), strings.Repeat("p", 40), strings.Repeat("a", 40),
+	)
+	if len(got) > 100 {
+		t.Errorf("expected app name truncated to 100 chars, got %d chars: %q", len(got), got)
+	}
+	if strings.HasSuffix(got, "-") {
+		t.Errorf("expected no trailing hyphen after truncation, got %q", got)
+	}
+}
+
+// TestAgentThunderAppName_TruncationDoesNotCollide guards against two distinct
+// agents producing the identical Thunder app name: without a collision-avoidance
+// hash, two names sharing the same first 100 characters (and differing only
+// beyond that cutoff) would truncate to the exact same string, causing Thunder's
+// 409 fallback (findAgentByName) to hand the second agent's binding the first
+// agent's Thunder identity — so regenerating or revoking one silently rotates or
+// kills the other's credential.
+func TestAgentThunderAppName_TruncationDoesNotCollide(t *testing.T) {
+	sharedPrefix := strings.Repeat("x", 200)
+	agentA := sharedPrefix + "aaa"
+	agentB := sharedPrefix + "bbb"
+
+	nameA := AgentThunderAppName("acme", "staging", "proj1", agentA)
+	nameB := AgentThunderAppName("acme", "staging", "proj1", agentB)
+
+	if nameA == nameB {
+		t.Fatalf("two distinct agents truncated to the same Thunder app name: %q", nameA)
+	}
+	if len(nameA) > 100 || len(nameB) > 100 {
+		t.Errorf("truncated names must still respect the 100-char limit: %d, %d", len(nameA), len(nameB))
+	}
+}
+
+// These lock in resolveThunderBaseURL's candidate cascade — the mechanism that lets
+// AMS reach env-Thunder both when running in-cluster (production) and when running
+// via docker-compose outside the cluster (local dev), where *.svc.cluster.local
+// cannot be resolved at all. A fake prober stands in for real network probing so
+// the cascade order and short-circuiting are tested deterministically.
+
+func TestResolveThunderBaseURL_PrefersClusterInternal(t *testing.T) {
+	var probed []thunderURLCandidate
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		probed = append(probed, c)
+		return c.baseURL == ThunderInternalURL("acme", "staging")
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when the cluster-internal candidate is reachable")
+	}
+	if got.baseURL != ThunderInternalURL("acme", "staging") {
+		t.Errorf("want cluster-internal base URL, got %q", got.baseURL)
+	}
+	if got.resolveToHost != "" {
+		t.Errorf("cluster-internal candidate must not set resolveToHost, got %q", got.resolveToHost)
+	}
+	if len(probed) != 1 {
+		t.Errorf("must stop at the first reachable candidate, probed %d", len(probed))
+	}
+}
+
+func TestResolveThunderBaseURL_FallsBackToExternalIngress(t *testing.T) {
+	externalBaseURL := "http://acme-staging.thunder.amp.localhost:8080"
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		return c.baseURL == externalBaseURL && c.resolveToHost == ""
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when the external ingress candidate is reachable")
+	}
+	if got.baseURL != externalBaseURL || got.resolveToHost != "" {
+		t.Errorf("want external ingress candidate with no dial override, got %+v", got)
+	}
+}
+
+// TestResolveThunderBaseURL_ExternalIngressCandidate_RespectsTLSConfig guards a
+// regression: the external ingress candidate must match thunderExternalOrigin's
+// TLS-aware scheme/port (what env-Thunder itself advertises as its issuer/JWKS),
+// not a hardcoded http://...:8080 — otherwise a VM/production deployment
+// (TLS_ENABLED=true) falling back to this candidate probes the wrong scheme and
+// port entirely, and reports a live env-Thunder as unreachable.
+func TestResolveThunderBaseURL_ExternalIngressCandidate_RespectsTLSConfig(t *testing.T) {
+	origTLS := config.GetConfig().TLSConfig.EnableTLS
+	defer func() { config.GetConfig().TLSConfig.EnableTLS = origTLS }()
+	config.GetConfig().TLSConfig.EnableTLS = true
+
+	wantBaseURL := "https://acme-staging.thunder.amp.localhost"
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		return c.baseURL == wantBaseURL && c.resolveToHost == ""
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when the TLS-aware external ingress candidate is reachable")
+	}
+	if got.baseURL != wantBaseURL || got.resolveToHost != "" {
+		t.Errorf("want TLS-aware external ingress candidate %q, got %+v", wantBaseURL, got)
+	}
+}
+
+// The Docker Desktop / loopback candidates are only ever generated when
+// config.IsLocalDevEnv is set (see thunderBaseURLCandidates) — they exist purely to
+// compensate for agent-manager-service running as a plain Docker container in local
+// dev, and must never be probed in-cluster. Both tests below flip that flag for their
+// duration to exercise the fallback path.
+
+func TestResolveThunderBaseURL_FallsBackToDockerDesktop(t *testing.T) {
+	orig := config.GetConfig().IsLocalDevEnv
+	defer func() { config.GetConfig().IsLocalDevEnv = orig }()
+	config.GetConfig().IsLocalDevEnv = true
+
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		return c.resolveToHost == "host.docker.internal:8080"
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when only the host.docker.internal candidate is reachable")
+	}
+	if got.resolveToHost != "host.docker.internal:8080" {
+		t.Errorf("want host.docker.internal dial override, got %+v", got)
+	}
+}
+
+func TestResolveThunderBaseURL_FallsBackToLoopback(t *testing.T) {
+	orig := config.GetConfig().IsLocalDevEnv
+	defer func() { config.GetConfig().IsLocalDevEnv = orig }()
+	config.GetConfig().IsLocalDevEnv = true
+
+	prober := func(_ context.Context, c thunderURLCandidate) bool {
+		return c.resolveToHost == "127.0.0.1:8080"
+	}
+
+	got, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if !ok {
+		t.Fatal("expected ok=true when only the 127.0.0.1 candidate is reachable")
+	}
+	if got.resolveToHost != "127.0.0.1:8080" {
+		t.Errorf("want 127.0.0.1 dial override, got %+v", got)
+	}
+}
+
+func TestResolveThunderBaseURL_AllUnreachable(t *testing.T) {
+	prober := func(_ context.Context, _ thunderURLCandidate) bool { return false }
+
+	_, ok := resolveThunderBaseURL(context.Background(), "acme", "staging", prober)
+	if ok {
+		t.Error("expected ok=false when no candidate is reachable")
+	}
+}
+
+func TestResolveThunderBaseURL_PublicWrapperUsesRealCascadeShape(t *testing.T) {
+	// ResolveThunderBaseURL can't be probed against real network in a unit test,
+	// but it must at least be wired to the real candidate cascade for a
+	// definitely-unreachable org/env, rather than e.g. always returning ok=true.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, _, ok := ResolveThunderBaseURL(ctx, "nonexistent-org-xyz", "nonexistent-env-xyz")
+	if ok {
+		t.Error("expected ok=false for an org/env with no env-Thunder deployed anywhere reachable")
 	}
 }
 

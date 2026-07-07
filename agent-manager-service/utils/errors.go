@@ -76,6 +76,8 @@ var (
 	ErrOrganizationNotFound           = errors.New("organization not found")
 	ErrBuildNotFound                  = errors.New("build not found")
 	ErrEnvironmentNotFound            = errors.New("environment not found")
+	ErrAgentIdentityNotProvisioned    = errors.New("agent identity not yet provisioned for this environment")
+	ErrAgentCredentialNotAvailable    = errors.New("agent credential not currently available for this environment")
 	ErrOrganizationAlreadyExists      = errors.New("organization already exists")
 	ErrProjectAlreadyExists           = errors.New("project already exists")
 	ErrDeploymentPipelineNotFound     = errors.New("deployment pipeline not found")

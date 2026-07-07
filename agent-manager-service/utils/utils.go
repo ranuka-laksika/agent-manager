@@ -630,7 +630,7 @@ func validateInputInterface(agentType spec.AgentType, inputInterface *spec.Input
 		)
 	}
 	if StrPointerAsStr(agentType.SubType, "") == string(AgentSubTypeCustomAPI) {
-		if inputInterface.Schema.Path == "" || !strings.HasPrefix(inputInterface.Schema.Path, "/") {
+		if inputInterface.Schema == nil || inputInterface.Schema.Path == "" || !strings.HasPrefix(inputInterface.Schema.Path, "/") {
 			return NewValidationError(
 				"Please provide a valid schema path starting with /",
 				"inputInterface.schema.path is required and must start with /",

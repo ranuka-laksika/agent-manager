@@ -138,6 +138,14 @@ echo ""
 # Step 3: Run migrations
 echo "Step 3: Running migrations on test database"
 export ENV_FILE_PATH="$ENV_TEST_FILE"
+# .env.test intentionally omits JWT_SIGNING_PRIVATE_KEY_PATH/JWT_SIGNING_PUBLIC_KEYS_CONFIG
+# and falls back to config_loader.go's relative defaults ("keys/private.pem", etc.), which
+# only resolve from the repo root. `go test ./...` runs each package's test binary with its
+# OWN directory as the working directory (not $PROJECT_ROOT), so any package other than the
+# repo root — e.g. ./tests — would fail to find the keys at all. Force absolute paths so every
+# package resolves the same real key files regardless of which directory its binary runs from.
+export JWT_SIGNING_PRIVATE_KEY_PATH="$PROJECT_ROOT/keys/private.pem"
+export JWT_SIGNING_PUBLIC_KEYS_CONFIG="$PROJECT_ROOT/keys/public-keys-config.json"
 set +e
 go run . -migrate -server=false 2>&1
 migrationExitCode=$?

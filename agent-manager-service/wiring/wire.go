@@ -59,6 +59,8 @@ var clientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
+	ProvideEnvThunderResolver,
+	ProvideAgentSecretStore,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -72,6 +74,8 @@ var serviceProviderSet = wire.NewSet(
 	services.NewMonitorManagerService,
 	ProvideThunderConfig,
 	services.NewMonitorSchedulerService,
+	services.NewAgentThunderProvisioningService,
+	services.NewAgentThunderReconcilerService,
 	services.NewEvaluatorManagerService,
 	services.NewEnvironmentService,
 	services.NewPlatformGatewayService,
@@ -139,6 +143,8 @@ var testClientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
+	ProvideEnvThunderResolver,
+	ProvideAgentSecretStore,
 )
 
 // ProvideLogger provides the configured slog.Logger instance
@@ -330,6 +336,7 @@ var repositoryProviderSet = wire.NewSet(
 	repositories.NewMonitorLLMMappingRepository,
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
+	ProvideAgentThunderClientRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -459,6 +466,24 @@ func ProvideAgentKindRepository(db *gorm.DB) repositories.AgentKindRepository {
 
 func ProvideAIApplicationRepository(db *gorm.DB) repositories.AIApplicationRepository {
 	return repositories.NewAIApplicationRepository(db)
+}
+
+func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderClientRepository {
+	return repositories.NewAgentThunderClientRepo(db)
+}
+
+// ProvideEnvThunderResolver creates the resolver that maps (org, environment) to an
+// authenticated ThunderClient for that environment's Thunder instance, reading the
+// system-client secret that add-environment-thunder.sh already wrote to OpenBao.
+func ProvideEnvThunderResolver(cfg config.Config) (thundersvc.EnvThunderResolver, error) {
+	return thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+}
+
+// ProvideAgentSecretStore creates the raw OpenBao-backed store for AgentID
+// client credentials (see agent_secret_store.go for why this bypasses the
+// SecretManagementClient/SecretReference machinery).
+func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, error) {
+	return thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {
