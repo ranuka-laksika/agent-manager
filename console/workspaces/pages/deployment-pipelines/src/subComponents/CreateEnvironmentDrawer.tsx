@@ -53,9 +53,10 @@ import {
 
 const TOKEN_MASK = "•••••••••••••••";
 
-// TODO: replace with real published doc URLs once the isolation-tier setup guides are written.
-const GVISOR_ISOLATION_DOCS_URL = "https://example.com/docs/gvisor-isolation-tier";
-const KATA_ISOLATION_DOCS_URL = "https://example.com/docs/kata-isolation-tier";
+const GVISOR_ISOLATION_DOCS_URL =
+  "https://wso2.github.io/agent-manager/docs/administration/isolation-tiers/gvisor";
+const KATA_ISOLATION_DOCS_URL =
+  "https://wso2.github.io/agent-manager/docs/administration/isolation-tiers/kata";
 
 interface CreateEnvironmentDrawerProps {
   open: boolean;
