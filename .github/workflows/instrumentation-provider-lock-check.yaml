@@ -1,0 +1,34 @@
+name: Instrumentation Provider Lock Check
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/release-config.json"
+      - "python-instrumentation-provider/**"
+      - ".github/workflows/instrumentation-provider-lock-check.yaml"
+
+jobs:
+  drift-check:
+    name: Regenerate & Diff
+    runs-on:
+      - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Ensure jq is available
+        run: jq --version
+
+      - name: Regenerate dependency locks
+        working-directory: ./python-instrumentation-provider
+        run: make lock
+
+      - name: Verify no drift in locks
+        run: |
+          if ! git diff --exit-code -- python-instrumentation-provider/locks; then
+            echo ""
+            echo "::error::Instrumentation provider locks are out of sync with release-config.json / requirements.in."
+            echo "::error::Run 'make lock' in python-instrumentation-provider/ and commit the result."
+            exit 1
+          fi
