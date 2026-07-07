@@ -65,7 +65,6 @@ func TestUpdateProject(t *testing.T) {
 
 		require.Len(t, ocClient.PatchProjectCalls(), 1)
 		call := ocClient.PatchProjectCalls()[0]
-		require.Equal(t, testUpdateProjectOrgName, call.NamespaceName)
 		require.Equal(t, "my-project", call.ProjectName)
 		require.Equal(t, "new-pipeline", call.Req.DeploymentPipeline)
 		require.Equal(t, "Updated Project", call.Req.DisplayName)

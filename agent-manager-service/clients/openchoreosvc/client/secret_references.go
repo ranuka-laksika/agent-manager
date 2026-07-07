@@ -31,7 +31,7 @@ import (
 
 // CreateSecretReference creates a new SecretReference CR in the specified namespace
 func (c *openChoreoClient) CreateSecretReference(ctx context.Context, ouID string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Build the data sources from the request
 	dataSources := make([]gen.SecretDataSource, len(req.SecretKeys))
 	for i, key := range req.SecretKeys {
@@ -98,7 +98,7 @@ func (c *openChoreoClient) CreateSecretReference(ctx context.Context, ouID strin
 
 // GetSecretReference retrieves a SecretReference by name
 func (c *openChoreoClient) GetSecretReference(ctx context.Context, ouID, secretRefName string) (*SecretReferenceInfo, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetSecretReferenceWithResponse(ctx, namespaceName, secretRefName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret reference: %w", err)
@@ -124,7 +124,7 @@ func (c *openChoreoClient) GetSecretReference(ctx context.Context, ouID, secretR
 // If componentName is empty, returns all secret references without filtering.
 // If componentName is provided, filters by that component label.
 func (c *openChoreoClient) ListSecretReferences(ctx context.Context, ouID string, componentName string) ([]*SecretReferenceInfo, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListSecretReferencesWithResponse(ctx, namespaceName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list secret references: %w", err)
@@ -158,7 +158,7 @@ func (c *openChoreoClient) ListSecretReferences(ctx context.Context, ouID string
 
 // UpdateSecretReference updates an existing SecretReference
 func (c *openChoreoClient) UpdateSecretReference(ctx context.Context, ouID, secretRefName string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Build the data sources from the request
 	dataSources := make([]gen.SecretDataSource, len(req.SecretKeys))
 	for i, key := range req.SecretKeys {
@@ -225,7 +225,7 @@ func (c *openChoreoClient) UpdateSecretReference(ctx context.Context, ouID, secr
 
 // DeleteSecretReference deletes a SecretReference by name
 func (c *openChoreoClient) DeleteSecretReference(ctx context.Context, ouID, secretRefName string) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.DeleteSecretReferenceWithResponse(ctx, namespaceName, secretRefName)
 	if err != nil {
 		return fmt.Errorf("failed to delete secret reference: %w", err)
@@ -245,7 +245,7 @@ func (c *openChoreoClient) DeleteSecretReference(ctx context.Context, ouID, secr
 
 // GetWorkloadSecretRefNames retrieves the names of all secret references used by a component's workload
 func (c *openChoreoClient) GetWorkloadSecretRefNames(ctx context.Context, ouID, projectName, componentName string) ([]string, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// List workloads filtered by component
 	resp, err := c.ocClient.ListWorkloadsWithResponse(ctx, namespaceName, &gen.ListWorkloadsParams{
 		Component: &componentName,

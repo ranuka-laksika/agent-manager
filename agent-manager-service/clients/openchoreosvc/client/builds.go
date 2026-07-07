@@ -38,7 +38,7 @@ import (
 const workflowRunWorkloadAnnotationKey = "openchoreo.dev/workload"
 
 func (c *openChoreoClient) TriggerBuild(ctx context.Context, ouID, projectName, componentName, commitID string) (*models.BuildResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the component to find its workflow configuration
 	compResp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
@@ -127,7 +127,7 @@ func (c *openChoreoClient) TriggerBuild(ctx context.Context, ouID, projectName, 
 }
 
 func (c *openChoreoClient) GetBuild(ctx context.Context, ouID, projectName, componentName, buildName string) (*models.BuildDetailsResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetWorkflowRunWithResponse(ctx, namespaceName, buildName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build: %w", err)
@@ -150,7 +150,7 @@ func (c *openChoreoClient) GetBuild(ctx context.Context, ouID, projectName, comp
 }
 
 func (c *openChoreoClient) ListBuilds(ctx context.Context, ouID, projectName, componentName string) ([]*models.BuildResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Use label selector to filter workflow runs by component
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", LabelKeyComponentName, componentName, LabelKeyProjectName, projectName)
 	resp, err := c.ocClient.ListWorkflowRunsWithResponse(ctx, namespaceName, &gen.ListWorkflowRunsParams{
@@ -192,7 +192,7 @@ func (c *openChoreoClient) ListBuilds(ctx context.Context, ouID, projectName, co
 }
 
 func (c *openChoreoClient) UpdateComponentBuildParameters(ctx context.Context, ouID, projectName, componentName string, req UpdateComponentBuildParametersRequest) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the component
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {

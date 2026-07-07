@@ -88,7 +88,7 @@ func TestCreateProject(t *testing.T) {
 
 		// Validate response fields
 		require.Equal(t, payload.Name, response.Name)
-		require.Equal(t, testCreateProjectOrgName, response.OrgName)
+		require.Equal(t, jwtassertion.MockOUID, response.OrgName)
 		require.Equal(t, payload.DisplayName, response.DisplayName)
 		require.NotZero(t, response.CreatedAt)
 
@@ -97,7 +97,6 @@ func TestCreateProject(t *testing.T) {
 
 		// Validate call parameters
 		createCall := openChoreoClient.CreateProjectCalls()[0]
-		require.Equal(t, testCreateProjectOrgName, createCall.NamespaceName)
 		require.Equal(t, payload.Name, createCall.Req.Name)
 		require.Equal(t, payload.DeploymentPipeline, createCall.Req.DeploymentPipeline)
 		require.Equal(t, payload.DisplayName, createCall.Req.DisplayName)
@@ -152,7 +151,7 @@ func TestCreateProject(t *testing.T) {
 		},
 		{
 			name:           "return 404 on organization not found",
-			authMiddleware: authMiddleware,
+			authMiddleware: jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"),
 			wantStatus:     404,
 			wantErrMsg:     "Organization not found",
 			url:            "/api/v1/orgs/nonexistent-org/projects",

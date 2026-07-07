@@ -44,7 +44,7 @@ type WorkflowRunResponse struct {
 
 // CreateWorkflowRun creates a new workflow run via OpenChoreo
 func (c *openChoreoClient) CreateWorkflowRun(ctx context.Context, ouID string, req CreateWorkflowRunRequest) (*WorkflowRunResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	workflowKind := gen.WorkflowRunConfigKindWorkflow
 	apiReq := gen.CreateWorkflowRunJSONRequestBody{
 		Metadata: gen.ObjectMeta{
@@ -84,7 +84,7 @@ func (c *openChoreoClient) CreateWorkflowRun(ctx context.Context, ouID string, r
 
 // GetWorkflowRun retrieves a workflow run by namespace and run name from OpenChoreo
 func (c *openChoreoClient) GetWorkflowRun(ctx context.Context, ouID, runName string) (*WorkflowRunResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetWorkflowRunWithResponse(ctx, namespaceName, runName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow run: %w", err)
@@ -108,7 +108,7 @@ func (c *openChoreoClient) GetWorkflowRun(ctx context.Context, ouID, runName str
 
 // ExpireWorkflowRun sets a short TTL on a workflow run to trigger cleanup
 func (c *openChoreoClient) ExpireWorkflowRun(ctx context.Context, ouID, runName string) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the current WorkflowRun
 	getResp, err := c.ocClient.GetWorkflowRunWithResponse(ctx, namespaceName, runName)
 	if err != nil {

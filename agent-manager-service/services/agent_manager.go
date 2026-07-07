@@ -4253,7 +4253,8 @@ func (s *agentManagerService) GetBuildLogs(ctx context.Context, ouID string, pro
 
 	// Fetch the build logs from Observability service
 	buildLogsParams := observabilitysvc.BuildLogsParams{
-		NamespaceName:      ouID,
+		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
+		NamespaceName:      s.ocClient.NamespaceFor(ouID),
 		ProjectName:        projectName,
 		AgentComponentName: agentName,
 		BuildName:          build.Name,
@@ -4302,10 +4303,11 @@ func (s *agentManagerService) GetAgentRuntimeLogs(ctx context.Context, ouID stri
 	componentLogsParams := observabilitysvc.ComponentLogsParams{
 		AgentComponentId: agent.UUID,
 		EnvId:            environment.UUID,
-		NamespaceName:    ouID,
-		ComponentName:    agentName,
-		ProjectName:      projectName,
-		EnvironmentName:  payload.EnvironmentName,
+		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
+		NamespaceName:   s.ocClient.NamespaceFor(ouID),
+		ComponentName:   agentName,
+		ProjectName:     projectName,
+		EnvironmentName: payload.EnvironmentName,
 	}
 	applicationLogs, err := s.observabilitySvcClient.GetComponentLogs(ctx, componentLogsParams, payload)
 	if err != nil {
@@ -4348,10 +4350,11 @@ func (s *agentManagerService) GetAgentMetrics(ctx context.Context, ouID string, 
 		AgentComponentId: agent.UUID,
 		EnvId:            environment.UUID,
 		ProjectId:        project.UUID,
-		NamespaceName:    ouID,
-		ProjectName:      projectName,
-		ComponentName:    agentName,
-		EnvironmentName:  payload.EnvironmentName,
+		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
+		NamespaceName:   s.ocClient.NamespaceFor(ouID),
+		ProjectName:     projectName,
+		ComponentName:   agentName,
+		EnvironmentName: payload.EnvironmentName,
 	}
 	metrics, err := s.observabilitySvcClient.GetComponentMetrics(ctx, componentMetricsParams, payload)
 	if err != nil {

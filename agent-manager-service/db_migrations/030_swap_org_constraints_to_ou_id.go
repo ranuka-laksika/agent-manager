@@ -33,7 +33,8 @@ var migration030 = migration{
 	ID: 30,
 	Migrate: func(db *gorm.DB) error {
 		return db.Transaction(func(tx *gorm.DB) error {
-			return runSQL(tx,
+			return runSQL(
+				tx,
 				// -- gateways (partial unique from 009 excludes soft-deleted rows;
 				//    partial uniqueness is only expressible as an index) --
 				`CREATE UNIQUE INDEX IF NOT EXISTS uq_gateway_ou_id_name_active

@@ -43,6 +43,7 @@ var migration029 = migration{
 			"custom_evaluators":         "org_name",
 			"org_publisher_credentials": "org_name",
 			"agent_kinds":               "org_name",
+			"agent_thunder_clients":     "org_name",
 		}
 		for table, orgColumn := range orgColumnByTable {
 			stmts := []string{

@@ -44,6 +44,11 @@ type Config struct {
 
 // OpenChoreoClient defines the interface for OpenChoreo operations
 type OpenChoreoClient interface {
+	// NamespaceFor resolves the OpenChoreo namespace an OU's workloads run in.
+	// Callers that address that namespace outside this client (e.g. observability
+	// log/metric queries) use this so the resolution stays in one place.
+	NamespaceFor(ouID string) string
+
 	// Organization Operations (maps to OC namespaces)
 	GetOrganization(ctx context.Context, ouID string) (*models.OrganizationResponse, error)
 	ListOrganizations(ctx context.Context) ([]*models.OrganizationResponse, error)
@@ -148,14 +153,16 @@ type OpenChoreoClient interface {
 type openChoreoClient struct {
 	ocClient *gen.ClientWithResponses
 	// defaultNamespace is the OpenChoreo namespace all API calls resolve to;
-	// see namespaceFor.
+	// see NamespaceFor.
 	defaultNamespace string
 }
 
-// namespaceFor resolves the OpenChoreo namespace for an OU. The deployment
+// NamespaceFor resolves the OpenChoreo namespace for an OU. The deployment
 // currently runs single-namespace, so every OU maps to the configured default
-// namespace.
-func (c *openChoreoClient) namespaceFor(_ string) string {
+// namespace. Exposed on the interface so other components that address the same
+// namespace (e.g. the observability service reading a workload's logs) resolve
+// it identically; a future ou_id → namespace mapping plugs in here only.
+func (c *openChoreoClient) NamespaceFor(_ string) string {
 	return c.defaultNamespace
 }
 

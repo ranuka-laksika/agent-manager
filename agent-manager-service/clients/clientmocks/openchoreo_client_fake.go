@@ -159,6 +159,9 @@ import (
 //			ListSecretReferencesFunc: func(ctx context.Context, ouID string, componentName string) ([]*client.SecretReferenceInfo, error) {
 //				panic("mock out the ListSecretReferences method")
 //			},
+//			NamespaceForFunc: func(ouID string) string {
+//				panic("mock out the NamespaceFor method")
+//			},
 //			PatchProjectFunc: func(ctx context.Context, ouID string, projectName string, req client.PatchProjectRequest) error {
 //				panic("mock out the PatchProject method")
 //			},
@@ -369,6 +372,9 @@ type OpenChoreoClientMock struct {
 
 	// ListSecretReferencesFunc mocks the ListSecretReferences method.
 	ListSecretReferencesFunc func(ctx context.Context, ouID string, componentName string) ([]*client.SecretReferenceInfo, error)
+
+	// NamespaceForFunc mocks the NamespaceFor method.
+	NamespaceForFunc func(ouID string) string
 
 	// PatchProjectFunc mocks the PatchProject method.
 	PatchProjectFunc func(ctx context.Context, ouID string, projectName string, req client.PatchProjectRequest) error
@@ -908,6 +914,11 @@ type OpenChoreoClientMock struct {
 			// ComponentName is the componentName argument value.
 			ComponentName string
 		}
+		// NamespaceFor holds details about calls to the NamespaceFor method.
+		NamespaceFor []struct {
+			// OuID is the ouID argument value.
+			OuID string
+		}
 		// PatchProject holds details about calls to the PatchProject method.
 		PatchProject []struct {
 			// Ctx is the ctx argument value.
@@ -1245,6 +1256,7 @@ type OpenChoreoClientMock struct {
 	lockListOrganizations                      sync.RWMutex
 	lockListProjects                           sync.RWMutex
 	lockListSecretReferences                   sync.RWMutex
+	lockNamespaceFor                           sync.RWMutex
 	lockPatchProject                           sync.RWMutex
 	lockPromoteComponent                       sync.RWMutex
 	lockRemoveComponentEnvironmentVariables    sync.RWMutex
@@ -3245,6 +3257,38 @@ func (mock *OpenChoreoClientMock) ListSecretReferencesCalls() []struct {
 	mock.lockListSecretReferences.RLock()
 	calls = mock.calls.ListSecretReferences
 	mock.lockListSecretReferences.RUnlock()
+	return calls
+}
+
+// NamespaceFor calls NamespaceForFunc.
+func (mock *OpenChoreoClientMock) NamespaceFor(ouID string) string {
+	if mock.NamespaceForFunc == nil {
+		panic("OpenChoreoClientMock.NamespaceForFunc: method is nil but OpenChoreoClient.NamespaceFor was just called")
+	}
+	callInfo := struct {
+		OuID string
+	}{
+		OuID: ouID,
+	}
+	mock.lockNamespaceFor.Lock()
+	mock.calls.NamespaceFor = append(mock.calls.NamespaceFor, callInfo)
+	mock.lockNamespaceFor.Unlock()
+	return mock.NamespaceForFunc(ouID)
+}
+
+// NamespaceForCalls gets all the calls that were made to NamespaceFor.
+// Check the length with:
+//
+//	len(mockedOpenChoreoClient.NamespaceForCalls())
+func (mock *OpenChoreoClientMock) NamespaceForCalls() []struct {
+	OuID string
+} {
+	var calls []struct {
+		OuID string
+	}
+	mock.lockNamespaceFor.RLock()
+	calls = mock.calls.NamespaceFor
+	mock.lockNamespaceFor.RUnlock()
 	return calls
 }
 

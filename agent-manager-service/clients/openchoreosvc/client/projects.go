@@ -28,7 +28,7 @@ import (
 )
 
 func (c *openChoreoClient) CreateProject(ctx context.Context, ouID string, req CreateProjectRequest) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	annotations := map[string]string{
 		string(AnnotationKeyDisplayName): req.DisplayName,
 		string(AnnotationKeyDescription): req.Description,
@@ -68,7 +68,7 @@ func (c *openChoreoClient) CreateProject(ctx context.Context, ouID string, req C
 }
 
 func (c *openChoreoClient) GetProject(ctx context.Context, ouID, projectName string) (*models.ProjectResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project: %w", err)
@@ -91,7 +91,7 @@ func (c *openChoreoClient) GetProject(ctx context.Context, ouID, projectName str
 }
 
 func (c *openChoreoClient) PatchProject(ctx context.Context, ouID, projectName string, req PatchProjectRequest) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the project
 	resp, err := c.ocClient.GetProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
@@ -148,7 +148,7 @@ func (c *openChoreoClient) PatchProject(ctx context.Context, ouID, projectName s
 }
 
 func (c *openChoreoClient) DeleteProject(ctx context.Context, ouID, projectName string) error {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.DeleteProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
@@ -167,7 +167,7 @@ func (c *openChoreoClient) DeleteProject(ctx context.Context, ouID, projectName 
 }
 
 func (c *openChoreoClient) ListProjects(ctx context.Context, ouID string) ([]*models.ProjectResponse, error) {
-	namespaceName := c.namespaceFor(ouID)
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListProjectsWithResponse(ctx, namespaceName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
