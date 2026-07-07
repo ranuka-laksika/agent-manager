@@ -29,6 +29,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { ArrowRight, PlusCircle } from "@wso2/oxygen-ui-icons-react";
 import type { Environment } from "@agent-management-platform/types";
+import { getIsolationTierMeta } from "@agent-management-platform/shared-component";
 import { chainOptionsFor } from "../utils/chainUtils";
 
 interface PipelineChainEditorProps {
@@ -86,20 +87,26 @@ export function PipelineChainEditor(
         <Stack direction="row" alignItems="center" sx={{ minWidth: "max-content" }} spacing={0.5}>
           {chain.map((envName, index) => {
             const env = envOptions.find((e) => e.name === envName);
+            const tierMeta = getIsolationTierMeta(env?.isolationTier);
+            const TierIcon = tierMeta.icon;
             return (
               <Stack key={index} direction="row" alignItems="center" spacing={0.5}>
-                <Chip
-                  label={<Typography>
-                    <Typography variant="body2" component="span">{env?.displayName ?? envName}
-                    </Typography>
-                    <Typography component="span" variant="caption">{env?.isProduction ? " (Production)" : ""}
-                    </Typography>
-                  </Typography>}
-                  variant="outlined"
-                  onClick={(e) => handleOpenMenu(e as React.MouseEvent<HTMLElement>, index)}
-                  onDelete={canRemove ? () => handleRemove(index) : undefined}
-                  disabled={disabled}
-                />
+                <Tooltip title={tierMeta.fullLabel}>
+                  <Chip
+                    icon={<TierIcon size={14} />}
+                    label={<Typography>
+                      <Typography variant="body2" component="span">{env?.displayName ?? envName}
+                      </Typography>
+                      <Typography component="span" variant="caption">{env?.isProduction ? " (Production)" : ""}
+                      </Typography>
+                    </Typography>}
+                    variant="outlined"
+                    onClick={(e) => handleOpenMenu(e as React.MouseEvent<HTMLElement>, index)}
+                    onDelete={canRemove ? () => handleRemove(index) : undefined}
+                    disabled={disabled}
+                    sx={{ "& .MuiChip-icon": { color: tierMeta.iconColor } }}
+                  />
+                </Tooltip>
                 {index < chain.length - 1 && <ArrowRight size={14} />}
               </Stack>
             );
@@ -127,11 +134,22 @@ export function PipelineChainEditor(
         {menuOptions.length === 0 ? (
           <MenuItem disabled>No environments available</MenuItem>
         ) : (
-          menuOptions.map((env) => (
-            <MenuItem key={env.name} onClick={() => handleMenuSelect(env.name)}>
-              {env.displayName ?? env.name} {env.isProduction ? "(Production)" : ""}
-            </MenuItem>
-          ))
+          menuOptions.map((env) => {
+            const tierMeta = getIsolationTierMeta(env.isolationTier);
+            const TierIcon = tierMeta.icon;
+            return (
+              <MenuItem key={env.name} onClick={() => handleMenuSelect(env.name)}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Box display="inline-flex" alignItems="center" sx={{ color: tierMeta.iconColor }}>
+                    <TierIcon size={14} />
+                  </Box>
+                  <span>
+                    {env.displayName ?? env.name} {env.isProduction ? "(Production)" : ""}
+                  </span>
+                </Stack>
+              </MenuItem>
+            );
+          })
         )}
       </Menu>
     </Form.Section>

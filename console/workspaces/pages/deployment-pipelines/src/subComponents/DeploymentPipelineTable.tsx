@@ -40,7 +40,7 @@ import {
   useListEnvironments,
 } from "@agent-management-platform/api-client";
 import type { DeploymentPipelineResponse } from "@agent-management-platform/types";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { getIsolationTierMeta, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { FadeIn } from "@agent-management-platform/views";
 import { validatePromotionChain } from "../utils/validatePromotionChain";
 
@@ -49,7 +49,7 @@ interface DeploymentPipelineTableProps {
   onCreatePipeline?: () => void;
 }
 
-interface EnvInfo { displayName?: string; isProduction: boolean; }
+interface EnvInfo { displayName?: string; isProduction: boolean; isolationTier?: string; }
 
 function PromotionChainCell({
   pipeline,
@@ -81,19 +81,25 @@ function PromotionChainCell({
     <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
       {chain.map((envName, index) => {
         const env = envMap.get(envName);
+        const tierMeta = getIsolationTierMeta(env?.isolationTier);
+        const TierIcon = tierMeta.icon;
         return (
           <Stack key={envName} direction="row" spacing={0.5} alignItems="center">
-            <Chip
-              label={
-                <Typography component="span">
-                  <Typography variant="body2" component="span">{env?.displayName ?? envName}</Typography>
-                  {env?.isProduction && (
-                    <Typography component="span" variant="caption"> (Production)</Typography>
-                  )}
-                </Typography>
-              }
-              variant="outlined"
-            />
+            <Tooltip title={tierMeta.fullLabel}>
+              <Chip
+                icon={<TierIcon size={14} />}
+                label={
+                  <Typography component="span">
+                    <Typography variant="body2" component="span">{env?.displayName ?? envName}</Typography>
+                    {env?.isProduction && (
+                      <Typography component="span" variant="caption"> (Production)</Typography>
+                    )}
+                  </Typography>
+                }
+                variant="outlined"
+                sx={{ "& .MuiChip-icon": { color: tierMeta.iconColor } }}
+              />
+            </Tooltip>
             {index < chain.length - 1 && <ArrowRight size={12} />}
           </Stack>
         );
@@ -119,7 +125,11 @@ export function DeploymentPipelineTable(
   const envMap = useMemo(() => {
     const map = new Map<string, EnvInfo>();
     (environments ?? []).forEach((e) => {
-      map.set(e.name, { displayName: e.displayName, isProduction: e.isProduction });
+      map.set(e.name, {
+        displayName: e.displayName,
+        isProduction: e.isProduction,
+        isolationTier: e.isolationTier,
+      });
     });
     return map;
   }, [environments]);

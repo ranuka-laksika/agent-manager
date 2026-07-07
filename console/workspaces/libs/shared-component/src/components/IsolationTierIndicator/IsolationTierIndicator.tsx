@@ -32,6 +32,8 @@ export interface IsolationTierMeta {
   /** Full label for tooltips, e.g. "Sandboxing Tier 2 — gVisor". */
   fullLabel: string;
   color: "default" | "info" | "success";
+  /** Theme color path for tinting the bare shield icon, e.g. "info.main". */
+  iconColor: string;
   icon: ComponentType<{ size?: string | number }>;
 }
 
@@ -43,6 +45,7 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     shortLabel: "Sandboxing T1",
     fullLabel: "Sandboxing Tier 1 — runc (default)",
     color: "default",
+    iconColor: "text.secondary",
     icon: Shield,
   },
   gvisor: {
@@ -52,6 +55,7 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     shortLabel: "Sandboxing T2",
     fullLabel: "Sandboxing Tier 2 — gVisor",
     color: "info",
+    iconColor: "info.main",
     icon: ShieldPlus,
   },
   kata: {
@@ -61,6 +65,7 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     shortLabel: "Sandboxing T3",
     fullLabel: "Sandboxing Tier 3 — Kata Containers",
     color: "success",
+    iconColor: "success.main",
     icon: ShieldCheck,
   },
 };
@@ -69,12 +74,6 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
 export function getIsolationTierMeta(tier?: string): IsolationTierMeta {
   return TIER_META[tier as IsolationTierValue] ?? TIER_META.runc;
 }
-
-const ICON_SX = {
-  default: { color: "text.secondary" },
-  info: { color: "info.main" },
-  success: { color: "success.main" },
-} as const;
 
 interface IsolationTierBadgeProps {
   tier?: string;
@@ -90,7 +89,7 @@ export function IsolationTierBadge({ tier, size = 18 }: IsolationTierBadgeProps)
   const IconComponent = meta.icon;
   return (
     <Tooltip title={meta.fullLabel}>
-      <Box display="inline-flex" alignItems="center" sx={ICON_SX[meta.color]}>
+      <Box display="inline-flex" alignItems="center" sx={{ color: meta.iconColor }}>
         <IconComponent size={size} />
       </Box>
     </Tooltip>
