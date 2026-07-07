@@ -38,12 +38,13 @@ import {
   useAddGroupMembers,
   useRemoveGroupMembers,
 } from "@agent-management-platform/api-client";
-import { PageLayout } from "@agent-management-platform/views";
 import {
   absoluteRouteMap,
   type ThunderGroup,
 } from "@agent-management-platform/types";
+import { BackButton } from "./components/BackButton";
 import { EditFormSkeleton } from "./components/EditFormSkeleton";
+import { EntityHeader } from "./components/EntityHeader";
 
 type TabId = "groups" | "roles";
 
@@ -109,11 +110,8 @@ export const UserEditPage: React.FC = () => {
 
   const usersPath = orgId
     ? generatePath(
-        (
-          absoluteRouteMap.children.org.children as unknown as {
-            identities: { children: { users: { path: string } } };
-          }
-        ).identities.children.users.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.users.path,
         { orgId },
       )
     : "#";
@@ -162,27 +160,25 @@ export const UserEditPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <PageLayout
-        isLoading
-        disableIcon
-        backHref={usersPath}
-        backLabel="Back to Users"
-      >
+      <>
+        <BackButton to={usersPath} label="Users" />
         <EditFormSkeleton tabs={2} />
-      </PageLayout>
+      </>
     );
   }
 
   const userRoles = userRolesData?.roles ?? [];
 
   return (
-    <PageLayout
-      title={username || "Edit User"}
-      backHref={usersPath}
-      backLabel="Back to Users"
-      disableIcon
-    >
+    <>
+      <BackButton to={usersPath} label="Users" />
       <Stack spacing={3}>
+        <EntityHeader
+          fallback="U"
+          name={username}
+          subtitle={(user?.attributes?.["email"] as string) || undefined}
+          id={userId ?? ""}
+        />
         {saveError != null && <Alert severity="error">{saveError}</Alert>}
         {saveSuccess && (
           <Alert severity="success">User updated successfully.</Alert>
@@ -294,6 +290,6 @@ export const UserEditPage: React.FC = () => {
           </Stack>
         )}
       </Stack>
-    </PageLayout>
+    </>
   );
 };

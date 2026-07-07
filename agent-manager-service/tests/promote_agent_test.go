@@ -238,7 +238,7 @@ func TestPromoteAgent(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &errResp))
 		require.Equal(t, utils.ErrCodeValidation, errResp.Code)
 		require.Equal(t,
-			"useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig",
+			"useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, instrumentationVersion, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig",
 			errResp.Message)
 
 		// The agent must not have been promoted.

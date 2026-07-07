@@ -37,11 +37,8 @@ import { GroupEditPage } from "./GroupEditPage";
 
 export const IdentitiesOrganization: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
-  const identitiesRoute = (
-    absoluteRouteMap.children.org.children as unknown as {
-      identities: { children: { users: { path: string } } };
-    }
-  ).identities;
+  const identitiesRoute =
+    absoluteRouteMap.children.org.children.settings.children.identities;
 
   return (
     <Routes>

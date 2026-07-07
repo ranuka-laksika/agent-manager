@@ -22,10 +22,8 @@ import {
   Button,
   IconButton,
   ListingTable,
-  Stack,
   TablePagination,
   Tooltip,
-  Typography,
 } from "@wso2/oxygen-ui";
 import { Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
@@ -34,12 +32,13 @@ import {
   useListGroups,
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import { FadeIn, PageLayout } from "@agent-management-platform/views";
 import {
   absoluteRouteMap,
   type ThunderGroup,
 } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
+
+const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 
 export const GroupsPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -47,7 +46,7 @@ export const GroupsPage: React.FC = () => {
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = useListGroups(
     { orgName: orgId },
@@ -68,11 +67,8 @@ export const GroupsPage: React.FC = () => {
     }
   }, [groups.length, total, page, rowsPerPage]);
 
-  const identitiesRoute = (
-    absoluteRouteMap.children.org.children as unknown as {
-      identities: { children: { groups: { path: string } } };
-    }
-  ).identities;
+  const identitiesRoute =
+    absoluteRouteMap.children.org.children.settings.children.identities;
 
   const createPath = orgId
     ? generatePath(identitiesRoute.children.groups.path + "/create", { orgId })
@@ -86,6 +82,16 @@ export const GroupsPage: React.FC = () => {
         })
       : "#";
 
+  const filteredGroups = useMemo(() => {
+    if (!search) return groups;
+    const q = search.toLowerCase();
+    return groups.filter(
+      (g) =>
+        g.name.toLowerCase().includes(q) ||
+        (g.description ?? "").toLowerCase().includes(q),
+    );
+  }, [groups, search]);
+
   const handleDelete = (group: ThunderGroup) => {
     addConfirmation({
       title: "Delete Group",
@@ -98,130 +104,107 @@ export const GroupsPage: React.FC = () => {
   };
 
   return (
-    <PageLayout title="Groups" disableIcon>
+    <>
       {error != null && (
         <Alert severity="error" sx={{ mb: 2 }}>
           Failed to load groups
         </Alert>
       )}
 
-      <Stack direction="row" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          startIcon={<Plus />}
-          onClick={() => navigate(createPath)}
-        >
-          Create Group
-        </Button>
-      </Stack>
-
-      <ListingTable.Container disablePaper>
-        {!isLoading && total === 0 ? (
-          <ListingTable.EmptyState
-            illustration={<Folder size={64} />}
-            title="No groups yet"
-            description='Click "Create Group" to add one.'
+      <ListingTable.Provider searchValue={search} onSearchChange={setSearch}>
+        <ListingTable.Container>
+          <ListingTable.Toolbar
+            showSearch
+            searchPlaceholder="Search groups..."
+            actions={
+              <Button
+                variant="contained"
+                startIcon={<Plus />}
+                onClick={() => navigate(createPath)}
+              >
+                Create Group
+              </Button>
+            }
           />
-        ) : (
-          <ListingTable variant="card">
-            <ListingTable.Head>
-              <ListingTable.Row>
-                <ListingTable.Cell>Name</ListingTable.Cell>
-                <ListingTable.Cell>Description</ListingTable.Cell>
-                <ListingTable.Cell align="right" width="120px" />
-              </ListingTable.Row>
-            </ListingTable.Head>
-            <ListingTable.Body>
-              {isLoading && <ListingSkeletonRows rows={rowsPerPage} />}
-              {!isLoading &&
-                groups.map((group: ThunderGroup) => (
-                  <ListingTable.Row
-                    key={group.id}
-                    variant="card"
-                    hover
-                    clickable
-                    onClick={() => navigate(editGroupPath(group.id))}
-                    onMouseEnter={() => setHoveredId(group.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    onFocus={() => setHoveredId(group.id)}
-                    onBlur={(e) => {
-                      if (
-                        !e.currentTarget.contains(
-                          e.relatedTarget as Node | null,
-                        )
-                      ) {
-                        setHoveredId(null);
-                      }
-                    }}
-                  >
-                    <ListingTable.Cell>
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Avatar
-                          sx={{
-                            bgcolor: "primary.main",
-                            color: "primary.contrastText",
-                            fontSize: 16,
-                            height: 36,
-                            width: 36,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {group.name.charAt(0).toUpperCase() || "G"}
-                        </Avatar>
-                        <Typography variant="body2" fontWeight={500} noWrap>
-                          {group.name}
-                        </Typography>
-                      </Stack>
-                    </ListingTable.Cell>
-                    <ListingTable.Cell>
-                      <Typography variant="body2" color="text.secondary">
-                        {group.description ?? "—"}
-                      </Typography>
-                    </ListingTable.Cell>
-                    <ListingTable.Cell align="right">
-                      {hoveredId === group.id && (
-                        <FadeIn>
-                          <Stack
-                            direction="row"
-                            spacing={0.5}
-                            justifyContent="flex-end"
-                          >
-                            <Tooltip title="Delete group">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(group);
-                                }}
-                              >
-                                <Trash size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </Stack>
-                        </FadeIn>
-                      )}
-                    </ListingTable.Cell>
-                  </ListingTable.Row>
-                ))}
-            </ListingTable.Body>
-          </ListingTable>
-        )}
-        {!isLoading && total > 0 && (
-          <TablePagination
-            component="div"
-            count={total}
-            page={page}
-            rowsPerPage={rowsPerPage}
-            onPageChange={(_e, newPage) => setPage(newPage)}
-            onRowsPerPageChange={(e) => {
-              setRowsPerPage(parseInt(e.target.value, 10));
-              setPage(0);
-            }}
-            rowsPerPageOptions={[5, 10, 25, 50]}
-          />
-        )}
-      </ListingTable.Container>
-    </PageLayout>
+          {!isLoading && total === 0 ? (
+            <ListingTable.EmptyState
+              illustration={<Folder size={64} />}
+              title="No groups yet"
+              description='Click "Create Group" to add one.'
+            />
+          ) : !isLoading && filteredGroups.length === 0 ? (
+            <ListingTable.EmptyState
+              illustration={<Folder size={64} />}
+              title="No groups found"
+              description={`No groups match "${search}". Try a different search term.`}
+            />
+          ) : (
+            <ListingTable variant="table">
+              <ListingTable.Head>
+                <ListingTable.Row>
+                  <ListingTable.Cell>Name</ListingTable.Cell>
+                  <ListingTable.Cell align="center" width="80px" />
+                </ListingTable.Row>
+              </ListingTable.Head>
+              <ListingTable.Body>
+                {isLoading && <ListingSkeletonRows rows={rowsPerPage} columns={1} />}
+                {!isLoading &&
+                  filteredGroups.map((group: ThunderGroup) => (
+                    <ListingTable.Row
+                      key={group.id}
+                      variant="table"
+                      hover
+                      clickable
+                      onClick={() => navigate(editGroupPath(group.id))}
+                    >
+                      <ListingTable.Cell>
+                        <ListingTable.CellIcon
+                          icon={
+                            <Avatar sx={AVATAR_SX}>
+                              {group.name.charAt(0).toUpperCase() || "G"}
+                            </Avatar>
+                          }
+                          primary={group.name}
+                          secondary={group.description ?? undefined}
+                        />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell align="center">
+                        <ListingTable.RowActions visibility="hover">
+                          <Tooltip title="Delete group">
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(group);
+                              }}
+                            >
+                              <Trash size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </ListingTable.RowActions>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))}
+              </ListingTable.Body>
+            </ListingTable>
+          )}
+          {!isLoading && total >= 5 && (
+            <TablePagination
+              component="div"
+              count={total}
+              page={page}
+              rowsPerPage={rowsPerPage}
+              onPageChange={(_e, newPage) => setPage(newPage)}
+              onRowsPerPageChange={(e) => {
+                setRowsPerPage(parseInt(e.target.value, 10));
+                setPage(0);
+              }}
+              rowsPerPageOptions={[5, 10, 25, 50]}
+            />
+          )}
+        </ListingTable.Container>
+      </ListingTable.Provider>
+    </>
   );
 };

@@ -748,11 +748,12 @@ func ValidatePromoteAgentRequest(payload *spec.PromoteAgentRequest) error {
 	if useSource {
 		if len(payload.Env) > 0 || len(payload.Files) > 0 ||
 			payload.EnableAutoInstrumentation != nil ||
+			payload.InstrumentationVersion.IsSet() ||
 			payload.EnableApiKeySecurity != nil ||
 			payload.CorsConfig != nil ||
 			payload.EnableOAuthSecurity != nil ||
 			payload.OauthConfig != nil {
-			return fmt.Errorf("useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig")
+			return fmt.Errorf("useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, instrumentationVersion, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig")
 		}
 	}
 

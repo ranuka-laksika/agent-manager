@@ -25,6 +25,7 @@ export interface NavigationItem {
   icon?: ReactNode;
   href?: string;
   isActive?: boolean;
+  pinBottom?: boolean;
   type: 'item';
 }
 export interface NavigationSection {
@@ -63,6 +64,9 @@ export function LeftNavigation({
   mainItems,
   groupedItems,
 }: LeftNavigationProps) {
+  const topItems = mainItems.filter((item) => !item.pinBottom);
+  const bottomItems = mainItems.filter((item) => item.pinBottom);
+
   return (
     <Sidebar collapsed={collapsed} activeItem={activeItem} width={280}>
       <Sidebar.Nav
@@ -82,7 +86,7 @@ export function LeftNavigation({
           },
         }}
       >
-        <Sidebar.Category>{mainItems.map(renderItem)}</Sidebar.Category>
+        <Sidebar.Category>{topItems.map(renderItem)}</Sidebar.Category>
         {groupedItems.map((group) => (
           <Sidebar.Category key={group.title}>
             <Sidebar.CategoryLabel>{group.title}</Sidebar.CategoryLabel>
@@ -90,6 +94,11 @@ export function LeftNavigation({
           </Sidebar.Category>
         ))}
       </Sidebar.Nav>
+      {bottomItems.length > 0 && (
+        <Sidebar.Footer>
+          <Sidebar.Category>{bottomItems.map(renderItem)}</Sidebar.Category>
+        </Sidebar.Footer>
+      )}
     </Sidebar>
   );
 }
