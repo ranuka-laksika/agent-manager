@@ -3,14 +3,20 @@ name: Instrumentation Provider Lock Check
 on:
   pull_request:
     branches: ["main"]
+    # Only the inputs that determine which locks must exist / what they pin.
+    # Narrow on purpose: editing RELEASING.md, sitecustomize.py, etc. must not
+    # trigger a lock check.
     paths:
       - ".github/release-config.json"
-      - "python-instrumentation-provider/**"
+      - "python-instrumentation-provider/requirements.in"
+      - "python-instrumentation-provider/locks/**"
+      - "python-instrumentation-provider/scripts/**"
+      - "python-instrumentation-provider/Dockerfile"
       - ".github/workflows/instrumentation-provider-lock-check.yaml"
 
 jobs:
-  drift-check:
-    name: Regenerate & Diff
+  check-locks:
+    name: Verify locks cover the matrix
     runs-on:
       - codebuild-wso2_agent-manager-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
@@ -20,15 +26,11 @@ jobs:
       - name: Ensure jq is available
         run: jq --version
 
-      - name: Regenerate dependency locks
+      # Hermetic: reads only committed files (no PyPI/Docker), so it is
+      # deterministic over time. Catches a release-config entry with no committed
+      # lock, a lock whose traceloop-sdk pin doesn't match, or an orphan lock.
+      # Refreshing the pinned transitive tree is an intentional, human-run step
+      # (`make lock`), not something CI re-resolves.
+      - name: Verify committed locks cover the release-config matrix
         working-directory: ./python-instrumentation-provider
-        run: make lock
-
-      - name: Verify no drift in locks
-        run: |
-          if ! git diff --exit-code -- python-instrumentation-provider/locks; then
-            echo ""
-            echo "::error::Instrumentation provider locks are out of sync with release-config.json / requirements.in."
-            echo "::error::Run 'make lock' in python-instrumentation-provider/ and commit the result."
-            exit 1
-          fi
+        run: make check-locks

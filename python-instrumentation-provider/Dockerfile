@@ -20,10 +20,10 @@ WORKDIR /instrumentation
 # requirements.in + traceloop-sdk==${TRACELOOP_VERSION}; requirements.in is folded
 # into the lock and is NOT installed here. A missing lock fails the build (forces
 # `make lock`), which is intentional — never resolve dependencies live.
-COPY locks/ ./locks/
-RUN pip install --no-cache-dir \
-      -r "locks/traceloop-${TRACELOOP_VERSION}-python${PYTHON_VERSION}.txt" \
-      --target packages
+# Copy only the lock this build needs (variable expansion in COPY source is
+# supported) so re-locking one version doesn't bust the cached layer for others.
+COPY locks/traceloop-${TRACELOOP_VERSION}-python${PYTHON_VERSION}.txt ./lock.txt
+RUN pip install --no-cache-dir -r lock.txt --target packages
 
 # #Copy the custom sitecustomize.py into the packages folder.
 COPY sitecustomize.py packages/sitecustomize.py
