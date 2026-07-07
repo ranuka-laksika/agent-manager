@@ -40,6 +40,7 @@ export default defineConfig({
       { find: '@agent-management-platform/agent-security', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-security/src') },
       { find: '@agent-management-platform/agent-kind', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-kind/src') },
       { find: '@agent-management-platform/identities', replacement: path.resolve(__dirname, '../../workspaces/pages/identities/src') },
+      { find: '@agent-management-platform/settings', replacement: path.resolve(__dirname, '../../workspaces/pages/settings/src') },
       { find: '@agent-management-platform/deployment-pipelines', replacement: path.resolve(__dirname, '../../workspaces/pages/deployment-pipelines/src') },
     ],
   },

@@ -23,6 +23,8 @@ import {
   Route,
   useParams,
   Outlet,
+  Navigate,
+  generatePath,
 } from "react-router-dom";
 import { OxygenLayout } from "../Layouts";
 import { Protected } from "../Providers/Protected";
@@ -43,7 +45,7 @@ import {
   LazyViewMCPServerComponent,
   LazyGatewaysOrg,
   LazyThunderInstancesOrg,
-  LazyIdentitiesOrg,
+  LazySettingsOrg,
   LazyDeploymentPipelinesOrg,
   LazyEnvironmentsOrg,
   LazyCatalogOrg,
@@ -65,11 +67,13 @@ import {
   LazyCreateMonitorComponent,
   LazyViewMonitorComponent,
   LazyEditMonitorComponent,
-  LazyProfilePage,
   LazyCompareMonitorComponent,
 } from "../pages";
 import { LoadingFallback } from "../components/LoadingFallback";
-import { relativeRouteMap } from "@agent-management-platform/types";
+import {
+  relativeRouteMap,
+  absoluteRouteMap,
+} from "@agent-management-platform/types";
 import {
   useExternalPageModules,
   type ExternalPageModule,
@@ -80,6 +84,18 @@ import {
   useGetAgent,
 } from "@agent-management-platform/api-client";
 import { MountPoints } from "../types";
+
+// Back-compat redirect: the Identities pages (users/roles/groups) moved from
+// /org/:orgId/identities/* to /org/:orgId/settings/identities/*. Preserve any
+// trailing sub-path so existing deep links keep working.
+function LegacyIdentitiesRedirect() {
+  const { orgId, "*": rest } = useParams<{ orgId: string; "*": string }>();
+  const base = generatePath(
+    absoluteRouteMap.children.org.children.settings.children.identities.path,
+    { orgId },
+  );
+  return <Navigate to={rest ? `${base}/${rest}` : base} replace />;
+}
 
 // Remounts the Security page on agent change so per-agent component state
 // (Create-key dialog open flag, newly-issued-key banner) does not leak
@@ -105,7 +121,13 @@ function GuardedOutlet({
   if (isError) {
     return <ErrorPages.CustomError title={title} message={message} />;
   }
-  return <Outlet />;
+  // Suspense boundary for the lazy route components rendered below this
+  // guard, so every lazy import gets a loading fallback.
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 function OrgGuard() {
@@ -218,14 +240,6 @@ export function RootRouter() {
             element={<OrgGuard />}
           >
             <Route index element={<LazyOverviewOrg />} />
-            <Route
-              path={relativeRouteMap.children.org.children.profile.path}
-              element={
-                <Suspense fallback={<LoadingFallback />}>
-                  <LazyProfilePage />
-                </Suspense>
-              }
-            />
             {orgPageModules.map((module) => (
               <Route
                 key={module.path}
@@ -254,10 +268,12 @@ export function RootRouter() {
             />
             <Route
               path={
-                relativeRouteMap.children.org.children.identities.path + "/*"
+                relativeRouteMap.children.org.children.settings.path + "/*"
               }
-              element={<LazyIdentitiesOrg />}
+              element={<LazySettingsOrg />}
             />
+            {/* Back-compat: identities pages moved under Settings → IDP Settings */}
+            <Route path="identities/*" element={<LegacyIdentitiesRedirect />} />
             <Route
               path={
                 relativeRouteMap.children.org.children.deploymentPipelines

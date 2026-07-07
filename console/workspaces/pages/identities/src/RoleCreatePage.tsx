@@ -16,18 +16,14 @@
  */
 
 import React, { useCallback, useState } from "react";
-import {
-  Alert,
-  Box,
-  Button,
-  Collapse,
-  Form,
-  TextField,
-} from "@wso2/oxygen-ui";
+import { Alert, Box, Button, Collapse, Form, TextField } from "@wso2/oxygen-ui";
 import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useCreateRole } from "@agent-management-platform/api-client";
-import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import {
+  useFormValidation,
+  useDirtyState,
+} from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { createRoleSchema, type CreateRoleFormValues } from "./forms/schemas";
 
@@ -46,14 +42,16 @@ export const RoleCreatePage: React.FC = () => {
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
     useState<typeof errors>({});
 
-  const { mutateAsync: createRole, isPending: isCreating, error: createError } =
-    useCreateRole();
+  const {
+    mutateAsync: createRole,
+    isPending: isCreating,
+    error: createError,
+  } = useCreateRole();
 
   const rolesPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { roles: { path: string } } };
-        }).identities.children.roles.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.roles.path,
         { orgId },
       )
     : "#";
@@ -76,7 +74,7 @@ export const RoleCreatePage: React.FC = () => {
     setLastSubmittedValidationErrors({});
 
     try {
-      await createRole({
+      const created = await createRole({
         params: { orgName: orgId },
         body: {
           name: formData.name.trim(),
@@ -85,24 +83,31 @@ export const RoleCreatePage: React.FC = () => {
       });
       resetDirty();
       clearErrors();
-      navigate(rolesPath);
+      navigate(
+        generatePath(
+          absoluteRouteMap.children.org.children.settings.children.identities
+            .children.roles.children.detail.path,
+          { orgId, roleId: created.id },
+        ),
+      );
     } catch {
       // createError state is set by React Query and displayed in the Alert above
     }
   }, [
-    formData, validateForm, errors, createRole, orgId,
-    resetDirty, clearErrors, navigate, rolesPath,
+    formData,
+    validateForm,
+    errors,
+    createRole,
+    orgId,
+    resetDirty,
+    clearErrors,
+    navigate,
   ]);
 
   const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
-    <PageLayout
-      title="Create Role"
-      backHref={rolesPath}
-      backLabel="Back to Roles"
-      disableIcon
-    >
+    <>
       <Box display="flex" flexDirection="column" gap={2}>
         {createError != null && (
           <Alert severity="error">
@@ -127,11 +132,16 @@ export const RoleCreatePage: React.FC = () => {
                 />
               </Form.ElementWrapper>
 
-              <Form.ElementWrapper label="Description (optional)" name="description">
+              <Form.ElementWrapper
+                label="Description (optional)"
+                name="description"
+              >
                 <TextField
                   id="description"
                   value={formData.description}
-                  onChange={(e) => handleFieldChange("description", e.target.value)}
+                  onChange={(e) =>
+                    handleFieldChange("description", e.target.value)
+                  }
                   placeholder="Describe the role's purpose and permissions"
                   multiline
                   minRows={2}
@@ -154,7 +164,11 @@ export const RoleCreatePage: React.FC = () => {
             </Alert>
           </Collapse>
           <Box display="flex" flexDirection="row" gap={1} alignItems="center">
-            <Button variant="outlined" color="primary" onClick={() => navigate(rolesPath)}>
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(rolesPath)}
+            >
               Cancel
             </Button>
             <Button
@@ -169,6 +183,6 @@ export const RoleCreatePage: React.FC = () => {
           </Box>
         </Box>
       </Box>
-    </PageLayout>
+    </>
   );
 };

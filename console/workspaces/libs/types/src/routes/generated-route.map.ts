@@ -11,6 +11,11 @@ export const generatedRouteMap =  {
       "path": "/org/:orgId",
       "wildPath": "/org/:orgId/*",
       "children": {
+        "profile": {
+          "path": "/org/:orgId/profile",
+          "wildPath": "/org/:orgId/profile/*",
+          "children": {}
+        },
         "thunderInstances": {
           "path": "/org/:orgId/thunder-instances",
           "wildPath": "/org/:orgId/thunder-instances/*",
@@ -65,39 +70,56 @@ export const generatedRouteMap =  {
             }
           }
         },
-        "identities": {
-          "path": "/org/:orgId/identities",
-          "wildPath": "/org/:orgId/identities/*",
+        "settings": {
+          "path": "/org/:orgId/settings",
+          "wildPath": "/org/:orgId/settings/*",
           "children": {
-            "users": {
-              "path": "/org/:orgId/identities/users",
-              "wildPath": "/org/:orgId/identities/users/*",
+            "identities": {
+              "path": "/org/:orgId/settings/identities",
+              "wildPath": "/org/:orgId/settings/identities/*",
               "children": {
-                "detail": {
-                  "path": "/org/:orgId/identities/users/:userId",
-                  "wildPath": "/org/:orgId/identities/users/:userId/*",
-                  "children": {}
+                "users": {
+                  "path": "/org/:orgId/settings/identities/users",
+                  "wildPath": "/org/:orgId/settings/identities/users/*",
+                  "children": {
+                    "detail": {
+                      "path": "/org/:orgId/settings/identities/users/:userId",
+                      "wildPath": "/org/:orgId/settings/identities/users/:userId/*",
+                      "children": {}
+                    }
+                  }
+                },
+                "roles": {
+                  "path": "/org/:orgId/settings/identities/roles",
+                  "wildPath": "/org/:orgId/settings/identities/roles/*",
+                  "children": {
+                    "detail": {
+                      "path": "/org/:orgId/settings/identities/roles/:roleId",
+                      "wildPath": "/org/:orgId/settings/identities/roles/:roleId/*",
+                      "children": {}
+                    }
+                  }
+                },
+                "groups": {
+                  "path": "/org/:orgId/settings/identities/groups",
+                  "wildPath": "/org/:orgId/settings/identities/groups/*",
+                  "children": {
+                    "detail": {
+                      "path": "/org/:orgId/settings/identities/groups/:groupId",
+                      "wildPath": "/org/:orgId/settings/identities/groups/:groupId/*",
+                      "children": {}
+                    }
+                  }
                 }
               }
             },
-            "roles": {
-              "path": "/org/:orgId/identities/roles",
-              "wildPath": "/org/:orgId/identities/roles/*",
+            "appearance": {
+              "path": "/org/:orgId/settings/appearance",
+              "wildPath": "/org/:orgId/settings/appearance/*",
               "children": {
-                "detail": {
-                  "path": "/org/:orgId/identities/roles/:roleId",
-                  "wildPath": "/org/:orgId/identities/roles/:roleId/*",
-                  "children": {}
-                }
-              }
-            },
-            "groups": {
-              "path": "/org/:orgId/identities/groups",
-              "wildPath": "/org/:orgId/identities/groups/*",
-              "children": {
-                "detail": {
-                  "path": "/org/:orgId/identities/groups/:groupId",
-                  "wildPath": "/org/:orgId/identities/groups/:groupId/*",
+                "theme": {
+                  "path": "/org/:orgId/settings/appearance/theme",
+                  "wildPath": "/org/:orgId/settings/appearance/theme/*",
                   "children": {}
                 }
               }

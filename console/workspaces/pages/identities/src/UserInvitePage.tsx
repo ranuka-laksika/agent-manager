@@ -30,7 +30,10 @@ import {
 import { Check, Copy, Link2 } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useInviteUser } from "@agent-management-platform/api-client";
-import { PageLayout, useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import {
+  useFormValidation,
+  useDirtyState,
+} from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { inviteUserSchema, type InviteUserFormValues } from "./forms/schemas";
 
@@ -48,14 +51,16 @@ export const UserInvitePage: React.FC = () => {
   const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
     useState<typeof errors>({});
 
-  const { mutateAsync: inviteUser, isPending: isInviting, error: inviteError } =
-    useInviteUser();
+  const {
+    mutateAsync: inviteUser,
+    isPending: isInviting,
+    error: inviteError,
+  } = useInviteUser();
 
   const usersPath = orgId
     ? generatePath(
-        (absoluteRouteMap.children.org.children as unknown as {
-          identities: { children: { users: { path: string } } };
-        }).identities.children.users.path,
+        absoluteRouteMap.children.org.children.settings.children.identities
+          .children.users.path,
         { orgId },
       )
     : "#";
@@ -106,12 +111,7 @@ export const UserInvitePage: React.FC = () => {
   const submitErrors = Object.values(lastSubmittedValidationErrors);
 
   return (
-    <PageLayout
-      title="Invite User"
-      backHref={usersPath}
-      backLabel="Back to Users"
-      disableIcon
-    >
+    <>
       <Box display="flex" flexDirection="column" gap={2}>
         {inviteError != null && (
           <Alert severity="error">
@@ -130,7 +130,9 @@ export const UserInvitePage: React.FC = () => {
                       id="email"
                       type="email"
                       value={formData.email}
-                      onChange={(e) => handleFieldChange("email", e.target.value)}
+                      onChange={(e) =>
+                        handleFieldChange("email", e.target.value)
+                      }
                       placeholder="user@example.com"
                       autoComplete="off"
                       error={!!errors.email}
@@ -143,21 +145,35 @@ export const UserInvitePage: React.FC = () => {
             </Form.Stack>
 
             <Box display="flex" flexDirection="column" gap={3}>
-              <Collapse in={submitErrors.length > 0} timeout="auto" unmountOnExit>
+              <Collapse
+                in={submitErrors.length > 0}
+                timeout="auto"
+                unmountOnExit
+              >
                 <Alert severity="error">
                   {submitErrors.map((error, index) => (
                     <Box key={index}>{error}</Box>
                   ))}
                 </Alert>
               </Collapse>
-              <Box display="flex" flexDirection="row" gap={1} alignItems="center">
-                <Button variant="outlined" color="primary" onClick={() => navigate(usersPath)} disabled={isInviting}>
+              <Box
+                display="flex"
+                flexDirection="row"
+                gap={1}
+                alignItems="center"
+              >
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => navigate(usersPath)}
+                  disabled={isInviting}
+                >
                   Cancel
                 </Button>
                 <Button
                   variant="contained"
                   color="primary"
-                  startIcon={<Link2   size={16} />}
+                  startIcon={<Link2 size={16} />}
                   onClick={handleSubmit}
                   disabled={isInviting || !formData.email.trim()}
                 >
@@ -172,15 +188,21 @@ export const UserInvitePage: React.FC = () => {
               <Form.Subheader>Invitation Created</Form.Subheader>
               <Form.Stack spacing={2}>
                 <Alert severity="success">
-                  An invitation has been created for <strong>{formData.email}</strong>.{" "}
-                  Share the link below with the user to complete registration.
+                  An invitation has been created for{" "}
+                  <strong>{formData.email}</strong>. Share the link below with
+                  the user to complete registration.
                 </Alert>
 
                 <Box>
                   <Typography variant="body2" color="text.secondary" mb={1}>
                     Invite Link
                   </Typography>
-                  <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+                  <Box
+                    display="flex"
+                    flexDirection="row"
+                    gap={1}
+                    alignItems="center"
+                  >
                     <TextField
                       fullWidth
                       value={inviteLink}
@@ -194,11 +216,25 @@ export const UserInvitePage: React.FC = () => {
                   </Box>
                 </Box>
 
-                <Box display="flex" flexDirection="row" gap={1} alignItems="center" justifyContent="flex-end">
-                  <Button variant="outlined" color="primary" onClick={handleInviteAnother}>
+                <Box
+                  display="flex"
+                  flexDirection="row"
+                  gap={1}
+                  alignItems="center"
+                  justifyContent="flex-end"
+                >
+                  <Button
+                    variant="outlined"
+                    color="primary"
+                    onClick={handleInviteAnother}
+                  >
                     Invite Another
                   </Button>
-                  <Button variant="contained" color="primary" onClick={() => navigate(usersPath)}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={() => navigate(usersPath)}
+                  >
                     Done
                   </Button>
                 </Box>
@@ -207,6 +243,6 @@ export const UserInvitePage: React.FC = () => {
           </Form.Stack>
         )}
       </Box>
-    </PageLayout>
+    </>
   );
 };
