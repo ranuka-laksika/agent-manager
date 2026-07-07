@@ -66,6 +66,15 @@ const sidebars: SidebarsConfig = {
       items: [
         'administration/register-ai-gateway',
         'administration/environment-management',
+        {
+          type: 'category',
+          label: 'Agent Isolation Tiers',
+          collapsed: true,
+          items: [
+            'administration/isolation-tiers/gvisor',
+            'administration/isolation-tiers/kata',
+          ],
+        },
         'administration/configure-identity-providers',
         'administration/instrumentation-catalog',
       ],
