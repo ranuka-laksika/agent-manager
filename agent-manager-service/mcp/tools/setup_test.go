@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 )
 
 // constants for testing
@@ -62,7 +63,11 @@ func setupTestServerWithToolsets(t *testing.T, toolsets *Toolsets) *gomcp.Client
 
 	toolsets.Register(server)
 
-	ctx := context.Background()
+	// Tools resolve the caller's OU ID from token claims on the connection
+	// context, mirroring how the assertion middleware injects them in prod.
+	ctx := jwtassertion.ContextWithTokenClaims(context.Background(), &jwtassertion.TokenClaims{
+		OuId: testOrgName,
+	})
 	clientTransport, serverTransport := gomcp.NewInMemoryTransports()
 
 	if _, err := server.Connect(ctx, serverTransport, nil); err != nil {

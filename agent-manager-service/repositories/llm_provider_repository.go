@@ -105,7 +105,7 @@ func (r *LLMProviderRepo) GetByUUID(providerID, orgUUID string) (*models.LLMProv
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.uuid = ? AND a.organization_name = ? AND a.kind = ?", providerID, orgUUID, models.KindLLMProvider).
+		Where("a.uuid = ? AND a.ou_id = ? AND a.kind = ?", providerID, orgUUID, models.KindLLMProvider).
 		First(&provider).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -133,7 +133,7 @@ func (r *LLMProviderRepo) GetByHandle(handle, orgUUID string) (*models.LLMProvid
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", handle, orgUUID, models.KindLLMProvider).
+		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindLLMProvider).
 		First(&provider).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -160,7 +160,7 @@ func (r *LLMProviderRepo) List(orgUUID string, limit, offset int) ([]*models.LLM
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ?", orgUUID, models.KindLLMProvider).
+		Where("a.ou_id = ? AND a.kind = ?", orgUUID, models.KindLLMProvider).
 		Order("a.created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -241,7 +241,7 @@ func (r *LLMProviderRepo) Delete(providerID, orgUUID string) error {
 		var artifact struct{ UUID uuid.UUID }
 		result := tx.Table("artifacts").
 			Select("uuid").
-			Where("uuid = ? AND organization_name = ? AND kind = ?", providerUUID, orgUUID, models.KindLLMProvider).
+			Where("uuid = ? AND ou_id = ? AND kind = ?", providerUUID, orgUUID, models.KindLLMProvider).
 			Take(&artifact)
 		if result.Error != nil {
 			if errors.Is(result.Error, gorm.ErrRecordNotFound) {

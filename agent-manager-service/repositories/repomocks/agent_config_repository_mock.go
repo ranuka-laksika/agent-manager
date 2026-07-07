@@ -15,10 +15,10 @@ import (
 //
 //		// make and configure a mocked repositories.AgentConfigRepository
 //		mockedAgentConfigRepository := &AgentConfigRepositoryMock{
-//			DeleteAllByAgentFunc: func(orgName string, projectName string, agentName string) error {
+//			DeleteAllByAgentFunc: func(ouID string, projectName string, agentName string) error {
 //				panic("mock out the DeleteAllByAgent method")
 //			},
-//			GetFunc: func(orgName string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error) {
+//			GetFunc: func(ouID string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error) {
 //				panic("mock out the Get method")
 //			},
 //			UpsertFunc: func(config *models.AgentConfig) error {
@@ -32,10 +32,10 @@ import (
 //	}
 type AgentConfigRepositoryMock struct {
 	// DeleteAllByAgentFunc mocks the DeleteAllByAgent method.
-	DeleteAllByAgentFunc func(orgName string, projectName string, agentName string) error
+	DeleteAllByAgentFunc func(ouID string, projectName string, agentName string) error
 
 	// GetFunc mocks the Get method.
-	GetFunc func(orgName string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error)
+	GetFunc func(ouID string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error)
 
 	// UpsertFunc mocks the Upsert method.
 	UpsertFunc func(config *models.AgentConfig) error
@@ -44,7 +44,7 @@ type AgentConfigRepositoryMock struct {
 	calls struct {
 		// DeleteAllByAgent holds details about calls to the DeleteAllByAgent method.
 		DeleteAllByAgent []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -53,7 +53,7 @@ type AgentConfigRepositoryMock struct {
 		}
 		// Get holds details about calls to the Get method.
 		Get []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -74,7 +74,7 @@ type AgentConfigRepositoryMock struct {
 }
 
 // DeleteAllByAgent calls DeleteAllByAgentFunc.
-func (mock *AgentConfigRepositoryMock) DeleteAllByAgent(orgName string, projectName string, agentName string) error {
+func (mock *AgentConfigRepositoryMock) DeleteAllByAgent(ouID string, projectName string, agentName string) error {
 	if mock.DeleteAllByAgentFunc == nil {
 		panic("AgentConfigRepositoryMock.DeleteAllByAgentFunc: method is nil but AgentConfigRepository.DeleteAllByAgent was just called")
 	}
@@ -83,14 +83,14 @@ func (mock *AgentConfigRepositoryMock) DeleteAllByAgent(orgName string, projectN
 		ProjectName string
 		AgentName   string
 	}{
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
 	mock.lockDeleteAllByAgent.Lock()
 	mock.calls.DeleteAllByAgent = append(mock.calls.DeleteAllByAgent, callInfo)
 	mock.lockDeleteAllByAgent.Unlock()
-	return mock.DeleteAllByAgentFunc(orgName, projectName, agentName)
+	return mock.DeleteAllByAgentFunc(ouID, projectName, agentName)
 }
 
 // DeleteAllByAgentCalls gets all the calls that were made to DeleteAllByAgent.
@@ -114,7 +114,7 @@ func (mock *AgentConfigRepositoryMock) DeleteAllByAgentCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *AgentConfigRepositoryMock) Get(orgName string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error) {
+func (mock *AgentConfigRepositoryMock) Get(ouID string, projectName string, agentName string, environmentName string) (*models.AgentConfig, error) {
 	if mock.GetFunc == nil {
 		panic("AgentConfigRepositoryMock.GetFunc: method is nil but AgentConfigRepository.Get was just called")
 	}
@@ -124,7 +124,7 @@ func (mock *AgentConfigRepositoryMock) Get(orgName string, projectName string, a
 		AgentName       string
 		EnvironmentName string
 	}{
-		OrgName:         orgName,
+		OrgName:         ouID,
 		ProjectName:     projectName,
 		AgentName:       agentName,
 		EnvironmentName: environmentName,
@@ -132,7 +132,7 @@ func (mock *AgentConfigRepositoryMock) Get(orgName string, projectName string, a
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(orgName, projectName, agentName, environmentName)
+	return mock.GetFunc(ouID, projectName, agentName, environmentName)
 }
 
 // GetCalls gets all the calls that were made to Get.

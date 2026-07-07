@@ -131,7 +131,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gatewayID := gateway.UUID.String()
-	orgName := gateway.OrganizationName
+	ouID := gateway.OrganizationName
 	gatewayName := gateway.Name
 
 	// Ensure the gateway is registered in the EventHub (idempotent - safe to call on every connect).
@@ -139,7 +139,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 		if err := c.hub.RegisterGateway(gatewayID); err != nil {
 			log.Warn("Failed to register gateway in EventHub",
 				"gatewayID", gatewayID, "gatewayName", gatewayName,
-				"orgName", orgName, "error", err)
+				"ouID", ouID, "error", err)
 		}
 	}
 
@@ -149,7 +149,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	if !c.checkRateLimit(gatewayID) {
 		log.Warn("Gateway connection rate limit exceeded",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "ip", clientIP)
+			"ouID", ouID, "ip", clientIP)
 		http.Error(w, "Connection rate limit exceeded. Please try again later.", http.StatusTooManyRequests)
 		return
 	}
@@ -159,7 +159,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("WebSocket upgrade failed",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "error", err)
+			"ouID", ouID, "error", err)
 		// Upgrade error is already sent by upgrader
 		return
 	}
@@ -172,7 +172,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("Connection registration failed",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "error", err)
+			"ouID", ouID, "error", err)
 		// Send error message before closing
 		errorMsg := map[string]string{
 			"type":    "error",
@@ -182,13 +182,13 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 			if err := conn.WriteMessage(websocket.TextMessage, jsonErr); err != nil {
 				log.Error("Failed to send error message",
 					"gatewayID", gatewayID, "gatewayName", gatewayName,
-					"orgName", orgName, "error", err)
+					"ouID", ouID, "error", err)
 			}
 		}
 		if err := conn.Close(); err != nil {
 			log.Debug("Connection close returned error",
 				"gatewayID", gatewayID, "gatewayName", gatewayName,
-				"orgName", orgName, "error", err)
+				"ouID", ouID, "error", err)
 		}
 		return
 	}
@@ -205,24 +205,24 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Error("Failed to marshal connection ACK",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "error", err)
+			"ouID", ouID, "error", err)
 	} else {
 		if err := connection.Send(ackJSON); err != nil {
 			log.Error("Failed to send connection ACK",
 				"gatewayID", gatewayID, "gatewayName", gatewayName,
-				"orgName", orgName, "connectionID", connection.ConnectionID, "error", err)
+				"ouID", ouID, "connectionID", connection.ConnectionID, "error", err)
 		}
 	}
 
 	log.Info("WebSocket connection established",
 		"gatewayID", gatewayID, "gatewayName", gatewayName,
-		"orgName", orgName, "connectionID", connection.ConnectionID, "ip", clientIP)
+		"ouID", ouID, "connectionID", connection.ConnectionID, "ip", clientIP)
 
 	// Update gateway active status to true when connection is established
 	if err := c.gatewayService.UpdateGatewayActiveStatus(gatewayID, true); err != nil {
 		log.Error("Failed to update gateway active status to true",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "error", err)
+			"ouID", ouID, "error", err)
 	}
 
 	// Start reading messages (blocks until connection closes)
@@ -232,14 +232,14 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	// Connection closed - cleanup
 	log.Info("WebSocket connection closed",
 		"gatewayID", gatewayID, "gatewayName", gatewayName,
-		"orgName", orgName, "connectionID", connection.ConnectionID)
+		"ouID", ouID, "connectionID", connection.ConnectionID)
 	c.manager.Unregister(gatewayID, connection.ConnectionID)
 
 	// Update gateway active status to false when connection is disconnected
 	if err := c.gatewayService.UpdateGatewayActiveStatus(gatewayID, false); err != nil {
 		log.Error("Failed to update gateway active status to false",
 			"gatewayID", gatewayID, "gatewayName", gatewayName,
-			"orgName", orgName, "error", err)
+			"ouID", ouID, "error", err)
 	}
 }
 

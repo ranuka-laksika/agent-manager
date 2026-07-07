@@ -32,7 +32,7 @@ type AgentKind struct {
 	Name        string             `gorm:"column:name"`
 	DisplayName string             `gorm:"column:display_name"`
 	Description string             `gorm:"column:description"`
-	OrgName     string             `gorm:"column:org_name"`
+	OrgName     string             `gorm:"column:ou_id"`
 	ProjectName string             `gorm:"column:project_name"`
 	AgentName   string             `gorm:"column:agent_name"`
 	CreatedAt   time.Time          `gorm:"column:created_at"`

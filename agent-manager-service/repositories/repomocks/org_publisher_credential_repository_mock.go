@@ -15,7 +15,7 @@ import (
 //
 //		// make and configure a mocked repositories.OrgPublisherCredentialRepository
 //		mockedOrgPublisherCredentialRepository := &OrgPublisherCredentialRepositoryMock{
-//			GetByOrgNameFunc: func(orgName string) (*models.OrgPublisherCredential, error) {
+//			GetByOrgNameFunc: func(ouID string) (*models.OrgPublisherCredential, error) {
 //				panic("mock out the GetByOrgName method")
 //			},
 //			UpsertFunc: func(cred *models.OrgPublisherCredential) error {
@@ -29,7 +29,7 @@ import (
 //	}
 type OrgPublisherCredentialRepositoryMock struct {
 	// GetByOrgNameFunc mocks the GetByOrgName method.
-	GetByOrgNameFunc func(orgName string) (*models.OrgPublisherCredential, error)
+	GetByOrgNameFunc func(ouID string) (*models.OrgPublisherCredential, error)
 
 	// UpsertFunc mocks the Upsert method.
 	UpsertFunc func(cred *models.OrgPublisherCredential) error
@@ -38,7 +38,7 @@ type OrgPublisherCredentialRepositoryMock struct {
 	calls struct {
 		// GetByOrgName holds details about calls to the GetByOrgName method.
 		GetByOrgName []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// Upsert holds details about calls to the Upsert method.
@@ -52,19 +52,19 @@ type OrgPublisherCredentialRepositoryMock struct {
 }
 
 // GetByOrgName calls GetByOrgNameFunc.
-func (mock *OrgPublisherCredentialRepositoryMock) GetByOrgName(orgName string) (*models.OrgPublisherCredential, error) {
+func (mock *OrgPublisherCredentialRepositoryMock) GetByOrgName(ouID string) (*models.OrgPublisherCredential, error) {
 	if mock.GetByOrgNameFunc == nil {
 		panic("OrgPublisherCredentialRepositoryMock.GetByOrgNameFunc: method is nil but OrgPublisherCredentialRepository.GetByOrgName was just called")
 	}
 	callInfo := struct {
 		OrgName string
 	}{
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockGetByOrgName.Lock()
 	mock.calls.GetByOrgName = append(mock.calls.GetByOrgName, callInfo)
 	mock.lockGetByOrgName.Unlock()
-	return mock.GetByOrgNameFunc(orgName)
+	return mock.GetByOrgNameFunc(ouID)
 }
 
 // GetByOrgNameCalls gets all the calls that were made to GetByOrgName.

@@ -25,7 +25,7 @@ import (
 //			DeleteStaleScoresFunc: func(monitorID uuid.UUID, currentRunEvaluatorIDs []uuid.UUID, traceIDs []string) error {
 //				panic("mock out the DeleteStaleScores method")
 //			},
-//			GetAgentTraceScoresFunc: func(orgName string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error) {
+//			GetAgentTraceScoresFunc: func(ouID string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error) {
 //				panic("mock out the GetAgentTraceScores method")
 //			},
 //			GetEvaluatorTimeSeriesAggregatedFunc: func(monitorID uuid.UUID, displayName string, startTime time.Time, endTime time.Time, granularity string) ([]repositories.TimeBucketAggregation, error) {
@@ -46,13 +46,13 @@ import (
 //			GetEvaluatorsTraceAggregatedFunc: func(monitorID uuid.UUID, evaluatorNames []string, startTime time.Time, endTime time.Time, limit int) ([]repositories.BatchTraceAggregation, error) {
 //				panic("mock out the GetEvaluatorsTraceAggregated method")
 //			},
-//			GetMonitorIDFunc: func(orgName string, projName string, agentName string, monitorName string) (uuid.UUID, error) {
+//			GetMonitorIDFunc: func(ouID string, projName string, agentName string, monitorName string) (uuid.UUID, error) {
 //				panic("mock out the GetMonitorID method")
 //			},
 //			GetMonitorScoresAggregatedFunc: func(monitorID uuid.UUID, startTime time.Time, endTime time.Time, filters repositories.ScoreFilters) ([]repositories.EvaluatorAggregation, error) {
 //				panic("mock out the GetMonitorScoresAggregated method")
 //			},
-//			GetScoresByTraceIDFunc: func(traceID string, orgName string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error) {
+//			GetScoresByTraceIDFunc: func(traceID string, ouID string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error) {
 //				panic("mock out the GetScoresByTraceID method")
 //			},
 //			GetScoresGroupedByLabelFunc: func(monitorID uuid.UUID, startTime time.Time, endTime time.Time, level string) ([]repositories.LabelAggregation, error) {
@@ -81,7 +81,7 @@ type ScoreRepositoryMock struct {
 	DeleteStaleScoresFunc func(monitorID uuid.UUID, currentRunEvaluatorIDs []uuid.UUID, traceIDs []string) error
 
 	// GetAgentTraceScoresFunc mocks the GetAgentTraceScores method.
-	GetAgentTraceScoresFunc func(orgName string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error)
+	GetAgentTraceScoresFunc func(ouID string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error)
 
 	// GetEvaluatorTimeSeriesAggregatedFunc mocks the GetEvaluatorTimeSeriesAggregated method.
 	GetEvaluatorTimeSeriesAggregatedFunc func(monitorID uuid.UUID, displayName string, startTime time.Time, endTime time.Time, granularity string) ([]repositories.TimeBucketAggregation, error)
@@ -102,13 +102,13 @@ type ScoreRepositoryMock struct {
 	GetEvaluatorsTraceAggregatedFunc func(monitorID uuid.UUID, evaluatorNames []string, startTime time.Time, endTime time.Time, limit int) ([]repositories.BatchTraceAggregation, error)
 
 	// GetMonitorIDFunc mocks the GetMonitorID method.
-	GetMonitorIDFunc func(orgName string, projName string, agentName string, monitorName string) (uuid.UUID, error)
+	GetMonitorIDFunc func(ouID string, projName string, agentName string, monitorName string) (uuid.UUID, error)
 
 	// GetMonitorScoresAggregatedFunc mocks the GetMonitorScoresAggregated method.
 	GetMonitorScoresAggregatedFunc func(monitorID uuid.UUID, startTime time.Time, endTime time.Time, filters repositories.ScoreFilters) ([]repositories.EvaluatorAggregation, error)
 
 	// GetScoresByTraceIDFunc mocks the GetScoresByTraceID method.
-	GetScoresByTraceIDFunc func(traceID string, orgName string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error)
+	GetScoresByTraceIDFunc func(traceID string, ouID string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error)
 
 	// GetScoresGroupedByLabelFunc mocks the GetScoresGroupedByLabel method.
 	GetScoresGroupedByLabelFunc func(monitorID uuid.UUID, startTime time.Time, endTime time.Time, level string) ([]repositories.LabelAggregation, error)
@@ -140,7 +140,7 @@ type ScoreRepositoryMock struct {
 		}
 		// GetAgentTraceScores holds details about calls to the GetAgentTraceScores method.
 		GetAgentTraceScores []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjName is the projName argument value.
 			ProjName string
@@ -225,7 +225,7 @@ type ScoreRepositoryMock struct {
 		}
 		// GetMonitorID holds details about calls to the GetMonitorID method.
 		GetMonitorID []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjName is the projName argument value.
 			ProjName string
@@ -249,7 +249,7 @@ type ScoreRepositoryMock struct {
 		GetScoresByTraceID []struct {
 			// TraceID is the traceID argument value.
 			TraceID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjName is the projName argument value.
 			ProjName string
@@ -374,7 +374,7 @@ func (mock *ScoreRepositoryMock) DeleteStaleScoresCalls() []struct {
 }
 
 // GetAgentTraceScores calls GetAgentTraceScoresFunc.
-func (mock *ScoreRepositoryMock) GetAgentTraceScores(orgName string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error) {
+func (mock *ScoreRepositoryMock) GetAgentTraceScores(ouID string, projName string, agentName string, startTime time.Time, endTime time.Time, limit int, offset int, sortOrder string) ([]repositories.TraceAggregation, int, error) {
 	if mock.GetAgentTraceScoresFunc == nil {
 		panic("ScoreRepositoryMock.GetAgentTraceScoresFunc: method is nil but ScoreRepository.GetAgentTraceScores was just called")
 	}
@@ -388,7 +388,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScores(orgName string, projName st
 		Offset    int
 		SortOrder string
 	}{
-		OrgName:   orgName,
+		OrgName:   ouID,
 		ProjName:  projName,
 		AgentName: agentName,
 		StartTime: startTime,
@@ -400,7 +400,7 @@ func (mock *ScoreRepositoryMock) GetAgentTraceScores(orgName string, projName st
 	mock.lockGetAgentTraceScores.Lock()
 	mock.calls.GetAgentTraceScores = append(mock.calls.GetAgentTraceScores, callInfo)
 	mock.lockGetAgentTraceScores.Unlock()
-	return mock.GetAgentTraceScoresFunc(orgName, projName, agentName, startTime, endTime, limit, offset, sortOrder)
+	return mock.GetAgentTraceScoresFunc(ouID, projName, agentName, startTime, endTime, limit, offset, sortOrder)
 }
 
 // GetAgentTraceScoresCalls gets all the calls that were made to GetAgentTraceScores.
@@ -698,7 +698,7 @@ func (mock *ScoreRepositoryMock) GetEvaluatorsTraceAggregatedCalls() []struct {
 }
 
 // GetMonitorID calls GetMonitorIDFunc.
-func (mock *ScoreRepositoryMock) GetMonitorID(orgName string, projName string, agentName string, monitorName string) (uuid.UUID, error) {
+func (mock *ScoreRepositoryMock) GetMonitorID(ouID string, projName string, agentName string, monitorName string) (uuid.UUID, error) {
 	if mock.GetMonitorIDFunc == nil {
 		panic("ScoreRepositoryMock.GetMonitorIDFunc: method is nil but ScoreRepository.GetMonitorID was just called")
 	}
@@ -708,7 +708,7 @@ func (mock *ScoreRepositoryMock) GetMonitorID(orgName string, projName string, a
 		AgentName   string
 		MonitorName string
 	}{
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjName:    projName,
 		AgentName:   agentName,
 		MonitorName: monitorName,
@@ -716,7 +716,7 @@ func (mock *ScoreRepositoryMock) GetMonitorID(orgName string, projName string, a
 	mock.lockGetMonitorID.Lock()
 	mock.calls.GetMonitorID = append(mock.calls.GetMonitorID, callInfo)
 	mock.lockGetMonitorID.Unlock()
-	return mock.GetMonitorIDFunc(orgName, projName, agentName, monitorName)
+	return mock.GetMonitorIDFunc(ouID, projName, agentName, monitorName)
 }
 
 // GetMonitorIDCalls gets all the calls that were made to GetMonitorID.
@@ -786,7 +786,7 @@ func (mock *ScoreRepositoryMock) GetMonitorScoresAggregatedCalls() []struct {
 }
 
 // GetScoresByTraceID calls GetScoresByTraceIDFunc.
-func (mock *ScoreRepositoryMock) GetScoresByTraceID(traceID string, orgName string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error) {
+func (mock *ScoreRepositoryMock) GetScoresByTraceID(traceID string, ouID string, projName string, agentName string) ([]repositories.ScoreWithMonitor, error) {
 	if mock.GetScoresByTraceIDFunc == nil {
 		panic("ScoreRepositoryMock.GetScoresByTraceIDFunc: method is nil but ScoreRepository.GetScoresByTraceID was just called")
 	}
@@ -797,14 +797,14 @@ func (mock *ScoreRepositoryMock) GetScoresByTraceID(traceID string, orgName stri
 		AgentName string
 	}{
 		TraceID:   traceID,
-		OrgName:   orgName,
+		OrgName:   ouID,
 		ProjName:  projName,
 		AgentName: agentName,
 	}
 	mock.lockGetScoresByTraceID.Lock()
 	mock.calls.GetScoresByTraceID = append(mock.calls.GetScoresByTraceID, callInfo)
 	mock.lockGetScoresByTraceID.Unlock()
-	return mock.GetScoresByTraceIDFunc(traceID, orgName, projName, agentName)
+	return mock.GetScoresByTraceIDFunc(traceID, ouID, projName, agentName)
 }
 
 // GetScoresByTraceIDCalls gets all the calls that were made to GetScoresByTraceID.

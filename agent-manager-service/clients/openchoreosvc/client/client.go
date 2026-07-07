@@ -36,104 +36,108 @@ type Config struct {
 	BaseURL      string
 	AuthProvider AuthProvider
 	RetryConfig  requests.RequestRetryConfig
+	// DefaultNamespace is the OpenChoreo namespace (organization) all API
+	// calls are scoped to. The deployment runs single-namespace, so every
+	// method overrides its namespace/org argument with this value.
+	DefaultNamespace string
 }
 
 // OpenChoreoClient defines the interface for OpenChoreo operations
 type OpenChoreoClient interface {
 	// Organization Operations (maps to OC namespaces)
-	GetOrganization(ctx context.Context, orgName string) (*models.OrganizationResponse, error)
+	GetOrganization(ctx context.Context, ouID string) (*models.OrganizationResponse, error)
 	ListOrganizations(ctx context.Context) ([]*models.OrganizationResponse, error)
 
 	// Project Operations
-	CreateProject(ctx context.Context, namespaceName string, req CreateProjectRequest) error
-	GetProject(ctx context.Context, namespaceName, projectName string) (*models.ProjectResponse, error)
-	PatchProject(ctx context.Context, namespaceName, projectName string, req PatchProjectRequest) error
-	DeleteProject(ctx context.Context, namespaceName, projectName string) error
-	ListProjects(ctx context.Context, namespaceName string) ([]*models.ProjectResponse, error)
+	CreateProject(ctx context.Context, ouID string, req CreateProjectRequest) error
+	GetProject(ctx context.Context, ouID, projectName string) (*models.ProjectResponse, error)
+	PatchProject(ctx context.Context, ouID, projectName string, req PatchProjectRequest) error
+	DeleteProject(ctx context.Context, ouID, projectName string) error
+	ListProjects(ctx context.Context, ouID string) ([]*models.ProjectResponse, error)
 
 	// Component Operations
-	CreateComponent(ctx context.Context, namespaceName, projectName string, req CreateComponentRequest) error
-	GetComponent(ctx context.Context, namespaceName, projectName, componentName string) (*models.AgentResponse, error)
-	UpdateComponentBasicInfo(ctx context.Context, namespaceName, projectName, componentName string, req UpdateComponentBasicInfoRequest) error
-	GetEnvResourceConfigs(ctx context.Context, namespaceName, projectName, componentName, environment string) (*ComponentResourceConfigsResponse, error)
-	UpdateEnvResourceConfigs(ctx context.Context, namespaceName, projectName, componentName, environment string, req UpdateComponentResourceConfigsRequest) error
-	DeleteComponent(ctx context.Context, namespaceName, projectName, componentName string) error
-	ListComponents(ctx context.Context, namespaceName, projectName string) ([]*models.AgentResponse, error)
-	ListComponentsByKind(ctx context.Context, namespaceName, projectName, kindName string) ([]*models.AgentResponse, error)
-	ComponentExists(ctx context.Context, namespaceName, projectName, componentName string) (bool, error)
-	AttachTraits(ctx context.Context, namespaceName, projectName, componentName string, traitRequests []TraitRequest) error
-	DetachTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) error
-	HasTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) (bool, error)
-	UpdateComponentDeploymentConfig(ctx context.Context, namespaceName, projectName, componentName string, req ComponentDeploymentConfigRequest) error
-	UpdateComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error
-	ReplaceComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error
-	ReplaceComponentFileMounts(ctx context.Context, namespaceName, projectName, componentName string, files []FileVar) error
-	UpdateReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, envVars []EnvVar) error
-	RemoveComponentEnvironmentVariables(ctx context.Context, namespaceName, projectName, componentName string, envVarKeys []string) error
-	RemoveReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, envVarKeys []string) error
-	ReplaceReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, keysToRemove []string, envVarsToAdd []EnvVar) error
-	RemoveWorkloadEnvVars(ctx context.Context, namespaceName, componentName string, envVarKeys []string) error
-	GetComponentEndpoints(ctx context.Context, namespaceName, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error)
-	GetComponentConfigurations(ctx context.Context, namespaceName, projectName, componentName, environment string) ([]models.EnvVars, error)
-	GetComponentFileMounts(ctx context.Context, namespaceName, projectName, componentName, environment string) ([]models.FileMountEntry, error)
+	CreateComponent(ctx context.Context, ouID, projectName string, req CreateComponentRequest) error
+	GetComponent(ctx context.Context, ouID, projectName, componentName string) (*models.AgentResponse, error)
+	UpdateComponentBasicInfo(ctx context.Context, ouID, projectName, componentName string, req UpdateComponentBasicInfoRequest) error
+	GetEnvResourceConfigs(ctx context.Context, ouID, projectName, componentName, environment string) (*ComponentResourceConfigsResponse, error)
+	UpdateEnvResourceConfigs(ctx context.Context, ouID, projectName, componentName, environment string, req UpdateComponentResourceConfigsRequest) error
+	DeleteComponent(ctx context.Context, ouID, projectName, componentName string) error
+	ListComponents(ctx context.Context, ouID, projectName string) ([]*models.AgentResponse, error)
+	ListComponentsByKind(ctx context.Context, ouID, projectName, kindName string) ([]*models.AgentResponse, error)
+	ComponentExists(ctx context.Context, ouID, projectName, componentName string) (bool, error)
+	AttachTraits(ctx context.Context, ouID, projectName, componentName string, traitRequests []TraitRequest) error
+	DetachTrait(ctx context.Context, ouID, projectName, componentName string, traitType TraitType) error
+	HasTrait(ctx context.Context, ouID, projectName, componentName string, traitType TraitType) (bool, error)
+	UpdateComponentDeploymentConfig(ctx context.Context, ouID, projectName, componentName string, req ComponentDeploymentConfigRequest) error
+	UpdateComponentEnvVars(ctx context.Context, ouID, projectName, componentName string, envVars []EnvVar) error
+	ReplaceComponentEnvVars(ctx context.Context, ouID, projectName, componentName string, envVars []EnvVar) error
+	ReplaceComponentFileMounts(ctx context.Context, ouID, projectName, componentName string, files []FileVar) error
+	UpdateReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, envVars []EnvVar) error
+	RemoveComponentEnvironmentVariables(ctx context.Context, ouID, projectName, componentName string, envVarKeys []string) error
+	RemoveReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, envVarKeys []string) error
+	ReplaceReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, keysToRemove []string, envVarsToAdd []EnvVar) error
+	RemoveWorkloadEnvVars(ctx context.Context, ouID, componentName string, envVarKeys []string) error
+	GetComponentEndpoints(ctx context.Context, ouID, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error)
+	GetComponentConfigurations(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.EnvVars, error)
+	GetComponentFileMounts(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.FileMountEntry, error)
 
 	// Build Operations
-	TriggerBuild(ctx context.Context, namespaceName, projectName, componentName, commitID string) (*models.BuildResponse, error)
-	GetBuild(ctx context.Context, namespaceName, projectName, componentName, buildName string) (*models.BuildDetailsResponse, error)
-	ListBuilds(ctx context.Context, namespaceName, projectName, componentName string) ([]*models.BuildResponse, error)
-	UpdateComponentBuildParameters(ctx context.Context, namespaceName, projectName, componentName string, req UpdateComponentBuildParametersRequest) error
+	TriggerBuild(ctx context.Context, ouID, projectName, componentName, commitID string) (*models.BuildResponse, error)
+	GetBuild(ctx context.Context, ouID, projectName, componentName, buildName string) (*models.BuildDetailsResponse, error)
+	ListBuilds(ctx context.Context, ouID, projectName, componentName string) ([]*models.BuildResponse, error)
+	UpdateComponentBuildParameters(ctx context.Context, ouID, projectName, componentName string, req UpdateComponentBuildParametersRequest) error
 
 	// Deployment Operations
-	Deploy(ctx context.Context, namespaceName, projectName, componentName string, req DeployRequest) error
-	CreateInternalAgentFromKindWorkload(ctx context.Context, namespaceName, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error
-	GetDeployments(ctx context.Context, namespaceName, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error)
-	UpdateDeploymentState(ctx context.Context, namespaceName, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error
-	IsDeploymentInProgress(ctx context.Context, namespaceName, componentName, environment string) (bool, error)
+	Deploy(ctx context.Context, ouID, projectName, componentName string, req DeployRequest) error
+	CreateInternalAgentFromKindWorkload(ctx context.Context, ouID, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error
+	GetDeployments(ctx context.Context, ouID, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error)
+	UpdateDeploymentState(ctx context.Context, ouID, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error
+	IsDeploymentInProgress(ctx context.Context, ouID, componentName, environment string) (bool, error)
 
 	// Environment Operations
-	CreateEnvironment(ctx context.Context, namespaceName string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error)
-	GetEnvironment(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error)
-	UpdateEnvironment(ctx context.Context, namespaceName, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error)
-	DeleteEnvironment(ctx context.Context, namespaceName, environmentName string) error
-	ListEnvironments(ctx context.Context, namespaceName string) ([]*models.EnvironmentResponse, error)
+	CreateEnvironment(ctx context.Context, ouID string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error)
+	GetEnvironment(ctx context.Context, ouID, environmentName string) (*models.EnvironmentResponse, error)
+	UpdateEnvironment(ctx context.Context, ouID, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error)
+	DeleteEnvironment(ctx context.Context, ouID, environmentName string) error
+	ListEnvironments(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error)
 
 	// Release Binding Operations
-	UpdateReleaseBindingTraitConfigs(ctx context.Context, namespaceName, componentName, environment string, traitConfigs map[string]interface{}) error
-	ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, namespaceName, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error
+	UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}) error
+	ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, ouID, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error
 
 	// Promotion Operations
-	PromoteComponent(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error
+	PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error
 	// GetSourceEnvWorkloadOverrides fetches the workload overrides (env vars and file mounts)
 	// from the source environment's release binding, converted to client types.
-	GetSourceEnvWorkloadOverrides(ctx context.Context, namespaceName, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error)
+	GetSourceEnvWorkloadOverrides(ctx context.Context, ouID, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error)
 
 	// Infrastructure Operations
-	GetProjectDeploymentPipeline(ctx context.Context, namespaceName, projectName string) (*models.DeploymentPipelineResponse, error)
-	CreateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
-	UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
-	DeleteOrgDeploymentPipeline(ctx context.Context, namespaceName string, pipelineName string) error
-	ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error)
+	GetProjectDeploymentPipeline(ctx context.Context, ouID, projectName string) (*models.DeploymentPipelineResponse, error)
+	CreateDeploymentPipeline(ctx context.Context, ouID, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
+	UpdateDeploymentPipeline(ctx context.Context, ouID, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error)
+	DeleteOrgDeploymentPipeline(ctx context.Context, ouID string, pipelineName string) error
+	ListDeploymentPipelines(ctx context.Context, ouID string) ([]*models.DeploymentPipelineResponse, error)
 	ListDataPlanes(ctx context.Context) ([]*models.DataPlaneResponse, error)
 
 	// WorkflowRun Operations
-	CreateWorkflowRun(ctx context.Context, namespaceName string, req CreateWorkflowRunRequest) (*WorkflowRunResponse, error)
-	GetWorkflowRun(ctx context.Context, namespaceName, runName string) (*WorkflowRunResponse, error)
-	ExpireWorkflowRun(ctx context.Context, namespaceName, runName string) error
+	CreateWorkflowRun(ctx context.Context, ouID string, req CreateWorkflowRunRequest) (*WorkflowRunResponse, error)
+	GetWorkflowRun(ctx context.Context, ouID, runName string) (*WorkflowRunResponse, error)
+	ExpireWorkflowRun(ctx context.Context, ouID, runName string) error
 
 	// Secret Reference Operations
-	CreateSecretReference(ctx context.Context, namespaceName string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error)
-	GetSecretReference(ctx context.Context, namespaceName, secretRefName string) (*SecretReferenceInfo, error)
-	ListSecretReferences(ctx context.Context, namespaceName string, componentName string) ([]*SecretReferenceInfo, error)
-	UpdateSecretReference(ctx context.Context, namespaceName, secretRefName string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error)
-	DeleteSecretReference(ctx context.Context, namespaceName, secretRefName string) error
+	CreateSecretReference(ctx context.Context, ouID string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error)
+	GetSecretReference(ctx context.Context, ouID, secretRefName string) (*SecretReferenceInfo, error)
+	ListSecretReferences(ctx context.Context, ouID string, componentName string) ([]*SecretReferenceInfo, error)
+	UpdateSecretReference(ctx context.Context, ouID, secretRefName string, req CreateSecretReferenceRequest) (*SecretReferenceInfo, error)
+	DeleteSecretReference(ctx context.Context, ouID, secretRefName string) error
 
 	// Workload Operations
-	GetWorkloadSecretRefNames(ctx context.Context, namespaceName, projectName, componentName string) ([]string, error)
+	GetWorkloadSecretRefNames(ctx context.Context, ouID, projectName, componentName string) ([]string, error)
 
 	// Git Secret Operations
-	CreateGitSecret(ctx context.Context, namespaceName string, req CreateGitSecretRequest) (*GitSecretInfo, error)
-	ListGitSecrets(ctx context.Context, namespaceName string) ([]*GitSecretInfo, error)
-	DeleteGitSecret(ctx context.Context, namespaceName, secretName string) error
+	CreateGitSecret(ctx context.Context, ouID string, req CreateGitSecretRequest) (*GitSecretInfo, error)
+	ListGitSecrets(ctx context.Context, ouID string) ([]*GitSecretInfo, error)
+	DeleteGitSecret(ctx context.Context, ouID, secretName string) error
 
 	// Authz Operations
 	// EnsureClusterRoleBinding creates a ClusterAuthzRoleBinding binding the given clientID (sub claim)
@@ -143,6 +147,16 @@ type OpenChoreoClient interface {
 
 type openChoreoClient struct {
 	ocClient *gen.ClientWithResponses
+	// defaultNamespace is the OpenChoreo namespace all API calls resolve to;
+	// see namespaceFor.
+	defaultNamespace string
+}
+
+// namespaceFor resolves the OpenChoreo namespace for an OU. The deployment
+// currently runs single-namespace, so every OU maps to the configured default
+// namespace.
+func (c *openChoreoClient) namespaceFor(_ string) string {
+	return c.defaultNamespace
 }
 
 func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
@@ -195,6 +209,7 @@ func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
 	}
 
 	return &openChoreoClient{
-		ocClient: ocClient,
+		ocClient:         ocClient,
+		defaultNamespace: cfg.DefaultNamespace,
 	}, nil
 }

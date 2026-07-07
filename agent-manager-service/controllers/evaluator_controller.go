@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -53,12 +54,12 @@ func NewEvaluatorController(evaluatorService services.EvaluatorManagerService) E
 	}
 }
 
-// ListEvaluators handles GET /orgs/{orgName}/evaluators
+// ListEvaluators handles GET /orgs/{ouID}/evaluators
 func (c *evaluatorController) ListEvaluators(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Parse query parameters
 	limit, _ := strconv.ParseInt(r.URL.Query().Get("limit"), 10, 32)
@@ -97,7 +98,7 @@ func (c *evaluatorController) ListEvaluators(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Call service
-	evaluators, total, err := c.evaluatorService.ListEvaluators(ctx, orgName, filters)
+	evaluators, total, err := c.evaluatorService.ListEvaluators(ctx, ouID, filters)
 	if err != nil {
 		log.Error("Failed to list evaluators", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list evaluators")
@@ -124,12 +125,12 @@ func (c *evaluatorController) ListEvaluators(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// GetEvaluator handles GET /orgs/{orgName}/evaluators/{evaluatorId}
+// GetEvaluator handles GET /orgs/{ouID}/evaluators/{evaluatorId}
 func (c *evaluatorController) GetEvaluator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Extract and URL-decode evaluator identifier
 	evaluatorID := r.PathValue(utils.PathParamEvaluatorId)
@@ -147,7 +148,7 @@ func (c *evaluatorController) GetEvaluator(w http.ResponseWriter, r *http.Reques
 	}
 
 	// Call service
-	evaluator, err := c.evaluatorService.GetEvaluator(ctx, orgName, decodedID)
+	evaluator, err := c.evaluatorService.GetEvaluator(ctx, ouID, decodedID)
 	if err != nil {
 		if errors.Is(err, utils.ErrEvaluatorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Evaluator not found")
@@ -168,12 +169,12 @@ func (c *evaluatorController) GetEvaluator(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// CreateCustomEvaluator handles POST /orgs/{orgName}/evaluators/custom
+// CreateCustomEvaluator handles POST /orgs/{ouID}/evaluators/custom
 func (c *evaluatorController) CreateCustomEvaluator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Limit request body to 1MB to prevent resource exhaustion
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -195,7 +196,7 @@ func (c *evaluatorController) CreateCustomEvaluator(w http.ResponseWriter, r *ht
 	}
 
 	req := convertSpecCreateRequest(&specReq)
-	evaluator, err := c.evaluatorService.CreateCustomEvaluator(ctx, orgName, req)
+	evaluator, err := c.evaluatorService.CreateCustomEvaluator(ctx, ouID, req)
 	if err != nil {
 		if errors.Is(err, utils.ErrCustomEvaluatorAlreadyExists) {
 			utils.WriteErrorResponse(w, http.StatusConflict, "Custom evaluator with this identifier already exists")
@@ -223,12 +224,12 @@ func (c *evaluatorController) CreateCustomEvaluator(w http.ResponseWriter, r *ht
 	}
 }
 
-// GetCustomEvaluator handles GET /orgs/{orgName}/evaluators/custom/{identifier}
+// GetCustomEvaluator handles GET /orgs/{ouID}/evaluators/custom/{identifier}
 func (c *evaluatorController) GetCustomEvaluator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	identifier := r.PathValue("identifier")
 	if identifier == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Identifier is required")
@@ -242,7 +243,7 @@ func (c *evaluatorController) GetCustomEvaluator(w http.ResponseWriter, r *http.
 		return
 	}
 
-	evaluator, err := c.evaluatorService.GetCustomEvaluator(ctx, orgName, decodedIdentifier)
+	evaluator, err := c.evaluatorService.GetCustomEvaluator(ctx, ouID, decodedIdentifier)
 	if err != nil {
 		if errors.Is(err, utils.ErrCustomEvaluatorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Custom evaluator not found")
@@ -262,12 +263,12 @@ func (c *evaluatorController) GetCustomEvaluator(w http.ResponseWriter, r *http.
 	}
 }
 
-// UpdateCustomEvaluator handles PUT /orgs/{orgName}/evaluators/custom/{identifier}
+// UpdateCustomEvaluator handles PUT /orgs/{ouID}/evaluators/custom/{identifier}
 func (c *evaluatorController) UpdateCustomEvaluator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	identifier := r.PathValue("identifier")
 	if identifier == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Identifier is required")
@@ -296,7 +297,7 @@ func (c *evaluatorController) UpdateCustomEvaluator(w http.ResponseWriter, r *ht
 	}
 
 	req := convertSpecUpdateRequest(&specReq)
-	evaluator, err := c.evaluatorService.UpdateCustomEvaluator(ctx, orgName, decodedIdentifier, req)
+	evaluator, err := c.evaluatorService.UpdateCustomEvaluator(ctx, ouID, decodedIdentifier, req)
 	if err != nil {
 		if errors.Is(err, utils.ErrCustomEvaluatorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Custom evaluator not found")
@@ -320,12 +321,12 @@ func (c *evaluatorController) UpdateCustomEvaluator(w http.ResponseWriter, r *ht
 	}
 }
 
-// DeleteCustomEvaluator handles DELETE /orgs/{orgName}/evaluators/custom/{identifier}
+// DeleteCustomEvaluator handles DELETE /orgs/{ouID}/evaluators/custom/{identifier}
 func (c *evaluatorController) DeleteCustomEvaluator(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	identifier := r.PathValue("identifier")
 	if identifier == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Identifier is required")
@@ -339,7 +340,7 @@ func (c *evaluatorController) DeleteCustomEvaluator(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := c.evaluatorService.DeleteCustomEvaluator(ctx, orgName, decodedIdentifier); err != nil {
+	if err := c.evaluatorService.DeleteCustomEvaluator(ctx, ouID, decodedIdentifier); err != nil {
 		if errors.Is(err, utils.ErrCustomEvaluatorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Custom evaluator not found")
 			return

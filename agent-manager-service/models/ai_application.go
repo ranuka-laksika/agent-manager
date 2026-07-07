@@ -33,7 +33,7 @@ type AIApplication struct {
 	AgentID          string    `gorm:"column:agent_id;not null" json:"agentId"`
 	ProjectName      string    `gorm:"column:project_name;not null" json:"projectName"`
 	EnvironmentName  string    `gorm:"column:environment_name;not null" json:"environmentName"`
-	OrganizationName string    `gorm:"column:organization_name;not null" json:"organizationName"`
+	OrganizationName string    `gorm:"column:ou_id;not null" json:"organizationName"`
 	CreatedAt        time.Time `gorm:"column:created_at" json:"createdAt"`
 	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updatedAt"`
 }

@@ -23,19 +23,19 @@ import (
 //			CreateVersionFunc: func(ctx context.Context, version *models.AgentKindVersion) error {
 //				panic("mock out the CreateVersion method")
 //			},
-//			DeleteKindFunc: func(ctx context.Context, orgName string, kindName string) error {
+//			DeleteKindFunc: func(ctx context.Context, ouID string, kindName string) error {
 //				panic("mock out the DeleteKind method")
 //			},
 //			DeleteVersionFunc: func(ctx context.Context, kindID uuid.UUID, versionTag string) error {
 //				panic("mock out the DeleteVersion method")
 //			},
-//			ExistsBySourceAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) (bool, error) {
+//			ExistsBySourceAgentFunc: func(ctx context.Context, ouID string, projectName string, agentName string) (bool, error) {
 //				panic("mock out the ExistsBySourceAgent method")
 //			},
-//			FindVersionByImageIDInOrgFunc: func(ctx context.Context, orgName string, imageID string) (*models.AgentKindVersion, error) {
+//			FindVersionByImageIDInOrgFunc: func(ctx context.Context, ouID string, imageID string) (*models.AgentKindVersion, error) {
 //				panic("mock out the FindVersionByImageIDInOrg method")
 //			},
-//			GetKindFunc: func(ctx context.Context, orgName string, kindName string) (*models.AgentKind, error) {
+//			GetKindFunc: func(ctx context.Context, ouID string, kindName string) (*models.AgentKind, error) {
 //				panic("mock out the GetKind method")
 //			},
 //			GetVersionFunc: func(ctx context.Context, kindID uuid.UUID, versionTag string) (*models.AgentKindVersion, error) {
@@ -44,7 +44,7 @@ import (
 //			GetVersionByImageIDFunc: func(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error) {
 //				panic("mock out the GetVersionByImageID method")
 //			},
-//			ListKindsFunc: func(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentKind, int64, error) {
+//			ListKindsFunc: func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error) {
 //				panic("mock out the ListKinds method")
 //			},
 //			ListVersionsFunc: func(ctx context.Context, kindID uuid.UUID) ([]models.AgentKindVersion, error) {
@@ -67,19 +67,19 @@ type AgentKindRepositoryMock struct {
 	CreateVersionFunc func(ctx context.Context, version *models.AgentKindVersion) error
 
 	// DeleteKindFunc mocks the DeleteKind method.
-	DeleteKindFunc func(ctx context.Context, orgName string, kindName string) error
+	DeleteKindFunc func(ctx context.Context, ouID string, kindName string) error
 
 	// DeleteVersionFunc mocks the DeleteVersion method.
 	DeleteVersionFunc func(ctx context.Context, kindID uuid.UUID, versionTag string) error
 
 	// ExistsBySourceAgentFunc mocks the ExistsBySourceAgent method.
-	ExistsBySourceAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) (bool, error)
+	ExistsBySourceAgentFunc func(ctx context.Context, ouID string, projectName string, agentName string) (bool, error)
 
 	// FindVersionByImageIDInOrgFunc mocks the FindVersionByImageIDInOrg method.
-	FindVersionByImageIDInOrgFunc func(ctx context.Context, orgName string, imageID string) (*models.AgentKindVersion, error)
+	FindVersionByImageIDInOrgFunc func(ctx context.Context, ouID string, imageID string) (*models.AgentKindVersion, error)
 
 	// GetKindFunc mocks the GetKind method.
-	GetKindFunc func(ctx context.Context, orgName string, kindName string) (*models.AgentKind, error)
+	GetKindFunc func(ctx context.Context, ouID string, kindName string) (*models.AgentKind, error)
 
 	// GetVersionFunc mocks the GetVersion method.
 	GetVersionFunc func(ctx context.Context, kindID uuid.UUID, versionTag string) (*models.AgentKindVersion, error)
@@ -88,7 +88,7 @@ type AgentKindRepositoryMock struct {
 	GetVersionByImageIDFunc func(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error)
 
 	// ListKindsFunc mocks the ListKinds method.
-	ListKindsFunc func(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentKind, int64, error)
+	ListKindsFunc func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error)
 
 	// ListVersionsFunc mocks the ListVersions method.
 	ListVersionsFunc func(ctx context.Context, kindID uuid.UUID) ([]models.AgentKindVersion, error)
@@ -116,7 +116,7 @@ type AgentKindRepositoryMock struct {
 		DeleteKind []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// KindName is the kindName argument value.
 			KindName string
@@ -134,7 +134,7 @@ type AgentKindRepositoryMock struct {
 		ExistsBySourceAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -145,7 +145,7 @@ type AgentKindRepositoryMock struct {
 		FindVersionByImageIDInOrg []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ImageID is the imageID argument value.
 			ImageID string
@@ -154,7 +154,7 @@ type AgentKindRepositoryMock struct {
 		GetKind []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// KindName is the kindName argument value.
 			KindName string
@@ -181,7 +181,7 @@ type AgentKindRepositoryMock struct {
 		ListKinds []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// Limit is the limit argument value.
 			Limit int
@@ -290,7 +290,7 @@ func (mock *AgentKindRepositoryMock) CreateVersionCalls() []struct {
 }
 
 // DeleteKind calls DeleteKindFunc.
-func (mock *AgentKindRepositoryMock) DeleteKind(ctx context.Context, orgName string, kindName string) error {
+func (mock *AgentKindRepositoryMock) DeleteKind(ctx context.Context, ouID string, kindName string) error {
 	if mock.DeleteKindFunc == nil {
 		panic("AgentKindRepositoryMock.DeleteKindFunc: method is nil but AgentKindRepository.DeleteKind was just called")
 	}
@@ -300,13 +300,13 @@ func (mock *AgentKindRepositoryMock) DeleteKind(ctx context.Context, orgName str
 		KindName string
 	}{
 		Ctx:      ctx,
-		OrgName:  orgName,
+		OrgName:  ouID,
 		KindName: kindName,
 	}
 	mock.lockDeleteKind.Lock()
 	mock.calls.DeleteKind = append(mock.calls.DeleteKind, callInfo)
 	mock.lockDeleteKind.Unlock()
-	return mock.DeleteKindFunc(ctx, orgName, kindName)
+	return mock.DeleteKindFunc(ctx, ouID, kindName)
 }
 
 // DeleteKindCalls gets all the calls that were made to DeleteKind.
@@ -370,7 +370,7 @@ func (mock *AgentKindRepositoryMock) DeleteVersionCalls() []struct {
 }
 
 // ExistsBySourceAgent calls ExistsBySourceAgentFunc.
-func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, orgName string, projectName string, agentName string) (bool, error) {
+func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, ouID string, projectName string, agentName string) (bool, error) {
 	if mock.ExistsBySourceAgentFunc == nil {
 		panic("AgentKindRepositoryMock.ExistsBySourceAgentFunc: method is nil but AgentKindRepository.ExistsBySourceAgent was just called")
 	}
@@ -381,14 +381,14 @@ func (mock *AgentKindRepositoryMock) ExistsBySourceAgent(ctx context.Context, or
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
 	mock.lockExistsBySourceAgent.Lock()
 	mock.calls.ExistsBySourceAgent = append(mock.calls.ExistsBySourceAgent, callInfo)
 	mock.lockExistsBySourceAgent.Unlock()
-	return mock.ExistsBySourceAgentFunc(ctx, orgName, projectName, agentName)
+	return mock.ExistsBySourceAgentFunc(ctx, ouID, projectName, agentName)
 }
 
 // ExistsBySourceAgentCalls gets all the calls that were made to ExistsBySourceAgent.
@@ -414,7 +414,7 @@ func (mock *AgentKindRepositoryMock) ExistsBySourceAgentCalls() []struct {
 }
 
 // FindVersionByImageIDInOrg calls FindVersionByImageIDInOrgFunc.
-func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrg(ctx context.Context, orgName string, imageID string) (*models.AgentKindVersion, error) {
+func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrg(ctx context.Context, ouID string, imageID string) (*models.AgentKindVersion, error) {
 	if mock.FindVersionByImageIDInOrgFunc == nil {
 		panic("AgentKindRepositoryMock.FindVersionByImageIDInOrgFunc: method is nil but AgentKindRepository.FindVersionByImageIDInOrg was just called")
 	}
@@ -424,13 +424,13 @@ func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrg(ctx context.Conte
 		ImageID string
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OrgName: ouID,
 		ImageID: imageID,
 	}
 	mock.lockFindVersionByImageIDInOrg.Lock()
 	mock.calls.FindVersionByImageIDInOrg = append(mock.calls.FindVersionByImageIDInOrg, callInfo)
 	mock.lockFindVersionByImageIDInOrg.Unlock()
-	return mock.FindVersionByImageIDInOrgFunc(ctx, orgName, imageID)
+	return mock.FindVersionByImageIDInOrgFunc(ctx, ouID, imageID)
 }
 
 // FindVersionByImageIDInOrgCalls gets all the calls that were made to FindVersionByImageIDInOrg.
@@ -454,7 +454,7 @@ func (mock *AgentKindRepositoryMock) FindVersionByImageIDInOrgCalls() []struct {
 }
 
 // GetKind calls GetKindFunc.
-func (mock *AgentKindRepositoryMock) GetKind(ctx context.Context, orgName string, kindName string) (*models.AgentKind, error) {
+func (mock *AgentKindRepositoryMock) GetKind(ctx context.Context, ouID string, kindName string) (*models.AgentKind, error) {
 	if mock.GetKindFunc == nil {
 		panic("AgentKindRepositoryMock.GetKindFunc: method is nil but AgentKindRepository.GetKind was just called")
 	}
@@ -464,13 +464,13 @@ func (mock *AgentKindRepositoryMock) GetKind(ctx context.Context, orgName string
 		KindName string
 	}{
 		Ctx:      ctx,
-		OrgName:  orgName,
+		OrgName:  ouID,
 		KindName: kindName,
 	}
 	mock.lockGetKind.Lock()
 	mock.calls.GetKind = append(mock.calls.GetKind, callInfo)
 	mock.lockGetKind.Unlock()
-	return mock.GetKindFunc(ctx, orgName, kindName)
+	return mock.GetKindFunc(ctx, ouID, kindName)
 }
 
 // GetKindCalls gets all the calls that were made to GetKind.
@@ -574,7 +574,7 @@ func (mock *AgentKindRepositoryMock) GetVersionByImageIDCalls() []struct {
 }
 
 // ListKinds calls ListKindsFunc.
-func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentKind, int64, error) {
+func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error) {
 	if mock.ListKindsFunc == nil {
 		panic("AgentKindRepositoryMock.ListKindsFunc: method is nil but AgentKindRepository.ListKinds was just called")
 	}
@@ -585,14 +585,14 @@ func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, orgName stri
 		Offset  int
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OrgName: ouID,
 		Limit:   limit,
 		Offset:  offset,
 	}
 	mock.lockListKinds.Lock()
 	mock.calls.ListKinds = append(mock.calls.ListKinds, callInfo)
 	mock.lockListKinds.Unlock()
-	return mock.ListKindsFunc(ctx, orgName, limit, offset)
+	return mock.ListKindsFunc(ctx, ouID, limit, offset)
 }
 
 // ListKindsCalls gets all the calls that were made to ListKinds.

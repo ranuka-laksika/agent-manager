@@ -18,37 +18,37 @@ import (
 //
 //		// make and configure a mocked repositories.AgentConfigurationRepository
 //		mockedAgentConfigurationRepository := &AgentConfigurationRepositoryMock{
-//			CountFunc: func(ctx context.Context, orgName string) (int64, error) {
+//			CountFunc: func(ctx context.Context, ouID string) (int64, error) {
 //				panic("mock out the Count method")
 //			},
-//			CountByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string) (int64, error) {
+//			CountByAgentFunc: func(ctx context.Context, ouID string, projectName string, agentName string) (int64, error) {
 //				panic("mock out the CountByAgent method")
 //			},
-//			CountByAgentAndTypeFunc: func(ctx context.Context, orgName string, projectName string, agentName string, typeID uint) (int64, error) {
+//			CountByAgentAndTypeFunc: func(ctx context.Context, ouID string, projectName string, agentName string, typeID uint) (int64, error) {
 //				panic("mock out the CountByAgentAndType method")
 //			},
 //			CreateFunc: func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error {
 //				panic("mock out the Create method")
 //			},
-//			DeleteFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, orgName string) error {
+//			DeleteFunc: func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, ouID string) error {
 //				panic("mock out the Delete method")
 //			},
-//			ExistsFunc: func(ctx context.Context, configUUID uuid.UUID, orgName string) (bool, error) {
+//			ExistsFunc: func(ctx context.Context, configUUID uuid.UUID, ouID string) (bool, error) {
 //				panic("mock out the Exists method")
 //			},
-//			GetByAgentIDFunc: func(ctx context.Context, agentID string, orgName string) (*models.AgentConfiguration, error) {
+//			GetByAgentIDFunc: func(ctx context.Context, agentID string, ouID string) (*models.AgentConfiguration, error) {
 //				panic("mock out the GetByAgentID method")
 //			},
-//			GetByUUIDFunc: func(ctx context.Context, configUUID uuid.UUID, orgName string) (*models.AgentConfiguration, error) {
+//			GetByUUIDFunc: func(ctx context.Context, configUUID uuid.UUID, ouID string) (*models.AgentConfiguration, error) {
 //				panic("mock out the GetByUUID method")
 //			},
-//			ListFunc: func(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentConfiguration, error) {
+//			ListFunc: func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentConfiguration, error) {
 //				panic("mock out the List method")
 //			},
-//			ListByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error) {
+//			ListByAgentFunc: func(ctx context.Context, ouID string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error) {
 //				panic("mock out the ListByAgent method")
 //			},
-//			ListByAgentAndTypeFunc: func(ctx context.Context, orgName string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error) {
+//			ListByAgentAndTypeFunc: func(ctx context.Context, ouID string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error) {
 //				panic("mock out the ListByAgentAndType method")
 //			},
 //			UpdateFunc: func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error {
@@ -62,37 +62,37 @@ import (
 //	}
 type AgentConfigurationRepositoryMock struct {
 	// CountFunc mocks the Count method.
-	CountFunc func(ctx context.Context, orgName string) (int64, error)
+	CountFunc func(ctx context.Context, ouID string) (int64, error)
 
 	// CountByAgentFunc mocks the CountByAgent method.
-	CountByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string) (int64, error)
+	CountByAgentFunc func(ctx context.Context, ouID string, projectName string, agentName string) (int64, error)
 
 	// CountByAgentAndTypeFunc mocks the CountByAgentAndType method.
-	CountByAgentAndTypeFunc func(ctx context.Context, orgName string, projectName string, agentName string, typeID uint) (int64, error)
+	CountByAgentAndTypeFunc func(ctx context.Context, ouID string, projectName string, agentName string, typeID uint) (int64, error)
 
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error
 
 	// DeleteFunc mocks the Delete method.
-	DeleteFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, orgName string) error
+	DeleteFunc func(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, ouID string) error
 
 	// ExistsFunc mocks the Exists method.
-	ExistsFunc func(ctx context.Context, configUUID uuid.UUID, orgName string) (bool, error)
+	ExistsFunc func(ctx context.Context, configUUID uuid.UUID, ouID string) (bool, error)
 
 	// GetByAgentIDFunc mocks the GetByAgentID method.
-	GetByAgentIDFunc func(ctx context.Context, agentID string, orgName string) (*models.AgentConfiguration, error)
+	GetByAgentIDFunc func(ctx context.Context, agentID string, ouID string) (*models.AgentConfiguration, error)
 
 	// GetByUUIDFunc mocks the GetByUUID method.
-	GetByUUIDFunc func(ctx context.Context, configUUID uuid.UUID, orgName string) (*models.AgentConfiguration, error)
+	GetByUUIDFunc func(ctx context.Context, configUUID uuid.UUID, ouID string) (*models.AgentConfiguration, error)
 
 	// ListFunc mocks the List method.
-	ListFunc func(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentConfiguration, error)
+	ListFunc func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentConfiguration, error)
 
 	// ListByAgentFunc mocks the ListByAgent method.
-	ListByAgentFunc func(ctx context.Context, orgName string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error)
+	ListByAgentFunc func(ctx context.Context, ouID string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error)
 
 	// ListByAgentAndTypeFunc mocks the ListByAgentAndType method.
-	ListByAgentAndTypeFunc func(ctx context.Context, orgName string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error)
+	ListByAgentAndTypeFunc func(ctx context.Context, ouID string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error)
 
 	// UpdateFunc mocks the Update method.
 	UpdateFunc func(ctx context.Context, tx *gorm.DB, config *models.AgentConfiguration) error
@@ -103,14 +103,14 @@ type AgentConfigurationRepositoryMock struct {
 		Count []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// CountByAgent holds details about calls to the CountByAgent method.
 		CountByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -121,7 +121,7 @@ type AgentConfigurationRepositoryMock struct {
 		CountByAgentAndType []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -147,7 +147,7 @@ type AgentConfigurationRepositoryMock struct {
 			Tx *gorm.DB
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// Exists holds details about calls to the Exists method.
@@ -156,7 +156,7 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// GetByAgentID holds details about calls to the GetByAgentID method.
@@ -165,7 +165,7 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// AgentID is the agentID argument value.
 			AgentID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// GetByUUID holds details about calls to the GetByUUID method.
@@ -174,14 +174,14 @@ type AgentConfigurationRepositoryMock struct {
 			Ctx context.Context
 			// ConfigUUID is the configUUID argument value.
 			ConfigUUID uuid.UUID
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// List holds details about calls to the List method.
 		List []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// Limit is the limit argument value.
 			Limit int
@@ -192,7 +192,7 @@ type AgentConfigurationRepositoryMock struct {
 		ListByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -207,7 +207,7 @@ type AgentConfigurationRepositoryMock struct {
 		ListByAgentAndType []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 			// ProjectName is the projectName argument value.
 			ProjectName string
@@ -245,7 +245,7 @@ type AgentConfigurationRepositoryMock struct {
 }
 
 // Count calls CountFunc.
-func (mock *AgentConfigurationRepositoryMock) Count(ctx context.Context, orgName string) (int64, error) {
+func (mock *AgentConfigurationRepositoryMock) Count(ctx context.Context, ouID string) (int64, error) {
 	if mock.CountFunc == nil {
 		panic("AgentConfigurationRepositoryMock.CountFunc: method is nil but AgentConfigurationRepository.Count was just called")
 	}
@@ -254,12 +254,12 @@ func (mock *AgentConfigurationRepositoryMock) Count(ctx context.Context, orgName
 		OrgName string
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockCount.Lock()
 	mock.calls.Count = append(mock.calls.Count, callInfo)
 	mock.lockCount.Unlock()
-	return mock.CountFunc(ctx, orgName)
+	return mock.CountFunc(ctx, ouID)
 }
 
 // CountCalls gets all the calls that were made to Count.
@@ -281,7 +281,7 @@ func (mock *AgentConfigurationRepositoryMock) CountCalls() []struct {
 }
 
 // CountByAgent calls CountByAgentFunc.
-func (mock *AgentConfigurationRepositoryMock) CountByAgent(ctx context.Context, orgName string, projectName string, agentName string) (int64, error) {
+func (mock *AgentConfigurationRepositoryMock) CountByAgent(ctx context.Context, ouID string, projectName string, agentName string) (int64, error) {
 	if mock.CountByAgentFunc == nil {
 		panic("AgentConfigurationRepositoryMock.CountByAgentFunc: method is nil but AgentConfigurationRepository.CountByAgent was just called")
 	}
@@ -292,14 +292,14 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgent(ctx context.Context, 
 		AgentName   string
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
 	mock.lockCountByAgent.Lock()
 	mock.calls.CountByAgent = append(mock.calls.CountByAgent, callInfo)
 	mock.lockCountByAgent.Unlock()
-	return mock.CountByAgentFunc(ctx, orgName, projectName, agentName)
+	return mock.CountByAgentFunc(ctx, ouID, projectName, agentName)
 }
 
 // CountByAgentCalls gets all the calls that were made to CountByAgent.
@@ -325,7 +325,7 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgentCalls() []struct {
 }
 
 // CountByAgentAndType calls CountByAgentAndTypeFunc.
-func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Context, orgName string, projectName string, agentName string, typeID uint) (int64, error) {
+func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Context, ouID string, projectName string, agentName string, typeID uint) (int64, error) {
 	if mock.CountByAgentAndTypeFunc == nil {
 		panic("AgentConfigurationRepositoryMock.CountByAgentAndTypeFunc: method is nil but AgentConfigurationRepository.CountByAgentAndType was just called")
 	}
@@ -337,7 +337,7 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Co
 		TypeID      uint
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		TypeID:      typeID,
@@ -345,7 +345,7 @@ func (mock *AgentConfigurationRepositoryMock) CountByAgentAndType(ctx context.Co
 	mock.lockCountByAgentAndType.Lock()
 	mock.calls.CountByAgentAndType = append(mock.calls.CountByAgentAndType, callInfo)
 	mock.lockCountByAgentAndType.Unlock()
-	return mock.CountByAgentAndTypeFunc(ctx, orgName, projectName, agentName, typeID)
+	return mock.CountByAgentAndTypeFunc(ctx, ouID, projectName, agentName, typeID)
 }
 
 // CountByAgentAndTypeCalls gets all the calls that were made to CountByAgentAndType.
@@ -413,7 +413,7 @@ func (mock *AgentConfigurationRepositoryMock) CreateCalls() []struct {
 }
 
 // Delete calls DeleteFunc.
-func (mock *AgentConfigurationRepositoryMock) Delete(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, orgName string) error {
+func (mock *AgentConfigurationRepositoryMock) Delete(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID, ouID string) error {
 	if mock.DeleteFunc == nil {
 		panic("AgentConfigurationRepositoryMock.DeleteFunc: method is nil but AgentConfigurationRepository.Delete was just called")
 	}
@@ -426,12 +426,12 @@ func (mock *AgentConfigurationRepositoryMock) Delete(ctx context.Context, tx *go
 		Ctx:        ctx,
 		Tx:         tx,
 		ConfigUUID: configUUID,
-		OrgName:    orgName,
+		OrgName:    ouID,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
 	mock.lockDelete.Unlock()
-	return mock.DeleteFunc(ctx, tx, configUUID, orgName)
+	return mock.DeleteFunc(ctx, tx, configUUID, ouID)
 }
 
 // DeleteCalls gets all the calls that were made to Delete.
@@ -457,7 +457,7 @@ func (mock *AgentConfigurationRepositoryMock) DeleteCalls() []struct {
 }
 
 // Exists calls ExistsFunc.
-func (mock *AgentConfigurationRepositoryMock) Exists(ctx context.Context, configUUID uuid.UUID, orgName string) (bool, error) {
+func (mock *AgentConfigurationRepositoryMock) Exists(ctx context.Context, configUUID uuid.UUID, ouID string) (bool, error) {
 	if mock.ExistsFunc == nil {
 		panic("AgentConfigurationRepositoryMock.ExistsFunc: method is nil but AgentConfigurationRepository.Exists was just called")
 	}
@@ -468,12 +468,12 @@ func (mock *AgentConfigurationRepositoryMock) Exists(ctx context.Context, config
 	}{
 		Ctx:        ctx,
 		ConfigUUID: configUUID,
-		OrgName:    orgName,
+		OrgName:    ouID,
 	}
 	mock.lockExists.Lock()
 	mock.calls.Exists = append(mock.calls.Exists, callInfo)
 	mock.lockExists.Unlock()
-	return mock.ExistsFunc(ctx, configUUID, orgName)
+	return mock.ExistsFunc(ctx, configUUID, ouID)
 }
 
 // ExistsCalls gets all the calls that were made to Exists.
@@ -497,7 +497,7 @@ func (mock *AgentConfigurationRepositoryMock) ExistsCalls() []struct {
 }
 
 // GetByAgentID calls GetByAgentIDFunc.
-func (mock *AgentConfigurationRepositoryMock) GetByAgentID(ctx context.Context, agentID string, orgName string) (*models.AgentConfiguration, error) {
+func (mock *AgentConfigurationRepositoryMock) GetByAgentID(ctx context.Context, agentID string, ouID string) (*models.AgentConfiguration, error) {
 	if mock.GetByAgentIDFunc == nil {
 		panic("AgentConfigurationRepositoryMock.GetByAgentIDFunc: method is nil but AgentConfigurationRepository.GetByAgentID was just called")
 	}
@@ -508,12 +508,12 @@ func (mock *AgentConfigurationRepositoryMock) GetByAgentID(ctx context.Context, 
 	}{
 		Ctx:     ctx,
 		AgentID: agentID,
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockGetByAgentID.Lock()
 	mock.calls.GetByAgentID = append(mock.calls.GetByAgentID, callInfo)
 	mock.lockGetByAgentID.Unlock()
-	return mock.GetByAgentIDFunc(ctx, agentID, orgName)
+	return mock.GetByAgentIDFunc(ctx, agentID, ouID)
 }
 
 // GetByAgentIDCalls gets all the calls that were made to GetByAgentID.
@@ -537,7 +537,7 @@ func (mock *AgentConfigurationRepositoryMock) GetByAgentIDCalls() []struct {
 }
 
 // GetByUUID calls GetByUUIDFunc.
-func (mock *AgentConfigurationRepositoryMock) GetByUUID(ctx context.Context, configUUID uuid.UUID, orgName string) (*models.AgentConfiguration, error) {
+func (mock *AgentConfigurationRepositoryMock) GetByUUID(ctx context.Context, configUUID uuid.UUID, ouID string) (*models.AgentConfiguration, error) {
 	if mock.GetByUUIDFunc == nil {
 		panic("AgentConfigurationRepositoryMock.GetByUUIDFunc: method is nil but AgentConfigurationRepository.GetByUUID was just called")
 	}
@@ -548,12 +548,12 @@ func (mock *AgentConfigurationRepositoryMock) GetByUUID(ctx context.Context, con
 	}{
 		Ctx:        ctx,
 		ConfigUUID: configUUID,
-		OrgName:    orgName,
+		OrgName:    ouID,
 	}
 	mock.lockGetByUUID.Lock()
 	mock.calls.GetByUUID = append(mock.calls.GetByUUID, callInfo)
 	mock.lockGetByUUID.Unlock()
-	return mock.GetByUUIDFunc(ctx, configUUID, orgName)
+	return mock.GetByUUIDFunc(ctx, configUUID, ouID)
 }
 
 // GetByUUIDCalls gets all the calls that were made to GetByUUID.
@@ -577,7 +577,7 @@ func (mock *AgentConfigurationRepositoryMock) GetByUUIDCalls() []struct {
 }
 
 // List calls ListFunc.
-func (mock *AgentConfigurationRepositoryMock) List(ctx context.Context, orgName string, limit int, offset int) ([]models.AgentConfiguration, error) {
+func (mock *AgentConfigurationRepositoryMock) List(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentConfiguration, error) {
 	if mock.ListFunc == nil {
 		panic("AgentConfigurationRepositoryMock.ListFunc: method is nil but AgentConfigurationRepository.List was just called")
 	}
@@ -588,14 +588,14 @@ func (mock *AgentConfigurationRepositoryMock) List(ctx context.Context, orgName 
 		Offset  int
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OrgName: ouID,
 		Limit:   limit,
 		Offset:  offset,
 	}
 	mock.lockList.Lock()
 	mock.calls.List = append(mock.calls.List, callInfo)
 	mock.lockList.Unlock()
-	return mock.ListFunc(ctx, orgName, limit, offset)
+	return mock.ListFunc(ctx, ouID, limit, offset)
 }
 
 // ListCalls gets all the calls that were made to List.
@@ -621,7 +621,7 @@ func (mock *AgentConfigurationRepositoryMock) ListCalls() []struct {
 }
 
 // ListByAgent calls ListByAgentFunc.
-func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, orgName string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error) {
+func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, ouID string, projectName string, agentName string, limit int, offset int) ([]models.AgentConfiguration, error) {
 	if mock.ListByAgentFunc == nil {
 		panic("AgentConfigurationRepositoryMock.ListByAgentFunc: method is nil but AgentConfigurationRepository.ListByAgent was just called")
 	}
@@ -634,7 +634,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, o
 		Offset      int
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		Limit:       limit,
@@ -643,7 +643,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgent(ctx context.Context, o
 	mock.lockListByAgent.Lock()
 	mock.calls.ListByAgent = append(mock.calls.ListByAgent, callInfo)
 	mock.lockListByAgent.Unlock()
-	return mock.ListByAgentFunc(ctx, orgName, projectName, agentName, limit, offset)
+	return mock.ListByAgentFunc(ctx, ouID, projectName, agentName, limit, offset)
 }
 
 // ListByAgentCalls gets all the calls that were made to ListByAgent.
@@ -673,7 +673,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentCalls() []struct {
 }
 
 // ListByAgentAndType calls ListByAgentAndTypeFunc.
-func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Context, orgName string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error) {
+func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Context, ouID string, projectName string, agentName string, typeID uint, limit int, offset int) ([]models.AgentConfiguration, error) {
 	if mock.ListByAgentAndTypeFunc == nil {
 		panic("AgentConfigurationRepositoryMock.ListByAgentAndTypeFunc: method is nil but AgentConfigurationRepository.ListByAgentAndType was just called")
 	}
@@ -687,7 +687,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Con
 		Offset      int
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		TypeID:      typeID,
@@ -697,7 +697,7 @@ func (mock *AgentConfigurationRepositoryMock) ListByAgentAndType(ctx context.Con
 	mock.lockListByAgentAndType.Lock()
 	mock.calls.ListByAgentAndType = append(mock.calls.ListByAgentAndType, callInfo)
 	mock.lockListByAgentAndType.Unlock()
-	return mock.ListByAgentAndTypeFunc(ctx, orgName, projectName, agentName, typeID, limit, offset)
+	return mock.ListByAgentAndTypeFunc(ctx, ouID, projectName, agentName, typeID, limit, offset)
 }
 
 // ListByAgentAndTypeCalls gets all the calls that were made to ListByAgentAndType.

@@ -123,7 +123,7 @@ func (r *MCPProxyRepo) GetByUUID(ctx context.Context, proxyUUID, orgUUID string)
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-		Where("mcp_proxies.uuid = ? AND a.organization_name = ? AND a.kind = ?", proxyUUID, orgUUID, models.KindMCPProxy).
+		Where("mcp_proxies.uuid = ? AND a.ou_id = ? AND a.kind = ?", proxyUUID, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -140,7 +140,7 @@ func (r *MCPProxyRepo) GetByHandle(ctx context.Context, handle, orgUUID string) 
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-		Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
+		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -161,7 +161,7 @@ func (r *MCPProxyRepo) GetByHandleForUpdate(ctx context.Context, tx *gorm.DB, ha
 		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-		Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
+		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
 	if err != nil {
 		return nil, err
@@ -175,7 +175,7 @@ func (r *MCPProxyRepo) List(ctx context.Context, orgUUID string, limit, offset i
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ?", orgUUID, models.KindMCPProxy).
+		Where("a.ou_id = ? AND a.kind = ?", orgUUID, models.KindMCPProxy).
 		Order("a.created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -193,17 +193,17 @@ func (r *MCPProxyRepo) Delete(ctx context.Context, handle, orgUUID string) error
 		var proxy models.MCPProxy
 		err := tx.
 			Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-			Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
+			Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
 			First(&proxy).Error
 		if err != nil {
 			return err
 		}
 
-		if err := tx.Where("artifact_uuid = ? AND organization_name = ?", proxy.UUID, orgUUID).
+		if err := tx.Where("artifact_uuid = ? AND ou_id = ?", proxy.UUID, orgUUID).
 			Delete(&models.DeploymentStatusRecord{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("artifact_uuid = ? AND organization_name = ?", proxy.UUID, orgUUID).
+		if err := tx.Where("artifact_uuid = ? AND ou_id = ?", proxy.UUID, orgUUID).
 			Delete(&models.Deployment{}).Error; err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ func (r *MCPProxyRepo) Count(ctx context.Context, orgUUID string) (int, error) {
 	err := r.db.WithContext(ctx).
 		Model(&models.MCPProxy{}).
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ?", orgUUID, models.KindMCPProxy).
+		Where("a.ou_id = ? AND a.kind = ?", orgUUID, models.KindMCPProxy).
 		Count(&count).Error
 	return int(count), err
 }

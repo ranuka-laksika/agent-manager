@@ -91,7 +91,7 @@ func (c *gatewayInternalController) GetLLMProvider(w http.ResponseWriter, r *htt
 		return
 	}
 
-	orgName := gateway.OrganizationName
+	ouID := gateway.OrganizationName
 	gatewayID := gateway.UUID.String()
 	providerID := r.PathValue("providerId")
 	if providerID == "" {
@@ -99,7 +99,7 @@ func (c *gatewayInternalController) GetLLMProvider(w http.ResponseWriter, r *htt
 		return
 	}
 
-	provider, err := c.gatewayInternalService.GetActiveLLMProviderDeploymentByGateway(ctx, providerID, orgName, gatewayID)
+	provider, err := c.gatewayInternalService.GetActiveLLMProviderDeploymentByGateway(ctx, providerID, ouID, gatewayID)
 	if err != nil {
 		if errors.Is(err, utils.ErrDeploymentNotActive) {
 			http.Error(w, "No active deployment found for this LLM provider on this gateway", http.StatusNotFound)
@@ -158,7 +158,7 @@ func (c *gatewayInternalController) GetLLMProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	orgName := gateway.OrganizationName
+	ouID := gateway.OrganizationName
 	gatewayID := gateway.UUID.String()
 	proxyID := r.PathValue("proxyId")
 	if proxyID == "" {
@@ -166,7 +166,7 @@ func (c *gatewayInternalController) GetLLMProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	proxy, err := c.gatewayInternalService.GetActiveLLMProxyDeploymentByGateway(ctx, proxyID, orgName, gatewayID)
+	proxy, err := c.gatewayInternalService.GetActiveLLMProxyDeploymentByGateway(ctx, proxyID, ouID, gatewayID)
 	if err != nil {
 		if errors.Is(err, utils.ErrDeploymentNotActive) {
 			http.Error(w, "No active deployment found for this LLM proxy on this gateway", http.StatusNotFound)
@@ -221,7 +221,7 @@ func (c *gatewayInternalController) GetMCPProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	orgName := gateway.OrganizationName
+	ouID := gateway.OrganizationName
 	gatewayID := gateway.UUID.String()
 	proxyID := r.PathValue("proxyId")
 	if proxyID == "" {
@@ -233,7 +233,7 @@ func (c *gatewayInternalController) GetMCPProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	proxy, err := c.gatewayInternalService.GetActiveMCPProxyDeploymentByGateway(ctx, proxyID, orgName, gatewayID)
+	proxy, err := c.gatewayInternalService.GetActiveMCPProxyDeploymentByGateway(ctx, proxyID, ouID, gatewayID)
 	if err != nil {
 		if errors.Is(err, utils.ErrDeploymentNotActive) {
 			http.Error(w, "No active deployment found for this MCP proxy on this gateway", http.StatusNotFound)

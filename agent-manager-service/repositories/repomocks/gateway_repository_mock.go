@@ -32,7 +32,7 @@ import (
 //			CreateTokenFunc: func(token *models.GatewayToken) error {
 //				panic("mock out the CreateToken method")
 //			},
-//			DeleteFunc: func(gatewayID string, orgName string) error {
+//			DeleteFunc: func(gatewayID string, ouID string) error {
 //				panic("mock out the Delete method")
 //			},
 //			DeleteEnvironmentMappingFunc: func(gatewayID string, environmentID string) error {
@@ -53,10 +53,10 @@ import (
 //			GetActiveTokensByGatewayUUIDFunc: func(gatewayId string) ([]*models.GatewayToken, error) {
 //				panic("mock out the GetActiveTokensByGatewayUUID method")
 //			},
-//			GetByNameAndOrgIDFunc: func(name string, orgName string) (*models.Gateway, error) {
+//			GetByNameAndOrgIDFunc: func(name string, ouID string) (*models.Gateway, error) {
 //				panic("mock out the GetByNameAndOrgID method")
 //			},
-//			GetByOrganizationIDFunc: func(ctx context.Context, orgName string) ([]*models.Gateway, error) {
+//			GetByOrganizationIDFunc: func(ctx context.Context, ouID string) ([]*models.Gateway, error) {
 //				panic("mock out the GetByOrganizationID method")
 //			},
 //			GetByUUIDFunc: func(gatewayId string) (*models.Gateway, error) {
@@ -74,13 +74,13 @@ import (
 //			GetTokenByUUIDFunc: func(tokenId string) (*models.GatewayToken, error) {
 //				panic("mock out the GetTokenByUUID method")
 //			},
-//			HasGatewayAssociationsFunc: func(gatewayID string, orgName string) (bool, error) {
+//			HasGatewayAssociationsFunc: func(gatewayID string, ouID string) (bool, error) {
 //				panic("mock out the HasGatewayAssociations method")
 //			},
-//			HasGatewayAssociationsOrDeploymentsFunc: func(gatewayID string, orgName string) (bool, error) {
+//			HasGatewayAssociationsOrDeploymentsFunc: func(gatewayID string, ouID string) (bool, error) {
 //				panic("mock out the HasGatewayAssociationsOrDeployments method")
 //			},
-//			HasGatewayDeploymentsFunc: func(gatewayID string, orgName string) (bool, error) {
+//			HasGatewayDeploymentsFunc: func(gatewayID string, ouID string) (bool, error) {
 //				panic("mock out the HasGatewayDeployments method")
 //			},
 //			ListFunc: func() ([]*models.Gateway, error) {
@@ -92,7 +92,7 @@ import (
 //			ListIdentityProvidersByGatewayFunc: func(gatewayID string) ([]models.GatewayIdentityProvider, error) {
 //				panic("mock out the ListIdentityProvidersByGateway method")
 //			},
-//			ListIdentityProvidersByOrgFunc: func(orgName string) ([]repositories.IdentityProviderWithContext, error) {
+//			ListIdentityProvidersByOrgFunc: func(ouID string) ([]repositories.IdentityProviderWithContext, error) {
 //				panic("mock out the ListIdentityProvidersByOrg method")
 //			},
 //			ListWithFiltersFunc: func(filters repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
@@ -133,7 +133,7 @@ type GatewayRepositoryMock struct {
 	CreateTokenFunc func(token *models.GatewayToken) error
 
 	// DeleteFunc mocks the Delete method.
-	DeleteFunc func(gatewayID string, orgName string) error
+	DeleteFunc func(gatewayID string, ouID string) error
 
 	// DeleteEnvironmentMappingFunc mocks the DeleteEnvironmentMapping method.
 	DeleteEnvironmentMappingFunc func(gatewayID string, environmentID string) error
@@ -154,10 +154,10 @@ type GatewayRepositoryMock struct {
 	GetActiveTokensByGatewayUUIDFunc func(gatewayId string) ([]*models.GatewayToken, error)
 
 	// GetByNameAndOrgIDFunc mocks the GetByNameAndOrgID method.
-	GetByNameAndOrgIDFunc func(name string, orgName string) (*models.Gateway, error)
+	GetByNameAndOrgIDFunc func(name string, ouID string) (*models.Gateway, error)
 
 	// GetByOrganizationIDFunc mocks the GetByOrganizationID method.
-	GetByOrganizationIDFunc func(ctx context.Context, orgName string) ([]*models.Gateway, error)
+	GetByOrganizationIDFunc func(ctx context.Context, ouID string) ([]*models.Gateway, error)
 
 	// GetByUUIDFunc mocks the GetByUUID method.
 	GetByUUIDFunc func(gatewayId string) (*models.Gateway, error)
@@ -175,13 +175,13 @@ type GatewayRepositoryMock struct {
 	GetTokenByUUIDFunc func(tokenId string) (*models.GatewayToken, error)
 
 	// HasGatewayAssociationsFunc mocks the HasGatewayAssociations method.
-	HasGatewayAssociationsFunc func(gatewayID string, orgName string) (bool, error)
+	HasGatewayAssociationsFunc func(gatewayID string, ouID string) (bool, error)
 
 	// HasGatewayAssociationsOrDeploymentsFunc mocks the HasGatewayAssociationsOrDeployments method.
-	HasGatewayAssociationsOrDeploymentsFunc func(gatewayID string, orgName string) (bool, error)
+	HasGatewayAssociationsOrDeploymentsFunc func(gatewayID string, ouID string) (bool, error)
 
 	// HasGatewayDeploymentsFunc mocks the HasGatewayDeployments method.
-	HasGatewayDeploymentsFunc func(gatewayID string, orgName string) (bool, error)
+	HasGatewayDeploymentsFunc func(gatewayID string, ouID string) (bool, error)
 
 	// ListFunc mocks the List method.
 	ListFunc func() ([]*models.Gateway, error)
@@ -193,7 +193,7 @@ type GatewayRepositoryMock struct {
 	ListIdentityProvidersByGatewayFunc func(gatewayID string) ([]models.GatewayIdentityProvider, error)
 
 	// ListIdentityProvidersByOrgFunc mocks the ListIdentityProvidersByOrg method.
-	ListIdentityProvidersByOrgFunc func(orgName string) ([]repositories.IdentityProviderWithContext, error)
+	ListIdentityProvidersByOrgFunc func(ouID string) ([]repositories.IdentityProviderWithContext, error)
 
 	// ListWithFiltersFunc mocks the ListWithFilters method.
 	ListWithFiltersFunc func(filters repositories.GatewayFilterOptions) ([]*models.Gateway, error)
@@ -241,7 +241,7 @@ type GatewayRepositoryMock struct {
 		Delete []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// DeleteEnvironmentMapping holds details about calls to the DeleteEnvironmentMapping method.
@@ -284,14 +284,14 @@ type GatewayRepositoryMock struct {
 		GetByNameAndOrgID []struct {
 			// Name is the name argument value.
 			Name string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// GetByOrganizationID holds details about calls to the GetByOrganizationID method.
 		GetByOrganizationID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// GetByUUID holds details about calls to the GetByUUID method.
@@ -323,21 +323,21 @@ type GatewayRepositoryMock struct {
 		HasGatewayAssociations []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// HasGatewayAssociationsOrDeployments holds details about calls to the HasGatewayAssociationsOrDeployments method.
 		HasGatewayAssociationsOrDeployments []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// HasGatewayDeployments holds details about calls to the HasGatewayDeployments method.
 		HasGatewayDeployments []struct {
 			// GatewayID is the gatewayID argument value.
 			GatewayID string
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// List holds details about calls to the List method.
@@ -355,7 +355,7 @@ type GatewayRepositoryMock struct {
 		}
 		// ListIdentityProvidersByOrg holds details about calls to the ListIdentityProvidersByOrg method.
 		ListIdentityProvidersByOrg []struct {
-			// OrgName is the orgName argument value.
+			// OrgName is the ouID argument value.
 			OrgName string
 		}
 		// ListWithFilters holds details about calls to the ListWithFilters method.
@@ -580,7 +580,7 @@ func (mock *GatewayRepositoryMock) CreateTokenCalls() []struct {
 }
 
 // Delete calls DeleteFunc.
-func (mock *GatewayRepositoryMock) Delete(gatewayID string, orgName string) error {
+func (mock *GatewayRepositoryMock) Delete(gatewayID string, ouID string) error {
 	if mock.DeleteFunc == nil {
 		panic("GatewayRepositoryMock.DeleteFunc: method is nil but GatewayRepository.Delete was just called")
 	}
@@ -589,12 +589,12 @@ func (mock *GatewayRepositoryMock) Delete(gatewayID string, orgName string) erro
 		OrgName   string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   orgName,
+		OrgName:   ouID,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
 	mock.lockDelete.Unlock()
-	return mock.DeleteFunc(gatewayID, orgName)
+	return mock.DeleteFunc(gatewayID, ouID)
 }
 
 // DeleteCalls gets all the calls that were made to Delete.
@@ -820,7 +820,7 @@ func (mock *GatewayRepositoryMock) GetActiveTokensByGatewayUUIDCalls() []struct 
 }
 
 // GetByNameAndOrgID calls GetByNameAndOrgIDFunc.
-func (mock *GatewayRepositoryMock) GetByNameAndOrgID(name string, orgName string) (*models.Gateway, error) {
+func (mock *GatewayRepositoryMock) GetByNameAndOrgID(name string, ouID string) (*models.Gateway, error) {
 	if mock.GetByNameAndOrgIDFunc == nil {
 		panic("GatewayRepositoryMock.GetByNameAndOrgIDFunc: method is nil but GatewayRepository.GetByNameAndOrgID was just called")
 	}
@@ -829,12 +829,12 @@ func (mock *GatewayRepositoryMock) GetByNameAndOrgID(name string, orgName string
 		OrgName string
 	}{
 		Name:    name,
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockGetByNameAndOrgID.Lock()
 	mock.calls.GetByNameAndOrgID = append(mock.calls.GetByNameAndOrgID, callInfo)
 	mock.lockGetByNameAndOrgID.Unlock()
-	return mock.GetByNameAndOrgIDFunc(name, orgName)
+	return mock.GetByNameAndOrgIDFunc(name, ouID)
 }
 
 // GetByNameAndOrgIDCalls gets all the calls that were made to GetByNameAndOrgID.
@@ -856,7 +856,7 @@ func (mock *GatewayRepositoryMock) GetByNameAndOrgIDCalls() []struct {
 }
 
 // GetByOrganizationID calls GetByOrganizationIDFunc.
-func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error) {
+func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, ouID string) ([]*models.Gateway, error) {
 	if mock.GetByOrganizationIDFunc == nil {
 		panic("GatewayRepositoryMock.GetByOrganizationIDFunc: method is nil but GatewayRepository.GetByOrganizationID was just called")
 	}
@@ -865,12 +865,12 @@ func (mock *GatewayRepositoryMock) GetByOrganizationID(ctx context.Context, orgN
 		OrgName string
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockGetByOrganizationID.Lock()
 	mock.calls.GetByOrganizationID = append(mock.calls.GetByOrganizationID, callInfo)
 	mock.lockGetByOrganizationID.Unlock()
-	return mock.GetByOrganizationIDFunc(ctx, orgName)
+	return mock.GetByOrganizationIDFunc(ctx, ouID)
 }
 
 // GetByOrganizationIDCalls gets all the calls that were made to GetByOrganizationID.
@@ -1052,7 +1052,7 @@ func (mock *GatewayRepositoryMock) GetTokenByUUIDCalls() []struct {
 }
 
 // HasGatewayAssociations calls HasGatewayAssociationsFunc.
-func (mock *GatewayRepositoryMock) HasGatewayAssociations(gatewayID string, orgName string) (bool, error) {
+func (mock *GatewayRepositoryMock) HasGatewayAssociations(gatewayID string, ouID string) (bool, error) {
 	if mock.HasGatewayAssociationsFunc == nil {
 		panic("GatewayRepositoryMock.HasGatewayAssociationsFunc: method is nil but GatewayRepository.HasGatewayAssociations was just called")
 	}
@@ -1061,12 +1061,12 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociations(gatewayID string, orgN
 		OrgName   string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   orgName,
+		OrgName:   ouID,
 	}
 	mock.lockHasGatewayAssociations.Lock()
 	mock.calls.HasGatewayAssociations = append(mock.calls.HasGatewayAssociations, callInfo)
 	mock.lockHasGatewayAssociations.Unlock()
-	return mock.HasGatewayAssociationsFunc(gatewayID, orgName)
+	return mock.HasGatewayAssociationsFunc(gatewayID, ouID)
 }
 
 // HasGatewayAssociationsCalls gets all the calls that were made to HasGatewayAssociations.
@@ -1088,7 +1088,7 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociationsCalls() []struct {
 }
 
 // HasGatewayAssociationsOrDeployments calls HasGatewayAssociationsOrDeploymentsFunc.
-func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeployments(gatewayID string, orgName string) (bool, error) {
+func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeployments(gatewayID string, ouID string) (bool, error) {
 	if mock.HasGatewayAssociationsOrDeploymentsFunc == nil {
 		panic("GatewayRepositoryMock.HasGatewayAssociationsOrDeploymentsFunc: method is nil but GatewayRepository.HasGatewayAssociationsOrDeployments was just called")
 	}
@@ -1097,12 +1097,12 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeployments(gatewayID
 		OrgName   string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   orgName,
+		OrgName:   ouID,
 	}
 	mock.lockHasGatewayAssociationsOrDeployments.Lock()
 	mock.calls.HasGatewayAssociationsOrDeployments = append(mock.calls.HasGatewayAssociationsOrDeployments, callInfo)
 	mock.lockHasGatewayAssociationsOrDeployments.Unlock()
-	return mock.HasGatewayAssociationsOrDeploymentsFunc(gatewayID, orgName)
+	return mock.HasGatewayAssociationsOrDeploymentsFunc(gatewayID, ouID)
 }
 
 // HasGatewayAssociationsOrDeploymentsCalls gets all the calls that were made to HasGatewayAssociationsOrDeployments.
@@ -1124,7 +1124,7 @@ func (mock *GatewayRepositoryMock) HasGatewayAssociationsOrDeploymentsCalls() []
 }
 
 // HasGatewayDeployments calls HasGatewayDeploymentsFunc.
-func (mock *GatewayRepositoryMock) HasGatewayDeployments(gatewayID string, orgName string) (bool, error) {
+func (mock *GatewayRepositoryMock) HasGatewayDeployments(gatewayID string, ouID string) (bool, error) {
 	if mock.HasGatewayDeploymentsFunc == nil {
 		panic("GatewayRepositoryMock.HasGatewayDeploymentsFunc: method is nil but GatewayRepository.HasGatewayDeployments was just called")
 	}
@@ -1133,12 +1133,12 @@ func (mock *GatewayRepositoryMock) HasGatewayDeployments(gatewayID string, orgNa
 		OrgName   string
 	}{
 		GatewayID: gatewayID,
-		OrgName:   orgName,
+		OrgName:   ouID,
 	}
 	mock.lockHasGatewayDeployments.Lock()
 	mock.calls.HasGatewayDeployments = append(mock.calls.HasGatewayDeployments, callInfo)
 	mock.lockHasGatewayDeployments.Unlock()
-	return mock.HasGatewayDeploymentsFunc(gatewayID, orgName)
+	return mock.HasGatewayDeploymentsFunc(gatewayID, ouID)
 }
 
 // HasGatewayDeploymentsCalls gets all the calls that were made to HasGatewayDeployments.
@@ -1251,19 +1251,19 @@ func (mock *GatewayRepositoryMock) ListIdentityProvidersByGatewayCalls() []struc
 }
 
 // ListIdentityProvidersByOrg calls ListIdentityProvidersByOrgFunc.
-func (mock *GatewayRepositoryMock) ListIdentityProvidersByOrg(orgName string) ([]repositories.IdentityProviderWithContext, error) {
+func (mock *GatewayRepositoryMock) ListIdentityProvidersByOrg(ouID string) ([]repositories.IdentityProviderWithContext, error) {
 	if mock.ListIdentityProvidersByOrgFunc == nil {
 		panic("GatewayRepositoryMock.ListIdentityProvidersByOrgFunc: method is nil but GatewayRepository.ListIdentityProvidersByOrg was just called")
 	}
 	callInfo := struct {
 		OrgName string
 	}{
-		OrgName: orgName,
+		OrgName: ouID,
 	}
 	mock.lockListIdentityProvidersByOrg.Lock()
 	mock.calls.ListIdentityProvidersByOrg = append(mock.calls.ListIdentityProvidersByOrg, callInfo)
 	mock.lockListIdentityProvidersByOrg.Unlock()
-	return mock.ListIdentityProvidersByOrgFunc(orgName)
+	return mock.ListIdentityProvidersByOrgFunc(ouID)
 }
 
 // ListIdentityProvidersByOrgCalls gets all the calls that were made to ListIdentityProvidersByOrg.

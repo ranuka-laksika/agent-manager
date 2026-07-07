@@ -33,35 +33,35 @@ type Toolsets struct {
 }
 
 type ProjectToolsetHandler interface {
-	ListProjects(ctx context.Context, orgName string, limit int, offset int) ([]*models.ProjectResponse, int32, error)
-	CreateProject(ctx context.Context, orgName string, payload spec.CreateProjectRequest) (*models.ProjectResponse, error)
+	ListProjects(ctx context.Context, ouID string, limit int, offset int) ([]*models.ProjectResponse, int32, error)
+	CreateProject(ctx context.Context, ouID string, payload spec.CreateProjectRequest) (*models.ProjectResponse, error)
 }
 
 type AgentToolsetHandler interface {
-	ListAgents(ctx context.Context, orgName string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error)
-	GenerateToken(ctx context.Context, orgName string, projectName string, agentName string, environment string, expiresIn string) (*spec.TokenResponse, error)
-	CreateAgent(ctx context.Context, orgName string, projectName string, req *spec.CreateAgentRequest) error
-	GetAgent(ctx context.Context, orgName string, projectName string, agentName string) (*models.AgentResponse, error)
+	ListAgents(ctx context.Context, ouID string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error)
+	GenerateToken(ctx context.Context, ouID string, projectName string, agentName string, environment string, expiresIn string) (*spec.TokenResponse, error)
+	CreateAgent(ctx context.Context, ouID string, projectName string, req *spec.CreateAgentRequest) error
+	GetAgent(ctx context.Context, ouID string, projectName string, agentName string) (*models.AgentResponse, error)
 }
 
 type BuildToolsetHandler interface {
-	ListAgentBuilds(ctx context.Context, orgName string, projectName string, agentName string, limit int32, offset int32) ([]*models.BuildResponse, int32, error)
-	GetBuild(ctx context.Context, orgName string, projectName string, agentName string, buildName string) (*models.BuildDetailsResponse, error)
-	BuildAgent(ctx context.Context, orgName string, projectName string, agentName string, commitId string) (*models.BuildResponse, error)
-	GetBuildLogs(ctx context.Context, orgName string, projectName string, agentName string, buildName string) (*models.LogsResponse, error)
+	ListAgentBuilds(ctx context.Context, ouID string, projectName string, agentName string, limit int32, offset int32) ([]*models.BuildResponse, int32, error)
+	GetBuild(ctx context.Context, ouID string, projectName string, agentName string, buildName string) (*models.BuildDetailsResponse, error)
+	BuildAgent(ctx context.Context, ouID string, projectName string, agentName string, commitId string) (*models.BuildResponse, error)
+	GetBuildLogs(ctx context.Context, ouID string, projectName string, agentName string, buildName string) (*models.LogsResponse, error)
 }
 
 type DeploymentToolsetHandler interface {
-	GetAgentDeployments(ctx context.Context, orgName string, projectName string, agentName string) ([]*models.DeploymentResponse, error)
-	DeployAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.DeployAgentRequest) (string, error)
-	UpdateDeploymentState(ctx context.Context, orgName string, projectName string, agentName string, environment string, state string) error
+	GetAgentDeployments(ctx context.Context, ouID string, projectName string, agentName string) ([]*models.DeploymentResponse, error)
+	DeployAgent(ctx context.Context, ouID string, projectName string, agentName string, req *spec.DeployAgentRequest) (string, error)
+	UpdateDeploymentState(ctx context.Context, ouID string, projectName string, agentName string, environment string, state string) error
 }
 
 type ObservabilityToolsetHandler interface {
-	GetRuntimeLogs(ctx context.Context, orgName string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error)
-	GetMetrics(ctx context.Context, orgName string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error)
-	ListTraces(ctx context.Context, orgName string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error)
-	ExportTraces(ctx context.Context, orgName string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error)
-	GetTraceDetails(ctx context.Context, orgName string, projectName string, agentName string, traceID string, environment string, startTime string, endTime string, limit int) (map[string]any, error)
-	GetSpanDetails(ctx context.Context, orgName string, projectName string, agentName string, traceID string, spanID string, environment string) (map[string]any, error)
+	GetRuntimeLogs(ctx context.Context, ouID string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error)
+	GetMetrics(ctx context.Context, ouID string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error)
+	ListTraces(ctx context.Context, ouID string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error)
+	ExportTraces(ctx context.Context, ouID string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error)
+	GetTraceDetails(ctx context.Context, ouID string, projectName string, agentName string, traceID string, environment string, startTime string, endTime string, limit int) (map[string]any, error)
+	GetSpanDetails(ctx context.Context, ouID string, projectName string, agentName string, traceID string, spanID string, environment string) (map[string]any, error)
 }

@@ -295,9 +295,9 @@ func (s *monitorSchedulerService) syncSingleRunStatus(ctx context.Context, run *
 }
 
 // orgOCClient returns a per-org OC client in Thunder mode, or the system client in non-Thunder mode.
-func (s *monitorSchedulerService) orgOCClient(ctx context.Context, orgName string) (client.OpenChoreoClient, error) {
+func (s *monitorSchedulerService) orgOCClient(ctx context.Context, ouID string) (client.OpenChoreoClient, error) {
 	if !s.provisioner.IsThunderMode() {
 		return s.ocClient, nil
 	}
-	return s.provisioner.GetOCClientForOrg(ctx, orgName)
+	return s.provisioner.GetOCClientForOrg(ctx, ouID)
 }

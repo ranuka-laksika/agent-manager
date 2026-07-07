@@ -37,9 +37,10 @@ import (
 // to the JSON workload object (including spec.container.image).
 const workflowRunWorkloadAnnotationKey = "openchoreo.dev/workload"
 
-func (c *openChoreoClient) TriggerBuild(ctx context.Context, orgName, projectName, componentName, commitID string) (*models.BuildResponse, error) {
+func (c *openChoreoClient) TriggerBuild(ctx context.Context, ouID, projectName, componentName, commitID string) (*models.BuildResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// Get the component to find its workflow configuration
-	compResp, err := c.ocClient.GetComponentWithResponse(ctx, orgName, componentName)
+	compResp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get component: %w", err)
 	}
@@ -91,7 +92,7 @@ func (c *openChoreoClient) TriggerBuild(ctx context.Context, orgName, projectNam
 	apiReq := gen.CreateWorkflowRunJSONRequestBody{
 		Metadata: gen.ObjectMeta{
 			Name:      workflowRunName,
-			Namespace: &orgName,
+			Namespace: &namespaceName,
 			Labels:    &labels,
 		},
 		Spec: &gen.WorkflowRunSpec{
@@ -103,7 +104,7 @@ func (c *openChoreoClient) TriggerBuild(ctx context.Context, orgName, projectNam
 		},
 	}
 
-	resp, err := c.ocClient.CreateWorkflowRunWithResponse(ctx, orgName, apiReq)
+	resp, err := c.ocClient.CreateWorkflowRunWithResponse(ctx, namespaceName, apiReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to trigger build: %w", err)
 	}
@@ -125,8 +126,9 @@ func (c *openChoreoClient) TriggerBuild(ctx context.Context, orgName, projectNam
 	return toWorkflowRunBuild(resp.JSON201, componentName, projectName)
 }
 
-func (c *openChoreoClient) GetBuild(ctx context.Context, orgName, projectName, componentName, buildName string) (*models.BuildDetailsResponse, error) {
-	resp, err := c.ocClient.GetWorkflowRunWithResponse(ctx, orgName, buildName)
+func (c *openChoreoClient) GetBuild(ctx context.Context, ouID, projectName, componentName, buildName string) (*models.BuildDetailsResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
+	resp, err := c.ocClient.GetWorkflowRunWithResponse(ctx, namespaceName, buildName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build: %w", err)
 	}
@@ -147,10 +149,11 @@ func (c *openChoreoClient) GetBuild(ctx context.Context, orgName, projectName, c
 	return toBuildDetailsResponse(resp.JSON200, componentName, projectName)
 }
 
-func (c *openChoreoClient) ListBuilds(ctx context.Context, orgName, projectName, componentName string) ([]*models.BuildResponse, error) {
+func (c *openChoreoClient) ListBuilds(ctx context.Context, ouID, projectName, componentName string) ([]*models.BuildResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// Use label selector to filter workflow runs by component
 	labelSelector := fmt.Sprintf("%s=%s,%s=%s", LabelKeyComponentName, componentName, LabelKeyProjectName, projectName)
-	resp, err := c.ocClient.ListWorkflowRunsWithResponse(ctx, orgName, &gen.ListWorkflowRunsParams{
+	resp, err := c.ocClient.ListWorkflowRunsWithResponse(ctx, namespaceName, &gen.ListWorkflowRunsParams{
 		LabelSelector: &labelSelector,
 		Limit:         &defaultListLimit,
 	})
@@ -188,7 +191,8 @@ func (c *openChoreoClient) ListBuilds(ctx context.Context, orgName, projectName,
 	return buildResponses, nil
 }
 
-func (c *openChoreoClient) UpdateComponentBuildParameters(ctx context.Context, namespaceName, projectName, componentName string, req UpdateComponentBuildParametersRequest) error {
+func (c *openChoreoClient) UpdateComponentBuildParameters(ctx context.Context, ouID, projectName, componentName string, req UpdateComponentBuildParametersRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	// Get the component
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {

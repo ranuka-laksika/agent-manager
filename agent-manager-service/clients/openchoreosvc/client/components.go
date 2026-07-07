@@ -35,7 +35,8 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
-func (c *openChoreoClient) CreateComponent(ctx context.Context, namespaceName, projectName string, req CreateComponentRequest) error {
+func (c *openChoreoClient) CreateComponent(ctx context.Context, ouID, projectName string, req CreateComponentRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	createComponentReqBody, err := buildCreateComponentRequestBody(namespaceName, projectName, req)
 	if err != nil {
 		return fmt.Errorf("failed to build component request: %w", err)
@@ -540,7 +541,8 @@ func resolveDockerfilePath(appPath, dockerfilePath string) string {
 	return normalizePath(appPath) + "/" + strings.TrimPrefix(normalizePath(dockerfilePath), "/")
 }
 
-func (c *openChoreoClient) GetComponent(ctx context.Context, namespaceName, projectName, componentName string) (*models.AgentResponse, error) {
+func (c *openChoreoClient) GetComponent(ctx context.Context, ouID, projectName, componentName string) (*models.AgentResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get component resource: %w", err)
@@ -562,7 +564,8 @@ func (c *openChoreoClient) GetComponent(ctx context.Context, namespaceName, proj
 	return convertComponentFromTyped(resp.JSON200)
 }
 
-func (c *openChoreoClient) UpdateComponentBasicInfo(ctx context.Context, namespaceName, projectName, componentName string, req UpdateComponentBasicInfoRequest) error {
+func (c *openChoreoClient) UpdateComponentBasicInfo(ctx context.Context, ouID, projectName, componentName string, req UpdateComponentBasicInfoRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to get component: %w", err)
@@ -605,7 +608,8 @@ func (c *openChoreoClient) UpdateComponentBasicInfo(ctx context.Context, namespa
 }
 
 // UpdateEnvResourceConfigs updates environment-specific resource configurations via release binding
-func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, namespaceName, projectName, componentName, environment string, req UpdateComponentResourceConfigsRequest) error {
+func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, ouID, projectName, componentName, environment string, req UpdateComponentResourceConfigsRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	// List release bindings to find the correct binding name for the environment
 	componentFilter := componentName
 	listResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
@@ -731,7 +735,8 @@ func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, namespa
 }
 
 // GetEnvResourceConfigs fetches environment-specific resource configurations from release binding
-func (c *openChoreoClient) GetEnvResourceConfigs(ctx context.Context, namespaceName, projectName, componentName, environment string) (*ComponentResourceConfigsResponse, error) {
+func (c *openChoreoClient) GetEnvResourceConfigs(ctx context.Context, ouID, projectName, componentName, environment string) (*ComponentResourceConfigsResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// Step 1: Get component to find its ComponentType reference
 	compResp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
@@ -1042,7 +1047,8 @@ func toInt32(v interface{}) (int32, bool) {
 	return 0, false
 }
 
-func (c *openChoreoClient) DeleteComponent(ctx context.Context, namespaceName, projectName, componentName string) error {
+func (c *openChoreoClient) DeleteComponent(ctx context.Context, ouID, projectName, componentName string) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.DeleteComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to delete component: %w", err)
@@ -1058,7 +1064,8 @@ func (c *openChoreoClient) DeleteComponent(ctx context.Context, namespaceName, p
 	return nil
 }
 
-func (c *openChoreoClient) ListComponents(ctx context.Context, namespaceName, projectName string) ([]*models.AgentResponse, error) {
+func (c *openChoreoClient) ListComponents(ctx context.Context, ouID, projectName string) ([]*models.AgentResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.ListComponentsWithResponse(ctx, namespaceName, &gen.ListComponentsParams{
 		Project: &projectName,
 		Limit:   &defaultListLimit,
@@ -1090,7 +1097,8 @@ func (c *openChoreoClient) ListComponents(ctx context.Context, namespaceName, pr
 	return components, nil
 }
 
-func (c *openChoreoClient) ListComponentsByKind(ctx context.Context, namespaceName, projectName, kindName string) ([]*models.AgentResponse, error) {
+func (c *openChoreoClient) ListComponentsByKind(ctx context.Context, ouID, projectName, kindName string) ([]*models.AgentResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	labelSelector := string(LabelKeyAgentKindName) + "=" + kindName
 	resp, err := c.ocClient.ListComponentsWithResponse(ctx, namespaceName, &gen.ListComponentsParams{
 		Project:       &projectName,
@@ -1124,7 +1132,8 @@ func (c *openChoreoClient) ListComponentsByKind(ctx context.Context, namespaceNa
 	return components, nil
 }
 
-func (c *openChoreoClient) ComponentExists(ctx context.Context, namespaceName, projectName, componentName string) (bool, error) {
+func (c *openChoreoClient) ComponentExists(ctx context.Context, ouID, projectName, componentName string) (bool, error) {
+	namespaceName := c.namespaceFor(ouID)
 	_, err := c.GetComponent(ctx, namespaceName, projectName, componentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrNotFound) {
@@ -1163,7 +1172,8 @@ type TraitRequest struct {
 }
 
 // AttachTraits attaches one or more traits to a component in a single GET-UPDATE cycle.
-func (c *openChoreoClient) AttachTraits(ctx context.Context, namespaceName, projectName, componentName string, traitRequests []TraitRequest) error {
+func (c *openChoreoClient) AttachTraits(ctx context.Context, ouID, projectName, componentName string, traitRequests []TraitRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	if len(traitRequests) == 0 {
 		return nil
 	}
@@ -1231,7 +1241,8 @@ func (c *openChoreoClient) AttachTraits(ctx context.Context, namespaceName, proj
 }
 
 // DetachTrait removes a trait from a component
-func (c *openChoreoClient) DetachTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) error {
+func (c *openChoreoClient) DetachTrait(ctx context.Context, ouID, projectName, componentName string, traitType TraitType) error {
+	namespaceName := c.namespaceFor(ouID)
 	// Get the component
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
@@ -1290,7 +1301,8 @@ func (c *openChoreoClient) DetachTrait(ctx context.Context, namespaceName, proje
 }
 
 // HasTrait checks if a component has a specific trait attached
-func (c *openChoreoClient) HasTrait(ctx context.Context, namespaceName, projectName, componentName string, traitType TraitType) (bool, error) {
+func (c *openChoreoClient) HasTrait(ctx context.Context, ouID, projectName, componentName string, traitType TraitType) (bool, error) {
+	namespaceName := c.namespaceFor(ouID)
 	traits, err := c.listComponentTraits(ctx, namespaceName, projectName, componentName)
 	if err != nil {
 		return false, err
@@ -1306,7 +1318,8 @@ func (c *openChoreoClient) HasTrait(ctx context.Context, namespaceName, projectN
 }
 
 // UpdateComponentDeploymentConfig applies deploy-time Component CR changes in one GET-UPDATE cycle.
-func (c *openChoreoClient) UpdateComponentDeploymentConfig(ctx context.Context, namespaceName, projectName, componentName string, req ComponentDeploymentConfigRequest) error {
+func (c *openChoreoClient) UpdateComponentDeploymentConfig(ctx context.Context, ouID, projectName, componentName string, req ComponentDeploymentConfigRequest) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to get component: %w", err)
@@ -1481,13 +1494,15 @@ func (c *openChoreoClient) mergeComponentEnvVars(ctx context.Context, namespaceN
 }
 
 // UpdateComponentEnvVars updates the environment variables in the component's workflow parameters.
-func (c *openChoreoClient) UpdateComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error {
+func (c *openChoreoClient) UpdateComponentEnvVars(ctx context.Context, ouID, projectName, componentName string, envVars []EnvVar) error {
+	namespaceName := c.namespaceFor(ouID)
 	return c.mergeComponentEnvVars(ctx, namespaceName, componentName, envVars)
 }
 
 // ReplaceComponentEnvVars replaces all environment variables in the component's workflow parameters.
 // Unlike mergeComponentEnvVars which merges with existing vars, this completely replaces them.
-func (c *openChoreoClient) ReplaceComponentEnvVars(ctx context.Context, namespaceName, projectName, componentName string, envVars []EnvVar) error {
+func (c *openChoreoClient) ReplaceComponentEnvVars(ctx context.Context, ouID, projectName, componentName string, envVars []EnvVar) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to get component: %w", err)
@@ -1558,7 +1573,8 @@ func replaceComponentWorkflowEnvVars(component *gen.Component, envVars []EnvVar)
 }
 
 // ReplaceComponentFileMounts replaces all file mount configurations in the component's workflow parameters.
-func (c *openChoreoClient) ReplaceComponentFileMounts(ctx context.Context, namespaceName, projectName, componentName string, files []FileVar) error {
+func (c *openChoreoClient) ReplaceComponentFileMounts(ctx context.Context, ouID, projectName, componentName string, files []FileVar) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to get component: %w", err)
@@ -1626,7 +1642,8 @@ func (c *openChoreoClient) ReplaceComponentFileMounts(ctx context.Context, names
 // UpdateReleaseBindingEnvVars merges env vars into the ReleaseBinding for the specified environment,
 // then sets restartedAt to trigger a pod rollout. If no binding exists for the component+environment yet
 // (agent not deployed), returns nil — the Component CR vars will be picked up on first deploy.
-func (c *openChoreoClient) UpdateReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, envVars []EnvVar) error {
+func (c *openChoreoClient) UpdateReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, envVars []EnvVar) error {
+	namespaceName := c.namespaceFor(ouID)
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, envName)
 	if err != nil {
 		return err
@@ -1711,7 +1728,8 @@ func (c *openChoreoClient) UpdateReleaseBindingEnvVars(ctx context.Context, name
 
 // RemoveComponentEnvironmentVariables removes the specified env var keys from the component's
 // workflow parameters and updates the component CR.
-func (c *openChoreoClient) RemoveComponentEnvironmentVariables(ctx context.Context, namespaceName, projectName, componentName string, envVarKeys []string) error {
+func (c *openChoreoClient) RemoveComponentEnvironmentVariables(ctx context.Context, ouID, projectName, componentName string, envVarKeys []string) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
 	if err != nil {
 		return fmt.Errorf("failed to get component: %w", err)
@@ -1780,7 +1798,8 @@ func (c *openChoreoClient) RemoveComponentEnvironmentVariables(ctx context.Conte
 // RemoveReleaseBindingEnvVars removes env var keys from the ReleaseBinding for the specified environment,
 // then sets restartedAt to trigger a pod rollout. If no binding exists for the component+environment yet,
 // returns nil (idempotent — nothing to remove).
-func (c *openChoreoClient) RemoveReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, envVarKeys []string) error {
+func (c *openChoreoClient) RemoveReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, envVarKeys []string) error {
+	namespaceName := c.namespaceFor(ouID)
 	if len(envVarKeys) == 0 {
 		return nil
 	}
@@ -1888,7 +1907,8 @@ func (c *openChoreoClient) RemoveReleaseBindingEnvVars(ctx context.Context, name
 // ReplaceReleaseBindingEnvVars atomically removes specified keys and merges new env vars into
 // the ReleaseBinding in a single Get/Update cycle. This avoids resource version conflicts that
 // occur when RemoveReleaseBindingEnvVars and UpdateReleaseBindingEnvVars are called back-to-back.
-func (c *openChoreoClient) ReplaceReleaseBindingEnvVars(ctx context.Context, namespaceName, projectName, componentName, envName string, keysToRemove []string, envVarsToAdd []EnvVar) error {
+func (c *openChoreoClient) ReplaceReleaseBindingEnvVars(ctx context.Context, ouID, projectName, componentName, envName string, keysToRemove []string, envVarsToAdd []EnvVar) error {
+	namespaceName := c.namespaceFor(ouID)
 	componentFilter := componentName
 	listResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentFilter,
@@ -1999,7 +2019,8 @@ func (c *openChoreoClient) ReplaceReleaseBindingEnvVars(ctx context.Context, nam
 // RemoveWorkloadEnvVars removes env var keys from the Workload for the specified component.
 // The Workload is a live runtime resource; removing env vars here ensures that stale entries
 // (e.g., from a deleted LLM config) do not persist after the configuration is cleaned up.
-func (c *openChoreoClient) RemoveWorkloadEnvVars(ctx context.Context, namespaceName, componentName string, envVarKeys []string) error {
+func (c *openChoreoClient) RemoveWorkloadEnvVars(ctx context.Context, ouID, componentName string, envVarKeys []string) error {
+	namespaceName := c.namespaceFor(ouID)
 	if len(envVarKeys) == 0 {
 		return nil
 	}
@@ -2417,7 +2438,8 @@ func getInstrumentationImage(languageVersion, instrumentationVersion string) (st
 	return fmt.Sprintf("%s/%s:%s-python%s", InstrumentationImageRegistry, InstrumentationImageName, instrumentationVersion, pythonMajorMinor), nil
 }
 
-func (c *openChoreoClient) GetComponentEndpoints(ctx context.Context, namespaceName, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error) {
+func (c *openChoreoClient) GetComponentEndpoints(ctx context.Context, ouID, projectName, componentName, environment string) (map[string]models.EndpointsResponse, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// List release bindings filtering by component to get endpoint URLs
 	releaseBindingResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,
@@ -2505,7 +2527,8 @@ func (c *openChoreoClient) GetComponentEndpoints(ctx context.Context, namespaceN
 	return endpointDetails, nil
 }
 
-func (c *openChoreoClient) GetComponentConfigurations(ctx context.Context, namespaceName, projectName, componentName, environment string) ([]models.EnvVars, error) {
+func (c *openChoreoClient) GetComponentConfigurations(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.EnvVars, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// Create a map to store environment variables (for easy merging)
 	type envVarEntry struct {
 		Value       string
@@ -2620,7 +2643,8 @@ func (c *openChoreoClient) GetComponentConfigurations(ctx context.Context, names
 	return envVars, nil
 }
 
-func (c *openChoreoClient) GetComponentFileMounts(ctx context.Context, namespaceName, projectName, componentName, environment string) ([]models.FileMountEntry, error) {
+func (c *openChoreoClient) GetComponentFileMounts(ctx context.Context, ouID, projectName, componentName, environment string) ([]models.FileMountEntry, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// List workloads to extract file mounts
 	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, namespaceName, &gen.ListWorkloadsParams{
 		Component: &componentName,

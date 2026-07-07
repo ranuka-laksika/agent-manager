@@ -45,7 +45,7 @@ type StoredAPIKey struct {
 	Name             string     `gorm:"column:name" json:"name"`
 	DisplayName      string     `gorm:"column:display_name" json:"displayName"`
 	ArtifactUUID     uuid.UUID  `gorm:"column:artifact_uuid" json:"artifactUuid"`
-	OrganizationName string     `gorm:"column:organization_name" json:"organizationName"`
+	OrganizationName string     `gorm:"column:ou_id" json:"organizationName"`
 	APIKeyHash       string     `gorm:"column:api_key_hash" json:"-"`
 	MaskedAPIKey     string     `gorm:"column:masked_api_key" json:"maskedApiKey"`
 	Status           string     `gorm:"column:status" json:"status"`

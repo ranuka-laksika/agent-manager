@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -207,11 +208,11 @@ func (c *agentController) GetAgent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
-	agent, err := c.agentService.GetAgent(ctx, orgName, projName, agentName)
+	agent, err := c.agentService.GetAgent(ctx, ouID, projName, agentName)
 	if err != nil {
 		log.Error("GetAgent: failed to get agent", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent")
@@ -226,7 +227,7 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 
 	// Parse query parameters
@@ -254,7 +255,7 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agents, total, err := c.agentService.ListAgents(ctx, orgName, projName, int32(limit), int32(offset))
+	agents, total, err := c.agentService.ListAgents(ctx, ouID, projName, int32(limit), int32(offset))
 	if err != nil {
 		log.Error("ListAgents: failed to list agents", "error", err)
 		handleCommonErrors(w, err, "Failed to list agents")
@@ -277,7 +278,7 @@ func (c *agentController) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 
 	// Parse and validate request body
@@ -294,7 +295,7 @@ func (c *agentController) CreateAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := c.agentService.CreateAgent(ctx, orgName, projName, &payload)
+	err := c.agentService.CreateAgent(ctx, ouID, projName, &payload)
 	if err != nil {
 		log.Error("CreateAgent: failed to create agent", "error", err)
 		handleCommonErrors(w, err, "Failed to create agent")
@@ -324,7 +325,7 @@ func (c *agentController) UpdateAgentBasicInfo(w http.ResponseWriter, r *http.Re
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -340,7 +341,7 @@ func (c *agentController) UpdateAgentBasicInfo(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	agent, err := c.agentService.UpdateAgentBasicInfo(ctx, orgName, projName, agentName, &payload)
+	agent, err := c.agentService.UpdateAgentBasicInfo(ctx, ouID, projName, agentName, &payload)
 	if err != nil {
 		log.Error("UpdateAgent: failed to update agent", "error", err)
 		handleCommonErrors(w, err, "Failed to update agent")
@@ -356,7 +357,7 @@ func (c *agentController) UpdateAgentBuildParameters(w http.ResponseWriter, r *h
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -372,7 +373,7 @@ func (c *agentController) UpdateAgentBuildParameters(w http.ResponseWriter, r *h
 		return
 	}
 
-	agent, err := c.agentService.UpdateAgentBuildParameters(ctx, orgName, projName, agentName, &payload)
+	agent, err := c.agentService.UpdateAgentBuildParameters(ctx, ouID, projName, agentName, &payload)
 	if err != nil {
 		log.Error("UpdateAgentBuildParameters: failed to update agent build parameters", "error", err)
 		handleCommonErrors(w, err, "Failed to update agent build parameters")
@@ -388,7 +389,7 @@ func (c *agentController) GetAgentResourceConfigs(w http.ResponseWriter, r *http
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	environment := r.URL.Query().Get("environment")
@@ -398,7 +399,7 @@ func (c *agentController) GetAgentResourceConfigs(w http.ResponseWriter, r *http
 		return
 	}
 
-	configs, err := c.agentService.GetAgentResourceConfigs(ctx, orgName, projName, agentName, environment)
+	configs, err := c.agentService.GetAgentResourceConfigs(ctx, ouID, projName, agentName, environment)
 	if err != nil {
 		log.Error("GetAgentResourceConfigs: failed to get agent resource configurations", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent resource configurations")
@@ -413,7 +414,7 @@ func (c *agentController) UpdateAgentResourceConfigs(w http.ResponseWriter, r *h
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	environment := r.URL.Query().Get("environment")
@@ -435,7 +436,7 @@ func (c *agentController) UpdateAgentResourceConfigs(w http.ResponseWriter, r *h
 		return
 	}
 
-	resourceConfigs, err := c.agentService.UpdateAgentResourceConfigs(ctx, orgName, projName, agentName, environment, &payload)
+	resourceConfigs, err := c.agentService.UpdateAgentResourceConfigs(ctx, ouID, projName, agentName, environment, &payload)
 	if err != nil {
 		log.Error("UpdateAgentResourceConfigs: failed to update agent resource configurations", "error", err)
 		handleCommonErrors(w, err, "Failed to update agent resource configurations")
@@ -449,11 +450,11 @@ func (c *agentController) DeleteAgent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
-	err := c.agentService.DeleteAgent(ctx, orgName, projName, agentName)
+	err := c.agentService.DeleteAgent(ctx, ouID, projName, agentName)
 	if err != nil {
 		log.Error("DeleteAgent: failed to delete agent", "error", err)
 		handleCommonErrors(w, err, "Failed to delete agent")
@@ -467,7 +468,7 @@ func (c *agentController) BuildAgent(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -476,7 +477,7 @@ func (c *agentController) BuildAgent(w http.ResponseWriter, r *http.Request) {
 	if commitId == "" {
 		log.Debug("BuildAgent: commitId not provided, using latest commit")
 	}
-	build, err := c.agentService.BuildAgent(ctx, orgName, projName, agentName, commitId)
+	build, err := c.agentService.BuildAgent(ctx, ouID, projName, agentName, commitId)
 	if err != nil {
 		log.Error("BuildAgent: failed to build agent", "error", err)
 		handleCommonErrors(w, err, "Failed to build agent")
@@ -490,12 +491,12 @@ func (c *agentController) GetBuildLogs(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	buildName := r.PathValue(utils.PathParamBuildName)
 
-	buildLogs, err := c.agentService.GetBuildLogs(ctx, orgName, projName, agentName, buildName)
+	buildLogs, err := c.agentService.GetBuildLogs(ctx, ouID, projName, agentName, buildName)
 	if err != nil {
 		log.Error("GetBuildLogs: failed to get build logs", "error", err)
 		handleCommonErrors(w, err, "Failed to get build logs")
@@ -510,7 +511,7 @@ func (c *agentController) GetAgentRuntimeLogs(w http.ResponseWriter, r *http.Req
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -528,7 +529,7 @@ func (c *agentController) GetAgentRuntimeLogs(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	applicationLogs, err := c.agentService.GetAgentRuntimeLogs(ctx, orgName, projName, agentName, payload)
+	applicationLogs, err := c.agentService.GetAgentRuntimeLogs(ctx, ouID, projName, agentName, payload)
 	if err != nil {
 		log.Error("GetAgentRuntimeLogs: failed to get run-time logs", "error", err)
 		handleCommonErrors(w, err, "Failed to get run-time logs")
@@ -543,7 +544,7 @@ func (c *agentController) GetAgentMetrics(w http.ResponseWriter, r *http.Request
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -561,7 +562,7 @@ func (c *agentController) GetAgentMetrics(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	metricsResponse, err := c.agentService.GetAgentMetrics(ctx, orgName, projName, agentName, payload)
+	metricsResponse, err := c.agentService.GetAgentMetrics(ctx, ouID, projName, agentName, payload)
 	if err != nil {
 		log.Error("GetAgentMetrics: failed to get agent metrics", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent metrics")
@@ -575,7 +576,7 @@ func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -593,7 +594,7 @@ func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	deployedEnv, err := c.agentService.DeployAgent(ctx, orgName, projName, agentName, &payload)
+	deployedEnv, err := c.agentService.DeployAgent(ctx, ouID, projName, agentName, &payload)
 	if err != nil {
 		log.Error("DeployAgent: failed to deploy agent", "error", err)
 		handleCommonErrors(w, err, "Failed to deploy agent")
@@ -613,7 +614,7 @@ func (c *agentController) PromoteAgent(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -629,7 +630,7 @@ func (c *agentController) PromoteAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := c.agentService.PromoteAgent(ctx, orgName, projName, agentName, &payload); err != nil {
+	if err := c.agentService.PromoteAgent(ctx, ouID, projName, agentName, &payload); err != nil {
 		log.Error("PromoteAgent: failed to promote agent", "error", err)
 		handleCommonErrors(w, err, "Failed to promote agent")
 		return
@@ -648,7 +649,7 @@ func (c *agentController) UpdateAgentDeploySettings(w http.ResponseWriter, r *ht
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -663,7 +664,7 @@ func (c *agentController) UpdateAgentDeploySettings(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := c.agentService.UpdateAgentDeploySettings(ctx, orgName, projName, agentName, &payload); err != nil {
+	if err := c.agentService.UpdateAgentDeploySettings(ctx, ouID, projName, agentName, &payload); err != nil {
 		log.Error("UpdateAgentDeploySettings: failed to update deploy settings", "error", err)
 		handleCommonErrors(w, err, "Failed to update deploy settings")
 		return
@@ -675,7 +676,7 @@ func (c *agentController) UpdateAgentConfigurations(w http.ResponseWriter, r *ht
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -690,7 +691,7 @@ func (c *agentController) UpdateAgentConfigurations(w http.ResponseWriter, r *ht
 		return
 	}
 
-	if err := c.agentService.UpdateAgentConfigurations(ctx, orgName, projName, agentName, &payload); err != nil {
+	if err := c.agentService.UpdateAgentConfigurations(ctx, ouID, projName, agentName, &payload); err != nil {
 		log.Error("UpdateAgentConfigurations: failed to update configurations", "error", err)
 		handleCommonErrors(w, err, "Failed to update agent configurations")
 		return
@@ -703,7 +704,7 @@ func (c *agentController) ListAgentBuilds(w http.ResponseWriter, r *http.Request
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -732,7 +733,7 @@ func (c *agentController) ListAgentBuilds(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	builds, total, err := c.agentService.ListAgentBuilds(ctx, orgName, projName, agentName, int32(limit), int32(offset))
+	builds, total, err := c.agentService.ListAgentBuilds(ctx, ouID, projName, agentName, int32(limit), int32(offset))
 	if err != nil {
 		log.Error("ListAgentBuilds: failed to list agent builds", "error", err)
 		handleCommonErrors(w, err, "Failed to list agent builds")
@@ -755,7 +756,7 @@ func (c *agentController) GenerateName(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	// Parse and validate request body
 	var payload spec.ResourceNameRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -771,7 +772,7 @@ func (c *agentController) GenerateName(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	candidateName, err := c.agentService.GenerateName(ctx, orgName, payload)
+	candidateName, err := c.agentService.GenerateName(ctx, ouID, payload)
 	if err != nil {
 		log.Error("GenerateAgentName: failed to generate agent name", "error", err)
 		handleCommonErrors(w, err, "Failed to check agent name availability")
@@ -791,12 +792,12 @@ func (c *agentController) GetBuild(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	buildName := r.PathValue(utils.PathParamBuildName)
 
-	build, err := c.agentService.GetBuild(ctx, orgName, projName, agentName, buildName)
+	build, err := c.agentService.GetBuild(ctx, ouID, projName, agentName, buildName)
 	if err != nil {
 		log.Error("GetBuild: failed to get build", "error", err)
 		handleCommonErrors(w, err, "Failed to get build")
@@ -812,11 +813,11 @@ func (c *agentController) GetAgentDeployments(w http.ResponseWriter, r *http.Req
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
-	deployments, err := c.agentService.GetAgentDeployments(ctx, orgName, projName, agentName)
+	deployments, err := c.agentService.GetAgentDeployments(ctx, ouID, projName, agentName)
 	if err != nil {
 		log.Error("GetAgentDeployments: failed to get deployments", "error", err)
 		handleCommonErrors(w, err, "Failed to get deployments")
@@ -832,7 +833,7 @@ func (c *agentController) UpdateDeploymentState(w http.ResponseWriter, r *http.R
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -863,7 +864,7 @@ func (c *agentController) UpdateDeploymentState(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err := c.agentService.UpdateAgentDeploymentState(ctx, orgName, projName, agentName, payload.Environment, payload.State)
+	err := c.agentService.UpdateAgentDeploymentState(ctx, ouID, projName, agentName, payload.Environment, payload.State)
 	if err != nil {
 		log.Error("UpdateDeploymentState: failed to update deployment state", "error", err)
 		handleCommonErrors(w, err, "Failed to update deployment state")
@@ -883,7 +884,7 @@ func (c *agentController) GetAgentEndpoints(w http.ResponseWriter, r *http.Reque
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	environment := r.URL.Query().Get("environment")
@@ -893,7 +894,7 @@ func (c *agentController) GetAgentEndpoints(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	endpoints, err := c.agentService.GetAgentEndpoints(ctx, orgName, projName, agentName, environment)
+	endpoints, err := c.agentService.GetAgentEndpoints(ctx, ouID, projName, agentName, environment)
 	if err != nil {
 		log.Error("GetAgentEndpoints: failed to get agent endpoints", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent endpoints")
@@ -909,7 +910,7 @@ func (c *agentController) GetAgentConfigurations(w http.ResponseWriter, r *http.
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -920,7 +921,7 @@ func (c *agentController) GetAgentConfigurations(w http.ResponseWriter, r *http.
 		return
 	}
 
-	configurations, err := c.agentService.GetAgentConfigurations(ctx, orgName, projName, agentName, environment)
+	configurations, err := c.agentService.GetAgentConfigurations(ctx, ouID, projName, agentName, environment)
 	if err != nil {
 		log.Error("GetAgentConfigurations: failed to get configurations", "error", err)
 		handleCommonErrors(w, err, "Failed to get configurations")
@@ -946,7 +947,7 @@ func (c *agentController) GetAgentConfigurations(w http.ResponseWriter, r *http.
 	}
 
 	// Fetch file mounts
-	fileMounts, err := c.agentService.GetAgentFileMounts(ctx, orgName, projName, agentName, environment)
+	fileMounts, err := c.agentService.GetAgentFileMounts(ctx, ouID, projName, agentName, environment)
 	if err != nil {
 		log.Error("GetAgentConfigurations: failed to get file mounts", "error", err)
 		handleCommonErrors(w, err, "Failed to get file mounts")
@@ -989,7 +990,7 @@ func (c *agentController) PublishKind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -1004,7 +1005,7 @@ func (c *agentController) PublishKind(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := c.agentKindService.PublishKind(ctx, orgName, projName, agentName, &payload)
+	result, err := c.agentKindService.PublishKind(ctx, ouID, projName, agentName, &payload)
 	if err != nil {
 		log.Error("Failed to publish agent kind", "error", err)
 		handleCommonErrors(w, err, "Failed to publish agent kind")

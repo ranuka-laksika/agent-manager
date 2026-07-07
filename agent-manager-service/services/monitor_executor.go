@@ -237,7 +237,7 @@ func (e *monitorExecutor) resolveLLMProxyConfig(ctx context.Context, monitor *mo
 // resolveProxyURL derives the proxy base URL from the preloaded LLMProxy and the gateway
 // associated with the given environment. Uses the same AI-gateway-first preference as
 // LLMProxyProvisioner.ResolveGateway so we hit the same host the proxy was deployed to.
-func (e *monitorExecutor) resolveProxyURL(ctx context.Context, orgName, environmentID string, proxy *models.LLMProxy) (string, error) {
+func (e *monitorExecutor) resolveProxyURL(ctx context.Context, ouID, environmentID string, proxy *models.LLMProxy) (string, error) {
 	if proxy == nil {
 		return "", fmt.Errorf("LLM proxy not preloaded for mapping")
 	}
@@ -247,7 +247,7 @@ func (e *monitorExecutor) resolveProxyURL(ctx context.Context, orgName, environm
 
 	// Prefer AI-type gateways, mirroring the selection used during provisioning.
 	gateways, err := e.gatewayRepo.ListWithFilters(repositories.GatewayFilterOptions{
-		OrganizationID:    orgName,
+		OrganizationID:    ouID,
 		FunctionalityType: &aiType,
 		Status:            &activeStatus,
 		EnvironmentID:     &environmentID,
@@ -258,7 +258,7 @@ func (e *monitorExecutor) resolveProxyURL(ctx context.Context, orgName, environm
 	}
 	if len(gateways) == 0 {
 		gateways, err = e.gatewayRepo.ListWithFilters(repositories.GatewayFilterOptions{
-			OrganizationID: orgName,
+			OrganizationID: ouID,
 			Status:         &activeStatus,
 			EnvironmentID:  &environmentID,
 			Limit:          1,
@@ -350,7 +350,7 @@ func (e *monitorExecutor) buildPublishingParams(monitor *models.Monitor, runID u
 		params["secretKey"] = cred.SecretKey
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Fallback to static defaults (on-prem single-tenant)
-		e.logger.Debug("No per-org publisher credentials found, using defaults", "orgName", monitor.OrgName)
+		e.logger.Debug("No per-org publisher credentials found, using defaults", "ouID", monitor.OrgName)
 		params["clientId"] = "amp-publisher-client"
 		params["secretKVPath"] = "amp-publisher-client-secret"
 		params["secretKey"] = "value"
@@ -377,7 +377,7 @@ type evalJobEvaluator struct {
 // templateHandle is used to prepend the provider prefix to the "model" config field
 // just before serialization — the stored evaluator config is not modified.
 // Returns the JSON string, whether any evaluator is type "llm_judge", and any error.
-func (e *monitorExecutor) serializeEvaluators(orgName string, evaluators []models.MonitorEvaluator, templateHandle string) (string, bool, error) {
+func (e *monitorExecutor) serializeEvaluators(ouID string, evaluators []models.MonitorEvaluator, templateHandle string) (string, bool, error) {
 	// Identify which evaluators are custom (not in the built-in catalog)
 	var customIdentifiers []string
 	for _, eval := range evaluators {
@@ -389,7 +389,7 @@ func (e *monitorExecutor) serializeEvaluators(orgName string, evaluators []model
 	// Batch-fetch custom evaluator definitions
 	customMap := make(map[string]*models.CustomEvaluator)
 	if len(customIdentifiers) > 0 {
-		customs, err := e.custEvalRepo.GetByIdentifiers(orgName, customIdentifiers)
+		customs, err := e.custEvalRepo.GetByIdentifiers(ouID, customIdentifiers)
 		if err != nil {
 			return "", false, fmt.Errorf("failed to resolve custom evaluators: %w", err)
 		}

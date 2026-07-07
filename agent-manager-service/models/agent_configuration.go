@@ -56,7 +56,7 @@ type AgentConfiguration struct {
 	Description      string    `gorm:"column:description;type:text" json:"description,omitempty"`
 	AgentID          string    `gorm:"column:agent_id;type:varchar(255);not null" json:"agentId"`
 	TypeID           uint      `gorm:"column:type_id;type:integer;not null;default:1" json:"-"`
-	OrganizationName string    `gorm:"column:organization_name;type:varchar(255);not null" json:"organizationName"`
+	OrganizationName string    `gorm:"column:ou_id;type:varchar(255);not null" json:"organizationName"`
 	ProjectName      string    `gorm:"column:project_name;type:varchar(255);not null" json:"projectName"`
 	CreatedAt        time.Time `gorm:"column:created_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"createdAt"`
 	UpdatedAt        time.Time `gorm:"column:updated_at;type:timestamp;default:CURRENT_TIMESTAMP" json:"updatedAt"`

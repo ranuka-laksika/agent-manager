@@ -26,19 +26,20 @@ import (
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	reqlogger "github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
-// helper function for resolving the org of the agent
-const defaultOrgName = "default"
-
-func resolveOrgName(value string) string {
-	if trimmed := strings.TrimSpace(value); trimmed != "" {
-		return trimmed
+// resolveOUID returns the caller's OU ID from the token claims. Org identity
+// is never taken from tool input: the token is the single source of truth,
+// and services scope all data by ou_id.
+func resolveOUID(ctx context.Context) string {
+	if claims := jwtassertion.GetTokenClaims(ctx); claims != nil {
+		return claims.OuId
 	}
-	return defaultOrgName
+	return ""
 }
 
 // helper function for resolving the environment of the agent

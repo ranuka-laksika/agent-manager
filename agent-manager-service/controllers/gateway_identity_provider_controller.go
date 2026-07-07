@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -62,9 +63,9 @@ func identityProviderListResponse(providers []spec.IdentityProvider) spec.Identi
 func (c *gatewayController) ListIdentityProviders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
-	rows, err := c.gatewayService.ListIdentityProvidersByOrg(orgName)
+	rows, err := c.gatewayService.ListIdentityProvidersByOrg(ouID)
 	if err != nil {
 		log.Error("ListIdentityProviders: failed to list", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list identity providers")
@@ -75,7 +76,7 @@ func (c *gatewayController) ListIdentityProviders(w http.ResponseWriter, r *http
 	// mapping to a display name via the OpenChoreo client (same source the gateways
 	// list uses). Best-effort: rows still render without an env name on failure.
 	envNames := make(map[string]string)
-	if envs, envErr := c.ocClient.ListEnvironments(ctx, orgName); envErr == nil {
+	if envs, envErr := c.ocClient.ListEnvironments(ctx, ouID); envErr == nil {
 		for _, env := range envs {
 			envNames[env.UUID] = env.Name
 		}
@@ -110,10 +111,10 @@ func enrichSpecIdentityProvider(row repositories.IdentityProviderWithContext, en
 // ListGatewayIdentityProviders lists the identity providers mirrored for a gateway.
 func (c *gatewayController) ListGatewayIdentityProviders(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(r.Context())
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
-	providers, err := c.gatewayService.ListIdentityProvidersByGateway(gatewayID, orgName)
+	providers, err := c.gatewayService.ListIdentityProvidersByGateway(gatewayID, ouID)
 	if err != nil {
 		log.Error("ListGatewayIdentityProviders: failed to list", "error", err)
 		handleGatewayErrors(w, err, "Failed to list gateway identity providers")
@@ -134,7 +135,7 @@ func (c *gatewayController) ListGatewayIdentityProviders(w http.ResponseWriter, 
 // while the gateway rejects its tokens at runtime. Use manage-identity-provider.sh.
 func (c *gatewayController) UpsertGatewayIdentityProvider(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(r.Context())
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 	name := strings.TrimSpace(r.PathValue("name"))
 
@@ -146,7 +147,7 @@ func (c *gatewayController) UpsertGatewayIdentityProvider(w http.ResponseWriter,
 	}
 
 	provider, err := c.gatewayService.UpsertIdentityProvider(
-		r.Context(), gatewayID, orgName, name,
+		r.Context(), gatewayID, ouID, name,
 		derefString(req.Issuer), derefString(req.JwksUri), derefString(req.Description), derefBool(req.SkipTlsVerify),
 	)
 	if err != nil {
@@ -164,11 +165,11 @@ func (c *gatewayController) UpsertGatewayIdentityProvider(w http.ResponseWriter,
 // the mirror and the gateway runtime in sync.
 func (c *gatewayController) DeleteGatewayIdentityProvider(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(r.Context())
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 	name := strings.TrimSpace(r.PathValue("name"))
 
-	if err := c.gatewayService.DeleteIdentityProvider(r.Context(), gatewayID, orgName, name); err != nil {
+	if err := c.gatewayService.DeleteIdentityProvider(r.Context(), gatewayID, ouID, name); err != nil {
 		log.Error("DeleteGatewayIdentityProvider: failed to delete", "error", err)
 		handleGatewayErrors(w, err, "Failed to delete identity provider")
 		return
@@ -181,10 +182,10 @@ func (c *gatewayController) DeleteGatewayIdentityProvider(w http.ResponseWriter,
 func (c *gatewayController) ListEnvironmentIdentityProviders(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	environmentID := strings.TrimSpace(r.PathValue("environmentId"))
 
-	envUUID, err := c.resolveEnvironmentUUID(ctx, orgName, environmentID)
+	envUUID, err := c.resolveEnvironmentUUID(ctx, ouID, environmentID)
 	if err != nil {
 		log.Error("ListEnvironmentIdentityProviders: failed to resolve environment", "error", err)
 		utils.WriteErrorResponse(w, http.StatusNotFound, "Environment not found")

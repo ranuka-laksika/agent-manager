@@ -36,7 +36,8 @@ const (
 // -----------------------------------------------------------------------------
 
 // CreateGitSecret creates a new git secret via OpenChoreo
-func (c *openChoreoClient) CreateGitSecret(ctx context.Context, namespaceName string, req CreateGitSecretRequest) (*GitSecretInfo, error) {
+func (c *openChoreoClient) CreateGitSecret(ctx context.Context, ouID string, req CreateGitSecretRequest) (*GitSecretInfo, error) {
+	namespaceName := c.namespaceFor(ouID)
 	// Build the request body
 	body := gen.CreateGitSecretJSONRequestBody{
 		SecretName:        req.Name,
@@ -76,7 +77,8 @@ func (c *openChoreoClient) CreateGitSecret(ctx context.Context, namespaceName st
 }
 
 // ListGitSecrets lists all git secrets in a namespace
-func (c *openChoreoClient) ListGitSecrets(ctx context.Context, namespaceName string) ([]*GitSecretInfo, error) {
+func (c *openChoreoClient) ListGitSecrets(ctx context.Context, ouID string) ([]*GitSecretInfo, error) {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.ListGitSecretsWithResponse(ctx, namespaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list git secrets: %w", err)
@@ -102,7 +104,8 @@ func (c *openChoreoClient) ListGitSecrets(ctx context.Context, namespaceName str
 }
 
 // DeleteGitSecret deletes a git secret by name
-func (c *openChoreoClient) DeleteGitSecret(ctx context.Context, namespaceName, secretName string) error {
+func (c *openChoreoClient) DeleteGitSecret(ctx context.Context, ouID, secretName string) error {
+	namespaceName := c.namespaceFor(ouID)
 	resp, err := c.ocClient.DeleteGitSecretWithResponse(ctx, namespaceName, secretName)
 	if err != nil {
 		return fmt.Errorf("failed to delete git secret: %w", err)

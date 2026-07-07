@@ -162,7 +162,7 @@ func listBuilds(handler BuildToolsetHandler) func(context.Context, *gomcp.CallTo
 		if agentName == "" {
 			return nil, nil, fmt.Errorf("agent_name is required")
 		}
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		limit := utils.DefaultLimit
 		if input.Limit != nil {
@@ -180,13 +180,13 @@ func listBuilds(handler BuildToolsetHandler) func(context.Context, *gomcp.CallTo
 			return nil, nil, fmt.Errorf("offset must be >= %d", utils.MinOffset)
 		}
 
-		builds, total, err := handler.ListAgentBuilds(ctx, orgName, projectName, agentName, int32(limit), int32(offset))
+		builds, total, err := handler.ListAgentBuilds(ctx, ouID, projectName, agentName, int32(limit), int32(offset))
 		if err != nil {
 			return nil, nil, wrapToolError("list_builds", err)
 		}
 
 		response := listBuildsOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
 			Builds:      reduceBuildListResponse(builds),
@@ -215,15 +215,15 @@ func getBuildDetails(handler BuildToolsetHandler) func(context.Context, *gomcp.C
 			return nil, nil, fmt.Errorf("build_name is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
-		result, err := handler.GetBuild(ctx, orgName, projectName, agentName, buildName)
+		result, err := handler.GetBuild(ctx, ouID, projectName, agentName, buildName)
 		if err != nil {
 			return nil, nil, wrapToolError("get_build_details", err)
 		}
 
 		response := getBuildDetailsOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
 			Build:       utils.ConvertToBuildDetailsResponse(result),
@@ -247,17 +247,17 @@ func buildAgent(handler BuildToolsetHandler) func(context.Context, *gomcp.CallTo
 		if agentName == "" {
 			return nil, nil, fmt.Errorf("agent_name is required")
 		}
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		commitID := ""
 		if input.CommitID != nil {
 			commitID = strings.TrimSpace(*input.CommitID)
 		}
-		build, err := handler.BuildAgent(ctx, orgName, projectName, agentName, commitID)
+		build, err := handler.BuildAgent(ctx, ouID, projectName, agentName, commitID)
 		if err != nil {
 			return nil, nil, wrapToolError("build_agent", err)
 		}
 		response := buildAgentOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
 			Build:       utils.ConvertToBuildResponse(build),
@@ -281,15 +281,15 @@ func getBuildLogs(handler BuildToolsetHandler) func(context.Context, *gomcp.Call
 		if buildName == "" {
 			return nil, nil, fmt.Errorf("build_name is required")
 		}
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
-		result, err := handler.GetBuildLogs(ctx, orgName, projectName, agentName, buildName)
+		result, err := handler.GetBuildLogs(ctx, ouID, projectName, agentName, buildName)
 		if err != nil {
 			return nil, nil, wrapToolError("get_build_logs", err)
 		}
 
 		response := getBuildLogsOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
 			BuildName:   buildName,
