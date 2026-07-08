@@ -190,11 +190,15 @@ export function AgentChat() {
 
       // Persistent auth failure: hand control back to the user instead of
       // retrying blindly — restore the message so it can be resent with one
-      // click after the key is refreshed.
+      // click after the key is refreshed. When the gateway is offline the
+      // standing warning banner already explains the failure and refreshing
+      // the key cannot help, so no additional alert is shown.
       if (apiResponse === null) {
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
         setMessage(userMessage.content);
-        setKeyAlert("unauthorized");
+        if (testKey?.gatewayConnected !== false) {
+          setKeyAlert("unauthorized");
+        }
         return;
       }
 

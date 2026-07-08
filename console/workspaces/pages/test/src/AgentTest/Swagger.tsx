@@ -113,15 +113,18 @@ export function Swagger() {
   // swagger-ui cannot replay a request, so on a 401 (usually a test key the
   // gateway hasn't loaded yet, or one superseded by another session) surface
   // an alert with a manual refresh action. Refetching automatically would
-  // rotate the key and restart the gateway propagation window.
+  // rotate the key and restart the gateway propagation window. When the
+  // gateway is offline the standing warning banner already explains the
+  // failure and refreshing cannot help, so no additional alert is shown.
+  const gatewayOffline = testKey?.gatewayConnected === false;
   const responseInterceptor = useMemo(
     () => (res: any) => {
-      if (securityEnabled && res?.status === 401) {
+      if (securityEnabled && res?.status === 401 && !gatewayOffline) {
         setKeyAlert("unauthorized");
       }
       return res;
     },
-    [securityEnabled]
+    [securityEnabled, gatewayOffline]
   );
 
   const handleRefreshTestKey = async () => {
@@ -168,7 +171,7 @@ export function Swagger() {
           </Typography>
         </Alert>
       )}
-      {securityEnabled && testKey?.gatewayConnected === false && (
+      {securityEnabled && gatewayOffline && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           The gateway is not connected to the control plane right now. The
           test API key has been stored but will only work once the gateway
