@@ -35,11 +35,6 @@ export interface ExternalComponentModule extends ExternalModuleCore {
   kind: 'component';
 }
 
-export interface ExternalConfigModule extends ExternalModuleCore {
-  value: object;
-  kind: 'config';
-}
-
 export interface ExternalNavItem extends ExternalModuleCore {
   icon: React.ReactNode;
   title: string;
@@ -52,8 +47,7 @@ export interface ExternalNavItem extends ExternalModuleCore {
 export type ExternalModule =
   | ExternalPageModule
   | ExternalComponentModule
-  | ExternalNavItem
-  | ExternalConfigModule;
+  | ExternalNavItem;
 
 export interface ModuleContextValue {
   externalPageModules: ExternalModule[];
@@ -93,22 +87,6 @@ export function useExternalPageModules() {
     [externalPageModules]
   );
   return modules as ExternalPageModule[];
-}
-
-export function useExternalConfigModules(mountPoint?: string) {
-  const { externalPageModules } = useAllModuleContext();
-  const modules = useMemo(() => {
-    if (mountPoint) {
-      return externalPageModules.filter(
-        (module) =>
-          module.kind === 'config' && module.mountPoint === mountPoint
-      );
-    }
-    return externalPageModules.filter(
-      (module) => module.kind === 'config'
-    );
-  }, [externalPageModules, mountPoint]);
-  return modules as ExternalConfigModule[];
 }
 
 export function useExternalComponentModules(id?: string) {
