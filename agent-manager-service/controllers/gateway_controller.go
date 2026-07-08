@@ -140,8 +140,8 @@ func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Reque
 
 	// Use the OU ID from the request body if provided, otherwise fall back to the one from the request context.
 	ouID := middleware.OUIDFromRequest(r)
-	if req.OrgUid != nil && *req.OrgUid != "" {
-		ouID = *req.OrgUid
+	if req.OrgId != nil && *req.OrgId != "" {
+		ouID = *req.OrgId
 	}
 
 	// Validate environments if present
