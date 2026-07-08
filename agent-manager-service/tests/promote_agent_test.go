@@ -85,7 +85,7 @@ func TestPromoteAgent(t *testing.T) {
 		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
 			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
 		}
-		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}) error {
+		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error {
 			return nil
 		}
 		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
@@ -117,7 +117,7 @@ func TestPromoteAgent(t *testing.T) {
 		}
 		var capturedEnv []client.EnvVar
 		var capturedFiles []client.FileVar
-		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}) error {
+		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error {
 			capturedEnv = envOverrides
 			capturedFiles = fileOverrides
 			return nil
@@ -152,7 +152,7 @@ func TestPromoteAgent(t *testing.T) {
 			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
 		}
 		var capturedEnv []client.EnvVar
-		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}) error {
+		ocClient.PromoteComponentFunc = func(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []client.EnvVar, fileOverrides []client.FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error {
 			capturedEnv = envOverrides
 			return nil
 		}

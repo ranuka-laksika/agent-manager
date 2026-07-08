@@ -2245,7 +2245,7 @@ type DeploymentDetailsResponse struct {
 	ImageId string `json:"imageId"`
 
 	// LastDeployed Timestamp of last deployment
-	LastDeployed time.Time `json:"lastDeployed"`
+	LastDeployed *time.Time `json:"lastDeployed,omitempty"`
 
 	// PromotionTargetEnvironment Promotion target environment details
 	PromotionTargetEnvironment *struct {

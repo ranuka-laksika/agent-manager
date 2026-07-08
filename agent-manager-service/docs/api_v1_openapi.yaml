@@ -10550,7 +10550,6 @@ components:
       required:
         - imageId
         - status
-        - lastDeployed
         - endpoints
     DeploymentListResponse:
       type: object

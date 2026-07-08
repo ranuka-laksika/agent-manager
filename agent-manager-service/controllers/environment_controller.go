@@ -90,7 +90,7 @@ func (c *environmentController) CreateEnvironment(w http.ResponseWriter, r *http
 		DNSPrefix:     req.DnsPrefix,
 		IsProduction:  false,
 		Gateway:       fromSpecGatewaySpec(req.Gateway),
-		IsolationTier: req.IsolationTier,
+		IsolationTier: utils.GetOrDefault(req.IsolationTier, ""),
 	}
 
 	if req.Description != nil {
@@ -260,17 +260,19 @@ func getIntQueryParam(r *http.Request, key string, defaultValue int) int {
 // convertToSpecEnvironmentResponse converts internal environment response to spec response
 func convertToSpecEnvironmentResponse(env *models.GatewayEnvironmentResponse) spec.GatewayEnvironmentResponse {
 	response := spec.GatewayEnvironmentResponse{
-		Id:            env.UUID,
-		Name:          env.Name,
-		DisplayName:   env.DisplayName,
-		DataplaneRef:  env.DataplaneRef,
-		DnsPrefix:     env.DNSPrefix,
-		Description:   &env.Description,
-		IsolationTier: env.IsolationTier,
-		IsProduction:  env.IsProduction,
-		Gateway:       toSpecGatewaySpec(env.Gateway),
-		CreatedAt:     env.CreatedAt,
-		UpdatedAt:     env.UpdatedAt,
+		Id:           env.UUID,
+		Name:         env.Name,
+		DisplayName:  env.DisplayName,
+		DataplaneRef: env.DataplaneRef,
+		DnsPrefix:    env.DNSPrefix,
+		Description:  &env.Description,
+		IsProduction: env.IsProduction,
+		Gateway:      toSpecGatewaySpec(env.Gateway),
+		CreatedAt:    env.CreatedAt,
+		UpdatedAt:    env.UpdatedAt,
+	}
+	if env.IsolationTier != "" {
+		response.IsolationTier = &env.IsolationTier
 	}
 
 	return response

@@ -35,10 +35,9 @@ import { AlertTriangle, Edit, Plus, Search, Server, Trash } from "@wso2/oxygen-u
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
-import { getErrorMessage } from "@agent-management-platform/shared-component";
+import { getErrorMessage, IsolationTierChip } from "@agent-management-platform/shared-component";
 import { absoluteRouteMap, type Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
-import { IsolationTierChip } from "@agent-management-platform/shared-component";
 
 interface EnvironmentTableProps {
   onEditEnvironment?: (environment: Environment) => void;
