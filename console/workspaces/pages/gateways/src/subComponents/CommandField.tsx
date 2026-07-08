@@ -33,7 +33,13 @@ export interface CommandFieldProps {
   copyLabel: string;
 }
 
-export function CommandField({ value, multiline, minRows = 1, onCopy, copyLabel }: CommandFieldProps) {
+export function CommandField({
+  value,
+  multiline,
+  minRows = 1,
+  onCopy,
+  copyLabel,
+}: CommandFieldProps) {
   return (
     <TextField
       fullWidth

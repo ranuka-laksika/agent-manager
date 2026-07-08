@@ -42,7 +42,10 @@ export interface GatewayNetworkSpec {
   internal?: GatewayEndpointSpec;
 }
 
-/** Gateway configuration with ingress and egress network specs, sourced from the underlying OpenChoreo environment. */
+/**
+ * Gateway configuration with ingress and egress network specs, sourced from
+ * the underlying OpenChoreo environment.
+ */
 export interface GatewaySpec {
   ingress?: GatewayNetworkSpec;
   egress?: GatewayNetworkSpec;
