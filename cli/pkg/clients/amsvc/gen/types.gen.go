@@ -1948,6 +1948,9 @@ type CreateEnvironmentRequest struct {
 	// IsProduction Whether this is a production environment
 	IsProduction *bool `json:"isProduction,omitempty"`
 
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); empty/absent uses the default runc runtime.
+	IsolationTier *string `json:"isolationTier,omitempty"`
+
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 }
@@ -2650,6 +2653,9 @@ type GatewayEnvironmentResponse struct {
 
 	// IsProduction Whether this is a production environment
 	IsProduction bool `json:"isProduction"`
+
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); empty/absent uses the default runc runtime.
+	IsolationTier *string `json:"isolationTier,omitempty"`
 
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
