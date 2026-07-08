@@ -71,7 +71,19 @@ export interface AppConfig {
     /** Path to the AMP instrumentation version mapping section. */
     versionMapping?: string;
   };
+  /** Feature flags. All default to false (disabled) unless explicitly enabled. */
+  featureFlags?: FeatureFlags;
 }
+
+export type FeatureFlags = {
+  /** Shows the private Git repository option when building agents from source. */
+  enablePrivateRepoSupport?: boolean;
+  /**
+   * When true, identity provider management calls the REST API directly instead of
+   * rendering the self-hosted manage-identity-provider.sh script snippet.
+   */
+  enableIdentityProviderManagedMode?: boolean;
+};
 
 export type GuardrailCapabilities = {
   /** Unlocks: aws-bedrock-guardrail */

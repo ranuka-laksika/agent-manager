@@ -358,6 +358,13 @@ console:
       graniteGuardian: false     # Unlocks: granite-guardian-prompt-injection
       nemoGuard: false           # Unlocks: nvidia-nemoguard-content-safety
       semanticGuardrails: false  # Unlocks: semantic-prompt-guard, semantic-cache
+    # Feature flags.
+    featureFlags:
+      # Shows the private Git repository option when building agents from source.
+      enablePrivateRepoSupport: true
+      # When true, identity provider management calls the REST API directly instead
+      # of rendering the self-hosted manage-identity-provider.sh script snippet.
+      enableIdentityProviderManagedMode: false
 
   # Pod-level configurations
   podAnnotations: {}

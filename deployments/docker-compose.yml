@@ -151,6 +151,7 @@ services:
       - GUARDRAILS_CATALOG_URL=https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies?categories=Guardrails,AI&limit=100
       - GUARDRAILS_DEFINITION_BASE_URL=https://db720294-98fd-40f4-85a1-cc6a3b65bc9a-prod.e1-us-east-azure.choreoapis.dev/api-platform/policy-hub-api/policy-hub-public/v1.0/policies
       - DOCS_URL=https://wso2.github.io/agent-manager/docs/next
+      - FEATURE_FLAG_ENABLE_PRIVATE_REPO_SUPPORT=true
     volumes:
       # Mount source code at the SAME absolute path as on the host so that
       # rush/pnpm symlinks in common/temp resolve identically in the container.
