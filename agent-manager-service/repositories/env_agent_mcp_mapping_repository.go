@@ -31,7 +31,7 @@ import (
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/env_agent_mcp_mapping_repository_mock.go . EnvAgentMCPMappingRepository:EnvAgentMCPMappingRepositoryMock
 type EnvAgentMCPMappingRepository interface {
-	Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, orgName string) error
+	Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, ouID string) error
 	ListByConfig(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
 	// ListByMCPProxy returns every mapping that derives from the given source proxy.
 	// Used by the redeploy-on-update cascade so agent-scoped artifacts pick up new
@@ -59,7 +59,7 @@ func NewEnvAgentMCPMappingRepository(db *gorm.DB) EnvAgentMCPMappingRepository {
 	}
 }
 
-func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, orgName string) error {
+func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, ouID string) error {
 	if mapping.ArtifactUUID == uuid.Nil {
 		mapping.ArtifactUUID = uuid.New()
 	}
@@ -80,14 +80,14 @@ func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, 
 	}
 	now := time.Now()
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
-		UUID:             mapping.ArtifactUUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindMCPMapping,
-		OrganizationName: orgName,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		UUID:      mapping.ArtifactUUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindMCPMapping,
+		OUID:      ouID,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}); err != nil {
 		return fmt.Errorf("failed to create MCP config artifact: %w", err)
 	}

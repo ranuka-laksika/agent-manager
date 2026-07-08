@@ -57,7 +57,8 @@ type EndpointSchema struct {
 
 // CreateInternalAgentFromKindWorkload creates a Workload CR directly for a kind-sourced agent,
 // bypassing the workflow/build system entirely.
-func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Context, orgName, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error {
+func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Context, ouID, projectName, componentName string, req InternalAgentFromKindWorkloadRequest) error {
+	namespaceName := c.NamespaceFor(ouID)
 	workloadName := componentName + "-workload"
 
 	// Build endpoint map
@@ -110,7 +111,7 @@ func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Conte
 	workload := gen.CreateWorkloadJSONRequestBody{
 		Metadata: gen.ObjectMeta{
 			Name:      workloadName,
-			Namespace: &orgName,
+			Namespace: &namespaceName,
 		},
 		Spec: &gen.WorkloadSpec{
 			Container: &gen.WorkloadContainer{
@@ -126,7 +127,7 @@ func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Conte
 		},
 	}
 
-	resp, err := c.ocClient.CreateWorkloadWithResponse(ctx, orgName, workload)
+	resp, err := c.ocClient.CreateWorkloadWithResponse(ctx, namespaceName, workload)
 	if err != nil {
 		return fmt.Errorf("failed to create kind-sourced agent workload: %w", err)
 	}
@@ -141,9 +142,10 @@ func (c *openChoreoClient) CreateInternalAgentFromKindWorkload(ctx context.Conte
 	return nil
 }
 
-func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, componentName string, req DeployRequest) error {
+func (c *openChoreoClient) Deploy(ctx context.Context, ouID, projectName, componentName string, req DeployRequest) error {
+	namespaceName := c.NamespaceFor(ouID)
 	// List workloads to find the one for this component
-	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, orgName, &gen.ListWorkloadsParams{
+	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, namespaceName, &gen.ListWorkloadsParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
 	})
@@ -191,7 +193,7 @@ func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, com
 	}
 
 	// Update workload
-	updateResp, err := c.ocClient.UpdateWorkloadWithResponse(ctx, orgName, workloadName, workload)
+	updateResp, err := c.ocClient.UpdateWorkloadWithResponse(ctx, namespaceName, workloadName, workload)
 	if err != nil {
 		return fmt.Errorf("failed to update workload: %w", err)
 	}
@@ -209,7 +211,7 @@ func (c *openChoreoClient) Deploy(ctx context.Context, orgName, projectName, com
 	// This ensures pods pick up updated secret values, since secret references
 	// in the spec don't change when the underlying secret value changes.
 	if req.Environment != "" {
-		if err := c.setRestartedAt(ctx, orgName, componentName, req.Environment); err != nil {
+		if err := c.setRestartedAt(ctx, namespaceName, componentName, req.Environment); err != nil {
 			return fmt.Errorf("failed to set restartedAt: %w", err)
 		}
 	}
@@ -342,7 +344,8 @@ func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, co
 // pod rollout. Splitting them produced races (two separate updates contending on the same
 // resourceVersion) without giving callers any control they'd actually use.
 // Returns ErrNotFound when no binding exists yet for (component, environment).
-func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, namespaceName, componentName, environment string, traitConfigs map[string]interface{}) error {
+func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}) error {
+	namespaceName := c.NamespaceFor(ouID)
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
 	if err != nil {
 		return err
@@ -366,7 +369,8 @@ func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context,
 // pod rollout — all in a single Get→mutate→Update cycle.
 // Passing nil for envOverrides or fileOverrides leaves that aspect untouched; passing an empty
 // slice clears it. Returns ErrNotFound when no binding exists yet.
-func (c *openChoreoClient) ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, namespaceName, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error {
+func (c *openChoreoClient) ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, ouID, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error {
+	namespaceName := c.NamespaceFor(ouID)
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
 	if err != nil {
 		return err
@@ -402,7 +406,8 @@ func (c *openChoreoClient) ReplaceReleaseBindingWorkloadOverrides(ctx context.Co
 // PromoteComponent promotes a component from sourceEnvironment to targetEnvironment.
 // It finds the release name deployed in the source environment, then creates or updates
 // a release binding in the target environment using the naming convention {componentName}-{targetEnv}.
-func (c *openChoreoClient) PromoteComponent(ctx context.Context, namespaceName, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error {
+func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error {
+	namespaceName := c.NamespaceFor(ouID)
 	// Step 1: List release bindings for the component to find the source release name
 	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,
@@ -526,7 +531,8 @@ func (c *openChoreoClient) PromoteComponent(ctx context.Context, namespaceName, 
 // GetSourceEnvWorkloadOverrides returns the effective env vars and file mounts for the source
 // environment by merging the Workload CR (base) with the source release binding's WorkloadOverrides
 // (per-env overrides). When the same key exists in both, the binding override takes precedence.
-func (c *openChoreoClient) GetSourceEnvWorkloadOverrides(ctx context.Context, namespaceName, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error) {
+func (c *openChoreoClient) GetSourceEnvWorkloadOverrides(ctx context.Context, ouID, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	// Build maps to hold the merged result; overrides win on key conflict.
 	envMap := make(map[string]EnvVar)
 	fileMap := make(map[string]FileVar)
@@ -691,15 +697,16 @@ func toGenFileVars(fileVars []FileVar) []gen.FileVar {
 	return result
 }
 
-func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error) {
+func (c *openChoreoClient) GetDeployments(ctx context.Context, ouID, pipelineName, projectName, componentName string) ([]*models.DeploymentResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the deployment pipeline for environment ordering
-	pipeline, err := c.GetProjectDeploymentPipeline(ctx, orgName, projectName)
+	pipeline, err := c.GetProjectDeploymentPipeline(ctx, namespaceName, projectName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment pipeline: %w", err)
 	}
 
 	// Get all environments for display names
-	environments, err := c.ListEnvironments(ctx, orgName)
+	environments, err := c.ListEnvironments(ctx, namespaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
 	}
@@ -708,7 +715,7 @@ func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipeline
 	environmentOrder := buildEnvironmentOrder(pipeline.PromotionPaths)
 
 	// Get release bindings for the component
-	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, orgName, &gen.ListReleaseBindingsParams{
+	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
 	})
@@ -745,7 +752,7 @@ func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipeline
 	// Fetch workload to get endpoint visibility and schema info
 	workloadEndpoints := make(map[string]*gen.WorkloadEndpoint)
 	var liveWorkloadContainerImage string
-	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, orgName, &gen.ListWorkloadsParams{
+	workloadResp, err := c.ocClient.ListWorkloadsWithResponse(ctx, namespaceName, &gen.ListWorkloadsParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
 	})
@@ -764,7 +771,7 @@ func (c *openChoreoClient) GetDeployments(ctx context.Context, orgName, pipeline
 
 	// List all ComponentReleases for the component and create a map by release name
 	componentReleaseMap := make(map[string]*gen.ComponentRelease)
-	releasesResp, err := c.ocClient.ListComponentReleasesWithResponse(ctx, orgName, &gen.ListComponentReleasesParams{
+	releasesResp, err := c.ocClient.ListComponentReleasesWithResponse(ctx, namespaceName, &gen.ListComponentReleasesParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
 	})
@@ -867,7 +874,8 @@ func buildEnvironmentOrder(promotionPaths []models.PromotionPath) []string {
 
 // IsDeploymentInProgress checks whether the release binding for the given component and environment
 // has a deployment currently in progress (ResourcesReady condition with ResourcesProgressing reason).
-func (c *openChoreoClient) IsDeploymentInProgress(ctx context.Context, namespaceName, componentName, environment string) (bool, error) {
+func (c *openChoreoClient) IsDeploymentInProgress(ctx context.Context, ouID, componentName, environment string) (bool, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,
 		Limit:     &defaultListLimit,
@@ -1059,7 +1067,8 @@ func extractEndpointsFromBinding(binding *gen.ReleaseBinding, workloadEndpoints 
 }
 
 // UpdateDeploymentState updates the state of a deployment (Active or Undeploy)
-func (c *openChoreoClient) UpdateDeploymentState(ctx context.Context, namespaceName, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error {
+func (c *openChoreoClient) UpdateDeploymentState(ctx context.Context, ouID, projectName, componentName, environment string, state gen.ReleaseBindingSpecState) error {
+	namespaceName := c.NamespaceFor(ouID)
 	// List release bindings for the component
 	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
 		Component: &componentName,

@@ -51,8 +51,8 @@ func newInfraManager(oc *clientmocks.OpenChoreoClientMock) InfraResourceManager 
 // okOrg returns a GetOrganization func that always resolves — used to get past
 // the org-existence validation gate that fronts almost every method.
 func okOrg() func(context.Context, string) (*models.OrganizationResponse, error) {
-	return func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
-		return &models.OrganizationResponse{Name: orgName}, nil
+	return func(_ context.Context, ouID string) (*models.OrganizationResponse, error) {
+		return &models.OrganizationResponse{Name: ouID}, nil
 	}
 }
 

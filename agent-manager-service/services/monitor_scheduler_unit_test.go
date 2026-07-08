@@ -78,16 +78,16 @@ func (f *fakeMonitorExecutor) UpdateNextRunTime(ctx context.Context, monitorID u
 }
 
 type fakeProvisioner struct {
-	EnsureCredentialsFunc func(ctx context.Context, orgName, orgUUID string) (*PublisherCredentials, error)
+	EnsureCredentialsFunc func(ctx context.Context, ouID, orgUUID string) (*PublisherCredentials, error)
 	IsThunderModeFunc     func() bool
-	GetOCClientForOrgFunc func(ctx context.Context, orgName string) (client.OpenChoreoClient, error)
+	GetOCClientForOrgFunc func(ctx context.Context, ouID string) (client.OpenChoreoClient, error)
 }
 
-func (f *fakeProvisioner) EnsureCredentials(ctx context.Context, orgName, orgUUID string) (*PublisherCredentials, error) {
+func (f *fakeProvisioner) EnsureCredentials(ctx context.Context, ouID, orgUUID string) (*PublisherCredentials, error) {
 	if f.EnsureCredentialsFunc == nil {
 		panic("fakeProvisioner.EnsureCredentialsFunc: method is nil but EnsureCredentials was just called")
 	}
-	return f.EnsureCredentialsFunc(ctx, orgName, orgUUID)
+	return f.EnsureCredentialsFunc(ctx, ouID, orgUUID)
 }
 
 func (f *fakeProvisioner) IsThunderMode() bool {
@@ -97,11 +97,11 @@ func (f *fakeProvisioner) IsThunderMode() bool {
 	return f.IsThunderModeFunc()
 }
 
-func (f *fakeProvisioner) GetOCClientForOrg(ctx context.Context, orgName string) (client.OpenChoreoClient, error) {
+func (f *fakeProvisioner) GetOCClientForOrg(ctx context.Context, ouID string) (client.OpenChoreoClient, error) {
 	if f.GetOCClientForOrgFunc == nil {
 		panic("fakeProvisioner.GetOCClientForOrgFunc: method is nil but GetOCClientForOrg was just called")
 	}
-	return f.GetOCClientForOrgFunc(ctx, orgName)
+	return f.GetOCClientForOrgFunc(ctx, ouID)
 }
 
 // newScheduler builds the concrete scheduler so the test can exercise the
@@ -117,12 +117,12 @@ func newScheduler(
 
 func intPtrU(i int) *int { return &i }
 
-func futureMonitor(orgName string, interval int, nextRun time.Time) models.Monitor {
+func futureMonitor(ouID string, interval int, nextRun time.Time) models.Monitor {
 	return models.Monitor{
 		ID:              uuid.New(),
 		Name:            "my-monitor",
 		Type:            models.MonitorTypeFuture,
-		OrgName:         orgName,
+		OUID:            ouID,
 		IntervalMinutes: intPtrU(interval),
 		NextRunTime:     &nextRun,
 		Evaluators:      []models.MonitorEvaluator{{Identifier: "answer_relevancy", DisplayName: "Relevancy"}},
@@ -171,8 +171,8 @@ func TestMonitorScheduler_orgOCClient(t *testing.T) {
 		orgOC := &clientmocks.OpenChoreoClientMock{}
 		prov := &fakeProvisioner{
 			IsThunderModeFunc: func() bool { return true },
-			GetOCClientForOrgFunc: func(_ context.Context, orgName string) (client.OpenChoreoClient, error) {
-				assert.Equal(t, "acme", orgName)
+			GetOCClientForOrgFunc: func(_ context.Context, ouID string) (client.OpenChoreoClient, error) {
+				assert.Equal(t, "acme", ouID)
 				return orgOC, nil
 			},
 		}
@@ -300,7 +300,7 @@ func TestMonitorScheduler_triggerMonitor(t *testing.T) {
 
 		// StartTime = NextRunTime - interval (deterministic, independent of wall clock).
 		assert.Equal(t, nextRun.Add(-time.Duration(interval)*time.Minute), captured.StartTime)
-		assert.Equal(t, org, captured.OrgName)
+		assert.Equal(t, org, captured.OUID)
 		assert.Equal(t, m.Evaluators, captured.Evaluators)
 
 		// EndTime = now - safetyDelta; bound it between the pre/post wall-clock reads.
@@ -441,7 +441,7 @@ func TestMonitorScheduler_syncSingleRunStatus(t *testing.T) {
 		return &repomocks.MonitorRepositoryMock{
 			GetMonitorByIDFunc: func(id uuid.UUID) (*models.Monitor, error) {
 				assert.Equal(t, monitorID, id)
-				return &models.Monitor{ID: monitorID, OrgName: org, Name: "my-monitor"}, nil
+				return &models.Monitor{ID: monitorID, OUID: org, Name: "my-monitor"}, nil
 			},
 		}
 	}
@@ -613,8 +613,8 @@ func TestMonitorScheduler_syncSingleRunStatus(t *testing.T) {
 		}
 		prov := &fakeProvisioner{
 			IsThunderModeFunc: func() bool { return true },
-			GetOCClientForOrgFunc: func(_ context.Context, orgName string) (client.OpenChoreoClient, error) {
-				assert.Equal(t, org, orgName)
+			GetOCClientForOrgFunc: func(_ context.Context, ouID string) (client.OpenChoreoClient, error) {
+				assert.Equal(t, org, ouID)
 				return orgOC, nil
 			},
 		}

@@ -35,16 +35,16 @@ import (
 // EvaluatorManagerService defines the interface for evaluator catalog and custom evaluator operations
 type EvaluatorManagerService interface {
 	// Catalog operations (built-in + custom merged)
-	ListEvaluators(ctx context.Context, orgName string, filters EvaluatorFilters) ([]*models.EvaluatorResponse, int32, error)
-	GetEvaluator(ctx context.Context, orgName string, identifier string) (*models.EvaluatorResponse, error)
+	ListEvaluators(ctx context.Context, ouID string, filters EvaluatorFilters) ([]*models.EvaluatorResponse, int32, error)
+	GetEvaluator(ctx context.Context, ouID string, identifier string) (*models.EvaluatorResponse, error)
 	// Custom evaluator CRUD
-	CreateCustomEvaluator(ctx context.Context, orgName string, req *models.CreateCustomEvaluatorRequest) (*models.EvaluatorResponse, error)
-	GetCustomEvaluator(ctx context.Context, orgName string, identifier string) (*models.EvaluatorResponse, error)
-	UpdateCustomEvaluator(ctx context.Context, orgName string, identifier string, req *models.UpdateCustomEvaluatorRequest) (*models.EvaluatorResponse, error)
-	DeleteCustomEvaluator(ctx context.Context, orgName string, identifier string) error
+	CreateCustomEvaluator(ctx context.Context, ouID string, req *models.CreateCustomEvaluatorRequest) (*models.EvaluatorResponse, error)
+	GetCustomEvaluator(ctx context.Context, ouID string, identifier string) (*models.EvaluatorResponse, error)
+	UpdateCustomEvaluator(ctx context.Context, ouID string, identifier string, req *models.UpdateCustomEvaluatorRequest) (*models.EvaluatorResponse, error)
+	DeleteCustomEvaluator(ctx context.Context, ouID string, identifier string) error
 
 	// Resolve custom evaluators for monitor execution
-	ResolveCustomEvaluators(ctx context.Context, orgName string, identifiers []string) ([]models.CustomEvaluator, error)
+	ResolveCustomEvaluators(ctx context.Context, ouID string, identifiers []string) ([]models.CustomEvaluator, error)
 }
 
 // EvaluatorFilters contains filtering options for listing evaluators
@@ -74,8 +74,8 @@ func NewEvaluatorManagerService(logger *slog.Logger, custRepo repositories.Custo
 
 // ListEvaluators retrieves evaluators from both the built-in catalog and custom evaluator DB.
 // Results are merged, filtered, and paginated.
-func (s *evaluatorManagerService) ListEvaluators(ctx context.Context, orgName string, filters EvaluatorFilters) ([]*models.EvaluatorResponse, int32, error) {
-	s.logger.Info("Listing evaluators", "orgName", orgName, "filters", filters)
+func (s *evaluatorManagerService) ListEvaluators(ctx context.Context, ouID string, filters EvaluatorFilters) ([]*models.EvaluatorResponse, int32, error) {
+	s.logger.Info("Listing evaluators", "ouID", ouID, "filters", filters)
 
 	var merged []*models.EvaluatorResponse
 
@@ -93,7 +93,7 @@ func (s *evaluatorManagerService) ListEvaluators(ctx context.Context, orgName st
 			customFilters.Type = models.CustomEvaluatorTypeLLMJudge
 		}
 
-		customs, _, err := s.custRepo.List(orgName, customFilters)
+		customs, _, err := s.custRepo.List(ouID, customFilters)
 		if err != nil {
 			s.logger.Error("Failed to list custom evaluators", "error", err)
 			return nil, 0, fmt.Errorf("failed to list custom evaluators: %w", err)
@@ -139,7 +139,7 @@ func (s *evaluatorManagerService) ListEvaluators(ctx context.Context, orgName st
 
 // GetEvaluator retrieves a single evaluator by identifier.
 // Checks the built-in catalog first, then falls back to custom evaluators.
-func (s *evaluatorManagerService) GetEvaluator(ctx context.Context, orgName string, identifier string) (*models.EvaluatorResponse, error) {
+func (s *evaluatorManagerService) GetEvaluator(ctx context.Context, ouID string, identifier string) (*models.EvaluatorResponse, error) {
 	s.logger.Info("Getting evaluator", "identifier", identifier)
 
 	// Check built-in catalog first
@@ -150,7 +150,7 @@ func (s *evaluatorManagerService) GetEvaluator(ctx context.Context, orgName stri
 	}
 
 	// Fall back to custom evaluator
-	custom, err := s.custRepo.GetByIdentifier(orgName, identifier)
+	custom, err := s.custRepo.GetByIdentifier(ouID, identifier)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			s.logger.Warn("Evaluator not found", "identifier", identifier)
@@ -164,8 +164,8 @@ func (s *evaluatorManagerService) GetEvaluator(ctx context.Context, orgName stri
 }
 
 // CreateCustomEvaluator creates a new custom evaluator
-func (s *evaluatorManagerService) CreateCustomEvaluator(ctx context.Context, orgName string, req *models.CreateCustomEvaluatorRequest) (*models.EvaluatorResponse, error) {
-	s.logger.Info("Creating custom evaluator", "orgName", orgName, "displayName", req.DisplayName, "type", req.Type)
+func (s *evaluatorManagerService) CreateCustomEvaluator(ctx context.Context, ouID string, req *models.CreateCustomEvaluatorRequest) (*models.EvaluatorResponse, error) {
+	s.logger.Info("Creating custom evaluator", "ouID", ouID, "displayName", req.DisplayName, "type", req.Type)
 
 	// Generate identifier from display name if not provided
 	identifier := req.Identifier
@@ -184,7 +184,7 @@ func (s *evaluatorManagerService) CreateCustomEvaluator(ctx context.Context, org
 	}
 
 	evaluator := &models.CustomEvaluator{
-		OrgName:      orgName,
+		OUID:         ouID,
 		Identifier:   identifier,
 		DisplayName:  req.DisplayName,
 		Description:  req.Description,
@@ -214,10 +214,10 @@ func (s *evaluatorManagerService) CreateCustomEvaluator(ctx context.Context, org
 }
 
 // GetCustomEvaluator retrieves a custom evaluator by identifier
-func (s *evaluatorManagerService) GetCustomEvaluator(ctx context.Context, orgName string, identifier string) (*models.EvaluatorResponse, error) {
-	s.logger.Info("Getting custom evaluator", "orgName", orgName, "identifier", identifier)
+func (s *evaluatorManagerService) GetCustomEvaluator(ctx context.Context, ouID string, identifier string) (*models.EvaluatorResponse, error) {
+	s.logger.Info("Getting custom evaluator", "ouID", ouID, "identifier", identifier)
 
-	custom, err := s.custRepo.GetByIdentifier(orgName, identifier)
+	custom, err := s.custRepo.GetByIdentifier(ouID, identifier)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrCustomEvaluatorNotFound
@@ -229,10 +229,10 @@ func (s *evaluatorManagerService) GetCustomEvaluator(ctx context.Context, orgNam
 }
 
 // UpdateCustomEvaluator updates an existing custom evaluator
-func (s *evaluatorManagerService) UpdateCustomEvaluator(ctx context.Context, orgName string, identifier string, req *models.UpdateCustomEvaluatorRequest) (*models.EvaluatorResponse, error) {
-	s.logger.Info("Updating custom evaluator", "orgName", orgName, "identifier", identifier)
+func (s *evaluatorManagerService) UpdateCustomEvaluator(ctx context.Context, ouID string, identifier string, req *models.UpdateCustomEvaluatorRequest) (*models.EvaluatorResponse, error) {
+	s.logger.Info("Updating custom evaluator", "ouID", ouID, "identifier", identifier)
 
-	evaluator, err := s.custRepo.GetByIdentifier(orgName, identifier)
+	evaluator, err := s.custRepo.GetByIdentifier(ouID, identifier)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrCustomEvaluatorNotFound
@@ -266,10 +266,10 @@ func (s *evaluatorManagerService) UpdateCustomEvaluator(ctx context.Context, org
 }
 
 // DeleteCustomEvaluator soft-deletes a custom evaluator
-func (s *evaluatorManagerService) DeleteCustomEvaluator(ctx context.Context, orgName string, identifier string) error {
-	s.logger.Info("Deleting custom evaluator", "orgName", orgName, "identifier", identifier)
+func (s *evaluatorManagerService) DeleteCustomEvaluator(ctx context.Context, ouID string, identifier string) error {
+	s.logger.Info("Deleting custom evaluator", "ouID", ouID, "identifier", identifier)
 
-	evaluator, err := s.custRepo.GetByIdentifier(orgName, identifier)
+	evaluator, err := s.custRepo.GetByIdentifier(ouID, identifier)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.ErrCustomEvaluatorNotFound
@@ -277,7 +277,7 @@ func (s *evaluatorManagerService) DeleteCustomEvaluator(ctx context.Context, org
 		return fmt.Errorf("failed to get custom evaluator: %w", err)
 	}
 
-	monitors, err := s.monitorRepo.FindActiveMonitorsByEvaluatorIdentifier(orgName, identifier)
+	monitors, err := s.monitorRepo.FindActiveMonitorsByEvaluatorIdentifier(ouID, identifier)
 	if err != nil {
 		return fmt.Errorf("failed to check evaluator usage: %w", err)
 	}
@@ -294,11 +294,11 @@ func (s *evaluatorManagerService) DeleteCustomEvaluator(ctx context.Context, org
 }
 
 // ResolveCustomEvaluators batch-fetches custom evaluators by identifiers for monitor execution
-func (s *evaluatorManagerService) ResolveCustomEvaluators(ctx context.Context, orgName string, identifiers []string) ([]models.CustomEvaluator, error) {
+func (s *evaluatorManagerService) ResolveCustomEvaluators(ctx context.Context, ouID string, identifiers []string) ([]models.CustomEvaluator, error) {
 	if len(identifiers) == 0 {
 		return nil, nil
 	}
-	return s.custRepo.GetByIdentifiers(orgName, identifiers)
+	return s.custRepo.GetByIdentifiers(ouID, identifiers)
 }
 
 // catalogEntryToResponse converts a catalog.Entry to an EvaluatorResponse DTO.

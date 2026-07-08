@@ -48,7 +48,7 @@ func seedRunEvaluator(t *testing.T) (runEvaluatorID, monitorID uuid.UUID) {
 		Name:            "score-repo-test-" + uuid.New().String()[:8],
 		DisplayName:     "Score Repo Test Monitor",
 		Type:            models.MonitorTypePast,
-		OrgName:         "test-org",
+		OUID:            "test-org",
 		ProjectName:     "test-project",
 		AgentName:       "test-agent",
 		AgentID:         uuid.New().String(),

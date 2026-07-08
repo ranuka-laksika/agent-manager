@@ -264,7 +264,7 @@ func TestPromoteAgent(t *testing.T) {
 
 	t.Run("returns 404 when the organization is not found", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
-		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"))
 
 		payload := spec.PromoteAgentRequest{SourceEnvironment: "development", TargetEnvironment: "production"}
 		body, _ := json.Marshal(payload)

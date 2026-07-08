@@ -31,7 +31,7 @@ import (
 
 func TestDeleteOrgDeploymentPipeline(t *testing.T) {
 	const (
-		orgName      = "test-org"
+		ouID         = "test-org"
 		pipelineName = "my-pipeline"
 	)
 
@@ -51,7 +51,7 @@ func TestDeleteOrgDeploymentPipeline(t *testing.T) {
 		}
 		mgr := NewInfraResourceManager(ocClient, slog.Default())
 
-		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), orgName, pipelineName)
+		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), ouID, pipelineName)
 
 		require.ErrorIs(t, err, utils.ErrDeploymentPipelineInUse)
 		require.Contains(t, err.Error(), "referencing-project")
@@ -72,7 +72,7 @@ func TestDeleteOrgDeploymentPipeline(t *testing.T) {
 		}
 		mgr := NewInfraResourceManager(ocClient, slog.Default())
 
-		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), orgName, pipelineName)
+		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), ouID, pipelineName)
 
 		require.NoError(t, err)
 		require.Len(t, ocClient.DeleteOrgDeploymentPipelineCalls(), 1)
@@ -93,7 +93,7 @@ func TestDeleteOrgDeploymentPipeline(t *testing.T) {
 		}
 		mgr := NewInfraResourceManager(ocClient, slog.Default())
 
-		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), orgName, pipelineName)
+		err := mgr.DeleteOrgDeploymentPipeline(context.Background(), ouID, pipelineName)
 
 		require.ErrorIs(t, err, listErr)
 		require.False(t, deleteCalled, "OpenChoreo delete must not be called when the reference check fails")

@@ -24,9 +24,8 @@ type AgentKindResponse struct {
 	// Unique slug name of the Agent Kind within the organization
 	Name string `json:"name"`
 	// Human-readable name
-	DisplayName      string  `json:"displayName"`
-	Description      *string `json:"description,omitempty"`
-	OrganizationName string  `json:"organizationName"`
+	DisplayName string  `json:"displayName"`
+	Description *string `json:"description,omitempty"`
 	// Resource type discriminator (always \"AgentKind\" for this schema)
 	Kind string `json:"kind"`
 	// The most recently published version tag
@@ -40,12 +39,11 @@ type AgentKindResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentKindResponse(uuid string, name string, displayName string, organizationName string, kind string, versions []AgentKindVersionResponse, createdAt time.Time) *AgentKindResponse {
+func NewAgentKindResponse(uuid string, name string, displayName string, kind string, versions []AgentKindVersionResponse, createdAt time.Time) *AgentKindResponse {
 	this := AgentKindResponse{}
 	this.Uuid = uuid
 	this.Name = name
 	this.DisplayName = displayName
-	this.OrganizationName = organizationName
 	this.Kind = kind
 	this.Versions = versions
 	this.CreatedAt = createdAt
@@ -162,30 +160,6 @@ func (o *AgentKindResponse) HasDescription() bool {
 // SetDescription gets a reference to the given string and assigns it to the Description field.
 func (o *AgentKindResponse) SetDescription(v string) {
 	o.Description = &v
-}
-
-// GetOrganizationName returns the OrganizationName field value
-func (o *AgentKindResponse) GetOrganizationName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrganizationName
-}
-
-// GetOrganizationNameOk returns a tuple with the OrganizationName field value
-// and a boolean to check if the value has been set.
-func (o *AgentKindResponse) GetOrganizationNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrganizationName, true
-}
-
-// SetOrganizationName sets field value
-func (o *AgentKindResponse) SetOrganizationName(v string) {
-	o.OrganizationName = v
 }
 
 // GetKind returns the Kind field value
@@ -340,7 +314,6 @@ func (o AgentKindResponse) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
 	}
-	toSerialize["organizationName"] = o.OrganizationName
 	toSerialize["kind"] = o.Kind
 	if !IsNil(o.LatestVersion) {
 		toSerialize["latestVersion"] = o.LatestVersion

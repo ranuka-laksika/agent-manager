@@ -35,11 +35,11 @@ const testKeyTTL = 10 * time.Minute
 
 // AgentAPIKeyServiceInterface defines the contract for agent API key operations
 type AgentAPIKeyServiceInterface interface {
-	CreateAPIKey(ctx context.Context, orgName, projectName, agentName, envID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error)
-	RevokeAPIKey(ctx context.Context, orgName, projectName, agentName, envID, keyName string) error
-	RotateAPIKey(ctx context.Context, orgName, projectName, agentName, envID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error)
-	ListAPIKeys(ctx context.Context, orgName, projectName, agentName, envID string) ([]models.StoredAPIKey, error)
-	IssueTestAPIKey(ctx context.Context, orgName, projectName, agentName, envID string) (*models.IssueTestAPIKeyResponse, error)
+	CreateAPIKey(ctx context.Context, ouID, projectName, agentName, envID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error)
+	RevokeAPIKey(ctx context.Context, ouID, projectName, agentName, envID, keyName string) error
+	RotateAPIKey(ctx context.Context, ouID, projectName, agentName, envID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error)
+	ListAPIKeys(ctx context.Context, ouID, projectName, agentName, envID string) ([]models.StoredAPIKey, error)
+	IssueTestAPIKey(ctx context.Context, ouID, projectName, agentName, envID string) (*models.IssueTestAPIKeyResponse, error)
 }
 
 // AgentAPIKeyService handles API key management for agents
@@ -72,13 +72,13 @@ func NewAgentAPIKeyService(
 	}
 }
 
-func (s *AgentAPIKeyService) resolveAgentAPIArtifact(ctx context.Context, orgName, projectName, agentName, envID string) (*models.Artifact, string, error) {
-	environment, err := s.ocClient.GetEnvironment(ctx, orgName, envID)
+func (s *AgentAPIKeyService) resolveAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName, envID string) (*models.Artifact, string, error) {
+	environment, err := s.ocClient.GetEnvironment(ctx, ouID, envID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get environment: %w", translateEnvironmentError(err))
 	}
 
-	artifact, err := s.artifactRepo.GetByHandle(agentEnvAPIArtifactHandle(projectName, agentName, environment.UUID), orgName)
+	artifact, err := s.artifactRepo.GetByHandle(agentEnvAPIArtifactHandle(projectName, agentName, environment.UUID), ouID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get agent API artifact: %w", err)
 	}
@@ -111,13 +111,13 @@ func (s *AgentAPIKeyService) resolveEnvGateways(envUUID string) ([]*models.Gatew
 // CreateAPIKey generates an API key for an agent and broadcasts it to the environment's gateways.
 func (s *AgentAPIKeyService) CreateAPIKey(
 	ctx context.Context,
-	orgName, projectName, agentName, envID string,
+	ouID, projectName, agentName, envID string,
 	req *models.CreateAPIKeyRequest,
 ) (*models.CreateAPIKeyResponse, error) {
 	if req != nil && req.Name == models.APIKeyTestKeyName {
 		return nil, fmt.Errorf("%w: %q is reserved for console test keys", utils.ErrBadRequest, models.APIKeyTestKeyName)
 	}
-	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, orgName, projectName, agentName, envID)
+	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,15 +126,15 @@ func (s *AgentAPIKeyService) CreateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastCreateToGateways(gateways, orgName, artifactUUID, artifactUUID, req)
+	return s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID, req)
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to the environment's gateways.
 func (s *AgentAPIKeyService) RevokeAPIKey(
 	ctx context.Context,
-	orgName, projectName, agentName, envID, keyName string,
+	ouID, projectName, agentName, envID, keyName string,
 ) error {
-	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, orgName, projectName, agentName, envID)
+	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
 		return err
 	}
@@ -150,10 +150,10 @@ func (s *AgentAPIKeyService) RevokeAPIKey(
 // Returns the new API key (shown once) and its identifier.
 func (s *AgentAPIKeyService) RotateAPIKey(
 	ctx context.Context,
-	orgName, projectName, agentName, envID, keyName string,
+	ouID, projectName, agentName, envID, keyName string,
 	req *models.RotateAPIKeyRequest,
 ) (*models.CreateAPIKeyResponse, error) {
-	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, orgName, projectName, agentName, envID)
+	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
 		return nil, err
 	}
@@ -162,19 +162,19 @@ func (s *AgentAPIKeyService) RotateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastRotateToGateways(gateways, orgName, artifactUUID, artifactUUID, keyName, req)
+	return s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName, req)
 }
 
 // ListAPIKeys returns API keys for the given agent (masked values only).
 func (s *AgentAPIKeyService) ListAPIKeys(
 	ctx context.Context,
-	orgName, projectName, agentName, envID string,
+	ouID, projectName, agentName, envID string,
 ) ([]models.StoredAPIKey, error) {
-	artifact, _, err := s.resolveAgentAPIArtifact(ctx, orgName, projectName, agentName, envID)
+	artifact, _, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
 		return nil, err
 	}
-	all, err := s.apiKeyRepo.ListPermanentByArtifactKind(orgName, models.KindAgent)
+	all, err := s.apiKeyRepo.ListPermanentByArtifactKind(ouID, models.KindAgent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list API keys: %w", err)
 	}
@@ -192,9 +192,9 @@ func (s *AgentAPIKeyService) ListAPIKeys(
 // scoped by APIKeyTestKeyName and never appears in the user-facing list.
 func (s *AgentAPIKeyService) IssueTestAPIKey(
 	ctx context.Context,
-	orgName, projectName, agentName, envID string,
+	ouID, projectName, agentName, envID string,
 ) (*models.IssueTestAPIKeyResponse, error) {
-	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, orgName, projectName, agentName, envID)
+	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
 		return nil, err
 	}
@@ -217,10 +217,10 @@ func (s *AgentAPIKeyService) IssueTestAPIKey(
 			return nil, fmt.Errorf("%w: %q is reserved for console test keys", utils.ErrBadRequest, models.APIKeyTestKeyName)
 		}
 		// Same DB row, new hash + expiry; purpose is preserved (Upsert.DoUpdates excludes it).
-		resp, err = s.broadcaster.broadcastRotateToGateways(gateways, orgName, artifactUUID, artifactUUID, models.APIKeyTestKeyName,
+		resp, err = s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, models.APIKeyTestKeyName,
 			&models.RotateAPIKeyRequest{ExpiresAt: &expiresAt})
 	} else {
-		resp, err = s.broadcaster.broadcastCreateToGateways(gateways, orgName, artifactUUID, artifactUUID,
+		resp, err = s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID,
 			&models.CreateAPIKeyRequest{
 				Name:        models.APIKeyTestKeyName,
 				DisplayName: "Console Try-It",

@@ -230,7 +230,7 @@ func getRuntimeLogs(handler ObservabilityToolsetHandler) func(context.Context, *
 			return nil, nil, fmt.Errorf("limit must be between 1 and 10000")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 
 		start, end, err := resolveTimeWindow(input.StartTime, input.EndTime)
@@ -266,7 +266,7 @@ func getRuntimeLogs(handler ObservabilityToolsetHandler) func(context.Context, *
 			SearchPhrase:    search,
 		}
 
-		result, err := handler.GetRuntimeLogs(ctx, orgName, projectName, agentName, req)
+		result, err := handler.GetRuntimeLogs(ctx, ouID, projectName, agentName, req)
 		if err != nil {
 			return nil, nil, wrapToolError("get_runtime_logs", err)
 		}
@@ -288,7 +288,7 @@ func getMetrics(handler ObservabilityToolsetHandler) func(context.Context, *gomc
 			return nil, nil, fmt.Errorf("agent_name is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 
 		start, end, err := resolveTimeWindow(input.StartTime, input.EndTime)
@@ -302,7 +302,7 @@ func getMetrics(handler ObservabilityToolsetHandler) func(context.Context, *gomc
 			EndTime:         end,
 		}
 
-		result, err := handler.GetMetrics(ctx, orgName, projectName, agentName, payload)
+		result, err := handler.GetMetrics(ctx, ouID, projectName, agentName, payload)
 		if err != nil {
 			return nil, nil, wrapToolError("get_metrics", err)
 		}
@@ -326,7 +326,7 @@ func listTraces(handler ObservabilityToolsetHandler) func(context.Context, *gomc
 			return nil, nil, fmt.Errorf("limit must be between 1 and %d", maxTraceListLimit)
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 
 		start, end, err := resolveTraceTimeWindow(input.StartTime, input.EndTime)
@@ -341,14 +341,14 @@ func listTraces(handler ObservabilityToolsetHandler) func(context.Context, *gomc
 		}
 
 		// Call service layer
-		result, err := handler.ListTraces(ctx, orgName, projectName, agentName, env, start, end, sortOrder, limit)
+		result, err := handler.ListTraces(ctx, ouID, projectName, agentName, env, start, end, sortOrder, limit)
 		if err != nil {
 			return nil, nil, wrapToolError("list_traces", err)
 		}
 
 		includeIO := input.IncludeIO != nil && *input.IncludeIO
 		reducedTraces := extractTraceOverviews(result, includeIO)
-		reducedTraces["org_name"] = orgName
+		reducedTraces["org_name"] = ouID
 		reducedTraces["project_name"] = projectName
 		reducedTraces["agent_name"] = agentName
 		reducedTraces["environment"] = env
@@ -375,7 +375,7 @@ func getTraces(handler ObservabilityToolsetHandler) func(context.Context, *gomcp
 			return nil, nil, fmt.Errorf("limit must be between 1 and %d", maxTraceExportLimit)
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 
 		start, end, err := resolveTraceTimeWindow(input.StartTime, input.EndTime)
@@ -389,7 +389,7 @@ func getTraces(handler ObservabilityToolsetHandler) func(context.Context, *gomcp
 			limit = *input.Limit
 		}
 
-		result, err := handler.ExportTraces(ctx, orgName, projectName, agentName, env, start, end, sortOrder, limit)
+		result, err := handler.ExportTraces(ctx, ouID, projectName, agentName, env, start, end, sortOrder, limit)
 		if err != nil {
 			return nil, nil, wrapToolError("get_traces", err)
 		}
@@ -410,7 +410,7 @@ func getTraces(handler ObservabilityToolsetHandler) func(context.Context, *gomcp
 		}
 
 		reducedTraces["totalCount"] = result["totalCount"]
-		reducedTraces["org_name"] = orgName
+		reducedTraces["org_name"] = ouID
 		reducedTraces["project_name"] = projectName
 		reducedTraces["agent_name"] = agentName
 		reducedTraces["environment"] = env
@@ -436,7 +436,7 @@ func getTraceDetails(handler ObservabilityToolsetHandler) func(context.Context, 
 			return nil, nil, fmt.Errorf("trace_id is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 		start, end, err := resolveTraceTimeWindow(input.StartTime, input.EndTime)
 		if err != nil {
@@ -447,13 +447,13 @@ func getTraceDetails(handler ObservabilityToolsetHandler) func(context.Context, 
 			limit = *input.Limit
 		}
 
-		result, err := handler.GetTraceDetails(ctx, orgName, projectName, agentName, input.TraceID, env, start, end, limit)
+		result, err := handler.GetTraceDetails(ctx, ouID, projectName, agentName, input.TraceID, env, start, end, limit)
 		if err != nil {
 			return nil, nil, wrapToolError("get_trace_details", err)
 		}
 
 		reducedTrace := extractTraceDetails(result, input.TraceID)
-		reducedTrace["org_name"] = orgName
+		reducedTrace["org_name"] = ouID
 		reducedTrace["project_name"] = projectName
 		reducedTrace["agent_name"] = agentName
 		reducedTrace["environment"] = env
@@ -480,10 +480,10 @@ func getSpanDetails(handler ObservabilityToolsetHandler) func(context.Context, *
 			return nil, nil, fmt.Errorf("span_id is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		env := resolveEnv(input.Environment)
 
-		result, err := handler.GetSpanDetails(ctx, orgName, projectName, agentName, input.TraceID, input.SpanID, env)
+		result, err := handler.GetSpanDetails(ctx, ouID, projectName, agentName, input.TraceID, input.SpanID, env)
 		if err != nil {
 			return nil, nil, wrapToolError("get_span_details", err)
 		}

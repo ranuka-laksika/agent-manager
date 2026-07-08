@@ -28,8 +28,6 @@ type StoredAPIKey struct {
 	DisplayName string `json:"displayName"`
 	// UUID of the artifact this key is bound to.
 	ArtifactUuid string `json:"artifactUuid"`
-	// Organization name the key belongs to.
-	OrganizationName string `json:"organizationName"`
 	// Masked representation of the API key (full value is shown only once at creation).
 	MaskedApiKey string `json:"maskedApiKey"`
 	// Current lifecycle status of the API key (e.g. active, revoked).
@@ -46,13 +44,12 @@ type StoredAPIKey struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewStoredAPIKey(uuid string, name string, displayName string, artifactUuid string, organizationName string, maskedApiKey string, status string, purpose int32, createdAt time.Time, updatedAt time.Time) *StoredAPIKey {
+func NewStoredAPIKey(uuid string, name string, displayName string, artifactUuid string, maskedApiKey string, status string, purpose int32, createdAt time.Time, updatedAt time.Time) *StoredAPIKey {
 	this := StoredAPIKey{}
 	this.Uuid = uuid
 	this.Name = name
 	this.DisplayName = displayName
 	this.ArtifactUuid = artifactUuid
-	this.OrganizationName = organizationName
 	this.MaskedApiKey = maskedApiKey
 	this.Status = status
 	this.Purpose = purpose
@@ -163,30 +160,6 @@ func (o *StoredAPIKey) GetArtifactUuidOk() (*string, bool) {
 // SetArtifactUuid sets field value
 func (o *StoredAPIKey) SetArtifactUuid(v string) {
 	o.ArtifactUuid = v
-}
-
-// GetOrganizationName returns the OrganizationName field value
-func (o *StoredAPIKey) GetOrganizationName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrganizationName
-}
-
-// GetOrganizationNameOk returns a tuple with the OrganizationName field value
-// and a boolean to check if the value has been set.
-func (o *StoredAPIKey) GetOrganizationNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrganizationName, true
-}
-
-// SetOrganizationName sets field value
-func (o *StoredAPIKey) SetOrganizationName(v string) {
-	o.OrganizationName = v
 }
 
 // GetMaskedApiKey returns the MaskedApiKey field value
@@ -366,7 +339,6 @@ func (o StoredAPIKey) ToMap() (map[string]interface{}, error) {
 	toSerialize["name"] = o.Name
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["artifactUuid"] = o.ArtifactUuid
-	toSerialize["organizationName"] = o.OrganizationName
 	toSerialize["maskedApiKey"] = o.MaskedApiKey
 	toSerialize["status"] = o.Status
 	toSerialize["purpose"] = o.Purpose

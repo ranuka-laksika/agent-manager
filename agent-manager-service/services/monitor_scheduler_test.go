@@ -107,7 +107,7 @@ func TestTriggerMonitor_Success(t *testing.T) {
 	monitor := &models.Monitor{
 		ID:              monitorID,
 		Name:            "test-monitor",
-		OrgName:         "test-org",
+		OUID:            "test-org",
 		IntervalMinutes: intPtr(interval),
 		NextRunTime:     timePtr(now),
 		Evaluators:      []models.MonitorEvaluator{{Identifier: "eval-1", DisplayName: "eval-1", Config: map[string]interface{}{"level": "trace"}}},
@@ -120,7 +120,7 @@ func TestTriggerMonitor_Success(t *testing.T) {
 	// Verify executor was called
 	require.Len(t, executor.executeCalls, 1)
 	call := executor.executeCalls[0]
-	assert.Equal(t, "test-org", call.OrgName)
+	assert.Equal(t, "test-org", call.OUID)
 	assert.Equal(t, monitor, call.Monitor)
 	assert.Equal(t, []models.MonitorEvaluator{{Identifier: "eval-1", DisplayName: "eval-1", Config: map[string]interface{}{"level": "trace"}}}, call.Evaluators)
 
@@ -207,7 +207,7 @@ func TestTriggerMonitor_UpdateNextRunTimeError(t *testing.T) {
 	monitor := &models.Monitor{
 		ID:              uuid.New(),
 		Name:            "test-monitor",
-		OrgName:         "test-org",
+		OUID:            "test-org",
 		IntervalMinutes: intPtr(60),
 		NextRunTime:     timePtr(time.Now()),
 		Evaluators:      []models.MonitorEvaluator{{Identifier: "eval-1", DisplayName: "eval-1", Config: map[string]interface{}{"level": "trace"}}},
@@ -233,7 +233,7 @@ func TestTriggerMonitor_TimeWindowCalculation(t *testing.T) {
 	monitor := &models.Monitor{
 		ID:              uuid.New(),
 		Name:            "calc-test",
-		OrgName:         "test-org",
+		OUID:            "test-org",
 		IntervalMinutes: intPtr(interval),
 		NextRunTime:     timePtr(nextRunTime),
 		Evaluators:      []models.MonitorEvaluator{{Identifier: "eval-1", DisplayName: "eval-1", Config: map[string]interface{}{"level": "trace"}}},
@@ -437,7 +437,7 @@ func TestSchedulerCycle_TwoConcurrentCycles(t *testing.T) {
 		Name:            fmt.Sprintf("lock-test-%d", time.Now().UnixNano()),
 		DisplayName:     "Lock Test Monitor",
 		Type:            models.MonitorTypeFuture,
-		OrgName:         "lock-test-org",
+		OUID:            "lock-test-org",
 		ProjectName:     "test-project",
 		AgentName:       "test-agent",
 		AgentID:         "test-agent-id",

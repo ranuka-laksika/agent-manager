@@ -51,8 +51,8 @@ func NewGitSecretService(
 }
 
 // Create creates a new git secret
-func (s *GitSecretService) Create(ctx context.Context, orgName string, req *spec.CreateGitSecretRequest) (*GitSecretInfo, error) {
-	slog.Info("GitSecretService.Create: starting", "orgName", orgName, "name", req.Name, "type", req.Type)
+func (s *GitSecretService) Create(ctx context.Context, ouID string, req *spec.CreateGitSecretRequest) (*GitSecretInfo, error) {
+	slog.Info("GitSecretService.Create: starting", "ouID", ouID, "name", req.Name, "type", req.Type)
 
 	// Validate input
 	if err := s.validateCreateRequest(req); err != nil {
@@ -71,17 +71,17 @@ func (s *GitSecretService) Create(ctx context.Context, orgName string, req *spec
 	}
 
 	// Create git secret via OpenChoreo
-	result, err := s.ocClient.CreateGitSecret(ctx, orgName, ocReq)
+	result, err := s.ocClient.CreateGitSecret(ctx, ouID, ocReq)
 	if err != nil {
 		if errors.Is(err, utils.ErrConflict) {
-			slog.Warn("GitSecretService.Create: git secret already exists", "orgName", orgName, "name", req.Name)
+			slog.Warn("GitSecretService.Create: git secret already exists", "ouID", ouID, "name", req.Name)
 			return nil, utils.ErrGitSecretAlreadyExists
 		}
-		slog.Error("GitSecretService.Create: failed to create git secret", "orgName", orgName, "name", req.Name, "error", err)
+		slog.Error("GitSecretService.Create: failed to create git secret", "ouID", ouID, "name", req.Name, "error", err)
 		return nil, err
 	}
 
-	slog.Info("GitSecretService.Create: git secret created successfully", "orgName", orgName, "name", result.Name)
+	slog.Info("GitSecretService.Create: git secret created successfully", "ouID", ouID, "name", result.Name)
 
 	return &GitSecretInfo{
 		Name: result.Name,
@@ -89,13 +89,13 @@ func (s *GitSecretService) Create(ctx context.Context, orgName string, req *spec
 }
 
 // List lists all git secrets for an organization
-func (s *GitSecretService) List(ctx context.Context, orgName string, limit, offset int) ([]*GitSecretInfo, int, error) {
-	slog.Info("GitSecretService.List: starting", "orgName", orgName, "limit", limit, "offset", offset)
+func (s *GitSecretService) List(ctx context.Context, ouID string, limit, offset int) ([]*GitSecretInfo, int, error) {
+	slog.Info("GitSecretService.List: starting", "ouID", ouID, "limit", limit, "offset", offset)
 
 	// List git secrets via OpenChoreo
-	secrets, err := s.ocClient.ListGitSecrets(ctx, orgName)
+	secrets, err := s.ocClient.ListGitSecrets(ctx, ouID)
 	if err != nil {
-		slog.Error("GitSecretService.List: failed to list git secrets", "orgName", orgName, "error", err)
+		slog.Error("GitSecretService.List: failed to list git secrets", "ouID", ouID, "error", err)
 		return nil, 0, err
 	}
 
@@ -118,28 +118,28 @@ func (s *GitSecretService) List(ctx context.Context, orgName string, limit, offs
 		end = totalCount
 	}
 
-	slog.Info("GitSecretService.List: completed", "orgName", orgName, "count", len(gitSecrets[offset:end]), "total", totalCount)
+	slog.Info("GitSecretService.List: completed", "ouID", ouID, "count", len(gitSecrets[offset:end]), "total", totalCount)
 	return gitSecrets[offset:end], totalCount, nil
 }
 
 // Delete deletes a git secret
-func (s *GitSecretService) Delete(ctx context.Context, orgName, secretName string) error {
-	slog.Info("GitSecretService.Delete: starting", "orgName", orgName, "secretName", secretName)
+func (s *GitSecretService) Delete(ctx context.Context, ouID, secretName string) error {
+	slog.Info("GitSecretService.Delete: starting", "ouID", ouID, "secretName", secretName)
 
 	if secretName == "" {
 		return utils.ErrInvalidInput
 	}
 
 	// Delete git secret via OpenChoreo
-	if err := s.ocClient.DeleteGitSecret(ctx, orgName, secretName); err != nil {
+	if err := s.ocClient.DeleteGitSecret(ctx, ouID, secretName); err != nil {
 		if errors.Is(err, utils.ErrNotFound) {
 			return utils.ErrGitSecretNotFound
 		}
-		slog.Error("GitSecretService.Delete: failed to delete git secret", "orgName", orgName, "secretName", secretName, "error", err)
+		slog.Error("GitSecretService.Delete: failed to delete git secret", "ouID", ouID, "secretName", secretName, "error", err)
 		return err
 	}
 
-	slog.Info("GitSecretService.Delete: completed", "orgName", orgName, "secretName", secretName)
+	slog.Info("GitSecretService.Delete: completed", "ouID", ouID, "secretName", secretName)
 	return nil
 }
 

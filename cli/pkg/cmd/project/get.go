@@ -100,7 +100,7 @@ func runGet(ctx context.Context, o *GetOptions) error {
 	fmt.Fprintf(w, "display name:  %s\n", p.DisplayName)
 	fmt.Fprintf(w, "description:   %s\n", p.Description)
 	fmt.Fprintf(w, "pipeline:      %s\n", p.DeploymentPipeline)
-	fmt.Fprintf(w, "org:           %s\n", p.OrgName)
+	fmt.Fprintf(w, "org:           %s\n", o.Org)
 	fmt.Fprintf(w, "created:       %s\n", cs.Gray(p.CreatedAt.Format("2006-01-02T15:04:05Z07:00")))
 	return nil
 }

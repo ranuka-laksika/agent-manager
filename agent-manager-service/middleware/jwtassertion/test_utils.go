@@ -26,9 +26,22 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// MockOUID is the OU ID carried by tokens minted by NewMockMiddleware. It is
+// distinct from the path org handle (as in a real token). Handlers scope org
+// data by OU ID, so tests assert against this value rather than the path org.
+const MockOUID = "mock-org-id"
+
 // NewMockMiddleware creates a mock JWT middleware for testing.
 // Automatically extracts org from the request path if it contains /orgs/{orgName}/
 func NewMockMiddleware(t *testing.T) Middleware {
+	t.Helper()
+	return NewMockMiddlewareWithOUID(t, MockOUID)
+}
+
+// NewMockMiddlewareWithOUID is like NewMockMiddleware but lets the caller pin
+// the token's OU ID. Use it to exercise org-scoped behaviour that depends on a
+// specific OU ID — e.g. an organization the OpenChoreo mock reports as missing.
+func NewMockMiddlewareWithOUID(t *testing.T, ouID string) Middleware {
 	t.Helper()
 
 	return func(next http.Handler) http.Handler {
@@ -41,11 +54,13 @@ func NewMockMiddleware(t *testing.T) Middleware {
 				orgName = "mock-org"
 			}
 
-			// Create token claims with extracted org
+			// Create token claims. OuHandle mirrors the path org (the human handle);
+			// OuId is a distinct identifier, as in a real token. Handlers scope by
+			// OuId, so tests assert against this value, not the path org.
 			tokenClaims := &TokenClaims{
 				Scope:    "test-scopes",
-				OuId:     "mock-org-id",
-				OuHandle: orgName, // Use extracted org as handle
+				OuId:     ouID,
+				OuHandle: orgName,
 				RegisteredClaims: jwt.RegisteredClaims{
 					ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
 				},

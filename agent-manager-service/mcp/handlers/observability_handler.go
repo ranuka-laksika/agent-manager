@@ -36,21 +36,21 @@ func NewObservabilityHandler(agentSvc services.AgentManagerService, traceClient 
 	return &ObservabilityHandler{agentSvc: agentSvc, traceClient: traceClient}
 }
 
-func (h *ObservabilityHandler) GetRuntimeLogs(ctx context.Context, orgName string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error) {
-	return h.agentSvc.GetAgentRuntimeLogs(ctx, orgName, projectName, agentName, payload)
+func (h *ObservabilityHandler) GetRuntimeLogs(ctx context.Context, ouID string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error) {
+	return h.agentSvc.GetAgentRuntimeLogs(ctx, ouID, projectName, agentName, payload)
 }
 
-func (h *ObservabilityHandler) GetMetrics(ctx context.Context, orgName string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error) {
-	return h.agentSvc.GetAgentMetrics(ctx, orgName, projectName, agentName, payload)
+func (h *ObservabilityHandler) GetMetrics(ctx context.Context, ouID string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error) {
+	return h.agentSvc.GetAgentMetrics(ctx, ouID, projectName, agentName, payload)
 }
 
-func (h *ObservabilityHandler) ListTraces(ctx context.Context, orgName string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error) {
+func (h *ObservabilityHandler) ListTraces(ctx context.Context, ouID string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error) {
 	if h.traceClient == nil {
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
 	params := traceobserversvc.TraceListParams{
-		Organization: orgName,
+		Organization: ouID,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -63,13 +63,13 @@ func (h *ObservabilityHandler) ListTraces(ctx context.Context, orgName string, p
 	return h.traceClient.ListTraces(ctx, params)
 }
 
-func (h *ObservabilityHandler) ExportTraces(ctx context.Context, orgName string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error) {
+func (h *ObservabilityHandler) ExportTraces(ctx context.Context, ouID string, projectName string, agentName string, environment string, startTime string, endTime string, sortOrder string, limit int) (map[string]any, error) {
 	if h.traceClient == nil {
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
 	params := traceobserversvc.TraceListParams{
-		Organization: orgName,
+		Organization: ouID,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -82,14 +82,14 @@ func (h *ObservabilityHandler) ExportTraces(ctx context.Context, orgName string,
 	return h.traceClient.ExportTraces(ctx, params)
 }
 
-func (h *ObservabilityHandler) GetTraceDetails(ctx context.Context, orgName string, projectName string, agentName string, traceID string, environment string, startTime string, endTime string, limit int) (map[string]any, error) {
+func (h *ObservabilityHandler) GetTraceDetails(ctx context.Context, ouID string, projectName string, agentName string, traceID string, environment string, startTime string, endTime string, limit int) (map[string]any, error) {
 	if h.traceClient == nil {
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
 	params := traceobserversvc.TraceDetailsParams{
 		TraceID:      traceID,
-		Organization: orgName,
+		Organization: ouID,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -101,7 +101,7 @@ func (h *ObservabilityHandler) GetTraceDetails(ctx context.Context, orgName stri
 	return h.traceClient.GetTrace(ctx, params)
 }
 
-func (h *ObservabilityHandler) GetSpanDetails(ctx context.Context, orgName string, projectName string, agentName string, traceID string, spanID string, environment string) (map[string]any, error) {
+func (h *ObservabilityHandler) GetSpanDetails(ctx context.Context, ouID string, projectName string, agentName string, traceID string, spanID string, environment string) (map[string]any, error) {
 	if h.traceClient == nil {
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
@@ -109,7 +109,7 @@ func (h *ObservabilityHandler) GetSpanDetails(ctx context.Context, orgName strin
 	params := traceobserversvc.SpanDetailsParams{
 		TraceID:      traceID,
 		SpanID:       spanID,
-		Organization: orgName,
+		Organization: ouID,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,

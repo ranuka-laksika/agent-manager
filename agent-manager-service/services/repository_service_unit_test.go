@@ -23,7 +23,7 @@
 // network is everything that runs BEFORE the provider call:
 //
 //   - getGitProviderConfigWithCredentials: a pure helper (nil/invalid/valid creds).
-//   - credential resolution: when the request carries a secretRef + orgName the
+//   - credential resolution: when the request carries a secretRef + ouID the
 //     service calls GitCredentialsService.GetGitCredentials; we assert that a
 //     fetch error and an invalid-credentials result are propagated verbatim,
 //     before any provider/network work happens.
@@ -56,11 +56,11 @@ import (
 // interface (no moq mock exists for it). A nil GetGitCredentialsFunc panics, so
 // a test that reaches this method unexpectedly fails loudly.
 type gitCredsStub struct {
-	GetGitCredentialsFunc func(ctx context.Context, orgName, secretRef string) (*GitCredentials, error)
+	GetGitCredentialsFunc func(ctx context.Context, ouID, secretRef string) (*GitCredentials, error)
 }
 
-func (s *gitCredsStub) GetGitCredentials(ctx context.Context, orgName, secretRef string) (*GitCredentials, error) {
-	return s.GetGitCredentialsFunc(ctx, orgName, secretRef)
+func (s *gitCredsStub) GetGitCredentials(ctx context.Context, ouID, secretRef string) (*GitCredentials, error) {
+	return s.GetGitCredentialsFunc(ctx, ouID, secretRef)
 }
 
 // newRepoService wires repositoryService with the credential stub and a discard
@@ -69,24 +69,24 @@ func newRepoService(creds GitCredentialsService) RepositoryService {
 	return NewRepositoryService(creds, discardLogger())
 }
 
-// branchReq builds a ListBranchesRequest carrying a secretRef + orgName, which is
+// branchReq builds a ListBranchesRequest carrying a secretRef + ouID, which is
 // what triggers the credential-resolution branch.
-func branchReq(secretRef, orgName string) spec.ListBranchesRequest {
+func branchReq(secretRef, ouID string) spec.ListBranchesRequest {
 	return spec.ListBranchesRequest{
 		Owner:      "acme",
 		Repository: "widgets",
 		SecretRef:  strPtr(secretRef),
-		OrgName:    strPtr(orgName),
+		OrgName:    strPtr(ouID),
 	}
 }
 
 // commitReq mirrors branchReq for ListCommits.
-func commitReq(secretRef, orgName string) spec.ListCommitsRequest {
+func commitReq(secretRef, ouID string) spec.ListCommitsRequest {
 	return spec.ListCommitsRequest{
 		Owner:     "acme",
 		Repo:      "widgets",
 		SecretRef: strPtr(secretRef),
-		OrgName:   strPtr(orgName),
+		OrgName:   strPtr(ouID),
 	}
 }
 
@@ -158,7 +158,7 @@ func TestRepositoryService_ListBranches(t *testing.T) {
 	})
 
 	t.Run("unsupported provider type fails locally without network", func(t *testing.T) {
-		// No secretRef/orgName => credential branch is skipped (stub func left nil
+		// No secretRef/ouID => credential branch is skipped (stub func left nil
 		// to assert it is never called). NewProvider rejects the unknown type
 		// before any HTTP call is made.
 		svc := newRepoService(&gitCredsStub{})

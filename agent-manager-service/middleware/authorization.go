@@ -50,8 +50,10 @@ func NewResolverForbiddenError(msg string) *ResolverError {
 
 // RequireOrgMatch returns a middleware that:
 //  1. Validates token carries ouId (required for both cloud and on-prem).
-//  2. Validates path {orgName} parameter matches token's OuHandle.
-//  3. Injects ResolvedOrg into the request context for handlers to use.
+//  2. Injects ResolvedOrg into the request context. The token is the single
+//     source of truth for org identity: the {orgName} URL segment exists for
+//     routing only and is never read — handlers take the OU ID from the
+//     context (OUIDFromRequest) and the data layer scopes rows by ou_id.
 func RequireOrgMatch(resolver OrgResolver) func(http.HandlerFunc) http.HandlerFunc {
 	return requireOrgMatch(resolver, false)
 }
@@ -81,22 +83,6 @@ func requireOrgMatch(resolver OrgResolver, allowRootOU bool) func(http.HandlerFu
 			if claims.OuId == "" || claims.OuHandle == "" {
 				slog.Warn("RequireOrgMatch rejected", "reason", "missing ou identity in token", "sub", claims.Sub, "path", r.URL.Path)
 				utils.WriteErrorResponse(w, http.StatusForbidden, "missing ou identity in token")
-				return
-			}
-
-			// Validate path orgName matches token's OuHandle
-			pathOrg := r.PathValue(utils.PathParamOrgName)
-			if pathOrg != claims.OuHandle {
-				if allowRootOU && claims.OuHandle == config.GetConfig().RootOUHandle {
-					slog.Info("RequireOrgMatch: root OU token granted cross-org access", "sub", claims.Sub, "pathOrg", pathOrg)
-					ctx := WithResolvedOrg(r.Context(), ResolvedOrg{
-						OuHandle: pathOrg,
-					})
-					next(w, r.WithContext(ctx))
-					return
-				}
-				slog.Warn("RequireOrgMatch rejected", "reason", "invalid organization access", "sub", claims.Sub, "tokenOu", claims.OuHandle, "pathOrg", pathOrg)
-				utils.WriteErrorResponse(w, http.StatusForbidden, "invalid organization access")
 				return
 			}
 

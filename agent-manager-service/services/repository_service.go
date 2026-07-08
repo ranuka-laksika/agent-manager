@@ -81,7 +81,7 @@ func (s *repositoryService) ListBranches(ctx context.Context, req spec.ListBranc
 	if req.HasSecretRef() && req.HasOrgName() {
 		creds, err := s.gitCredentialsService.GetGitCredentials(ctx, req.GetOrgName(), req.GetSecretRef())
 		if err != nil {
-			s.logger.Error("failed to get git credentials", "error", err, "secretRef", req.GetSecretRef(), "orgName", req.GetOrgName())
+			s.logger.Error("failed to get git credentials", "error", err, "secretRef", req.GetSecretRef(), "ouID", req.GetOrgName())
 			return nil, err
 		}
 		providerConfig, err = getGitProviderConfigWithCredentials(creds)
@@ -141,7 +141,7 @@ func (s *repositoryService) ListCommits(ctx context.Context, req spec.ListCommit
 	if req.HasSecretRef() && req.HasOrgName() {
 		creds, err := s.gitCredentialsService.GetGitCredentials(ctx, req.GetOrgName(), req.GetSecretRef())
 		if err != nil {
-			s.logger.Error("failed to get git credentials", "error", err, "secretRef", req.GetSecretRef(), "orgName", req.GetOrgName())
+			s.logger.Error("failed to get git credentials", "error", err, "secretRef", req.GetSecretRef(), "ouID", req.GetOrgName())
 			return nil, err
 		}
 		providerConfig, err = getGitProviderConfigWithCredentials(creds)

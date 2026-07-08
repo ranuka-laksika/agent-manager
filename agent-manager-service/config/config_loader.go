@@ -179,7 +179,8 @@ func loadEnvs() {
 		Token: r.readOptionalString("GITHUB_TOKEN", ""),
 	}
 	config.OpenChoreo = OpenChoreoConfig{
-		BaseURL: r.readRequiredString("OPEN_CHOREO_BASE_URL"),
+		BaseURL:          r.readRequiredString("OPEN_CHOREO_BASE_URL"),
+		DefaultNamespace: r.readOptionalString("OPEN_CHOREO_DEFAULT_NAMESPACE", "default"),
 	}
 
 	// Internal Server configuration (for WebSocket and gateway internal APIs)
