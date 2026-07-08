@@ -61,8 +61,10 @@ window.__RUNTIME_CONFIG__ = {
     semanticGuardrails: "" === "true",
   },
   featureFlags: {
-    enablePrivateRepoSupport: "" === "true",
+    enablePrivateRepoSupport: "true" === "true",
     enableIdentityProviderManagedMode: "" === "true",
+    enableProfileManagement: "true" === "true",
+    enableUserManagement: "true" === "true",
   },
   docsUrl: "https://wso2.github.io/agent-manager/docs/next",
   footerLinks: {

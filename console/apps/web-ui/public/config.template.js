@@ -56,6 +56,8 @@ window.__RUNTIME_CONFIG__ = {
   featureFlags: {
     enablePrivateRepoSupport: '$FEATURE_FLAG_ENABLE_PRIVATE_REPO_SUPPORT' === 'true',
     enableIdentityProviderManagedMode: '$FEATURE_FLAG_ENABLE_IDENTITY_PROVIDER_MANAGED_MODE' === 'true',
+    enableProfileManagement: '$FEATURE_FLAG_ENABLE_PROFILE_MANAGEMENT' === 'true',
+    enableUserManagement: '$FEATURE_FLAG_ENABLE_USER_MANAGEMENT' === 'true',
   },
   docsUrl: 'https://wso2.github.io/agent-manager/docs/next',
   footerLinks: {

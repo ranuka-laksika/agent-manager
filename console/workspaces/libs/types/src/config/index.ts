@@ -83,6 +83,16 @@ export type FeatureFlags = {
    * rendering the self-hosted manage-identity-provider.sh script snippet.
    */
   enableIdentityProviderManagedMode?: boolean;
+  /**
+   * When false, the Profile Settings text fields and Save Changes button are
+   * hidden/disabled, and the Change Password tab is disabled.
+   */
+  enableProfileManagement?: boolean;
+  /**
+   * When false, the Add User, Invite User, Create Role, and Create Group
+   * buttons on the Settings page are disabled.
+   */
+  enableUserManagement?: boolean;
 };
 
 export type GuardrailCapabilities = {
