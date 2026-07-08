@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -41,6 +42,7 @@ type stubAgentThunderProvisioning struct {
 	AgentThunderProvisioningService
 	RegenerateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
 	ClaimFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
+	RevokeFunc     func(ctx context.Context, orgName, projectName, agentName, envName string) (string, error)
 }
 
 func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
@@ -49,6 +51,10 @@ func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, org
 
 func (s *stubAgentThunderProvisioning) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
 	return s.ClaimFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
+	return s.RevokeFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
@@ -322,7 +328,16 @@ func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testin
 			return models.AgentProvisioningTypeInternal, "client-def", "fresh-secret-internal", nil
 		},
 	}
-	s := &agentManagerService{agentThunderProvisioning: stub}
+	refreshed := 0
+	injector := &agentIdentityInjectorStub{
+		RefreshAfterRotationFunc: func(_ context.Context, orgName, _, _, envName string) error {
+			refreshed++
+			assert.Equal(t, "acme", orgName)
+			assert.Equal(t, "dev", envName)
+			return nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, logger: discardLogger()}
 
 	resp, err := s.RegenerateAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
 
@@ -332,6 +347,109 @@ func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testin
 		"an Internal agent must ALSO get its freshly regenerated secret back — regenerate is not the "+
 			"one-time-claim endpoint, withholding it here would just force a second call to see it")
 	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
+	assert.Equal(t, 1, refreshed, "internal rotation must refresh the workload's injected credential")
+}
+
+func TestRegenerateAgentIdentitySecret_InternalAgent_RefreshFailureDoesNotFailRotation(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RegenerateFunc: func(_ context.Context, _, _, _, _ string) (models.AgentProvisioningType, string, string, error) {
+			return models.AgentProvisioningTypeInternal, "client-def", "fresh-secret-internal", nil
+		},
+	}
+	injector := &agentIdentityInjectorStub{
+		RefreshAfterRotationFunc: func(_ context.Context, _, _, _, _ string) error {
+			return errors.New("workload refresh failed")
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, logger: discardLogger()}
+
+	resp, err := s.RegenerateAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err, "the rotation already happened in Thunder — a failed workload refresh must not fail the request")
+	assert.Equal(t, "fresh-secret-internal", resp.ClientSecret)
+}
+
+func TestRevokeAgentIdentitySecret_LowestEnv_RemovesWorkloadLevelVars(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RevokeFunc: func(_ context.Context, _, _, _, _ string) (string, error) { return "client-abc", nil },
+	}
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+	}
+	var gotIncludeWorkload *bool
+	injector := &agentIdentityInjectorStub{
+		RemoveForEnvironmentFunc: func(_ context.Context, _, _, _, envName string, includeWorkloadLevel bool) error {
+			assert.Equal(t, "dev", envName)
+			gotIncludeWorkload = &includeWorkloadLevel
+			return nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, ocClient: ocClient, logger: discardLogger()}
+
+	resp, err := s.RevokeAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err)
+	assert.Equal(t, "client-abc", resp.ClientID)
+	require.NotNil(t, gotIncludeWorkload)
+	assert.True(t, *gotIncludeWorkload, "revoking the LOWEST environment's credential must also strip the shared workload-level vars")
+}
+
+func TestRevokeAgentIdentitySecret_NonLowestEnv_KeepsWorkloadLevelVars(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RevokeFunc: func(_ context.Context, _, _, _, _ string) (string, error) { return "client-abc", nil },
+	}
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+	}
+	var gotIncludeWorkload *bool
+	injector := &agentIdentityInjectorStub{
+		RemoveForEnvironmentFunc: func(_ context.Context, _, _, _, envName string, includeWorkloadLevel bool) error {
+			assert.Equal(t, "staging", envName)
+			gotIncludeWorkload = &includeWorkloadLevel
+			return nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, ocClient: ocClient, logger: discardLogger()}
+
+	_, err := s.RevokeAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.NoError(t, err)
+	require.NotNil(t, gotIncludeWorkload)
+	assert.False(t, *gotIncludeWorkload, "revoking a NON-lowest environment must never strip the lowest environment's shared workload-level vars")
+}
+
+func TestRevokeAgentIdentitySecret_PipelineLookupFails_StillRevokesConservatively(t *testing.T) {
+	stub := &stubAgentThunderProvisioning{
+		RevokeFunc: func(_ context.Context, _, _, _, _ string) (string, error) { return "client-abc", nil },
+	}
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return nil, errors.New("pipeline unavailable")
+		},
+	}
+	var gotIncludeWorkload *bool
+	injector := &agentIdentityInjectorStub{
+		RemoveForEnvironmentFunc: func(_ context.Context, _, _, _, _ string, includeWorkloadLevel bool) error {
+			gotIncludeWorkload = &includeWorkloadLevel
+			return nil
+		},
+	}
+	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, ocClient: ocClient, logger: discardLogger()}
+
+	resp, err := s.RevokeAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
+
+	require.NoError(t, err, "revoke already succeeded in Thunder — cleanup problems must not fail the request")
+	assert.Equal(t, "client-abc", resp.ClientID)
+	require.NotNil(t, gotIncludeWorkload)
+	assert.False(t, *gotIncludeWorkload, "with an unknown pipeline, be conservative and leave workload-level vars alone")
 }
 
 func TestClaimAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T) {
@@ -399,4 +517,160 @@ func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
 	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
 
 	require.ErrorIs(t, err, boom)
+}
+
+// stubAgentConfigurationServiceForPromote implements AgentConfigurationService
+// by embedding the (nil) interface and overriding only the two methods
+// PromoteAgent actually calls — any other method call panics on the nil
+// embed, which is fine since these tests never exercise them.
+type stubAgentConfigurationServiceForPromote struct {
+	AgentConfigurationService
+	SystemKeysFunc func(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error)
+	SystemVarsFunc func(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error)
+}
+
+func (s *stubAgentConfigurationServiceForPromote) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error) {
+	return s.SystemKeysFunc(ctx, agentID, orgName, environmentName)
+}
+
+func (s *stubAgentConfigurationServiceForPromote) BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error) {
+	return s.SystemVarsFunc(ctx, agentID, orgName, environmentName)
+}
+
+// promoteAgentTestFixture builds the minimal set of mocks PromoteAgent needs
+// for a non-API-type internal agent (skips the large isAPIAgent branch
+// entirely), for a dev -> staging promotion pipeline.
+func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, tgtIdentityErr error) (*agentManagerService, *bool) {
+	t.Helper()
+	promoteCalled := false
+
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: orgName}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				Provisioning: models.Provisioning{Type: string(utils.InternalAgent)},
+				Type:         models.AgentType{Type: "agent-chat"}, // deliberately not agent-api
+			}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) { return false, nil },
+		PromoteComponentFunc: func(_ context.Context, _, _, _, _, _ string, _ []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+			promoteCalled = true
+			return nil
+		},
+	}
+
+	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
+		SystemKeysFunc: func(_ context.Context, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+	}
+
+	identityInjector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, envName string) ([]client.EnvVar, error) {
+			if tgtIdentityErr != nil {
+				return nil, tgtIdentityErr
+			}
+			if envName == "staging" {
+				return tgtIdentityEnvVars, nil
+			}
+			// Source environment's own identity vars must never be requested
+			// by name for inclusion in the target — if PromoteAgent ever asks
+			// this stub for "dev", something is wrong with the isolation logic.
+			t.Fatalf("agentIdentityInjection.EnvVarsForEnvironment must only be called for the TARGET environment, got %q", envName)
+			return nil, nil
+		},
+	}
+
+	provisioningStub := &stubAgentThunderProvisioning{}
+	// ProvisionForEnvironmentIfMissing is called unconditionally before the
+	// readiness check — must not panic.
+	provisioningStubWithProvision := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: provisioningStub}
+
+	s := &agentManagerService{
+		ocClient:                  ocClient,
+		agentConfigurationService: agentConfigSvc,
+		agentIdentityInjection:    identityInjector,
+		agentThunderProvisioning:  provisioningStubWithProvision,
+		logger:                    discardLogger(),
+	}
+	return s, &promoteCalled
+}
+
+// provisionForEnvIfMissingStub adds a no-op ProvisionForEnvironmentIfMissing
+// on top of stubAgentThunderProvisioning, since PromoteAgent now calls it
+// unconditionally before checking target-identity readiness.
+type provisionForEnvIfMissingStub struct {
+	*stubAgentThunderProvisioning
+}
+
+func (s *provisionForEnvIfMissingStub) ProvisionForEnvironmentIfMissing(_ context.Context, _, _, _, _ string, _ models.AgentProvisioningType, _ string) (bool, error) {
+	return false, nil
+}
+
+func TestPromoteAgent_BlocksWhenTargetIdentityNotReady(t *testing.T) {
+	// Empty, no-error result — exactly what EnvVarsForEnvironment returns
+	// when the target's AgentID binding hasn't finished provisioning yet.
+	s, promoteCalled := promoteAgentTestFixture(t, nil, nil)
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrInvalidInput)
+	assert.Contains(t, err.Error(), "not ready yet")
+	assert.False(t, *promoteCalled,
+		"promotion must be blocked BEFORE calling PromoteComponent — otherwise the pod is already promoted with leaked credentials by the time this error is returned")
+}
+
+func TestPromoteAgent_TargetIdentityReady_PromotesWithTargetOnlyCredentials(t *testing.T) {
+	targetVars := []client.EnvVar{
+		{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"},
+	}
+	s, _ := promoteAgentTestFixture(t, targetVars, nil)
+
+	var capturedOverrides []client.EnvVar
+	ocMock, ok := s.ocClient.(*clientmocks.OpenChoreoClientMock)
+	require.True(t, ok)
+	ocMock.PromoteComponentFunc = func(_ context.Context, _, _, _, _, _ string, envOverrides []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+		capturedOverrides = envOverrides
+		return nil
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, capturedOverrides, "PromoteComponent must actually be called")
+
+	found := false
+	for _, ev := range capturedOverrides {
+		if ev.Key == "AMP_AGENT_IDENTITY_CLIENT_ID" {
+			found = true
+			assert.Equal(t, "staging-client-id", ev.Value,
+				"the target environment's own identity vars must be the ones actually sent to PromoteComponent")
+		}
+	}
+	assert.True(t, found, "target environment's identity env vars must be present in the promoted overrides")
+}
+
+func TestPromoteAgent_IdentityBuildError_AbortsBeforePromoting(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, nil, errors.New("openchoreo unavailable"))
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.Error(t, err)
+	assert.False(t, *promoteCalled, "a real error building identity env vars must abort before promoting, not just log a warning")
 }

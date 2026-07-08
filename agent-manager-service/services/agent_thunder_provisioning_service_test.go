@@ -31,6 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -43,7 +44,18 @@ func newTestProvisioningService(
 	resolver *clientmocks.EnvThunderResolverMock,
 	store *clientmocks.AgentSecretStoreMock,
 ) AgentThunderProvisioningService {
-	return NewAgentThunderProvisioningService(repo, resolver, store, slog.Default())
+	return NewAgentThunderProvisioningService(repo, resolver, store, nil, slog.Default())
+}
+
+// newTestProvisioningServiceWithInjector is newTestProvisioningService plus a
+// workload injector, for tests asserting the post-provisioning Gateway Binding hook.
+func newTestProvisioningServiceWithInjector(
+	repo *repomocks.AgentThunderClientRepositoryMock,
+	resolver *clientmocks.EnvThunderResolverMock,
+	store *clientmocks.AgentSecretStoreMock,
+	injector AgentIdentityInjectionService,
+) AgentThunderProvisioningService {
+	return NewAgentThunderProvisioningService(repo, resolver, store, injector, slog.Default())
 }
 
 func fakeThunderClientMock() *clientmocks.ThunderClientMock {
@@ -1168,18 +1180,28 @@ func TestDeleteAllBindings_DeletesRowsBeforeSlowThunderCleanup(t *testing.T) {
 // Thunder identity/secret below would leave that row pointing at now-destroyed
 // resources — and a same-named agent recreated afterward would silently no-op
 // against it via Upsert's OnConflict DoNothing.
-func TestDeleteAllBindings_StopsOnDeleteByIDsFailure(t *testing.T) {
+// TestDeleteAllBindings_ContinuesExternalCleanupOnDeleteByIDsFailure documents
+// a deliberate behavior change: this used to abort ALL cleanup (including
+// live Thunder identities, SecretReference CRs, and OpenBao secrets) the
+// moment the local DB row delete failed. That left external, still-active
+// resources orphaned indefinitely — worse than a few stale local rows, since
+// an orphaned Thunder identity can still mint valid tokens. Failing the DB
+// delete must now be logged and treated as non-fatal, falling through to
+// clean up everything else regardless.
+func TestDeleteAllBindings_ContinuesExternalCleanupOnDeleteByIDsFailure(t *testing.T) {
+	thunderDeleted := false
 	tc := fakeThunderClientMock()
 	tc.DeleteAgentIdentityFunc = func(_ context.Context, _ string) (bool, error) {
-		t.Fatal("must not delete the Thunder identity when the DB row deletion failed")
-		return false, nil
+		thunderDeleted = true
+		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
 		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
+	secretDeleted := false
 	store := &clientmocks.AgentSecretStoreMock{
 		DeleteFunc: func(context.Context, string) error {
-			t.Fatal("must not delete the stored secret when the DB row deletion failed")
+			secretDeleted = true
 			return nil
 		},
 	}
@@ -1196,6 +1218,9 @@ func TestDeleteAllBindings_StopsOnDeleteByIDsFailure(t *testing.T) {
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	svc.DeleteAllBindings(context.Background(), "acme", "proj1", "my-agent")
+
+	assert.True(t, thunderDeleted, "a failed local DB row delete must not block deleting the live Thunder identity")
+	assert.True(t, secretDeleted, "a failed local DB row delete must not block deleting the OpenBao secret")
 }
 
 // TestProvisionForEnvironmentIfMissing_* cover the shared helper behind both the
@@ -1568,4 +1593,335 @@ func TestKeyedMutex_EvictionSafeUnderConcurrentReacquire(t *testing.T) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	assert.Empty(t, m.locks, "the key must be evicted once every holder has released")
+}
+
+// agentIdentityInjectorStub is a hand-written func-field stub for the
+// in-package AgentIdentityInjectionService interface (no moq mock — see the
+// service-unit-test conventions). A nil func field panics when called, so
+// tests can prove a path is never reached, mirroring moq semantics.
+type agentIdentityInjectorStub struct {
+	EnvVarsForEnvironmentFunc func(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error)
+	InjectForEnvironmentFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) error
+	RefreshAfterRotationFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) error
+	RemoveForEnvironmentFunc  func(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error
+	CleanupForEnvironmentFunc func(ctx context.Context, orgName, agentName, envName string) error
+}
+
+func (s *agentIdentityInjectorStub) EnvVarsForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error) {
+	if s.EnvVarsForEnvironmentFunc == nil {
+		panic("unexpected call to EnvVarsForEnvironment")
+	}
+	return s.EnvVarsForEnvironmentFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *agentIdentityInjectorStub) InjectForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) error {
+	if s.InjectForEnvironmentFunc == nil {
+		panic("unexpected call to InjectForEnvironment")
+	}
+	return s.InjectForEnvironmentFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *agentIdentityInjectorStub) RefreshAfterRotation(ctx context.Context, orgName, projectName, agentName, envName string) error {
+	if s.RefreshAfterRotationFunc == nil {
+		panic("unexpected call to RefreshAfterRotation")
+	}
+	return s.RefreshAfterRotationFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *agentIdentityInjectorStub) RemoveForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error {
+	if s.RemoveForEnvironmentFunc == nil {
+		panic("unexpected call to RemoveForEnvironment")
+	}
+	return s.RemoveForEnvironmentFunc(ctx, orgName, projectName, agentName, envName, includeWorkloadLevel)
+}
+
+func (s *agentIdentityInjectorStub) CleanupForEnvironment(ctx context.Context, orgName, agentName, envName string) error {
+	if s.CleanupForEnvironmentFunc == nil {
+		panic("unexpected call to CleanupForEnvironment")
+	}
+	return s.CleanupForEnvironmentFunc(ctx, orgName, agentName, envName)
+}
+
+// successfulProvisionMocks builds the resolver/store/repo trio for a
+// clean-path AttemptProvision run, capturing the recorded update.
+func successfulProvisionMocks(recorded *repositories.AgentThunderAttemptUpdate) (
+	*repomocks.AgentThunderClientRepositoryMock,
+	*clientmocks.EnvThunderResolverMock,
+	*clientmocks.AgentSecretStoreMock,
+) {
+	tc := fakeThunderClientMock()
+	tc.CreateAgentIdentityFunc = func(_ context.Context, _, _, _ string) (string, string, string, bool, error) {
+		return "thunder-agent-1", "client-abc", "secret-xyz", true, nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		StoreFunc: func(_ context.Context, _, _, _, _, _, _ string) (string, error) { return "some/path", nil },
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
+			*recorded = fields
+			return nil
+		},
+	}
+	return repo, resolver, store
+}
+
+func TestAttemptProvision_Success_InternalAgent_InjectsWorkloadCredentials(t *testing.T) {
+	var recorded repositories.AgentThunderAttemptUpdate
+	repo, resolver, store := successfulProvisionMocks(&recorded)
+
+	injectedCalls := 0
+	injector := &agentIdentityInjectorStub{
+		InjectForEnvironmentFunc: func(_ context.Context, orgName, projectName, agentName, envName string) error {
+			injectedCalls++
+			assert.Equal(t, "acme", orgName)
+			assert.Equal(t, "proj1", projectName)
+			assert.Equal(t, "my-agent", agentName)
+			assert.Equal(t, "staging", envName)
+			return nil
+		},
+	}
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
+
+	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
+	})
+
+	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status)
+	assert.Equal(t, 1, injectedCalls, "successful internal provisioning must inject workload credentials exactly once")
+}
+
+func TestAttemptProvision_Success_ExternalAgent_SkipsWorkloadInjection(t *testing.T) {
+	var recorded repositories.AgentThunderAttemptUpdate
+	repo, resolver, store := successfulProvisionMocks(&recorded)
+
+	// All stub funcs nil: any injector call panics, proving external agents
+	// never reach the Gateway Binding hook.
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, &agentIdentityInjectorStub{})
+
+	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
+	})
+
+	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status)
+}
+
+func TestAttemptProvision_InjectorFailure_DoesNotAffectCompletion(t *testing.T) {
+	var recorded repositories.AgentThunderAttemptUpdate
+	repo, resolver, store := successfulProvisionMocks(&recorded)
+
+	injector := &agentIdentityInjectorStub{
+		InjectForEnvironmentFunc: func(_ context.Context, _, _, _, _ string) error {
+			return errors.New("workload injection failed")
+		},
+	}
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
+
+	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
+	})
+
+	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status,
+		"injection is best-effort — a failed injection must never un-complete the binding")
+	require.NotNil(t, recorded.ThunderAgentID)
+	assert.Equal(t, "thunder-agent-1", *recorded.ThunderAgentID)
+}
+
+func TestAttemptProvision_RecordFailure_SkipsInjection(t *testing.T) {
+	tc := fakeThunderClientMock()
+	tc.CreateAgentIdentityFunc = func(_ context.Context, _, _, _ string) (string, string, string, bool, error) {
+		return "", "", "", false, errors.New("thunder down")
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error {
+			return nil
+		},
+	}
+	// Nil stub funcs: an injector call on the failure path would panic.
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, &clientmocks.AgentSecretStoreMock{}, &agentIdentityInjectorStub{})
+
+	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
+	})
+}
+
+func TestDeleteAllBindings_CleansUpIdentitySecretReferences(t *testing.T) {
+	internalBinding := models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "dev", ProvisioningType: models.AgentProvisioningTypeInternal,
+		ThunderAgentID: "t-1", SecretRefPath: "p1",
+	}
+	externalBinding := models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "prod", ProvisioningType: models.AgentProvisioningTypeExternal,
+		ThunderAgentID: "t-2", SecretRefPath: "p2",
+	}
+
+	tc := fakeThunderClientMock()
+	tc.DeleteAgentIdentityFunc = func(_ context.Context, _ string) (bool, error) { return true, nil }
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		DeleteFunc: func(_ context.Context, _ string) error { return nil },
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
+			return []models.AgentThunderClient{internalBinding, externalBinding}, nil
+		},
+		DeleteByIDsFunc: func(_ context.Context, _ []uuid.UUID) error { return nil },
+	}
+
+	var cleanedEnvs []string
+	injector := &agentIdentityInjectorStub{
+		CleanupForEnvironmentFunc: func(_ context.Context, orgName, agentName, envName string) error {
+			assert.Equal(t, "acme", orgName)
+			assert.Equal(t, "my-agent", agentName)
+			cleanedEnvs = append(cleanedEnvs, envName)
+			return nil
+		},
+	}
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
+
+	svc.DeleteAllBindings(context.Background(), "acme", "proj1", "my-agent")
+
+	assert.Equal(t, []string{"dev"}, cleanedEnvs,
+		"SecretReference cleanup must run for internal bindings only — external agents never had one")
+}
+
+func TestDeleteAllBindings_ContinuesExternalCleanupWhenDBRowDeleteFails(t *testing.T) {
+	binding := models.AgentThunderClient{
+		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		EnvironmentName: "dev", ProvisioningType: models.AgentProvisioningTypeInternal,
+		ThunderAgentID: "t-1", SecretRefPath: "p1",
+	}
+
+	tc := fakeThunderClientMock()
+	thunderDeleted := false
+	tc.DeleteAgentIdentityFunc = func(_ context.Context, _ string) (bool, error) {
+		thunderDeleted = true
+		return true, nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	secretDeleted := false
+	store := &clientmocks.AgentSecretStoreMock{
+		DeleteFunc: func(_ context.Context, _ string) error {
+			secretDeleted = true
+			return nil
+		},
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
+			return []models.AgentThunderClient{binding}, nil
+		},
+		DeleteByIDsFunc: func(_ context.Context, _ []uuid.UUID) error {
+			return errors.New("db unavailable")
+		},
+	}
+	secretRefCleaned := false
+	injector := &agentIdentityInjectorStub{
+		CleanupForEnvironmentFunc: func(_ context.Context, _, _, _ string) error {
+			secretRefCleaned = true
+			return nil
+		},
+	}
+	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
+
+	svc.DeleteAllBindings(context.Background(), "acme", "proj1", "my-agent")
+
+	assert.True(t, thunderDeleted, "a failed local DB row delete must not block deleting the live Thunder identity")
+	assert.True(t, secretDeleted, "a failed local DB row delete must not block deleting the OpenBao secret")
+	assert.True(t, secretRefCleaned, "a failed local DB row delete must not block deleting the SecretReference CR")
+}
+
+func TestAttemptProvision_SerializesWithRegenerateSecret(t *testing.T) {
+	// Proves AttemptProvision and RegenerateSecret cannot interleave their
+	// Thunder RegenerateAgentSecret + OpenBao Store calls for the same
+	// binding: AttemptProvision's recovery branch holds the binding lock for
+	// its full duration, so a concurrent RegenerateSecret call must wait
+	// until it releases.
+	const org, proj, agent, env = "acme", "proj1", "my-agent", "staging"
+
+	attemptEnteredThunderCall := make(chan struct{})
+	releaseAttempt := make(chan struct{})
+
+	// RegenerateAgentSecretFunc is shared by both AttemptProvision's recovery
+	// branch (the first call, which must block to prove serialization) and
+	// RegenerateSecret's own call (a later call, which only happens AFTER
+	// AttemptProvision has released the binding lock and returned — so it
+	// must NOT re-block or re-close the already-closed signaling channel).
+	var callCount int32
+	tc := fakeThunderClientMock()
+	tc.RegenerateAgentSecretFunc = func(_ context.Context, _ string) (string, error) {
+		if atomic.AddInt32(&callCount, 1) == 1 {
+			close(attemptEnteredThunderCall)
+			<-releaseAttempt // block here until the test says go, holding the binding lock the whole time
+			return "recovered-secret", nil
+		}
+		return "regenerated-by-user", nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{
+		StoreFunc: func(_ context.Context, _, _, _, _, _, _ string) (string, error) { return "some/path", nil },
+	}
+	binding := models.AgentThunderClient{
+		ID: uuid.New(), OrgName: org, ProjectName: proj, AgentName: agent,
+		EnvironmentName: env, ProvisioningType: models.AgentProvisioningTypeInternal,
+		ThunderAgentID: "already-created", ThunderClientID: "client-abc", SecretRefPath: "", // triggers the recovery branch
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
+		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error {
+			return nil
+		},
+		// GetFunc/UpdateSecretRefFunc/MarkClaimedFunc are needed for the
+		// RegenerateSecret call this test also makes.
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &binding, nil
+		},
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+		MarkClaimedFunc: func(_ context.Context, _ uuid.UUID, _ time.Time) (bool, error) {
+			return true, nil
+		},
+	}
+	svc := newTestProvisioningService(repo, resolver, store)
+
+	go svc.AttemptProvision(context.Background(), binding)
+	<-attemptEnteredThunderCall // AttemptProvision now holds the binding lock
+
+	regenerateReturned := make(chan struct{})
+	go func() {
+		defer close(regenerateReturned)
+		_, _, _, _ = svc.RegenerateSecret(context.Background(), org, proj, agent, env)
+	}()
+
+	select {
+	case <-regenerateReturned:
+		t.Fatal("RegenerateSecret must block while AttemptProvision holds the binding lock, but it returned immediately")
+	case <-time.After(100 * time.Millisecond):
+		// expected: still blocked
+	}
+
+	close(releaseAttempt)
+	select {
+	case <-regenerateReturned:
+		// expected: unblocks once AttemptProvision releases the lock
+	case <-time.After(2 * time.Second):
+		t.Fatal("RegenerateSecret never unblocked after AttemptProvision released the binding lock")
+	}
 }

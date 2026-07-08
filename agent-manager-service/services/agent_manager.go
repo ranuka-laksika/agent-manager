@@ -85,6 +85,7 @@ type agentManagerService struct {
 	aiApplicationService      *AIApplicationService
 	gatewayRepo               repositories.GatewayRepository
 	agentThunderProvisioning  AgentThunderProvisioningService
+	agentIdentityInjection    AgentIdentityInjectionService
 	logger                    *slog.Logger
 }
 
@@ -102,6 +103,7 @@ func NewAgentManagerService(
 	aiApplicationService *AIApplicationService,
 	gatewayRepo repositories.GatewayRepository,
 	agentThunderProvisioning AgentThunderProvisioningService,
+	agentIdentityInjection AgentIdentityInjectionService,
 	logger *slog.Logger,
 ) AgentManagerService {
 	return &agentManagerService{
@@ -115,6 +117,7 @@ func NewAgentManagerService(
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
 		agentThunderProvisioning:  agentThunderProvisioning,
+		agentIdentityInjection:    agentIdentityInjection,
 		artifactRepo:              artifactRepo,
 		aiApplicationService:      aiApplicationService,
 		gatewayRepo:               gatewayRepo,
@@ -2388,6 +2391,28 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 		s.logger.Debug("No system-managed env vars to preserve", "agentName", agentName)
 	}
 
+	// AgentID credentials (client ID/secret ref/token endpoint/scopes) are re-derived
+	// fresh on every deploy — Deploy() replaces all workload env vars, so anything not
+	// re-derived here would be silently wiped. Nil result = identity not provisioned
+	// (yet) for this environment, which is a normal state, not an error. A real error
+	// aborts the deploy for the same reason getSystemManagedEnvVars failure does: a
+	// deploy that silently drops injected credentials is worse than a failed deploy.
+	identityEnvVars, idErr := s.agentIdentityInjection.EnvVarsForEnvironment(ctx, orgName, projectName, agentName, lowestEnv)
+	if idErr != nil {
+		s.logger.Error("Failed to build agent identity env vars, aborting deploy to prevent credential loss",
+			"agentName", agentName, "environment", lowestEnv, "error", idErr)
+		return "", fmt.Errorf("failed to build agent identity env vars for agent %s: %w", agentName, idErr)
+	}
+	// Always filter user-echoed copies of the identity keys (the console reads
+	// configurations back and may round-trip them), even when there is nothing
+	// to re-inject — these keys are system-owned, never user-writable.
+	if systemManagedKeys == nil {
+		systemManagedKeys = map[string]bool{}
+	}
+	for k := range AgentIdentityEnvVarKeys() {
+		systemManagedKeys[k] = true
+	}
+
 	// Filter out system-managed env vars from the deploy request before processEnvVars.
 	// The frontend may include these (e.g., LLM config API key) in req.Env because it reads
 	// all configurations. processEnvVars would mangle their SecretKeyRef.Key, so we handle
@@ -2419,7 +2444,9 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	s.logger.Debug("Processed user env vars", "agentName", agentName, "count", len(envVars))
 
 	// Combine user-processed env vars with preserved system-managed env vars
+	// and freshly-derived AgentID credentials.
 	deployReq.Env = append(envVars, systemManagedEnvVars...)
+	deployReq.Env = append(deployReq.Env, identityEnvVars...)
 
 	// Ensure Env is always non-nil so Deploy() replaces the Workload env vars rather than
 	// skipping the update. A nil slice is a no-op in Deploy(); an empty slice clears all vars.
@@ -3034,6 +3061,18 @@ func (s *agentManagerService) RegenerateAgentIdentitySecret(ctx context.Context,
 		return nil, err
 	}
 
+	// Gateway Binding: an internal agent's running pod still holds the OLD
+	// secret via its SecretReference-backed env var. Force an immediate Secret
+	// re-sync + pod rollout so it picks up the rotated value. Best-effort —
+	// the rotation itself already succeeded, so the response must report it
+	// regardless; a failed refresh self-heals on the next deploy.
+	if ownership == models.AgentProvisioningTypeInternal {
+		if refreshErr := s.agentIdentityInjection.RefreshAfterRotation(ctx, orgName, projectName, agentName, environmentName); refreshErr != nil {
+			s.logger.Warn("Failed to refresh agent identity credentials in workload after rotation",
+				"agentName", agentName, "environment", environmentName, "error", refreshErr)
+		}
+	}
+
 	return &models.AgentRegenerateSecretResponse{
 		EnvironmentName:  environmentName,
 		ProvisioningType: ownership,
@@ -3051,6 +3090,25 @@ func (s *agentManagerService) RevokeAgentIdentitySecret(ctx context.Context, org
 	if err != nil {
 		return models.AgentRevokeSecretResponse{}, err
 	}
+
+	// Gateway Binding: strip the now-dead credential from the running pod so it
+	// doesn't keep presenting a secret that can no longer mint tokens. Only the
+	// pipeline's lowest environment carries these vars at the shared Workload
+	// level (written there by the deploy flow) — removing workload-level vars
+	// while revoking any OTHER environment's credential would break the lowest
+	// environment's pod. Best-effort: the revoke itself already succeeded.
+	includeWorkloadLevel := false
+	if pipeline, pipeErr := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName); pipeErr != nil {
+		s.logger.Warn("Failed to resolve deployment pipeline during identity revoke cleanup; skipping workload-level env removal",
+			"agentName", agentName, "environment", environmentName, "error", pipeErr)
+	} else {
+		includeWorkloadLevel = findLowestEnvironment(pipeline.PromotionPaths) == environmentName
+	}
+	if removeErr := s.agentIdentityInjection.RemoveForEnvironment(ctx, orgName, projectName, agentName, environmentName, includeWorkloadLevel); removeErr != nil {
+		s.logger.Warn("Failed to remove agent identity credentials from workload after revoke",
+			"agentName", agentName, "environment", environmentName, "error", removeErr)
+	}
+
 	return models.AgentRevokeSecretResponse{
 		EnvironmentName: environmentName,
 		ClientID:        clientID,
@@ -3220,6 +3278,65 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		}
 	}
 
+	// AgentID credentials are strictly per-environment: the source environment's
+	// client ID/secret must NEVER travel to the target. Marking the identity keys
+	// as system-managed in BOTH sets makes the useSource clone strip them from the
+	// copied overrides and the user-driven branch drop echoed copies from req.Env.
+	// This runs AFTER the src-vs-tgt validation above, which must only compare
+	// DB-backed LLM/system configuration. The target environment's own identity
+	// vars are appended below.
+	if srcSystemKeys == nil {
+		srcSystemKeys = map[string]bool{}
+	}
+	if tgtSystemKeys == nil {
+		tgtSystemKeys = map[string]bool{}
+	}
+	for k := range AgentIdentityEnvVarKeys() {
+		srcSystemKeys[k] = true
+		tgtSystemKeys[k] = true
+	}
+
+	// Best-effort kick-off: the target environment may have been added to the
+	// org AFTER this agent was created, so its AgentID binding could be
+	// missing entirely (agent-creation only provisions into environments that
+	// existed at that time). Doing this BEFORE building envOverrides below —
+	// rather than after promotion succeeds, as this used to work — matters:
+	// see the hard block right after this call.
+	var requestedBy string
+	if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+		requestedBy = callerClaims.Sub
+	}
+	if _, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
+		ctx, orgName, projectName, agentName, req.TargetEnvironment, models.AgentProvisioningTypeInternal, requestedBy,
+	); err != nil {
+		s.logger.Warn("Failed to ensure AgentID for promotion target environment before promoting", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
+	}
+
+	tgtIdentityEnvVars, idErr := s.agentIdentityInjection.EnvVarsForEnvironment(ctx, orgName, projectName, agentName, req.TargetEnvironment)
+	if idErr != nil {
+		s.logger.Error("Failed to build target env agent identity env vars, aborting promotion to prevent credential loss",
+			"agentName", agentName, "environment", req.TargetEnvironment, "error", idErr)
+		return fmt.Errorf("failed to build target env agent identity env vars: %w", idErr)
+	}
+	// HARD BLOCK, not best-effort: identity credentials for the deploy flow's
+	// lowest environment are written into the shared OpenChoreo Workload CR
+	// (inherited by every environment unless a ReleaseBinding overrides it).
+	// If the target environment's own identity isn't ready yet, tgtIdentityEnvVars
+	// is empty and NOTHING would override those keys in the target's
+	// ReleaseBinding — the promoted pod would silently start up presenting the
+	// SOURCE (or lowest) environment's real client_id/client_secret, a genuine
+	// cross-environment credential leak. Refusing to promote until the
+	// target's own identity is ready is the same strategy already used a few
+	// lines above for LLM/system configuration (len(tgtSystemKeys) == 0 case).
+	if len(tgtIdentityEnvVars) == 0 {
+		return fmt.Errorf(
+			"%w: agent %q's AgentID identity for target environment %q is not ready yet (still provisioning). "+
+				"Promotion is blocked to prevent the promoted pod from inheriting a different environment's credentials — "+
+				"check GET .../identities for this agent and retry once it shows status=completed for %q",
+			utils.ErrInvalidInput, agentName, req.TargetEnvironment, req.TargetEnvironment,
+		)
+	}
+
 	var envOverrides []client.EnvVar
 	var fileOverrides []client.FileVar
 
@@ -3274,6 +3391,10 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	// replaces the source vars we just stripped; in the user-driven branch it ensures
 	// the agent has its target-env wiring even if the user supplied no overrides.
 	envOverrides = append(envOverrides, tgtSystemEnvVars...)
+	// Same for the target env's own AgentID credentials (nil when the target's
+	// identity hasn't finished provisioning — the post-provisioning hook injects
+	// them once it does).
+	envOverrides = append(envOverrides, tgtIdentityEnvVars...)
 
 	// Build trait environment configs for per-environment trait overrides
 	var traitEnvConfigs map[string]interface{}
@@ -3392,20 +3513,10 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		return fmt.Errorf("failed to promote agent: %w", err)
 	}
 
-	// Ensure the target environment has an AgentID. The target may not have
-	// existed (or been in this project's pipeline) yet when the agent was first
-	// created, so its binding could be missing entirely — best-effort and
-	// non-blocking, exactly like provisioning at agent-creation time, so a
-	// Thunder hiccup never rolls back an otherwise-successful promotion.
-	var requestedBy string
-	if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
-		requestedBy = callerClaims.Sub
-	}
-	if _, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
-		ctx, orgName, projectName, agentName, req.TargetEnvironment, models.AgentProvisioningTypeInternal, requestedBy,
-	); err != nil {
-		s.logger.Warn("Failed to ensure AgentID for promoted agent's target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
-	}
+	// (AgentID provisioning for the target environment is now ensured, and
+	// verified ready, BEFORE promotion above — see the hard block earlier in
+	// this function. By this point tgtIdentityEnvVars was already non-empty,
+	// so there is nothing left to backfill here.)
 
 	s.logger.Info("Agent promoted successfully", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)
 	return nil
@@ -3560,6 +3671,23 @@ func (s *agentManagerService) UpdateAgentConfigurations(ctx context.Context, org
 		systemManagedKeys = nil
 	}
 
+	// AgentID credentials must survive the override rewrite below, which replaces
+	// the environment's entire env var set. Unlike the lenient LLM-var fallback
+	// above, an error here aborts: rewriting overrides without re-appending the
+	// identity vars would silently strip the agent's credentials.
+	identityEnvVars, idErr := s.agentIdentityInjection.EnvVarsForEnvironment(ctx, orgName, projectName, agentName, req.EnvironmentName)
+	if idErr != nil {
+		s.logger.Error("Failed to build agent identity env vars, aborting configurations update to prevent credential loss",
+			"agentName", agentName, "environment", req.EnvironmentName, "error", idErr)
+		return fmt.Errorf("failed to build agent identity env vars: %w", idErr)
+	}
+	if systemManagedKeys == nil {
+		systemManagedKeys = map[string]bool{}
+	}
+	for k := range AgentIdentityEnvVarKeys() {
+		systemManagedKeys[k] = true
+	}
+
 	// Build env overrides (nil-vs-empty has meaning at the client layer: nil = leave existing,
 	// empty slice = clear).
 	var envOverrides []client.EnvVar
@@ -3581,6 +3709,7 @@ func (s *agentManagerService) UpdateAgentConfigurations(ctx context.Context, org
 			return fmt.Errorf("failed to process env vars: %w", err)
 		}
 		envOverrides = append(processed, systemManagedEnvVars...)
+		envOverrides = append(envOverrides, identityEnvVars...)
 		if envOverrides == nil {
 			// Caller sent an empty list and there are no system-managed vars to inject —
 			// preserve the "clear all" intent rather than collapsing to nil.

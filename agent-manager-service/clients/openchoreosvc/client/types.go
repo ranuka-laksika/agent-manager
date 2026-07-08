@@ -312,6 +312,12 @@ type CreateSecretReferenceRequest struct {
 	KVPath          string   // Path in OpenBao KV store
 	SecretKeys      []string // Keys to extract from KV path
 	RefreshInterval string   // How often to refresh (e.g., "1h", "15s")
+	// TemplateAnnotations are set on the generated Secret's template metadata.
+	// Changing an annotation is a real spec change, so an update carrying a fresh
+	// value (e.g. a rotated-at timestamp) forces the OpenChoreo controller to
+	// re-sync the Secret from the KV store immediately instead of waiting for the
+	// next RefreshInterval tick — used after credential rotation.
+	TemplateAnnotations map[string]string
 }
 
 // SecretReferenceInfo contains info about a SecretReference CR

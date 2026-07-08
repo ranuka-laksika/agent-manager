@@ -75,6 +75,7 @@ var serviceProviderSet = wire.NewSet(
 	ProvideThunderConfig,
 	services.NewMonitorSchedulerService,
 	services.NewAgentThunderProvisioningService,
+	ProvideAgentIdentityInjectionService,
 	services.NewAgentThunderReconcilerService,
 	services.NewEvaluatorManagerService,
 	services.NewEnvironmentService,
@@ -484,6 +485,19 @@ func ProvideEnvThunderResolver(cfg config.Config) (thundersvc.EnvThunderResolver
 // SecretManagementClient/SecretReference machinery).
 func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, error) {
 	return thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+}
+
+// ProvideAgentIdentityInjectionService creates the Gateway Binding service that
+// delivers AgentID credentials into internal agents' workloads. It reuses the
+// secret manager's SecretReference refresh interval so AgentID Secrets follow
+// the same re-sync cadence as every other injected secret.
+func ProvideAgentIdentityInjectionService(
+	repo repositories.AgentThunderClientRepository,
+	ocClient occlient.OpenChoreoClient,
+	cfg config.Config,
+	logger *slog.Logger,
+) services.AgentIdentityInjectionService {
+	return services.NewAgentIdentityInjectionService(repo, ocClient, cfg.SecretManager.RefreshInterval, logger)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

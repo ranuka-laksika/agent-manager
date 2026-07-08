@@ -30,6 +30,15 @@ import (
 // given path.
 var ErrAgentSecretNotFound = errors.New("agent thunder secret not found")
 
+// KV key names inside one AgentID credential entry. Exported because the
+// credential-injection path (services/agent_identity_injection_service.go)
+// points a SecretReference CR at this same KV entry, and the SecretKeyRef in
+// the pod spec must name the exact key this store writes.
+const (
+	AgentSecretKeyClientID     = "client_id"
+	AgentSecretKeyClientSecret = "client_secret"
+)
+
 // errOpenBaoDataNotFound is returned by readOpenBaoKVv2Data when the secret or
 // its data section doesn't exist. Internal to this package — each caller maps
 // it to its own not-found sentinel (ErrAgentSecretNotFound, ErrThunderNotProvisioned).
@@ -39,11 +48,13 @@ var errOpenBaoDataNotFound = errors.New("openbao kv-v2 data not found")
 
 // AgentSecretStore stores and retrieves an AgentID's Thunder client credentials
 // in OpenBao. This is deliberately a raw KV store, independent of the
-// SecretManagementClient/SecretReference machinery used elsewhere in this
-// service: that machinery exists to inject secrets into OpenChoreo workloads as
-// env vars, which is never appropriate for an AgentID credential — it is
-// managed by the platform itself (for internal agents) or shown once and
-// otherwise untouched (for external agents), never auto-mounted into a pod.
+// SecretManagementClient machinery used elsewhere in this service — external
+// agents' secrets are shown once and never mounted anywhere, and internal
+// agents' secrets are written here first, independent of any workload.
+// Internal agents DO get their credential injected into their pod (Gateway
+// Binding): services/agent_identity_injection_service.go points an OpenChoreo
+// SecretReference CR at the exact KV path this store writes, without this
+// store ever re-writing or duplicating the secret.
 type AgentSecretStore interface {
 	// Store writes the client ID and secret for one agent/environment binding
 	// and returns the path it was stored at.
@@ -164,8 +175,8 @@ func (s *agentSecretStore) Store(ctx context.Context, orgName, projectName, envN
 
 	_, err = s.rw.WriteWithContext(ctx, dataPath, map[string]interface{}{
 		"data": map[string]interface{}{
-			"client_id":     clientID,
-			"client_secret": clientSecret,
+			AgentSecretKeyClientID:     clientID,
+			AgentSecretKeyClientSecret: clientSecret,
 		},
 	})
 	if err != nil {
@@ -182,8 +193,8 @@ func (s *agentSecretStore) Get(ctx context.Context, secretPath string) (clientID
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read agent thunder secret at %s: %w", secretPath, err)
 	}
-	clientID, _ = dataMap["client_id"].(string)
-	clientSecret, _ = dataMap["client_secret"].(string)
+	clientID, _ = dataMap[AgentSecretKeyClientID].(string)
+	clientSecret, _ = dataMap[AgentSecretKeyClientSecret].(string)
 	if clientID == "" && clientSecret == "" {
 		return "", "", ErrAgentSecretNotFound
 	}

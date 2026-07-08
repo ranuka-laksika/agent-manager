@@ -114,15 +114,27 @@ const (
 	// variables, so the env-injection trait injects them under these names instead.
 	BalConfigVarOTELEndpoint = "BAL_CONFIG_VAR_BALLERINAX_AMP_OTELENDPOINT"
 	BalConfigVarAgentAPIKey  = "BAL_CONFIG_VAR_BALLERINAX_AMP_APIKEY"
+
+	// AgentID (per-environment Thunder OAuth2 identity) credentials injected into
+	// internal agents' pods. The client secret is delivered via a SecretKeyRef into
+	// the SecretReference-backed Kubernetes Secret — never as a literal value.
+	EnvVarAgentIdentityClientID      = "AMP_AGENT_IDENTITY_CLIENT_ID"
+	EnvVarAgentIdentityClientSecret  = "AMP_AGENT_IDENTITY_CLIENT_SECRET" //nolint:gosec // env var NAME, not a credential value
+	EnvVarAgentIdentityTokenEndpoint = "AMP_AGENT_IDENTITY_TOKEN_ENDPOINT"
+	EnvVarAgentIdentityScopes        = "AMP_AGENT_IDENTITY_SCOPES"
 )
 
 // SystemInjectedEnvVars is a set of environment variable names that are automatically
 // injected by the system and should be filtered out from user-facing configuration APIs
 var SystemInjectedEnvVars = map[string]struct{}{
-	EnvVarOTELEndpoint:       {},
-	EnvVarAgentAPIKey:        {},
-	BalConfigVarOTELEndpoint: {},
-	BalConfigVarAgentAPIKey:  {},
+	EnvVarOTELEndpoint:               {},
+	EnvVarAgentAPIKey:                {},
+	BalConfigVarOTELEndpoint:         {},
+	BalConfigVarAgentAPIKey:          {},
+	EnvVarAgentIdentityClientID:      {},
+	EnvVarAgentIdentityClientSecret:  {},
+	EnvVarAgentIdentityTokenEndpoint: {},
+	EnvVarAgentIdentityScopes:        {},
 }
 
 // -----------------------------------------------------------------------------

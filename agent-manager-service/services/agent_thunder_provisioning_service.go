@@ -130,25 +130,33 @@ type AgentThunderProvisioningService interface {
 }
 
 type agentThunderProvisioningService struct {
-	repo         repositories.AgentThunderClientRepository
-	envResolver  thundersvc.EnvThunderResolver
-	secretStore  thundersvc.AgentSecretStore
-	logger       *slog.Logger
-	bindingLocks keyedMutex
+	repo        repositories.AgentThunderClientRepository
+	envResolver thundersvc.EnvThunderResolver
+	secretStore thundersvc.AgentSecretStore
+	// workloadInjector pushes a freshly-provisioned internal agent's credential
+	// into its live workload (Gateway Binding). Optional (nil skips injection):
+	// the deploy flow independently injects at deploy time, so this hook only
+	// covers agents that were deployed BEFORE provisioning completed.
+	workloadInjector AgentIdentityInjectionService
+	logger           *slog.Logger
+	bindingLocks     keyedMutex
 }
 
 // NewAgentThunderProvisioningService creates a new AgentThunderProvisioningService.
+// workloadInjector may be nil (no workload injection on provisioning completion).
 func NewAgentThunderProvisioningService(
 	repo repositories.AgentThunderClientRepository,
 	envResolver thundersvc.EnvThunderResolver,
 	secretStore thundersvc.AgentSecretStore,
+	workloadInjector AgentIdentityInjectionService,
 	logger *slog.Logger,
 ) AgentThunderProvisioningService {
 	return &agentThunderProvisioningService{
-		repo:        repo,
-		envResolver: envResolver,
-		secretStore: secretStore,
-		logger:      logger,
+		repo:             repo,
+		envResolver:      envResolver,
+		secretStore:      secretStore,
+		workloadInjector: workloadInjector,
+		logger:           logger,
 	}
 }
 
@@ -288,6 +296,21 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		return
 	}
 
+	// Serialize with RegenerateSecret/RevokeSecret for this exact binding.
+	// ClaimForAttempt above only prevents two concurrent AttemptProvision
+	// calls from double-processing the same row — it does nothing to stop a
+	// user-triggered RegenerateSecret/RevokeSecret call from running at the
+	// same time as the partial-failure recovery branches below (both of
+	// which also call Thunder's RegenerateAgentSecret on the same
+	// thunderAgentID). Without this shared lock, whichever caller's OpenBao
+	// write lands LAST wins the stored secret, even if Thunder itself now
+	// considers a DIFFERENT (chronologically later) regenerated secret the
+	// only valid one — silently locking the agent out until the next
+	// rotation. RegenerateSecret/RevokeSecret can only race this once
+	// binding.ThunderAgentID is already set (i.e. identity creation itself
+	// succeeded), which is exactly when the recovery branches below run.
+	defer s.bindingLocks.Lock(bindingLockKey(binding.OrgName, binding.ProjectName, binding.AgentName, binding.EnvironmentName))()
+
 	thunderClient, err := s.envResolver.Resolve(ctx, binding.OrgName, binding.EnvironmentName)
 	if err != nil {
 		s.recordFailure(ctx, binding, "", "", err)
@@ -360,6 +383,18 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		SecretRefPath:   &secretRefPath,
 	}); err != nil {
 		s.logger.Error("Failed to record successful agent thunder provisioning", "bindingID", binding.ID, "error", err)
+		return
+	}
+
+	// Gateway Binding: push the credential into the live workload for internal
+	// agents that were already deployed before this attempt completed. Purely
+	// best-effort — the binding is COMPLETED either way, and the deploy flow
+	// re-derives these env vars on every (re)deploy regardless.
+	if s.workloadInjector != nil && binding.ProvisioningType == models.AgentProvisioningTypeInternal {
+		if err := s.workloadInjector.InjectForEnvironment(ctx, binding.OrgName, binding.ProjectName, binding.AgentName, binding.EnvironmentName); err != nil {
+			s.logger.Warn("Failed to inject agent identity credentials into workload after provisioning",
+				"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+		}
 	}
 }
 
@@ -599,11 +634,28 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		ids = append(ids, b.ID)
 	}
 	if err := s.repo.DeleteByIDs(ctx, ids); err != nil {
-		s.logger.Error("Failed to delete agent thunder client rows", "agentName", agentName, "error", err)
-		return
+		// Do NOT return here: by the time this method runs, the agent's own
+		// primary record (the OpenChoreo Component) is already gone from the
+		// caller's perspective — this is best-effort cleanup of everything
+		// ELSE the agent left behind. A failed DB-row delete leaves a few
+		// stale local rows, which is comparatively inert and can be swept up
+		// later; but bailing out here would ALSO skip deleting the live
+		// Thunder identities, SecretReference CRs, and OpenBao secrets below
+		// — external, still-active resources whose leak is a materially
+		// worse outcome (an orphaned Thunder identity can still mint valid
+		// tokens indefinitely) than a few dangling database rows.
+		s.logger.Error("Failed to delete agent thunder client rows; continuing to clean up external resources anyway", "agentName", agentName, "error", err)
 	}
 
 	for _, b := range bindings {
+		// The AgentID SecretReference CR is independent of whether the identity
+		// ever landed in Thunder — clean it up for every internal binding, even
+		// ones that never completed.
+		if s.workloadInjector != nil && b.ProvisioningType == models.AgentProvisioningTypeInternal {
+			if err := s.workloadInjector.CleanupForEnvironment(ctx, orgName, agentName, b.EnvironmentName); err != nil {
+				s.logger.Warn("Failed to delete agent identity SecretReference during agent deletion", "agentName", agentName, "env", b.EnvironmentName, "error", err)
+			}
+		}
 		if b.ThunderAgentID == "" {
 			continue // never made it to Thunder — nothing to delete there
 		}

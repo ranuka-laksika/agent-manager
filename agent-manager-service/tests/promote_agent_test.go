@@ -31,7 +31,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -70,9 +72,62 @@ func envVarValue(envVars []client.EnvVar, key string) string {
 	return ""
 }
 
+// seedReadyAgentIdentityRow inserts a COMPLETED AgentID binding for
+// (org, project, agent, env) directly into the real test database, so
+// agentIdentityInjection.EnvVarsForEnvironment (which PromoteAgent now calls
+// and hard-blocks on if the target's identity isn't ready — see
+// agent_manager.go's PromoteAgent) treats this environment's identity as
+// ready. These promotion tests exercise env-var-override merging, not
+// AgentID provisioning itself, so this stands in for "the agent's identity
+// already finished provisioning before promotion was attempted" without
+// needing the caller to actually run the full async provisioning flow.
+//
+// Call this ONCE per (org, project, agent, env) — every t.Run subtest in
+// TestPromoteAgent shares the same agentName, and the table has a unique
+// constraint on (org, project, agent, env), so seeding it more than once for
+// the same tuple fails with a duplicate-key error.
+func seedReadyAgentIdentityRow(t *testing.T, orgName, projectName, agentName, envName string) {
+	t.Helper()
+	binding := &models.AgentThunderClient{
+		OrgName:          orgName,
+		ProjectName:      projectName,
+		AgentName:        agentName,
+		EnvironmentName:  envName,
+		ProvisioningType: models.AgentProvisioningTypeInternal,
+		Status:           models.AgentThunderStatusCompleted,
+		ThunderAgentID:   "test-thunder-agent-" + uuid.New().String()[:8],
+		ThunderClientID:  "test-client-" + uuid.New().String()[:8],
+		SecretRefPath:    "agent-thunder-clients/" + orgName + "/" + projectName + "/" + envName + "/" + agentName,
+	}
+	require.NoError(t, db.DB(context.Background()).Create(binding).Error)
+}
+
+// stubReadyAgentIdentitySecretReference stubs the OpenChoreo mock's
+// SecretReference methods for the "not found yet, create it" path —
+// EnvVarsForEnvironment calls these once per invocation, and each subtest
+// constructs its own fresh ocClient mock (unlike the DB row, which is
+// shared), so this must be called once per subtest.
+func stubReadyAgentIdentitySecretReference(ocClient *clientmocks.OpenChoreoClientMock) {
+	ocClient.GetSecretReferenceFunc = func(_ context.Context, _, _ string) (*client.SecretReferenceInfo, error) {
+		return nil, utils.ErrNotFound
+	}
+	ocClient.CreateSecretReferenceFunc = func(_ context.Context, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+		return &client.SecretReferenceInfo{Name: req.Name}, nil
+	}
+}
+
 func TestPromoteAgent(t *testing.T) {
 	authMiddleware := jwtassertion.NewMockMiddleware(t)
 	agentName := fmt.Sprintf("agent-%s", uuid.New().String()[:8])
+
+	// PromoteAgent hard-blocks promotion when the target environment's
+	// AgentID identity isn't ready (see agent_manager.go) — seed a completed
+	// one for "production" up front so the subtests below, which are
+	// exercising env-var-override merging rather than AgentID provisioning,
+	// aren't blocked by it. Seeded once (not per-subtest) because the table
+	// has a unique constraint on (org, project, agent, env) and every
+	// subtest shares this same agentName/org/env combination.
+	seedReadyAgentIdentityRow(t, testPromoteOrgName, "my-project", agentName, "production")
 
 	promoteURL := func(org string) string {
 		return fmt.Sprintf("/api/v1/orgs/%s/projects/my-project/agents/%s/promote", org, agentName)
@@ -80,6 +135,7 @@ func TestPromoteAgent(t *testing.T) {
 
 	t.Run("promoting along a valid path returns 202", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		stubReadyAgentIdentitySecretReference(ocClient)
 		ocClient.GetProjectDeploymentPipelineFunc = pipelineWithPath("development", "production")
 		// System-managed env var resolution parses the environment UUID, so it must be valid.
 		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
@@ -106,6 +162,7 @@ func TestPromoteAgent(t *testing.T) {
 
 	t.Run("with useConfigFromSourceEnv=true clones the source env overrides", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		stubReadyAgentIdentitySecretReference(ocClient)
 		ocClient.GetProjectDeploymentPipelineFunc = pipelineWithPath("development", "production")
 		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
 			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
@@ -147,6 +204,7 @@ func TestPromoteAgent(t *testing.T) {
 
 	t.Run("with useConfigFromSourceEnv=false forwards the provided env overrides", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		stubReadyAgentIdentitySecretReference(ocClient)
 		ocClient.GetProjectDeploymentPipelineFunc = pipelineWithPath("development", "production")
 		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
 			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
@@ -275,5 +333,25 @@ func TestPromoteAgent(t *testing.T) {
 
 		require.Equal(t, http.StatusNotFound, rr.Code)
 		require.Contains(t, rr.Body.String(), "Organization not found")
+	})
+
+	t.Run("returns 400 when target environment AgentID is not ready", func(t *testing.T) {
+		ocClient := apitestutils.CreateMockOpenChoreoClient()
+		stubReadyAgentIdentitySecretReference(ocClient)
+		ocClient.GetProjectDeploymentPipelineFunc = pipelineWithPath("development", "unready-env")
+		ocClient.GetEnvironmentFunc = func(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
+			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
+		}
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+
+		payload := spec.PromoteAgentRequest{SourceEnvironment: "development", TargetEnvironment: "unready-env"}
+		body, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, promoteURL(testPromoteOrgName), bytes.NewBuffer(body))
+		req.Header.Set("Content-Type", "application/json")
+		rr := httptest.NewRecorder()
+		app.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Contains(t, rr.Body.String(), "is not ready yet")
 	})
 }
