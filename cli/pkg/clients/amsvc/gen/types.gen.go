@@ -2025,6 +2025,12 @@ type CreateLLMAPIKeyResponse struct {
 	// ApiKey Generated API key value. Returned only once; store it securely.
 	ApiKey *string `json:"apiKey,omitempty"`
 
+	// GatewayConnected Whether every target gateway had a live websocket connection to the
+	// control plane when the key was created. When false, the key has
+	// been stored but will only become usable once the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
+
 	// KeyId Unique identifier of the created key.
 	KeyId *string `json:"keyId,omitempty"`
 
@@ -2963,6 +2969,12 @@ type IssueTestAPIKeyResponse struct {
 
 	// ExpiresAt Expiry timestamp (RFC3339); the console rotates the key before this elapses.
 	ExpiresAt time.Time `json:"expiresAt"`
+
+	// GatewayConnected Whether every gateway serving the agent's environment had a live
+	// websocket connection to the control plane when the key was issued.
+	// When false, the key has been stored but will only become usable
+	// once the gateway reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 
 	// KeyId The fixed name "console-test".
 	KeyId   *string `json:"keyId,omitempty"`
@@ -4330,6 +4342,12 @@ type RotateLLMAPIKeyRequest struct {
 type RotateLLMAPIKeyResponse struct {
 	// ApiKey New API key value. Returned only once; store it securely.
 	ApiKey *string `json:"apiKey,omitempty"`
+
+	// GatewayConnected Whether every target gateway had a live websocket connection to the
+	// control plane when the key was rotated. When false, the new key has
+	// been stored but will only become usable once the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 
 	// KeyId Unique identifier of the rotated key.
 	KeyId *string `json:"keyId,omitempty"`
