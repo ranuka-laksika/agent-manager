@@ -353,8 +353,9 @@ if [ "$THUNDER_PROVISIONED" = "true" ]; then
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
     )
     # Mirror the env-Thunder into Agent Manager as this gateway's identity provider.
+    # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
     HELM_ARGS+=(
-        --set "bootstrap.identityProviders[0].name=${THUNDER_RELEASE}"
+        --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
         --set "bootstrap.identityProviders[0].issuer=${THUNDER_ISSUER}"
         --set "bootstrap.identityProviders[0].jwksUri=${THUNDER_INTERNAL_JWKS}"
         --set "bootstrap.identityProviders[0].skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"

@@ -71,7 +71,8 @@ if helm status "${THUNDER_RELEASE}" --namespace "${THUNDER_RELEASE}" > /dev/null
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}"
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}"
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
-        --set "bootstrap.identityProviders[0].name=${THUNDER_RELEASE}"
+        # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
+        --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
         --set "bootstrap.identityProviders[0].issuer=${THUNDER_ISSUER}"
         --set "bootstrap.identityProviders[0].jwksUri=${THUNDER_INTERNAL_JWKS}"
         --set "bootstrap.identityProviders[0].skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
