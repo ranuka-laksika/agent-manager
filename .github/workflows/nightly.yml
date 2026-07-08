@@ -13,8 +13,8 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  REGISTRY_ORG: hanzjk
-  HELM_REGISTRY: oci://ghcr.io/hanzjk
+  REGISTRY_ORG: wso2
+  HELM_REGISTRY: oci://ghcr.io/wso2
 
 jobs:
   # Compute the dated version string once; all jobs consume it via needs.
@@ -31,7 +31,67 @@ jobs:
           echo "dev-version=$DEV_VERSION" >> "$GITHUB_OUTPUT"
           echo "✅ Dev version: $DEV_VERSION"
 
+  # Delete previous nightly Docker/OCI image tags (0.0.0-dev-*) from all packages
+  # before building new ones so stale dated tags don't accumulate.
+  cleanup-images:
+    name: Cleanup Previous Nightly Images
+    needs: compute-version
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - amp-api
+          - amp-console
+          - amp-traces-observer
+          - amp-quick-start
+          - amp-evaluation-monitor
+          - wso2-agent-manager
+          - wso2-amp-observability-extension
+          - wso2-amp-platform-resources-extension
+          - wso2-amp-thunder-extension
+          - wso2-amp-evaluation-extension
+          - wso2-amp-api-platform-gateway-extension
+    steps:
+      - name: Delete previous 0.0.0-dev-* tags for ${{ matrix.package }}
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          owner: ${{ env.REGISTRY_ORG }}
+          package: ${{ matrix.package }}
+          delete-tags: '0.0.0-dev-*'
+          delete-untagged: false
 
+  # Delete the previous nightly git tag before creating the new dated one.
+  cleanup-git-tag:
+    name: Cleanup Previous Nightly Git Tag
+    needs: compute-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete previous nightly git tags
+        env:
+          TODAY_TAG: amp/v${{ needs.compute-version.outputs.dev-version }}
+        run: |
+          # Delete all remote amp/v0.0.0-dev-* tags except today's (which doesn't exist yet)
+          git ls-remote --tags origin 'refs/tags/amp/v0.0.0-dev-*' \
+            | awk '{print $2}' \
+            | sed 's|refs/tags/||' \
+            | grep -v "^${TODAY_TAG}$" \
+            | while read -r tag; do
+                echo "Deleting tag: $tag"
+                git push origin --delete "refs/tags/$tag" || echo "⚠️ Could not delete $tag (may not exist)"
+              done
+          echo "✅ Previous nightly git tags cleaned"
 
   # Load release-config.json and emit job matrices (mirrors release.yml pattern).
   load-config:
