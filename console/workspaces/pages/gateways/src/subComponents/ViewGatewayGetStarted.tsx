@@ -30,6 +30,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { Computer, Server, Cloud } from "@wso2/oxygen-ui-icons-react";
 import {
+  copyToClipboard,
   getConfigureGatewayDisplayCommand,
   getGatewayEnvFile,
   getGatewayVersionHelm,
@@ -105,8 +106,9 @@ export function ViewGatewayGetStarted({
 
   const handleCopy = useCallback(
     (text: string, label: string) => {
-      navigator.clipboard.writeText(text);
-      onCopy(text, label);
+      void copyToClipboard(text).then((succeeded) => {
+        if (succeeded) onCopy(text, label);
+      });
     },
     [onCopy],
   );

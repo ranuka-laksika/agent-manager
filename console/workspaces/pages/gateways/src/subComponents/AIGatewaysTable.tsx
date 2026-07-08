@@ -74,12 +74,7 @@ const AVATAR_SX = {
 } as const;
 
 const matchesQuery = (gateway: GatewayResponse, query: string) => {
-  const haystack = [
-    gateway.name ?? "",
-    gateway.displayName ?? "",
-    (gateway as { description?: string }).description ?? "",
-    gateway.vhost ?? "",
-  ].join(" ");
+  const haystack = [gateway.name ?? "", gateway.displayName ?? "", gateway.vhost ?? ""].join(" ");
   return haystack.toLowerCase().includes(query);
 };
 
@@ -173,9 +168,7 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
 
   const renderGatewayRow = (gateway: GatewayResponse) => {
     const displayName = gateway.displayName || gateway.name;
-    const isActive =
-      gateway.status === "ACTIVE" ||
-      (gateway as { isActive?: boolean }).isActive;
+    const isActive = gateway.status === "ACTIVE";
     const lastUpdated = formatRelativeTime(gateway.updatedAt);
 
     return (
@@ -202,9 +195,6 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
               </Avatar>
             }
             primary={displayName}
-            secondary={
-              (gateway as { description?: string }).description ?? undefined
-            }
           />
         </ListingTable.Cell>
 
@@ -276,6 +266,7 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
   // between renders would remount the search input and drop its focus.
   const renderBody = () => {
     if (error) {
+      const failedResource = gatewaysError ? "gateways" : "environments";
       return (
         <ListingTable.Container>
           <Alert
@@ -283,7 +274,7 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
             icon={<AlertTriangle size={18} />}
             sx={{ alignSelf: "stretch" }}
           >
-            Failed to load gateways.{" "}
+            Failed to load {failedResource}.{" "}
             {error instanceof Error ? error.message : "Please try again."}
           </Alert>
         </ListingTable.Container>

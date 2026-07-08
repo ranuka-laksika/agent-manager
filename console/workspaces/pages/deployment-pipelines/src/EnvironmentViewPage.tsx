@@ -102,7 +102,10 @@ interface EndpointCardProps {
 }
 
 function EndpointCard({ label, scheme, endpoint, onCopy }: EndpointCardProps) {
-  const url = `${scheme}://${endpoint.host}${endpoint.port ? `:${endpoint.port}` : ""}`;
+  const url = endpoint.host
+    ? `${scheme}://${endpoint.host}${endpoint.port ? `:${endpoint.port}` : ""}`
+    : undefined;
+  const displayValue = url ?? "Not configured";
 
   return (
     <Card variant="outlined" sx={{ height: "100%" }}>
@@ -114,20 +117,23 @@ function EndpointCard({ label, scheme, endpoint, onCopy }: EndpointCardProps) {
           <Stack direction="row" alignItems="center" spacing={1}>
             <Typography
               variant="body2"
+              color={url ? "text.primary" : "text.secondary"}
               sx={{ fontFamily: "monospace", wordBreak: "break-all", flex: 1, fontSize: "0.8rem" }}
             >
-              {url}
+              {displayValue}
             </Typography>
-            <Tooltip title={`Copy ${label}`}>
-              <IconButton
-                size="small"
-                aria-label={`Copy ${label}`}
-                onClick={() => onCopy(url, `${label} copied to clipboard`)}
-                sx={{ flexShrink: 0 }}
-              >
-                <Copy size={14} />
-              </IconButton>
-            </Tooltip>
+            {url && (
+              <Tooltip title={`Copy ${label}`}>
+                <IconButton
+                  size="small"
+                  aria-label={`Copy ${label}`}
+                  onClick={() => onCopy(url, `${label} copied to clipboard`)}
+                  sx={{ flexShrink: 0 }}
+                >
+                  <Copy size={14} />
+                </IconButton>
+              </Tooltip>
+            )}
           </Stack>
         </Stack>
       </CardContent>

@@ -36,7 +36,7 @@ import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
 import { getErrorMessage } from "@agent-management-platform/shared-component";
-import type { Environment } from "@agent-management-platform/types";
+import { absoluteRouteMap, type Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
 
 interface EnvironmentTableProps {
@@ -55,8 +55,16 @@ export function EnvironmentTable(
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  const environmentsBasePath = absoluteRouteMap.children.org.children.environments.path;
+  // The `as string` cast keeps generatePath's inferred params type as the
+  // same permissive `Record<string, string | null>` it already infers for
+  // other route-map `.path` lookups in this codebase — without it, TS narrows
+  // the template literal to only recognize the trailing `:envName` segment
+  // and rejects `orgId`.
   const envViewPath = (envName: string) =>
-    orgId ? generatePath("/org/:orgId/environments/:envName", { orgId, envName }) : "#";
+    orgId
+      ? generatePath(`${environmentsBasePath}/:envName` as string, { orgId, envName })
+      : "#";
 
   const { data: environments, isLoading, error } = useListEnvironments({ orgName: orgId });
 

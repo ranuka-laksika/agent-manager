@@ -85,14 +85,15 @@ export function ThunderInstancesTable() {
     isLoading: instancesLoading,
     error: instancesError,
   } = useListThunderInstances({ orgName: orgId });
-  const {
-    data: environments,
-    isLoading: environmentsLoading,
-    error: environmentsError,
-  } = useListEnvironments({ orgName: orgId });
+  const { data: environments, isLoading: environmentsLoading } = useListEnvironments({
+    orgName: orgId,
+  });
 
   const isLoading = instancesLoading || environmentsLoading;
-  const error = instancesError || environmentsError;
+  // Only block the table on a failure to load instances themselves — the
+  // environments query only enriches titles/grouping, and `environments ?? []`
+  // already degrades gracefully if it fails.
+  const error = instancesError;
 
   const instances = useMemo(() => data?.thunderInstances ?? [], [data]);
 
@@ -139,7 +140,12 @@ export function ThunderInstancesTable() {
           type: "success",
         });
       })
-      .catch(() => {});
+      .catch(() => {
+        pushSnackBar({
+          message: "Failed to copy token endpoint",
+          type: "error",
+        });
+      });
   };
 
   const handleRowClick = (instance: ThunderInstanceResponse) => {
