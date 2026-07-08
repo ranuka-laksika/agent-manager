@@ -34,6 +34,11 @@ export function ThunderInstanceComingSoonTab({
       title={`${title} — Coming Soon`}
       description="This feature is under development."
       minHeight={220}
+      // The content pane now has a real computed height (it stretches to
+      // match the sidebar nav card), so without this the empty state only
+      // takes up its 220px minHeight and sits pinned to the top instead of
+      // sitting centered in the pane.
+      sx={{ height: "100%" }}
     />
   );
 }

@@ -18,6 +18,7 @@
 import React, { useCallback, useState } from "react";
 import {
   getErrorMessage,
+  GatewayTypeChip,
   useConfirmationDialog,
 } from "@agent-management-platform/shared-component";
 import {
@@ -45,6 +46,7 @@ import {
 } from "@agent-management-platform/types";
 import { PageLayout } from "@agent-management-platform/views";
 import { GatewayIdentityProvidersCard } from "./GatewayIdentityProvidersCard";
+import { GatewayReconfigureCard } from "./GatewayReconfigureCard";
 import { ViewGatewayGetStarted } from "./ViewGatewayGetStarted";
 
 export const ViewGateway: React.FC = () => {
@@ -166,14 +168,23 @@ export const ViewGateway: React.FC = () => {
                   color="error"
                 />
               )}
+              {gateway?.gatewayType && <GatewayTypeChip type={gateway.gatewayType} />}
             </Stack>
           ) : undefined
         }
       >
         {isLoading && (
           <Stack spacing={3}>
+            <Card variant="outlined" sx={{ p: 3 }}>
+              <Stack spacing={2}>
+                <Skeleton variant="text" width={140} height={28} />
+                <Skeleton variant="rounded" height={48} />
+                <Skeleton variant="rounded" height={160} />
+              </Stack>
+            </Card>
+
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Skeleton variant="text" width="30%" height={14} />
@@ -181,7 +192,7 @@ export const ViewGateway: React.FC = () => {
                   </Stack>
                 </Card>
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Skeleton variant="text" width="35%" height={14} />
@@ -193,11 +204,15 @@ export const ViewGateway: React.FC = () => {
                 </Card>
               </Grid>
             </Grid>
+
             <Card variant="outlined" sx={{ p: 3 }}>
               <Stack spacing={2}>
-                <Skeleton variant="text" width={120} height={24} />
-                <Skeleton variant="rounded" height={48} />
-                <Skeleton variant="rounded" height={120} />
+                <Skeleton variant="text" width={160} height={24} />
+                <Skeleton variant="text" width="60%" height={18} />
+                <Stack spacing={1}>
+                  <Skeleton variant="rounded" height={44} />
+                  <Skeleton variant="rounded" height={44} />
+                </Stack>
               </Stack>
             </Card>
           </Stack>
@@ -214,8 +229,19 @@ export const ViewGateway: React.FC = () => {
 
         {gateway && !error && (
           <Stack spacing={3}>
+            {!isActive && (
+              <ViewGatewayGetStarted
+                isConfigured={isConfigured}
+                registrationToken={registrationToken}
+                hasJustRegeneratedToken={hasJustRegeneratedToken}
+                onRegenerateToken={handleRegenerateToken}
+                isRegeneratingToken={isRotating}
+                onCopy={handleCopy}
+              />
+            )}
+
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Typography
@@ -234,27 +260,7 @@ export const ViewGateway: React.FC = () => {
                   </Stack>
                 </Card>
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-                  <Stack spacing={0.5}>
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontWeight: 500 }}
-                    >
-                      Type
-                    </Typography>
-                    <Chip
-                      label={gateway.gatewayType?.toUpperCase() === "AI" ? "AI" : "Regular"}
-                      size="small"
-                      variant="outlined"
-                      color={gateway.gatewayType?.toUpperCase() === "AI" ? "info" : "default"}
-                      sx={{ width: "fit-content" }}
-                    />
-                  </Stack>
-                </Card>
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Typography
@@ -297,14 +303,15 @@ export const ViewGateway: React.FC = () => {
               environments={gateway.environments ?? []}
             />
 
-            <ViewGatewayGetStarted
-              isConfigured={isConfigured}
-              registrationToken={registrationToken}
-              hasJustRegeneratedToken={hasJustRegeneratedToken}
-              onRegenerateToken={handleRegenerateToken}
-              isRegeneratingToken={isRotating}
-              onCopy={handleCopy}
-            />
+            {isActive && (
+              <GatewayReconfigureCard
+                registrationToken={registrationToken}
+                hasJustRegeneratedToken={hasJustRegeneratedToken}
+                onReconfigure={handleRegenerateToken}
+                isReconfiguring={isRotating}
+                onCopy={handleCopy}
+              />
+            )}
           </Stack>
         )}
       </PageLayout>

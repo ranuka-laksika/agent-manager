@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { type ChangeEvent, useEffect, useMemo, useState } from "react";
+import { type ChangeEvent, Fragment, useMemo, useState } from "react";
 import {
   Alert,
   Avatar,
@@ -27,7 +27,6 @@ import {
   SearchBar,
   Skeleton,
   Stack,
-  TablePagination,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -39,38 +38,67 @@ import {
   DoorClosedLocked,
   Trash,
 } from "@wso2/oxygen-ui-icons-react";
-import { formatDistanceToNow } from "date-fns";
 import { generatePath, Link, useNavigate, useParams } from "react-router-dom";
 import {
   useDeleteGateway,
+  useListEnvironments,
   useListGateways,
 } from "@agent-management-platform/api-client";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import {
+  GatewayTypeChip,
+  formatRelativeTime,
+  getAvatarInitials,
+  useConfirmationDialog,
+} from "@agent-management-platform/shared-component";
 import {
   absoluteRouteMap,
   type GatewayResponse,
 } from "@agent-management-platform/types";
-import { FadeIn } from "@agent-management-platform/views";
 
 interface AIGatewaysTableProps {
   onEditGateway?: (gateway: GatewayResponse) => void;
 }
 
+interface EnvironmentSection {
+  key: string;
+  title: string;
+  gateways: GatewayResponse[];
+}
+
+const AVATAR_SX = {
+  width: 28,
+  height: 28,
+  fontSize: 12,
+  bgcolor: "primary.main",
+  color: "primary.contrastText",
+} as const;
+
+const matchesQuery = (gateway: GatewayResponse, query: string) => {
+  const haystack = [gateway.name ?? "", gateway.displayName ?? "", gateway.vhost ?? ""].join(" ");
+  return haystack.toLowerCase().includes(query);
+};
+
 export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
   const navigate = useNavigate();
   const { orgId } = useParams<{ orgId: string }>();
   const [searchQuery, setSearchQuery] = useState("");
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(5);
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
   const { addConfirmation } = useConfirmationDialog();
 
   const {
     data: gatewaysData,
-    isLoading,
-    error,
+    isLoading: gatewaysLoading,
+    error: gatewaysError,
     refetch,
   } = useListGateways({ orgName: orgId });
+
+  const {
+    data: environments,
+    isLoading: environmentsLoading,
+    error: environmentsError,
+  } = useListEnvironments({ orgName: orgId });
+
+  const isLoading = gatewaysLoading || environmentsLoading;
+  const error = gatewaysError || environmentsError;
 
   const { mutateAsync: deleteGateway } = useDeleteGateway();
 
@@ -79,28 +107,38 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
   const filteredGateways = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return gateways;
-    return gateways.filter((gw) => {
-      const haystack = [
-        gw.name ?? "",
-        gw.displayName ?? "",
-        (gw as { description?: string }).description ?? "",
-        gw.vhost ?? "",
-      ].join(" ");
-      return haystack.toLowerCase().includes(query);
-    });
+    return gateways.filter((gw) => matchesQuery(gw, query));
   }, [gateways, searchQuery]);
 
-  useEffect(() => {
-    if (page !== 0 && page * rowsPerPage >= filteredGateways.length) {
-      setPage(0);
+  // Gateways are owned by environments (and can be mapped to more than one),
+  // so group them per environment; environments with no gateways are omitted.
+  const sections = useMemo<EnvironmentSection[]>(() => {
+    const grouped: EnvironmentSection[] = (environments ?? [])
+      .map((env) => ({
+        key: env.name,
+        title: env.displayName || env.name,
+        gateways: filteredGateways.filter((gw) =>
+          gw.environments?.some((e) => e.name === env.name),
+        ),
+      }))
+      .filter((section) => section.gateways.length > 0);
+    const unassigned = filteredGateways.filter(
+      (gw) => !gw.environments?.length,
+    );
+    if (unassigned.length) {
+      grouped.push({
+        key: "__unassigned__",
+        title: "Unassigned",
+        gateways: unassigned,
+      });
     }
-  }, [filteredGateways.length, page, rowsPerPage]);
+    return grouped;
+  }, [environments, filteredGateways]);
 
   const toolbar = (
     <Stack direction="row" spacing={1} alignItems="center">
       <Box flexGrow={1}>
         <SearchBar
-          key="search-bar"
           placeholder="Search Gateways..."
           size="small"
           fullWidth
@@ -128,28 +166,123 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
     </Stack>
   );
 
-  if (error) {
+  const renderGatewayRow = (gateway: GatewayResponse) => {
+    const displayName = gateway.displayName || gateway.name;
+    const isActive = gateway.status === "ACTIVE";
+    const lastUpdated = formatRelativeTime(gateway.updatedAt);
+
     return (
-      <>
-        {toolbar}
+      <ListingTable.Row
+        key={gateway.uuid}
+        variant="card"
+        hover
+        clickable
+        onClick={() =>
+          navigate(
+            generatePath(
+              absoluteRouteMap.children.org.children.gateways.children.view
+                .path,
+              { orgId: orgId ?? "", gatewayId: gateway.uuid },
+            ),
+          )
+        }
+      >
+        <ListingTable.Cell>
+          <ListingTable.CellIcon
+            icon={
+              <Avatar sx={AVATAR_SX}>
+                {getAvatarInitials(displayName, { fallback: "G", maxChars: 1 })}
+              </Avatar>
+            }
+            primary={displayName}
+          />
+        </ListingTable.Cell>
+
+        <ListingTable.Cell align="left">
+          <GatewayTypeChip type={gateway.gatewayType} />
+        </ListingTable.Cell>
+
+        <ListingTable.Cell align="center">
+          <Chip
+            label={isActive ? "Active" : "Inactive"}
+            size="small"
+            variant="outlined"
+            color={isActive ? "success" : "default"}
+          />
+        </ListingTable.Cell>
+
+        <ListingTable.Cell align="right">
+          <Typography variant="caption" color="text.secondary">
+            {lastUpdated}
+          </Typography>
+        </ListingTable.Cell>
+
+        <ListingTable.Cell align="center">
+          <ListingTable.RowActions visibility="hover">
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditGateway?.(gateway);
+                }}
+              >
+                <Edit size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton
+                color="error"
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  addConfirmation({
+                    title: "Delete Gateway",
+                    description: `Are you sure you want to delete ${displayName}?`,
+                    confirmButtonText: "Delete",
+                    confirmButtonColor: "error",
+                    confirmButtonIcon: <Trash size={16} />,
+                    onConfirm: async () => {
+                      await deleteGateway({
+                        orgName: orgId ?? "",
+                        gatewayId: gateway.uuid,
+                      });
+                      refetch();
+                    },
+                  });
+                }}
+              >
+                <Trash size={16} />
+              </IconButton>
+            </Tooltip>
+          </ListingTable.RowActions>
+        </ListingTable.Cell>
+      </ListingTable.Row>
+    );
+  };
+
+  // The body renders below a toolbar that stays mounted at a stable tree
+  // position across all states — swapping the toolbar's parent structure
+  // between renders would remount the search input and drop its focus.
+  const renderBody = () => {
+    if (error) {
+      const failedResource = gatewaysError ? "gateways" : "environments";
+      return (
         <ListingTable.Container>
           <Alert
             severity="error"
             icon={<AlertTriangle size={18} />}
             sx={{ alignSelf: "stretch" }}
           >
-            Failed to load gateways.{" "}
+            Failed to load {failedResource}.{" "}
             {error instanceof Error ? error.message : "Please try again."}
           </Alert>
         </ListingTable.Container>
-      </>
-    );
-  }
+      );
+    }
 
-  if (isLoading) {
-    return (
-      <>
-        {toolbar}
+    if (isLoading) {
+      return (
         <ListingTable.Container disablePaper>
           <Stack spacing={1} mt={1}>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -193,14 +326,11 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
             ))}
           </Stack>
         </ListingTable.Container>
-      </>
-    );
-  }
+      );
+    }
 
-  if (gateways.length === 0) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
+    if (gateways.length === 0) {
+      return (
         <ListingTable.Container>
           <ListingTable.EmptyState
             illustration={<DoorClosedLocked size={64} />}
@@ -222,14 +352,11 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
             }
           />
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  if (filteredGateways.length === 0) {
-    return (
-      <Stack spacing={1}>
-        {toolbar}
+    if (filteredGateways.length === 0) {
+      return (
         <ListingTable.Container>
           <ListingTable.EmptyState
             illustration={<Search size={64} />}
@@ -237,203 +364,57 @@ export function AIGatewaysTable({ onEditGateway }: AIGatewaysTableProps) {
             description="Try a different keyword or clear the search filter."
           />
         </ListingTable.Container>
-      </Stack>
-    );
-  }
+      );
+    }
 
-  const paginated = filteredGateways.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage,
-  );
-
-  return (
-    <>
-      {toolbar}
-      <Stack pt={4}>
+    return (
+      <Stack pt={3}>
         <ListingTable.Container disablePaper>
           <ListingTable variant="card">
             <ListingTable.Head>
               <ListingTable.Row>
-                <ListingTable.Cell width="300px">Name</ListingTable.Cell>
-                <ListingTable.Cell align="center" width="120px">
+                <ListingTable.Cell>Name</ListingTable.Cell>
+                <ListingTable.Cell align="left" width="120px">
                   Type
                 </ListingTable.Cell>
                 <ListingTable.Cell align="center" width="120px">
                   Status
                 </ListingTable.Cell>
-                <ListingTable.Cell width="140px" align="right">
+                <ListingTable.Cell align="right" width="140px">
                   Last Updated
                 </ListingTable.Cell>
+                <ListingTable.Cell align="center" width="96px" />
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>
-              {paginated.map((gateway) => {
-                const displayName = gateway.displayName || gateway.name;
-                const isActive =
-                  gateway.status === "ACTIVE" ||
-                  (gateway as { isActive?: boolean }).isActive;
-                const lastUpdated = gateway.updatedAt
-                  ? formatDistanceToNow(new Date(gateway.updatedAt), {
-                      addSuffix: true,
-                    })
-                  : "—";
-
-                return (
-                  <ListingTable.Row
-                    key={gateway.uuid}
-                    variant="card"
-                    hover
-                    clickable
-                    onClick={() =>
-                      navigate(
-                        generatePath(
-                          absoluteRouteMap.children.org.children.gateways
-                            .children.view.path,
-                          { orgId: orgId ?? "", gatewayId: gateway.uuid },
-                        ),
-                      )
-                    }
-                    onMouseEnter={() => setHoveredId(gateway.uuid)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    onFocus={() => setHoveredId(gateway.uuid)}
-                    onBlur={() => setHoveredId(null)}
-                  >
-                    <ListingTable.Cell>
-                      <Stack direction="row" alignItems="center" spacing={2}>
-                        <Avatar
-                          sx={{
-                            bgcolor: "primary.main",
-                            color: "primary.contrastText",
-                            fontSize: 16,
-                            height: 36,
-                            width: 36,
-                            flexShrink: 0,
-                          }}
-                        >
-                          {displayName?.charAt(0)?.toUpperCase() ?? "G"}
-                        </Avatar>
-                        <Box>
-                          <Typography variant="body2" fontWeight={500}>
-                            {displayName}
-                          </Typography>
-                          {(gateway as { description?: string })
-                            .description && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{
-                                display: "block",
-                                maxWidth: 240,
-                                overflow: "hidden",
-                                textOverflow: "ellipsis",
-                                whiteSpace: "nowrap",
-                              }}
-                            >
-                              {
-                                (gateway as { description?: string })
-                                  .description
-                              }
-                            </Typography>
-                          )}
-                        </Box>
-                      </Stack>
-                    </ListingTable.Cell>
-
-                    <ListingTable.Cell align="center">
-                      <Chip
-                        label={gateway.gatewayType === "AI" ? "AI" : "Regular"}
-                        size="small"
-                        variant="outlined"
-                        color={gateway.gatewayType === "AI" ? "info" : "default"}
-                      />
-                    </ListingTable.Cell>
-
-                    <ListingTable.Cell align="center">
-                      <Chip
-                        label={isActive ? "Active" : "Inactive"}
-                        size="small"
-                        variant="outlined"
-                        color={isActive ? "success" : "default"}
-                      />
-                    </ListingTable.Cell>
-
+              {sections.map((section) => (
+                <Fragment key={section.key}>
+                  <ListingTable.Row>
+                    {/* "&&" outranks the table's descendant padding rule on
+                        .MuiTableCell-root, which beats a plain sx padding. */}
                     <ListingTable.Cell
-                      align="right"
-                      onClick={(e) => e.stopPropagation()}
+                      colSpan={5}
+                      sx={{ "&&": { border: 0, p: 0 } }}
                     >
-                      <Stack
-                        direction="row"
-                        alignItems="center"
-                        spacing={1}
-                        justifyContent="flex-end"
-                      >
-                        {hoveredId === gateway.uuid ? (
-                          <FadeIn>
-                            <Tooltip title="Edit">
-                              <IconButton
-                                size="small"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onEditGateway?.(gateway);
-                                }}
-                              >
-                                <Edit size={16} />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton
-                                color="error"
-                                size="small"
-                                onClick={() =>
-                                  addConfirmation({
-                                    title: "Delete Gateway",
-                                    description: `Are you sure you want to delete ${displayName}?`,
-                                    confirmButtonText: "Delete",
-                                    confirmButtonColor: "error",
-                                    confirmButtonIcon: <Trash size={16} />,
-                                    onConfirm: async () => {
-                                      await deleteGateway({
-                                        orgName: orgId ?? "",
-                                        gatewayId: gateway.uuid,
-                                      });
-                                      refetch();
-                                    },
-                                  })
-                                }
-                              >
-                                <Trash size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </FadeIn>
-                        ) : (
-                          <Typography variant="caption" color="text.secondary">
-                            {lastUpdated}
-                          </Typography>
-                        )}
-                      </Stack>
+                      <Typography variant="overline" color="text.secondary">
+                        {section.title}
+                      </Typography>
                     </ListingTable.Cell>
                   </ListingTable.Row>
-                );
-              })}
+                  {section.gateways.map(renderGatewayRow)}
+                </Fragment>
+              ))}
             </ListingTable.Body>
           </ListingTable>
-
-          {filteredGateways.length > 5 && (
-            <TablePagination
-              component="div"
-              count={filteredGateways.length}
-              page={page}
-              rowsPerPage={rowsPerPage}
-              onPageChange={(_e, newPage) => setPage(newPage)}
-              onRowsPerPageChange={(e) => {
-                setRowsPerPage(parseInt(e.target.value, 10));
-                setPage(0);
-              }}
-              rowsPerPageOptions={[5, 10, 25]}
-            />
-          )}
         </ListingTable.Container>
       </Stack>
-    </>
+    );
+  };
+
+  return (
+    <Stack spacing={1}>
+      {toolbar}
+      {renderBody()}
+    </Stack>
   );
 }
