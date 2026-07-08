@@ -447,7 +447,7 @@ func TestExecuteMonitorRun_PerOrgPublisherCredentials(t *testing.T) {
 	}
 	require.NoError(t, gdb.Create(cred).Error)
 	t.Cleanup(func() {
-		gdb.Where("org_name = ?", monitor.OUID).Delete(&models.OrgPublisherCredential{})
+		gdb.Where("ou_id = ?", monitor.OUID).Delete(&models.OrgPublisherCredential{})
 	})
 
 	var capturedReq client.CreateWorkflowRunRequest
