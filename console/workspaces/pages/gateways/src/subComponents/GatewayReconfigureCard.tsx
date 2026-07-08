@@ -86,11 +86,10 @@ export function GatewayReconfigureCard({
       <Card variant="outlined">
         <CardContent sx={{ p: 3 }}>
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-            <RefreshCw size={18} />
             <Typography variant="h6">Reconfigure Gateway</Typography>
           </Stack>
           <Stack spacing={1.5}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2">
               Generate a new registration token to reconnect or update your gateway configuration.
               This will revoke the existing token.
             </Typography>
@@ -100,6 +99,7 @@ export function GatewayReconfigureCard({
                 startIcon={<RefreshCw size={16} />}
                 onClick={onReconfigure}
                 disabled={isReconfiguring}
+                color="error"
               >
                 {isReconfiguring ? "Generating..." : "Reconfigure"}
               </Button>
@@ -155,7 +155,6 @@ export function GatewayReconfigureCard({
     <Card variant="outlined">
       <CardContent sx={{ p: 3 }}>
         <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-          <RefreshCw size={18} />
           <Typography variant="h6">Reconfigure Gateway</Typography>
         </Stack>
         <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>

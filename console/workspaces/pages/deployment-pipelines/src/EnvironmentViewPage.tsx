@@ -17,24 +17,47 @@
 
 import {
   Alert,
+  Avatar,
   Card,
+  CardContent,
   Chip,
   Grid,
+  IconButton,
   ListingTable,
   Skeleton,
   Stack,
+  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { AlertTriangle, DoorClosedLocked } from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Copy, DoorClosedLocked, KeyRound } from "@wso2/oxygen-ui-icons-react";
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
-import { GatewayTypeChip } from "@agent-management-platform/shared-component";
 import {
-  useListEnvironments,
+  GatewayTypeChip,
+  getAvatarInitials,
+  getErrorMessage,
+} from "@agent-management-platform/shared-component";
+import {
+  useGetEnvironment,
   useListGateways,
+  useListThunderInstances,
 } from "@agent-management-platform/api-client";
-import { absoluteRouteMap, type GatewayResponse, type GatewayStatus } from "@agent-management-platform/types";
-import { PageLayout } from "@agent-management-platform/views";
+import {
+  absoluteRouteMap,
+  type GatewayListenerSpec,
+  type GatewayResponse,
+  type GatewayStatus,
+} from "@agent-management-platform/types";
+import { PageLayout, useSnackBar } from "@agent-management-platform/views";
+
+const monoEllipsisSx = {
+  fontFamily: "monospace",
+  color: "text.secondary",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  display: "block",
+} as const;
 
 const STATUS_COLOR: Record<GatewayStatus, "success" | "warning" | "error" | "default"> = {
   ACTIVE: "success",
@@ -43,12 +66,83 @@ const STATUS_COLOR: Record<GatewayStatus, "success" | "warning" | "error" | "def
   ERROR: "error",
 };
 
+const GATEWAY_AVATAR_SX = {
+  width: 28,
+  height: 28,
+  fontSize: 12,
+  bgcolor: "primary.main",
+  color: "primary.contrastText",
+} as const;
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+        <Stack spacing={0.5}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+            {label}
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
+          >
+            {value}
+          </Typography>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface EndpointCardProps {
+  label: string;
+  scheme: "http" | "https";
+  endpoint: GatewayListenerSpec;
+  onCopy: (value: string, message: string) => void;
+}
+
+function EndpointCard({ label, scheme, endpoint, onCopy }: EndpointCardProps) {
+  const url = `${scheme}://${endpoint.host}${endpoint.port ? `:${endpoint.port}` : ""}`;
+
+  return (
+    <Card variant="outlined" sx={{ height: "100%" }}>
+      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+        <Stack spacing={0.5}>
+          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+            {label}
+          </Typography>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Typography
+              variant="body2"
+              sx={{ fontFamily: "monospace", wordBreak: "break-all", flex: 1, fontSize: "0.8rem" }}
+            >
+              {url}
+            </Typography>
+            <Tooltip title={`Copy ${label}`}>
+              <IconButton
+                size="small"
+                aria-label={`Copy ${label}`}
+                onClick={() => onCopy(url, `${label} copied to clipboard`)}
+                sx={{ flexShrink: 0 }}
+              >
+                <Copy size={14} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function EnvironmentViewPage() {
   const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
   const navigate = useNavigate();
+  const { pushSnackBar } = useSnackBar();
 
-  const { data: environments, isLoading: isLoadingEnv, error: envError } = useListEnvironments({
+  const { data: env, isLoading: isLoadingEnv, error: envError } = useGetEnvironment({
     orgName: orgId,
+    envName,
   });
 
   const { data: gatewaysData, isLoading: isLoadingGateways } = useListGateways(
@@ -60,8 +154,25 @@ export function EnvironmentViewPage() {
     ? generatePath(absoluteRouteMap.children.org.children.environments.path, { orgId })
     : "#";
 
-  const env = environments?.find((e) => e.name === envName);
   const gateways = gatewaysData?.gateways ?? [];
+
+  const { data: thunderInstancesData, isLoading: isLoadingProviders } =
+    useListThunderInstances({ orgName: orgId });
+  const thunderInstance = thunderInstancesData?.thunderInstances.find(
+    (i) => i.envName === envName,
+  );
+
+  const handleCopy = (value: string, message: string) => {
+    navigator.clipboard
+      .writeText(value)
+      .then(() => {
+        pushSnackBar({ message, type: "success" });
+      })
+      .catch(() => {});
+  };
+
+  const httpEndpoint = env?.gateway?.ingress?.external?.http;
+  const httpsEndpoint = env?.gateway?.ingress?.external?.https;
 
   const displayName = env?.displayName ?? env?.name ?? envName ?? "";
 
@@ -79,18 +190,23 @@ export function EnvironmentViewPage() {
       disableIcon
       titleTail={
         env ? (
-          <Chip
-            label={env.isProduction ? "Production" : "Non-production"}
-            size="small"
-            variant="outlined"
-            color={env.isProduction ? "primary" : "default"}
-          />
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <Chip
+              label={env.isProduction ? "Production" : "Non-production"}
+              size="small"
+              variant="outlined"
+              color={env.isProduction ? "primary" : "default"}
+            />
+            <Tooltip title="Data plane reference for this environment">
+              <Chip label={env.dataplaneRef || "—"} size="small" variant="outlined" />
+            </Tooltip>
+          </Stack>
         ) : undefined
       }
     >
       {envError ? (
         <Alert severity="error" icon={<AlertTriangle size={18} />} sx={{ mb: 2 }}>
-          Failed to load environment. Please try again.
+          {getErrorMessage(envError) || "Failed to load environment. Please try again."}
         </Alert>
       ) : null}
 
@@ -100,68 +216,75 @@ export function EnvironmentViewPage() {
         </Alert>
       ) : null}
 
+      {isLoadingEnv && (
+        <Stack spacing={3}>
+          <Stack spacing={1.5}>
+            <Skeleton variant="text" width={120} height={16} />
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Skeleton variant="rounded" height={72} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Skeleton variant="rounded" height={72} />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Skeleton variant="rounded" height={72} />
+              </Grid>
+            </Grid>
+          </Stack>
+
+          <Stack spacing={1.5}>
+            <Skeleton variant="text" width={90} height={16} />
+            <Stack spacing={1}>
+              <Skeleton variant="rounded" height={56} />
+              <Skeleton variant="rounded" height={56} />
+            </Stack>
+          </Stack>
+
+          <Stack spacing={1.5}>
+            <Skeleton variant="text" width={140} height={16} />
+            <Skeleton variant="rounded" height={56} />
+          </Stack>
+        </Stack>
+      )}
+
       {env && !envError && (
         <Stack spacing={3}>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-                <Stack spacing={0.5}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                    Data Plane
-                  </Typography>
-                  <Typography variant="body2" sx={{ wordBreak: "break-all" }}>
-                    {env.dataplaneRef || "—"}
-                  </Typography>
-                </Stack>
-              </Card>
-            </Grid>
-
-            {env.dnsPrefix && (
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-                  <Stack spacing={0.5}>
-                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                      DNS Prefix
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontFamily: "monospace", wordBreak: "break-all" }}>
-                      {env.dnsPrefix}
-                    </Typography>
-                  </Stack>
-                </Card>
+          <Stack spacing={1.5}>
+            {env.dnsPrefix || httpEndpoint || httpsEndpoint ? (
+              <Grid container spacing={2}>
+                {env.dnsPrefix && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <InfoCard label="DNS Prefix" value={env.dnsPrefix} />
+                  </Grid>
+                )}
+                {httpEndpoint && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <EndpointCard
+                      label="HTTP Endpoint"
+                      scheme="http"
+                      endpoint={httpEndpoint}
+                      onCopy={handleCopy}
+                    />
+                  </Grid>
+                )}
+                {httpsEndpoint && (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                    <EndpointCard
+                      label="HTTPS Endpoint"
+                      scheme="https"
+                      endpoint={httpsEndpoint}
+                      onCopy={handleCopy}
+                    />
+                  </Grid>
+                )}
               </Grid>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No external ingress configured for this environment.
+              </Typography>
             )}
-
-            <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-              <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-                <Stack spacing={0.5}>
-                  <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-                    Gateways
-                  </Typography>
-                  {isLoadingGateways ? (
-                    <Stack direction="row" spacing={0.5}>
-                      <Skeleton variant="rounded" width={70} height={24} />
-                      <Skeleton variant="rounded" width={70} height={24} />
-                    </Stack>
-                  ) : gateways.length > 0 ? (
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                      {gateways.map((gw: GatewayResponse) => (
-                        <Chip
-                          key={gw.uuid}
-                          label={gw.displayName ?? gw.name}
-                          size="small"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Stack>
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">
-                      —
-                    </Typography>
-                  )}
-                </Stack>
-              </Card>
-            </Grid>
-          </Grid>
+          </Stack>
 
           <Stack spacing={1.5}>
             <Typography variant="overline" color="text.secondary">
@@ -210,7 +333,14 @@ export function EnvironmentViewPage() {
                       >
                         <ListingTable.Cell>
                           <ListingTable.CellIcon
-                            icon={undefined}
+                            icon={
+                              <Avatar sx={GATEWAY_AVATAR_SX}>
+                                {getAvatarInitials(gw.displayName ?? gw.name, {
+                                  fallback: "G",
+                                  maxChars: 1,
+                                })}
+                              </Avatar>
+                            }
                             primary={gw.displayName ?? gw.name}
                           />
                         </ListingTable.Cell>
@@ -232,6 +362,98 @@ export function EnvironmentViewPage() {
                         </ListingTable.Cell>
                       </ListingTable.Row>
                     ))}
+                  </ListingTable.Body>
+                </ListingTable>
+              </ListingTable.Container>
+            )}
+          </Stack>
+
+          <Stack spacing={1.5}>
+            <Typography variant="overline" color="text.secondary">
+              Identity Providers
+            </Typography>
+            {isLoadingProviders ? (
+              <Stack spacing={1}>
+                <Skeleton variant="rounded" height={56} />
+              </Stack>
+            ) : !thunderInstance ? (
+              <ListingTable.Container>
+                <ListingTable.EmptyState
+                  illustration={<KeyRound size={56} />}
+                  title="No identity providers in this environment"
+                  description="Each environment automatically gets a Thunder identity provider."
+                />
+              </ListingTable.Container>
+            ) : (
+              <ListingTable.Container>
+                <ListingTable variant="table">
+                  <ListingTable.Head>
+                    <ListingTable.Row>
+                      <ListingTable.Cell width="240px">Identity Provider</ListingTable.Cell>
+                      <ListingTable.Cell>Issuer</ListingTable.Cell>
+                      <ListingTable.Cell>Token Endpoint</ListingTable.Cell>
+                    </ListingTable.Row>
+                  </ListingTable.Head>
+                  <ListingTable.Body>
+                    <ListingTable.Row
+                      variant="table"
+                      hover
+                      clickable
+                      onClick={() =>
+                        navigate(
+                          generatePath(
+                            absoluteRouteMap.children.org.children.thunderInstances.children.view
+                              .path,
+                            { orgId: orgId ?? "", envName: thunderInstance.envName },
+                          ),
+                        )
+                      }
+                    >
+                      <ListingTable.Cell>
+                        <ListingTable.CellIcon
+                          icon={
+                            <Avatar
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: "primary.main",
+                                color: "primary.contrastText",
+                              }}
+                            >
+                              <KeyRound size={16} />
+                            </Avatar>
+                          }
+                          primary="Thunder"
+                          secondary="System identity provider"
+                        />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Typography variant="caption" sx={{ ...monoEllipsisSx, maxWidth: 280 }}>
+                          {thunderInstance.issuerUrl}
+                        </Typography>
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Typography variant="caption" sx={{ ...monoEllipsisSx, maxWidth: 320 }}>
+                            {thunderInstance.tokenUrl}
+                          </Typography>
+                          <Tooltip title="Copy token endpoint">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCopy(
+                                  thunderInstance.tokenUrl,
+                                  "Token endpoint copied to clipboard",
+                                );
+                              }}
+                            >
+                              <Copy size={14} />
+                            </IconButton>
+                          </Tooltip>
+                        </Stack>
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
                   </ListingTable.Body>
                 </ListingTable>
               </ListingTable.Container>

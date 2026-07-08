@@ -26,6 +26,28 @@ export type GatewayStatus =
   | "PROVISIONING"
   | "ERROR";
 
+export interface GatewayListenerSpec {
+  port?: number;
+  host?: string;
+}
+
+export interface GatewayEndpointSpec {
+  http?: GatewayListenerSpec;
+  https?: GatewayListenerSpec;
+  tls?: GatewayListenerSpec;
+}
+
+export interface GatewayNetworkSpec {
+  external?: GatewayEndpointSpec;
+  internal?: GatewayEndpointSpec;
+}
+
+/** Gateway configuration with ingress and egress network specs, sourced from the underlying OpenChoreo environment. */
+export interface GatewaySpec {
+  ingress?: GatewayNetworkSpec;
+  egress?: GatewayNetworkSpec;
+}
+
 export interface GatewayEnvironmentResponse {
   id: string;
   organizationName: string;
@@ -35,6 +57,7 @@ export interface GatewayEnvironmentResponse {
   dataplaneRef: string;
   dnsPrefix: string;
   isProduction: boolean;
+  gateway?: GatewaySpec;
   createdAt: string;
   updatedAt: string;
 }

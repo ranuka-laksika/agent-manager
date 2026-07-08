@@ -18,6 +18,7 @@
 import { useMemo, useState } from "react";
 import {
   Alert,
+  Avatar,
   Button,
   Card,
   CardContent,
@@ -146,6 +147,7 @@ export function GatewayIdentityProvidersCard({
                 borderColor: "divider",
               }}
             >
+              <Skeleton variant="circular" width={28} height={28} sx={{ flexShrink: 0 }} />
               <Skeleton variant="text" width={160} height={20} />
               <Skeleton
                 variant="rounded"
@@ -200,9 +202,21 @@ export function GatewayIdentityProvidersCard({
                 onBlur={() => setHoveredKey(null)}
               >
                 <ListingTable.Cell>
-                  <Typography variant="body2" fontWeight={500}>
-                    {provider.name}
-                  </Typography>
+                  <ListingTable.CellIcon
+                    icon={
+                      <Avatar
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          bgcolor: isSystem ? "action.selected" : "primary.main",
+                          color: isSystem ? "text.secondary" : "primary.contrastText",
+                        }}
+                      >
+                        <KeyRound size={16} />
+                      </Avatar>
+                    }
+                    primary={provider.name}
+                  />
                 </ListingTable.Cell>
                 <ListingTable.Cell>
                   <Chip
