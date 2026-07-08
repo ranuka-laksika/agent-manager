@@ -39,6 +39,7 @@ set -euo pipefail
 #     https listener variant. Set ENV_INGRESS_HTTPS_HOST=$ENV_INGRESS_HOST for
 #     the TLS toggle alone; without it the deployed-agent invoke URL is empty.
 #   - ENV_INGRESS_HTTPS_PORT (default: 443): port for the https listener variant.
+#   - IDP_SKIP_TLS_VERIFY (default: true): skipTlsVerify for the seeded env-Thunder identity provider.
 
 # --- Required inputs ---
 : "${ENV_NAME:?ENV_NAME is required (e.g. ENV_NAME=staging)}"
@@ -92,6 +93,14 @@ DATAPLANE_REF="${DATAPLANE_REF:-default}"
 AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
 GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+IDP_SKIP_TLS_VERIFY="${IDP_SKIP_TLS_VERIFY:-true}"
+case "$IDP_SKIP_TLS_VERIFY" in
+    true|false) ;;
+    *)
+        echo "❌ IDP_SKIP_TLS_VERIFY must be 'true' or 'false' (got '${IDP_SKIP_TLS_VERIFY}')"
+        exit 1
+        ;;
+esac
 
 CHART_REF="oci://ghcr.io/wso2/wso2-amp-api-platform-gateway-extension"
 
@@ -130,9 +139,7 @@ AGENT_MANAGER_INTERNAL_CP="${AGENT_MANAGER_INTERNAL_CP:-host.docker.internal:924
 AGENT_MANAGER_INTERNAL_API="${AGENT_MANAGER_INTERNAL_BASE_URL}/api/v1"
 AGENT_MANAGER_INTERNAL_JWKS="${AGENT_MANAGER_INTERNAL_BASE_URL}/auth/external/jwks.json"
 
-# Platform Thunder (shared) identity — matches the chart's built-in defaults.
-# Must always be re-asserted alongside keymanagers[0] because helm --set on
-# an indexed array replaces the entire list, not just the specified element.
+# Platform Thunder (shared) fallback identity — matches the chart's built-in defaults.
 PLATFORM_THUNDER_ISSUER="${PLATFORM_THUNDER_ISSUER:-http://thunder.amp.localhost:8080}"
 PLATFORM_THUNDER_JWKS="${PLATFORM_THUNDER_JWKS:-http://amp-thunder-extension-service.amp-thunder:8090/oauth2/jwks}"
 
@@ -343,7 +350,15 @@ if [ "$THUNDER_PROVISIONED" = "true" ]; then
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}"
         --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}"
-        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=true"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
+    )
+    # Mirror the env-Thunder into Agent Manager as this gateway's identity provider.
+    # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
+    HELM_ARGS+=(
+        --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
+        --set "bootstrap.identityProviders[0].issuer=${THUNDER_ISSUER}"
+        --set "bootstrap.identityProviders[0].jwksUri=${THUNDER_INTERNAL_JWKS}"
+        --set "bootstrap.identityProviders[0].skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
     )
 else
     # Re-assert the platform Thunder keymanager explicitly. Helm --set on an indexed array

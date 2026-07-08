@@ -18,6 +18,17 @@ ORG_NAME="${ORG_NAME:-default}"
 ENV_NAME="${ENV_NAME:-default}"
 GATEWAY_VHOST_PORT="${GATEWAY_VHOST_PORT:-19080}"
 GATEWAY_VHOST="${GATEWAY_VHOST:-http://${ENV_NAME}-${ORG_NAME}.gateway.localhost:${GATEWAY_VHOST_PORT}}"
+IDP_SKIP_TLS_VERIFY="${IDP_SKIP_TLS_VERIFY:-true}"
+case "$IDP_SKIP_TLS_VERIFY" in
+    true|false) ;;
+    *)
+        echo "❌ IDP_SKIP_TLS_VERIFY must be 'true' or 'false' (got '${IDP_SKIP_TLS_VERIFY}')"
+        exit 1
+        ;;
+esac
+
+# shellcheck source=../scripts/thunder-naming.sh
+source "${SCRIPT_DIR}/../scripts/thunder-naming.sh"
 
 echo "=== Installing API Platform Gateway ==="
 
@@ -37,17 +48,42 @@ until curl -sf "$AGENT_MANAGER_HEALTH_URL" > /dev/null 2>&1; do
 done
 echo "✅ Agent Manager is healthy"
 
+# Wire the gateway's ThunderKeyManager to this environment's own Thunder instance
+# when it exists, mirroring the THUNDER_PROVISIONED logic in add-environment.sh.
+THUNDER_RELEASE="$(thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
+HELM_ARGS=(
+    upgrade --install "api-platform-${ORG_NAME}-${ENV_NAME}"
+    "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension"
+    --namespace openchoreo-data-plane
+    --set agentManager.orgName="${ORG_NAME}"
+    --set gateway.environment="${ENV_NAME}"
+    --set gateway.vhost="${GATEWAY_VHOST}"
+    --set agentManager.apiUrl="http://host.docker.internal:9000/api/v1"
+    --set apiGateway.controlPlane.host="host.docker.internal:9243"
+    -f "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension/values-dev.yaml"
+)
+if helm status "${THUNDER_RELEASE}" --namespace "${THUNDER_RELEASE}" > /dev/null 2>&1; then
+    echo "✅ Env-Thunder instance found (Helm release: ${THUNDER_RELEASE}) — wiring gateway to it"
+    THUNDER_ISSUER="$(thunder_issuer "${ORG_NAME}" "${ENV_NAME}")"
+    THUNDER_INTERNAL_JWKS="http://${THUNDER_RELEASE}-service.${THUNDER_RELEASE}.svc.cluster.local:8090/oauth2/jwks"
+    HELM_ARGS+=(
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${THUNDER_ISSUER}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${THUNDER_INTERNAL_JWKS}"
+        --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
+        # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
+        --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
+        --set "bootstrap.identityProviders[0].issuer=${THUNDER_ISSUER}"
+        --set "bootstrap.identityProviders[0].jwksUri=${THUNDER_INTERNAL_JWKS}"
+        --set "bootstrap.identityProviders[0].skipTlsVerify=${IDP_SKIP_TLS_VERIFY}"
+    )
+else
+    echo "ℹ️  No env-Thunder instance found for '${ENV_NAME}' — gateway will use values-dev.yaml's platform Thunder default"
+fi
+
 echo ""
 echo "🌐 Installing gateway chart..."
-helm upgrade --install "api-platform-${ORG_NAME}-${ENV_NAME}" \
-    "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension" \
-    --namespace openchoreo-data-plane \
-    --set agentManager.orgName="${ORG_NAME}" \
-    --set gateway.environment="${ENV_NAME}" \
-    --set gateway.vhost="${GATEWAY_VHOST}" \
-    --set agentManager.apiUrl="http://host.docker.internal:9000/api/v1" \
-    --set apiGateway.controlPlane.host="host.docker.internal:9243" \
-    -f "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension/values-dev.yaml"
+helm "${HELM_ARGS[@]}"
 
 echo "⏳ Waiting for Gateway to be ready..."
 if kubectl wait --for=condition=Programmed "apigateway/api-platform-${ORG_NAME}-${ENV_NAME}" -n openchoreo-data-plane --timeout=180s; then
