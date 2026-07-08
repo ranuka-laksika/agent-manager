@@ -65,7 +65,6 @@ func TestUpdateProject(t *testing.T) {
 
 		require.Len(t, ocClient.PatchProjectCalls(), 1)
 		call := ocClient.PatchProjectCalls()[0]
-		require.Equal(t, testUpdateProjectOrgName, call.NamespaceName)
 		require.Equal(t, "my-project", call.ProjectName)
 		require.Equal(t, "new-pipeline", call.Req.DeploymentPipeline)
 		require.Equal(t, "Updated Project", call.Req.DisplayName)
@@ -105,11 +104,10 @@ func TestUpdateProject(t *testing.T) {
 
 	t.Run("returns 404 when the organization is not found", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
-		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"))
 
 		payload := spec.UpdateProjectRequest{DisplayName: "Updated", Description: "d", DeploymentPipeline: "new-pipeline"}
 		body, _ := json.Marshal(payload)
-		// The default mock returns ErrOrganizationNotFound for "nonexistent-org".
 		url := "/api/v1/orgs/nonexistent-org/projects/my-project"
 		req := httptest.NewRequest(http.MethodPut, url, bytes.NewBuffer(body))
 		req.Header.Set("Content-Type", "application/json")

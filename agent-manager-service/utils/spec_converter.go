@@ -61,13 +61,13 @@ func GetOrDefaultProxyConfig(cfg *spec.LLMProxyConfig) spec.LLMProxyConfig {
 
 // ConvertSpecToModelLLMProviderTemplate converts spec.CreateLLMProviderTemplateRequest to models.LLMProviderTemplate
 // Note: The service layer handles Configuration field (JSON marshaling)
-func ConvertSpecToModelLLMProviderTemplate(req *spec.CreateLLMProviderTemplateRequest, orgName string) *models.LLMProviderTemplate {
+func ConvertSpecToModelLLMProviderTemplate(req *spec.CreateLLMProviderTemplateRequest, ouID string) *models.LLMProviderTemplate {
 	template := &models.LLMProviderTemplate{
-		UUID:             uuid.New(),
-		OrganizationName: orgName,
-		Handle:           req.Id, // ID is the handle
-		Name:             req.Name,
-		Description:      ptrToString(req.Description),
+		UUID:        uuid.New(),
+		OUID:        ouID,
+		Handle:      req.Id, // ID is the handle
+		Name:        req.Name,
+		Description: ptrToString(req.Description),
 	}
 
 	// Map nested configuration fields

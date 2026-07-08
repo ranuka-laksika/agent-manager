@@ -365,7 +365,7 @@ func TestEvaluatorManagerService_CreateCustomEvaluator(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, created, "expected Create to be called")
 		assert.Equal(t, "my-cool-evaluator", created.Identifier)
-		assert.Equal(t, org, created.OrgName)
+		assert.Equal(t, org, created.OUID)
 		assert.NotNil(t, created.ConfigSchema, "nil config schema must be defaulted to empty slice")
 		assert.NotNil(t, created.Tags, "nil tags must be defaulted to empty slice")
 		assert.Equal(t, "my-cool-evaluator", resp.Identifier)

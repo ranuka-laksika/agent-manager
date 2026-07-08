@@ -37,7 +37,6 @@ import {
   DrawerContent,
   DrawerHeader,
   DrawerWrapper,
-  useExternalConfigModules,
 } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import {
@@ -51,20 +50,14 @@ import {
   getAmpVersionHelm,
   getRawScriptUrl,
 } from "@agent-management-platform/shared-component";
-import type {
-  GatewayEnvironmentResponse,
-  IdentityProvider,
+import {
+  globalConfig,
+  type GatewayEnvironmentResponse,
+  type IdentityProvider,
 } from "@agent-management-platform/types";
 
 const SCRIPT_NAME = "manage-identity-provider.sh";
 const TOKEN_MASK = "•••••••••••••••";
-
-// Must mirror MountPoints.IdentityProviderMode in @agent-management-platform/am-core-ui.
-// A cloud build injects a config module here with { enabled: true } so the server-side
-// applier patches the gateway runtime config directly; the dialog then calls the REST
-// endpoints instead of rendering the self-hosted script snippet. Nothing injected (the
-// self-hosted default) keeps the script behavior unchanged.
-const IDENTITY_PROVIDER_MODE_MOUNT_POINT = "identity-provider-mode";
 
 export type ManageIdentityProviderMode = "upsert" | "delete";
 
@@ -154,13 +147,10 @@ export function ManageIdentityProviderDialog({
   const [resolvedToken, setResolvedToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Managed mode: a cloud build injects { enabled: true } at this mount point so the
-  // server patches the gateway runtime config. When off (self-hosted default), the
-  // dialog renders the script snippet exactly as before.
-  const idpModeModules = useExternalConfigModules(IDENTITY_PROVIDER_MODE_MOUNT_POINT);
-  const managedMode = idpModeModules.some(
-    (m) => (m.value as { enabled?: boolean } | undefined)?.enabled === true,
-  );
+  // Managed mode: when enabled, the server patches the gateway runtime config
+  // directly. When off (self-hosted default), the dialog renders the script
+  // snippet exactly as before.
+  const managedMode = globalConfig.featureFlags?.enableIdentityProviderManagedMode === true;
   const upsertIdp = useUpsertIdentityProvider();
   const deleteIdp = useDeleteIdentityProvider();
   const isSubmitting = upsertIdp.isPending || deleteIdp.isPending;

@@ -69,7 +69,6 @@ func TestDeleteProject(t *testing.T) {
 
 		// Validate call parameters
 		deleteCall := openChoreoClient.DeleteProjectCalls()[0]
-		require.Equal(t, testDeleteProjectOrgName, deleteCall.NamespaceName)
 		require.Equal(t, testDeleteProjectProjName, deleteCall.ProjectName)
 	})
 
@@ -147,7 +146,7 @@ func TestDeleteProject(t *testing.T) {
 	}{
 		{
 			name:           "return 404 on organization not found",
-			authMiddleware: authMiddleware,
+			authMiddleware: jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"),
 			wantStatus:     404,
 			wantErrMsg:     "Organization not found",
 			url:            fmt.Sprintf("/api/v1/orgs/nonexistent-org/projects/%s", testDeleteProjectProjName),

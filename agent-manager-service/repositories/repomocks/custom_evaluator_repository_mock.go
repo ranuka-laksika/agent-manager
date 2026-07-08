@@ -20,13 +20,13 @@ import (
 //			CreateFunc: func(evaluator *models.CustomEvaluator) error {
 //				panic("mock out the Create method")
 //			},
-//			GetByIdentifierFunc: func(orgName string, identifier string) (*models.CustomEvaluator, error) {
+//			GetByIdentifierFunc: func(ouID string, identifier string) (*models.CustomEvaluator, error) {
 //				panic("mock out the GetByIdentifier method")
 //			},
-//			GetByIdentifiersFunc: func(orgName string, identifiers []string) ([]models.CustomEvaluator, error) {
+//			GetByIdentifiersFunc: func(ouID string, identifiers []string) ([]models.CustomEvaluator, error) {
 //				panic("mock out the GetByIdentifiers method")
 //			},
-//			ListFunc: func(orgName string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
+//			ListFunc: func(ouID string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
 //				panic("mock out the List method")
 //			},
 //			RunInTransactionFunc: func(fn func(txRepo repositories.CustomEvaluatorRepository) error) error {
@@ -52,13 +52,13 @@ type CustomEvaluatorRepositoryMock struct {
 	CreateFunc func(evaluator *models.CustomEvaluator) error
 
 	// GetByIdentifierFunc mocks the GetByIdentifier method.
-	GetByIdentifierFunc func(orgName string, identifier string) (*models.CustomEvaluator, error)
+	GetByIdentifierFunc func(ouID string, identifier string) (*models.CustomEvaluator, error)
 
 	// GetByIdentifiersFunc mocks the GetByIdentifiers method.
-	GetByIdentifiersFunc func(orgName string, identifiers []string) ([]models.CustomEvaluator, error)
+	GetByIdentifiersFunc func(ouID string, identifiers []string) ([]models.CustomEvaluator, error)
 
 	// ListFunc mocks the List method.
-	ListFunc func(orgName string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error)
+	ListFunc func(ouID string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error)
 
 	// RunInTransactionFunc mocks the RunInTransaction method.
 	RunInTransactionFunc func(fn func(txRepo repositories.CustomEvaluatorRepository) error) error
@@ -81,22 +81,22 @@ type CustomEvaluatorRepositoryMock struct {
 		}
 		// GetByIdentifier holds details about calls to the GetByIdentifier method.
 		GetByIdentifier []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Identifier is the identifier argument value.
 			Identifier string
 		}
 		// GetByIdentifiers holds details about calls to the GetByIdentifiers method.
 		GetByIdentifiers []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Identifiers is the identifiers argument value.
 			Identifiers []string
 		}
 		// List holds details about calls to the List method.
 		List []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Filters is the filters argument value.
 			Filters repositories.CustomEvaluatorFilters
 		}
@@ -164,21 +164,21 @@ func (mock *CustomEvaluatorRepositoryMock) CreateCalls() []struct {
 }
 
 // GetByIdentifier calls GetByIdentifierFunc.
-func (mock *CustomEvaluatorRepositoryMock) GetByIdentifier(orgName string, identifier string) (*models.CustomEvaluator, error) {
+func (mock *CustomEvaluatorRepositoryMock) GetByIdentifier(ouID string, identifier string) (*models.CustomEvaluator, error) {
 	if mock.GetByIdentifierFunc == nil {
 		panic("CustomEvaluatorRepositoryMock.GetByIdentifierFunc: method is nil but CustomEvaluatorRepository.GetByIdentifier was just called")
 	}
 	callInfo := struct {
-		OrgName    string
+		OuID       string
 		Identifier string
 	}{
-		OrgName:    orgName,
+		OuID:       ouID,
 		Identifier: identifier,
 	}
 	mock.lockGetByIdentifier.Lock()
 	mock.calls.GetByIdentifier = append(mock.calls.GetByIdentifier, callInfo)
 	mock.lockGetByIdentifier.Unlock()
-	return mock.GetByIdentifierFunc(orgName, identifier)
+	return mock.GetByIdentifierFunc(ouID, identifier)
 }
 
 // GetByIdentifierCalls gets all the calls that were made to GetByIdentifier.
@@ -186,11 +186,11 @@ func (mock *CustomEvaluatorRepositoryMock) GetByIdentifier(orgName string, ident
 //
 //	len(mockedCustomEvaluatorRepository.GetByIdentifierCalls())
 func (mock *CustomEvaluatorRepositoryMock) GetByIdentifierCalls() []struct {
-	OrgName    string
+	OuID       string
 	Identifier string
 } {
 	var calls []struct {
-		OrgName    string
+		OuID       string
 		Identifier string
 	}
 	mock.lockGetByIdentifier.RLock()
@@ -200,21 +200,21 @@ func (mock *CustomEvaluatorRepositoryMock) GetByIdentifierCalls() []struct {
 }
 
 // GetByIdentifiers calls GetByIdentifiersFunc.
-func (mock *CustomEvaluatorRepositoryMock) GetByIdentifiers(orgName string, identifiers []string) ([]models.CustomEvaluator, error) {
+func (mock *CustomEvaluatorRepositoryMock) GetByIdentifiers(ouID string, identifiers []string) ([]models.CustomEvaluator, error) {
 	if mock.GetByIdentifiersFunc == nil {
 		panic("CustomEvaluatorRepositoryMock.GetByIdentifiersFunc: method is nil but CustomEvaluatorRepository.GetByIdentifiers was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		Identifiers []string
 	}{
-		OrgName:     orgName,
+		OuID:        ouID,
 		Identifiers: identifiers,
 	}
 	mock.lockGetByIdentifiers.Lock()
 	mock.calls.GetByIdentifiers = append(mock.calls.GetByIdentifiers, callInfo)
 	mock.lockGetByIdentifiers.Unlock()
-	return mock.GetByIdentifiersFunc(orgName, identifiers)
+	return mock.GetByIdentifiersFunc(ouID, identifiers)
 }
 
 // GetByIdentifiersCalls gets all the calls that were made to GetByIdentifiers.
@@ -222,11 +222,11 @@ func (mock *CustomEvaluatorRepositoryMock) GetByIdentifiers(orgName string, iden
 //
 //	len(mockedCustomEvaluatorRepository.GetByIdentifiersCalls())
 func (mock *CustomEvaluatorRepositoryMock) GetByIdentifiersCalls() []struct {
-	OrgName     string
+	OuID        string
 	Identifiers []string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		Identifiers []string
 	}
 	mock.lockGetByIdentifiers.RLock()
@@ -236,21 +236,21 @@ func (mock *CustomEvaluatorRepositoryMock) GetByIdentifiersCalls() []struct {
 }
 
 // List calls ListFunc.
-func (mock *CustomEvaluatorRepositoryMock) List(orgName string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
+func (mock *CustomEvaluatorRepositoryMock) List(ouID string, filters repositories.CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
 	if mock.ListFunc == nil {
 		panic("CustomEvaluatorRepositoryMock.ListFunc: method is nil but CustomEvaluatorRepository.List was just called")
 	}
 	callInfo := struct {
-		OrgName string
+		OuID    string
 		Filters repositories.CustomEvaluatorFilters
 	}{
-		OrgName: orgName,
+		OuID:    ouID,
 		Filters: filters,
 	}
 	mock.lockList.Lock()
 	mock.calls.List = append(mock.calls.List, callInfo)
 	mock.lockList.Unlock()
-	return mock.ListFunc(orgName, filters)
+	return mock.ListFunc(ouID, filters)
 }
 
 // ListCalls gets all the calls that were made to List.
@@ -258,11 +258,11 @@ func (mock *CustomEvaluatorRepositoryMock) List(orgName string, filters reposito
 //
 //	len(mockedCustomEvaluatorRepository.ListCalls())
 func (mock *CustomEvaluatorRepositoryMock) ListCalls() []struct {
-	OrgName string
+	OuID    string
 	Filters repositories.CustomEvaluatorFilters
 } {
 	var calls []struct {
-		OrgName string
+		OuID    string
 		Filters repositories.CustomEvaluatorFilters
 	}
 	mock.lockList.RLock()

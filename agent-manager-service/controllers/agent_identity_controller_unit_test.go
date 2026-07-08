@@ -28,6 +28,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 )
@@ -272,12 +273,12 @@ func TestAgentIdentityRoutes_EnvThunderUnavailable(t *testing.T) {
 // resolver's ResolveIdentityFunc is left nil and must not be called).
 func TestAgentIdentityListAgents_ReturnsBindings(t *testing.T) {
 	bindingRepo := &repomocks.AgentThunderClientRepositoryMock{
-		FindByOrgAndEnvironmentFunc: func(_ context.Context, orgName, environmentName string) ([]models.AgentThunderClient, error) {
-			assert.Equal(t, "o1", orgName)
+		FindByOuAndEnvironmentFunc: func(_ context.Context, ouID, environmentName string) ([]models.AgentThunderClient, error) {
+			assert.Equal(t, "ou-1", ouID)
 			assert.Equal(t, "dev", environmentName)
 			return []models.AgentThunderClient{
 				{
-					OrgName:         "o1",
+					OUID:            "ou-1",
 					ProjectName:     "proj",
 					AgentName:       "agent-a",
 					EnvironmentName: "dev",
@@ -293,6 +294,7 @@ func TestAgentIdentityListAgents_ReturnsBindings(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/agents", nil)
 	req.SetPathValue("orgName", "o1")
 	req.SetPathValue("envName", "dev")
+	req = req.WithContext(middleware.WithResolvedOrg(req.Context(), middleware.ResolvedOrg{OUID: "ou-1"}))
 	w := httptest.NewRecorder()
 
 	ctrl.ListAgents(w, req)

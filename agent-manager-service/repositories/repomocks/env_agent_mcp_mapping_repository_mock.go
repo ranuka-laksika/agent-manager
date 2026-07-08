@@ -18,7 +18,7 @@ import (
 //
 //		// make and configure a mocked repositories.EnvAgentMCPMappingRepository
 //		mockedEnvAgentMCPMappingRepository := &EnvAgentMCPMappingRepositoryMock{
-//			CreateFunc: func(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, orgName string) error {
+//			CreateFunc: func(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, ouID string) error {
 //				panic("mock out the Create method")
 //			},
 //			DeleteFunc: func(ctx context.Context, tx *gorm.DB, mappingID uint) error {
@@ -47,7 +47,7 @@ import (
 //	}
 type EnvAgentMCPMappingRepositoryMock struct {
 	// CreateFunc mocks the Create method.
-	CreateFunc func(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, orgName string) error
+	CreateFunc func(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, ouID string) error
 
 	// DeleteFunc mocks the Delete method.
 	DeleteFunc func(ctx context.Context, tx *gorm.DB, mappingID uint) error
@@ -85,8 +85,8 @@ type EnvAgentMCPMappingRepositoryMock struct {
 			Name string
 			// Version is the version argument value.
 			Version string
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 		// Delete holds details about calls to the Delete method.
 		Delete []struct {
@@ -147,7 +147,7 @@ type EnvAgentMCPMappingRepositoryMock struct {
 }
 
 // Create calls CreateFunc.
-func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, orgName string) error {
+func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle string, name string, version string, ouID string) error {
 	if mock.CreateFunc == nil {
 		panic("EnvAgentMCPMappingRepositoryMock.CreateFunc: method is nil but EnvAgentMCPMappingRepository.Create was just called")
 	}
@@ -159,7 +159,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *go
 		Handle       string
 		Name         string
 		Version      string
-		OrgName      string
+		OuID         string
 	}{
 		Ctx:          ctx,
 		Tx:           tx,
@@ -168,12 +168,12 @@ func (mock *EnvAgentMCPMappingRepositoryMock) Create(ctx context.Context, tx *go
 		Handle:       handle,
 		Name:         name,
 		Version:      version,
-		OrgName:      orgName,
+		OuID:         ouID,
 	}
 	mock.lockCreate.Lock()
 	mock.calls.Create = append(mock.calls.Create, callInfo)
 	mock.lockCreate.Unlock()
-	return mock.CreateFunc(ctx, tx, mapping, proxyMapping, handle, name, version, orgName)
+	return mock.CreateFunc(ctx, tx, mapping, proxyMapping, handle, name, version, ouID)
 }
 
 // CreateCalls gets all the calls that were made to Create.
@@ -188,7 +188,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) CreateCalls() []struct {
 	Handle       string
 	Name         string
 	Version      string
-	OrgName      string
+	OuID         string
 } {
 	var calls []struct {
 		Ctx          context.Context
@@ -198,7 +198,7 @@ func (mock *EnvAgentMCPMappingRepositoryMock) CreateCalls() []struct {
 		Handle       string
 		Name         string
 		Version      string
-		OrgName      string
+		OuID         string
 	}
 	mock.lockCreate.RLock()
 	calls = mock.calls.Create

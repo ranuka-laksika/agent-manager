@@ -43,6 +43,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/wiring"
 
 	"go.uber.org/automaxprocs/maxprocs"
+	"gorm.io/gorm"
 )
 
 // Options holds the configuration options for running the application.
@@ -60,6 +61,11 @@ type Options struct {
 	// default) preserves the script-driven behavior; cloud deployments inject an
 	// implementation. See services.GatewayConfigApplier.
 	GatewayConfigApplier services.GatewayConfigApplier
+	// AgentThunderProvisioning is the deployment-specific AgentID provisioning
+	// implementation. A factory because the open-source impl is DB-backed and the
+	// DB is initialized inside Run. nil disables provisioning (identity endpoints
+	// report it unavailable, reconciler not started, no OpenBao required).
+	AgentThunderProvisioning func(db *gorm.DB) services.AgentThunderProvisioningService
 }
 
 // Run starts the application with the provided providers and options.
@@ -96,7 +102,14 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 
 	// Get the raw DB instance without context - repositories will add context per-operation
 	database := db.GetDB()
-	dependencies, err := wiring.InitializeAppParams(cfg, database, authProvider, secretProvider, opts.GatewayConfigApplier)
+
+	// Deployment-specific AgentID provisioning; nil disables it.
+	var agentThunderProvisioning services.AgentThunderProvisioningService
+	if opts.AgentThunderProvisioning != nil {
+		agentThunderProvisioning = opts.AgentThunderProvisioning(database)
+	}
+
+	dependencies, err := wiring.InitializeAppParams(cfg, database, authProvider, secretProvider, opts.GatewayConfigApplier, agentThunderProvisioning)
 	if err != nil {
 		slog.Error("failed to initialize app dependencies", "error", err)
 		os.Exit(1)
@@ -109,11 +122,14 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		os.Exit(1)
 	}
 
-	// Start the AgentID provisioning retry reconciler with its own background context
+	// Start the AgentID provisioning retry reconciler, but only when provisioning
+	// is enabled — otherwise there is nothing to reconcile.
 	agentThunderReconcilerCtx, agentThunderReconcilerCancel := context.WithCancel(context.Background())
-	if err := dependencies.AgentThunderReconciler.Start(agentThunderReconcilerCtx); err != nil {
-		slog.Error("failed to start agent thunder provisioning reconciler", "error", err)
-		os.Exit(1)
+	if agentThunderProvisioning != nil {
+		if err := dependencies.AgentThunderReconciler.Start(agentThunderReconcilerCtx); err != nil {
+			slog.Error("failed to start agent thunder provisioning reconciler", "error", err)
+			os.Exit(1)
+		}
 	}
 
 	// Load built-in LLM provider templates into memory
@@ -157,8 +173,10 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		}
 
 		agentThunderReconcilerCancel()
-		if err := dependencies.AgentThunderReconciler.Stop(); err != nil {
-			slog.Error("error stopping agent thunder provisioning reconciler", "error", err)
+		if agentThunderProvisioning != nil {
+			if err := dependencies.AgentThunderReconciler.Stop(); err != nil {
+				slog.Error("error stopping agent thunder provisioning reconciler", "error", err)
+			}
 		}
 
 		// Shutdown WebSocket manager in a goroutine since it blocks

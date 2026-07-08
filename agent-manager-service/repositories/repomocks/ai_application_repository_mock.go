@@ -20,19 +20,19 @@ import (
 //			CreateFunc: func(ctx context.Context, tx *gorm.DB, app *models.AIApplication) (bool, error) {
 //				panic("mock out the Create method")
 //			},
-//			DeleteByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentID string) error {
+//			DeleteByAgentFunc: func(ctx context.Context, ouID string, projectName string, agentID string) error {
 //				panic("mock out the DeleteByAgent method")
 //			},
-//			DeleteByAgentEnvFunc: func(ctx context.Context, tx *gorm.DB, orgName string, projectName string, agentID string, envName string) error {
+//			DeleteByAgentEnvFunc: func(ctx context.Context, tx *gorm.DB, ouID string, projectName string, agentID string, envName string) error {
 //				panic("mock out the DeleteByAgentEnv method")
 //			},
-//			GetByAgentEnvFunc: func(ctx context.Context, orgName string, projectName string, agentID string, envName string) (*models.AIApplication, error) {
+//			GetByAgentEnvFunc: func(ctx context.Context, ouID string, projectName string, agentID string, envName string) (*models.AIApplication, error) {
 //				panic("mock out the GetByAgentEnv method")
 //			},
-//			ListByAgentFunc: func(ctx context.Context, orgName string, projectName string, agentID string) ([]models.AIApplication, error) {
+//			ListByAgentFunc: func(ctx context.Context, ouID string, projectName string, agentID string) ([]models.AIApplication, error) {
 //				panic("mock out the ListByAgent method")
 //			},
-//			ListByOrgFunc: func(ctx context.Context, orgName string) ([]models.AIApplication, error) {
+//			ListByOrgFunc: func(ctx context.Context, ouID string) ([]models.AIApplication, error) {
 //				panic("mock out the ListByOrg method")
 //			},
 //		}
@@ -46,19 +46,19 @@ type AIApplicationRepositoryMock struct {
 	CreateFunc func(ctx context.Context, tx *gorm.DB, app *models.AIApplication) (bool, error)
 
 	// DeleteByAgentFunc mocks the DeleteByAgent method.
-	DeleteByAgentFunc func(ctx context.Context, orgName string, projectName string, agentID string) error
+	DeleteByAgentFunc func(ctx context.Context, ouID string, projectName string, agentID string) error
 
 	// DeleteByAgentEnvFunc mocks the DeleteByAgentEnv method.
-	DeleteByAgentEnvFunc func(ctx context.Context, tx *gorm.DB, orgName string, projectName string, agentID string, envName string) error
+	DeleteByAgentEnvFunc func(ctx context.Context, tx *gorm.DB, ouID string, projectName string, agentID string, envName string) error
 
 	// GetByAgentEnvFunc mocks the GetByAgentEnv method.
-	GetByAgentEnvFunc func(ctx context.Context, orgName string, projectName string, agentID string, envName string) (*models.AIApplication, error)
+	GetByAgentEnvFunc func(ctx context.Context, ouID string, projectName string, agentID string, envName string) (*models.AIApplication, error)
 
 	// ListByAgentFunc mocks the ListByAgent method.
-	ListByAgentFunc func(ctx context.Context, orgName string, projectName string, agentID string) ([]models.AIApplication, error)
+	ListByAgentFunc func(ctx context.Context, ouID string, projectName string, agentID string) ([]models.AIApplication, error)
 
 	// ListByOrgFunc mocks the ListByOrg method.
-	ListByOrgFunc func(ctx context.Context, orgName string) ([]models.AIApplication, error)
+	ListByOrgFunc func(ctx context.Context, ouID string) ([]models.AIApplication, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -75,8 +75,8 @@ type AIApplicationRepositoryMock struct {
 		DeleteByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -88,8 +88,8 @@ type AIApplicationRepositoryMock struct {
 			Ctx context.Context
 			// Tx is the tx argument value.
 			Tx *gorm.DB
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -101,8 +101,8 @@ type AIApplicationRepositoryMock struct {
 		GetByAgentEnv []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -114,8 +114,8 @@ type AIApplicationRepositoryMock struct {
 		ListByAgent []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentID is the agentID argument value.
@@ -125,8 +125,8 @@ type AIApplicationRepositoryMock struct {
 		ListByOrg []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 		}
 	}
 	lockCreate           sync.RWMutex
@@ -178,25 +178,25 @@ func (mock *AIApplicationRepositoryMock) CreateCalls() []struct {
 }
 
 // DeleteByAgent calls DeleteByAgentFunc.
-func (mock *AIApplicationRepositoryMock) DeleteByAgent(ctx context.Context, orgName string, projectName string, agentID string) error {
+func (mock *AIApplicationRepositoryMock) DeleteByAgent(ctx context.Context, ouID string, projectName string, agentID string) error {
 	if mock.DeleteByAgentFunc == nil {
 		panic("AIApplicationRepositoryMock.DeleteByAgentFunc: method is nil but AIApplicationRepository.DeleteByAgent was just called")
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 	}
 	mock.lockDeleteByAgent.Lock()
 	mock.calls.DeleteByAgent = append(mock.calls.DeleteByAgent, callInfo)
 	mock.lockDeleteByAgent.Unlock()
-	return mock.DeleteByAgentFunc(ctx, orgName, projectName, agentID)
+	return mock.DeleteByAgentFunc(ctx, ouID, projectName, agentID)
 }
 
 // DeleteByAgentCalls gets all the calls that were made to DeleteByAgent.
@@ -205,13 +205,13 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgent(ctx context.Context, orgN
 //	len(mockedAIApplicationRepository.DeleteByAgentCalls())
 func (mock *AIApplicationRepositoryMock) DeleteByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}
@@ -222,21 +222,21 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentCalls() []struct {
 }
 
 // DeleteByAgentEnv calls DeleteByAgentEnvFunc.
-func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, tx *gorm.DB, orgName string, projectName string, agentID string, envName string) error {
+func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, tx *gorm.DB, ouID string, projectName string, agentID string, envName string) error {
 	if mock.DeleteByAgentEnvFunc == nil {
 		panic("AIApplicationRepositoryMock.DeleteByAgentEnvFunc: method is nil but AIApplicationRepository.DeleteByAgentEnv was just called")
 	}
 	callInfo := struct {
 		Ctx         context.Context
 		Tx          *gorm.DB
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
 	}{
 		Ctx:         ctx,
 		Tx:          tx,
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 		EnvName:     envName,
@@ -244,7 +244,7 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, t
 	mock.lockDeleteByAgentEnv.Lock()
 	mock.calls.DeleteByAgentEnv = append(mock.calls.DeleteByAgentEnv, callInfo)
 	mock.lockDeleteByAgentEnv.Unlock()
-	return mock.DeleteByAgentEnvFunc(ctx, tx, orgName, projectName, agentID, envName)
+	return mock.DeleteByAgentEnvFunc(ctx, tx, ouID, projectName, agentID, envName)
 }
 
 // DeleteByAgentEnvCalls gets all the calls that were made to DeleteByAgentEnv.
@@ -254,7 +254,7 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnv(ctx context.Context, t
 func (mock *AIApplicationRepositoryMock) DeleteByAgentEnvCalls() []struct {
 	Ctx         context.Context
 	Tx          *gorm.DB
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 	EnvName     string
@@ -262,7 +262,7 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnvCalls() []struct {
 	var calls []struct {
 		Ctx         context.Context
 		Tx          *gorm.DB
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
@@ -274,19 +274,19 @@ func (mock *AIApplicationRepositoryMock) DeleteByAgentEnvCalls() []struct {
 }
 
 // GetByAgentEnv calls GetByAgentEnvFunc.
-func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, orgName string, projectName string, agentID string, envName string) (*models.AIApplication, error) {
+func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, ouID string, projectName string, agentID string, envName string) (*models.AIApplication, error) {
 	if mock.GetByAgentEnvFunc == nil {
 		panic("AIApplicationRepositoryMock.GetByAgentEnvFunc: method is nil but AIApplicationRepository.GetByAgentEnv was just called")
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 		EnvName:     envName,
@@ -294,7 +294,7 @@ func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, orgN
 	mock.lockGetByAgentEnv.Lock()
 	mock.calls.GetByAgentEnv = append(mock.calls.GetByAgentEnv, callInfo)
 	mock.lockGetByAgentEnv.Unlock()
-	return mock.GetByAgentEnvFunc(ctx, orgName, projectName, agentID, envName)
+	return mock.GetByAgentEnvFunc(ctx, ouID, projectName, agentID, envName)
 }
 
 // GetByAgentEnvCalls gets all the calls that were made to GetByAgentEnv.
@@ -303,14 +303,14 @@ func (mock *AIApplicationRepositoryMock) GetByAgentEnv(ctx context.Context, orgN
 //	len(mockedAIApplicationRepository.GetByAgentEnvCalls())
 func (mock *AIApplicationRepositoryMock) GetByAgentEnvCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 	EnvName     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 		EnvName     string
@@ -322,25 +322,25 @@ func (mock *AIApplicationRepositoryMock) GetByAgentEnvCalls() []struct {
 }
 
 // ListByAgent calls ListByAgentFunc.
-func (mock *AIApplicationRepositoryMock) ListByAgent(ctx context.Context, orgName string, projectName string, agentID string) ([]models.AIApplication, error) {
+func (mock *AIApplicationRepositoryMock) ListByAgent(ctx context.Context, ouID string, projectName string, agentID string) ([]models.AIApplication, error) {
 	if mock.ListByAgentFunc == nil {
 		panic("AIApplicationRepositoryMock.ListByAgentFunc: method is nil but AIApplicationRepository.ListByAgent was just called")
 	}
 	callInfo := struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}{
 		Ctx:         ctx,
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentID:     agentID,
 	}
 	mock.lockListByAgent.Lock()
 	mock.calls.ListByAgent = append(mock.calls.ListByAgent, callInfo)
 	mock.lockListByAgent.Unlock()
-	return mock.ListByAgentFunc(ctx, orgName, projectName, agentID)
+	return mock.ListByAgentFunc(ctx, ouID, projectName, agentID)
 }
 
 // ListByAgentCalls gets all the calls that were made to ListByAgent.
@@ -349,13 +349,13 @@ func (mock *AIApplicationRepositoryMock) ListByAgent(ctx context.Context, orgNam
 //	len(mockedAIApplicationRepository.ListByAgentCalls())
 func (mock *AIApplicationRepositoryMock) ListByAgentCalls() []struct {
 	Ctx         context.Context
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentID     string
 } {
 	var calls []struct {
 		Ctx         context.Context
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentID     string
 	}
@@ -366,21 +366,21 @@ func (mock *AIApplicationRepositoryMock) ListByAgentCalls() []struct {
 }
 
 // ListByOrg calls ListByOrgFunc.
-func (mock *AIApplicationRepositoryMock) ListByOrg(ctx context.Context, orgName string) ([]models.AIApplication, error) {
+func (mock *AIApplicationRepositoryMock) ListByOrg(ctx context.Context, ouID string) ([]models.AIApplication, error) {
 	if mock.ListByOrgFunc == nil {
 		panic("AIApplicationRepositoryMock.ListByOrgFunc: method is nil but AIApplicationRepository.ListByOrg was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}{
-		Ctx:     ctx,
-		OrgName: orgName,
+		Ctx:  ctx,
+		OuID: ouID,
 	}
 	mock.lockListByOrg.Lock()
 	mock.calls.ListByOrg = append(mock.calls.ListByOrg, callInfo)
 	mock.lockListByOrg.Unlock()
-	return mock.ListByOrgFunc(ctx, orgName)
+	return mock.ListByOrgFunc(ctx, ouID)
 }
 
 // ListByOrgCalls gets all the calls that were made to ListByOrg.
@@ -388,12 +388,12 @@ func (mock *AIApplicationRepositoryMock) ListByOrg(ctx context.Context, orgName 
 //
 //	len(mockedAIApplicationRepository.ListByOrgCalls())
 func (mock *AIApplicationRepositoryMock) ListByOrgCalls() []struct {
-	Ctx     context.Context
-	OrgName string
+	Ctx  context.Context
+	OuID string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
+		Ctx  context.Context
+		OuID string
 	}
 	mock.lockListByOrg.RLock()
 	calls = mock.calls.ListByOrg

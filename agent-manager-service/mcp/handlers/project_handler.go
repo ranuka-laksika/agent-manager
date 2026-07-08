@@ -33,10 +33,10 @@ func NewProjectHandler(infraSvc services.InfraResourceManager) *ProjectHandler {
 	return &ProjectHandler{infraSvc: infraSvc}
 }
 
-func (h *ProjectHandler) ListProjects(ctx context.Context, orgName string, limit int, offset int) ([]*models.ProjectResponse, int32, error) {
-	return h.infraSvc.ListProjects(ctx, orgName, limit, offset)
+func (h *ProjectHandler) ListProjects(ctx context.Context, ouID string, limit int, offset int) ([]*models.ProjectResponse, int32, error) {
+	return h.infraSvc.ListProjects(ctx, ouID, limit, offset)
 }
 
-func (h *ProjectHandler) CreateProject(ctx context.Context, orgName string, payload spec.CreateProjectRequest) (*models.ProjectResponse, error) {
-	return h.infraSvc.CreateProject(ctx, orgName, payload)
+func (h *ProjectHandler) CreateProject(ctx context.Context, ouID string, payload spec.CreateProjectRequest) (*models.ProjectResponse, error) {
+	return h.infraSvc.CreateProject(ctx, ouID, payload)
 }

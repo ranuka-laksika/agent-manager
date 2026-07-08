@@ -38,7 +38,7 @@ const (
 // CustomEvaluator is the GORM model for the custom_evaluators table
 type CustomEvaluator struct {
 	ID           uuid.UUID              `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
-	OrgName      string                 `gorm:"column:org_name;not null"`
+	OUID         string                 `gorm:"column:ou_id;not null"`
 	Identifier   string                 `gorm:"column:identifier;not null"`
 	DisplayName  string                 `gorm:"column:display_name;not null"`
 	Description  string                 `gorm:"column:description;not null;default:''"`

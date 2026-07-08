@@ -24,6 +24,7 @@ import (
 	"net/http"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -644,8 +645,9 @@ func (c *agentIdentityController) ListAgents(w http.ResponseWriter, r *http.Requ
 	log := logger.GetLogger(ctx)
 	orgName := r.PathValue(utils.PathParamOrgName)
 	envName := r.PathValue("envName")
+	ouID := middleware.OUIDFromRequest(r)
 
-	rows, err := c.bindingRepo.FindByOrgAndEnvironment(ctx, orgName, envName)
+	rows, err := c.bindingRepo.FindByOuAndEnvironment(ctx, ouID, envName)
 	if err != nil {
 		log.Error("agent-identity ListAgents failed", "org", orgName, "env", envName, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list agent identity bindings")

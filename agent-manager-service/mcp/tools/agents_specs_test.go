@@ -40,7 +40,7 @@ func agentToolSpecs() []toolTestSpec {
 			expectedMethod: "ListAgents",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -62,7 +62,7 @@ func agentToolSpecs() []toolTestSpec {
 			expectedMethod: "ListProjects",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 			},
 		},
@@ -83,7 +83,7 @@ func agentToolSpecs() []toolTestSpec {
 			expectedMethod: "CreateAgent",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)

@@ -29,10 +29,10 @@ import (
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/agent_kind_repository_mock.go . AgentKindRepository:AgentKindRepositoryMock
 type AgentKindRepository interface {
 	CreateKind(ctx context.Context, kind *models.AgentKind) error
-	GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKind, error)
-	ListKinds(ctx context.Context, orgName string, limit, offset int) ([]models.AgentKind, int64, error)
+	GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKind, error)
+	ListKinds(ctx context.Context, ouID string, limit, offset int) ([]models.AgentKind, int64, error)
 	UpdateKind(ctx context.Context, kind *models.AgentKind) error
-	DeleteKind(ctx context.Context, orgName, kindName string) error
+	DeleteKind(ctx context.Context, ouID, kindName string) error
 
 	// ExistsBySourceAgent reports whether any agent kind is published from the
 	// given source agent.
@@ -47,12 +47,12 @@ type AgentKindRepository interface {
 	// exists before it ever creates a kind (see agent_kind_service.go). Treat a
 	// false negative here as acceptable; do not "fix" this with a lock without
 	// re-reading that reasoning.
-	ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error)
+	ExistsBySourceAgent(ctx context.Context, ouID, projectName, agentName string) (bool, error)
 
 	CreateVersion(ctx context.Context, version *models.AgentKindVersion) error
 	GetVersion(ctx context.Context, kindID uuid.UUID, versionTag string) (*models.AgentKindVersion, error)
 	GetVersionByImageID(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error)
-	FindVersionByImageIDInOrg(ctx context.Context, orgName, imageID string) (*models.AgentKindVersion, error)
+	FindVersionByImageIDInOrg(ctx context.Context, ouID, imageID string) (*models.AgentKindVersion, error)
 	ListVersions(ctx context.Context, kindID uuid.UUID) ([]models.AgentKindVersion, error)
 	DeleteVersion(ctx context.Context, kindID uuid.UUID, versionTag string) error
 }
@@ -73,19 +73,19 @@ func (r *agentKindRepo) CreateKind(ctx context.Context, kind *models.AgentKind) 
 	return result.Error
 }
 
-func (r *agentKindRepo) ExistsBySourceAgent(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
+func (r *agentKindRepo) ExistsBySourceAgent(ctx context.Context, ouID, projectName, agentName string) (bool, error) {
 	var count int64
 	result := r.db.WithContext(ctx).Model(&models.AgentKind{}).
-		Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+		Where("ou_id = ? AND project_name = ? AND agent_name = ?", ouID, projectName, agentName).
 		Count(&count)
 	return count > 0, result.Error
 }
 
-func (r *agentKindRepo) GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKind, error) {
+func (r *agentKindRepo) GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKind, error) {
 	var kind models.AgentKind
 	result := r.db.WithContext(ctx).
 		Preload("Versions", func(db *gorm.DB) *gorm.DB { return db.Order("created_at DESC") }).
-		Where("org_name = ? AND name = ?", orgName, kindName).
+		Where("ou_id = ? AND name = ?", ouID, kindName).
 		First(&kind)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return nil, gorm.ErrRecordNotFound
@@ -93,12 +93,12 @@ func (r *agentKindRepo) GetKind(ctx context.Context, orgName, kindName string) (
 	return &kind, result.Error
 }
 
-func (r *agentKindRepo) ListKinds(ctx context.Context, orgName string, limit, offset int) ([]models.AgentKind, int64, error) {
+func (r *agentKindRepo) ListKinds(ctx context.Context, ouID string, limit, offset int) ([]models.AgentKind, int64, error) {
 	var kinds []models.AgentKind
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&models.AgentKind{}).
-		Where("org_name = ?", orgName)
+		Where("ou_id = ?", ouID)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -131,11 +131,11 @@ func (r *agentKindRepo) UpdateKind(ctx context.Context, kind *models.AgentKind) 
 	return nil
 }
 
-func (r *agentKindRepo) DeleteKind(ctx context.Context, orgName, kindName string) error {
+func (r *agentKindRepo) DeleteKind(ctx context.Context, ouID, kindName string) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Fetch the kind first so we can delete its versions before the parent row.
 		var kind models.AgentKind
-		if err := tx.Where("org_name = ? AND name = ?", orgName, kindName).
+		if err := tx.Where("ou_id = ? AND name = ?", ouID, kindName).
 			First(&kind).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return gorm.ErrRecordNotFound
@@ -188,11 +188,11 @@ func (r *agentKindRepo) GetVersionByImageID(ctx context.Context, kindID uuid.UUI
 	return &v, result.Error
 }
 
-func (r *agentKindRepo) FindVersionByImageIDInOrg(ctx context.Context, orgName, imageID string) (*models.AgentKindVersion, error) {
+func (r *agentKindRepo) FindVersionByImageIDInOrg(ctx context.Context, ouID, imageID string) (*models.AgentKindVersion, error) {
 	var v models.AgentKindVersion
 	result := r.db.WithContext(ctx).
 		Joins("JOIN agent_kinds ON agent_kinds.id = agent_kind_versions.agent_kind_id").
-		Where("agent_kinds.org_name = ? AND agent_kind_versions.image_id = ?", orgName, imageID).
+		Where("agent_kinds.ou_id = ? AND agent_kind_versions.image_id = ?", ouID, imageID).
 		Preload("Kind").
 		First(&v)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {

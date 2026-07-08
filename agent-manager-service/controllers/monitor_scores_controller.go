@@ -27,6 +27,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -99,7 +100,7 @@ func (c *monitorScoresController) GetMonitorScores(w http.ResponseWriter, r *htt
 	log := logger.GetLogger(r.Context())
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -122,7 +123,7 @@ func (c *monitorScoresController) GetMonitorScores(w http.ResponseWriter, r *htt
 	}
 
 	// Resolve monitor name to ID
-	monitorID, err := c.scoresService.GetMonitorID(orgName, projName, agentName, monitorName)
+	monitorID, err := c.scoresService.GetMonitorID(ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -153,7 +154,7 @@ func (c *monitorScoresController) GetMonitorRunScores(w http.ResponseWriter, r *
 	log := logger.GetLogger(r.Context())
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -166,13 +167,13 @@ func (c *monitorScoresController) GetMonitorRunScores(w http.ResponseWriter, r *
 	}
 
 	// Resolve monitor name to ID to enforce org/project/agent scoping
-	monitorID, err := c.scoresService.GetMonitorID(orgName, projName, agentName, monitorName)
+	monitorID, err := c.scoresService.GetMonitorID(ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
 			return
 		}
-		log.Error("Failed to resolve monitor", "orgName", orgName, "projName", projName, "agentName", agentName, "monitorName", monitorName, "error", err)
+		log.Error("Failed to resolve monitor", "ouID", ouID, "projName", projName, "agentName", agentName, "monitorName", monitorName, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to resolve monitor")
 		return
 	}
@@ -183,7 +184,7 @@ func (c *monitorScoresController) GetMonitorRunScores(w http.ResponseWriter, r *
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor run not found")
 			return
 		}
-		log.Error("Failed to get monitor run scores", "orgName", orgName, "projName", projName, "agentName", agentName, "monitorName", monitorName, "runId", runIDStr, "error", err)
+		log.Error("Failed to get monitor run scores", "ouID", ouID, "projName", projName, "agentName", agentName, "monitorName", monitorName, "runId", runIDStr, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get monitor run scores")
 		return
 	}
@@ -202,7 +203,7 @@ func (c *monitorScoresController) GetScoresTimeSeries(w http.ResponseWriter, r *
 	log := logger.GetLogger(r.Context())
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -237,7 +238,7 @@ func (c *monitorScoresController) GetScoresTimeSeries(w http.ResponseWriter, r *
 	}
 
 	// Resolve monitor name to ID
-	monitorID, err := c.scoresService.GetMonitorID(orgName, projName, agentName, monitorName)
+	monitorID, err := c.scoresService.GetMonitorID(ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -286,7 +287,7 @@ func parseEvaluatorsList(param string) []string {
 func (c *monitorScoresController) GetGroupedScores(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(r.Context())
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -302,7 +303,7 @@ func (c *monitorScoresController) GetGroupedScores(w http.ResponseWriter, r *htt
 		return
 	}
 
-	monitorID, err := c.scoresService.GetMonitorID(orgName, projName, agentName, monitorName)
+	monitorID, err := c.scoresService.GetMonitorID(ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -333,7 +334,7 @@ func (c *monitorScoresController) GetTraceScores(w http.ResponseWriter, r *http.
 	log := logger.GetLogger(r.Context())
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	traceID := r.PathValue(utils.PathParamTraceId)
@@ -343,7 +344,7 @@ func (c *monitorScoresController) GetTraceScores(w http.ResponseWriter, r *http.
 		return
 	}
 
-	result, err := c.scoresService.GetTraceScores(traceID, orgName, projName, agentName)
+	result, err := c.scoresService.GetTraceScores(traceID, ouID, projName, agentName)
 	if err != nil {
 		log.Error("Failed to get trace scores", "traceId", traceID, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get trace scores")
@@ -362,7 +363,7 @@ func (c *monitorScoresController) GetTraceScores(w http.ResponseWriter, r *http.
 func (c *monitorScoresController) GetAgentTraceScores(w http.ResponseWriter, r *http.Request) {
 	log := logger.GetLogger(r.Context())
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -404,7 +405,7 @@ func (c *monitorScoresController) GetAgentTraceScores(w http.ResponseWriter, r *
 		return
 	}
 
-	result, err := c.scoresService.GetAgentTraceScores(orgName, projName, agentName, startTime, endTime, limit, offset, sortOrder)
+	result, err := c.scoresService.GetAgentTraceScores(ouID, projName, agentName, startTime, endTime, limit, offset, sortOrder)
 	if err != nil {
 		log.Error("Failed to get agent trace scores", "agentName", agentName, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get agent trace scores")

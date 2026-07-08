@@ -138,7 +138,6 @@ func TestCreateAgent(t *testing.T) {
 
 		// Validate call parameters
 		createComponentCall := openChoreoClient.CreateComponentCalls()[0]
-		require.Equal(t, testOrgName, createComponentCall.NamespaceName)
 		require.Equal(t, testProjName, createComponentCall.ProjectName)
 		require.Equal(t, testAgentNameOne, createComponentCall.Req.Name)
 		require.Equal(t, "Test Agent Description", createComponentCall.Req.Description)
@@ -228,7 +227,6 @@ func TestCreateAgent(t *testing.T) {
 
 		// Validate call parameters
 		createComponentCall := openChoreoClient.CreateComponentCalls()[0]
-		require.Equal(t, testOrgName, createComponentCall.NamespaceName)
 		require.Equal(t, testProjName, createComponentCall.ProjectName)
 		require.Equal(t, testAgentNameBallerina, createComponentCall.Req.Name)
 		require.Equal(t, "Test Ballerina Agent Description", createComponentCall.Req.Description)
@@ -320,7 +318,6 @@ func TestCreateAgent(t *testing.T) {
 
 		// Validate call parameters
 		createComponentCall := openChoreoClient.CreateComponentCalls()[0]
-		require.Equal(t, testOrgName, createComponentCall.NamespaceName)
 		require.Equal(t, testProjName, createComponentCall.ProjectName)
 		require.Equal(t, testAgentNameDocker, createComponentCall.Req.Name)
 		require.Equal(t, "Test Docker Agent Description", createComponentCall.Req.Description)
@@ -332,7 +329,6 @@ func TestCreateAgent(t *testing.T) {
 		require.Len(t, attachTraitsCalls, 1, "Should have called AttachTraits once with all traits")
 
 		attachCall := attachTraitsCalls[0]
-		require.Equal(t, testOrgName, attachCall.NamespaceName)
 		require.Equal(t, testProjName, attachCall.ProjectName)
 		require.Equal(t, testAgentNameDocker, attachCall.ComponentName)
 		require.Len(t, attachCall.TraitRequests, 2)
@@ -439,7 +435,6 @@ func TestCreateAgent(t *testing.T) {
 
 		// Validate call parameters
 		createComponentCall := openChoreoClient.CreateComponentCalls()[0]
-		require.Equal(t, testOrgName, createComponentCall.NamespaceName)
 		require.Equal(t, testProjName, createComponentCall.ProjectName)
 		require.Equal(t, testAgentNameTwo, createComponentCall.Req.Name)
 		require.Equal(t, "Test Agent Description", createComponentCall.Req.Description)
@@ -606,7 +601,7 @@ func TestCreateAgent(t *testing.T) {
 		},
 		{
 			name:           "return 404 on organization not found",
-			authMiddleware: authMiddleware,
+			authMiddleware: jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"),
 			payload: map[string]interface{}{
 				"name":        fmt.Sprintf("test-agent-%s", uuid.New().String()[:5]),
 				"displayName": "Test Agent",

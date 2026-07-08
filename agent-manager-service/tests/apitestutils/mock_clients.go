@@ -27,6 +27,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
@@ -34,6 +35,12 @@ import (
 // CreateMockOpenChoreoClient creates a mock OpenChoreo client with default behavior for testing
 func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 	return &clientmocks.OpenChoreoClientMock{
+		// Resolve the namespace the same way the real client does — from the
+		// configured default namespace — so callers (e.g. observability) get a
+		// realistic value rather than an empty string.
+		NamespaceForFunc: func(ouID string) string {
+			return config.GetConfig().OpenChoreo.DefaultNamespace
+		},
 		GetOrganizationFunc: func(ctx context.Context, orgName string) (*models.OrganizationResponse, error) {
 			if orgName == "nonexistent-org" {
 				return nil, utils.ErrOrganizationNotFound

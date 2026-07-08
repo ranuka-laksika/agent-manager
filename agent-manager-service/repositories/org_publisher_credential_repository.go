@@ -29,7 +29,7 @@ import (
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/org_publisher_credential_repository_mock.go . OrgPublisherCredentialRepository:OrgPublisherCredentialRepositoryMock
 type OrgPublisherCredentialRepository interface {
-	GetByOrgName(orgName string) (*models.OrgPublisherCredential, error)
+	GetByOrgName(ouID string) (*models.OrgPublisherCredential, error)
 	Upsert(cred *models.OrgPublisherCredential) error
 }
 
@@ -44,9 +44,9 @@ func NewOrgPublisherCredentialRepo(db *gorm.DB) OrgPublisherCredentialRepository
 
 // GetByOrgName returns the publisher credentials for the given org.
 // Returns (nil, gorm.ErrRecordNotFound) if no record exists; returns (nil, err) on other DB errors.
-func (r *orgPublisherCredentialRepo) GetByOrgName(orgName string) (*models.OrgPublisherCredential, error) {
+func (r *orgPublisherCredentialRepo) GetByOrgName(ouID string) (*models.OrgPublisherCredential, error) {
 	var cred models.OrgPublisherCredential
-	result := r.db.Where("org_name = ?", orgName).First(&cred)
+	result := r.db.Where("ou_id = ?", ouID).First(&cred)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, gorm.ErrRecordNotFound
@@ -59,7 +59,7 @@ func (r *orgPublisherCredentialRepo) GetByOrgName(orgName string) (*models.OrgPu
 // Upsert atomically creates or updates publisher credentials for an org.
 func (r *orgPublisherCredentialRepo) Upsert(cred *models.OrgPublisherCredential) error {
 	return r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "org_name"}},
+		Columns:   []clause.Column{{Name: "ou_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"org_uuid", "client_id", "secret_kv_path", "secret_key", "client_secret_encrypted", "updated_at"}),
 	}).Create(cred).Error
 }

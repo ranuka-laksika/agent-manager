@@ -26,8 +26,6 @@ type DataPlane struct {
 	DisplayName string `json:"displayName"`
 	// Description of the data plane
 	Description string `json:"description"`
-	// Organization name
-	OrgName string `json:"orgName"`
 	// Timestamp when the data plane was created
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -36,12 +34,11 @@ type DataPlane struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDataPlane(name string, displayName string, description string, orgName string, createdAt time.Time) *DataPlane {
+func NewDataPlane(name string, displayName string, description string, createdAt time.Time) *DataPlane {
 	this := DataPlane{}
 	this.Name = name
 	this.DisplayName = displayName
 	this.Description = description
-	this.OrgName = orgName
 	this.CreatedAt = createdAt
 	return &this
 }
@@ -126,30 +123,6 @@ func (o *DataPlane) SetDescription(v string) {
 	o.Description = v
 }
 
-// GetOrgName returns the OrgName field value
-func (o *DataPlane) GetOrgName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrgName
-}
-
-// GetOrgNameOk returns a tuple with the OrgName field value
-// and a boolean to check if the value has been set.
-func (o *DataPlane) GetOrgNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrgName, true
-}
-
-// SetOrgName sets field value
-func (o *DataPlane) SetOrgName(v string) {
-	o.OrgName = v
-}
-
 // GetCreatedAt returns the CreatedAt field value
 func (o *DataPlane) GetCreatedAt() time.Time {
 	if o == nil {
@@ -187,7 +160,6 @@ func (o DataPlane) ToMap() (map[string]interface{}, error) {
 	toSerialize["name"] = o.Name
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["description"] = o.Description
-	toSerialize["orgName"] = o.OrgName
 	toSerialize["createdAt"] = o.CreatedAt
 	return toSerialize, nil
 }

@@ -25,14 +25,14 @@ import (
 // CatalogEntry represents a resource in the catalog
 // This model maps to the artifacts table with in_catalog filter
 type CatalogEntry struct {
-	UUID             uuid.UUID `gorm:"column:uuid;primaryKey" json:"uuid"`
-	Handle           string    `gorm:"column:handle;not null" json:"handle"`
-	Name             string    `gorm:"column:name;not null" json:"name"`
-	Version          string    `gorm:"column:version;not null" json:"version"`
-	Kind             string    `gorm:"column:kind;not null" json:"kind"`
-	InCatalog        bool      `gorm:"column:in_catalog" json:"inCatalog"`
-	OrganizationName string    `gorm:"column:organization_name;not null" json:"-"`
-	CreatedAt        time.Time `gorm:"column:created_at" json:"createdAt"`
+	UUID      uuid.UUID `gorm:"column:uuid;primaryKey" json:"uuid"`
+	Handle    string    `gorm:"column:handle;not null" json:"handle"`
+	Name      string    `gorm:"column:name;not null" json:"name"`
+	Version   string    `gorm:"column:version;not null" json:"version"`
+	Kind      string    `gorm:"column:kind;not null" json:"kind"`
+	InCatalog bool      `gorm:"column:in_catalog" json:"inCatalog"`
+	OUID      string    `gorm:"column:ou_id;not null" json:"-"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"createdAt"`
 }
 
 // TableName returns the table name for catalog queries

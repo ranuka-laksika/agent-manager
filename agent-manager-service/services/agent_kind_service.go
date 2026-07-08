@@ -35,30 +35,30 @@ import (
 
 type AgentKindService interface {
 	// Kind CRUD
-	GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKindResponse, error)
-	ListKinds(ctx context.Context, orgName string, limit, offset int) (*models.AgentKindListResponse, error)
-	UpdateKind(ctx context.Context, orgName, kindName string, req *spec.UpdateAgentKindRequest) (*models.AgentKindResponse, error)
-	DeleteKind(ctx context.Context, orgName, kindName string) error
+	GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKindResponse, error)
+	ListKinds(ctx context.Context, ouID string, limit, offset int) (*models.AgentKindListResponse, error)
+	UpdateKind(ctx context.Context, ouID, kindName string, req *spec.UpdateAgentKindRequest) (*models.AgentKindResponse, error)
+	DeleteKind(ctx context.Context, ouID, kindName string) error
 
 	// Version management
-	AddVersion(ctx context.Context, orgName, kindName string, req *spec.AddAgentKindVersionRequest) (*models.AgentKindVersionResponse, error)
-	GetVersion(ctx context.Context, orgName, kindName, versionTag string) (*models.AgentKindVersionResponse, error)
-	ListVersions(ctx context.Context, orgName, kindName string) ([]models.AgentKindVersionResponse, error)
-	DeleteVersion(ctx context.Context, orgName, kindName, versionTag string) error
+	AddVersion(ctx context.Context, ouID, kindName string, req *spec.AddAgentKindVersionRequest) (*models.AgentKindVersionResponse, error)
+	GetVersion(ctx context.Context, ouID, kindName, versionTag string) (*models.AgentKindVersionResponse, error)
+	ListVersions(ctx context.Context, ouID, kindName string) ([]models.AgentKindVersionResponse, error)
+	DeleteVersion(ctx context.Context, ouID, kindName, versionTag string) error
 
 	// Publish shortcut: creates kind if needed + adds version
-	PublishKind(ctx context.Context, orgName, projectName, agentName string, req *spec.PublishAgentKindRequest) (*models.AgentKindVersionResponse, error)
+	PublishKind(ctx context.Context, ouID, projectName, agentName string, req *spec.PublishAgentKindRequest) (*models.AgentKindVersionResponse, error)
 
 	// For use during agent creation from kind
-	GetKindVersion(ctx context.Context, orgName, kindName, versionTag string) (*models.AgentKindVersion, error)
+	GetKindVersion(ctx context.Context, ouID, kindName, versionTag string) (*models.AgentKindVersion, error)
 
 	// ListKindAgents returns all agents deployed from a given kind across all projects in the org.
-	ListKindAgents(ctx context.Context, orgName, kindName string) ([]*models.AgentResponse, error)
+	ListKindAgents(ctx context.Context, ouID, kindName string) ([]*models.AgentResponse, error)
 
 	// HasKindsSourcedFrom reports whether any agent kind is published from the
 	// given source agent. See ExistsBySourceAgent in agent_kind_repository.go for
 	// why this is a plain (not lock-protected) check, by design.
-	HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error)
+	HasKindsSourcedFrom(ctx context.Context, ouID, projectName, agentName string) (bool, error)
 }
 
 type agentKindService struct {
@@ -74,8 +74,8 @@ func NewAgentKindService(kindRepo repositories.AgentKindRepository, ocClient occ
 }
 
 // GetKind returns an Agent Kind with all its versions.
-func (s *agentKindService) GetKind(ctx context.Context, orgName, kindName string) (*models.AgentKindResponse, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKindResponse, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -86,8 +86,8 @@ func (s *agentKindService) GetKind(ctx context.Context, orgName, kindName string
 }
 
 // ListKinds returns a paginated list of Agent Kinds in the org.
-func (s *agentKindService) ListKinds(ctx context.Context, orgName string, limit, offset int) (*models.AgentKindListResponse, error) {
-	kinds, total, err := s.kindRepo.ListKinds(ctx, orgName, limit, offset)
+func (s *agentKindService) ListKinds(ctx context.Context, ouID string, limit, offset int) (*models.AgentKindListResponse, error) {
+	kinds, total, err := s.kindRepo.ListKinds(ctx, ouID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list agent kinds: %w", err)
 	}
@@ -107,8 +107,8 @@ func (s *agentKindService) ListKinds(ctx context.Context, orgName string, limit,
 }
 
 // UpdateKind updates the display name and description of an Agent Kind.
-func (s *agentKindService) UpdateKind(ctx context.Context, orgName, kindName string, req *spec.UpdateAgentKindRequest) (*models.AgentKindResponse, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) UpdateKind(ctx context.Context, ouID, kindName string, req *spec.UpdateAgentKindRequest) (*models.AgentKindResponse, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -129,8 +129,8 @@ func (s *agentKindService) UpdateKind(ctx context.Context, orgName, kindName str
 
 // DeleteKind deletes an Agent Kind and cascades to all versions.
 // It returns ErrAgentKindHasInstances if any agents are still instantiated from this kind.
-func (s *agentKindService) DeleteKind(ctx context.Context, orgName, kindName string) error {
-	instances, err := s.ListKindAgents(ctx, orgName, kindName)
+func (s *agentKindService) DeleteKind(ctx context.Context, ouID, kindName string) error {
+	instances, err := s.ListKindAgents(ctx, ouID, kindName)
 	if err != nil {
 		return fmt.Errorf("failed to check kind instances before deletion: %w", err)
 	}
@@ -138,7 +138,7 @@ func (s *agentKindService) DeleteKind(ctx context.Context, orgName, kindName str
 		return utils.ErrAgentKindHasInstances
 	}
 
-	err = s.kindRepo.DeleteKind(ctx, orgName, kindName)
+	err = s.kindRepo.DeleteKind(ctx, ouID, kindName)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return utils.ErrAgentKindNotFound
 	}
@@ -150,8 +150,8 @@ func (s *agentKindService) DeleteKind(ctx context.Context, orgName, kindName str
 // see the NOTE on AgentKindRepository.ExistsBySourceAgent for why a small
 // check-then-act window here is an accepted, intentional trade-off rather than
 // an oversight.
-func (s *agentKindService) HasKindsSourcedFrom(ctx context.Context, orgName, projectName, agentName string) (bool, error) {
-	exists, err := s.kindRepo.ExistsBySourceAgent(ctx, orgName, projectName, agentName)
+func (s *agentKindService) HasKindsSourcedFrom(ctx context.Context, ouID, projectName, agentName string) (bool, error) {
+	exists, err := s.kindRepo.ExistsBySourceAgent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		return false, fmt.Errorf("failed to check agent kinds sourced from agent: %w", err)
 	}
@@ -159,8 +159,8 @@ func (s *agentKindService) HasKindsSourcedFrom(ctx context.Context, orgName, pro
 }
 
 // AddVersion publishes a new version to an existing Agent Kind.
-func (s *agentKindService) AddVersion(ctx context.Context, orgName, kindName string, req *spec.AddAgentKindVersionRequest) (*models.AgentKindVersionResponse, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) AddVersion(ctx context.Context, ouID, kindName string, req *spec.AddAgentKindVersionRequest) (*models.AgentKindVersionResponse, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -172,12 +172,12 @@ func (s *agentKindService) AddVersion(ctx context.Context, orgName, kindName str
 	if err != nil {
 		return nil, err
 	}
-	return s.publishVersion(ctx, orgName, kind, req.GetSourceProjectName(), req.GetSourceAgentName(), req.GetBuildName(), req.GetVersion(), req.GetConfigSchema(), metadata)
+	return s.publishVersion(ctx, ouID, kind, req.GetSourceProjectName(), req.GetSourceAgentName(), req.GetBuildName(), req.GetVersion(), req.GetConfigSchema(), metadata)
 }
 
 // GetVersion returns a specific version of an Agent Kind.
-func (s *agentKindService) GetVersion(ctx context.Context, orgName, kindName, versionTag string) (*models.AgentKindVersionResponse, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) GetVersion(ctx context.Context, ouID, kindName, versionTag string) (*models.AgentKindVersionResponse, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -198,8 +198,8 @@ func (s *agentKindService) GetVersion(ctx context.Context, orgName, kindName, ve
 }
 
 // ListVersions returns all versions of an Agent Kind.
-func (s *agentKindService) ListVersions(ctx context.Context, orgName, kindName string) ([]models.AgentKindVersionResponse, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) ListVersions(ctx context.Context, ouID, kindName string) ([]models.AgentKindVersionResponse, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -220,8 +220,8 @@ func (s *agentKindService) ListVersions(ctx context.Context, orgName, kindName s
 }
 
 // DeleteVersion removes a specific version from an Agent Kind.
-func (s *agentKindService) DeleteVersion(ctx context.Context, orgName, kindName, versionTag string) error {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) DeleteVersion(ctx context.Context, ouID, kindName, versionTag string) error {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.ErrAgentKindNotFound
@@ -237,10 +237,10 @@ func (s *agentKindService) DeleteVersion(ctx context.Context, orgName, kindName,
 }
 
 // PublishKind is a convenience method: creates the kind if it doesn't exist, then adds a version.
-func (s *agentKindService) PublishKind(ctx context.Context, orgName, projectName, agentName string, req *spec.PublishAgentKindRequest) (*models.AgentKindVersionResponse, error) {
+func (s *agentKindService) PublishKind(ctx context.Context, ouID, projectName, agentName string, req *spec.PublishAgentKindRequest) (*models.AgentKindVersionResponse, error) {
 	kindName := req.GetKindName()
 
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("failed to look up agent kind: %w", err)
@@ -254,7 +254,7 @@ func (s *agentKindService) PublishKind(ctx context.Context, orgName, projectName
 			Name:        kindName,
 			DisplayName: displayName,
 			Description: req.GetKindDescription(),
-			OrgName:     orgName,
+			OUID:        ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
 			CreatedAt:   time.Now(),
@@ -263,7 +263,7 @@ func (s *agentKindService) PublishKind(ctx context.Context, orgName, projectName
 		}
 		if createErr := s.kindRepo.CreateKind(ctx, newKind); createErr != nil {
 			// Handle concurrent creation race
-			existing, retryErr := s.kindRepo.GetKind(ctx, orgName, kindName)
+			existing, retryErr := s.kindRepo.GetKind(ctx, ouID, kindName)
 			if retryErr == nil {
 				kind = existing
 			} else {
@@ -278,12 +278,12 @@ func (s *agentKindService) PublishKind(ctx context.Context, orgName, projectName
 	if err != nil {
 		return nil, err
 	}
-	return s.publishVersion(ctx, orgName, kind, projectName, agentName, req.GetBuildName(), req.GetVersion(), req.GetConfigSchema(), metadata)
+	return s.publishVersion(ctx, ouID, kind, projectName, agentName, req.GetBuildName(), req.GetVersion(), req.GetConfigSchema(), metadata)
 }
 
 // GetKindVersion returns the raw DB record for a kind version (used during agent creation from kind).
-func (s *agentKindService) GetKindVersion(ctx context.Context, orgName, kindName, versionTag string) (*models.AgentKindVersion, error) {
-	kind, err := s.kindRepo.GetKind(ctx, orgName, kindName)
+func (s *agentKindService) GetKindVersion(ctx context.Context, ouID, kindName, versionTag string) (*models.AgentKindVersion, error) {
+	kind, err := s.kindRepo.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
@@ -302,16 +302,16 @@ func (s *agentKindService) GetKindVersion(ctx context.Context, orgName, kindName
 }
 
 // ListKindAgents returns all agents across all projects in the org that were deployed from the given kind.
-func (s *agentKindService) ListKindAgents(ctx context.Context, orgName, kindName string) ([]*models.AgentResponse, error) {
+func (s *agentKindService) ListKindAgents(ctx context.Context, ouID, kindName string) ([]*models.AgentResponse, error) {
 	// Verify kind exists first
-	if _, err := s.kindRepo.GetKind(ctx, orgName, kindName); err != nil {
+	if _, err := s.kindRepo.GetKind(ctx, ouID, kindName); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrAgentKindNotFound
 		}
 		return nil, fmt.Errorf("failed to get agent kind: %w", err)
 	}
 
-	projects, err := s.ocClient.ListProjects(ctx, orgName)
+	projects, err := s.ocClient.ListProjects(ctx, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
@@ -327,7 +327,7 @@ func (s *agentKindService) ListKindAgents(ctx context.Context, orgName, kindName
 		wg.Add(1)
 		go func(idx int, projectName string) {
 			defer wg.Done()
-			agents, err := s.ocClient.ListComponentsByKind(ctx, orgName, projectName, kindName)
+			agents, err := s.ocClient.ListComponentsByKind(ctx, ouID, projectName, kindName)
 			results[idx] = result{agents: agents, err: err}
 		}(i, p.Name)
 	}
@@ -350,7 +350,7 @@ func (s *agentKindService) ListKindAgents(ctx context.Context, orgName, kindName
 // publishVersion fetches build details from OpenChoreo and persists the version.
 func (s *agentKindService) publishVersion(
 	ctx context.Context,
-	orgName string,
+	ouID string,
 	kind *models.AgentKind,
 	sourceProjectName, sourceAgentName, buildName, versionTag string,
 	configSchema []spec.AgentKindConfigSchemaItem,
@@ -372,11 +372,11 @@ func (s *agentKindService) publishVersion(
 	// already deleted — with no concurrency/timing involved at all. This is what
 	// actually closes the "kind published from a deleted agent" gap; the
 	// recheck in DeleteAgent only narrows the much rarer concurrent-race variant.
-	if _, err := s.ocClient.GetComponent(ctx, orgName, sourceProjectName, sourceAgentName); err != nil {
+	if _, err := s.ocClient.GetComponent(ctx, ouID, sourceProjectName, sourceAgentName); err != nil {
 		return nil, fmt.Errorf("%w: %s/%s", utils.ErrSourceAgentNotFound, sourceProjectName, sourceAgentName)
 	}
 
-	build, err := s.ocClient.GetBuild(ctx, orgName, sourceProjectName, sourceAgentName, buildName)
+	build, err := s.ocClient.GetBuild(ctx, ouID, sourceProjectName, sourceAgentName, buildName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get build: %w", err)
 	}
@@ -392,7 +392,7 @@ func (s *agentKindService) publishVersion(
 	}
 
 	// Block re-publishing the same image under any other kind in the org
-	if orgDup, orgDupErr := s.kindRepo.FindVersionByImageIDInOrg(ctx, orgName, build.ImageId); orgDupErr == nil && orgDup != nil {
+	if orgDup, orgDupErr := s.kindRepo.FindVersionByImageIDInOrg(ctx, ouID, build.ImageId); orgDupErr == nil && orgDup != nil {
 		return nil, fmt.Errorf("%w: image already published as version %q of kind %q", utils.ErrKindImageAlreadyPublished, orgDup.Version, orgDup.Kind.Name)
 	} else if orgDupErr != nil && !errors.Is(orgDupErr, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("failed to check for duplicate image across org: %w", orgDupErr)
@@ -494,7 +494,6 @@ func toAgentKindResponse(kind *models.AgentKind) *models.AgentKindResponse {
 		Kind:          "AgentKind",
 		DisplayName:   kind.DisplayName,
 		Description:   kind.Description,
-		OrgName:       kind.OrgName,
 		ProjectName:   kind.ProjectName,
 		AgentName:     kind.AgentName,
 		LatestVersion: latestVersion,

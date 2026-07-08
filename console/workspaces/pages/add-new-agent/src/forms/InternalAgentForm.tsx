@@ -33,7 +33,7 @@ import { GitSecretSelector } from "../components/GitSecretSelector";
 import { LLMProviderSection } from "../components/LLMProviderSection";
 import { MCPProxySection } from "../components/MCPProxySection";
 import type { CreateAgentFormValues, LLMProviderFormEntry, MCPProxyFormEntry } from "../form/schema";
-import { BuildpackIcon, useExternalConfigModules } from "@agent-management-platform/views";
+import { BuildpackIcon } from "@agent-management-platform/views";
 
 interface InternalAgentFormProps {
   formData: CreateAgentFormValues;
@@ -97,11 +97,7 @@ export const InternalAgentForm = ({
     }
   }, []);
 
-  const privateRepoConfigs = useExternalConfigModules("private-repo-support");
-  const isPrivateRepoEnabled =
-    privateRepoConfigs.length === 0 ||
-    (privateRepoConfigs[0]?.value as { enabled?: boolean })
-      ?.enabled !== false;
+  const isPrivateRepoEnabled = globalConfig.featureFlags?.enablePrivateRepoSupport === true;
 
   const { mutate: generateName, isPending: isGeneratingName } = useGenerateResourceName({
     orgName: orgId,

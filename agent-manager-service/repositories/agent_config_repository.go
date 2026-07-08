@@ -37,10 +37,10 @@ type AgentConfigRepository interface {
 	Upsert(config *models.AgentConfig) error
 
 	// Get retrieves agent config for a specific agent and environment
-	Get(orgName, projectName, agentName, environmentName string) (*models.AgentConfig, error)
+	Get(ouID, projectName, agentName, environmentName string) (*models.AgentConfig, error)
 
 	// DeleteAllByAgent removes all configs for an agent (used when agent is deleted)
-	DeleteAllByAgent(orgName, projectName, agentName string) error
+	DeleteAllByAgent(ouID, projectName, agentName string) error
 }
 
 // AgentConfigRepo implements AgentConfigRepository using GORM
@@ -66,7 +66,7 @@ func (r *AgentConfigRepo) Upsert(config *models.AgentConfig) error {
 	// Use Select("*") to force GORM to include all fields including boolean false values
 	// Without this, GORM skips "zero value" fields like false booleans during Create
 	return r.db.Select("*").Clauses(clause.OnConflict{
-		Columns: []clause.Column{{Name: "org_name"}, {Name: "project_name"}, {Name: "agent_name"}, {Name: "environment_name"}},
+		Columns: []clause.Column{{Name: "ou_id"}, {Name: "project_name"}, {Name: "agent_name"}, {Name: "environment_name"}},
 		DoUpdates: clause.Assignments(map[string]interface{}{
 			"enable_auto_instrumentation": config.EnableAutoInstrumentation,
 			"instrumentation_version":     config.InstrumentationVersion,
@@ -88,10 +88,10 @@ func (r *AgentConfigRepo) Upsert(config *models.AgentConfig) error {
 }
 
 // Get retrieves agent config for a specific agent and environment
-func (r *AgentConfigRepo) Get(orgName, projectName, agentName, environmentName string) (*models.AgentConfig, error) {
+func (r *AgentConfigRepo) Get(ouID, projectName, agentName, environmentName string) (*models.AgentConfig, error) {
 	var config models.AgentConfig
-	err := r.db.Where("org_name = ? AND project_name = ? AND agent_name = ? AND environment_name = ?",
-		orgName, projectName, agentName, environmentName).First(&config).Error
+	err := r.db.Where("ou_id = ? AND project_name = ? AND agent_name = ? AND environment_name = ?",
+		ouID, projectName, agentName, environmentName).First(&config).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrAgentConfigNotFound
@@ -102,7 +102,7 @@ func (r *AgentConfigRepo) Get(orgName, projectName, agentName, environmentName s
 }
 
 // DeleteAllByAgent removes all configs for an agent (used when agent is deleted)
-func (r *AgentConfigRepo) DeleteAllByAgent(orgName, projectName, agentName string) error {
-	return r.db.Where("org_name = ? AND project_name = ? AND agent_name = ?",
-		orgName, projectName, agentName).Delete(&models.AgentConfig{}).Error
+func (r *AgentConfigRepo) DeleteAllByAgent(ouID, projectName, agentName string) error {
+	return r.db.Where("ou_id = ? AND project_name = ? AND agent_name = ?",
+		ouID, projectName, agentName).Delete(&models.AgentConfig{}).Error
 }

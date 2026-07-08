@@ -64,16 +64,16 @@ func NewAIApplicationService(
 // gateway will pick up the application via the bulk-sync endpoint on reconnect.
 func (s *AIApplicationService) EnsureAndBind(
 	ctx context.Context,
-	orgName, projectName, agentID, envName string,
+	ouID, projectName, agentID, envName string,
 	appHandle, appName, apiKeyUUID string,
 ) (*models.AIApplication, bool, error) {
 	app := &models.AIApplication{
-		Handle:           appHandle,
-		Name:             appName,
-		AgentID:          agentID,
-		ProjectName:      projectName,
-		EnvironmentName:  envName,
-		OrganizationName: orgName,
+		Handle:          appHandle,
+		Name:            appName,
+		AgentID:         agentID,
+		ProjectName:     projectName,
+		EnvironmentName: envName,
+		OUID:            ouID,
 	}
 
 	created, err := s.appRepo.Create(ctx, nil, app)
@@ -83,14 +83,14 @@ func (s *AIApplicationService) EnsureAndBind(
 
 	// ON CONFLICT DO NOTHING fired — re-fetch the existing record.
 	if !created {
-		existing, err := s.appRepo.GetByAgentEnv(ctx, orgName, projectName, agentID, envName)
+		existing, err := s.appRepo.GetByAgentEnv(ctx, ouID, projectName, agentID, envName)
 		if err != nil {
 			return nil, false, fmt.Errorf("failed to fetch existing AI application: %w", err)
 		}
 		app = existing
 	}
 
-	s.broadcastToAllGateways(ctx, orgName, app, apiKeyUUID)
+	s.broadcastToAllGateways(ctx, ouID, app, apiKeyUUID)
 
 	s.logger.Info(
 		"Ensured AI application and bound API key",
@@ -98,7 +98,7 @@ func (s *AIApplicationService) EnsureAndBind(
 		"applicationHandle", appHandle,
 		"agentID", agentID,
 		"envName", envName,
-		"orgName", orgName,
+		"ouID", ouID,
 		"newlyCreated", created,
 	)
 	return app, created, nil
@@ -108,8 +108,8 @@ func (s *AIApplicationService) EnsureAndBind(
 // Called when the last LLM config for that agent+env is deleted.
 // Broadcasts application.updated with empty mappings so the gateway stops enforcing
 // per-consumer rate limits for this application immediately.
-func (s *AIApplicationService) Delete(ctx context.Context, orgName, projectName, agentID, envName string) error {
-	app, err := s.appRepo.GetByAgentEnv(ctx, orgName, projectName, agentID, envName)
+func (s *AIApplicationService) Delete(ctx context.Context, ouID, projectName, agentID, envName string) error {
+	app, err := s.appRepo.GetByAgentEnv(ctx, ouID, projectName, agentID, envName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil
@@ -117,11 +117,11 @@ func (s *AIApplicationService) Delete(ctx context.Context, orgName, projectName,
 		return fmt.Errorf("failed to fetch AI application before delete: %w", err)
 	}
 
-	if err := s.appRepo.DeleteByAgentEnv(ctx, nil, orgName, projectName, agentID, envName); err != nil {
+	if err := s.appRepo.DeleteByAgentEnv(ctx, nil, ouID, projectName, agentID, envName); err != nil {
 		return fmt.Errorf("failed to delete AI application: %w", err)
 	}
 
-	s.broadcastDeletionToAllGateways(ctx, orgName, app)
+	s.broadcastDeletionToAllGateways(ctx, ouID, app)
 
 	s.logger.Info(
 		"Deleted AI application",
@@ -130,7 +130,7 @@ func (s *AIApplicationService) Delete(ctx context.Context, orgName, projectName,
 		"agentID", agentID,
 		"projectName", projectName,
 		"envName", envName,
-		"orgName", orgName,
+		"ouID", ouID,
 	)
 	return nil
 }
@@ -138,32 +138,32 @@ func (s *AIApplicationService) Delete(ctx context.Context, orgName, projectName,
 // DeleteAllByAgent removes all AIApplication records for the given org+project+agent and
 // broadcasts deletion to all gateways so they revoke the applications immediately without
 // waiting for a reconnect-triggered bulk-sync.
-func (s *AIApplicationService) DeleteAllByAgent(ctx context.Context, orgName, projectName, agentID string) error {
-	apps, err := s.appRepo.ListByAgent(ctx, orgName, projectName, agentID)
+func (s *AIApplicationService) DeleteAllByAgent(ctx context.Context, ouID, projectName, agentID string) error {
+	apps, err := s.appRepo.ListByAgent(ctx, ouID, projectName, agentID)
 	if err != nil {
-		return fmt.Errorf("failed to list AI applications for agent %q in org %q: %w", agentID, orgName, err)
+		return fmt.Errorf("failed to list AI applications for agent %q in org %q: %w", agentID, ouID, err)
 	}
 
-	if err := s.appRepo.DeleteByAgent(ctx, orgName, projectName, agentID); err != nil {
-		return fmt.Errorf("failed to delete AI applications for agent %q in org %q: %w", agentID, orgName, err)
+	if err := s.appRepo.DeleteByAgent(ctx, ouID, projectName, agentID); err != nil {
+		return fmt.Errorf("failed to delete AI applications for agent %q in org %q: %w", agentID, ouID, err)
 	}
 
 	for i := range apps {
-		s.broadcastDeletionToAllGateways(ctx, orgName, &apps[i])
+		s.broadcastDeletionToAllGateways(ctx, ouID, &apps[i])
 	}
 
-	s.logger.Info("Deleted all AI applications for agent", "agentID", agentID, "projectName", projectName, "orgName", orgName, "count", len(apps))
+	s.logger.Info("Deleted all AI applications for agent", "agentID", agentID, "projectName", projectName, "ouID", ouID, "count", len(apps))
 	return nil
 }
 
 // broadcastDeletionToAllGateways sends an application.updated event with empty mappings to every
 // gateway in the org. The gateway interprets empty mappings as a full revocation of the application,
 // stopping per-consumer rate limit enforcement immediately without requiring a reconnect.
-func (s *AIApplicationService) broadcastDeletionToAllGateways(ctx context.Context, orgName string, app *models.AIApplication) {
-	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, orgName)
+func (s *AIApplicationService) broadcastDeletionToAllGateways(ctx context.Context, ouID string, app *models.AIApplication) {
+	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, ouID)
 	if err != nil {
 		s.logger.Warn("Failed to list gateways for application deletion broadcast; gateway will sync on reconnect",
-			"orgName", orgName, "applicationUUID", app.UUID, "error", err)
+			"ouID", ouID, "applicationUUID", app.UUID, "error", err)
 		return
 	}
 
@@ -185,11 +185,11 @@ func (s *AIApplicationService) broadcastDeletionToAllGateways(ctx context.Contex
 
 // broadcastToAllGateways sends an application.updated event to every gateway in the org.
 // Errors are logged but not returned so a broadcast failure never blocks the main flow.
-func (s *AIApplicationService) broadcastToAllGateways(ctx context.Context, orgName string, app *models.AIApplication, apiKeyUUID string) {
-	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, orgName)
+func (s *AIApplicationService) broadcastToAllGateways(ctx context.Context, ouID string, app *models.AIApplication, apiKeyUUID string) {
+	gateways, err := s.gatewayRepo.GetByOrganizationID(ctx, ouID)
 	if err != nil {
 		s.logger.Warn("Failed to list gateways for application broadcast; gateway will sync on reconnect",
-			"orgName", orgName, "applicationUUID", app.UUID, "error", err)
+			"ouID", ouID, "applicationUUID", app.UUID, "error", err)
 		return
 	}
 

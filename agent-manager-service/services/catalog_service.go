@@ -48,11 +48,11 @@ var globalEnvCache = &envMappingCache{
 	maxSize: 100, // Limit cache size to prevent memory issues
 }
 
-func (c *envMappingCache) get(orgName string) (map[string]string, bool) {
+func (c *envMappingCache) get(ouID string) (map[string]string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	entry, exists := c.data[orgName]
+	entry, exists := c.data[ouID]
 	if !exists {
 		return nil, false
 	}
@@ -65,7 +65,7 @@ func (c *envMappingCache) get(orgName string) (map[string]string, bool) {
 	return entry.mapping, true
 }
 
-func (c *envMappingCache) set(orgName string, mapping map[string]string) {
+func (c *envMappingCache) set(ouID string, mapping map[string]string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -92,7 +92,7 @@ func (c *envMappingCache) set(orgName string, mapping map[string]string) {
 		}
 	}
 
-	c.data[orgName] = envCacheEntry{
+	c.data[ouID] = envCacheEntry{
 		mapping:   mapping,
 		expiresAt: time.Now().Add(c.ttl),
 	}
@@ -100,7 +100,7 @@ func (c *envMappingCache) set(orgName string, mapping map[string]string) {
 
 // CatalogService defines the interface for catalog operations
 type CatalogService interface {
-	ListCatalog(ctx context.Context, orgName string, kind string, limit, offset int) ([]models.CatalogEntry, int64, error)
+	ListCatalog(ctx context.Context, ouID string, kind string, limit, offset int) ([]models.CatalogEntry, int64, error)
 	ListLLMProviders(ctx context.Context, filters *models.CatalogListFilters) ([]models.CatalogLLMProviderEntry, int64, error)
 }
 
@@ -124,12 +124,12 @@ func NewCatalogService(
 }
 
 // ListCatalog retrieves catalog entries filtered by kind and organization
-func (s *catalogService) ListCatalog(ctx context.Context, orgName string, kind string, limit, offset int) ([]models.CatalogEntry, int64, error) {
-	if orgName == "" {
-		return nil, 0, fmt.Errorf("orgName must not be empty")
+func (s *catalogService) ListCatalog(ctx context.Context, ouID string, kind string, limit, offset int) ([]models.CatalogEntry, int64, error) {
+	if ouID == "" {
+		return nil, 0, fmt.Errorf("ouID must not be empty")
 	}
 	s.logger.Info("Listing catalog entries",
-		"orgName", orgName,
+		"ouID", ouID,
 		"kind", kind,
 		"limit", limit,
 		"offset", offset)
@@ -141,15 +141,15 @@ func (s *catalogService) ListCatalog(ctx context.Context, orgName string, kind s
 	// Query based on kind filter
 	if kind == "" {
 		// No kind filter - return all catalog entries
-		entries, total, err = s.catalogRepo.ListAll(orgName, limit, offset)
+		entries, total, err = s.catalogRepo.ListAll(ouID, limit, offset)
 	} else {
 		// Filter by specific kind
-		entries, total, err = s.catalogRepo.ListByKind(orgName, kind, limit, offset)
+		entries, total, err = s.catalogRepo.ListByKind(ouID, kind, limit, offset)
 	}
 
 	if err != nil {
 		s.logger.Error("Failed to list catalog entries",
-			"orgName", orgName,
+			"ouID", ouID,
 			"kind", kind,
 			"error", err)
 		return nil, 0, fmt.Errorf("failed to list catalog entries: %w", err)
@@ -171,7 +171,7 @@ func (s *catalogService) ListLLMProviders(ctx context.Context, filters *models.C
 	}
 
 	s.logger.Info("Listing LLM provider catalog entries",
-		"orgName", filters.OrganizationName,
+		"ouID", filters.OrganizationName,
 		"environmentUUID", filters.EnvironmentUUID,
 		"name", filters.Name,
 		"limit", filters.Limit,
@@ -183,13 +183,13 @@ func (s *catalogService) ListLLMProviders(ctx context.Context, filters *models.C
 		return nil, 0, fmt.Errorf("invalid filters: %w", err)
 	}
 
-	orgName := filters.OrganizationName
+	ouID := filters.OrganizationName
 
 	// Get LLM providers from repository using optimized single query
 	entries, total, err := s.catalogRepo.ListLLMProviders(filters)
 	if err != nil {
 		s.logger.Error("Failed to list LLM providers from repository",
-			"orgName", filters.OrganizationName,
+			"ouID", filters.OrganizationName,
 			"error", err)
 		return nil, 0, fmt.Errorf("failed to list LLM providers: %w", err)
 	}
@@ -207,21 +207,21 @@ func (s *catalogService) ListLLMProviders(ctx context.Context, filters *models.C
 	var envMap map[string]string
 	if hasDeployments {
 		// Try to get environment mapping from cache first
-		cached, found := globalEnvCache.get(orgName)
+		cached, found := globalEnvCache.get(ouID)
 		if found {
-			s.logger.Debug("Using cached environment mapping", "orgName", orgName)
+			s.logger.Debug("Using cached environment mapping", "ouID", ouID)
 			envMap = cached
 		} else {
 			// Cache miss - fetch from OpenChoreo and cache the result
-			s.logger.Debug("Cache miss - fetching environment mapping from OpenChoreo", "orgName", orgName)
-			envMap, err = s.buildEnvironmentMapping(ctx, orgName)
+			s.logger.Debug("Cache miss - fetching environment mapping from OpenChoreo", "ouID", ouID)
+			envMap, err = s.buildEnvironmentMapping(ctx, ouID)
 			if err != nil {
 				s.logger.Warn("Failed to build environment mapping, continuing without environment names", "error", err)
 				envMap = make(map[string]string) // Continue with empty map
 			} else {
 				// Cache the successful result
-				globalEnvCache.set(orgName, envMap)
-				s.logger.Debug("Cached environment mapping", "orgName", orgName, "count", len(envMap))
+				globalEnvCache.set(ouID, envMap)
+				s.logger.Debug("Cached environment mapping", "ouID", ouID, "count", len(envMap))
 			}
 		}
 
@@ -253,9 +253,9 @@ func (s *catalogService) ListLLMProviders(ctx context.Context, filters *models.C
 }
 
 // buildEnvironmentMapping fetches all environments and builds UUID to name mapping
-func (s *catalogService) buildEnvironmentMapping(ctx context.Context, orgName string) (map[string]string, error) {
+func (s *catalogService) buildEnvironmentMapping(ctx context.Context, ouID string) (map[string]string, error) {
 	// Fetch all environments from OpenChoreo
-	environments, err := s.openChoreoClient.ListEnvironments(ctx, orgName)
+	environments, err := s.openChoreoClient.ListEnvironments(ctx, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
 	}

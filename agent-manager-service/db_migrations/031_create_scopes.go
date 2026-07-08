@@ -18,11 +18,11 @@ package dbmigrations
 
 import "gorm.io/gorm"
 
-// migration029 creates the scopes table: an org-global, resource-agnostic
+// migration031 creates the scopes table: an org-global, resource-agnostic
 // catalog of scope names. AMS stores only the catalog; grants (which agent gets
 // which scope) live in each environment's own Thunder instance, not here.
-var migration029 = migration{
-	ID: 29,
+var migration031 = migration{
+	ID: 31,
 	Migrate: func(db *gorm.DB) error {
 		sql := `
 			CREATE TABLE scopes (

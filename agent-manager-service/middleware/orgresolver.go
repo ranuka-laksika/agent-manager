@@ -18,6 +18,8 @@ package middleware
 
 import (
 	"context"
+	"log/slog"
+	"net/http"
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
@@ -41,6 +43,18 @@ func WithResolvedOrg(ctx context.Context, org ResolvedOrg) context.Context {
 func GetResolvedOrg(ctx context.Context) (ResolvedOrg, bool) {
 	org, ok := ctx.Value(resolvedOrgKey{}).(ResolvedOrg)
 	return org, ok
+}
+
+// OUIDFromRequest returns the token's OU ID injected by RequireOrgMatch.
+// Returns "" (and logs) when the middleware did not run — that means the
+// route was registered without org validation and is a programming error.
+func OUIDFromRequest(r *http.Request) string {
+	org, ok := GetResolvedOrg(r.Context())
+	if !ok {
+		slog.Error("resolved org missing from request context — RequireOrgMatch not applied", "path", r.URL.Path)
+		return ""
+	}
+	return org.OUID
 }
 
 // OrgResolver resolves an org handle to a Thunder OU ID.

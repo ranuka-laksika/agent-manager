@@ -1300,11 +1300,10 @@ type AgentKindResponse struct {
 	LatestVersion *string `json:"latestVersion,omitempty"`
 
 	// Name Unique slug name of the Agent Kind within the organization
-	Name             string                     `json:"name"`
-	OrganizationName string                     `json:"organizationName"`
-	UpdatedAt        *time.Time                 `json:"updatedAt,omitempty"`
-	Uuid             openapi_types.UUID         `json:"uuid"`
-	Versions         []AgentKindVersionResponse `json:"versions"`
+	Name      string                     `json:"name"`
+	UpdatedAt *time.Time                 `json:"updatedAt,omitempty"`
+	Uuid      openapi_types.UUID         `json:"uuid"`
+	Versions  []AgentKindVersionResponse `json:"versions"`
 }
 
 // AgentKindResponseKind Resource type discriminator (always "AgentKind" for this schema)
@@ -1365,9 +1364,6 @@ type AgentModelConfigListItem struct {
 	// Name Configuration name
 	Name string `json:"name"`
 
-	// OrganizationName Organization name
-	OrganizationName string `json:"organizationName"`
-
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
 
@@ -1404,9 +1400,6 @@ type AgentModelConfigResponse struct {
 
 	// Name Name of the configuration
 	Name string `json:"name"`
-
-	// OrganizationName Organization name
-	OrganizationName string `json:"organizationName"`
 
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
@@ -2043,6 +2036,9 @@ type CreateGatewayRequest struct {
 	// Name Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
+	// OrgId OU ID of the organization the gateway belongs to.
+	OrgId *string `json:"orgId,omitempty"`
+
 	// Region Deployment region (optional)
 	Region *string `json:"region,omitempty"`
 
@@ -2270,9 +2266,6 @@ type DataPlane struct {
 
 	// Name Name of the data plane
 	Name string `json:"name"`
-
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
 }
 
 // DataPlaneListResponse List of data planes
@@ -2372,9 +2365,6 @@ type DeploymentPipelineResponse struct {
 
 	// Name Name of the deployment pipeline
 	Name string `json:"name"`
-
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
 
 	// PromotionPaths List of promotion paths in the pipeline
 	PromotionPaths []PromotionPath `json:"promotionPaths"`
@@ -2731,9 +2721,6 @@ type GatewayEnvironmentResponse struct {
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
-	// OrganizationName Organization UUID
-	OrganizationName string `json:"organizationName"`
-
 	// UpdatedAt Timestamp when the environment was last updated
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -2791,9 +2778,6 @@ type GatewayResponse struct {
 
 	// Name Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
-
-	// OrganizationName Organization UUID
-	OrganizationName string `json:"organizationName"`
 
 	// Region Deployment region
 	Region *string `json:"region,omitempty"`
@@ -3895,9 +3879,6 @@ type MonitorResponse struct {
 	// NextRunTime Next scheduled run time (only for 'future' type)
 	NextRunTime *time.Time `json:"nextRunTime,omitempty"`
 
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
-
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
 
@@ -4081,10 +4062,7 @@ type ProjectListItem struct {
 
 	// Name Name of the project
 	Name string `json:"name"`
-
-	// OrgName Name of the organization
-	OrgName string `json:"orgName"`
-	Uuid    string `json:"uuid"`
+	Uuid string `json:"uuid"`
 }
 
 // ProjectListResponse defines model for ProjectListResponse.
@@ -4113,10 +4091,7 @@ type ProjectResponse struct {
 
 	// Name Name of the project
 	Name string `json:"name"`
-
-	// OrgName Name of the organization
-	OrgName string `json:"orgName"`
-	Uuid    string `json:"uuid"`
+	Uuid string `json:"uuid"`
 }
 
 // PromoteAgentRequest defines model for PromoteAgentRequest.
@@ -4563,9 +4538,6 @@ type StoredAPIKey struct {
 
 	// Name Unique name of the API key within the agent.
 	Name string `json:"name"`
-
-	// OrganizationName Organization name the key belongs to.
-	OrganizationName string `json:"organizationName"`
 
 	// Purpose Internal purpose code of the API key.
 	Purpose int32 `json:"purpose"`

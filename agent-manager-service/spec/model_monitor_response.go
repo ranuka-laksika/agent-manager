@@ -30,8 +30,6 @@ type MonitorResponse struct {
 	Description *string `json:"description,omitempty"`
 	// Monitor type
 	Type string `json:"type"`
-	// Organization name
-	OrgName string `json:"orgName"`
 	// Project name
 	ProjectName string `json:"projectName"`
 	// Agent name
@@ -62,13 +60,12 @@ type MonitorResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewMonitorResponse(id string, name string, displayName string, type_ string, orgName string, projectName string, agentName string, environmentName string, evaluators []MonitorEvaluator, samplingRate float32, status string, createdAt time.Time) *MonitorResponse {
+func NewMonitorResponse(id string, name string, displayName string, type_ string, projectName string, agentName string, environmentName string, evaluators []MonitorEvaluator, samplingRate float32, status string, createdAt time.Time) *MonitorResponse {
 	this := MonitorResponse{}
 	this.Id = id
 	this.Name = name
 	this.DisplayName = displayName
 	this.Type = type_
-	this.OrgName = orgName
 	this.ProjectName = projectName
 	this.AgentName = agentName
 	this.EnvironmentName = environmentName
@@ -213,30 +210,6 @@ func (o *MonitorResponse) GetTypeOk() (*string, bool) {
 // SetType sets field value
 func (o *MonitorResponse) SetType(v string) {
 	o.Type = v
-}
-
-// GetOrgName returns the OrgName field value
-func (o *MonitorResponse) GetOrgName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrgName
-}
-
-// GetOrgNameOk returns a tuple with the OrgName field value
-// and a boolean to check if the value has been set.
-func (o *MonitorResponse) GetOrgNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrgName, true
-}
-
-// SetOrgName sets field value
-func (o *MonitorResponse) SetOrgName(v string) {
-	o.OrgName = v
 }
 
 // GetProjectName returns the ProjectName field value
@@ -616,7 +589,6 @@ func (o MonitorResponse) ToMap() (map[string]interface{}, error) {
 		toSerialize["description"] = o.Description
 	}
 	toSerialize["type"] = o.Type
-	toSerialize["orgName"] = o.OrgName
 	toSerialize["projectName"] = o.ProjectName
 	toSerialize["agentName"] = o.AgentName
 	toSerialize["environmentName"] = o.EnvironmentName

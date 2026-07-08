@@ -165,6 +165,13 @@ func GetTokenClaims(ctx context.Context) *TokenClaims {
 	return claims
 }
 
+// ContextWithTokenClaims returns ctx carrying the given claims, as if the
+// assertion middleware had validated a token. Intended for tests and
+// non-HTTP entry points that establish identity out of band.
+func ContextWithTokenClaims(ctx context.Context, claims *TokenClaims) context.Context {
+	return context.WithValue(ctx, assertionTokenClaimsKey, claims)
+}
+
 func GetJWTFromContext(ctx context.Context) string {
 	token, ok := ctx.Value(jwtToken).(string)
 	if !ok {

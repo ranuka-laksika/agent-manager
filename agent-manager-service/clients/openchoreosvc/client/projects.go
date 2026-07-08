@@ -27,7 +27,8 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
-func (c *openChoreoClient) CreateProject(ctx context.Context, namespaceName string, req CreateProjectRequest) error {
+func (c *openChoreoClient) CreateProject(ctx context.Context, ouID string, req CreateProjectRequest) error {
+	namespaceName := c.NamespaceFor(ouID)
 	annotations := map[string]string{
 		string(AnnotationKeyDisplayName): req.DisplayName,
 		string(AnnotationKeyDescription): req.Description,
@@ -66,7 +67,8 @@ func (c *openChoreoClient) CreateProject(ctx context.Context, namespaceName stri
 	return nil
 }
 
-func (c *openChoreoClient) GetProject(ctx context.Context, namespaceName, projectName string) (*models.ProjectResponse, error) {
+func (c *openChoreoClient) GetProject(ctx context.Context, ouID, projectName string) (*models.ProjectResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project: %w", err)
@@ -88,7 +90,8 @@ func (c *openChoreoClient) GetProject(ctx context.Context, namespaceName, projec
 	return convertProjectToResponse(resp.JSON200), nil
 }
 
-func (c *openChoreoClient) PatchProject(ctx context.Context, namespaceName, projectName string, req PatchProjectRequest) error {
+func (c *openChoreoClient) PatchProject(ctx context.Context, ouID, projectName string, req PatchProjectRequest) error {
+	namespaceName := c.NamespaceFor(ouID)
 	// Get the project
 	resp, err := c.ocClient.GetProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
@@ -144,7 +147,8 @@ func (c *openChoreoClient) PatchProject(ctx context.Context, namespaceName, proj
 	return nil
 }
 
-func (c *openChoreoClient) DeleteProject(ctx context.Context, namespaceName, projectName string) error {
+func (c *openChoreoClient) DeleteProject(ctx context.Context, ouID, projectName string) error {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.DeleteProjectWithResponse(ctx, namespaceName, projectName)
 	if err != nil {
 		return fmt.Errorf("failed to delete project: %w", err)
@@ -162,7 +166,8 @@ func (c *openChoreoClient) DeleteProject(ctx context.Context, namespaceName, pro
 	return nil
 }
 
-func (c *openChoreoClient) ListProjects(ctx context.Context, namespaceName string) ([]*models.ProjectResponse, error) {
+func (c *openChoreoClient) ListProjects(ctx context.Context, ouID string) ([]*models.ProjectResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListProjectsWithResponse(ctx, namespaceName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)

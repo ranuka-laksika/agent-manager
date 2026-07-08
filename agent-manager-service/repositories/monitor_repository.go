@@ -35,15 +35,15 @@ type MonitorRepository interface {
 
 	// Monitor CRUD
 	CreateMonitor(monitor *models.Monitor) error
-	GetMonitorByName(orgName, projectName, agentName, monitorName string) (*models.Monitor, error)
+	GetMonitorByName(ouID, projectName, agentName, monitorName string) (*models.Monitor, error)
 	GetMonitorByID(monitorID uuid.UUID) (*models.Monitor, error)
-	ListMonitorsByAgent(orgName, projectName, agentName string) ([]models.Monitor, error)
-	ListMonitorsByAgentEnvironment(orgName, projectName, agentName, environmentName string) ([]models.Monitor, error)
+	ListMonitorsByAgent(ouID, projectName, agentName string) ([]models.Monitor, error)
+	ListMonitorsByAgentEnvironment(ouID, projectName, agentName, environmentName string) ([]models.Monitor, error)
 	UpdateMonitor(monitor *models.Monitor) error
 	DeleteMonitor(monitor *models.Monitor) error
 	UpdateNextRunTime(monitorID uuid.UUID, nextRunTime *time.Time) error
 	ListDueMonitors(monitorType string, dueBy time.Time) ([]models.Monitor, error)
-	FindActiveMonitorsByEvaluatorIdentifier(orgName string, identifier string) ([]models.Monitor, error)
+	FindActiveMonitorsByEvaluatorIdentifier(ouID string, identifier string) ([]models.Monitor, error)
 
 	// MonitorRun CRUD
 	CreateMonitorRun(run *models.MonitorRun) error
@@ -87,10 +87,10 @@ func (r *MonitorRepo) CreateMonitor(monitor *models.Monitor) error {
 }
 
 // GetMonitorByName retrieves a monitor by its unique (org, project, agent, name) scope
-func (r *MonitorRepo) GetMonitorByName(orgName, projectName, agentName, monitorName string) (*models.Monitor, error) {
+func (r *MonitorRepo) GetMonitorByName(ouID, projectName, agentName, monitorName string) (*models.Monitor, error) {
 	var monitor models.Monitor
-	if err := r.db.Where("name = ? AND org_name = ? AND project_name = ? AND agent_name = ?",
-		monitorName, orgName, projectName, agentName).First(&monitor).Error; err != nil {
+	if err := r.db.Where("name = ? AND ou_id = ? AND project_name = ? AND agent_name = ?",
+		monitorName, ouID, projectName, agentName).First(&monitor).Error; err != nil {
 		return nil, err
 	}
 	return &monitor, nil
@@ -106,18 +106,18 @@ func (r *MonitorRepo) GetMonitorByID(monitorID uuid.UUID) (*models.Monitor, erro
 }
 
 // ListMonitorsByAgent lists all monitors for an org/project/agent combination
-func (r *MonitorRepo) ListMonitorsByAgent(orgName, projectName, agentName string) ([]models.Monitor, error) {
+func (r *MonitorRepo) ListMonitorsByAgent(ouID, projectName, agentName string) ([]models.Monitor, error) {
 	var monitors []models.Monitor
-	err := r.db.Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+	err := r.db.Where("ou_id = ? AND project_name = ? AND agent_name = ?", ouID, projectName, agentName).
 		Order("created_at DESC").
 		Find(&monitors).Error
 	return monitors, err
 }
 
 // ListMonitorsByAgentEnvironment lists all monitors for an org/project/agent/environment combination
-func (r *MonitorRepo) ListMonitorsByAgentEnvironment(orgName, projectName, agentName, environmentName string) ([]models.Monitor, error) {
+func (r *MonitorRepo) ListMonitorsByAgentEnvironment(ouID, projectName, agentName, environmentName string) ([]models.Monitor, error) {
 	var monitors []models.Monitor
-	err := r.db.Where("org_name = ? AND project_name = ? AND agent_name = ? AND environment_name = ?", orgName, projectName, agentName, environmentName).
+	err := r.db.Where("ou_id = ? AND project_name = ? AND agent_name = ? AND environment_name = ?", ouID, projectName, agentName, environmentName).
 		Order("created_at DESC").
 		Find(&monitors).Error
 	return monitors, err
@@ -147,11 +147,11 @@ func (r *MonitorRepo) ListDueMonitors(monitorType string, dueBy time.Time) ([]mo
 
 // FindActiveMonitorsByEvaluatorIdentifier returns all monitors in the org
 // whose evaluators JSONB array contains an entry with the given identifier.
-func (r *MonitorRepo) FindActiveMonitorsByEvaluatorIdentifier(orgName string, identifier string) ([]models.Monitor, error) {
+func (r *MonitorRepo) FindActiveMonitorsByEvaluatorIdentifier(ouID string, identifier string) ([]models.Monitor, error) {
 	var monitors []models.Monitor
 	err := r.db.Where(
-		"org_name = ? AND evaluators @> jsonb_build_array(jsonb_build_object('identifier', ?::text))",
-		orgName, identifier,
+		"ou_id = ? AND evaluators @> jsonb_build_array(jsonb_build_object('identifier', ?::text))",
+		ouID, identifier,
 	).Find(&monitors).Error
 	return monitors, err
 }

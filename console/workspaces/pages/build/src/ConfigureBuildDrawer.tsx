@@ -36,7 +36,6 @@ import {
   TextInput,
   useFormValidation,
   BuildpackIcon,
-  useExternalConfigModules,
 } from "@agent-management-platform/views";
 import { z } from "zod";
 import { useUpdateAgentBuildParameters } from "@agent-management-platform/api-client";
@@ -44,6 +43,7 @@ import {
   AgentResponse,
   UpdateAgentBuildParametersRequest,
   InputInterfaceType,
+  globalConfig,
 } from "@agent-management-platform/types";
 import { useEffect, useCallback, useMemo, useState } from "react";
 import { GitSecretSelect } from "./components/GitSecretSelect";
@@ -208,10 +208,7 @@ export function ConfigureBuildDrawer({
   projectId,
 }: ConfigureBuildDrawerProps) {
   const theme = useTheme();
-  const privateRepoConfigs = useExternalConfigModules("private-repo-support");
-  const isPrivateRepoEnabled =
-    privateRepoConfigs.length === 0 ||
-    (privateRepoConfigs[0]?.value as { enabled?: boolean })?.enabled !== false;
+  const isPrivateRepoEnabled = globalConfig.featureFlags?.enablePrivateRepoSupport === true;
   const isCustomInterface =
     !!agent.inputInterface?.schema?.path ||
     !!agent.inputInterface?.port ||

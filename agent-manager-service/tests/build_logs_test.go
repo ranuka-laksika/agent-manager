@@ -150,17 +150,17 @@ func TestGetBuildLogs(t *testing.T) {
 
 		// Validate call parameters
 		getBuildLogsCall := observabilityClient.GetBuildLogsCalls()[0]
-		require.Equal(t, buildLogsOrgName, getBuildLogsCall.Params.NamespaceName)
+		// Observability is queried by the OpenChoreo namespace (the test env's
+		// OPEN_CHOREO_DEFAULT_NAMESPACE, defaulting to "default"), never the OU ID.
+		require.Equal(t, "default", getBuildLogsCall.Params.NamespaceName)
 		require.Equal(t, buildLogsAgentName, getBuildLogsCall.Params.AgentComponentName)
 		require.Equal(t, buildLogsBuildName, getBuildLogsCall.Params.BuildName)
 
 		getComponentCall := openChoreoClient.GetComponentCalls()[0]
-		require.Equal(t, buildLogsOrgName, getComponentCall.NamespaceName)
 		require.Equal(t, buildLogsProjName, getComponentCall.ProjectName)
 		require.Equal(t, buildLogsAgentName, getComponentCall.ComponentName)
 
 		getWorkflowCall := openChoreoClient.GetBuildCalls()[0]
-		require.Equal(t, buildLogsOrgName, getWorkflowCall.NamespaceName)
 		require.Equal(t, buildLogsProjName, getWorkflowCall.ProjectName)
 		require.Equal(t, buildLogsAgentName, getWorkflowCall.ComponentName)
 		require.Equal(t, buildLogsBuildName, getWorkflowCall.BuildName)
@@ -176,7 +176,7 @@ func TestGetBuildLogs(t *testing.T) {
 	}{
 		{
 			name:           "return 404 on non-existent organization",
-			authMiddleware: authMiddleware,
+			authMiddleware: jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"),
 			wantStatus:     404,
 			wantErrMsg:     "Organization not found",
 			url:            fmt.Sprintf("/api/v1/orgs/nonexistent-org/projects/%s/agents/%s/builds/%s/build-logs", buildLogsProjName, buildLogsAgentName, buildLogsBuildName),

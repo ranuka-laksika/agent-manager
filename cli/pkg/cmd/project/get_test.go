@@ -30,7 +30,6 @@ func TestGet_Success(t *testing.T) {
 	clientFn, captured, closeFn := newTestClient(t, http.StatusOK, amsvc.ProjectResponse{
 		Name:               "alpha",
 		DisplayName:        "Alpha",
-		OrgName:            "acme",
 		DeploymentPipeline: "default",
 	})
 	defer closeFn()
