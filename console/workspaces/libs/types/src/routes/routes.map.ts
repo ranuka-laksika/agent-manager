@@ -190,7 +190,13 @@ export const rootRouteMap: AppRoute = {
                 environments: {
                     path: 'environments',
                     index: true,
-                    children: {},
+                    children: {
+                        view: {
+                            path: ':envName',
+                            index: true,
+                            children: {},
+                        },
+                    },
                 },
                 catalog: {
                     path: 'catalog',

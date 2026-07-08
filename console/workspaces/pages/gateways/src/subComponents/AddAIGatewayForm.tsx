@@ -24,7 +24,8 @@ import {
 import { Check } from "@wso2/oxygen-ui-icons-react";
 import { useListEnvironments } from "@agent-management-platform/api-client";
 import type { AddGatewayFormValues } from "../form/schema";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
+import { ADD_GATEWAY_ENV_PARAM } from "../constants";
 
 function toSlug(value: string): string {
   return value
@@ -58,25 +59,31 @@ export const AddAIGatewayForm: React.FC<AddAIGatewayFormProps> = ({
   validateField,
 }) => {
   const { orgId } = useParams<{ orgId: string }>();
+  const [searchParams] = useSearchParams();
   const theme = useTheme();
 
   const { data: environments = [] } = useListEnvironments({
     orgName: orgId,
   });
 
+  // Deep links can pass an environment name; when present, prefill it and
+  // skip the selector.
+  const presetEnvName = searchParams.get(ADD_GATEWAY_ENV_PARAM);
+  const presetEnv = environments.find((env) => env.name === presetEnvName);
+
   const hasInitializedEnvironments = useRef(false);
   useEffect(() => {
     if (environments.length > 0 && !hasInitializedEnvironments.current) {
       hasInitializedEnvironments.current = true;
-      const firstEnvId = environments[0].id;
-      if (firstEnvId) {
+      const initialEnvId = presetEnv?.id ?? environments[0].id;
+      if (initialEnvId) {
         setFormData((prev) => ({
           ...prev,
-          environmentIds: [firstEnvId],
+          environmentIds: [initialEnvId],
         }));
       }
     }
-  }, [environments, setFormData]);
+  }, [environments, presetEnv, setFormData]);
 
   const handleFieldChange = useCallback(
     (field: keyof AddGatewayFormValues, value: unknown) => {
@@ -149,7 +156,7 @@ export const AddAIGatewayForm: React.FC<AddAIGatewayFormProps> = ({
               fullWidth
             />
           </Form.ElementWrapper>
-          {environments.length > 1 && (
+          {environments.length > 1 && !presetEnv?.id && (
             <Form.ElementWrapper
               label="Environment"
               name="environmentIds"

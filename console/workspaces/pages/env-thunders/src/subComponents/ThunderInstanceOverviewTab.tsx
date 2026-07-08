@@ -17,7 +17,7 @@
  */
 
 import { Card, CardContent, Grid, IconButton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
-import { CheckCircle, Copy } from "@wso2/oxygen-ui-icons-react";
+import { Copy } from "@wso2/oxygen-ui-icons-react";
 import type { ThunderInstanceResponse } from "@agent-management-platform/types";
 
 function InfoCard({
@@ -89,14 +89,6 @@ export type ThunderInstanceOverviewTabProps = {
 export function ThunderInstanceOverviewTab({ instance, onCopy }: ThunderInstanceOverviewTabProps) {
   return (
     <Stack spacing={3}>
-      {/* Status */}
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <CheckCircle size={16} color="var(--oxygen-palette-success-main)" />
-        <Typography variant="body2" color="text.secondary">
-          Thunder identity provider is active for this environment
-        </Typography>
-      </Stack>
-
       {/* OAuth2 Endpoints */}
       <Stack spacing={1.5}>
         <Typography variant="subtitle2" fontWeight={600}>

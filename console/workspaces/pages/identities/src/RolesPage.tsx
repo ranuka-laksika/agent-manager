@@ -34,6 +34,7 @@ import {
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import {
   absoluteRouteMap,
+  globalConfig,
   type ThunderRole,
 } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
@@ -43,6 +44,7 @@ const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 export const RolesPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
+  const isUserManagementEnabled = globalConfig.featureFlags?.enableUserManagement === true;
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -117,6 +119,7 @@ export const RolesPage: React.FC = () => {
                 variant="contained"
                 startIcon={<Plus />}
                 onClick={() => navigate(createPath)}
+                disabled={!isUserManagementEnabled}
               >
                 Create Role
               </Button>
