@@ -93,7 +93,7 @@ This joins the host itself to the cluster as a real (non-Docker) k3s agent node 
 
 ## Create a Kata Environment
 
-Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **Kata Containers** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=kata` automatically.
+Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **Sandboxing T3 (Kata Containers)** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=kata` automatically.
 
 If you script environment creation directly, set the variable yourself:
 
@@ -108,7 +108,7 @@ ISOLATION_TIER=kata \
   bash add-environment.sh
 ```
 
-Then deploy or promote an agent to the environment as usual.
+The tier appears as a **Sandboxing T3** shield chip in the environment list, and as a shield icon next to the environment name on the agent's Deploy and Overview pages — hover over it to confirm *Sandboxing Tier 3 — Kata Containers*. Then deploy or promote an agent to the environment as usual.
 
 ## Verify VM Isolation
 

@@ -99,7 +99,7 @@ CLUSTER_NAME=amp-local ./deployments/setup/setup-gvisor-node.sh
 
 ## Create a gVisor Environment
 
-Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **gVisor** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=gvisor` automatically.
+Isolation tier is set at environment creation time. Open the **Create Environment** drawer in the console (Environments → Create Environment), select **Sandboxing T2 (gVisor)** from the **Isolation Tier** dropdown, and run the generated command — it includes `ISOLATION_TIER=gvisor` automatically.
 
 If you script environment creation directly, set the variable yourself:
 
@@ -114,7 +114,7 @@ ISOLATION_TIER=gvisor \
   bash add-environment.sh
 ```
 
-The tier appears as a chip in the environment list and on the deploy page. Deploy or promote an agent to the environment as usual — no agent-side changes are needed.
+The tier appears as a **Sandboxing T2** shield chip in the environment list, and as a shield icon next to the environment name on the agent's Deploy and Overview pages — hover over it to confirm *Sandboxing Tier 2 — gVisor*. Deploy or promote an agent to the environment as usual — no agent-side changes are needed.
 
 ## Verify
 
