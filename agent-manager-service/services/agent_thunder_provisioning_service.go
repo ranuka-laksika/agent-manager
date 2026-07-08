@@ -25,8 +25,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -135,6 +137,30 @@ type agentThunderProvisioningService struct {
 	secretStore  thundersvc.AgentSecretStore
 	logger       *slog.Logger
 	bindingLocks keyedMutex
+}
+
+// NewOpenBaoAgentThunderProvisioning returns the deployment factory that builds
+// the OpenBao-backed provisioning service once the DB is available (see
+// app.Options.AgentThunderProvisioning). Used by the open-source deployment,
+// which provisions AgentIDs against per-environment Thunder via OpenBao; panics
+// on a missing/invalid OPENBAO_* config so startup fails fast.
+func NewOpenBaoAgentThunderProvisioning(cfg config.Config) func(db *gorm.DB) AgentThunderProvisioningService {
+	return func(db *gorm.DB) AgentThunderProvisioningService {
+		envResolver, err := thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+		if err != nil {
+			panic(fmt.Errorf("create env thunder resolver: %w", err))
+		}
+		secretStore, err := thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+		if err != nil {
+			panic(fmt.Errorf("create agent secret store: %w", err))
+		}
+		return NewAgentThunderProvisioningService(
+			repositories.NewAgentThunderClientRepo(db),
+			envResolver,
+			secretStore,
+			slog.Default(),
+		)
+	}
 }
 
 // NewAgentThunderProvisioningService creates a new AgentThunderProvisioningService.
