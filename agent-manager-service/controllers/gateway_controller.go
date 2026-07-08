@@ -661,16 +661,15 @@ func (c *gatewayController) matchGatewayEnvironments(
 
 func convertGatewayToSpecResponse(gw *services.GatewayResponse, ouID string, environments []models.GatewayEnvironmentResponse) spec.GatewayResponse {
 	response := spec.GatewayResponse{
-		Uuid:             gw.ID,
-		OrganizationName: ouID,
-		Name:             gw.Name,
-		DisplayName:      gw.DisplayName,
-		GatewayType:      spec.GatewayType(gw.FunctionalityType),
-		Vhost:            gw.Vhost,
-		IsCritical:       gw.IsCritical,
-		Status:           convertStatusToGatewayStatus(gw.IsActive),
-		CreatedAt:        gw.CreatedAt,
-		UpdatedAt:        gw.UpdatedAt,
+		Uuid:        gw.ID,
+		Name:        gw.Name,
+		DisplayName: gw.DisplayName,
+		GatewayType: spec.GatewayType(gw.FunctionalityType),
+		Vhost:       gw.Vhost,
+		IsCritical:  gw.IsCritical,
+		Status:      convertStatusToGatewayStatus(gw.IsActive),
+		CreatedAt:   gw.CreatedAt,
+		UpdatedAt:   gw.UpdatedAt,
 	}
 
 	// Convert environments
@@ -694,15 +693,14 @@ func convertStatusToGatewayStatus(isActive bool) spec.GatewayStatus {
 
 func convertGatewayEnvironmentToSpecResponse(env *models.GatewayEnvironmentResponse) spec.GatewayEnvironmentResponse {
 	response := spec.GatewayEnvironmentResponse{
-		Id:               env.UUID,
-		OrganizationName: env.OrganizationName,
-		Name:             env.Name,
-		DisplayName:      env.DisplayName,
-		DataplaneRef:     env.DataplaneRef,
-		DnsPrefix:        env.DNSPrefix,
-		IsProduction:     env.IsProduction,
-		CreatedAt:        env.CreatedAt,
-		UpdatedAt:        env.UpdatedAt,
+		Id:           env.UUID,
+		Name:         env.Name,
+		DisplayName:  env.DisplayName,
+		DataplaneRef: env.DataplaneRef,
+		DnsPrefix:    env.DNSPrefix,
+		IsProduction: env.IsProduction,
+		CreatedAt:    env.CreatedAt,
+		UpdatedAt:    env.UpdatedAt,
 	}
 	if env.Description != "" {
 		response.Description = &env.Description

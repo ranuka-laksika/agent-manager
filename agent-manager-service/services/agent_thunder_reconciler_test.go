@@ -127,13 +127,13 @@ func TestAgentThunderReconciler_RunCycle_RetriesDueBindings(t *testing.T) {
 	t.Cleanup(func() { _ = repo.DeleteByAgent(ctx, org, project, agent) })
 
 	due := &models.AgentThunderClient{
-		OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: "dev",
+		OUID: org, ProjectName: project, AgentName: agent, EnvironmentName: "dev",
 		ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
 	}
 	require.NoError(t, repo.Upsert(ctx, due))
 
 	notYetDue := &models.AgentThunderClient{
-		OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: "staging",
+		OUID: org, ProjectName: project, AgentName: agent, EnvironmentName: "staging",
 		ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
 	}
 	future := time.Now().Add(1 * time.Hour)
@@ -175,7 +175,7 @@ func TestAgentThunderReconciler_RunCycle_AttemptsRunConcurrently(t *testing.T) {
 	envs := []string{"env1", "env2", "env3", "env4", "env5"}
 	for _, env := range envs {
 		require.NoError(t, repo.Upsert(ctx, &models.AgentThunderClient{
-			OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
+			OUID: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
 			ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
 		}))
 	}
@@ -186,7 +186,7 @@ func TestAgentThunderReconciler_RunCycle_AttemptsRunConcurrently(t *testing.T) {
 	var mine atomic.Int32
 	provisioning := &fakeProvisioningService{
 		attemptFunc: func(_ context.Context, b models.AgentThunderClient) {
-			if b.OrgName == org && b.ProjectName == project && b.AgentName == agent {
+			if b.OUID == org && b.ProjectName == project && b.AgentName == agent {
 				mine.Add(1)
 			}
 			for mine.Load() < n {
@@ -222,7 +222,7 @@ func TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped(t *testing.T) {
 	for i := range totalBindings {
 		env := fmt.Sprintf("env-%d", i)
 		require.NoError(t, repo.Upsert(ctx, &models.AgentThunderClient{
-			OrgName: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
+			OUID: org, ProjectName: project, AgentName: agent, EnvironmentName: env,
 			ProvisioningType: models.AgentProvisioningTypeExternal, Status: models.AgentThunderStatusPending,
 		}))
 	}
@@ -231,7 +231,7 @@ func TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped(t *testing.T) {
 	var maxObservedActive int32
 	provisioning := &fakeProvisioningService{
 		attemptFunc: func(_ context.Context, b models.AgentThunderClient) {
-			if b.OrgName == org && b.ProjectName == project && b.AgentName == agent {
+			if b.OUID == org && b.ProjectName == project && b.AgentName == agent {
 				n := atomic.AddInt32(&active, 1)
 				for {
 					max := atomic.LoadInt32(&maxObservedActive)

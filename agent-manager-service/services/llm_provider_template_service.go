@@ -74,7 +74,7 @@ func (s *LLMProviderTemplateService) Create(ouID, createdBy string, template *mo
 	}
 
 	// Set metadata - user templates are never system templates
-	template.OrganizationName = ouID
+	template.OUID = ouID
 	template.CreatedBy = createdBy
 	template.IsSystem = false
 
@@ -193,7 +193,7 @@ func (s *LLMProviderTemplateService) Update(ouID, templateID string, updates *mo
 
 	// Set metadata for update
 	updates.Handle = templateID
-	updates.OrganizationName = ouID
+	updates.OUID = ouID
 	updates.IsSystem = false // Ensure user templates remain non-system
 
 	// Serialize configuration

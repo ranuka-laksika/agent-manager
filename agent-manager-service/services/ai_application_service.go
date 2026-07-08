@@ -68,12 +68,12 @@ func (s *AIApplicationService) EnsureAndBind(
 	appHandle, appName, apiKeyUUID string,
 ) (*models.AIApplication, bool, error) {
 	app := &models.AIApplication{
-		Handle:           appHandle,
-		Name:             appName,
-		AgentID:          agentID,
-		ProjectName:      projectName,
-		EnvironmentName:  envName,
-		OrganizationName: ouID,
+		Handle:          appHandle,
+		Name:            appName,
+		AgentID:         agentID,
+		ProjectName:     projectName,
+		EnvironmentName: envName,
+		OUID:            ouID,
 	}
 
 	created, err := s.appRepo.Create(ctx, nil, app)

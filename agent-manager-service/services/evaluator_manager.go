@@ -184,7 +184,7 @@ func (s *evaluatorManagerService) CreateCustomEvaluator(ctx context.Context, ouI
 	}
 
 	evaluator := &models.CustomEvaluator{
-		OrgName:      ouID,
+		OUID:         ouID,
 		Identifier:   identifier,
 		DisplayName:  req.DisplayName,
 		Description:  req.Description,

@@ -24,13 +24,13 @@ import (
 
 // AssociationMapping represents the association between an API and a resource (gateway or dev portal)
 type AssociationMapping struct {
-	ID               int64     `gorm:"column:id;primaryKey" json:"id"`
-	ArtifactUUID     uuid.UUID `gorm:"column:artifact_uuid" json:"artifactId"`
-	OrganizationName string    `gorm:"column:ou_id" json:"organizationId"`
-	ResourceUUID     uuid.UUID `gorm:"column:resource_uuid" json:"resourceId"`
-	AssociationType  string    `gorm:"column:association_type" json:"associationType"`
-	CreatedAt        time.Time `gorm:"column:created_at" json:"createdAt"`
-	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updatedAt"`
+	ID              int64     `gorm:"column:id;primaryKey" json:"id"`
+	ArtifactUUID    uuid.UUID `gorm:"column:artifact_uuid" json:"artifactId"`
+	OUID            string    `gorm:"column:ou_id" json:"organizationId"`
+	ResourceUUID    uuid.UUID `gorm:"column:resource_uuid" json:"resourceId"`
+	AssociationType string    `gorm:"column:association_type" json:"associationType"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updatedAt"`
 }
 
 // TableName returns the table name for the AssociationMapping model

@@ -1086,7 +1086,7 @@ func TestUpdateMonitor_ClearLLMProvider_RejectedWhenLLMJudgePresent(t *testing.T
 		Name:            monitorName,
 		DisplayName:     "Clear LLM Guard Test",
 		Type:            models.MonitorTypeFuture,
-		OrgName:         "test-org",
+		OUID:            "test-org",
 		ProjectName:     "test-project",
 		AgentName:       "test-agent",
 		EnvironmentName: "dev",

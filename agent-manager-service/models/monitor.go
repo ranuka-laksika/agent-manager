@@ -73,7 +73,7 @@ type Monitor struct {
 	DisplayName     string             `gorm:"column:display_name;not null;default:''"`
 	Description     string             `gorm:"column:description;not null;default:''"`
 	Type            string             `gorm:"column:type;not null"`
-	OrgName         string             `gorm:"column:ou_id;not null"`
+	OUID            string             `gorm:"column:ou_id;not null"`
 	ProjectName     string             `gorm:"column:project_name;not null"`
 	AgentName       string             `gorm:"column:agent_name;not null"`
 	AgentID         string             `gorm:"column:agent_id;not null"`
@@ -99,7 +99,6 @@ func (m *Monitor) ToResponse(status MonitorStatus, latestRun *MonitorRunResponse
 		DisplayName:     m.DisplayName,
 		Description:     m.Description,
 		Type:            m.Type,
-		OrgName:         m.OrgName,
 		ProjectName:     m.ProjectName,
 		AgentName:       m.AgentName,
 		AgentID:         m.AgentID,
@@ -188,7 +187,6 @@ type MonitorResponse struct {
 	DisplayName     string                  `json:"displayName"`
 	Description     string                  `json:"description"`
 	Type            string                  `json:"type"`
-	OrgName         string                  `json:"orgName"`
 	ProjectName     string                  `json:"projectName"`
 	AgentName       string                  `json:"agentName"`
 	AgentID         string                  `json:"agentId"`
@@ -236,7 +234,7 @@ type MonitorRunsListResponse struct {
 // Each org gets one set of credentials shared by all monitors in that org.
 type OrgPublisherCredential struct {
 	ID                    uuid.UUID `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
-	OrgName               string    `gorm:"column:ou_id;not null;uniqueIndex:uq_org_publisher_creds_ou_id"`
+	OUID                  string    `gorm:"column:ou_id;not null;uniqueIndex:uq_org_publisher_creds_ou_id"`
 	OrgUUID               string    `gorm:"column:org_uuid;not null;default:''"`
 	ClientID              string    `gorm:"column:client_id;not null"`
 	SecretKVPath          string    `gorm:"column:secret_kv_path;not null"`

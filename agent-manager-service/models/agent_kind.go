@@ -32,7 +32,7 @@ type AgentKind struct {
 	Name        string             `gorm:"column:name"`
 	DisplayName string             `gorm:"column:display_name"`
 	Description string             `gorm:"column:description"`
-	OrgName     string             `gorm:"column:ou_id"`
+	OUID        string             `gorm:"column:ou_id"`
 	ProjectName string             `gorm:"column:project_name"`
 	AgentName   string             `gorm:"column:agent_name"`
 	CreatedAt   time.Time          `gorm:"column:created_at"`
@@ -86,7 +86,6 @@ type AgentKindResponse struct {
 	Kind          string                     `json:"kind"`
 	DisplayName   string                     `json:"displayName"`
 	Description   string                     `json:"description,omitempty"`
-	OrgName       string                     `json:"orgName"`
 	ProjectName   string                     `json:"projectName"`
 	AgentName     string                     `json:"agentName"`
 	LatestVersion string                     `json:"latestVersion,omitempty"`

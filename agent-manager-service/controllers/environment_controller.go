@@ -259,17 +259,16 @@ func getIntQueryParam(r *http.Request, key string, defaultValue int) int {
 // convertToSpecEnvironmentResponse converts internal environment response to spec response
 func convertToSpecEnvironmentResponse(env *models.GatewayEnvironmentResponse) spec.GatewayEnvironmentResponse {
 	response := spec.GatewayEnvironmentResponse{
-		Id:               env.UUID,
-		OrganizationName: env.OrganizationName,
-		Name:             env.Name,
-		DisplayName:      env.DisplayName,
-		DataplaneRef:     env.DataplaneRef,
-		DnsPrefix:        env.DNSPrefix,
-		Description:      &env.Description,
-		IsProduction:     env.IsProduction,
-		Gateway:          toSpecGatewaySpec(env.Gateway),
-		CreatedAt:        env.CreatedAt,
-		UpdatedAt:        env.UpdatedAt,
+		Id:           env.UUID,
+		Name:         env.Name,
+		DisplayName:  env.DisplayName,
+		DataplaneRef: env.DataplaneRef,
+		DnsPrefix:    env.DNSPrefix,
+		Description:  &env.Description,
+		IsProduction: env.IsProduction,
+		Gateway:      toSpecGatewaySpec(env.Gateway),
+		CreatedAt:    env.CreatedAt,
+		UpdatedAt:    env.UpdatedAt,
 	}
 
 	return response
@@ -361,14 +360,13 @@ func toSpecGatewayListenerSpec(l *models.GatewayListenerSpec) *spec.GatewayListe
 // convertToSpecGatewayResponse converts internal gateway response to spec response
 func convertToSpecGatewayResponse(gw *models.GatewayResponse) spec.GatewayResponse {
 	response := spec.GatewayResponse{
-		Uuid:             gw.UUID,
-		OrganizationName: gw.OrganizationName,
-		Name:             gw.Name,
-		DisplayName:      gw.DisplayName,
-		GatewayType:      spec.GatewayType(gw.GatewayType),
-		Vhost:            gw.VHost,
-		IsCritical:       gw.IsCritical,
-		Status:           spec.GatewayStatus(gw.Status),
+		Uuid:        gw.UUID,
+		Name:        gw.Name,
+		DisplayName: gw.DisplayName,
+		GatewayType: spec.GatewayType(gw.GatewayType),
+		Vhost:       gw.VHost,
+		IsCritical:  gw.IsCritical,
+		Status:      spec.GatewayStatus(gw.Status),
 	}
 
 	return response

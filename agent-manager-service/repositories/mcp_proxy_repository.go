@@ -71,15 +71,15 @@ func (r *MCPProxyRepo) Create(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 	now := time.Now()
 
 	if err := r.artifactRepo.Create(tx.WithContext(ctx), &models.Artifact{
-		UUID:             p.UUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindMCPProxy,
-		OrganizationName: orgUUID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		InCatalog:        true,
+		UUID:      p.UUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindMCPProxy,
+		OUID:      orgUUID,
+		CreatedAt: now,
+		UpdatedAt: now,
+		InCatalog: true,
 	}); err != nil {
 		return fmt.Errorf("failed to create artifact: %w", err)
 	}
@@ -110,10 +110,10 @@ func (r *MCPProxyRepo) Update(ctx context.Context, tx *gorm.DB, p *models.MCPPro
 	}
 
 	return r.artifactRepo.Update(tx.WithContext(ctx), &models.Artifact{
-		UUID:             p.UUID,
-		Name:             p.Configuration.Name,
-		Version:          p.Configuration.Version,
-		OrganizationName: orgUUID,
+		UUID:    p.UUID,
+		Name:    p.Configuration.Name,
+		Version: p.Configuration.Version,
+		OUID:    orgUUID,
 	})
 }
 

@@ -64,7 +64,7 @@ type MonitorExecutor interface {
 
 // ExecuteMonitorRunParams contains all inputs for executing a monitor run
 type ExecuteMonitorRunParams struct {
-	OrgName    string
+	OUID       string
 	Monitor    *models.Monitor
 	StartTime  time.Time
 	EndTime    time.Time
@@ -152,7 +152,7 @@ func (e *monitorExecutor) ExecuteMonitorRun(ctx context.Context, params ExecuteM
 	// The scheduler injects an org-scoped OC client into context before calling here;
 	// user-request paths leave the context as-is and fall back to the system client.
 	ocClient := ocClientFromContext(ctx, e.ocClient)
-	workflowRunResp, err := ocClient.CreateWorkflowRun(ctx, params.OrgName, *workflowRunReq)
+	workflowRunResp, err := ocClient.CreateWorkflowRun(ctx, params.OUID, *workflowRunReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WorkflowRun: %w", err)
 	}
@@ -220,13 +220,13 @@ func (e *monitorExecutor) resolveLLMProxyConfig(ctx context.Context, monitor *mo
 		return "", "", "", fmt.Errorf("monitor LLM mapping for monitor %s has no secret KV path — was it provisioned correctly?", monitor.ID)
 	}
 
-	resolvedURL, err := e.resolveProxyURL(ctx, monitor.OrgName, monitor.EnvironmentID, mapping.LLMProxy)
+	resolvedURL, err := e.resolveProxyURL(ctx, monitor.OUID, monitor.EnvironmentID, mapping.LLMProxy)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to resolve proxy URL: %w", err)
 	}
 
 	if mapping.LLMProxy != nil {
-		if provider, provErr := e.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), monitor.OrgName); provErr == nil {
+		if provider, provErr := e.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), monitor.OUID); provErr == nil {
 			templateHandle = provider.TemplateHandle
 		}
 	}
@@ -284,7 +284,7 @@ func (e *monitorExecutor) buildWorkflowRunRequest(
 	llmApiBase string,
 	templateHandle string,
 ) (*client.CreateWorkflowRunRequest, error) {
-	evaluatorsJSON, hasLLMJudge, err := e.serializeEvaluators(monitor.OrgName, evaluators, templateHandle)
+	evaluatorsJSON, hasLLMJudge, err := e.serializeEvaluators(monitor.OUID, evaluators, templateHandle)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +312,7 @@ func (e *monitorExecutor) buildWorkflowRunRequest(
 				"name":        monitor.Name,
 				"displayName": monitor.DisplayName,
 			},
-			"organization": monitor.OrgName,
+			"organization": monitor.OUID,
 			"project":      monitor.ProjectName,
 			"agent": map[string]interface{}{
 				"id":   monitor.AgentID,
@@ -343,19 +343,19 @@ func (e *monitorExecutor) buildPublishingParams(monitor *models.Monitor, runID u
 		"runId":     runID.String(),
 	}
 
-	cred, err := e.credRepo.GetByOrgName(monitor.OrgName)
+	cred, err := e.credRepo.GetByOrgName(monitor.OUID)
 	if err == nil && cred != nil {
 		params["clientId"] = cred.ClientID
 		params["secretKVPath"] = cred.SecretKVPath
 		params["secretKey"] = cred.SecretKey
 	} else if errors.Is(err, gorm.ErrRecordNotFound) {
 		// Fallback to static defaults (on-prem single-tenant)
-		e.logger.Debug("No per-org publisher credentials found, using defaults", "ouID", monitor.OrgName)
+		e.logger.Debug("No per-org publisher credentials found, using defaults", "ouID", monitor.OUID)
 		params["clientId"] = "amp-publisher-client"
 		params["secretKVPath"] = "amp-publisher-client-secret"
 		params["secretKey"] = "value"
 	} else {
-		return nil, fmt.Errorf("failed to look up publisher credentials for org %s: %w", monitor.OrgName, err)
+		return nil, fmt.Errorf("failed to look up publisher credentials for org %s: %w", monitor.OUID, err)
 	}
 
 	return params, nil

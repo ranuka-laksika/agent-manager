@@ -83,7 +83,7 @@ func (r *ArtifactRepo) Update(tx *gorm.DB, artifact *models.Artifact) error {
 	}
 
 	result := tx.Model(&models.Artifact{}).
-		Where("uuid = ? AND ou_id = ?", artifact.UUID, artifact.OrganizationName).
+		Where("uuid = ? AND ou_id = ?", artifact.UUID, artifact.OUID).
 		Updates(updates)
 
 	if result.Error != nil {

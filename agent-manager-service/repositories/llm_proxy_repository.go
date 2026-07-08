@@ -117,14 +117,14 @@ func (r *LLMProxyRepo) Create(p *models.LLMProxy, handle, name, version string, 
 
 		// Insert into artifacts table first
 		if err := r.artifactRepo.Create(tx, &models.Artifact{
-			UUID:             p.UUID,
-			Handle:           handle,
-			Name:             name,
-			Version:          version,
-			Kind:             models.KindLLMProxy,
-			OrganizationName: ouID,
-			CreatedAt:        now,
-			UpdatedAt:        now,
+			UUID:      p.UUID,
+			Handle:    handle,
+			Name:      name,
+			Version:   version,
+			Kind:      models.KindLLMProxy,
+			OUID:      ouID,
+			CreatedAt: now,
+			UpdatedAt: now,
 		}); err != nil {
 			return fmt.Errorf("failed to create artifact: %w", err)
 		}

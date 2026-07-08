@@ -91,7 +91,7 @@ func (c *gatewayInternalController) GetLLMProvider(w http.ResponseWriter, r *htt
 		return
 	}
 
-	ouID := gateway.OrganizationName
+	ouID := gateway.OUID
 	gatewayID := gateway.UUID.String()
 	providerID := r.PathValue("providerId")
 	if providerID == "" {
@@ -158,7 +158,7 @@ func (c *gatewayInternalController) GetLLMProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ouID := gateway.OrganizationName
+	ouID := gateway.OUID
 	gatewayID := gateway.UUID.String()
 	proxyID := r.PathValue("proxyId")
 	if proxyID == "" {
@@ -221,7 +221,7 @@ func (c *gatewayInternalController) GetMCPProxy(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ouID := gateway.OrganizationName
+	ouID := gateway.OUID
 	gatewayID := gateway.UUID.String()
 	proxyID := r.PathValue("proxyId")
 	if proxyID == "" {
@@ -334,9 +334,9 @@ func (c *gatewayInternalController) getAPIKeysByKinds(w http.ResponseWriter, r *
 					envUUIDs = append(envUUIDs, m.EnvironmentUUID.String())
 				}
 			}
-			kindKeys, err = c.apiKeyRepo.ListByArtifactKindAndEnvs(gateway.OrganizationName, kind, envUUIDs)
+			kindKeys, err = c.apiKeyRepo.ListByArtifactKindAndEnvs(gateway.OUID, kind, envUUIDs)
 		} else {
-			kindKeys, err = c.apiKeyRepo.ListByArtifactKind(gateway.OrganizationName, kind)
+			kindKeys, err = c.apiKeyRepo.ListByArtifactKind(gateway.OUID, kind)
 		}
 		if err != nil {
 			log.Error("Failed to list API keys", "kind", kind, "error", err)
@@ -419,7 +419,7 @@ func (c *gatewayInternalController) GetApplications(w http.ResponseWriter, r *ht
 		return
 	}
 
-	apps, err := c.aiApplicationRepo.ListByOrg(ctx, gateway.OrganizationName)
+	apps, err := c.aiApplicationRepo.ListByOrg(ctx, gateway.OUID)
 	if err != nil {
 		log.Error("Failed to list AI applications", "error", err)
 		http.Error(w, "Failed to list applications", http.StatusInternalServerError)

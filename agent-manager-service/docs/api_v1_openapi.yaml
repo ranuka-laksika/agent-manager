@@ -9491,7 +9491,6 @@ components:
         - name
         - displayName
         - artifactUuid
-        - organizationName
         - maskedApiKey
         - status
         - purpose
@@ -9512,9 +9511,6 @@ components:
           type: string
           format: uuid
           description: UUID of the artifact this key is bound to.
-        organizationName:
-          type: string
-          description: Organization name the key belongs to.
         maskedApiKey:
           type: string
           description: Masked representation of the API key (full value is shown only once at creation).
@@ -10651,9 +10647,6 @@ components:
         description:
           type: string
           description: Description of the data plane
-        orgName:
-          type: string
-          description: Organization name
         createdAt:
           type: string
           format: date-time
@@ -10662,7 +10655,6 @@ components:
         - name
         - displayName
         - description
-        - orgName
         - createdAt
 
     DataPlaneListResponse:
@@ -10683,9 +10675,6 @@ components:
         description:
           type: string
           description: Description of the deployment pipeline
-        orgName:
-          type: string
-          description: Organization name
         createdAt:
           type: string
           format: date-time
@@ -10699,7 +10688,6 @@ components:
         - name
         - displayName
         - description
-        - orgName
         - createdAt
         - promotionPaths
 
@@ -10913,9 +10901,6 @@ components:
         name:
           type: string
           description: Name of the project
-        orgName:
-          type: string
-          description: Name of the organization
         displayName:
           type: string
           description: Display name of the project
@@ -10932,7 +10917,6 @@ components:
       required:
         - uuid
         - name
-        - orgName
         - displayName
         - description
         - deploymentPipeline
@@ -10946,9 +10930,6 @@ components:
         name:
           type: string
           description: Name of the project
-        orgName:
-          type: string
-          description: Name of the organization
         displayName:
           type: string
           description: Display name of the project
@@ -10965,7 +10946,6 @@ components:
       required:
         - uuid
         - name
-        - orgName
         - displayName
         - createdAt
 
@@ -11116,7 +11096,6 @@ components:
         - name
         - displayName
         - type
-        - orgName
         - projectName
         - agentName
         - environmentName
@@ -11146,10 +11125,6 @@ components:
           description: Monitor type
           enum: [future, past]
           example: "future"
-        orgName:
-          type: string
-          description: Organization name
-          example: "default"
         projectName:
           type: string
           description: Project name
@@ -12470,7 +12445,6 @@ components:
       type: object
       required:
         - id
-        - organizationName
         - name
         - displayName
         - dataplaneRef
@@ -12483,10 +12457,6 @@ components:
           type: string
           description: Unique identifier for the environment
           example: 550e8400-e29b-41d4-a716-446655440000
-        organizationName:
-          type: string
-          description: Organization UUID
-          example: 123e4567-e89b-12d3-a456-426614174000
         name:
           type: string
           description: Unique environment name (lowercase, alphanumeric with hyphens)
@@ -12801,7 +12771,6 @@ components:
       type: object
       required:
         - uuid
-        - organizationName
         - name
         - displayName
         - gatewayType
@@ -12815,10 +12784,6 @@ components:
           type: string
           description: Unique identifier for the gateway
           example: 7c4a8d09-ca3f-4b0a-82e9-2e85b96dd8a7
-        organizationName:
-          type: string
-          description: Organization UUID
-          example: 123e4567-e89b-12d3-a456-426614174000
         name:
           type: string
           description: Unique gateway name (lowercase, alphanumeric with hyphens)
@@ -15061,7 +15026,6 @@ components:
         - name
         - agentId
         - type
-        - organizationName
         - projectName
         - envMappings
         - environmentVariables
@@ -15089,10 +15053,6 @@ components:
           type: string
           description: Type of configuration
           example: "llm"
-        organizationName:
-          type: string
-          description: Organization name
-          example: "acme-corp"
         projectName:
           type: string
           description: Project name
@@ -15276,7 +15236,6 @@ components:
         - name
         - agentId
         - type
-        - organizationName
         - projectName
         - createdAt
       properties:
@@ -15301,10 +15260,6 @@ components:
           type: string
           description: Configuration type
           example: "llm"
-        organizationName:
-          type: string
-          description: Organization name
-          example: "acme-corp"
         projectName:
           type: string
           description: Project name
@@ -15771,7 +15726,6 @@ components:
         - uuid
         - name
         - displayName
-        - organizationName
         - versions
         - createdAt
         - kind
@@ -15788,8 +15742,6 @@ components:
           description: Human-readable name
           example: "Weather Assistant"
         description:
-          type: string
-        organizationName:
           type: string
         kind:
           type: string

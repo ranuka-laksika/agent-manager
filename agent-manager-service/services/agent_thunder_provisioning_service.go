@@ -204,7 +204,7 @@ func (s *agentThunderProvisioningService) ProvisionForAgent(
 	bindings := make([]models.AgentThunderClient, 0, len(envNames))
 	for _, env := range envNames {
 		b := models.AgentThunderClient{
-			OrgName:          ouID,
+			OUID:             ouID,
 			ProjectName:      projectName,
 			AgentName:        agentName,
 			EnvironmentName:  env,
@@ -288,7 +288,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		return
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, binding.OrgName, binding.EnvironmentName)
+	thunderClient, err := s.envResolver.Resolve(ctx, binding.OUID, binding.EnvironmentName)
 	if err != nil {
 		s.recordFailure(ctx, binding, "", "", err)
 		return
@@ -305,7 +305,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 			return
 		}
 
-		appName := thundersvc.AgentThunderAppName(binding.OrgName, binding.EnvironmentName, binding.ProjectName, binding.AgentName)
+		appName := thundersvc.AgentThunderAppName(binding.OUID, binding.EnvironmentName, binding.ProjectName, binding.AgentName)
 		var created bool
 		thunderAgentID, clientID, clientSecret, created, err = thunderClient.CreateAgentIdentity(ctx, ouID, appName, "")
 		if err != nil {
@@ -340,7 +340,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 
 	secretRefPath := binding.SecretRefPath
 	if clientSecret != "" {
-		secretRefPath, err = s.secretStore.Store(ctx, binding.OrgName, binding.ProjectName, binding.EnvironmentName, binding.AgentName, clientID, clientSecret)
+		secretRefPath, err = s.secretStore.Store(ctx, binding.OUID, binding.ProjectName, binding.EnvironmentName, binding.AgentName, clientID, clientSecret)
 		if err != nil {
 			// The Thunder identity was already created successfully above —
 			// pass thunderAgentID/clientID through so recordFailure persists

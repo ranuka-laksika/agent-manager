@@ -26,7 +26,7 @@ import (
 // Gateway represents an API Platform gateway instance within an organization
 type Gateway struct {
 	UUID                     uuid.UUID              `gorm:"column:uuid;primaryKey" json:"id"`
-	OrganizationName         string                 `gorm:"column:ou_id" json:"organizationId"`
+	OUID                     string                 `gorm:"column:ou_id" json:"organizationId"`
 	Name                     string                 `gorm:"column:name" json:"name"`
 	DisplayName              string                 `gorm:"column:display_name" json:"displayName"`
 	Description              string                 `gorm:"column:description" json:"description"`

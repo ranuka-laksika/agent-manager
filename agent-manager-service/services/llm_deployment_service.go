@@ -143,7 +143,7 @@ func (s *LLMProviderDeploymentService) DeployLLMProvider(providerID string, req 
 		slog.Error("LLMProviderDeploymentService.DeployLLMProvider: failed to get gateway", "providerID", providerID, "gatewayID", req.GatewayID, "error", err)
 		return nil, fmt.Errorf("failed to get gateway: %w", err)
 	}
-	if gateway == nil || gateway.OrganizationName != ouID {
+	if gateway == nil || gateway.OUID != ouID {
 		slog.Warn("LLMProviderDeploymentService.DeployLLMProvider: gateway not found or org mismatch", "providerID", providerID, "gatewayID", req.GatewayID, "ouID", ouID)
 		return nil, utils.ErrGatewayNotFound
 	}
@@ -217,7 +217,7 @@ func (s *LLMProviderDeploymentService) DeployLLMProvider(providerID string, req 
 		DeploymentID:     deploymentID,
 		Name:             req.Name,
 		ArtifactUUID:     provider.UUID,
-		OrganizationName: ouID,
+		OUID:             ouID,
 		GatewayUUID:      gatewayUUID,
 		BaseDeploymentID: baseDeploymentID,
 		Content:          contentBytes,

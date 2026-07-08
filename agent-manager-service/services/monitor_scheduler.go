@@ -181,13 +181,13 @@ func (s *monitorSchedulerService) triggerMonitor(ctx context.Context, monitor *m
 	nextRunTime := endTime.Add(interval)
 
 	// Get an org-bound OC client in Thunder mode; nil in non-Thunder mode (executor falls back).
-	orgOCClient, err := s.orgOCClient(ctx, monitor.OrgName)
+	orgOCClient, err := s.orgOCClient(ctx, monitor.OUID)
 	if err != nil {
-		return fmt.Errorf("failed to get OC client for org %s: %w", monitor.OrgName, err)
+		return fmt.Errorf("failed to get OC client for org %s: %w", monitor.OUID, err)
 	}
 
 	result, err := s.executor.ExecuteMonitorRun(withOCClient(ctx, orgOCClient), ExecuteMonitorRunParams{
-		OrgName:    monitor.OrgName,
+		OUID:       monitor.OUID,
 		Monitor:    monitor,
 		StartTime:  startTime,
 		EndTime:    endTime,
@@ -243,12 +243,12 @@ func (s *monitorSchedulerService) syncSingleRunStatus(ctx context.Context, run *
 		return nil
 	}
 
-	ocClient, err := s.orgOCClient(ctx, monitor.OrgName)
+	ocClient, err := s.orgOCClient(ctx, monitor.OUID)
 	if err != nil {
-		return fmt.Errorf("failed to get OC client for org %s: %w", monitor.OrgName, err)
+		return fmt.Errorf("failed to get OC client for org %s: %w", monitor.OUID, err)
 	}
 
-	workflowRun, err := ocClient.GetWorkflowRun(ctx, monitor.OrgName, run.Name)
+	workflowRun, err := ocClient.GetWorkflowRun(ctx, monitor.OUID, run.Name)
 	if err != nil {
 		s.logger.Warn("WorkflowRun not found", "workflowRunName", run.Name)
 		return fmt.Errorf("failed to get workflow run: %w", err)

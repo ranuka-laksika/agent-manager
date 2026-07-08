@@ -27,15 +27,15 @@ import (
 // of the same agent in the same environment; all proxy API keys for that agent+env
 // are bound to it so the gateway policy engine can apply per-consumer limits.
 type AIApplication struct {
-	UUID             uuid.UUID `gorm:"column:uuid;primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
-	Handle           string    `gorm:"column:handle;not null" json:"handle"`
-	Name             string    `gorm:"column:name;not null" json:"name"`
-	AgentID          string    `gorm:"column:agent_id;not null" json:"agentId"`
-	ProjectName      string    `gorm:"column:project_name;not null" json:"projectName"`
-	EnvironmentName  string    `gorm:"column:environment_name;not null" json:"environmentName"`
-	OrganizationName string    `gorm:"column:ou_id;not null" json:"organizationName"`
-	CreatedAt        time.Time `gorm:"column:created_at" json:"createdAt"`
-	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updatedAt"`
+	UUID            uuid.UUID `gorm:"column:uuid;primaryKey;type:uuid;default:gen_random_uuid()" json:"uuid"`
+	Handle          string    `gorm:"column:handle;not null" json:"handle"`
+	Name            string    `gorm:"column:name;not null" json:"name"`
+	AgentID         string    `gorm:"column:agent_id;not null" json:"agentId"`
+	ProjectName     string    `gorm:"column:project_name;not null" json:"projectName"`
+	EnvironmentName string    `gorm:"column:environment_name;not null" json:"environmentName"`
+	OUID            string    `gorm:"column:ou_id;not null" json:"organizationName"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"createdAt"`
+	UpdatedAt       time.Time `gorm:"column:updated_at" json:"updatedAt"`
 }
 
 // TableName returns the table name for the AIApplication model.

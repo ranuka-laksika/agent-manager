@@ -180,7 +180,7 @@ func (s *monitorManagerService) CreateMonitor(ctx context.Context, ouID string, 
 		DisplayName:     req.DisplayName,
 		Description:     req.Description,
 		Type:            req.Type,
-		OrgName:         ouID,
+		OUID:            ouID,
 		ProjectName:     req.ProjectName,
 		AgentName:       req.AgentName,
 		AgentID:         agent.UUID,
@@ -299,7 +299,7 @@ func (s *monitorManagerService) CreateMonitor(ctx context.Context, ouID string, 
 	if monitor.Type == models.MonitorTypePast {
 		// Past monitors: trigger evaluation run immediately
 		result, err := s.executor.ExecuteMonitorRun(ctx, ExecuteMonitorRunParams{
-			OrgName:    ouID,
+			OUID:       ouID,
 			Monitor:    monitor,
 			StartTime:  *monitor.TraceStart,
 			EndTime:    *monitor.TraceEnd,
@@ -437,7 +437,7 @@ func (s *monitorManagerService) UpdateMonitor(ctx context.Context, ouID, project
 		if req.Evaluators != nil {
 			evalList = *req.Evaluators
 		}
-		hasLLMJudge, err := s.validateEvaluators(ctx, monitor.OrgName, evalList)
+		hasLLMJudge, err := s.validateEvaluators(ctx, monitor.OUID, evalList)
 		if err != nil {
 			return nil, err
 		}
@@ -656,7 +656,7 @@ func (s *monitorManagerService) UpdateMonitor(ctx context.Context, ouID, project
 	if monitor.Type == models.MonitorTypePast {
 		// Past monitors: trigger a new evaluation run with updated config
 		result, err := s.executor.ExecuteMonitorRun(ctx, ExecuteMonitorRunParams{
-			OrgName:    ouID,
+			OUID:       ouID,
 			Monitor:    monitor,
 			StartTime:  *monitor.TraceStart,
 			EndTime:    *monitor.TraceEnd,
@@ -949,7 +949,7 @@ func (s *monitorManagerService) RerunMonitor(ctx context.Context, ouID, projectN
 
 	// Create new WorkflowRun with same time parameters and evaluators from the original run
 	result, err := s.executor.ExecuteMonitorRun(ctx, ExecuteMonitorRunParams{
-		OrgName:    ouID,
+		OUID:       ouID,
 		Monitor:    monitor,
 		StartTime:  originalRun.TraceStart,
 		EndTime:    originalRun.TraceEnd,

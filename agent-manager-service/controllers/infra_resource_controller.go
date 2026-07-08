@@ -214,7 +214,6 @@ func (c *infraResourceController) CreateProject(w http.ResponseWriter, r *http.R
 		DisplayName:        project.DisplayName,
 		Description:        project.Description,
 		DeploymentPipeline: project.DeploymentPipeline,
-		OrgName:            project.OrgName,
 		CreatedAt:          project.CreatedAt,
 	}
 
@@ -255,7 +254,6 @@ func (c *infraResourceController) UpdateProject(w http.ResponseWriter, r *http.R
 		DisplayName:        project.DisplayName,
 		Description:        project.Description,
 		DeploymentPipeline: project.DeploymentPipeline,
-		OrgName:            project.OrgName,
 		CreatedAt:          project.CreatedAt,
 	}
 

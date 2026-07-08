@@ -123,7 +123,6 @@ func TestCreateEnvironment(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		require.Equal(t, payload.Name, resp.Name)
 		require.Equal(t, payload.DisplayName, resp.DisplayName)
-		require.Equal(t, jwtassertion.MockOUID, resp.OrganizationName)
 
 		require.Len(t, ocClient.CreateEnvironmentCalls(), 1)
 		call := ocClient.CreateEnvironmentCalls()[0]

@@ -30,8 +30,6 @@ type AgentModelConfigResponse struct {
 	AgentId string `json:"agentId"`
 	// Type of configuration
 	Type string `json:"type"`
-	// Organization name
-	OrganizationName string `json:"organizationName"`
 	// Project name
 	ProjectName string `json:"projectName"`
 	// Environment-specific model configurations
@@ -48,13 +46,12 @@ type AgentModelConfigResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentModelConfigResponse(uuid string, name string, agentId string, type_ string, organizationName string, projectName string, envMappings map[string]EnvProviderConfigMappings, environmentVariables []EnvironmentVariableConfig, createdAt time.Time, updatedAt time.Time) *AgentModelConfigResponse {
+func NewAgentModelConfigResponse(uuid string, name string, agentId string, type_ string, projectName string, envMappings map[string]EnvProviderConfigMappings, environmentVariables []EnvironmentVariableConfig, createdAt time.Time, updatedAt time.Time) *AgentModelConfigResponse {
 	this := AgentModelConfigResponse{}
 	this.Uuid = uuid
 	this.Name = name
 	this.AgentId = agentId
 	this.Type = type_
-	this.OrganizationName = organizationName
 	this.ProjectName = projectName
 	this.EnvMappings = envMappings
 	this.EnvironmentVariables = environmentVariables
@@ -199,30 +196,6 @@ func (o *AgentModelConfigResponse) SetType(v string) {
 	o.Type = v
 }
 
-// GetOrganizationName returns the OrganizationName field value
-func (o *AgentModelConfigResponse) GetOrganizationName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrganizationName
-}
-
-// GetOrganizationNameOk returns a tuple with the OrganizationName field value
-// and a boolean to check if the value has been set.
-func (o *AgentModelConfigResponse) GetOrganizationNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrganizationName, true
-}
-
-// SetOrganizationName sets field value
-func (o *AgentModelConfigResponse) SetOrganizationName(v string) {
-	o.OrganizationName = v
-}
-
 // GetProjectName returns the ProjectName field value
 func (o *AgentModelConfigResponse) GetProjectName() string {
 	if o == nil {
@@ -360,7 +333,6 @@ func (o AgentModelConfigResponse) ToMap() (map[string]interface{}, error) {
 	}
 	toSerialize["agentId"] = o.AgentId
 	toSerialize["type"] = o.Type
-	toSerialize["organizationName"] = o.OrganizationName
 	toSerialize["projectName"] = o.ProjectName
 	toSerialize["envMappings"] = o.EnvMappings
 	toSerialize["environmentVariables"] = o.EnvironmentVariables

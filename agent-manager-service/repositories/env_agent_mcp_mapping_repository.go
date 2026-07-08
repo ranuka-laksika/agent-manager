@@ -80,14 +80,14 @@ func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, 
 	}
 	now := time.Now()
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
-		UUID:             mapping.ArtifactUUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindMCPMapping,
-		OrganizationName: ouID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		UUID:      mapping.ArtifactUUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindMCPMapping,
+		OUID:      ouID,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}); err != nil {
 		return fmt.Errorf("failed to create MCP config artifact: %w", err)
 	}

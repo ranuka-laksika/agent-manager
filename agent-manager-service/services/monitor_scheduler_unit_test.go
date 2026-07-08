@@ -122,7 +122,7 @@ func futureMonitor(ouID string, interval int, nextRun time.Time) models.Monitor 
 		ID:              uuid.New(),
 		Name:            "my-monitor",
 		Type:            models.MonitorTypeFuture,
-		OrgName:         ouID,
+		OUID:            ouID,
 		IntervalMinutes: intPtrU(interval),
 		NextRunTime:     &nextRun,
 		Evaluators:      []models.MonitorEvaluator{{Identifier: "answer_relevancy", DisplayName: "Relevancy"}},
@@ -300,7 +300,7 @@ func TestMonitorScheduler_triggerMonitor(t *testing.T) {
 
 		// StartTime = NextRunTime - interval (deterministic, independent of wall clock).
 		assert.Equal(t, nextRun.Add(-time.Duration(interval)*time.Minute), captured.StartTime)
-		assert.Equal(t, org, captured.OrgName)
+		assert.Equal(t, org, captured.OUID)
 		assert.Equal(t, m.Evaluators, captured.Evaluators)
 
 		// EndTime = now - safetyDelta; bound it between the pre/post wall-clock reads.
@@ -441,7 +441,7 @@ func TestMonitorScheduler_syncSingleRunStatus(t *testing.T) {
 		return &repomocks.MonitorRepositoryMock{
 			GetMonitorByIDFunc: func(id uuid.UUID) (*models.Monitor, error) {
 				assert.Equal(t, monitorID, id)
-				return &models.Monitor{ID: monitorID, OrgName: org, Name: "my-monitor"}, nil
+				return &models.Monitor{ID: monitorID, OUID: org, Name: "my-monitor"}, nil
 			},
 		}
 	}

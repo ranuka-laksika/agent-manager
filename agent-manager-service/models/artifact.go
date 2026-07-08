@@ -24,15 +24,15 @@ import (
 
 // Artifact represents an API Platform artifact (API, LLM Provider, LLM Proxy)
 type Artifact struct {
-	UUID             uuid.UUID `gorm:"column:uuid;primaryKey" json:"uuid"`
-	Handle           string    `gorm:"column:handle" json:"handle"`
-	Name             string    `gorm:"column:name" json:"name"`
-	Version          string    `gorm:"column:version" json:"version"`
-	Kind             string    `gorm:"column:kind" json:"kind"`
-	OrganizationName string    `gorm:"column:ou_id" json:"organization_name"`
-	InCatalog        bool      `gorm:"column:in_catalog;default:false" json:"inCatalog"`
-	CreatedAt        time.Time `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt        time.Time `gorm:"column:updated_at" json:"updated_at"`
+	UUID      uuid.UUID `gorm:"column:uuid;primaryKey" json:"uuid"`
+	Handle    string    `gorm:"column:handle" json:"handle"`
+	Name      string    `gorm:"column:name" json:"name"`
+	Version   string    `gorm:"column:version" json:"version"`
+	Kind      string    `gorm:"column:kind" json:"kind"`
+	OUID      string    `gorm:"column:ou_id" json:"organization_name"`
+	InCatalog bool      `gorm:"column:in_catalog;default:false" json:"inCatalog"`
+	CreatedAt time.Time `gorm:"column:created_at" json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
 }
 
 // TableName returns the table name for the Artifact model

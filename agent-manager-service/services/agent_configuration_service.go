@@ -930,12 +930,12 @@ func (s *agentConfigurationService) createLLMConfig(ctx context.Context, ouID, p
 
 	// Build config struct (UUID assigned on Create)
 	config := &models.AgentConfiguration{
-		Name:             req.Name,
-		Description:      req.Description,
-		AgentID:          agentID,
-		TypeID:           models.AgentConfigTypeToID(req.Type),
-		OrganizationName: ouID,
-		ProjectName:      projectName,
+		Name:        req.Name,
+		Description: req.Description,
+		AgentID:     agentID,
+		TypeID:      models.AgentConfigTypeToID(req.Type),
+		OUID:        ouID,
+		ProjectName: projectName,
 	}
 
 	// Phase 1 — Short TX: persist config row only.
@@ -1249,12 +1249,12 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 	}
 
 	config := &models.AgentConfiguration{
-		Name:             req.Name,
-		Description:      req.Description,
-		AgentID:          agentID,
-		TypeID:           models.AgentConfigTypeIDMCP,
-		OrganizationName: ouID,
-		ProjectName:      projectName,
+		Name:        req.Name,
+		Description: req.Description,
+		AgentID:     agentID,
+		TypeID:      models.AgentConfigTypeIDMCP,
+		OUID:        ouID,
+		ProjectName: projectName,
 	}
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
 		return s.agentConfigRepo.Create(ctx, tx, config)
@@ -1543,14 +1543,13 @@ func (s *agentConfigurationService) List(ctx context.Context, ouID, projectName,
 	items := make([]models.AgentModelConfigListItem, len(configs))
 	for i, cfg := range configs {
 		items[i] = models.AgentModelConfigListItem{
-			UUID:             cfg.UUID.String(),
-			Name:             cfg.Name,
-			Description:      cfg.Description,
-			AgentID:          cfg.AgentID,
-			Type:             models.AgentConfigTypeFromID(cfg.TypeID),
-			OrganizationName: cfg.OrganizationName,
-			ProjectName:      cfg.ProjectName,
-			CreatedAt:        cfg.CreatedAt,
+			UUID:        cfg.UUID.String(),
+			Name:        cfg.Name,
+			Description: cfg.Description,
+			AgentID:     cfg.AgentID,
+			Type:        models.AgentConfigTypeFromID(cfg.TypeID),
+			ProjectName: cfg.ProjectName,
+			CreatedAt:   cfg.CreatedAt,
 		}
 	}
 
@@ -1581,14 +1580,13 @@ func (s *agentConfigurationService) ListByType(
 	items := make([]models.AgentModelConfigListItem, len(configs))
 	for i, cfg := range configs {
 		items[i] = models.AgentModelConfigListItem{
-			UUID:             cfg.UUID.String(),
-			Name:             cfg.Name,
-			Description:      cfg.Description,
-			AgentID:          cfg.AgentID,
-			Type:             models.AgentConfigTypeFromID(cfg.TypeID),
-			OrganizationName: cfg.OrganizationName,
-			ProjectName:      cfg.ProjectName,
-			CreatedAt:        cfg.CreatedAt,
+			UUID:        cfg.UUID.String(),
+			Name:        cfg.Name,
+			Description: cfg.Description,
+			AgentID:     cfg.AgentID,
+			Type:        models.AgentConfigTypeFromID(cfg.TypeID),
+			ProjectName: cfg.ProjectName,
+			CreatedAt:   cfg.CreatedAt,
 		}
 	}
 
@@ -3489,7 +3487,7 @@ func (s *agentConfigurationService) deleteLLMConfig(ctx context.Context, existin
 		// SecretReference CR is already deleted in Step 1b above, so we pass the persisted name
 		// to avoid a redundant (and potentially incorrect) deletion attempt.
 		proxySecretLoc := secretmanagersvc.SecretLocation{
-			OrgName:         existingConfig.OrganizationName,
+			OrgName:         existingConfig.OUID,
 			ProjectName:     existingConfig.ProjectName,
 			AgentName:       existingConfig.AgentID,
 			EnvironmentName: env,
@@ -3690,7 +3688,7 @@ func (s *agentConfigurationService) DeleteForAgentDeletion(ctx context.Context, 
 		}
 
 		proxySecretLoc := secretmanagersvc.SecretLocation{
-			OrgName:         existingConfig.OrganizationName,
+			OrgName:         existingConfig.OUID,
 			ProjectName:     existingConfig.ProjectName,
 			AgentName:       existingConfig.AgentID,
 			EnvironmentName: env,
@@ -4018,13 +4016,13 @@ func (s *agentConfigurationService) buildLLMProxyConfig(
 	proxyName := fmt.Sprintf("%s-proxy", scopedID)
 	contextPath := fmt.Sprintf("/%s", scopedID)
 
-	project, err := s.ocClient.GetProject(ctx, config.OrganizationName, config.ProjectName)
+	project, err := s.ocClient.GetProject(ctx, config.OUID, config.ProjectName)
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to get project from openchoreo: %w", err)
 	}
 
 	// Get provider details
-	provider, err := s.llmProviderRepo.GetByHandle(envMapping.ProviderName, config.OrganizationName)
+	provider, err := s.llmProviderRepo.GetByHandle(envMapping.ProviderName, config.OUID)
 	if err != nil {
 		return nil, "", "", nil, fmt.Errorf("failed to get provider: %w", err)
 	}
@@ -4070,7 +4068,7 @@ func (s *agentConfigurationService) buildLLMProxyConfig(
 
 		if providerApiKeyConfig != nil && providerApiKeyConfig.Enabled != nil && *providerApiKeyConfig.Enabled {
 			// Provider api key security is enabled.
-			apiKey, err := s.llmProviderAPIKeyService.CreateAPIKey(ctx, config.OrganizationName, provider.UUID.String(), &models.CreateAPIKeyRequest{
+			apiKey, err := s.llmProviderAPIKeyService.CreateAPIKey(ctx, config.OUID, provider.UUID.String(), &models.CreateAPIKeyRequest{
 				Name:        proxyName,
 				DisplayName: proxyName,
 				Purpose:     models.APIKeyPurposeConsoleManaged,
@@ -4086,7 +4084,7 @@ func (s *agentConfigurationService) buildLLMProxyConfig(
 			encrypted, err := utils.EncryptBytes([]byte(apiKey.APIKey), s.encryptionKey)
 			if err != nil {
 				// revoke created api key
-				if revokeErr := s.llmProviderAPIKeyService.RevokeAPIKey(ctx, config.OrganizationName, provider.UUID.String(), proxyName); revokeErr != nil {
+				if revokeErr := s.llmProviderAPIKeyService.RevokeAPIKey(ctx, config.OUID, provider.UUID.String(), proxyName); revokeErr != nil {
 					s.logger.Error(
 						"Failed to revoke provider API key after encryption failure",
 						"providerUUID", provider.UUID.String(),
@@ -4116,7 +4114,7 @@ func (s *agentConfigurationService) buildLLMProxyUpdateConfig(
 	envMapping models.EnvModelConfigRequest,
 	existingProxy *models.LLMProxy,
 ) (*models.LLMProxy, string, error) {
-	provider, err := s.llmProviderRepo.GetByHandle(envMapping.ProviderName, config.OrganizationName)
+	provider, err := s.llmProviderRepo.GetByHandle(envMapping.ProviderName, config.OUID)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to get provider: %w", err)
 	}
@@ -4577,11 +4575,11 @@ func (s *agentConfigurationService) removeMCPMappingAPIKeyEnvVar(ctx context.Con
 	if len(keysToRemove) == 0 {
 		return
 	}
-	if err := s.ocClient.RemoveReleaseBindingEnvVars(ctx, config.OrganizationName, config.ProjectName, config.AgentID, envName, keysToRemove); err != nil {
+	if err := s.ocClient.RemoveReleaseBindingEnvVars(ctx, config.OUID, config.ProjectName, config.AgentID, envName, keysToRemove); err != nil {
 		s.logger.Warn("failed to remove MCP API key env var from ReleaseBinding", "environment", envName, "err", err)
 	}
 	if firstEnvName != "" && envName == firstEnvName {
-		if err := s.ocClient.RemoveComponentEnvironmentVariables(ctx, config.OrganizationName, config.ProjectName, config.AgentID, keysToRemove); err != nil {
+		if err := s.ocClient.RemoveComponentEnvironmentVariables(ctx, config.OUID, config.ProjectName, config.AgentID, keysToRemove); err != nil {
 			s.logger.Warn("failed to remove MCP API key env var from Component CR", "environment", envName, "err", err)
 		}
 	}
@@ -4877,7 +4875,7 @@ func (s *agentConfigurationService) rollbackProxies(ctx context.Context, resourc
 // buildConfigResponse builds the full configuration response
 func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, config *models.AgentConfiguration, includeProxyURL bool) (*models.AgentModelConfigResponse, error) {
 	// Get environment names from OpenChoreo
-	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, config.OrganizationName)
+	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, config.OUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
 	}
@@ -4904,13 +4902,13 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 				ProxyName: utils.StrAsStrPointer(mapping.LLMProxy.Handle),
 				Policies:  mapping.PolicyConfiguration,
 			}
-			if provider, err := s.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), config.OrganizationName); err == nil && provider.Artifact != nil {
+			if provider, err := s.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), config.OUID); err == nil && provider.Artifact != nil {
 				proxyInfo.ProviderName = utils.StrAsStrPointer(provider.Artifact.Handle)
 			}
 
 			// Add proxy URL for external agents (subsequent GET calls)
 			if includeProxyURL {
-				gateway, err := s.resolveGatewayForProxy(ctx, mapping.LLMProxy.Handle, config.OrganizationName, mapping.EnvironmentUUID)
+				gateway, err := s.resolveGatewayForProxy(ctx, mapping.LLMProxy.Handle, config.OUID, mapping.EnvironmentUUID)
 				if err == nil && mapping.LLMProxy.Configuration.Context != nil {
 					url := fmt.Sprintf("%s%s", gateway.Vhost, *mapping.LLMProxy.Configuration.Context)
 					proxyInfo.URL = &url
@@ -4946,8 +4944,8 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 				ProviderName:   utils.StrAsStrPointer(proxyName),
 				AuthHeaderName: utils.StrAsStrPointer(mcpProxyAPIKeyHeaderName(mapping.MCPProxy, mapping.EnvironmentUUID.String())),
 			}
-			if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OrganizationName, mapping.EnvironmentUUID); err == nil {
-				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OrganizationName,
+			if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OUID, mapping.EnvironmentUUID); err == nil {
+				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
 				proxyInfo.URL = &url
@@ -4968,7 +4966,6 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 		Description:          config.Description,
 		AgentID:              config.AgentID,
 		Type:                 models.AgentConfigTypeFromID(config.TypeID),
-		OrganizationName:     config.OrganizationName,
 		ProjectName:          config.ProjectName,
 		EnvModelConfig:       envModelConfig,
 		EnvironmentVariables: envVars,
@@ -4993,7 +4990,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 	envCredentials map[string]envCredentialData,
 ) (*models.AgentModelConfigResponse, error) {
 	// Reload configuration with relationships (EnvMappings, LLMProxy, etc.)
-	reloadedConfig, err := s.agentConfigRepo.GetByUUID(ctx, config.UUID, config.OrganizationName)
+	reloadedConfig, err := s.agentConfigRepo.GetByUUID(ctx, config.UUID, config.OUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reload configuration: %w", err)
 	}
@@ -5007,7 +5004,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 	)
 
 	// Get environment names
-	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, config.OrganizationName)
+	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, config.OUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
 	}
@@ -5032,7 +5029,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 				ProxyName: utils.StrAsStrPointer(mapping.LLMProxy.Handle),
 				Policies:  mapping.PolicyConfiguration,
 			}
-			if provider, err := s.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), config.OrganizationName); err == nil && provider.Artifact != nil {
+			if provider, err := s.llmProviderRepo.GetByUUID(mapping.LLMProxy.ProviderUUID.String(), config.OUID); err == nil && provider.Artifact != nil {
 				proxyInfo.ProviderName = utils.StrAsStrPointer(provider.Artifact.Handle)
 			}
 
@@ -5092,8 +5089,8 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 					"hasProxyURL", creds.proxyURL != "",
 					"hasAPIKey", creds.apiKey != "",
 				)
-			} else if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OrganizationName, mapping.EnvironmentUUID); err == nil {
-				deployedProxy := buildAgentMCPConfigProxy(reloadedConfig, &mapping, mapping.MCPProxy, envName, config.OrganizationName,
+			} else if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OUID, mapping.EnvironmentUUID); err == nil {
+				deployedProxy := buildAgentMCPConfigProxy(reloadedConfig, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
 				proxyInfo.URL = &url
@@ -5121,7 +5118,6 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 		Description:          reloadedConfig.Description,
 		AgentID:              reloadedConfig.AgentID,
 		Type:                 models.AgentConfigTypeFromID(reloadedConfig.TypeID),
-		OrganizationName:     reloadedConfig.OrganizationName,
 		ProjectName:          reloadedConfig.ProjectName,
 		EnvModelConfig:       envModelConfig,
 		EnvironmentVariables: envVars,

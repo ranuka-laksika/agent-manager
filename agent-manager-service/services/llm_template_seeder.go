@@ -108,7 +108,7 @@ func (s *LLMTemplateSeeder) SeedForOrg(ouID string) error {
 
 		// Create new template
 		toCreate := &models.LLMProviderTemplate{
-			OrganizationName: ouID,
+			OUID:             ouID,
 			Handle:           tpl.Handle,
 			Name:             tpl.Name,
 			Description:      tpl.Description,

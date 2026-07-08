@@ -50,12 +50,12 @@ func ensureAgentEnvAPIArtifact(
 
 	artifactUUID := uuid.Must(uuid.NewV7())
 	artifact = &models.Artifact{
-		UUID:             artifactUUID,
-		Handle:           handle,
-		Name:             fmt.Sprintf("%s-%s-api-%s", agentName, environmentID, artifactUUID.String()[:8]),
-		Version:          "v1.0",
-		Kind:             models.KindAgent,
-		OrganizationName: ouID,
+		UUID:    artifactUUID,
+		Handle:  handle,
+		Name:    fmt.Sprintf("%s-%s-api-%s", agentName, environmentID, artifactUUID.String()[:8]),
+		Version: "v1.0",
+		Kind:    models.KindAgent,
+		OUID:    ouID,
 	}
 	if err := artifactRepo.Create(db, artifact); err != nil {
 		existing, getErr := artifactRepo.GetByHandle(handle, ouID)

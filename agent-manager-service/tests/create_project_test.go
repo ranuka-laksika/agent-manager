@@ -88,7 +88,6 @@ func TestCreateProject(t *testing.T) {
 
 		// Validate response fields
 		require.Equal(t, payload.Name, response.Name)
-		require.Equal(t, jwtassertion.MockOUID, response.OrgName)
 		require.Equal(t, payload.DisplayName, response.DisplayName)
 		require.NotZero(t, response.CreatedAt)
 

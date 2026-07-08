@@ -72,15 +72,15 @@ func (r *LLMProviderRepo) Create(tx *gorm.DB, p *models.LLMProvider, handle, nam
 	// Insert into artifacts table first
 	slog.Info("LLMProviderRepo.Create: creating artifact", "handle", handle, "uuid", p.UUID, "kind", models.KindLLMProvider)
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
-		UUID:             p.UUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindLLMProvider,
-		OrganizationName: orgUUID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		InCatalog:        true,
+		UUID:      p.UUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindLLMProvider,
+		OUID:      orgUUID,
+		CreatedAt: now,
+		UpdatedAt: now,
+		InCatalog: true,
 	}); err != nil {
 		slog.Error("LLMProviderRepo.Create: failed to create artifact", "handle", handle, "uuid", p.UUID, "error", err)
 		return fmt.Errorf("failed to create artifact: %w", err)

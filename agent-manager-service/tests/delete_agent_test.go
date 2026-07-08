@@ -209,7 +209,9 @@ func TestDeleteAgentBlockedWhenKindSource(t *testing.T) {
 			ID:          uuid.New(),
 			Name:        fmt.Sprintf("test-kind-%s", uuid.New().String()[:5]),
 			DisplayName: "Test Kind",
-			OrgName:     orgName,
+			// OrgName maps to the ou_id column; the delete flow scopes the
+			// kind-source check by the token's OU ID, so seed it with that.
+			OUID:        jwtassertion.MockOUID,
 			ProjectName: projName,
 			AgentName:   agentName,
 			CreatedAt:   time.Now(),

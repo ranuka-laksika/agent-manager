@@ -41,18 +41,18 @@ const (
 
 // StoredAPIKey represents an API key persisted in the database for gateway bulk-sync
 type StoredAPIKey struct {
-	UUID             uuid.UUID  `gorm:"column:uuid;primaryKey" json:"uuid"`
-	Name             string     `gorm:"column:name" json:"name"`
-	DisplayName      string     `gorm:"column:display_name" json:"displayName"`
-	ArtifactUUID     uuid.UUID  `gorm:"column:artifact_uuid" json:"artifactUuid"`
-	OrganizationName string     `gorm:"column:ou_id" json:"organizationName"`
-	APIKeyHash       string     `gorm:"column:api_key_hash" json:"-"`
-	MaskedAPIKey     string     `gorm:"column:masked_api_key" json:"maskedApiKey"`
-	Status           string     `gorm:"column:status" json:"status"`
-	Purpose          int        `gorm:"column:purpose;not null;default:1" json:"purpose"`
-	CreatedAt        time.Time  `gorm:"column:created_at" json:"createdAt"`
-	UpdatedAt        time.Time  `gorm:"column:updated_at" json:"updatedAt"`
-	ExpiresAt        *time.Time `gorm:"column:expires_at" json:"expiresAt,omitempty"`
+	UUID         uuid.UUID  `gorm:"column:uuid;primaryKey" json:"uuid"`
+	Name         string     `gorm:"column:name" json:"name"`
+	DisplayName  string     `gorm:"column:display_name" json:"displayName"`
+	ArtifactUUID uuid.UUID  `gorm:"column:artifact_uuid" json:"artifactUuid"`
+	OUID         string     `gorm:"column:ou_id" json:"organizationName"`
+	APIKeyHash   string     `gorm:"column:api_key_hash" json:"-"`
+	MaskedAPIKey string     `gorm:"column:masked_api_key" json:"maskedApiKey"`
+	Status       string     `gorm:"column:status" json:"status"`
+	Purpose      int        `gorm:"column:purpose;not null;default:1" json:"purpose"`
+	CreatedAt    time.Time  `gorm:"column:created_at" json:"createdAt"`
+	UpdatedAt    time.Time  `gorm:"column:updated_at" json:"updatedAt"`
+	ExpiresAt    *time.Time `gorm:"column:expires_at" json:"expiresAt,omitempty"`
 }
 
 // TableName returns the table name for the StoredAPIKey model

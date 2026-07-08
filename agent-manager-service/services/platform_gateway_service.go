@@ -183,7 +183,7 @@ func (s *PlatformGatewayService) RegisterGateway(
 
 	gateway := &models.Gateway{
 		UUID:                     gatewayUUID,
-		OrganizationName:         ouID,
+		OUID:                     ouID,
 		Name:                     name,
 		DisplayName:              displayName,
 		Description:              description,
@@ -202,7 +202,7 @@ func (s *PlatformGatewayService) RegisterGateway(
 
 	response := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -260,7 +260,7 @@ func (s *PlatformGatewayService) ListGateways(ouID *string, filters *GatewayList
 	for _, gw := range gateways {
 		responses = append(responses, GatewayResponse{
 			ID:                gw.UUID.String(),
-			OrganizationID:    gw.OrganizationName,
+			OrganizationID:    gw.OUID,
 			Name:              gw.Name,
 			DisplayName:       gw.DisplayName,
 			Description:       gw.Description,
@@ -304,13 +304,13 @@ func (s *PlatformGatewayService) GetGateway(gatewayID, ouID string) (*GatewayRes
 		return nil, utils.ErrGatewayNotFound
 	}
 
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
 	response := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -357,7 +357,7 @@ func (s *PlatformGatewayService) UpdateGateway(
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -382,7 +382,7 @@ func (s *PlatformGatewayService) UpdateGateway(
 
 	updatedGateway := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -412,7 +412,7 @@ func (s *PlatformGatewayService) DeleteGateway(gatewayID, ouID string) error {
 	if gateway == nil {
 		return utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return utils.ErrGatewayNotFound
 	}
 
@@ -532,7 +532,7 @@ func (s *PlatformGatewayService) RotateToken(gatewayID, ouID string) (*TokenRota
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -601,7 +601,7 @@ func (s *PlatformGatewayService) ListTokens(gatewayID, ouID string) (*GatewayTok
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -638,7 +638,7 @@ func (s *PlatformGatewayService) RevokeTokenByID(tokenID, gatewayID, ouID string
 	if gateway == nil {
 		return utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != ouID {
+	if gateway.OUID != ouID {
 		return utils.ErrGatewayNotFound
 	}
 
@@ -697,7 +697,7 @@ func (s *PlatformGatewayService) GetGatewayStatus(ctx context.Context, ouID stri
 			return nil, utils.ErrGatewayNotFound
 		}
 		// Check organization access
-		if gateway.OrganizationName != ouID {
+		if gateway.OUID != ouID {
 			return nil, utils.ErrGatewayNotFound
 		}
 		gateways = []*models.Gateway{gateway}
@@ -749,7 +749,7 @@ func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, ouID string) (str
 	if err != nil {
 		return "", utils.ErrGatewayNotFound
 	}
-	if gw.OrganizationName != ouID {
+	if gw.OUID != ouID {
 		return "", utils.ErrGatewayNotFound
 	}
 	return gw.UUID.String(), nil

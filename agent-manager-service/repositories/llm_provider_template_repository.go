@@ -205,7 +205,7 @@ func (r *LLMProviderTemplateRepo) Update(t *models.LLMProviderTemplate) error {
 
 	// Only update user templates (is_system = false)
 	result := r.db.Model(&models.LLMProviderTemplate{}).
-		Where("handle = ? AND ou_id = ? AND is_system = ?", t.Handle, t.OrganizationName, false).
+		Where("handle = ? AND ou_id = ? AND is_system = ?", t.Handle, t.OUID, false).
 		Updates(map[string]interface{}{
 			"name":          t.Name,
 			"description":   t.Description,

@@ -92,7 +92,7 @@ func (r *DeploymentRepo) CreateWithLimitEnforcement(deployment *models.Deploymen
 		var count int64
 		if err := tx.Model(&models.Deployment{}).
 			Where("artifact_uuid = ? AND gateway_uuid = ? AND ou_id = ?",
-				deployment.ArtifactUUID, deployment.GatewayUUID, deployment.OrganizationName).
+				deployment.ArtifactUUID, deployment.GatewayUUID, deployment.OUID).
 			Count(&count).Error; err != nil {
 			return err
 		}
@@ -108,7 +108,7 @@ func (r *DeploymentRepo) CreateWithLimitEnforcement(deployment *models.Deploymen
 					"AND d.ou_id = s.ou_id "+
 					"AND d.gateway_uuid = s.gateway_uuid").
 				Where("d.artifact_uuid = ? AND d.gateway_uuid = ? AND d.ou_id = ? AND s.deployment_id IS NULL",
-					deployment.ArtifactUUID, deployment.GatewayUUID, deployment.OrganizationName).
+					deployment.ArtifactUUID, deployment.GatewayUUID, deployment.OUID).
 				Order("d.created_at ASC").
 				Limit(5).
 				Pluck("d.deployment_id", &idsToDelete).Error; err != nil {
@@ -130,12 +130,12 @@ func (r *DeploymentRepo) CreateWithLimitEnforcement(deployment *models.Deploymen
 
 		// Insert or update deployment status (UPSERT)
 		deploymentStatus := &models.DeploymentStatusRecord{
-			ArtifactUUID:     deployment.ArtifactUUID,
-			OrganizationName: deployment.OrganizationName,
-			GatewayUUID:      deployment.GatewayUUID,
-			DeploymentID:     deployment.DeploymentID,
-			Status:           *deployment.Status,
-			UpdatedAt:        *deployment.UpdatedAt,
+			ArtifactUUID: deployment.ArtifactUUID,
+			OUID:         deployment.OUID,
+			GatewayUUID:  deployment.GatewayUUID,
+			DeploymentID: deployment.DeploymentID,
+			Status:       *deployment.Status,
+			UpdatedAt:    *deployment.UpdatedAt,
 		}
 
 		return tx.Clauses(clause.OnConflict{
@@ -221,12 +221,12 @@ func (r *DeploymentRepo) SetCurrent(artifactUUID, orgUUID, gatewayID, deployment
 	}
 
 	deploymentStatus := &models.DeploymentStatusRecord{
-		ArtifactUUID:     artifactUUID_uuid,
-		OrganizationName: orgUUID,
-		GatewayUUID:      gatewayUUID_uuid,
-		DeploymentID:     deploymentUUID_uuid,
-		Status:           status,
-		UpdatedAt:        updatedAt,
+		ArtifactUUID: artifactUUID_uuid,
+		OUID:         orgUUID,
+		GatewayUUID:  gatewayUUID_uuid,
+		DeploymentID: deploymentUUID_uuid,
+		Status:       status,
+		UpdatedAt:    updatedAt,
 	}
 
 	err = r.db.Clauses(clause.OnConflict{

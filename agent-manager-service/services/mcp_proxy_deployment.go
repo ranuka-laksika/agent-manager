@@ -95,13 +95,13 @@ func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *mo
 	deploymentID := uuid.New()
 	deployed := models.DeploymentStatusDeployed
 	deployment := &models.Deployment{
-		DeploymentID:     deploymentID,
-		Name:             deploymentName(proxy),
-		ArtifactUUID:     proxy.UUID,
-		OrganizationName: ouID,
-		GatewayUUID:      gateway.UUID,
-		Content:          []byte(deploymentYAML),
-		Status:           &deployed,
+		DeploymentID: deploymentID,
+		Name:         deploymentName(proxy),
+		ArtifactUUID: proxy.UUID,
+		OUID:         ouID,
+		GatewayUUID:  gateway.UUID,
+		Content:      []byte(deploymentYAML),
+		Status:       &deployed,
 	}
 
 	hardLimit := maxDeploymentsPerAPI + deploymentLimitBuffer
@@ -202,14 +202,14 @@ func (s *MCPProxyService) ensureMCPProxyEnvArtifactRow(deployProxy *models.MCPPr
 	now := time.Now()
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		return s.artifactRepo.Create(tx, &models.Artifact{
-			UUID:             deployProxy.UUID,
-			Handle:           deployProxy.Handle,
-			Name:             deployProxy.Name,
-			Version:          deployProxy.Version,
-			Kind:             models.KindMCPMapping,
-			OrganizationName: ouID,
-			CreatedAt:        now,
-			UpdatedAt:        now,
+			UUID:      deployProxy.UUID,
+			Handle:    deployProxy.Handle,
+			Name:      deployProxy.Name,
+			Version:   deployProxy.Version,
+			Kind:      models.KindMCPMapping,
+			OUID:      ouID,
+			CreatedAt: now,
+			UpdatedAt: now,
 		})
 	})
 }

@@ -305,7 +305,7 @@ func (p *publisherCredentialProvisioner) provisionCredentials(ctx context.Contex
 
 	// Save to DB — treat as fatal since we just provisioned real credentials
 	dbCred := &models.OrgPublisherCredential{
-		OrgName:               ouID,
+		OUID:                  ouID,
 		OrgUUID:               orgUUID,
 		ClientID:              clientID,
 		SecretKVPath:          resolvedKVPath,

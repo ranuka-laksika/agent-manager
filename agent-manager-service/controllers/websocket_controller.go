@@ -131,7 +131,7 @@ func (c *websocketController) Connect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gatewayID := gateway.UUID.String()
-	ouID := gateway.OrganizationName
+	ouID := gateway.OUID
 	gatewayName := gateway.Name
 
 	// Ensure the gateway is registered in the EventHub (idempotent - safe to call on every connect).

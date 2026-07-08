@@ -734,7 +734,6 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 		Description:          getStringPtr(modelResp.Description),
 		AgentId:              modelResp.AgentID,
 		Type:                 modelResp.Type,
-		OrganizationName:     modelResp.OrganizationName,
 		ProjectName:          modelResp.ProjectName,
 		EnvMappings:          envModelConfig,
 		EnvironmentVariables: envVars,
@@ -764,14 +763,13 @@ func convertAgentModelConfigListResponse(modelResp models.AgentModelConfigListRe
 	configs := make([]spec.AgentModelConfigListItem, len(modelResp.Configs))
 	for i, config := range modelResp.Configs {
 		configs[i] = spec.AgentModelConfigListItem{
-			Uuid:             config.UUID,
-			Name:             config.Name,
-			Description:      getStringPtr(config.Description),
-			AgentId:          config.AgentID,
-			Type:             config.Type,
-			OrganizationName: config.OrganizationName,
-			ProjectName:      config.ProjectName,
-			CreatedAt:        config.CreatedAt,
+			Uuid:        config.UUID,
+			Name:        config.Name,
+			Description: getStringPtr(config.Description),
+			AgentId:     config.AgentID,
+			Type:        config.Type,
+			ProjectName: config.ProjectName,
+			CreatedAt:   config.CreatedAt,
 		}
 	}
 

@@ -118,7 +118,7 @@ func (s *LLMProxyDeploymentService) DeployLLMProxy(proxyID string, req *models.D
 		slog.Error("LLMProxyDeploymentService.DeployLLMProxy: failed to get gateway", "proxyID", proxyID, "gatewayID", req.GatewayID, "error", err)
 		return nil, fmt.Errorf("failed to get gateway: %w", err)
 	}
-	if gateway == nil || gateway.OrganizationName != ouID {
+	if gateway == nil || gateway.OUID != ouID {
 		slog.Warn("LLMProxyDeploymentService.DeployLLMProxy: gateway not found or org mismatch", "proxyID", proxyID, "gatewayID", req.GatewayID, "ouID", ouID)
 		return nil, utils.ErrGatewayNotFound
 	}
@@ -183,7 +183,7 @@ func (s *LLMProxyDeploymentService) DeployLLMProxy(proxyID string, req *models.D
 		DeploymentID:     deploymentID,
 		Name:             req.Name,
 		ArtifactUUID:     proxy.UUID,
-		OrganizationName: ouID,
+		OUID:             ouID,
 		GatewayUUID:      gatewayUUID,
 		BaseDeploymentID: baseDeploymentID,
 		Content:          contentBytes,

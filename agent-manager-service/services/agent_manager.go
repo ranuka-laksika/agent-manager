@@ -726,7 +726,7 @@ func (s *agentManagerService) persistInstrumentationConfig(ctx context.Context, 
 
 	defaultCORS := config.GetAgentWorkloadConfig().CORS
 	agentConfig := &models.AgentConfig{
-		OrgName:                   ouID,
+		OUID:                      ouID,
 		ProjectName:               projectName,
 		AgentName:                 agentName,
 		EnvironmentName:           targetEnv.Name,
@@ -2618,7 +2618,7 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, ouID string, proj
 	// the value would NULL out a customer's pin on every redeploy.
 	if targetEnv != nil {
 		agentConfig := &models.AgentConfig{
-			OrgName:                   ouID,
+			OUID:                      ouID,
 			ProjectName:               projectName,
 			AgentName:                 agentName,
 			EnvironmentName:           targetEnv.Name,
@@ -3362,7 +3362,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 
 		// Persist config for the target environment
 		agentConfig := &models.AgentConfig{
-			OrgName:                   ouID,
+			OUID:                      ouID,
 			ProjectName:               projectName,
 			AgentName:                 agentName,
 			EnvironmentName:           req.TargetEnvironment,
@@ -3495,7 +3495,7 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, ouI
 
 	// Persist resolved config so subsequent deploy/promote calls see the current values.
 	agentConfig := &models.AgentConfig{
-		OrgName:                   ouID,
+		OUID:                      ouID,
 		ProjectName:               projectName,
 		AgentName:                 agentName,
 		EnvironmentName:           req.EnvironmentName,
