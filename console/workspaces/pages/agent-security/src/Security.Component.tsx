@@ -74,6 +74,7 @@ export const SecurityComponent: React.FC = () => {
   const { mutateAsync: createKey, isPending: isCreating } =
     useCreateAgentAPIKey();
   const { mutate: revokeKey, isPending: isRevoking } = useRevokeAgentAPIKey();
+  const [gatewayOffline, setGatewayOffline] = React.useState(false);
 
   const handleCreate = async ({ displayName, expiresAt }: CreateAPIKeyInput) => {
     const data = await createKey({
@@ -85,6 +86,7 @@ export const SecurityComponent: React.FC = () => {
       },
       body: { displayName, expiresAt },
     });
+    setGatewayOffline(data.gatewayConnected === false);
     return data.apiKey;
   };
 
@@ -128,6 +130,18 @@ export const SecurityComponent: React.FC = () => {
           it from the <strong>Deployment</strong> settings and redeploy.
         </Alert>
       ) : (
+        <>
+        {gatewayOffline && (
+          <Alert
+            severity="warning"
+            onClose={() => setGatewayOffline(false)}
+            sx={{ mb: 2 }}
+          >
+            The gateway is not connected to the control plane right now. The
+            API key has been stored but will only work once the gateway
+            reconnects.
+          </Alert>
+        )}
         <APIKeysManager
           keys={keys}
           isLoading={false}
@@ -138,6 +152,7 @@ export const SecurityComponent: React.FC = () => {
           onCreate={handleCreate}
           onRevoke={handleRevoke}
         />
+        </>
       )}
     </PageLayout>
   );

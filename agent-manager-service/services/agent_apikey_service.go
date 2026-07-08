@@ -18,20 +18,43 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
+	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
 )
+
+// GatewayConnectionChecker reports live websocket connections for a gateway.
+// *websocket.Manager satisfies this interface.
+type GatewayConnectionChecker interface {
+	GetConnections(gatewayID string) []*websocket.Connection
+}
 
 // testKeyTTL is the validity window for a console-issued test API key.
 // The console refreshes the key at staleTime well before this elapses.
 const testKeyTTL = 10 * time.Minute
+
+// legacyTestKeyName is the pre-per-user shared test key name; still reserved
+// so user-created keys can't collide with lingering legacy rows.
+const legacyTestKeyName = "console-test"
+
+// testKeyName returns a stable, per-user key name derived from the JWT subject.
+// Hashing keeps the name within the gateway's alphanumeric-hyphen constraint
+// and avoids storing raw user identifiers as key names.
+func testKeyName(userSub string) string {
+	h := sha256.Sum256([]byte(userSub))
+	return models.APIKeyTestKeyPrefix + hex.EncodeToString(h[:])[:12]
+}
 
 // AgentAPIKeyServiceInterface defines the contract for agent API key operations
 type AgentAPIKeyServiceInterface interface {
@@ -39,7 +62,7 @@ type AgentAPIKeyServiceInterface interface {
 	RevokeAPIKey(ctx context.Context, ouID, projectName, agentName, envID, keyName string) error
 	RotateAPIKey(ctx context.Context, ouID, projectName, agentName, envID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error)
 	ListAPIKeys(ctx context.Context, ouID, projectName, agentName, envID string) ([]models.StoredAPIKey, error)
-	IssueTestAPIKey(ctx context.Context, ouID, projectName, agentName, envID string) (*models.IssueTestAPIKeyResponse, error)
+	IssueTestAPIKey(ctx context.Context, ouID, projectName, agentName, envID, userSub string) (*models.IssueTestAPIKeyResponse, error)
 }
 
 // AgentAPIKeyService handles API key management for agents
@@ -49,6 +72,7 @@ type AgentAPIKeyService struct {
 	apiKeyRepo   repositories.APIKeyRepository
 	gatewayRepo  repositories.GatewayRepository
 	broadcaster  apiKeyBroadcaster
+	connChecker  GatewayConnectionChecker
 }
 
 // NewAgentAPIKeyService creates a new agent API key service instance
@@ -58,6 +82,7 @@ func NewAgentAPIKeyService(
 	gatewayRepo repositories.GatewayRepository,
 	gatewayService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
+	connChecker GatewayConnectionChecker,
 ) *AgentAPIKeyService {
 	return &AgentAPIKeyService{
 		artifactRepo: artifactRepo,
@@ -69,7 +94,23 @@ func NewAgentAPIKeyService(
 			gatewayService: gatewayService,
 			apiKeyRepo:     apiKeyRepo,
 		},
+		connChecker: connChecker,
 	}
+}
+
+// gatewaysConnected reports whether every given gateway currently has at
+// least one live websocket connection to this control plane. Key events for
+// a disconnected gateway are queued and only apply after it reconnects, so
+// callers surface this to warn that a fresh key is not yet usable.
+func (s *AgentAPIKeyService) gatewaysConnected(gateways []*models.Gateway) *bool {
+	connected := true
+	for _, gw := range gateways {
+		if len(s.connChecker.GetConnections(gw.UUID.String())) == 0 {
+			connected = false
+			break
+		}
+	}
+	return &connected
 }
 
 func (s *AgentAPIKeyService) resolveAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName, envID string) (*models.Artifact, string, error) {
@@ -114,8 +155,8 @@ func (s *AgentAPIKeyService) CreateAPIKey(
 	ouID, projectName, agentName, envID string,
 	req *models.CreateAPIKeyRequest,
 ) (*models.CreateAPIKeyResponse, error) {
-	if req != nil && req.Name == models.APIKeyTestKeyName {
-		return nil, fmt.Errorf("%w: %q is reserved for console test keys", utils.ErrBadRequest, models.APIKeyTestKeyName)
+	if req != nil && (strings.HasPrefix(req.Name, models.APIKeyTestKeyPrefix) || req.Name == legacyTestKeyName) {
+		return nil, fmt.Errorf("%w: names starting with %q are reserved for console test keys", utils.ErrBadRequest, models.APIKeyTestKeyPrefix)
 	}
 	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
@@ -126,7 +167,11 @@ func (s *AgentAPIKeyService) CreateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID, req)
+	resp, err := s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID, req)
+	if resp != nil {
+		resp.GatewayConnected = s.gatewaysConnected(gateways)
+	}
+	return resp, err
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to the environment's gateways.
@@ -162,7 +207,11 @@ func (s *AgentAPIKeyService) RotateAPIKey(
 		return nil, err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName, req)
+	resp, err := s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName, req)
+	if resp != nil {
+		resp.GatewayConnected = s.gatewaysConnected(gateways)
+	}
+	return resp, err
 }
 
 // ListAPIKeys returns API keys for the given agent (masked values only).
@@ -187,12 +236,13 @@ func (s *AgentAPIKeyService) ListAPIKeys(
 	return result, nil
 }
 
-// IssueTestAPIKey issues (or rotates) the single short-lived test API key
-// associated with an agent. Used by the console Try-It flow. The key is
-// scoped by APIKeyTestKeyName and never appears in the user-facing list.
+// IssueTestAPIKey issues (or rotates) a short-lived test API key scoped to the
+// calling user (userSub). Each user gets their own DB row, so concurrent sessions
+// across different users don't invalidate each other's keys. Used by the console
+// Try-It flow; test keys never appear in the user-facing list.
 func (s *AgentAPIKeyService) IssueTestAPIKey(
 	ctx context.Context,
-	ouID, projectName, agentName, envID string,
+	ouID, projectName, agentName, envID, userSub string,
 ) (*models.IssueTestAPIKeyResponse, error) {
 	artifact, envUUID, err := s.resolveAgentAPIArtifact(ctx, ouID, projectName, agentName, envID)
 	if err != nil {
@@ -204,39 +254,48 @@ func (s *AgentAPIKeyService) IssueTestAPIKey(
 	}
 	artifactUUID := artifact.UUID.String()
 
+	keyName := testKeyName(userSub)
 	expiresAt := time.Now().UTC().Add(testKeyTTL).Format(time.RFC3339)
 
-	existing, err := s.apiKeyRepo.GetByArtifactAndName(artifactUUID, models.APIKeyTestKeyName)
+	existing, err := s.apiKeyRepo.GetByArtifactAndName(artifactUUID, keyName)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, fmt.Errorf("failed to look up existing test key: %w", err)
 	}
 
+	log := logger.GetLogger(ctx)
 	var resp *models.CreateAPIKeyResponse
 	if existing != nil {
 		if existing.Purpose != models.APIKeyPurposeTest {
-			return nil, fmt.Errorf("%w: %q is reserved for console test keys", utils.ErrBadRequest, models.APIKeyTestKeyName)
+			return nil, fmt.Errorf("%w: %q is reserved for console test keys", utils.ErrBadRequest, keyName)
 		}
 		// Same DB row, new hash + expiry; purpose is preserved (Upsert.DoUpdates excludes it).
-		resp, err = s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, models.APIKeyTestKeyName,
+		resp, err = s.broadcaster.broadcastRotateToGateways(gateways, ouID, artifactUUID, artifactUUID, keyName,
 			&models.RotateAPIKeyRequest{ExpiresAt: &expiresAt})
+		if err == nil {
+			log.Info("IssueTestAPIKey: rotated", "keyName", keyName, "org", ouID, "agent", agentName, "env", envID, "expiresAt", expiresAt)
+		}
 	} else {
 		resp, err = s.broadcaster.broadcastCreateToGateways(gateways, ouID, artifactUUID, artifactUUID,
 			&models.CreateAPIKeyRequest{
-				Name:        models.APIKeyTestKeyName,
+				Name:        keyName,
 				DisplayName: "Console Try-It",
 				Purpose:     models.APIKeyPurposeTest,
 				ExpiresAt:   &expiresAt,
 			})
+		if err == nil {
+			log.Info("IssueTestAPIKey: created", "keyName", keyName, "org", ouID, "agent", agentName, "env", envID, "expiresAt", expiresAt)
+		}
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	return &models.IssueTestAPIKeyResponse{
-		Status:    resp.Status,
-		Message:   resp.Message,
-		KeyID:     resp.KeyID,
-		APIKey:    resp.APIKey,
-		ExpiresAt: expiresAt,
+		Status:           resp.Status,
+		Message:          resp.Message,
+		KeyID:            resp.KeyID,
+		APIKey:           resp.APIKey,
+		ExpiresAt:        expiresAt,
+		GatewayConnected: s.gatewaysConnected(gateways),
 	}, nil
 }

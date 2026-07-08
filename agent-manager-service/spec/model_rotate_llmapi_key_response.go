@@ -27,6 +27,8 @@ type RotateLLMAPIKeyResponse struct {
 	KeyId *string `json:"keyId,omitempty"`
 	// New API key value. Returned only once; store it securely.
 	ApiKey *string `json:"apiKey,omitempty"`
+	// Whether every target gateway had a live websocket connection to the control plane when the key was rotated. When false, the new key has been stored but will only become usable once the gateway reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // NewRotateLLMAPIKeyResponse instantiates a new RotateLLMAPIKeyResponse object
@@ -160,6 +162,38 @@ func (o *RotateLLMAPIKeyResponse) SetApiKey(v string) {
 	o.ApiKey = &v
 }
 
+// GetGatewayConnected returns the GatewayConnected field value if set, zero value otherwise.
+func (o *RotateLLMAPIKeyResponse) GetGatewayConnected() bool {
+	if o == nil || IsNil(o.GatewayConnected) {
+		var ret bool
+		return ret
+	}
+	return *o.GatewayConnected
+}
+
+// GetGatewayConnectedOk returns a tuple with the GatewayConnected field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *RotateLLMAPIKeyResponse) GetGatewayConnectedOk() (*bool, bool) {
+	if o == nil || IsNil(o.GatewayConnected) {
+		return nil, false
+	}
+	return o.GatewayConnected, true
+}
+
+// HasGatewayConnected returns a boolean if a field has been set.
+func (o *RotateLLMAPIKeyResponse) HasGatewayConnected() bool {
+	if o != nil && !IsNil(o.GatewayConnected) {
+		return true
+	}
+
+	return false
+}
+
+// SetGatewayConnected gets a reference to the given bool and assigns it to the GatewayConnected field.
+func (o *RotateLLMAPIKeyResponse) SetGatewayConnected(v bool) {
+	o.GatewayConnected = &v
+}
+
 func (o RotateLLMAPIKeyResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -177,6 +211,9 @@ func (o RotateLLMAPIKeyResponse) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.ApiKey) {
 		toSerialize["apiKey"] = o.ApiKey
+	}
+	if !IsNil(o.GatewayConnected) {
+		toSerialize["gatewayConnected"] = o.GatewayConnected
 	}
 	return toSerialize, nil
 }
