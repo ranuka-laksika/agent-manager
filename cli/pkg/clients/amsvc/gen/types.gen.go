@@ -1971,8 +1971,8 @@ type CreateGatewayRequest struct {
 	// Name Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
-	// OrgUid OU ID of the organization the gateway belongs to.
-	OrgUid *string `json:"orgUid,omitempty"`
+	// OrgId OU ID of the organization the gateway belongs to.
+	OrgId *string `json:"orgId,omitempty"`
 
 	// Region Deployment region (optional)
 	Region *string `json:"region,omitempty"`
