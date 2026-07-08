@@ -60,6 +60,12 @@ window.__RUNTIME_CONFIG__ = {
     nemoGuard: "" === "true",
     semanticGuardrails: "" === "true",
   },
+  featureFlags: {
+    enablePrivateRepoSupport: "true" === "true",
+    enableIdentityProviderManagedMode: "" === "true",
+    enableProfileManagement: "true" === "true",
+    enableUserManagement: "true" === "true",
+  },
   docsUrl: "https://wso2.github.io/agent-manager/docs/next",
   footerLinks: {
     privacyPolicyUrl: "https://wso2.com/agent-platform/agent-manager/",

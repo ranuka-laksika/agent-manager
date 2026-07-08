@@ -25,6 +25,7 @@ import {
   getAgentEndpoints,
   getAgentConfigurations,
   listEnvironments,
+  getEnvironment,
   getDeploymentPipeline,
   listDeploymentPipelines,
   listDataPlanes,
@@ -55,6 +56,7 @@ import type {
   ConfigurationResponse,
   ListEnvironmentsPathParams,
   EnvironmentListResponse,
+  GetEnvironmentPathParams,
   GetDeploymentPipelinePathParams,
   DeploymentPipelineResponse,
   DeploymentPipelineListResponse,
@@ -177,6 +179,15 @@ export function useListEnvironments(params: ListEnvironmentsPathParams) {
     queryKey: ['environments', params],
     queryFn: () => listEnvironments(params, getToken),
     enabled: !!params.orgName,
+  });
+}
+
+export function useGetEnvironment(params: GetEnvironmentPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<Environment>({
+    queryKey: ['environment', params],
+    queryFn: () => getEnvironment(params, getToken),
+    enabled: !!params.orgName && !!params.envName,
   });
 }
 

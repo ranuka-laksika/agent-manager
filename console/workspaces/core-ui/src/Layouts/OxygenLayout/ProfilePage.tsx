@@ -31,6 +31,7 @@ import {
 import { TextInput } from "@agent-management-platform/views";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useUpdateUserProfile, useGetUserProfile } from "@agent-management-platform/api-client";
+import { globalConfig } from "@agent-management-platform/types";
 
 type ActiveTab = "profile" | "password";
 
@@ -39,6 +40,7 @@ export const ProfilePage: React.FC = () => {
   const { userInfo } = useAuthHooks();
   const { orgId } = useParams<{ orgId: string }>();
   const [activeTab, setActiveTab] = useState<ActiveTab>("profile");
+  const isProfileManagementEnabled = globalConfig.featureFlags?.enableProfileManagement === true;
 
   const [profileData, setProfileData] = useState({
     username: userInfo?.username || "",
@@ -184,7 +186,7 @@ export const ProfilePage: React.FC = () => {
         sx={{ borderBottom: `1px solid ${theme.palette.divider}` }}
       >
         <Tab label="Profile Information" value="profile" />
-        <Tab label="Change Password" value="password" />
+        <Tab label="Change Password" value="password" disabled={!isProfileManagementEnabled} />
       </Tabs>
 
       {activeTab === "profile" && (
@@ -195,6 +197,7 @@ export const ProfilePage: React.FC = () => {
               <TextInput
                 label="Username"
                 required
+                disabled={!isProfileManagementEnabled}
                 value={profileData.username}
                 onChange={(e) => {
                   setProfileData({ ...profileData, username: e.target.value });
@@ -209,6 +212,7 @@ export const ProfilePage: React.FC = () => {
                 label="Email"
                 type="email"
                 required
+                disabled={!isProfileManagementEnabled}
                 value={profileData.email}
                 onChange={(e) => {
                   setProfileData({ ...profileData, email: e.target.value });
@@ -227,22 +231,26 @@ export const ProfilePage: React.FC = () => {
             <Box sx={{ display: "grid", gap: 2, gridTemplateColumns: { xs: "1fr", sm: "1fr 1fr" } }}>
               <TextInput
                 label="First Name"
+                disabled={!isProfileManagementEnabled}
                 value={profileData.given_name}
                 onChange={(e) => setProfileData({ ...profileData, given_name: e.target.value })}
               />
               <TextInput
                 label="Last Name"
+                disabled={!isProfileManagementEnabled}
                 value={profileData.family_name}
                 onChange={(e) => setProfileData({ ...profileData, family_name: e.target.value })}
               />
             </Box>
           </Stack>
 
-          <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button variant="contained" onClick={handleProfileSubmit} disabled={isUpdatingProfile}>
-              {isUpdatingProfile ? "Saving..." : "Save Changes"}
-            </Button>
-          </Stack>
+          {isProfileManagementEnabled && (
+            <Stack direction="row" spacing={1} justifyContent="flex-end">
+              <Button variant="contained" onClick={handleProfileSubmit} disabled={isUpdatingProfile}>
+                {isUpdatingProfile ? "Saving..." : "Save Changes"}
+              </Button>
+            </Stack>
+          )}
         </Stack>
       )}
 

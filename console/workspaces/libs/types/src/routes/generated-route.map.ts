@@ -171,7 +171,13 @@ export const generatedRouteMap =  {
         "environments": {
           "path": "/org/:orgId/environments",
           "wildPath": "/org/:orgId/environments/*",
-          "children": {}
+          "children": {
+            "view": {
+              "path": "/org/:orgId/environments/:envName",
+              "wildPath": "/org/:orgId/environments/:envName/*",
+              "children": {}
+            }
+          }
         },
         "catalog": {
           "path": "/org/:orgId/catalog",

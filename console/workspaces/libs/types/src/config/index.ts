@@ -71,7 +71,29 @@ export interface AppConfig {
     /** Path to the AMP instrumentation version mapping section. */
     versionMapping?: string;
   };
+  /** Feature flags. All default to false (disabled) unless explicitly enabled. */
+  featureFlags?: FeatureFlags;
 }
+
+export type FeatureFlags = {
+  /** Shows the private Git repository option when building agents from source. */
+  enablePrivateRepoSupport?: boolean;
+  /**
+   * When true, identity provider management calls the REST API directly instead of
+   * rendering the self-hosted manage-identity-provider.sh script snippet.
+   */
+  enableIdentityProviderManagedMode?: boolean;
+  /**
+   * When false, the Profile Settings text fields and Save Changes button are
+   * hidden/disabled, and the Change Password tab is disabled.
+   */
+  enableProfileManagement?: boolean;
+  /**
+   * When false, the Add User, Invite User, Create Role, and Create Group
+   * buttons on the Settings page are disabled.
+   */
+  enableUserManagement?: boolean;
+};
 
 export type GuardrailCapabilities = {
   /** Unlocks: aws-bedrock-guardrail */

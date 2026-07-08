@@ -17,6 +17,7 @@
  */
 
 import { type AgentPathParams, type CorsConfig, type OAuthConfig, type EnvironmentVariable, type FileMount, type EndpointSchema, type OrgProjPathParams, type PaginationMeta, type ListQuery } from './common';
+import type { GatewaySpec } from './gateways';
 
 // Requests
 export interface DeployAgentRequest {
@@ -127,6 +128,7 @@ export interface Environment {
   displayName?: string;
   isProduction: boolean;
   dnsPrefix?: string;
+  gateway?: GatewaySpec;
   createdAt: string; // ISO date-time
   id?: string;
   isolationTier?: string;
@@ -267,6 +269,12 @@ export interface UpdateEnvironmentPathParams {
   orgName: string | undefined;
   envName: string | undefined;
 }
+
+// Get Environment
+export type GetEnvironmentPathParams = {
+  orgName: string | undefined;
+  envName: string | undefined;
+};
 
 // Create Environment
 export interface CreateEnvironmentRequest {
