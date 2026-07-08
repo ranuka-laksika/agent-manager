@@ -374,7 +374,8 @@ install_gateway_extension() {
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${thunder_issuer_url}"
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${thunder_jwks}"
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${idp_skip_tls_verify}"
-            --set "bootstrap.identityProviders[0].name=${thunder_release}"
+            # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
+            --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
             --set "bootstrap.identityProviders[0].issuer=${thunder_issuer_url}"
             --set "bootstrap.identityProviders[0].jwksUri=${thunder_jwks}"
             --set "bootstrap.identityProviders[0].skipTlsVerify=${idp_skip_tls_verify}"
