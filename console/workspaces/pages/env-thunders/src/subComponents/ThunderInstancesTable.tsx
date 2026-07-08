@@ -49,6 +49,7 @@ import {
   absoluteRouteMap,
   type ThunderInstanceResponse,
 } from "@agent-management-platform/types";
+import { copyToClipboard } from "@agent-management-platform/shared-component";
 import { useSnackBar } from "@agent-management-platform/views";
 
 interface EnvironmentSection {
@@ -68,8 +69,14 @@ const monoEllipsisSx = {
   display: "block",
 } as const;
 
-const matchesQuery = (instance: ThunderInstanceResponse, query: string) =>
-  [PROVIDER_NAME, instance.issuerUrl, instance.tokenUrl]
+const matchesQuery = (section: EnvironmentSection, query: string) =>
+  [
+    PROVIDER_NAME,
+    section.title,
+    section.instance.envName,
+    section.instance.issuerUrl,
+    section.instance.tokenUrl,
+  ]
     .join(" ")
     .toLowerCase()
     .includes(query);
@@ -125,27 +132,18 @@ export function ThunderInstancesTable() {
       }
     }
     const query = searchQuery.trim().toLowerCase();
-    return query
-      ? grouped.filter((section) => matchesQuery(section.instance, query))
-      : grouped;
+    return query ? grouped.filter((section) => matchesQuery(section, query)) : grouped;
   }, [environments, instances, searchQuery]);
 
   const handleCopy = (e: MouseEvent<HTMLButtonElement>, value: string) => {
     e.stopPropagation();
-    navigator.clipboard
-      .writeText(value)
-      .then(() => {
-        pushSnackBar({
-          message: "Token endpoint copied to clipboard",
-          type: "success",
-        });
-      })
-      .catch(() => {
-        pushSnackBar({
-          message: "Failed to copy token endpoint",
-          type: "error",
-        });
-      });
+    void copyToClipboard(value).then((succeeded) => {
+      pushSnackBar(
+        succeeded
+          ? { message: "Token endpoint copied to clipboard", type: "success" }
+          : { message: "Failed to copy token endpoint", type: "error" },
+      );
+    });
   };
 
   const handleRowClick = (instance: ThunderInstanceResponse) => {

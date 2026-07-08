@@ -30,10 +30,10 @@ import {
 import { Cloud, RefreshCw, Server } from "@wso2/oxygen-ui-icons-react";
 import { useSearchParams } from "react-router-dom";
 import {
-  copyToClipboard,
   getConfigureGatewayDisplayCommand,
   getGatewayEnvFile,
   getK8sGatewayHelmCommand,
+  useCopyOnSuccess,
 } from "@agent-management-platform/shared-component";
 import { CommandField } from "./CommandField";
 
@@ -74,14 +74,7 @@ export function GatewayReconfigureCard({
     [setSearchParams],
   );
 
-  const handleCopy = useCallback(
-    (text: string, label: string) => {
-      void copyToClipboard(text).then((succeeded) => {
-        if (succeeded) onCopy(text, label);
-      });
-    },
-    [onCopy],
-  );
+  const handleCopy = useCopyOnSuccess(onCopy);
 
   if (!registrationToken) {
     return (

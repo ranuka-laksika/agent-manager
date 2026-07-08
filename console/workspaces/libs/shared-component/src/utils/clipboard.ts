@@ -16,6 +16,8 @@
  * under the License.
  */
 
+import { useCallback } from "react";
+
 /**
  * Writes `text` to the clipboard, guarding against browsers/contexts where
  * the Clipboard API is unavailable (e.g. insecure origins) and against a
@@ -33,4 +35,24 @@ export async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Wraps a `(text, label) => void` notifier (e.g. one that shows a "copied"
+ * toast) so it only fires after a successful clipboard write, using
+ * `copyToClipboard`. Returns a stable callback with the same
+ * `(text, label) => void` signature to pass straight through as an `onCopy`
+ * handler.
+ */
+export function useCopyOnSuccess(
+  onCopy: (text: string, label: string) => void,
+): (text: string, label: string) => void {
+  return useCallback(
+    (text: string, label: string) => {
+      void copyToClipboard(text).then((succeeded) => {
+        if (succeeded) onCopy(text, label);
+      });
+    },
+    [onCopy],
+  );
 }

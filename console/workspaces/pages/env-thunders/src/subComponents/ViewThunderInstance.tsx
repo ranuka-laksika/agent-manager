@@ -44,6 +44,7 @@ import {
 import { generatePath, useParams } from "react-router-dom";
 import { useListThunderInstances } from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
+import { copyToClipboard } from "@agent-management-platform/shared-component";
 import { PageLayout, useSnackBar } from "@agent-management-platform/views";
 import { ThunderInstanceComingSoonTab } from "./ThunderInstanceComingSoonTab";
 import { ThunderInstanceOverviewTab } from "./ThunderInstanceOverviewTab";
@@ -93,11 +94,18 @@ export const ViewThunderInstance: React.FC = () => {
   const { data, isLoading, error } = useListThunderInstances({ orgName: orgId });
   const instance = data?.thunderInstances.find((i) => i.envName === envName);
 
-  const handleCopy = useCallback((value: string, label: string) => {
-    navigator.clipboard.writeText(value).then(() => {
-      pushSnackBar({ message: `${label} copied to clipboard`, type: "success" });
-    }).catch(() => {});
-  }, [pushSnackBar]);
+  const handleCopy = useCallback(
+    (value: string, label: string) => {
+      void copyToClipboard(value).then((succeeded) => {
+        pushSnackBar(
+          succeeded
+            ? { message: `${label} copied to clipboard`, type: "success" }
+            : { message: `Failed to copy ${label}`, type: "error" },
+        );
+      });
+    },
+    [pushSnackBar],
+  );
 
   const displayName = instance?.displayName || instance?.envName || envName || "";
 

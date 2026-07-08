@@ -33,6 +33,7 @@ import { AlertTriangle, Copy, DoorClosedLocked, KeyRound } from "@wso2/oxygen-ui
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
+  copyToClipboard,
   GatewayTypeChip,
   getAvatarInitials,
   getErrorMessage,
@@ -169,12 +170,13 @@ export function EnvironmentViewPage() {
   );
 
   const handleCopy = (value: string, message: string) => {
-    navigator.clipboard
-      .writeText(value)
-      .then(() => {
-        pushSnackBar({ message, type: "success" });
-      })
-      .catch(() => {});
+    void copyToClipboard(value).then((succeeded) => {
+      pushSnackBar(
+        succeeded
+          ? { message, type: "success" }
+          : { message: "Failed to copy to clipboard", type: "error" },
+      );
+    });
   };
 
   const httpEndpoint = env?.gateway?.ingress?.external?.http;

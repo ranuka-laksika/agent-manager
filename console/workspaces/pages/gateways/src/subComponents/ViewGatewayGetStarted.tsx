@@ -30,11 +30,11 @@ import {
 } from "@wso2/oxygen-ui";
 import { Computer, Server, Cloud } from "@wso2/oxygen-ui-icons-react";
 import {
-  copyToClipboard,
   getConfigureGatewayDisplayCommand,
   getGatewayEnvFile,
   getGatewayVersionHelm,
   getK8sGatewayHelmCommand,
+  useCopyOnSuccess,
 } from "@agent-management-platform/shared-component";
 import { CommandField } from "./CommandField";
 
@@ -104,14 +104,7 @@ export function ViewGatewayGetStarted({
     [setSearchParams],
   );
 
-  const handleCopy = useCallback(
-    (text: string, label: string) => {
-      void copyToClipboard(text).then((succeeded) => {
-        if (succeeded) onCopy(text, label);
-      });
-    },
-    [onCopy],
-  );
+  const handleCopy = useCopyOnSuccess(onCopy);
 
   const renderStep2 = () => {
     if (registrationToken) {

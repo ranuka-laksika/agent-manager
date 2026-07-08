@@ -55,15 +55,12 @@ export function EnvironmentTable(
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const environmentsBasePath = absoluteRouteMap.children.org.children.environments.path;
-  // The `as string` cast keeps generatePath's inferred params type as the
-  // same permissive `Record<string, string | null>` it already infers for
-  // other route-map `.path` lookups in this codebase — without it, TS narrows
-  // the template literal to only recognize the trailing `:envName` segment
-  // and rejects `orgId`.
   const envViewPath = (envName: string) =>
     orgId
-      ? generatePath(`${environmentsBasePath}/:envName` as string, { orgId, envName })
+      ? generatePath(absoluteRouteMap.children.org.children.environments.children.view.path, {
+          orgId,
+          envName,
+        })
       : "#";
 
   const { data: environments, isLoading, error } = useListEnvironments({ orgName: orgId });
