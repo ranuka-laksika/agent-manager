@@ -211,6 +211,11 @@ Then configure the exporter to AMP. This is the .NET analog of `init_otel()`; th
 ```csharp
 const string SourceName = "my-dotnet-agent";
 
+var endpoint = Environment.GetEnvironmentVariable("AMP_OTEL_ENDPOINT")
+    ?? throw new InvalidOperationException("AMP_OTEL_ENDPOINT is not set");
+var apiKey = Environment.GetEnvironmentVariable("AMP_AGENT_API_KEY")
+    ?? throw new InvalidOperationException("AMP_AGENT_API_KEY is not set");
+
 // Exporter -> AMP. Note: when the OTLP Endpoint is set in code (rather than via
 // OTEL_EXPORTER_OTLP_ENDPOINT), the SDK does not append the signal path, so
 // include /v1/traces yourself.
@@ -219,9 +224,9 @@ Sdk.CreateTracerProviderBuilder()
     .AddSource(SourceName)               // must match the UseOpenTelemetry sourceName
     .AddOtlpExporter(o =>
     {
-        o.Endpoint = new Uri($"{Environment.GetEnvironmentVariable("AMP_OTEL_ENDPOINT")!.TrimEnd('/')}/v1/traces");
+        o.Endpoint = new Uri($"{endpoint.TrimEnd('/')}/v1/traces");
         o.Protocol = OtlpExportProtocol.HttpProtobuf;
-        o.Headers = $"x-amp-api-key={Environment.GetEnvironmentVariable("AMP_AGENT_API_KEY")}";
+        o.Headers = $"x-amp-api-key={Uri.EscapeDataString(apiKey)}";
     })
     .Build();
 

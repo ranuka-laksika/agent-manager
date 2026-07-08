@@ -26,6 +26,9 @@ var agent = AgentFactory.Create();
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 
+// Flush buffered spans to AMP before the process exits.
+app.Lifetime.ApplicationStopping.Register(AmpTelemetry.Shutdown);
+
 app.MapGet("/healthz", () => Results.Ok("ok"));
 
 // One /chat request -> one trace (invoke_agent -> chat -> execute_tool).

@@ -11,6 +11,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0
 WORKDIR /app
 COPY --from=build /app .
 
+# Run as the non-root user the .NET runtime images provide.
+USER $APP_UID
+
 # The agent listens on 8000 (see Program.cs).
 EXPOSE 8000
 

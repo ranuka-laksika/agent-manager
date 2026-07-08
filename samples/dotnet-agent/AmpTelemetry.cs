@@ -104,7 +104,9 @@ public static class AmpTelemetry
                 {
                     options.Endpoint = new Uri(TracesEndpoint(endpoint));
                     options.Protocol = OtlpExportProtocol.HttpProtobuf;
-                    options.Headers = $"x-amp-api-key={apiKey}";
+                    // URL-encode: the OTLP exporter parses Headers by splitting
+                    // on ',' and '=', so a key containing either would break it.
+                    options.Headers = $"x-amp-api-key={Uri.EscapeDataString(apiKey)}";
                 });
 
             // Optional: also print spans to the console for local debugging
@@ -118,6 +120,22 @@ public static class AmpTelemetry
             }
 
             _provider = providerBuilder.Build();
+        }
+    }
+
+    /// <summary>
+    /// Flush and shut down the tracer provider so the OTLP batch exporter's
+    /// buffered spans are exported before the process exits. Wire this to the
+    /// application's shutdown event (see <c>Program.cs</c>). A no-op if
+    /// <see cref="Configure"/> was never called.
+    /// </summary>
+    public static void Shutdown()
+    {
+        lock (InitLock)
+        {
+            _provider?.Shutdown();
+            _provider?.Dispose();
+            _provider = null;
         }
     }
 
