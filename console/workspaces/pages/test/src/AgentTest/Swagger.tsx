@@ -28,6 +28,10 @@ import { useMemo, useState, lazy, Suspense } from "react";
 
 const SwaggerUI = lazy(() => import("swagger-ui-react"));
 
+// A freshly issued test key takes a couple of seconds to reach the gateway's
+// policy engine, so one delayed retry with the same key rides out that window.
+const TEST_KEY_PROPAGATION_RETRY_DELAY_MS = 2000;
+
 const disableAuthorizeAndInfoPluginCustomSecuritySchema = {
   statePlugins: {
     spec: {
@@ -81,7 +85,14 @@ export function Swagger() {
   );
   const [isRefreshingKey, setIsRefreshingKey] = useState(false);
 
+  const gatewayOffline = testKey?.gatewayConnected === false;
+
   const endpoint = useMemo(() => Object.keys(data ?? {})?.[0] ?? "", [data]);
+
+  // The gateway drops CORS headers on 401s, so a cross-origin 401 rejects
+  // fetch with a TypeError before swagger-ui's responseInterceptor runs.
+  // Inject a custom fetch (req.userFetch) instead: retry once to ride out key
+  // propagation, then surface the refresh alert on a persistent 401/TypeError.
   const requestInterceptor = useMemo(
     () => (req: any) => {
       const targetUrl = data?.[endpoint]?.url;
@@ -105,26 +116,41 @@ export function Swagger() {
         req.headers = req.headers ?? {};
         req.headers["X-API-Key"] = testApiKey;
       }
+
+      if (securityEnabled && !gatewayOffline) {
+        req.userFetch = async (url: string, options: RequestInit) => {
+          const sleep = () =>
+            new Promise((resolve) =>
+              setTimeout(resolve, TEST_KEY_PROPAGATION_RETRY_DELAY_MS),
+            );
+          try {
+            const res = await fetch(url, options);
+            if (res.status !== 401) {
+              return res;
+            }
+            await sleep();
+            const retry = await fetch(url, options);
+            if (retry.status === 401) {
+              setKeyAlert("unauthorized");
+            }
+            return retry;
+          } catch (err) {
+            if (!(err instanceof TypeError)) {
+              throw err;
+            }
+            await sleep();
+            try {
+              return await fetch(url, options);
+            } catch (retryErr) {
+              setKeyAlert("unauthorized");
+              throw retryErr;
+            }
+          }
+        };
+      }
       return req;
     },
-    [data, endpoint, securityEnabled, testApiKey]
-  );
-
-  // swagger-ui cannot replay a request, so on a 401 (usually a test key the
-  // gateway hasn't loaded yet, or one superseded by another session) surface
-  // an alert with a manual refresh action. Refetching automatically would
-  // rotate the key and restart the gateway propagation window. When the
-  // gateway is offline the standing warning banner already explains the
-  // failure and refreshing cannot help, so no additional alert is shown.
-  const gatewayOffline = testKey?.gatewayConnected === false;
-  const responseInterceptor = useMemo(
-    () => (res: any) => {
-      if (securityEnabled && res?.status === 401 && !gatewayOffline) {
-        setKeyAlert("unauthorized");
-      }
-      return res;
-    },
-    [securityEnabled, gatewayOffline]
+    [data, endpoint, securityEnabled, testApiKey, gatewayOffline]
   );
 
   const handleRefreshTestKey = async () => {
@@ -213,7 +239,6 @@ export function Swagger() {
           plugins={[disableAuthorizeAndInfoPluginCustomSecuritySchema]}
           docExpansion="list"
           requestInterceptor={requestInterceptor}
-          responseInterceptor={responseInterceptor}
           supportedSubmitMethods={oauthOnly ? [] : undefined}
         />
       </Box>
