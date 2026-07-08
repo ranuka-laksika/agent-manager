@@ -183,10 +183,14 @@ func buildStatusResult(agent string, order []string, deployments amsvc.Deploymen
 	for _, envName := range order {
 		d := deployments[envName]
 		row := EnvStatus{
-			Name:         envName,
-			Status:       d.Status,
-			LastDeployed: d.LastDeployed,
-			Endpoints:    make([]EndpointRef, 0, len(d.Endpoints)),
+			Name:      envName,
+			Status:    d.Status,
+			Endpoints: make([]EndpointRef, 0, len(d.Endpoints)),
+		}
+		// lastDeployed is omitted for bindings that have not deployed yet (e.g.
+		// created by AutoDeploy before the first backend deploy); zero time renders as "-".
+		if d.LastDeployed != nil {
+			row.LastDeployed = *d.LastDeployed
 		}
 		if d.EnvironmentDisplayName != nil {
 			row.DisplayName = *d.EnvironmentDisplayName
