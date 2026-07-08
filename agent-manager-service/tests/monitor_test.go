@@ -68,6 +68,12 @@ func timePtr(t time.Time) *time.Time {
 // for dependencies required by monitor tests
 func createBaseMockChoreoClient() *clientmocks.OpenChoreoClientMock {
 	return &clientmocks.OpenChoreoClientMock{
+		// Resolve the namespace the same way the real client does — from the
+		// configured default namespace — so callers (e.g. GetMonitorRunLogs) get a
+		// realistic value rather than triggering the "method is nil" panic.
+		NamespaceForFunc: func(ouID string) string {
+			return config.GetConfig().OpenChoreo.DefaultNamespace
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			return &client.WorkflowRunResponse{
 				Name:         "test-workflow-run-123",
