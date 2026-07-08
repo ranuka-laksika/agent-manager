@@ -190,6 +190,63 @@ A couple of kinds work as a *kind* but don't have their full data card extracted
 
 Prompt and completion content is captured by default. To suppress it, set `TRACELOOP_TRACE_CONTENT=false` in the agent's environment. The variable is read by the Traceloop SDK on the auto path and is documented here for parity — on a fully hand-rolled manual setup that bypasses Traceloop, you control what you put into `gen_ai.input.messages` / `gen_ai.output.messages` directly.
 
+## Instrumenting .NET agents
+
+AMP's platform-injected auto-instrumentation covers Python (and Ballerina). A .NET agent joins AMP through the **external-agent path**: register it in the Console, then have it push spans to AMP's OTLP endpoint using the same transport and contract as above (`POST ${AMP_OTEL_ENDPOINT}/v1/traces`, header `x-amp-api-key`, `gen_ai.*` attributes). Nothing on the AMP side is .NET-specific — any process that emits contract-shaped spans to that endpoint renders in the Console and feeds evaluators.
+
+The runnable [`dotnet-agent`](https://github.com/wso2/agent-manager/tree/main/samples/dotnet-agent) sample is the worked example of everything below.
+
+### Where the `gen_ai.*` spans come from
+
+Unlike Python's Traceloop SDK, OpenTelemetry's .NET **zero-code** auto-instrumentation (the CoreCLR profiler) ships **no** GenAI instrumentation — it produces infrastructure spans (ASP.NET Core, HttpClient, database) only. In .NET, `gen_ai.*` spans are emitted by the **AI SDK itself** through an `ActivitySource`. So the primary path is SDK-native emission, and the profiler is an optional add-on for infrastructure spans.
+
+The recommended SDK is **Microsoft Agent Framework** (Microsoft's successor to Semantic Kernel and AutoGen, built on Microsoft.Extensions.AI). It emits the GenAI conventions natively — one agent invocation yields `invoke_agent` → `chat` → `execute_tool` spans, the same shape AMP's Python agents produce.
+
+### Enabling it
+
+Instrument the **agent** with `UseOpenTelemetry(sourceName)` and let Agent Framework auto-wire the chat-client and tool spans beneath it. Do not also instrument the chat client yourself — that disables the auto-wiring and flattens the trace.
+
+Then configure the exporter to AMP. This is the .NET analog of `init_otel()`; the sample wraps it in [`AmpTelemetry.cs`](https://github.com/wso2/agent-manager/tree/main/samples/dotnet-agent/AmpTelemetry.cs):
+
+```csharp
+const string SourceName = "my-dotnet-agent";
+
+// Exporter -> AMP. Note: when the OTLP Endpoint is set in code (rather than via
+// OTEL_EXPORTER_OTLP_ENDPOINT), the SDK does not append the signal path, so
+// include /v1/traces yourself.
+Sdk.CreateTracerProviderBuilder()
+    .SetSampler(new AlwaysOnSampler())   // see note below
+    .AddSource(SourceName)               // must match the UseOpenTelemetry sourceName
+    .AddOtlpExporter(o =>
+    {
+        o.Endpoint = new Uri($"{Environment.GetEnvironmentVariable("AMP_OTEL_ENDPOINT")!.TrimEnd('/')}/v1/traces");
+        o.Protocol = OtlpExportProtocol.HttpProtobuf;
+        o.Headers = $"x-amp-api-key={Environment.GetEnvironmentVariable("AMP_AGENT_API_KEY")}";
+    })
+    .Build();
+
+// Agent: one UseOpenTelemetry call, same source name.
+AIAgent agent = new ChatClientAgent(chatClient, name: "WeatherAgent", instructions: "...", tools: [...])
+    .AsBuilder()
+    .UseOpenTelemetry(sourceName: SourceName, configure: cfg => cfg.EnableSensitiveData = true)
+    .Build();
+```
+
+Two things that will otherwise cost you a trace with no visible error:
+
+- **`AddSource(SourceName)` must match** the `sourceName` passed to `UseOpenTelemetry`. If it doesn't, the spans are created but never exported.
+- **Sampling.** When the agent runs inside a web request whose ASP.NET Core activity is not itself sampled (i.e. you have not added ASP.NET Core instrumentation), the default `ParentBased` sampler drops the agent's child spans. Use `AlwaysOnSampler` (as above), or add ASP.NET Core instrumentation so the request span is recorded.
+
+### Content capture and experimental conventions
+
+Message content (prompts, responses, tool arguments) is captured only when `EnableSensitiveData = true`. Wire it to the same `AMP_TRACE_CONTENT` toggle the rest of AMP uses so content can be suppressed without dropping spans.
+
+The .NET GenAI conventions are still experimental, so pin your package versions and set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` across your fleet to keep the span shape stable.
+
+### Optional: infrastructure spans via zero-code
+
+To also capture ASP.NET Core / HttpClient / DB spans around the `gen_ai.*` spans, install the OpenTelemetry .NET zero-code (CoreCLR) auto-instrumentation and set its env vars (`CORECLR_ENABLE_PROFILING=1`, `CORECLR_PROFILER={918728DD-259F-4A6A-AC2B-B85E1B658318}`, `CORECLR_PROFILER_PATH`, `DOTNET_STARTUP_HOOKS`, `OTEL_DOTNET_AUTO_HOME`), plus `OTEL_DOTNET_AUTO_TRACES_ADDITIONAL_SOURCES=<your source name>` so it also exports the agent's spans. On Alpine/musl images, point `CORECLR_PROFILER_PATH` at the `linux-musl-x64` native library rather than `linux-x64`. The profiler adds infrastructure spans only; it does not itself produce `gen_ai.*` spans.
+
 ## AMP instrumentation version mapping
 
 Each AMP-instrumentation version is a single semver shared by the PyPI package (`amp-instrumentation`) and the init-container image (`ghcr.io/wso2/amp-python-instrumentation-provider:<version>-python<X.Y>`) AMP injects into platform-hosted Python agents. The version is independent of the AMP product version. One AMP-instrumentation version pins exactly one Traceloop SDK version.
