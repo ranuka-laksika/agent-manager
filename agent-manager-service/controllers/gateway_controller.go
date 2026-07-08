@@ -131,13 +131,17 @@ func handleGatewayErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	ouID := middleware.OUIDFromRequest(r)
-
 	var req spec.CreateGatewayRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error("RegisterGateway: failed to decode request", "error", err)
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	// Use the OU ID from the request body if provided, otherwise fall back to the one from the request context.
+	ouID := middleware.OUIDFromRequest(r)
+	if req.OrgUid != nil && *req.OrgUid != "" {
+		ouID = *req.OrgUid
 	}
 
 	// Validate environments if present

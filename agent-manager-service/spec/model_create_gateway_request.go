@@ -32,6 +32,8 @@ type CreateGatewayRequest struct {
 	IsCritical *bool `json:"isCritical,omitempty"`
 	// List of environment UUIDs to assign the gateway to during creation
 	EnvironmentIds []string `json:"environmentIds,omitempty"`
+	// OU ID of the organization the gateway belongs to.
+	OrgUid *string `json:"orgUid,omitempty"`
 }
 
 // NewCreateGatewayRequest instantiates a new CreateGatewayRequest object
@@ -251,6 +253,38 @@ func (o *CreateGatewayRequest) SetEnvironmentIds(v []string) {
 	o.EnvironmentIds = v
 }
 
+// GetOrgUid returns the OrgUid field value if set, zero value otherwise.
+func (o *CreateGatewayRequest) GetOrgUid() string {
+	if o == nil || IsNil(o.OrgUid) {
+		var ret string
+		return ret
+	}
+	return *o.OrgUid
+}
+
+// GetOrgUidOk returns a tuple with the OrgUid field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CreateGatewayRequest) GetOrgUidOk() (*string, bool) {
+	if o == nil || IsNil(o.OrgUid) {
+		return nil, false
+	}
+	return o.OrgUid, true
+}
+
+// HasOrgUid returns a boolean if a field has been set.
+func (o *CreateGatewayRequest) HasOrgUid() bool {
+	if o != nil && !IsNil(o.OrgUid) {
+		return true
+	}
+
+	return false
+}
+
+// SetOrgUid gets a reference to the given string and assigns it to the OrgUid field.
+func (o *CreateGatewayRequest) SetOrgUid(v string) {
+	o.OrgUid = &v
+}
+
 func (o CreateGatewayRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -273,6 +307,9 @@ func (o CreateGatewayRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.EnvironmentIds) {
 		toSerialize["environmentIds"] = o.EnvironmentIds
+	}
+	if !IsNil(o.OrgUid) {
+		toSerialize["orgUid"] = o.OrgUid
 	}
 	return toSerialize, nil
 }
