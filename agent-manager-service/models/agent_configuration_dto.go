@@ -55,7 +55,6 @@ type AgentModelConfigResponse struct {
 	Description          string                            `json:"description,omitempty"`
 	AgentID              string                            `json:"agentId"`
 	Type                 string                            `json:"type"`
-	OrganizationName     string                            `json:"organizationName"`
 	ProjectName          string                            `json:"projectName"`
 	EnvModelConfig       map[string]EnvModelConfigResponse `json:"envModelConfig"`
 	EnvironmentVariables []EnvironmentVariableConfig       `json:"environmentVariables"`
@@ -94,14 +93,13 @@ type AgentModelConfigListResponse struct {
 
 // AgentModelConfigListItem represents summary in list
 type AgentModelConfigListItem struct {
-	UUID             string    `json:"uuid"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description,omitempty"`
-	AgentID          string    `json:"agentId"`
-	Type             string    `json:"type"`
-	OrganizationName string    `json:"organizationName"`
-	ProjectName      string    `json:"projectName"`
-	CreatedAt        time.Time `json:"createdAt"`
+	UUID        string    `json:"uuid"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	AgentID     string    `json:"agentId"`
+	Type        string    `json:"type"`
+	ProjectName string    `json:"projectName"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // PaginationInfo contains pagination metadata

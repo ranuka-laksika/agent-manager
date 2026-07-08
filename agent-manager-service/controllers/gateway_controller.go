@@ -28,6 +28,7 @@ import (
 	"gorm.io/gorm"
 
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -85,7 +86,7 @@ func NewGatewayController(
 }
 
 // resolveEnvironmentUUID resolves environment name or UUID to UUID
-func (c *gatewayController) resolveEnvironmentUUID(ctx context.Context, orgName, envIdentifier string) (string, error) {
+func (c *gatewayController) resolveEnvironmentUUID(ctx context.Context, ouID, envIdentifier string) (string, error) {
 	// First try to parse as UUID
 	if _, err := uuid.Parse(envIdentifier); err == nil {
 		// It's a valid UUID, return it
@@ -93,7 +94,7 @@ func (c *gatewayController) resolveEnvironmentUUID(ctx context.Context, orgName,
 	}
 
 	// Not a UUID, try to resolve by name using OpenChoreo client
-	environments, err := c.ocClient.ListEnvironments(ctx, orgName)
+	environments, err := c.ocClient.ListEnvironments(ctx, ouID)
 	if err != nil {
 		return "", fmt.Errorf("failed to list environments: %w", err)
 	}
@@ -130,8 +131,6 @@ func handleGatewayErrors(w http.ResponseWriter, err error, fallbackMsg string) {
 func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
-
 	var req spec.CreateGatewayRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Error("RegisterGateway: failed to decode request", "error", err)
@@ -139,9 +138,15 @@ func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Use the OU ID from the request body if provided, otherwise fall back to the one from the request context.
+	ouID := middleware.OUIDFromRequest(r)
+	if req.OrgId != nil && *req.OrgId != "" {
+		ouID = *req.OrgId
+	}
+
 	// Validate environments if present
 	if len(req.EnvironmentIds) > 0 {
-		envs, err := c.ocClient.ListEnvironments(ctx, orgName)
+		envs, err := c.ocClient.ListEnvironments(ctx, ouID)
 		if err != nil {
 			log.Error("environment validation failed: failed to list environments")
 			utils.WriteErrorResponse(w, http.StatusInternalServerError, "environment validation error")
@@ -174,7 +179,7 @@ func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Reque
 	var properties map[string]interface{}
 
 	gateway, err := c.gatewayService.RegisterGateway(
-		orgName,
+		ouID,
 		req.Name,
 		req.DisplayName,
 		description,
@@ -200,21 +205,21 @@ func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Get environments for response
-	environments := c.getGatewayEnvironmentsFromDB(ctx, orgName, gateway.ID)
+	environments := c.getGatewayEnvironmentsFromDB(ctx, ouID, gateway.ID)
 
 	// Convert to spec response
-	response := convertGatewayToSpecResponse(gateway, orgName, environments)
+	response := convertGatewayToSpecResponse(gateway, ouID, environments)
 	utils.WriteSuccessResponse(w, http.StatusCreated, response)
 }
 
 func (c *gatewayController) GetGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
 	// Get gateway from local service
-	gateway, err := c.gatewayService.GetGateway(gatewayID, orgName)
+	gateway, err := c.gatewayService.GetGateway(gatewayID, ouID)
 	if err != nil {
 		log.Error("GetGateway: failed to get gateway", "error", err)
 		handleGatewayErrors(w, err, "Failed to get gateway")
@@ -222,16 +227,16 @@ func (c *gatewayController) GetGateway(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get environments from DB
-	environments := c.getGatewayEnvironmentsFromDB(ctx, orgName, gatewayID)
+	environments := c.getGatewayEnvironmentsFromDB(ctx, ouID, gatewayID)
 
-	response := convertGatewayToSpecResponse(gateway, orgName, environments)
+	response := convertGatewayToSpecResponse(gateway, ouID, environments)
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Parse and validate pagination parameters
 	limit := getIntQueryParam(r, "limit", defaultLimit)
@@ -267,7 +272,7 @@ func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request)
 	// Filter by environment
 	if envParam := r.URL.Query().Get("environment"); envParam != "" {
 		// envParam could be UUID or name, we need to resolve it to UUID
-		envUUID, err := c.resolveEnvironmentUUID(ctx, orgName, envParam)
+		envUUID, err := c.resolveEnvironmentUUID(ctx, ouID, envParam)
 		if err != nil {
 			log.Warn("ListGateways: failed to resolve environment", "environment", envParam, "error", err)
 			// Continue without environment filter if resolution fails
@@ -277,7 +282,7 @@ func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Get gateways from local service with filters and DB-level pagination
-	gatewaysResp, err := c.gatewayService.ListGateways(&orgName, filters, limit, offset)
+	gatewaysResp, err := c.gatewayService.ListGateways(&ouID, filters, limit, offset)
 	if err != nil {
 		log.Error("ListGateways: failed to list gateways", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list gateways")
@@ -285,7 +290,7 @@ func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fetch OpenChoreo environments ONCE for the entire organization (not per-gateway)
-	ocEnvironments, err := c.ocClient.ListEnvironments(ctx, orgName)
+	ocEnvironments, err := c.ocClient.ListEnvironments(ctx, ouID)
 	if err != nil {
 		log.Warn("ListGateways: failed to list environments from OpenChoreo", "error", err)
 		ocEnvironments = nil // Continue with empty environments
@@ -302,8 +307,8 @@ func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request)
 	specGateways := make([]spec.GatewayResponse, 0, len(gatewaysResp.List))
 	for _, gw := range gatewaysResp.List {
 		// Use pre-fetched mappings and environments (no additional DB/RPC calls)
-		environments := c.matchGatewayEnvironments(allMappings[gw.ID], ocEnvironments, orgName)
-		specGateways = append(specGateways, convertGatewayToSpecResponse(&gw, orgName, environments))
+		environments := c.matchGatewayEnvironments(allMappings[gw.ID], ocEnvironments, ouID)
+		specGateways = append(specGateways, convertGatewayToSpecResponse(&gw, ouID, environments))
 	}
 
 	response := spec.GatewayListResponse{
@@ -319,7 +324,7 @@ func (c *gatewayController) ListGateways(w http.ResponseWriter, r *http.Request)
 func (c *gatewayController) UpdateGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
 	var req spec.UpdateGatewayRequest
@@ -332,7 +337,7 @@ func (c *gatewayController) UpdateGateway(w http.ResponseWriter, r *http.Request
 	// Update using local service
 	var properties *map[string]interface{}
 	var description *string // Description not in spec
-	gateway, err := c.gatewayService.UpdateGateway(gatewayID, orgName, description, req.DisplayName, req.IsCritical, properties)
+	gateway, err := c.gatewayService.UpdateGateway(gatewayID, ouID, description, req.DisplayName, req.IsCritical, properties)
 	if err != nil {
 		log.Error("UpdateGateway: failed to update gateway", "error", err)
 		handleGatewayErrors(w, err, "Failed to update gateway")
@@ -340,19 +345,19 @@ func (c *gatewayController) UpdateGateway(w http.ResponseWriter, r *http.Request
 	}
 
 	// Get environments from DB
-	environments := c.getGatewayEnvironmentsFromDB(ctx, orgName, gatewayID)
+	environments := c.getGatewayEnvironmentsFromDB(ctx, ouID, gatewayID)
 
-	response := convertGatewayToSpecResponse(gateway, orgName, environments)
+	response := convertGatewayToSpecResponse(gateway, ouID, environments)
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 func (c *gatewayController) DeleteGateway(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
-	if err := c.gatewayService.DeleteGateway(gatewayID, orgName); err != nil {
+	if err := c.gatewayService.DeleteGateway(gatewayID, ouID); err != nil {
 		log.Error("DeleteGateway: failed to delete gateway", "error", err)
 		handleGatewayErrors(w, err, "Failed to delete gateway")
 		return
@@ -364,12 +369,12 @@ func (c *gatewayController) DeleteGateway(w http.ResponseWriter, r *http.Request
 func (c *gatewayController) AssignGatewayToEnvironment(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 	envID := strings.TrimSpace(r.PathValue("envID"))
 
 	// Verify gateway exists
-	if _, err := c.gatewayService.GetGateway(gatewayID, orgName); err != nil {
+	if _, err := c.gatewayService.GetGateway(gatewayID, ouID); err != nil {
 		log.Error("AssignGatewayToEnvironment: gateway not found", "error", err)
 		handleGatewayErrors(w, err, "Failed to assign gateway")
 		return
@@ -411,11 +416,11 @@ func (c *gatewayController) RemoveGatewayFromEnvironment(w http.ResponseWriter, 
 
 func (c *gatewayController) GetGatewayEnvironments(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
 	// Get environments from DB (via OpenChoreo)
-	environments := c.getGatewayEnvironmentsFromDB(ctx, orgName, gatewayID)
+	environments := c.getGatewayEnvironmentsFromDB(ctx, ouID, gatewayID)
 
 	// Convert to spec responses
 	specEnvs := make([]spec.GatewayEnvironmentResponse, len(environments))
@@ -433,11 +438,11 @@ func (c *gatewayController) GetGatewayEnvironments(w http.ResponseWriter, r *htt
 func (c *gatewayController) CheckGatewayHealth(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
 	// Get gateway to check if it exists
-	gateway, err := c.gatewayService.GetGateway(gatewayID, orgName)
+	gateway, err := c.gatewayService.GetGateway(gatewayID, ouID)
 	if err != nil {
 		log.Error("CheckGatewayHealth: gateway not found", "error", err)
 		handleGatewayErrors(w, err, "Failed to check gateway health")
@@ -462,12 +467,12 @@ func (c *gatewayController) CheckGatewayHealth(w http.ResponseWriter, r *http.Re
 func (c *gatewayController) ListGatewayTokens(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
-	log.Info("ListGatewayTokens: starting", "orgName", orgName, "gatewayID", gatewayID)
+	log.Info("ListGatewayTokens: starting", "ouID", ouID, "gatewayID", gatewayID)
 
-	svcResp, err := c.gatewayService.ListTokens(gatewayID, orgName)
+	svcResp, err := c.gatewayService.ListTokens(gatewayID, ouID)
 	if err != nil {
 		log.Error("ListGatewayTokens: failed to list tokens", "error", err)
 		handleGatewayErrors(w, err, "Failed to list gateway tokens")
@@ -493,11 +498,11 @@ func (c *gatewayController) ListGatewayTokens(w http.ResponseWriter, r *http.Req
 func (c *gatewayController) RotateGatewayToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
 	// Call service to rotate the token
-	tokenResp, err := c.gatewayService.RotateToken(gatewayID, orgName)
+	tokenResp, err := c.gatewayService.RotateToken(gatewayID, ouID)
 	if err != nil {
 		log.Error("RotateGatewayToken: failed to rotate token", "error", err)
 		handleGatewayErrors(w, err, "Failed to rotate gateway token")
@@ -519,13 +524,13 @@ func (c *gatewayController) RotateGatewayToken(w http.ResponseWriter, r *http.Re
 func (c *gatewayController) RevokeGatewayToken(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 	tokenID := strings.TrimSpace(r.PathValue("tokenID"))
 
-	log.Info("RevokeGatewayToken: starting", "orgName", orgName, "gatewayID", gatewayID, "tokenID", tokenID)
+	log.Info("RevokeGatewayToken: starting", "ouID", ouID, "gatewayID", gatewayID, "tokenID", tokenID)
 
-	if err := c.gatewayService.RevokeTokenByID(tokenID, gatewayID, orgName); err != nil {
+	if err := c.gatewayService.RevokeTokenByID(tokenID, gatewayID, ouID); err != nil {
 		log.Error("RevokeGatewayToken: failed to revoke token", "error", err)
 		switch {
 		case errors.Is(err, utils.ErrGatewayNotFound):
@@ -541,14 +546,14 @@ func (c *gatewayController) RevokeGatewayToken(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	log.Info("RevokeGatewayToken: token revoked successfully", "orgName", orgName, "gatewayID", gatewayID, "tokenID", tokenID)
+	log.Info("RevokeGatewayToken: token revoked successfully", "ouID", ouID, "gatewayID", gatewayID, "tokenID", tokenID)
 	w.WriteHeader(http.StatusNoContent)
 }
 
 func (c *gatewayController) GetGatewayStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Parse optional gatewayID query parameter
 	gatewayIDParam := r.URL.Query().Get("gatewayId")
@@ -557,7 +562,7 @@ func (c *gatewayController) GetGatewayStatus(w http.ResponseWriter, r *http.Requ
 		gatewayIDPtr = &gatewayIDParam
 	}
 
-	statusResp, err := c.gatewayService.GetGatewayStatus(ctx, orgName, gatewayIDPtr)
+	statusResp, err := c.gatewayService.GetGatewayStatus(ctx, ouID, gatewayIDPtr)
 	if err != nil {
 		log.Error("GetGatewayStatus: failed to get status", "error", err)
 		handleGatewayErrors(w, err, "Failed to get gateway status")
@@ -569,7 +574,7 @@ func (c *gatewayController) GetGatewayStatus(w http.ResponseWriter, r *http.Requ
 
 // getGatewayEnvironmentsFromDB retrieves environments associated with a gateway
 // Fetches environment UUIDs from service layer, then gets environment details from OpenChoreo
-func (c *gatewayController) getGatewayEnvironmentsFromDB(ctx context.Context, orgName, gatewayID string) []models.GatewayEnvironmentResponse {
+func (c *gatewayController) getGatewayEnvironmentsFromDB(ctx context.Context, ouID, gatewayID string) []models.GatewayEnvironmentResponse {
 	log := logger.GetLogger(ctx)
 
 	// Get environment mappings via service
@@ -584,13 +589,13 @@ func (c *gatewayController) getGatewayEnvironmentsFromDB(ctx context.Context, or
 	}
 
 	// Fetch all environments from OpenChoreo for this organization
-	ocEnvironments, err := c.ocClient.ListEnvironments(ctx, orgName)
+	ocEnvironments, err := c.ocClient.ListEnvironments(ctx, ouID)
 	if err != nil {
 		log.Warn("getGatewayEnvironmentsFromDB: failed to list environments from OpenChoreo", "error", err)
 		return []models.GatewayEnvironmentResponse{}
 	}
 
-	return c.matchGatewayEnvironments(mappings, ocEnvironments, orgName)
+	return c.matchGatewayEnvironments(mappings, ocEnvironments, ouID)
 }
 
 // getGatewayEnvironmentMappingsBulk retrieves environment mappings for multiple gateways in bulk
@@ -617,7 +622,7 @@ func (c *gatewayController) getGatewayEnvironmentMappingsBulk(ctx context.Contex
 func (c *gatewayController) matchGatewayEnvironments(
 	mappings []models.GatewayEnvironmentMapping,
 	ocEnvironments []*models.EnvironmentResponse,
-	orgName string,
+	ouID string,
 ) []models.GatewayEnvironmentResponse {
 	if len(mappings) == 0 {
 		return []models.GatewayEnvironmentResponse{}
@@ -640,7 +645,7 @@ func (c *gatewayController) matchGatewayEnvironments(
 		if ocEnv, found := envMap[envUUIDStr]; found {
 			environments = append(environments, models.GatewayEnvironmentResponse{
 				UUID:             ocEnv.UUID,
-				OrganizationName: orgName,
+				OrganizationName: ouID,
 				Name:             ocEnv.Name,
 				DisplayName:      ocEnv.DisplayName,
 				Description:      "",
@@ -658,18 +663,17 @@ func (c *gatewayController) matchGatewayEnvironments(
 
 // Helper conversion functions
 
-func convertGatewayToSpecResponse(gw *services.GatewayResponse, orgName string, environments []models.GatewayEnvironmentResponse) spec.GatewayResponse {
+func convertGatewayToSpecResponse(gw *services.GatewayResponse, ouID string, environments []models.GatewayEnvironmentResponse) spec.GatewayResponse {
 	response := spec.GatewayResponse{
-		Uuid:             gw.ID,
-		OrganizationName: orgName,
-		Name:             gw.Name,
-		DisplayName:      gw.DisplayName,
-		GatewayType:      spec.GatewayType(gw.FunctionalityType),
-		Vhost:            gw.Vhost,
-		IsCritical:       gw.IsCritical,
-		Status:           convertStatusToGatewayStatus(gw.IsActive),
-		CreatedAt:        gw.CreatedAt,
-		UpdatedAt:        gw.UpdatedAt,
+		Uuid:        gw.ID,
+		Name:        gw.Name,
+		DisplayName: gw.DisplayName,
+		GatewayType: spec.GatewayType(gw.FunctionalityType),
+		Vhost:       gw.Vhost,
+		IsCritical:  gw.IsCritical,
+		Status:      convertStatusToGatewayStatus(gw.IsActive),
+		CreatedAt:   gw.CreatedAt,
+		UpdatedAt:   gw.UpdatedAt,
 	}
 
 	// Convert environments
@@ -693,15 +697,14 @@ func convertStatusToGatewayStatus(isActive bool) spec.GatewayStatus {
 
 func convertGatewayEnvironmentToSpecResponse(env *models.GatewayEnvironmentResponse) spec.GatewayEnvironmentResponse {
 	response := spec.GatewayEnvironmentResponse{
-		Id:               env.UUID,
-		OrganizationName: env.OrganizationName,
-		Name:             env.Name,
-		DisplayName:      env.DisplayName,
-		DataplaneRef:     env.DataplaneRef,
-		DnsPrefix:        env.DNSPrefix,
-		IsProduction:     env.IsProduction,
-		CreatedAt:        env.CreatedAt,
-		UpdatedAt:        env.UpdatedAt,
+		Id:           env.UUID,
+		Name:         env.Name,
+		DisplayName:  env.DisplayName,
+		DataplaneRef: env.DataplaneRef,
+		DnsPrefix:    env.DNSPrefix,
+		IsProduction: env.IsProduction,
+		CreatedAt:    env.CreatedAt,
+		UpdatedAt:    env.UpdatedAt,
 	}
 	if env.Description != "" {
 		response.Description = &env.Description

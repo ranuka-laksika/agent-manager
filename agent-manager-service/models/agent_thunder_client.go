@@ -50,7 +50,7 @@ const (
 // binding record for one agent's AgentID in one environment.
 type AgentThunderClient struct {
 	ID               uuid.UUID             `gorm:"column:id;primaryKey;type:uuid;default:gen_random_uuid()"`
-	OrgName          string                `gorm:"column:org_name;not null"`
+	OUID             string                `gorm:"column:ou_id;not null"`
 	ProjectName      string                `gorm:"column:project_name;not null"`
 	AgentName        string                `gorm:"column:agent_name;not null"`
 	EnvironmentName  string                `gorm:"column:environment_name;not null"`

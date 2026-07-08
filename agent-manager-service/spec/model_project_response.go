@@ -23,8 +23,6 @@ type ProjectResponse struct {
 	Uuid string `json:"uuid"`
 	// Name of the project
 	Name string `json:"name"`
-	// Name of the organization
-	OrgName string `json:"orgName"`
 	// Display name of the project
 	DisplayName string `json:"displayName"`
 	// Description of the project
@@ -39,11 +37,10 @@ type ProjectResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewProjectResponse(uuid string, name string, orgName string, displayName string, description string, deploymentPipeline string, createdAt time.Time) *ProjectResponse {
+func NewProjectResponse(uuid string, name string, displayName string, description string, deploymentPipeline string, createdAt time.Time) *ProjectResponse {
 	this := ProjectResponse{}
 	this.Uuid = uuid
 	this.Name = name
-	this.OrgName = orgName
 	this.DisplayName = displayName
 	this.Description = description
 	this.DeploymentPipeline = deploymentPipeline
@@ -105,30 +102,6 @@ func (o *ProjectResponse) GetNameOk() (*string, bool) {
 // SetName sets field value
 func (o *ProjectResponse) SetName(v string) {
 	o.Name = v
-}
-
-// GetOrgName returns the OrgName field value
-func (o *ProjectResponse) GetOrgName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrgName
-}
-
-// GetOrgNameOk returns a tuple with the OrgName field value
-// and a boolean to check if the value has been set.
-func (o *ProjectResponse) GetOrgNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrgName, true
-}
-
-// SetOrgName sets field value
-func (o *ProjectResponse) SetOrgName(v string) {
-	o.OrgName = v
 }
 
 // GetDisplayName returns the DisplayName field value
@@ -239,7 +212,6 @@ func (o ProjectResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["uuid"] = o.Uuid
 	toSerialize["name"] = o.Name
-	toSerialize["orgName"] = o.OrgName
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["description"] = o.Description
 	toSerialize["deploymentPipeline"] = o.DeploymentPipeline

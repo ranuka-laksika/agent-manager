@@ -23,8 +23,6 @@ type ProjectListItem struct {
 	Uuid string `json:"uuid"`
 	// Name of the project
 	Name string `json:"name"`
-	// Name of the organization
-	OrgName string `json:"orgName"`
 	// Display name of the project
 	DisplayName string `json:"displayName"`
 	// Description of the project
@@ -39,11 +37,10 @@ type ProjectListItem struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewProjectListItem(uuid string, name string, orgName string, displayName string, createdAt time.Time) *ProjectListItem {
+func NewProjectListItem(uuid string, name string, displayName string, createdAt time.Time) *ProjectListItem {
 	this := ProjectListItem{}
 	this.Uuid = uuid
 	this.Name = name
-	this.OrgName = orgName
 	this.DisplayName = displayName
 	this.CreatedAt = createdAt
 	return &this
@@ -103,30 +100,6 @@ func (o *ProjectListItem) GetNameOk() (*string, bool) {
 // SetName sets field value
 func (o *ProjectListItem) SetName(v string) {
 	o.Name = v
-}
-
-// GetOrgName returns the OrgName field value
-func (o *ProjectListItem) GetOrgName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrgName
-}
-
-// GetOrgNameOk returns a tuple with the OrgName field value
-// and a boolean to check if the value has been set.
-func (o *ProjectListItem) GetOrgNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrgName, true
-}
-
-// SetOrgName sets field value
-func (o *ProjectListItem) SetOrgName(v string) {
-	o.OrgName = v
 }
 
 // GetDisplayName returns the DisplayName field value
@@ -253,7 +226,6 @@ func (o ProjectListItem) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["uuid"] = o.Uuid
 	toSerialize["name"] = o.Name
-	toSerialize["orgName"] = o.OrgName
 	toSerialize["displayName"] = o.DisplayName
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description

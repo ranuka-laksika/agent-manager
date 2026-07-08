@@ -37,11 +37,11 @@ func (m *mockLLMProviderRepository) Create(tx *gorm.DB, p *models.LLMProvider, h
 	return nil
 }
 
-func (m *mockLLMProviderRepository) GetByUUID(uuid, orgName string) (*models.LLMProvider, error) {
+func (m *mockLLMProviderRepository) GetByUUID(uuid, ouID string) (*models.LLMProvider, error) {
 	return m.provider, m.err
 }
 
-func (m *mockLLMProviderRepository) GetByHandle(handle, orgName string) (*models.LLMProvider, error) {
+func (m *mockLLMProviderRepository) GetByHandle(handle, ouID string) (*models.LLMProvider, error) {
 	return m.provider, m.err
 }
 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -47,12 +48,12 @@ func NewCatalogController(catalogService services.CatalogService) CatalogControl
 	}
 }
 
-// ListCatalog handles GET /orgs/{orgName}/catalog
+// ListCatalog handles GET /orgs/{ouID}/catalog
 func (c *catalogController) ListCatalog(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Parse query parameters
 	kind := r.URL.Query().Get("kind")
@@ -107,7 +108,7 @@ func (c *catalogController) ListCatalog(w http.ResponseWriter, r *http.Request) 
 	if kind == models.CatalogKindLLMProvider {
 		// Build filter struct
 		filters := &models.CatalogListFilters{
-			OrganizationName: orgName,
+			OrganizationName: ouID,
 			Kind:             kind,
 			Name:             name,
 			EnvironmentUUID:  environmentUUID,
@@ -129,7 +130,7 @@ func (c *catalogController) ListCatalog(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// For other kinds or no kind specified, use the basic service method
-	entries, total, err := c.catalogService.ListCatalog(ctx, orgName, kind, limit, offset)
+	entries, total, err := c.catalogService.ListCatalog(ctx, ouID, kind, limit, offset)
 	if err != nil {
 		log.Error("ListCatalog: failed to list catalog", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list catalog entries")

@@ -430,7 +430,6 @@ func ConvertToDeploymentPipelineResponse(pipeline *models.DeploymentPipelineResp
 		Name:           pipeline.Name,
 		DisplayName:    pipeline.DisplayName,
 		Description:    pipeline.Description,
-		OrgName:        pipeline.OrgName,
 		CreatedAt:      pipeline.CreatedAt,
 		PromotionPaths: promotionPaths,
 	}
@@ -485,7 +484,6 @@ func ConvertToProjectResponse(project *models.ProjectResponse) spec.ProjectRespo
 		Description:        project.Description,
 		CreatedAt:          project.CreatedAt,
 		DeploymentPipeline: project.DeploymentPipeline,
-		OrgName:            project.OrgName,
 	}
 }
 
@@ -500,7 +498,6 @@ func ConvertToProjectListItem(project *models.ProjectResponse) spec.ProjectListI
 		DisplayName:        project.DisplayName,
 		Description:        &project.Description,
 		CreatedAt:          project.CreatedAt,
-		OrgName:            project.OrgName,
 		DeploymentPipeline: &project.DeploymentPipeline,
 	}
 }
@@ -571,7 +568,6 @@ func ConvertToDataPlaneListResponse(dataPlanes []*models.DataPlaneResponse) []sp
 	for i, dp := range dataPlanes {
 		responses[i] = spec.DataPlane{
 			Name:        dp.Name,
-			OrgName:     dp.OrgName,
 			DisplayName: dp.DisplayName,
 			Description: dp.Description,
 			CreatedAt:   dp.CreatedAt,
@@ -712,7 +708,6 @@ func ConvertToMonitorResponse(monitor *models.MonitorResponse) spec.MonitorRespo
 		DisplayName:     monitor.DisplayName,
 		Description:     &monitor.Description,
 		Type:            monitor.Type,
-		OrgName:         monitor.OrgName,
 		ProjectName:     monitor.ProjectName,
 		AgentName:       monitor.AgentName,
 		EnvironmentName: monitor.EnvironmentName,

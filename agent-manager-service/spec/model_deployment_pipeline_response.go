@@ -26,8 +26,6 @@ type DeploymentPipelineResponse struct {
 	DisplayName string `json:"displayName"`
 	// Description of the deployment pipeline
 	Description string `json:"description"`
-	// Organization name
-	OrgName string `json:"orgName"`
 	// Timestamp when the pipeline was created
 	CreatedAt time.Time `json:"createdAt"`
 	// List of promotion paths in the pipeline
@@ -38,12 +36,11 @@ type DeploymentPipelineResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDeploymentPipelineResponse(name string, displayName string, description string, orgName string, createdAt time.Time, promotionPaths []PromotionPath) *DeploymentPipelineResponse {
+func NewDeploymentPipelineResponse(name string, displayName string, description string, createdAt time.Time, promotionPaths []PromotionPath) *DeploymentPipelineResponse {
 	this := DeploymentPipelineResponse{}
 	this.Name = name
 	this.DisplayName = displayName
 	this.Description = description
-	this.OrgName = orgName
 	this.CreatedAt = createdAt
 	this.PromotionPaths = promotionPaths
 	return &this
@@ -129,30 +126,6 @@ func (o *DeploymentPipelineResponse) SetDescription(v string) {
 	o.Description = v
 }
 
-// GetOrgName returns the OrgName field value
-func (o *DeploymentPipelineResponse) GetOrgName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrgName
-}
-
-// GetOrgNameOk returns a tuple with the OrgName field value
-// and a boolean to check if the value has been set.
-func (o *DeploymentPipelineResponse) GetOrgNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrgName, true
-}
-
-// SetOrgName sets field value
-func (o *DeploymentPipelineResponse) SetOrgName(v string) {
-	o.OrgName = v
-}
-
 // GetCreatedAt returns the CreatedAt field value
 func (o *DeploymentPipelineResponse) GetCreatedAt() time.Time {
 	if o == nil {
@@ -214,7 +187,6 @@ func (o DeploymentPipelineResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize["name"] = o.Name
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["description"] = o.Description
-	toSerialize["orgName"] = o.OrgName
 	toSerialize["createdAt"] = o.CreatedAt
 	toSerialize["promotionPaths"] = o.PromotionPaths
 	return toSerialize, nil

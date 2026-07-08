@@ -51,7 +51,7 @@ func NewLLMProxyService(
 }
 
 // Create creates a new LLM proxy
-func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMProxy) (*models.LLMProxy, error) {
+func (s *LLMProxyService) Create(ouID, createdBy string, proxy *models.LLMProxy) (*models.LLMProxy, error) {
 	if proxy == nil {
 		return nil, utils.ErrInvalidInput
 	}
@@ -75,7 +75,7 @@ func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMPro
 		return nil, utils.ErrInvalidInput
 	}
 	// Validate provider exists
-	providerModel, err := s.providerRepo.GetByUUID(provider, orgName)
+	providerModel, err := s.providerRepo.GetByUUID(provider, ouID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrLLMProviderNotFound
@@ -87,7 +87,7 @@ func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMPro
 	}
 
 	// Check if proxy already exists
-	exists, err := s.proxyRepo.Exists(handle, orgName)
+	exists, err := s.proxyRepo.Exists(handle, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check proxy exists: %w", err)
 	}
@@ -116,12 +116,12 @@ func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMPro
 	}
 
 	// Create proxy
-	if err := s.proxyRepo.Create(proxy, handle, name, version, orgName); err != nil {
+	if err := s.proxyRepo.Create(proxy, handle, name, version, ouID); err != nil {
 		return nil, fmt.Errorf("failed to create proxy: %w", err)
 	}
 
 	// Fetch created proxy
-	created, err := s.proxyRepo.GetByID(handle, orgName)
+	created, err := s.proxyRepo.GetByID(handle, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch created proxy: %w", err)
 	}
@@ -130,28 +130,28 @@ func (s *LLMProxyService) Create(orgName, createdBy string, proxy *models.LLMPro
 }
 
 // List lists all LLM proxies for an organization
-func (s *LLMProxyService) List(orgName string, projectID *string, limit, offset int) ([]*models.LLMProxy, int, error) {
+func (s *LLMProxyService) List(ouID string, projectID *string, limit, offset int) ([]*models.LLMProxy, int, error) {
 	var proxies []*models.LLMProxy
 	var totalCount int
 	var err error
 
 	if projectID != nil && *projectID != "" {
-		proxies, err = s.proxyRepo.ListByProject(orgName, *projectID, limit, offset)
+		proxies, err = s.proxyRepo.ListByProject(ouID, *projectID, limit, offset)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to list proxies by project: %w", err)
 		}
 
-		totalCount, err = s.proxyRepo.CountByProject(orgName, *projectID)
+		totalCount, err = s.proxyRepo.CountByProject(ouID, *projectID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to count proxies by project: %w", err)
 		}
 	} else {
-		proxies, err = s.proxyRepo.List(orgName, limit, offset)
+		proxies, err = s.proxyRepo.List(ouID, limit, offset)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to list proxies: %w", err)
 		}
 
-		totalCount, err = s.proxyRepo.Count(orgName)
+		totalCount, err = s.proxyRepo.Count(ouID)
 		if err != nil {
 			return nil, 0, fmt.Errorf("failed to count proxies: %w", err)
 		}
@@ -161,12 +161,12 @@ func (s *LLMProxyService) List(orgName string, projectID *string, limit, offset 
 }
 
 // Get retrieves an LLM proxy by ID
-func (s *LLMProxyService) Get(proxyID, orgName string) (*models.LLMProxy, error) {
+func (s *LLMProxyService) Get(proxyID, ouID string) (*models.LLMProxy, error) {
 	if proxyID == "" {
 		return nil, utils.ErrInvalidInput
 	}
 
-	proxy, err := s.proxyRepo.GetByID(proxyID, orgName)
+	proxy, err := s.proxyRepo.GetByID(proxyID, ouID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrLLMProxyNotFound
@@ -181,13 +181,13 @@ func (s *LLMProxyService) Get(proxyID, orgName string) (*models.LLMProxy, error)
 }
 
 // Update updates an existing LLM proxy
-func (s *LLMProxyService) Update(proxyID, orgName string, updates *models.LLMProxy) (*models.LLMProxy, error) {
+func (s *LLMProxyService) Update(proxyID, ouID string, updates *models.LLMProxy) (*models.LLMProxy, error) {
 	if proxyID == "" || updates == nil {
 		return nil, utils.ErrInvalidInput
 	}
 
 	// Fetch existing proxy to preserve sensitive fields
-	existing, err := s.proxyRepo.GetByID(proxyID, orgName)
+	existing, err := s.proxyRepo.GetByID(proxyID, ouID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrLLMProxyNotFound
@@ -201,7 +201,7 @@ func (s *LLMProxyService) Update(proxyID, orgName string, updates *models.LLMPro
 	// Validate provider if specified
 	provider := updates.Configuration.Provider
 	if provider != "" {
-		providerModel, err := s.providerRepo.GetByUUID(provider, orgName)
+		providerModel, err := s.providerRepo.GetByUUID(provider, ouID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil, utils.ErrLLMProviderNotFound
@@ -233,7 +233,7 @@ func (s *LLMProxyService) Update(proxyID, orgName string, updates *models.LLMPro
 	}
 
 	// Update proxy
-	if err := s.proxyRepo.Update(updates, proxyID, orgName); err != nil {
+	if err := s.proxyRepo.Update(updates, proxyID, ouID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrLLMProxyNotFound
 		}
@@ -241,7 +241,7 @@ func (s *LLMProxyService) Update(proxyID, orgName string, updates *models.LLMPro
 	}
 
 	// Fetch updated proxy
-	updated, err := s.proxyRepo.GetByID(proxyID, orgName)
+	updated, err := s.proxyRepo.GetByID(proxyID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch updated proxy: %w", err)
 	}
@@ -276,12 +276,12 @@ func preserveUpstreamAuthCredential(existing, updated *models.UpstreamAuth) *mod
 }
 
 // Delete deletes an LLM proxy
-func (s *LLMProxyService) Delete(proxyID, orgName string) error {
+func (s *LLMProxyService) Delete(proxyID, ouID string) error {
 	if proxyID == "" {
 		return utils.ErrInvalidInput
 	}
 
-	if err := s.proxyRepo.Delete(proxyID, orgName); err != nil {
+	if err := s.proxyRepo.Delete(proxyID, ouID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return utils.ErrLLMProxyNotFound
 		}
@@ -292,13 +292,13 @@ func (s *LLMProxyService) Delete(proxyID, orgName string) error {
 }
 
 // ListByProvider lists all proxies for a specific provider
-func (s *LLMProxyService) ListByProvider(orgName, providerID string, limit, offset int) ([]*models.LLMProxy, int, error) {
+func (s *LLMProxyService) ListByProvider(ouID, providerID string, limit, offset int) ([]*models.LLMProxy, int, error) {
 	if providerID == "" {
 		return nil, 0, utils.ErrInvalidInput
 	}
 
 	// Get provider to get its UUID
-	provider, err := s.providerRepo.GetByUUID(providerID, orgName)
+	provider, err := s.providerRepo.GetByUUID(providerID, ouID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, 0, utils.ErrLLMProviderNotFound
@@ -310,12 +310,12 @@ func (s *LLMProxyService) ListByProvider(orgName, providerID string, limit, offs
 	}
 
 	// List proxies by provider UUID
-	proxies, err := s.proxyRepo.ListByProvider(orgName, provider.UUID.String(), limit, offset)
+	proxies, err := s.proxyRepo.ListByProvider(ouID, provider.UUID.String(), limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to list proxies by provider: %w", err)
 	}
 
-	totalCount, err := s.proxyRepo.CountByProvider(orgName, provider.UUID.String())
+	totalCount, err := s.proxyRepo.CountByProvider(ouID, provider.UUID.String())
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to count proxies by provider: %w", err)
 	}

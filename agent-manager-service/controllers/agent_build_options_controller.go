@@ -55,7 +55,7 @@ func NewAgentBuildOptionsController(
 	}
 }
 
-// GetAgentBuildOptions handles GET /orgs/{orgName}/agent-build-options.
+// GetAgentBuildOptions handles GET /orgs/{ouID}/agent-build-options.
 // Returns the Python set the platform supports and the effective
 // instrumentation catalog. Org-scoped for routing/auth consistency with
 // catalog_routes.go; the response is identical across orgs.

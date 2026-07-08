@@ -314,9 +314,9 @@ func (s *MonitorScoresService) GetEvaluatorsTimeSeries(
 // GetTraceScores returns all evaluation scores for a specific trace across all monitors.
 // Scores are grouped by monitor, then split into trace-level evaluators and span-level groups.
 func (s *MonitorScoresService) GetTraceScores(
-	traceID, orgName, projName, agentName string,
+	traceID, ouID, projName, agentName string,
 ) (*models.TraceScoresResponse, error) {
-	scores, err := s.repo.GetScoresByTraceID(traceID, orgName, projName, agentName)
+	scores, err := s.repo.GetScoresByTraceID(traceID, ouID, projName, agentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trace scores: %w", err)
 	}
@@ -404,12 +404,12 @@ func (s *MonitorScoresService) GetTraceScores(
 
 // GetAgentTraceScores returns aggregated scores per trace across all monitors for an agent.
 func (s *MonitorScoresService) GetAgentTraceScores(
-	orgName, projName, agentName string,
+	ouID, projName, agentName string,
 	startTime, endTime time.Time,
 	limit, offset int,
 	sortOrder string,
 ) (*models.AgentTraceScoresResponse, error) {
-	aggregations, totalCount, err := s.repo.GetAgentTraceScores(orgName, projName, agentName, startTime, endTime, limit, offset, sortOrder)
+	aggregations, totalCount, err := s.repo.GetAgentTraceScores(ouID, projName, agentName, startTime, endTime, limit, offset, sortOrder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get agent trace scores: %w", err)
 	}
@@ -530,8 +530,8 @@ func (s *MonitorScoresService) GetMonitorRunScores(
 }
 
 // GetMonitorID resolves monitor name to monitor ID
-func (s *MonitorScoresService) GetMonitorID(orgName, projName, agentName, monitorName string) (uuid.UUID, error) {
-	id, err := s.repo.GetMonitorID(orgName, projName, agentName, monitorName)
+func (s *MonitorScoresService) GetMonitorID(ouID, projName, agentName, monitorName string) (uuid.UUID, error) {
+	id, err := s.repo.GetMonitorID(ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return uuid.Nil, fmt.Errorf("monitor %q not found: %w", monitorName, utils.ErrMonitorNotFound)

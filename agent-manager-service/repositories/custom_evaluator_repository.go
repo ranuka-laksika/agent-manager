@@ -44,11 +44,11 @@ type CustomEvaluatorRepository interface {
 	RunInTransaction(fn func(txRepo CustomEvaluatorRepository) error) error
 
 	Create(evaluator *models.CustomEvaluator) error
-	GetByIdentifier(orgName, identifier string) (*models.CustomEvaluator, error)
-	List(orgName string, filters CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error)
+	GetByIdentifier(ouID, identifier string) (*models.CustomEvaluator, error)
+	List(ouID string, filters CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error)
 	Update(evaluator *models.CustomEvaluator) error
 	SoftDelete(evaluator *models.CustomEvaluator) error
-	GetByIdentifiers(orgName string, identifiers []string) ([]models.CustomEvaluator, error)
+	GetByIdentifiers(ouID string, identifiers []string) ([]models.CustomEvaluator, error)
 }
 
 // CustomEvaluatorRepo implements CustomEvaluatorRepository using GORM
@@ -79,9 +79,9 @@ func (r *CustomEvaluatorRepo) Create(evaluator *models.CustomEvaluator) error {
 }
 
 // GetByIdentifier retrieves a custom evaluator by org and identifier (active records only)
-func (r *CustomEvaluatorRepo) GetByIdentifier(orgName, identifier string) (*models.CustomEvaluator, error) {
+func (r *CustomEvaluatorRepo) GetByIdentifier(ouID, identifier string) (*models.CustomEvaluator, error) {
 	var evaluator models.CustomEvaluator
-	if err := r.db.Where("org_name = ? AND identifier = ? AND deleted_at IS NULL", orgName, identifier).
+	if err := r.db.Where("ou_id = ? AND identifier = ? AND deleted_at IS NULL", ouID, identifier).
 		First(&evaluator).Error; err != nil {
 		return nil, err
 	}
@@ -89,8 +89,8 @@ func (r *CustomEvaluatorRepo) GetByIdentifier(orgName, identifier string) (*mode
 }
 
 // List returns paginated custom evaluators with optional filters
-func (r *CustomEvaluatorRepo) List(orgName string, filters CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
-	query := r.db.Where("org_name = ? AND deleted_at IS NULL", orgName)
+func (r *CustomEvaluatorRepo) List(ouID string, filters CustomEvaluatorFilters) ([]models.CustomEvaluator, int64, error) {
+	query := r.db.Where("ou_id = ? AND deleted_at IS NULL", ouID)
 
 	if filters.Type != "" {
 		query = query.Where("type = ?", filters.Type)
@@ -139,12 +139,12 @@ func (r *CustomEvaluatorRepo) SoftDelete(evaluator *models.CustomEvaluator) erro
 }
 
 // GetByIdentifiers batch-fetches custom evaluators by their identifiers (active records only)
-func (r *CustomEvaluatorRepo) GetByIdentifiers(orgName string, identifiers []string) ([]models.CustomEvaluator, error) {
+func (r *CustomEvaluatorRepo) GetByIdentifiers(ouID string, identifiers []string) ([]models.CustomEvaluator, error) {
 	if len(identifiers) == 0 {
 		return nil, nil
 	}
 	var evaluators []models.CustomEvaluator
-	err := r.db.Where("org_name = ? AND identifier IN ? AND deleted_at IS NULL", orgName, identifiers).
+	err := r.db.Where("ou_id = ? AND identifier IN ? AND deleted_at IS NULL", ouID, identifiers).
 		Find(&evaluators).Error
 	return evaluators, err
 }

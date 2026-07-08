@@ -33,8 +33,9 @@ import (
 // Organization Operations (maps to OC namespaces)
 // -----------------------------------------------------------------------------
 
-func (c *openChoreoClient) GetOrganization(ctx context.Context, orgName string) (*models.OrganizationResponse, error) {
-	resp, err := c.ocClient.GetNamespaceWithResponse(ctx, orgName)
+func (c *openChoreoClient) GetOrganization(ctx context.Context, ouID string) (*models.OrganizationResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
+	resp, err := c.ocClient.GetNamespaceWithResponse(ctx, namespaceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organization: %w", err)
 	}
@@ -113,7 +114,8 @@ func (c *openChoreoClient) ListOrganizations(ctx context.Context) ([]*models.Org
 // Environment Operations
 // -----------------------------------------------------------------------------
 
-func (c *openChoreoClient) CreateEnvironment(ctx context.Context, namespaceName string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+func (c *openChoreoClient) CreateEnvironment(ctx context.Context, ouID string, req CreateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	annotations := map[string]string{
 		AnnotationKeyDisplayName: req.DisplayName,
 	}
@@ -173,7 +175,8 @@ func (c *openChoreoClient) CreateEnvironment(ctx context.Context, namespaceName 
 	return convertEnvironmentToResponse(resp.JSON201), nil
 }
 
-func (c *openChoreoClient) UpdateEnvironment(ctx context.Context, namespaceName, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+func (c *openChoreoClient) UpdateEnvironment(ctx context.Context, ouID, environmentName string, req UpdateEnvironmentRequest) (*models.EnvironmentResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	// First get the existing environment to preserve fields
 	getResp, err := c.ocClient.GetEnvironmentWithResponse(ctx, namespaceName, environmentName)
 	if err != nil {
@@ -250,7 +253,8 @@ func (c *openChoreoClient) UpdateEnvironment(ctx context.Context, namespaceName,
 	return convertEnvironmentToResponse(resp.JSON200), nil
 }
 
-func (c *openChoreoClient) GetEnvironment(ctx context.Context, namespaceName, environmentName string) (*models.EnvironmentResponse, error) {
+func (c *openChoreoClient) GetEnvironment(ctx context.Context, ouID, environmentName string) (*models.EnvironmentResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.GetEnvironmentWithResponse(ctx, namespaceName, environmentName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get environment: %w", err)
@@ -276,7 +280,8 @@ func (c *openChoreoClient) GetEnvironment(ctx context.Context, namespaceName, en
 // the named environment does not exist. OpenChoreo refuses deletion while bindings/deployments
 // still reference the environment, so callers should ensure local-side cleanup of agents
 // (configs, monitors, applications) happens before this call.
-func (c *openChoreoClient) DeleteEnvironment(ctx context.Context, namespaceName, environmentName string) error {
+func (c *openChoreoClient) DeleteEnvironment(ctx context.Context, ouID, environmentName string) error {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.DeleteEnvironmentWithResponse(ctx, namespaceName, environmentName)
 	if err != nil {
 		return fmt.Errorf("failed to delete environment: %w", err)
@@ -296,7 +301,8 @@ func (c *openChoreoClient) DeleteEnvironment(ctx context.Context, namespaceName,
 	})
 }
 
-func (c *openChoreoClient) ListEnvironments(ctx context.Context, namespaceName string) ([]*models.EnvironmentResponse, error) {
+func (c *openChoreoClient) ListEnvironments(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListEnvironmentsWithResponse(ctx, namespaceName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list environments: %w", err)
@@ -325,7 +331,8 @@ func (c *openChoreoClient) ListEnvironments(ctx context.Context, namespaceName s
 // Deployment Pipeline Operations
 // -----------------------------------------------------------------------------
 
-func (c *openChoreoClient) GetProjectDeploymentPipeline(ctx context.Context, namespaceName, projectName string) (*models.DeploymentPipelineResponse, error) {
+func (c *openChoreoClient) GetProjectDeploymentPipeline(ctx context.Context, ouID, projectName string) (*models.DeploymentPipelineResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	// First get the project to find the deployment pipeline reference.
 	// A 404 here means the *project* is missing, not the pipeline — surface that
 	// distinctly so callers don't mislabel a missing project as a missing pipeline.
@@ -372,7 +379,7 @@ func (c *openChoreoClient) GetProjectDeploymentPipeline(ctx context.Context, nam
 	return convertDeploymentPipeline(resp.JSON200, namespaceName), nil
 }
 
-func convertDeploymentPipeline(p *ocapi.DeploymentPipeline, orgName string) *models.DeploymentPipelineResponse {
+func convertDeploymentPipeline(p *ocapi.DeploymentPipeline, namespaceName string) *models.DeploymentPipelineResponse {
 	if p == nil {
 		return nil
 	}
@@ -408,7 +415,7 @@ func convertDeploymentPipeline(p *ocapi.DeploymentPipeline, orgName string) *mod
 		Name:           p.Metadata.Name,
 		DisplayName:    displayName,
 		Description:    description,
-		OrgName:        orgName,
+		OrgName:        namespaceName,
 		CreatedAt:      createdAt,
 		PromotionPaths: promotionPaths,
 	}
@@ -443,7 +450,8 @@ func toOCPromotionPaths(promotionPaths []models.PromotionPath) []ocapi.Promotion
 	return ocPaths
 }
 
-func (c *openChoreoClient) CreateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+func (c *openChoreoClient) CreateDeploymentPipeline(ctx context.Context, ouID, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	annotations := make(map[string]string)
 	if displayName != nil {
 		annotations[AnnotationKeyDisplayName] = *displayName
@@ -487,7 +495,8 @@ func (c *openChoreoClient) CreateDeploymentPipeline(ctx context.Context, namespa
 	return convertDeploymentPipeline(resp.JSON201, namespaceName), nil
 }
 
-func (c *openChoreoClient) UpdateDeploymentPipeline(ctx context.Context, namespaceName, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+func (c *openChoreoClient) UpdateDeploymentPipeline(ctx context.Context, ouID, pipelineName string, displayName *string, description *string, promotionPaths []models.PromotionPath) (*models.DeploymentPipelineResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	// Get existing pipeline to preserve metadata
 	getResp, err := c.ocClient.GetDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName)
 	if err != nil {
@@ -551,7 +560,8 @@ func (c *openChoreoClient) UpdateDeploymentPipeline(ctx context.Context, namespa
 	return convertDeploymentPipeline(resp.JSON200, namespaceName), nil
 }
 
-func (c *openChoreoClient) DeleteOrgDeploymentPipeline(ctx context.Context, namespaceName string, pipelineName string) error {
+func (c *openChoreoClient) DeleteOrgDeploymentPipeline(ctx context.Context, ouID string, pipelineName string) error {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.DeleteDeploymentPipelineWithResponse(ctx, namespaceName, pipelineName)
 	if err != nil {
 		return fmt.Errorf("failed to delete deployment pipeline: %w", err)
@@ -567,7 +577,8 @@ func (c *openChoreoClient) DeleteOrgDeploymentPipeline(ctx context.Context, name
 	return nil
 }
 
-func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, namespaceName string) ([]*models.DeploymentPipelineResponse, error) {
+func (c *openChoreoClient) ListDeploymentPipelines(ctx context.Context, ouID string) ([]*models.DeploymentPipelineResponse, error) {
+	namespaceName := c.NamespaceFor(ouID)
 	resp, err := c.ocClient.ListDeploymentPipelinesWithResponse(ctx, namespaceName, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list deployment pipelines: %w", err)

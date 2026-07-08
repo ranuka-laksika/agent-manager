@@ -114,7 +114,7 @@ func TestAgentKindService_GetKind(t *testing.T) {
 					ID:          kindID,
 					Name:        kindName,
 					DisplayName: "Chatbot",
-					OrgName:     org,
+					OUID:        org,
 					Versions: []models.AgentKindVersion{
 						{Version: "v2"}, // first entry => latest
 						{Version: "v1"},
@@ -204,7 +204,7 @@ func TestAgentKindService_AddVersion_Gates(t *testing.T) {
 	baseRepo := func() *repomocks.AgentKindRepositoryMock {
 		return &repomocks.AgentKindRepositoryMock{
 			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
-				return &models.AgentKind{ID: kindID, Name: kindName, OrgName: org}, nil
+				return &models.AgentKind{ID: kindID, Name: kindName, OUID: org}, nil
 			},
 		}
 	}

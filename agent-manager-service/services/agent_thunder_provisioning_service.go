@@ -64,7 +64,7 @@ type AgentThunderProvisioningService interface {
 	// best-effort in the background. Never blocks the caller. requestedBy is
 	// the calling user's own subject, captured for audit only (see
 	// models.AgentThunderClient.RequestedBy) — it is never sent to Thunder.
-	ProvisionForAgent(ctx context.Context, orgName, projectName, agentName string, ownership models.AgentProvisioningType, envNames []string, requestedBy string)
+	ProvisionForAgent(ctx context.Context, ouID, projectName, agentName string, ownership models.AgentProvisioningType, envNames []string, requestedBy string)
 
 	// AttemptProvision performs one provisioning attempt for a single binding.
 	// Exported so the retry reconciler can call it directly for PENDING rows
@@ -81,7 +81,7 @@ type AgentThunderProvisioningService interface {
 	// retrying anything not yet completed. If none exists, behaves exactly like
 	// ProvisionForAgent for this one environment: write-ahead PENDING, then a
 	// best-effort background attempt.
-	ProvisionForEnvironmentIfMissing(ctx context.Context, orgName, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string) (alreadyExisted bool, err error)
+	ProvisionForEnvironmentIfMissing(ctx context.Context, ouID, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string) (alreadyExisted bool, err error)
 
 	// GetCredentials returns the current client ID and secret for one binding
 	// WITHOUT destroying the stored copy — repeatable, unlike ClaimSecret's
@@ -91,24 +91,24 @@ type AgentThunderProvisioningService interface {
 	// utils.ErrAgentIdentityNotProvisioned if the binding doesn't exist or hasn't
 	// completed yet, utils.ErrAgentCredentialNotAvailable if it has completed but
 	// there is currently no stored secret (e.g. right after a revoke).
-	GetCredentials(ctx context.Context, orgName, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
+	GetCredentials(ctx context.Context, ouID, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
 
 	// RegenerateSecret rotates the secret for one binding and returns the
 	// binding's ownership type, client ID, and the new secret. The caller (the
 	// HTTP layer) decides whether to expose the secret in the response based on
 	// ownership — this service always returns the true new secret.
-	RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (ownership models.AgentProvisioningType, clientID string, newSecret string, err error)
+	RegenerateSecret(ctx context.Context, ouID, projectName, agentName, envName string) (ownership models.AgentProvisioningType, clientID string, newSecret string, err error)
 
 	// RevokeSecret rotates the secret in Thunder (invalidating the old one) and
 	// clears the stored copy, leaving no currently-valid credential until an
 	// explicit regenerate. It does not return the new secret value to anyone —
 	// only the (unchanged) client ID, so callers can build a response body.
-	RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (clientID string, err error)
+	RevokeSecret(ctx context.Context, ouID, projectName, agentName, envName string) (clientID string, err error)
 
 	// DeleteAllBindings deletes every Thunder identity, stored secret, and
 	// binding row for the agent, across all environments. Best-effort: logs
 	// failures and never blocks the caller.
-	DeleteAllBindings(ctx context.Context, orgName, projectName, agentName string)
+	DeleteAllBindings(ctx context.Context, ouID, projectName, agentName string)
 
 	// GetIdentityViews returns the current binding for every environment this
 	// agent has been provisioned in. A safe, side-effect-free read: it never
@@ -117,7 +117,7 @@ type AgentThunderProvisioningService interface {
 	// and ClaimSecret is the only way to actually retrieve and consume it.
 	// Callers needing project-level visibility filtering (Section 2.1 of the
 	// architecture doc) apply it on top of this org-wide result.
-	GetIdentityViews(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error)
+	GetIdentityViews(ctx context.Context, ouID, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error)
 
 	// ClaimSecret performs the one-time claim of an External agent's secret
 	// for one environment: the first successful call destroys the stored copy
@@ -126,7 +126,7 @@ type AgentThunderProvisioningService interface {
 	// operation that actually exposes an External agent's secret — GetIdentityViews
 	// never does. Internal agents are rejected with utils.ErrInvalidInput;
 	// they have no claim state, and use GetCredentials instead.
-	ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
+	ClaimSecret(ctx context.Context, ouID, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
 }
 
 type agentThunderProvisioningService struct {
@@ -194,17 +194,17 @@ func (m *keyedMutex) Lock(key string) func() {
 	}
 }
 
-func bindingLockKey(orgName, projectName, agentName, envName string) string {
-	return orgName + "|" + projectName + "|" + agentName + "|" + envName
+func bindingLockKey(ouID, projectName, agentName, envName string) string {
+	return ouID + "|" + projectName + "|" + agentName + "|" + envName
 }
 
 func (s *agentThunderProvisioningService) ProvisionForAgent(
-	ctx context.Context, orgName, projectName, agentName string, ownership models.AgentProvisioningType, envNames []string, requestedBy string,
+	ctx context.Context, ouID, projectName, agentName string, ownership models.AgentProvisioningType, envNames []string, requestedBy string,
 ) {
 	bindings := make([]models.AgentThunderClient, 0, len(envNames))
 	for _, env := range envNames {
 		b := models.AgentThunderClient{
-			OrgName:          orgName,
+			OUID:             ouID,
 			ProjectName:      projectName,
 			AgentName:        agentName,
 			EnvironmentName:  env,
@@ -242,9 +242,9 @@ func (s *agentThunderProvisioningService) attemptAll(ctx context.Context, bindin
 }
 
 func (s *agentThunderProvisioningService) ProvisionForEnvironmentIfMissing(
-	ctx context.Context, orgName, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string,
+	ctx context.Context, ouID, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string,
 ) (bool, error) {
-	_, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+	_, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err == nil {
 		return true, nil
 	}
@@ -252,7 +252,7 @@ func (s *agentThunderProvisioningService) ProvisionForEnvironmentIfMissing(
 		return false, fmt.Errorf("check existing agent thunder binding: %w", err)
 	}
 
-	s.ProvisionForAgent(ctx, orgName, projectName, agentName, ownership, []string{envName}, requestedBy)
+	s.ProvisionForAgent(ctx, ouID, projectName, agentName, ownership, []string{envName}, requestedBy)
 	return false, nil
 }
 
@@ -288,7 +288,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		return
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, binding.OrgName, binding.EnvironmentName)
+	thunderClient, err := s.envResolver.Resolve(ctx, binding.OUID, binding.EnvironmentName)
 	if err != nil {
 		s.recordFailure(ctx, binding, "", "", err)
 		return
@@ -305,7 +305,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 			return
 		}
 
-		appName := thundersvc.AgentThunderAppName(binding.OrgName, binding.EnvironmentName, binding.ProjectName, binding.AgentName)
+		appName := thundersvc.AgentThunderAppName(binding.OUID, binding.EnvironmentName, binding.ProjectName, binding.AgentName)
 		var created bool
 		thunderAgentID, clientID, clientSecret, created, err = thunderClient.CreateAgentIdentity(ctx, ouID, appName, "")
 		if err != nil {
@@ -340,7 +340,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 
 	secretRefPath := binding.SecretRefPath
 	if clientSecret != "" {
-		secretRefPath, err = s.secretStore.Store(ctx, binding.OrgName, binding.ProjectName, binding.EnvironmentName, binding.AgentName, clientID, clientSecret)
+		secretRefPath, err = s.secretStore.Store(ctx, binding.OUID, binding.ProjectName, binding.EnvironmentName, binding.AgentName, clientID, clientSecret)
 		if err != nil {
 			// The Thunder identity was already created successfully above —
 			// pass thunderAgentID/clientID through so recordFailure persists
@@ -399,10 +399,10 @@ func (s *agentThunderProvisioningService) recordFailure(ctx context.Context, bin
 	}
 }
 
-func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
-	defer s.bindingLocks.Lock(bindingLockKey(orgName, projectName, agentName, envName))()
+func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, ouID, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
+	defer s.bindingLocks.Lock(bindingLockKey(ouID, projectName, agentName, envName))()
 
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -413,7 +413,7 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, orgName, envName)
+	thunderClient, err := s.envResolver.Resolve(ctx, ouID, envName)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -423,7 +423,7 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 		return "", "", "", err
 	}
 
-	secretPath, err := s.secretStore.Store(ctx, orgName, projectName, envName, agentName, binding.ThunderClientID, newSecret)
+	secretPath, err := s.secretStore.Store(ctx, ouID, projectName, envName, agentName, binding.ThunderClientID, newSecret)
 	if err != nil {
 		return "", "", "", fmt.Errorf("store regenerated secret: %w", err)
 	}
@@ -441,8 +441,8 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 	return binding.ProvisioningType, binding.ThunderClientID, newSecret, nil
 }
 
-func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, ouID, projectName, agentName, envName string) (string, string, string, error) {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -466,10 +466,10 @@ func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, or
 	return binding.ThunderAgentID, clientID, clientSecret, nil
 }
 
-func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
-	defer s.bindingLocks.Lock(bindingLockKey(orgName, projectName, agentName, envName))()
+func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, ouID, projectName, agentName, envName string) (string, error) {
+	defer s.bindingLocks.Lock(bindingLockKey(ouID, projectName, agentName, envName))()
 
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -480,7 +480,7 @@ func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, orgN
 		return "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, orgName, envName)
+	thunderClient, err := s.envResolver.Resolve(ctx, ouID, envName)
 	if err != nil {
 		return "", err
 	}
@@ -505,8 +505,8 @@ func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, orgN
 	return binding.ThunderClientID, nil
 }
 
-func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
-	bindings, err := s.repo.FindByAgent(ctx, orgName, projectName, agentName)
+func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, ouID, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
+	bindings, err := s.repo.FindByAgent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		return nil, err
 	}
@@ -529,8 +529,8 @@ func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, 
 	return views, nil
 }
 
-func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, ouID, projectName, agentName, envName string) (string, string, string, error) {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
@@ -579,8 +579,8 @@ func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, orgNa
 	return binding.ThunderAgentID, binding.ThunderClientID, secret, nil
 }
 
-func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context, orgName, projectName, agentName string) {
-	bindings, err := s.repo.FindByAgent(ctx, orgName, projectName, agentName)
+func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context, ouID, projectName, agentName string) {
+	bindings, err := s.repo.FindByAgent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent thunder bindings for deletion", "agentName", agentName, "error", err)
 		return
@@ -607,7 +607,7 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		if b.ThunderAgentID == "" {
 			continue // never made it to Thunder — nothing to delete there
 		}
-		thunderClient, err := s.envResolver.Resolve(ctx, orgName, b.EnvironmentName)
+		thunderClient, err := s.envResolver.Resolve(ctx, ouID, b.EnvironmentName)
 		if err != nil {
 			s.logger.Warn("Env-thunder resolver error during agent binding cleanup", "agentName", agentName, "env", b.EnvironmentName, "error", err)
 			continue

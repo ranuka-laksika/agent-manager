@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -51,7 +52,7 @@ func NewAgentKindController(kindService services.AgentKindService) AgentKindCont
 func (c *agentKindController) ListKinds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	limitStr := r.URL.Query().Get("limit")
 	if limitStr == "" {
@@ -72,7 +73,7 @@ func (c *agentKindController) ListKinds(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := c.kindService.ListKinds(ctx, orgName, limit, offset)
+	result, err := c.kindService.ListKinds(ctx, ouID, limit, offset)
 	if err != nil {
 		log.Error("Failed to list agent kinds", "error", err)
 		handleCommonErrors(w, err, "Failed to list agent kinds")
@@ -84,10 +85,10 @@ func (c *agentKindController) ListKinds(w http.ResponseWriter, r *http.Request) 
 func (c *agentKindController) GetKind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
-	result, err := c.kindService.GetKind(ctx, orgName, kindName)
+	result, err := c.kindService.GetKind(ctx, ouID, kindName)
 	if err != nil {
 		log.Error("Failed to get agent kind", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent kind")
@@ -99,7 +100,7 @@ func (c *agentKindController) GetKind(w http.ResponseWriter, r *http.Request) {
 func (c *agentKindController) UpdateKind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
 	var payload spec.UpdateAgentKindRequest
@@ -108,7 +109,7 @@ func (c *agentKindController) UpdateKind(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := c.kindService.UpdateKind(ctx, orgName, kindName, &payload)
+	result, err := c.kindService.UpdateKind(ctx, ouID, kindName, &payload)
 	if err != nil {
 		log.Error("Failed to update agent kind", "error", err)
 		handleCommonErrors(w, err, "Failed to update agent kind")
@@ -120,10 +121,10 @@ func (c *agentKindController) UpdateKind(w http.ResponseWriter, r *http.Request)
 func (c *agentKindController) DeleteKind(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
-	if err := c.kindService.DeleteKind(ctx, orgName, kindName); err != nil {
+	if err := c.kindService.DeleteKind(ctx, ouID, kindName); err != nil {
 		log.Error("Failed to delete agent kind", "error", err)
 		handleCommonErrors(w, err, "Failed to delete agent kind")
 		return
@@ -134,7 +135,7 @@ func (c *agentKindController) DeleteKind(w http.ResponseWriter, r *http.Request)
 func (c *agentKindController) AddVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
 	var payload spec.AddAgentKindVersionRequest
@@ -147,7 +148,7 @@ func (c *agentKindController) AddVersion(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := c.kindService.AddVersion(ctx, orgName, kindName, &payload)
+	result, err := c.kindService.AddVersion(ctx, ouID, kindName, &payload)
 	if err != nil {
 		log.Error("Failed to add agent kind version", "error", err)
 		handleCommonErrors(w, err, "Failed to add agent kind version")
@@ -159,10 +160,10 @@ func (c *agentKindController) AddVersion(w http.ResponseWriter, r *http.Request)
 func (c *agentKindController) ListVersions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
-	result, err := c.kindService.ListVersions(ctx, orgName, kindName)
+	result, err := c.kindService.ListVersions(ctx, ouID, kindName)
 	if err != nil {
 		log.Error("Failed to list agent kind versions", "error", err)
 		handleCommonErrors(w, err, "Failed to list agent kind versions")
@@ -174,11 +175,11 @@ func (c *agentKindController) ListVersions(w http.ResponseWriter, r *http.Reques
 func (c *agentKindController) GetVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 	versionTag := r.PathValue(utils.PathParamVersionTag)
 
-	result, err := c.kindService.GetVersion(ctx, orgName, kindName, versionTag)
+	result, err := c.kindService.GetVersion(ctx, ouID, kindName, versionTag)
 	if err != nil {
 		log.Error("Failed to get agent kind version", "error", err)
 		handleCommonErrors(w, err, "Failed to get agent kind version")
@@ -190,11 +191,11 @@ func (c *agentKindController) GetVersion(w http.ResponseWriter, r *http.Request)
 func (c *agentKindController) DeleteVersion(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 	versionTag := r.PathValue(utils.PathParamVersionTag)
 
-	if err := c.kindService.DeleteVersion(ctx, orgName, kindName, versionTag); err != nil {
+	if err := c.kindService.DeleteVersion(ctx, ouID, kindName, versionTag); err != nil {
 		log.Error("Failed to delete agent kind version", "error", err)
 		handleCommonErrors(w, err, "Failed to delete agent kind version")
 		return
@@ -205,10 +206,10 @@ func (c *agentKindController) DeleteVersion(w http.ResponseWriter, r *http.Reque
 func (c *agentKindController) ListKindAgents(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	kindName := r.PathValue(utils.PathParamKindName)
 
-	result, err := c.kindService.ListKindAgents(ctx, orgName, kindName)
+	result, err := c.kindService.ListKindAgents(ctx, ouID, kindName)
 	if err != nil {
 		log.Error("Failed to list agents for kind", "error", err)
 		handleCommonErrors(w, err, "Failed to list agents for kind")

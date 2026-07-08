@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -72,7 +73,7 @@ func (c *environmentController) CreateEnvironment(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	var req spec.CreateEnvironmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -99,7 +100,7 @@ func (c *environmentController) CreateEnvironment(w http.ResponseWriter, r *http
 		internalReq.IsProduction = *req.IsProduction
 	}
 
-	env, err := c.environmentService.CreateEnvironment(ctx, orgName, internalReq)
+	env, err := c.environmentService.CreateEnvironment(ctx, ouID, internalReq)
 	if err != nil {
 		log.Error("CreateEnvironment: failed to create environment", "error", err)
 		handleEnvironmentErrors(w, err, "Failed to create environment")
@@ -115,10 +116,10 @@ func (c *environmentController) GetEnvironment(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envID := r.PathValue("envID")
 
-	env, err := c.environmentService.GetEnvironment(ctx, orgName, envID)
+	env, err := c.environmentService.GetEnvironment(ctx, ouID, envID)
 	if err != nil {
 		log.Error("GetEnvironment: failed to get environment", "error", err)
 		handleEnvironmentErrors(w, err, "Failed to get environment")
@@ -133,7 +134,7 @@ func (c *environmentController) ListEnvironments(w http.ResponseWriter, r *http.
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
 	// Parse pagination parameters
 	limit := getIntQueryParam(r, "limit", utils.DefaultLimit)
@@ -149,7 +150,7 @@ func (c *environmentController) ListEnvironments(w http.ResponseWriter, r *http.
 		return
 	}
 
-	envList, err := c.environmentService.ListEnvironments(ctx, orgName, int32(limit), int32(offset))
+	envList, err := c.environmentService.ListEnvironments(ctx, ouID, int32(limit), int32(offset))
 	if err != nil {
 		log.Error("ListEnvironments: failed to list environments", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list environments")
@@ -169,7 +170,7 @@ func (c *environmentController) UpdateEnvironment(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envID := r.PathValue("envID")
 
 	var req spec.UpdateEnvironmentRequest
@@ -192,7 +193,7 @@ func (c *environmentController) UpdateEnvironment(w http.ResponseWriter, r *http
 		Gateway:      fromSpecGatewaySpec(req.Gateway),
 	}
 
-	env, err := c.environmentService.UpdateEnvironment(ctx, orgName, envID, internalReq)
+	env, err := c.environmentService.UpdateEnvironment(ctx, ouID, envID, internalReq)
 	if err != nil {
 		log.Error("UpdateEnvironment: failed to update environment", "error", err)
 		handleEnvironmentErrors(w, err, "Failed to update environment")
@@ -207,10 +208,10 @@ func (c *environmentController) DeleteEnvironment(w http.ResponseWriter, r *http
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envID := r.PathValue("envID")
 
-	if err := c.environmentService.DeleteEnvironment(ctx, orgName, envID); err != nil {
+	if err := c.environmentService.DeleteEnvironment(ctx, ouID, envID); err != nil {
 		log.Error("DeleteEnvironment: failed to delete environment", "error", err)
 		handleEnvironmentErrors(w, err, "Failed to delete environment")
 		return
@@ -223,10 +224,10 @@ func (c *environmentController) GetEnvironmentGateways(w http.ResponseWriter, r 
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envID := r.PathValue("envID")
 
-	gatewayList, err := c.environmentService.GetEnvironmentGateways(ctx, orgName, envID)
+	gatewayList, err := c.environmentService.GetEnvironmentGateways(ctx, ouID, envID)
 	if err != nil {
 		log.Error("GetEnvironmentGateways: failed to get gateways", "error", err)
 		handleEnvironmentErrors(w, err, "Failed to get environment gateways")
@@ -259,18 +260,17 @@ func getIntQueryParam(r *http.Request, key string, defaultValue int) int {
 // convertToSpecEnvironmentResponse converts internal environment response to spec response
 func convertToSpecEnvironmentResponse(env *models.GatewayEnvironmentResponse) spec.GatewayEnvironmentResponse {
 	response := spec.GatewayEnvironmentResponse{
-		Id:               env.UUID,
-		OrganizationName: env.OrganizationName,
-		Name:             env.Name,
-		DisplayName:      env.DisplayName,
-		DataplaneRef:     env.DataplaneRef,
-		DnsPrefix:        env.DNSPrefix,
-		Description:      &env.Description,
-		IsolationTier:    env.IsolationTier,
-		IsProduction:     env.IsProduction,
-		Gateway:          toSpecGatewaySpec(env.Gateway),
-		CreatedAt:        env.CreatedAt,
-		UpdatedAt:        env.UpdatedAt,
+		Id:            env.UUID,
+		Name:          env.Name,
+		DisplayName:   env.DisplayName,
+		DataplaneRef:  env.DataplaneRef,
+		DnsPrefix:     env.DNSPrefix,
+		Description:   &env.Description,
+		IsolationTier: env.IsolationTier,
+		IsProduction:  env.IsProduction,
+		Gateway:       toSpecGatewaySpec(env.Gateway),
+		CreatedAt:     env.CreatedAt,
+		UpdatedAt:     env.UpdatedAt,
 	}
 
 	return response
@@ -362,14 +362,13 @@ func toSpecGatewayListenerSpec(l *models.GatewayListenerSpec) *spec.GatewayListe
 // convertToSpecGatewayResponse converts internal gateway response to spec response
 func convertToSpecGatewayResponse(gw *models.GatewayResponse) spec.GatewayResponse {
 	response := spec.GatewayResponse{
-		Uuid:             gw.UUID,
-		OrganizationName: gw.OrganizationName,
-		Name:             gw.Name,
-		DisplayName:      gw.DisplayName,
-		GatewayType:      spec.GatewayType(gw.GatewayType),
-		Vhost:            gw.VHost,
-		IsCritical:       gw.IsCritical,
-		Status:           spec.GatewayStatus(gw.Status),
+		Uuid:        gw.UUID,
+		Name:        gw.Name,
+		DisplayName: gw.DisplayName,
+		GatewayType: spec.GatewayType(gw.GatewayType),
+		Vhost:       gw.VHost,
+		IsCritical:  gw.IsCritical,
+		Status:      spec.GatewayStatus(gw.Status),
 	}
 
 	return response

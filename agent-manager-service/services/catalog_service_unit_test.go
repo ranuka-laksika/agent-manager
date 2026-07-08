@@ -59,7 +59,7 @@ func newCatalogService(repo *repomocks.CatalogRepositoryMock, oc *clientmocks.Op
 // -----------------------------------------------------------------------------
 
 func TestCatalogService_ListCatalog(t *testing.T) {
-	t.Run("rejects empty orgName", func(t *testing.T) {
+	t.Run("rejects empty ouID", func(t *testing.T) {
 		// Both repo methods left nil: hitting either would panic, proving the
 		// guard short-circuits before any data access.
 		svc := newCatalogService(&repomocks.CatalogRepositoryMock{}, &clientmocks.OpenChoreoClientMock{})

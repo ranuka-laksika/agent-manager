@@ -289,7 +289,7 @@ func (s *MCPProxyService) Get(ctx context.Context, orgUUID, proxyID string) (*mo
 				gatewayIDs, err := s.deploymentRepo.GetDeployedGatewaysByProvider(*envCfg.ArtifactUUID, orgUUID)
 				if err != nil {
 					s.logger.Warn("Failed to list deployed gateways for MCP proxy environment",
-						"proxyID", proxy.UUID, "environment", envID, "orgName", orgUUID, "error", err)
+						"proxyID", proxy.UUID, "environment", envID, "ouID", orgUUID, "error", err)
 				} else if len(gatewayIDs) > 0 {
 					status = models.MCPDeploymentStatusDeployed
 					for _, gatewayID := range gatewayIDs {

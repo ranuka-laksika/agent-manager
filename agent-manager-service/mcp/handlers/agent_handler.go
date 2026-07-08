@@ -35,19 +35,19 @@ func NewAgentHandler(agentSvc services.AgentManagerService, tokenSvc services.Ag
 	return &AgentHandler{agentSvc: agentSvc, tokenSvc: tokenSvc}
 }
 
-func (h *AgentHandler) ListAgents(ctx context.Context, orgName string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
-	return h.agentSvc.ListAgents(ctx, orgName, projName, limit, offset)
+func (h *AgentHandler) ListAgents(ctx context.Context, ouID string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
+	return h.agentSvc.ListAgents(ctx, ouID, projName, limit, offset)
 }
 
-func (h *AgentHandler) CreateAgent(ctx context.Context, orgName string, projectName string, req *spec.CreateAgentRequest) error {
-	return h.agentSvc.CreateAgent(ctx, orgName, projectName, req)
+func (h *AgentHandler) CreateAgent(ctx context.Context, ouID string, projectName string, req *spec.CreateAgentRequest) error {
+	return h.agentSvc.CreateAgent(ctx, ouID, projectName, req)
 }
 
-func (h *AgentHandler) GetAgent(ctx context.Context, orgName string, projectName string, agentName string) (*models.AgentResponse, error) {
-	return h.agentSvc.GetAgent(ctx, orgName, projectName, agentName)
+func (h *AgentHandler) GetAgent(ctx context.Context, ouID string, projectName string, agentName string) (*models.AgentResponse, error) {
+	return h.agentSvc.GetAgent(ctx, ouID, projectName, agentName)
 }
 
-func (h *AgentHandler) GenerateToken(ctx context.Context, orgName string, projectName string, agentName string, environment string, expiresIn string) (*spec.TokenResponse, error) {
+func (h *AgentHandler) GenerateToken(ctx context.Context, ouID string, projectName string, agentName string, environment string, expiresIn string) (*spec.TokenResponse, error) {
 	if h.tokenSvc == nil {
 		return nil, fmt.Errorf("token service not configured")
 	}
@@ -58,7 +58,7 @@ func (h *AgentHandler) GenerateToken(ctx context.Context, orgName string, projec
 	}
 
 	req := services.GenerateTokenRequest{
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		Environment: environment,

@@ -37,7 +37,7 @@ func projectToolSpecs() []toolTestSpec {
 			expectedMethod:      "ListProjects",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 			},
 		},
@@ -56,7 +56,7 @@ func projectToolSpecs() []toolTestSpec {
 			expectedMethod: "CreateProject",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				req, ok := args[1].(spec.CreateProjectRequest)
 				if !ok {

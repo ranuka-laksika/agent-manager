@@ -40,7 +40,7 @@ type GitCredentials struct {
 // GitCredentialsService provides methods to fetch git credentials from OpenBao
 type GitCredentialsService interface {
 	// GetGitCredentials fetches git credentials for a given secret reference
-	GetGitCredentials(ctx context.Context, orgName, secretRef string) (*GitCredentials, error)
+	GetGitCredentials(ctx context.Context, ouID, secretRef string) (*GitCredentials, error)
 }
 
 type gitCredentialsService struct {
@@ -80,13 +80,13 @@ func convertToKV2ReadPath(kvPath string) string {
 }
 
 // GetGitCredentials fetches git credentials for a given secret reference
-func (s *gitCredentialsService) GetGitCredentials(ctx context.Context, orgName, secretRef string) (*GitCredentials, error) {
+func (s *gitCredentialsService) GetGitCredentials(ctx context.Context, ouID, secretRef string) (*GitCredentials, error) {
 	if secretRef == "" {
 		return nil, fmt.Errorf("secretRef is required")
 	}
 
 	// Get the SecretReference from OpenChoreo to find the OpenBao path
-	secretRefInfo, err := s.ocClient.GetSecretReference(ctx, orgName, secretRef)
+	secretRefInfo, err := s.ocClient.GetSecretReference(ctx, ouID, secretRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret reference: %w", err)
 	}
