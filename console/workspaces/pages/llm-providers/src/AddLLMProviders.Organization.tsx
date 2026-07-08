@@ -20,11 +20,7 @@ import React, { useCallback, useMemo } from "react";
 import { PageLayout } from "@agent-management-platform/views";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { getErrorMessage } from "@agent-management-platform/shared-component";
-import {
-  absoluteRouteMap,
-  type CreateLLMProviderRequest,
-  type UpstreamAuthType,
-} from "@agent-management-platform/types";
+import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   useCreateLLMProvider,
   useListGateways,
@@ -34,15 +30,11 @@ import {
   AddLLMProviderForm,
   type AddLLMProviderFormValues,
   type GuardrailSelection,
-  type TemplateCard,
 } from "./subComponents/AddLLMProviderForm";
-
-const toProviderId = (name: string): string =>
-  name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+import {
+  buildCreateLLMProviderRequest,
+  mapLLMProviderTemplatesToCards,
+} from "./utils/llmProviderPayload";
 
 export const AddLLMProvidersOrganization: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
@@ -76,22 +68,8 @@ export const AddLLMProvidersOrganization: React.FC = () => {
     error: createError,
   } = useCreateLLMProvider();
 
-  const templates: TemplateCard[] = useMemo(
-    () =>
-      templatesData?.templates?.map((t) => ({
-        id: t.id,
-        handle: t.id,
-        name: t.name,
-        description: t.description,
-        image: t.metadata?.logoUrl,
-        hasTemplateUrl: Boolean(t.metadata?.endpointUrl),
-        endpointUrl: t.metadata?.endpointUrl,
-        hasTemplateAuthType: Boolean(t.metadata?.auth?.type),
-        hasTemplateAuthHeader: Boolean(t.metadata?.auth?.header),
-        authType: t.metadata?.auth?.type,
-        authHeader: t.metadata?.auth?.header,
-        authValuePrefix: t.metadata?.auth?.valuePrefix,
-      })) ?? [],
+  const templates = useMemo(
+    () => mapLLMProviderTemplatesToCards(templatesData?.templates),
     [templatesData],
   );
 
@@ -121,85 +99,7 @@ export const AddLLMProvidersOrganization: React.FC = () => {
         return;
       }
 
-      const normalizedDisplayName = values.displayName?.trim() || "";
-      const providerId =
-        toProviderId(normalizedDisplayName) || "llm-provider";
-      const selectedTemplate = templates.find(
-        (tpl) => tpl.id === values.templateId,
-      );
-      const templateHandle =
-        selectedTemplate?.handle || selectedTemplate?.name || values.templateId;
-
-      const policies =
-        guardrails.length > 0
-          ? guardrails.map((g) => ({
-              name: g.name,
-              version: g.version,
-              paths: [
-                {
-                  path: "/*",
-                  methods: ["*"],
-                  params: g.settings ?? {},
-                },
-              ],
-            }))
-          : undefined;
-
-      const contextPath =
-        values.context?.trim() || ``;
-
-      const authType: UpstreamAuthType =
-        (selectedTemplate?.authType as UpstreamAuthType) ?? "bearer";
-      const authHeader =
-        selectedTemplate?.authHeader ?? "Authorization";
-      const apiKey = values.apiKey?.trim() ?? "";
-      const authValue = apiKey
-        ? (selectedTemplate?.authValuePrefix
-            ? `${selectedTemplate.authValuePrefix}${apiKey}`
-            : authType === "bearer"
-              ? `Bearer ${apiKey}`
-              : apiKey)
-        : "";
-
-      const payload: CreateLLMProviderRequest = {
-        id: providerId,
-        name: normalizedDisplayName || providerId,
-        version: values.version.trim(),
-        context: contextPath,
-        template: templateHandle,
-        upstream: {
-          main: {
-            url: values.upstreamUrl?.trim(),
-            auth: values.apiKey
-              ? {
-                  type: authType,
-                  header: authHeader,
-                  value: authValue,
-                }
-              : undefined,
-          },
-        },
-        description: values.description?.trim() || undefined,
-        security: values.apiKey
-          ? {
-              enabled: true,
-              apiKey: {
-                enabled: true,
-                key: "X-API-Key",
-                in: "header",
-              },
-            }
-          : undefined,
-        policies,
-        gateways:
-          values.gatewayIds && values.gatewayIds.length > 0
-            ? values.gatewayIds
-            : undefined,
-        accessControl: {
-          exceptions: [],
-          mode: "allow_all",
-        },
-      };
+      const payload = buildCreateLLMProviderRequest(values, guardrails, templates);
 
       createLLMProvider(
         {
@@ -229,6 +129,7 @@ export const AddLLMProvidersOrganization: React.FC = () => {
       backLabel="Back to Providers List"
     >
       <AddLLMProviderForm
+        orgId={orgId ?? ""}
         templates={templates}
         isLoadingTemplates={isLoadingTemplates}
         missingParamsMessage={missingParamsMessage}

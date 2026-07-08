@@ -16,7 +16,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { APIKeyLocation, MCPProxy } from "@agent-management-platform/types";
+import type {
+  APIKeyLocation,
+  MCPEnvironmentConfig,
+  MCPProxy,
+} from "@agent-management-platform/types";
 import {
   Alert,
   Button,
@@ -37,24 +41,26 @@ const KEY_LOCATION_OPTIONS: { value: APIKeyLocation; label: string }[] = [
   { value: "query", label: "query" },
 ];
 
-function isAPIKeySecurityEnabled(proxy: MCPProxy): boolean {
-  const apiKeyConfig = proxy.security?.apiKey;
+function isAPIKeySecurityEnabled(config: MCPEnvironmentConfig): boolean {
+  const apiKeyConfig = config.security?.apiKey;
   return (
-    proxy.security?.enabled !== false &&
+    config.security?.enabled !== false &&
     !!apiKeyConfig &&
     apiKeyConfig.enabled !== false
   );
 }
 
 export type MCPProxySecurityTabProps = {
-  proxy: MCPProxy | null | undefined;
+  config: MCPEnvironmentConfig | undefined;
+  selectedEnvironmentId: string;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPProxy>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxySecurityTab({
-  proxy,
+  config,
+  selectedEnvironmentId,
   isLoading = false,
   onUpdate,
   isUpdating,
@@ -71,38 +77,38 @@ export function MCPProxySecurityTab({
   const [fieldErrors, setFieldErrors] = useState<{ keyValue?: string }>({});
 
   const isDirty = useMemo(() => {
-    if (!proxy) return false;
-    const hasApiKey = isAPIKeySecurityEnabled(proxy);
+    if (!config) return false;
+    const hasApiKey = isAPIKeySecurityEnabled(config);
     const savedType = hasApiKey ? "apiKey" : "";
-    const savedKey = proxy.security?.apiKey?.key ?? "";
-    const savedIn = (proxy.security?.apiKey?.in as APIKeyLocation) ?? "header";
+    const savedKey = config.security?.apiKey?.key ?? "";
+    const savedIn = (config.security?.apiKey?.in as APIKeyLocation) ?? "header";
     if (authenticationType !== savedType) return true;
     if (keyValue.trim() !== savedKey) return true;
     if (keyIn !== savedIn) return true;
     return false;
-  }, [proxy, authenticationType, keyValue, keyIn]);
+  }, [config, authenticationType, keyValue, keyIn]);
 
   useEffect(() => {
-    if (!proxy) return;
-    const hasApiKey = isAPIKeySecurityEnabled(proxy);
+    if (!config || !selectedEnvironmentId) return;
+    const hasApiKey = isAPIKeySecurityEnabled(config);
     setAuthenticationType(hasApiKey ? "apiKey" : "");
-    setKeyValue(proxy.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
-    setKeyIn((proxy.security?.apiKey?.in as APIKeyLocation) ?? "header");
+    setKeyValue(config.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
+    setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
-  }, [proxy]);
+  }, [config, selectedEnvironmentId]);
 
   const handleDiscard = useCallback(() => {
-    if (!proxy) return;
-    const hasApiKey = isAPIKeySecurityEnabled(proxy);
+    if (!config) return;
+    const hasApiKey = isAPIKeySecurityEnabled(config);
     setAuthenticationType(hasApiKey ? "apiKey" : "");
-    setKeyValue(proxy.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
-    setKeyIn((proxy.security?.apiKey?.in as APIKeyLocation) ?? "header");
+    setKeyValue(config.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
+    setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
     setStatus(null);
-  }, [proxy]);
+  }, [config]);
 
   const handleSave = useCallback(async () => {
-    if (!proxy) return;
+    if (!config) return;
 
     if (authenticationType === "apiKey" && keyValue.trim().length === 0) {
       const message = "API Key is required when using API Key authentication";
@@ -118,7 +124,7 @@ export function MCPProxySecurityTab({
     try {
       await onUpdate({
         security: {
-          enabled: proxy.security?.enabled ?? true,
+          enabled: config.security?.enabled ?? true,
           apiKey: {
             enabled: authenticationType === "apiKey",
             key: authenticationType === "apiKey" ? nextKey : "",
@@ -137,9 +143,9 @@ export function MCPProxySecurityTab({
         severity: "error",
       });
     }
-  }, [proxy, authenticationType, keyValue, keyIn, onUpdate]);
+  }, [config, authenticationType, keyValue, keyIn, onUpdate]);
 
-  const isDisabled = isLoading || !proxy;
+  const isDisabled = isLoading || !config;
 
   if (isLoading) {
     return (
@@ -157,7 +163,7 @@ export function MCPProxySecurityTab({
     );
   }
 
-  if (!proxy) {
+  if (!config) {
     return null;
   }
 
@@ -168,7 +174,7 @@ export function MCPProxySecurityTab({
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 5 }}>
           <FormControl fullWidth disabled={isDisabled}>
-            <FormLabel>Authentication</FormLabel>
+            <FormLabel>Authentication Method</FormLabel>
             <Select
               size="small"
               value={authenticationType || ""}
@@ -181,52 +187,54 @@ export function MCPProxySecurityTab({
             </Select>
           </FormControl>
         </Grid>
-
-        {authenticationType === "apiKey" && (
-          <>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <FormControl
-                fullWidth
-                disabled={isDisabled}
-                error={!!fieldErrors.keyValue}
-              >
-                <FormLabel>Header Key</FormLabel>
-                <TextField
-                  size="small"
-                  value={keyValue}
-                  onChange={(e) => {
-                    setKeyValue(e.target.value);
-                    if (fieldErrors.keyValue) setFieldErrors({});
-                  }}
-                  error={!!fieldErrors.keyValue}
-                  helperText={fieldErrors.keyValue}
-                  sx={{
-                    "& .MuiInputBase-input": {
-                      fontFamily: "monospace",
-                    },
-                  }}
-                />
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 12, md: 5 }}>
-              <FormControl fullWidth disabled={isDisabled}>
-                <FormLabel>Key Location</FormLabel>
-                <Select
-                  size="small"
-                  value={keyIn}
-                  onChange={(e) => setKeyIn(e.target.value as APIKeyLocation)}
-                >
-                  {KEY_LOCATION_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </>
-        )}
       </Grid>
+
+      {authenticationType === "apiKey" && (
+        <Grid container spacing={3}>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <FormControl fullWidth disabled={isDisabled}>
+              <FormLabel>Key Location</FormLabel>
+              <Select
+                size="small"
+                value={keyIn}
+                onChange={(e) => setKeyIn(e.target.value as APIKeyLocation)}
+              >
+                {KEY_LOCATION_OPTIONS.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+          <Grid size={{ xs: 12, md: 5 }}>
+            <FormControl
+              fullWidth
+              disabled={isDisabled}
+              error={!!fieldErrors.keyValue}
+            >
+              <FormLabel>
+                {keyIn === "query" ? "Query Param Key" : "Header Key"}
+              </FormLabel>
+              <TextField
+                size="small"
+                value={keyValue}
+                onChange={(e) => {
+                  setKeyValue(e.target.value);
+                  if (fieldErrors.keyValue) setFieldErrors({});
+                }}
+                error={!!fieldErrors.keyValue}
+                helperText={fieldErrors.keyValue}
+                sx={{
+                  "& .MuiInputBase-input": {
+                    fontFamily: "monospace",
+                  },
+                }}
+              />
+            </FormControl>
+          </Grid>
+        </Grid>
+      )}
 
       <Stack spacing={1.5} width="100%">
         <Collapse in={!!status && !isDirty} timeout={300}>

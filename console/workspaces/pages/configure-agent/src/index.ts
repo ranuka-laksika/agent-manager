@@ -30,5 +30,4 @@ export const metaData: PageMetadata = {
 export { ConfigureComponent } from './Configure.Component';
 export { AddLLMProviderComponent, ProviderDisplay } from './AddLLMProvider.Component';
 export { ViewLLMProviderComponent } from './ViewLLMProvider.Component';
-export { AddMCPServerComponent } from './AddMCPServer.Component';
 export { ViewMCPServerComponent } from './ViewMCPServer.Component';

@@ -42,7 +42,9 @@ import {
   FileMountEditor,
 } from "@agent-management-platform/views";
 import {
+  useAgentBuildOptions,
   usePromoteAgent,
+  useGetAgent,
   useGetAgentConfigurations,
   useGetDeploymentPipeline,
   useListAgentDeployments,
@@ -53,6 +55,11 @@ import type {
   EnvironmentVariable,
   FileMount,
 } from "@agent-management-platform/types";
+import {
+  compatibleInstrumentationVersions,
+  normalizePythonMinor,
+  pickInstrumentationVersion,
+} from "../utils/instrumentation";
 
 interface PromoteAgentDrawerProps {
   open: boolean;
@@ -68,6 +75,11 @@ interface PromoteFormState {
   useConfigFromSourceEnv: boolean;
   env: EnvironmentVariable[];
   files: FileMount[];
+  instrumentationVersion: string;
+  // True once the user explicitly picks a version. When false, the version is
+  // omitted from the promote request so the backend inherits the source env's
+  // pin rather than overwriting the target with a display-only seed.
+  instrumentationVersionDirty: boolean;
 }
 
 const DEFAULT_STATE: PromoteFormState = {
@@ -75,6 +87,8 @@ const DEFAULT_STATE: PromoteFormState = {
   useConfigFromSourceEnv: false,
   env: [],
   files: [],
+  instrumentationVersion: "",
+  instrumentationVersionDirty: false,
 };
 
 export function PromoteAgentDrawer({
@@ -92,6 +106,29 @@ export function PromoteAgentDrawer({
     projName: projectId,
   });
   const { data: environments } = useListEnvironments({ orgName: orgId });
+  const { data: agent } = useGetAgent({
+    orgName: orgId,
+    projName: projectId,
+    agentName: agentId,
+  });
+
+  // Instrumentation version selection is only relevant for Python buildpack agents.
+  const isPythonBuildpack =
+    agent?.build?.type === "buildpack" &&
+    "buildpack" in (agent.build ?? {}) &&
+    (agent.build as { buildpack?: { language?: string } }).buildpack?.language ===
+      "python";
+  const agentPythonVersion = normalizePythonMinor(
+    (agent?.build as { buildpack?: { languageVersion?: string } } | undefined)
+      ?.buildpack?.languageVersion,
+  );
+
+  // Server instrumentation catalog, shared with the create wizard.
+  const { data: buildOptions } = useAgentBuildOptions({ orgName: orgId });
+  const compatibleInstrumentation = useMemo(
+    () => compatibleInstrumentationVersions(buildOptions, agentPythonVersion),
+    [buildOptions, agentPythonVersion],
+  );
 
   const envDisplayName = useCallback(
     (name: string) =>
@@ -191,6 +228,31 @@ export function PromoteAgentDrawer({
     filledForTarget,
   ]);
 
+  // Seed the version selector for DISPLAY once both the agent (for its Python
+  // version) and the catalog have loaded. Re-seed whenever the current value is
+  // not in the compatible set (self-corrects a stale seed / a target-env change);
+  // a valid user selection is always in the set, so this never clobbers it.
+  useEffect(() => {
+    if (!open || !buildOptions || !agent) return;
+    setFormState((prev) => {
+      const inSet = compatibleInstrumentation.some(
+        (v) => v.version === prev.instrumentationVersion,
+      );
+      if (inSet) return prev;
+      const seed = pickInstrumentationVersion(
+        compatibleInstrumentation,
+        agent?.configurations?.instrumentationVersion,
+        buildOptions.instrumentation.defaultVersion,
+      );
+      return { ...prev, instrumentationVersion: seed };
+    });
+  }, [
+    open,
+    buildOptions,
+    agent,
+    compatibleInstrumentation,
+  ]);
+
   const handleToggleUseSourceConfig = useCallback((checked: boolean) => {
     setFormState((prev) => ({ ...prev, useConfigFromSourceEnv: checked }));
   }, []);
@@ -282,6 +344,18 @@ export function PromoteAgentDrawer({
                         : { key, value, isSensitive },
                     ),
                   files: formState.files,
+                  // Only send the version when the user explicitly picked a
+                  // compatible one; otherwise omit it so the backend inherits
+                  // the source env's pin rather than overwriting the target with
+                  // a display-only seed.
+                  ...(isPythonBuildpack &&
+                  formState.instrumentationVersionDirty &&
+                  formState.instrumentationVersion &&
+                  compatibleInstrumentation.some(
+                    (v) => v.version === formState.instrumentationVersion,
+                  )
+                    ? { instrumentationVersion: formState.instrumentationVersion }
+                    : {}),
                 }),
           },
         });
@@ -292,6 +366,8 @@ export function PromoteAgentDrawer({
     },
     [
       formState,
+      isPythonBuildpack,
+      compatibleInstrumentation,
       promoteAgent,
       orgId,
       projectId,
@@ -508,6 +584,65 @@ export function PromoteAgentDrawer({
                         </Stack>
                       </CardContent>
                     </Card>
+
+                    {isPythonBuildpack && (
+                      <Card variant="outlined">
+                        <CardContent>
+                          <Stack spacing={1.5}>
+                            <Typography variant="h6">
+                              AMP Instrumentation Version
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Pins the init-container image and the bundled
+                              OpenLLMetry SDK version for{" "}
+                              {envDisplayName(formState.targetEnvironment)}.
+                            </Typography>
+                            {compatibleInstrumentation.length === 0 &&
+                            buildOptions ? (
+                              <Alert severity="info">
+                                <Typography variant="body2">
+                                  No AMP-provided instrumentation is available for
+                                  Python {agentPythonVersion ?? "the selected version"}.
+                                  You can still promote and instrument manually.
+                                </Typography>
+                              </Alert>
+                            ) : (
+                              <FormControl sx={{ minWidth: 240 }}>
+                                <Select
+                                  size="small"
+                                  value={
+                                    compatibleInstrumentation.some(
+                                      (v) =>
+                                        v.version ===
+                                        formState.instrumentationVersion,
+                                    )
+                                      ? formState.instrumentationVersion
+                                      : ""
+                                  }
+                                  disabled={isPending || !buildOptions}
+                                  onChange={(e) =>
+                                    setFormState((prev) => ({
+                                      ...prev,
+                                      instrumentationVersion: e.target
+                                        .value as string,
+                                      instrumentationVersionDirty: true,
+                                    }))
+                                  }
+                                >
+                                  {compatibleInstrumentation.map((v) => (
+                                    <MenuItem key={v.version} value={v.version}>
+                                      {v.traceloopSdk
+                                        ? `${v.version} (OpenLLMetry v${v.traceloopSdk})`
+                                        : v.version}
+                                    </MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            )}
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    )}
                   </Stack>
                 </Collapse>
               </Form.Stack>

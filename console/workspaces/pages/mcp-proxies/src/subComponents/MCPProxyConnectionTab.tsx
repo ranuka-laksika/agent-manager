@@ -16,7 +16,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MCPProxy } from "@agent-management-platform/types";
+import type {
+  MCPEnvironmentConfig,
+  MCPProxy,
+} from "@agent-management-platform/types";
 import {
   Accordion,
   AccordionDetails,
@@ -42,20 +45,22 @@ import { validateEndpointUrl } from "@agent-management-platform/shared-component
 const MASKED_CREDENTIAL_VALUE = "••••••••••••";
 
 export type MCPProxyConnectionTabProps = {
-  proxy: MCPProxy | null | undefined;
+  config: MCPEnvironmentConfig | undefined;
+  selectedEnvironmentId: string;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPProxy>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxyConnectionTab({
-  proxy,
+  config,
+  selectedEnvironmentId,
   isLoading = false,
   onUpdate,
   isUpdating,
 }: MCPProxyConnectionTabProps) {
   const theme = useTheme();
-  const initializedProxyIdRef = useRef<string | null>(null);
+  const initializedEnvIdRef = useRef<string | null>(null);
 
   const [endpoint, setEndpoint] = useState("");
   const [authHeader, setAuthHeader] = useState("");
@@ -71,27 +76,26 @@ export function MCPProxyConnectionTab({
   // Header and credential are stored together, so an existing header implies a
   // stored credential (the value itself is never returned by the backend).
   const hasStoredCredential = useMemo(
-    () => Boolean(proxy?.upstream?.main?.auth?.header),
-    [proxy?.upstream?.main?.auth?.header],
+    () => Boolean(config?.upstream?.auth?.header),
+    [config?.upstream?.auth?.header],
   );
 
-  const resetFromProxy = useCallback(() => {
-    if (!proxy) return;
-    setEndpoint(proxy.upstream?.main?.url ?? "");
-    setAuthHeader(proxy.upstream?.main?.auth?.header ?? "");
-    const hasCredential = Boolean(proxy.upstream?.main?.auth?.header);
+  const resetFromConfig = useCallback(() => {
+    setEndpoint(config?.upstream?.url ?? "");
+    setAuthHeader(config?.upstream?.auth?.header ?? "");
+    const hasCredential = Boolean(config?.upstream?.auth?.header);
     setCredentialValue(hasCredential ? MASKED_CREDENTIAL_VALUE : "");
     setIsCredentialMasked(hasCredential);
     setShowCredential(false);
     setEndpointError(null);
-  }, [proxy]);
+  }, [config]);
 
   useEffect(() => {
-    if (!proxy) return;
-    if (initializedProxyIdRef.current === proxy.id) return;
-    initializedProxyIdRef.current = proxy.id;
-    resetFromProxy();
-  }, [proxy, resetFromProxy]);
+    if (!selectedEnvironmentId) return;
+    if (initializedEnvIdRef.current === selectedEnvironmentId) return;
+    initializedEnvIdRef.current = selectedEnvironmentId;
+    resetFromConfig();
+  }, [selectedEnvironmentId, resetFromConfig]);
 
   const validateEndpoint = useCallback((value: string): string | null => {
     const err = validateEndpointUrl(value, {
@@ -105,22 +109,22 @@ export function MCPProxyConnectionTab({
     !isCredentialMasked && credentialValue.trim() !== MASKED_CREDENTIAL_VALUE;
 
   const isDirty = useMemo(() => {
-    if (!proxy) return false;
-    const savedUrl = (proxy.upstream?.main?.url ?? "").trim();
-    const savedHeader = (proxy.upstream?.main?.auth?.header ?? "").trim();
+    if (!config) return false;
+    const savedUrl = (config.upstream?.url ?? "").trim();
+    const savedHeader = (config.upstream?.auth?.header ?? "").trim();
     if (endpoint.trim() !== savedUrl) return true;
     if (authHeader.trim() !== savedHeader) return true;
     if (credentialChanged) return true;
     return false;
-  }, [proxy, endpoint, authHeader, credentialChanged]);
+  }, [config, endpoint, authHeader, credentialChanged]);
 
   const handleDiscard = useCallback(() => {
-    resetFromProxy();
+    resetFromConfig();
     setStatus(null);
-  }, [resetFromProxy]);
+  }, [resetFromConfig]);
 
   const handleSave = useCallback(async () => {
-    if (!proxy) return;
+    if (!config) return;
 
     const endpointValidationError = validateEndpoint(endpoint);
     if (endpointValidationError) {
@@ -129,7 +133,7 @@ export function MCPProxyConnectionTab({
     }
 
     const trimmedHeader = authHeader.trim();
-    const existingAuth = proxy.upstream?.main?.auth;
+    const existingAuth = config.upstream?.auth;
     // Preserve any existing auth (including its type); only override header,
     // and value when the user typed a new one — otherwise the backend keeps
     // the stored credential.
@@ -145,12 +149,9 @@ export function MCPProxyConnectionTab({
     try {
       await onUpdate({
         upstream: {
-          ...proxy.upstream,
-          main: {
-            ...proxy.upstream?.main,
-            url: endpoint.trim(),
-            auth,
-          },
+          ...config.upstream,
+          url: endpoint.trim(),
+          auth,
         },
       });
       setStatus({
@@ -165,7 +166,7 @@ export function MCPProxyConnectionTab({
       setStatus({ message: "Failed to update connection.", severity: "error" });
     }
   }, [
-    proxy,
+    config,
     endpoint,
     authHeader,
     credentialChanged,
@@ -187,7 +188,7 @@ export function MCPProxyConnectionTab({
     );
   }
 
-  if (!proxy) {
+  if (!config) {
     return null;
   }
 
@@ -222,7 +223,7 @@ export function MCPProxyConnectionTab({
           <Accordion defaultExpanded disableGutters variant="outlined">
             <AccordionSummary expandIcon={<ChevronDown size={18} />}>
               <Stack direction="row" alignItems="center" spacing={1}>
-                <Typography variant="subtitle1" fontWeight={600}>
+                <Typography variant="subtitle2" fontWeight={600}>
                   Advanced Configurations
                 </Typography>
                 <Tooltip title="Configure an optional authentication header sent to the MCP proxy endpoint.">

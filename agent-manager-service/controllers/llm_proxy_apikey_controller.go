@@ -30,6 +30,7 @@ import (
 
 // LLMProxyAPIKeyController handles API key operations for LLM proxies
 type LLMProxyAPIKeyController interface {
+	ListAPIKeys(w http.ResponseWriter, r *http.Request)
 	CreateAPIKey(w http.ResponseWriter, r *http.Request)
 	RevokeAPIKey(w http.ResponseWriter, r *http.Request)
 	RotateAPIKey(w http.ResponseWriter, r *http.Request)
@@ -46,6 +47,38 @@ func NewLLMProxyAPIKeyController(
 	return &llmProxyAPIKeyController{
 		apiKeyService: apiKeyService,
 	}
+}
+
+// ListAPIKeys handles GET /api/v1/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys
+func (c *llmProxyAPIKeyController) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	projName := r.PathValue(utils.PathParamProjName)
+	proxyID := r.PathValue("id")
+
+	log.Info("ListLLMProxyAPIKeys: starting", "orgName", orgName, "projName", projName, "proxyID", proxyID)
+
+	response, err := c.apiKeyService.ListAPIKeys(ctx, orgName, projName, proxyID)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrProjectNotFound):
+			log.Warn("ListLLMProxyAPIKeys: project not found", "orgName", orgName, "projName", projName)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Project not found")
+			return
+		case errors.Is(err, utils.ErrLLMProxyNotFound):
+			log.Warn("ListLLMProxyAPIKeys: proxy not found", "orgName", orgName, "projName", projName, "proxyID", proxyID)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM proxy not found")
+			return
+		default:
+			log.Error("ListLLMProxyAPIKeys: failed to list API keys", "orgName", orgName, "proxyID", proxyID, "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list API keys")
+			return
+		}
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 // CreateAPIKey handles POST /api/v1/orgs/{orgName}/projects/{projName}/llm-proxies/{id}/api-keys

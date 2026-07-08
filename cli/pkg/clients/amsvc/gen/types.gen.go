@@ -14,7 +14,6 @@ import (
 
 // Defines values for APIKeySecurityIn.
 const (
-	APIKeySecurityInCookie APIKeySecurityIn = "cookie"
 	APIKeySecurityInHeader APIKeySecurityIn = "header"
 	APIKeySecurityInQuery  APIKeySecurityIn = "query"
 )
@@ -22,8 +21,6 @@ const (
 // Valid indicates whether the value is a known member of the APIKeySecurityIn enum.
 func (e APIKeySecurityIn) Valid() bool {
 	switch e {
-	case APIKeySecurityInCookie:
-		return true
 	case APIKeySecurityInHeader:
 		return true
 	case APIKeySecurityInQuery:
@@ -1098,6 +1095,27 @@ func (e GetAgentTraceScoresParamsSortOrder) Valid() bool {
 	}
 }
 
+// APIKeyInfo Masked, read-only view of a stored API key for listing. The plain key value is never returned; only the masked representation.
+type APIKeyInfo struct {
+	// CreatedAt Creation timestamp in RFC3339 format.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DisplayName Human-readable name shown in the console.
+	DisplayName string `json:"displayName"`
+
+	// ExpiresAt Optional expiration timestamp if set.
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+
+	// MaskedApiKey Masked representation of the API key (full value is shown only once at creation).
+	MaskedApiKey string `json:"maskedApiKey"`
+
+	// Name Unique name of the API key.
+	Name string `json:"name"`
+
+	// Status Current lifecycle status of the API key (e.g. active, revoked).
+	Status string `json:"status"`
+}
+
 // APIKeySecurity defines model for APIKeySecurity.
 type APIKeySecurity struct {
 	// Enabled Whether API key security is enabled
@@ -1919,8 +1937,8 @@ type CreateDeploymentPipelineRequest struct {
 
 // CreateEnvironmentRequest defines model for CreateEnvironmentRequest.
 type CreateEnvironmentRequest struct {
-	// DataplaneRef Reference to the dataplane
-	DataplaneRef string `json:"dataplaneRef"`
+	// DataplaneRef Optional reference to the dataplane. When omitted, the default dataplane is used.
+	DataplaneRef *string `json:"dataplaneRef,omitempty"`
 
 	// Description Optional description of the environment
 	Description *string `json:"description,omitempty"`
@@ -3318,6 +3336,12 @@ type LabelEvaluatorSummary struct {
 	SkippedCount int32 `json:"skippedCount"`
 }
 
+// ListAPIKeysResponse defines model for ListAPIKeysResponse.
+type ListAPIKeysResponse struct {
+	// Keys List of masked API keys.
+	Keys []APIKeyInfo `json:"keys"`
+}
+
 // ListBranchesRequest Request body for listing repository branches
 type ListBranchesRequest struct {
 	// IncludeDefault Whether to include default branch information in the response
@@ -3450,6 +3474,190 @@ type MCPConfigRequest struct {
 
 	// ProxyName Handle of an already-configured MCP proxy. Applied to the component's initial (lowest) environment.
 	ProxyName string `json:"proxyName"`
+}
+
+// MCPPolicy defines model for MCPPolicy.
+type MCPPolicy struct {
+	// DisplayName Human-readable policy name
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// ExecutionCondition Optional policy execution condition
+	ExecutionCondition *string `json:"executionCondition,omitempty"`
+
+	// Name Policy name
+	Name string `json:"name"`
+
+	// Params Policy-specific parameters
+	Params *map[string]interface{} `json:"params,omitempty"`
+
+	// Version Policy version
+	Version string `json:"version"`
+}
+
+// MCPPolicyAvailabilityResponse defines model for MCPPolicyAvailabilityResponse.
+type MCPPolicyAvailabilityResponse struct {
+	Count int32                    `json:"count"`
+	List  []MCPPolicyAvailableItem `json:"list"`
+}
+
+// MCPPolicyAvailableItem defines model for MCPPolicyAvailableItem.
+type MCPPolicyAvailableItem struct {
+	// Name Policy name
+	Name string `json:"name"`
+
+	// Version Policy version
+	Version string `json:"version"`
+}
+
+// MCPProxyCapabilities defines model for MCPProxyCapabilities.
+type MCPProxyCapabilities struct {
+	Prompts   *[]map[string]interface{} `json:"prompts,omitempty"`
+	Resources *[]map[string]interface{} `json:"resources,omitempty"`
+	Tools     *[]map[string]interface{} `json:"tools,omitempty"`
+}
+
+// MCPProxyListItem defines model for MCPProxyListItem.
+type MCPProxyListItem struct {
+	// Context MCP proxy context path
+	Context *string `json:"context,omitempty"`
+
+	// CreatedAt Timestamp when the resource was created
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// CreatedBy User who created the MCP proxy
+	CreatedBy *string `json:"createdBy,omitempty"`
+
+	// Description Description of the MCP proxy
+	Description *string `json:"description,omitempty"`
+
+	// Id Unique handle for the MCP proxy
+	Id *string `json:"id,omitempty"`
+
+	// McpSpecVersion MCP specification version implemented by the upstream server
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+
+	// Name Human-readable name of the MCP proxy
+	Name *string `json:"name,omitempty"`
+
+	// Status MCP proxy status
+	Status *string `json:"status,omitempty"`
+
+	// UpdatedAt Timestamp when the resource was last updated
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+
+	// Version Version of the MCP proxy
+	Version *string `json:"version,omitempty"`
+}
+
+// MCPProxyListResponse defines model for MCPProxyListResponse.
+type MCPProxyListResponse struct {
+	Count      int32              `json:"count"`
+	List       []MCPProxyListItem `json:"list"`
+	Pagination PaginationInfo     `json:"pagination"`
+}
+
+// MCPProxyRequest defines model for MCPProxyRequest.
+type MCPProxyRequest struct {
+	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
+
+	// Context MCP proxy context path
+	Context *string `json:"context,omitempty"`
+
+	// Description Description of the MCP proxy
+	Description *string `json:"description,omitempty"`
+
+	// Gateways Gateway UUIDs to deploy the MCP proxy to after creation
+	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
+
+	// Id Unique handle for the MCP proxy
+	Id string `json:"id"`
+
+	// InCatalog Whether the MCP proxy is available in the catalog
+	InCatalog *bool `json:"inCatalog,omitempty"`
+
+	// McpSpecVersion MCP specification version implemented by the upstream server
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+
+	// Name Human-readable name of the MCP proxy
+	Name string `json:"name"`
+
+	// Policies Policies applied to the MCP proxy
+	Policies *[]MCPPolicy    `json:"policies,omitempty"`
+	Security *SecurityConfig `json:"security,omitempty"`
+	Upstream UpstreamConfig  `json:"upstream"`
+
+	// Version Version of the MCP proxy
+	Version string `json:"version"`
+
+	// Vhost Virtual host assigned to the MCP proxy
+	Vhost *string `json:"vhost,omitempty"`
+}
+
+// MCPProxyResponse defines model for MCPProxyResponse.
+type MCPProxyResponse struct {
+	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
+
+	// Context MCP proxy context path
+	Context *string `json:"context,omitempty"`
+
+	// CreatedAt Timestamp when the resource was created
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+
+	// CreatedBy User who created the MCP proxy
+	CreatedBy *string `json:"createdBy,omitempty"`
+
+	// Description Description of the MCP proxy
+	Description *string `json:"description,omitempty"`
+
+	// Gateways Gateway UUIDs associated with the MCP proxy
+	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
+
+	// Id Unique handle for the MCP proxy
+	Id string `json:"id"`
+
+	// InCatalog Whether the MCP proxy is available in the catalog
+	InCatalog *bool `json:"inCatalog,omitempty"`
+
+	// McpSpecVersion MCP specification version implemented by the upstream server
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+
+	// Name Human-readable name of the MCP proxy
+	Name string `json:"name"`
+
+	// Policies Policies applied to the MCP proxy
+	Policies *[]MCPPolicy    `json:"policies,omitempty"`
+	Security *SecurityConfig `json:"security,omitempty"`
+
+	// UpdatedAt Timestamp when the resource was last updated
+	UpdatedAt *time.Time     `json:"updatedAt,omitempty"`
+	Upstream  UpstreamConfig `json:"upstream"`
+
+	// Version Version of the MCP proxy
+	Version string `json:"version"`
+
+	// Vhost Virtual host assigned to the MCP proxy
+	Vhost *string `json:"vhost,omitempty"`
+}
+
+// MCPServerInfoFetchRequest defines model for MCPServerInfoFetchRequest.
+type MCPServerInfoFetchRequest struct {
+	Auth *UpstreamAuth `json:"auth,omitempty"`
+
+	// ProxyId Existing MCP proxy ID to refresh from. Currently unsupported by the backend.
+	ProxyId *string `json:"proxyId,omitempty"`
+
+	// Url MCP server endpoint URL
+	Url *string `json:"url,omitempty"`
+}
+
+// MCPServerInfoFetchResponse defines model for MCPServerInfoFetchResponse.
+type MCPServerInfoFetchResponse struct {
+	Prompts   *[]map[string]interface{} `json:"prompts,omitempty"`
+	Resources *[]map[string]interface{} `json:"resources,omitempty"`
+
+	// ServerInfo MCP server metadata returned by initialize
+	ServerInfo *map[string]interface{}   `json:"serverInfo,omitempty"`
+	Tools      *[]map[string]interface{} `json:"tools,omitempty"`
 }
 
 // MetricDataPoint A single metric data point with timestamp and value
@@ -3821,6 +4029,15 @@ type PromoteAgentRequest struct {
 	// Files Environment-specific file mounts for the target environment.
 	Files *[]FileMount `json:"files,omitempty"`
 
+	// InstrumentationVersion AMP instrumentation version to pin for the agent in the target
+	// environment. Selects the pre-built init-container image
+	// (`amp-python-instrumentation-provider:<version>-python<X.Y>`) and the
+	// `traceloop-sdk` it bundles. Applies only to Python buildpack agents
+	// with auto-instrumentation enabled. Omit (or send null) to inherit the
+	// currently-pinned version. Must be one of the versions supported by
+	// the deployment; unknown or python-incompatible values are rejected.
+	InstrumentationVersion *string `json:"instrumentationVersion,omitempty"`
+
 	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
 	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
 
@@ -4179,7 +4396,7 @@ type SecuritySummary struct {
 	// ApiKeyEnabled Whether API key security is enabled
 	ApiKeyEnabled *bool `json:"apiKeyEnabled,omitempty"`
 
-	// ApiKeyIn Where the API key is located (header/query/cookie)
+	// ApiKeyIn Where the API key is located (header/query)
 	ApiKeyIn *string `json:"apiKeyIn,omitempty"`
 
 	// Enabled Whether security is enabled
@@ -4389,6 +4606,15 @@ type UpdateAgentDeploySettingsRequest struct {
 
 	// EnvironmentName Name of the environment whose deploy settings to update.
 	EnvironmentName string `json:"environmentName"`
+
+	// InstrumentationVersion AMP instrumentation version to pin for this agent. Selects the
+	// pre-built init-container image
+	// (`amp-python-instrumentation-provider:<version>-python<X.Y>`) and the
+	// `traceloop-sdk` it bundles. Applies only to Python buildpack agents
+	// with auto-instrumentation enabled. Omit (or send null) to keep the
+	// currently-pinned version. Must be one of the versions supported by
+	// the deployment; unknown or python-incompatible values are rejected.
+	InstrumentationVersion *string `json:"instrumentationVersion,omitempty"`
 
 	// OauthConfig OAuth security configuration for the agent endpoint. Callers authenticate with a standard Authorization Bearer token validated by the gateway.
 	OauthConfig *OAuthConfig `json:"oauthConfig,omitempty"`
@@ -4891,6 +5117,15 @@ type ListLLMProxiesByProviderParams struct {
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// ListMCPProxiesParams defines parameters for ListMCPProxies.
+type ListMCPProxiesParams struct {
+	// Limit Maximum number of results to return
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Offset Number of results to skip
+	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
 // ListProjectsParams defines parameters for ListProjects.
 type ListProjectsParams struct {
 	// Limit Maximum number of results to return
@@ -5166,6 +5401,15 @@ type UpdateLLMProviderCatalogStatusJSONRequestBody = UpdateLLMProviderCatalogReq
 // DeployLLMProviderJSONRequestBody defines body for DeployLLMProvider for application/json ContentType.
 type DeployLLMProviderJSONRequestBody = DeployAgentRequest
 
+// CreateMCPProxyJSONRequestBody defines body for CreateMCPProxy for application/json ContentType.
+type CreateMCPProxyJSONRequestBody = MCPProxyRequest
+
+// FetchMCPProxyServerInfoJSONRequestBody defines body for FetchMCPProxyServerInfo for application/json ContentType.
+type FetchMCPProxyServerInfoJSONRequestBody = MCPServerInfoFetchRequest
+
+// UpdateMCPProxyJSONRequestBody defines body for UpdateMCPProxy for application/json ContentType.
+type UpdateMCPProxyJSONRequestBody = MCPProxyRequest
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
@@ -5205,6 +5449,12 @@ type CreateAgentMCPConfigJSONRequestBody = CreateAgentModelConfigRequest
 // UpdateAgentMCPConfigJSONRequestBody defines body for UpdateAgentMCPConfig for application/json ContentType.
 type UpdateAgentMCPConfigJSONRequestBody = UpdateAgentModelConfigRequest
 
+// CreateMCPConfigAPIKeyJSONRequestBody defines body for CreateMCPConfigAPIKey for application/json ContentType.
+type CreateMCPConfigAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
+
+// RotateMCPConfigAPIKeyJSONRequestBody defines body for RotateMCPConfigAPIKey for application/json ContentType.
+type RotateMCPConfigAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
+
 // GetAgentMetricsJSONRequestBody defines body for GetAgentMetrics for application/json ContentType.
 type GetAgentMetricsJSONRequestBody = MetricsFilterRequest
 
@@ -5213,6 +5463,12 @@ type CreateAgentModelConfigJSONRequestBody = CreateAgentModelConfigRequest
 
 // UpdateAgentModelConfigJSONRequestBody defines body for UpdateAgentModelConfig for application/json ContentType.
 type UpdateAgentModelConfigJSONRequestBody = UpdateAgentModelConfigRequest
+
+// CreateLLMConfigAPIKeyJSONRequestBody defines body for CreateLLMConfigAPIKey for application/json ContentType.
+type CreateLLMConfigAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
+
+// RotateLLMConfigAPIKeyJSONRequestBody defines body for RotateLLMConfigAPIKey for application/json ContentType.
+type RotateLLMConfigAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
 
 // CreateMonitorJSONRequestBody defines body for CreateMonitor for application/json ContentType.
 type CreateMonitorJSONRequestBody = CreateMonitorRequest

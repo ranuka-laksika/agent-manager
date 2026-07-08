@@ -22,11 +22,18 @@ import (
 	"github.com/google/uuid"
 )
 
-// API key purpose distinguishes user-managed permanent keys from
-// short-lived test keys minted by the console for the Try-It flow.
+// API key purpose distinguishes the lifecycle/ownership of a stored key:
+//   - UserManaged: explicitly created and managed by users (name + expiry),
+//     e.g. the agent Credentials tab, LLM provider keys, and MCP proxy keys.
+//     These are surfaced in user-facing key listings.
+//   - Test: short-lived key minted by the console for the Try-It flow.
+//   - ConsoleManaged: created and used internally by the console and never
+//     shown to users, e.g. the keys an LLM proxy mints for itself and for its
+//     upstream LLM provider during provisioning.
 const (
-	APIKeyPurposePermanent = 1
-	APIKeyPurposeTest      = 2
+	APIKeyPurposeUserManaged    = 1
+	APIKeyPurposeTest           = 2
+	APIKeyPurposeConsoleManaged = 3
 	// APIKeyTestKeyName is the fixed name used for the single test
 	// key per agent. Subsequent IssueTestAPIKey calls rotate this row.
 	APIKeyTestKeyName = "console-test"
@@ -70,8 +77,9 @@ type CreateAPIKeyRequest struct {
 	// DisplayName is the display name of the API key
 	DisplayName string `json:"displayName,omitempty"`
 
-	// Purpose marks the key as permanent (user-managed) or test (console-managed Try-It key).
-	// Zero defaults to permanent so existing call sites are unaffected.
+	// Purpose marks the key as user-managed, a console Try-It test key, or
+	// console-managed. Zero defaults to user-managed so user-facing call sites
+	// (which never set it) are unaffected; console-internal sites set it explicitly.
 	Purpose int `json:"purpose,omitempty"`
 
 	// ExpiresAt is the optional expiration time in ISO 8601 format
@@ -86,6 +94,59 @@ type IssueTestAPIKeyResponse struct {
 	KeyID     string `json:"keyId,omitempty"`
 	APIKey    string `json:"apiKey,omitempty"`
 	ExpiresAt string `json:"expiresAt"`
+}
+
+// APIKeyInfo is a masked, read-only view of a stored API key for listing.
+// The plain key value is never returned; only the masked representation.
+type APIKeyInfo struct {
+	// Name is the unique name of the API key
+	Name string `json:"name"`
+
+	// DisplayName is the display name of the API key
+	DisplayName string `json:"displayName"`
+
+	// MaskedAPIKey is the masked representation of the API key for display
+	MaskedAPIKey string `json:"maskedApiKey"`
+
+	// Status indicates whether the key is active
+	Status string `json:"status"`
+
+	// CreatedAt is the creation timestamp in RFC3339 format
+	CreatedAt string `json:"createdAt"`
+
+	// ExpiresAt is the optional expiration time in RFC3339 format
+	ExpiresAt *string `json:"expiresAt,omitempty"`
+}
+
+// ListAPIKeysResponse represents the response when listing an artifact's API keys.
+type ListAPIKeysResponse struct {
+	// Keys is the list of masked API keys
+	Keys []APIKeyInfo `json:"keys"`
+}
+
+// ToUserManagedAPIKeyInfos maps stored API keys to their masked, user-facing
+// representation. Only user-managed keys are surfaced; console-managed and test
+// keys are hidden. Timestamps are formatted as RFC3339.
+func ToUserManagedAPIKeyInfos(stored []StoredAPIKey) []APIKeyInfo {
+	keys := make([]APIKeyInfo, 0, len(stored))
+	for _, k := range stored {
+		if k.Purpose != APIKeyPurposeUserManaged {
+			continue
+		}
+		info := APIKeyInfo{
+			Name:         k.Name,
+			DisplayName:  k.DisplayName,
+			MaskedAPIKey: k.MaskedAPIKey,
+			Status:       k.Status,
+			CreatedAt:    k.CreatedAt.Format(time.RFC3339),
+		}
+		if k.ExpiresAt != nil {
+			expiresAt := k.ExpiresAt.Format(time.RFC3339)
+			info.ExpiresAt = &expiresAt
+		}
+		keys = append(keys, info)
+	}
+	return keys
 }
 
 // CreateAPIKeyResponse represents the response after creating an API key

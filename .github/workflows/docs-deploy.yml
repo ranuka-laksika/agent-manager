@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'documentation/**'
+      - 'scripts/install-amctl.sh'
       - '.github/workflows/docs-deploy.yml'
 
 jobs:
@@ -35,6 +36,11 @@ jobs:
       - name: Build documentation
         working-directory: ./documentation
         run: npm run build
+
+      - name: Include amctl install script
+        run: |
+          sh -n scripts/install-amctl.sh
+          cp scripts/install-amctl.sh documentation/build/install.sh
 
       - name: Upload Build Artifact
         uses: actions/upload-pages-artifact@v3

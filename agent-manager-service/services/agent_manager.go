@@ -63,6 +63,12 @@ type AgentManagerService interface {
 	PromoteAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.PromoteAgentRequest) error
 	UpdateAgentDeploySettings(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentDeploySettingsRequest) error
 	UpdateAgentConfigurations(ctx context.Context, orgName string, projectName string, agentName string, req *spec.UpdateAgentConfigurationsRequest) error
+	GetAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error)
+	ClaimAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error)
+	RegenerateAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error)
+	RevokeAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error)
+	ProvisionAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (view models.AgentIdentityEnvironmentView, alreadyExisted bool, err error)
+	GetAgentCredentials(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error)
 }
 
 type agentManagerService struct {
@@ -78,6 +84,7 @@ type agentManagerService struct {
 	artifactRepo              repositories.ArtifactRepository
 	aiApplicationService      *AIApplicationService
 	gatewayRepo               repositories.GatewayRepository
+	agentThunderProvisioning  AgentThunderProvisioningService
 	logger                    *slog.Logger
 }
 
@@ -94,6 +101,7 @@ func NewAgentManagerService(
 	artifactRepo repositories.ArtifactRepository,
 	aiApplicationService *AIApplicationService,
 	gatewayRepo repositories.GatewayRepository,
+	agentThunderProvisioning AgentThunderProvisioningService,
 	logger *slog.Logger,
 ) AgentManagerService {
 	return &agentManagerService{
@@ -106,6 +114,7 @@ func NewAgentManagerService(
 		agentConfigRepo:           agentConfigRepo,
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
+		agentThunderProvisioning:  agentThunderProvisioning,
 		artifactRepo:              artifactRepo,
 		aiApplicationService:      aiApplicationService,
 		gatewayRepo:               gatewayRepo,
@@ -567,19 +576,8 @@ func buildpackPythonVersion(b *spec.Build) string {
 	if bp.LanguageVersion == nil {
 		return ""
 	}
-	raw := strings.TrimSpace(*bp.LanguageVersion)
-	if raw == "" {
-		return ""
-	}
-	parts := strings.SplitN(raw, ".", 3)
-	if len(parts) < 2 {
-		return ""
-	}
-	major, minor := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
-	if major == "" || minor == "" {
-		return ""
-	}
-	return major + "." + minor
+	// Single source of the major.minor normalisation rule.
+	return normalizePythonMinor(*bp.LanguageVersion)
 }
 
 // validateEffectivePythonInstrumentationPair resolves the instrumentation
@@ -617,6 +615,90 @@ func (s *agentManagerService) validatePythonInstrumentationPair(pythonVersion, i
 	}
 	return fmt.Errorf("%w: instrumentation %q does not support python %q (supports: %v)",
 		utils.ErrInvalidInput, instrumentationVersion, pythonVersion, entry.PythonVersions)
+}
+
+// normalizePythonMinor collapses a Python runtime version to its bare
+// major.minor form ("3.11.4" -> "3.11"), matching the shape stored in the
+// instrumentation catalog. Returns "" when the value has fewer than two
+// dot-separated components.
+func normalizePythonMinor(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+	parts := strings.SplitN(raw, ".", 3)
+	if len(parts) < 2 {
+		return ""
+	}
+	major, minor := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+	if major == "" || minor == "" {
+		return ""
+	}
+	return major + "." + minor
+}
+
+// resolveInstrumentationImageOverride resolves the per-environment
+// instrumentationImage override for a Python buildpack agent. Precedence for the
+// effective version is: request override -> existing pin. When a version is
+// requested it is validated against the deployment catalog and the agent's Python
+// version; the existing pin is trusted (it validated at creation) so a redeploy
+// never fails on a catalog that has since changed.
+//
+// It returns the version to persist (nil when nothing is pinned) and the image to
+// write into the OTEL trait's per-environment config ("" when no version is
+// pinned, meaning the Component's create-time default stands). For non-Python
+// agents it is a no-op that echoes the existing pin.
+func (s *agentManagerService) resolveInstrumentationImageOverride(isPythonBuildpack bool, languageVersion string, requested, existing *string) (*string, string, error) {
+	if !isPythonBuildpack {
+		return existing, "", nil
+	}
+	pyMinor := normalizePythonMinor(languageVersion)
+	version := existing
+	if requested != nil {
+		if err := s.validateInstrumentationVersion(*requested); err != nil {
+			return nil, "", err
+		}
+		if err := s.validateEffectivePythonInstrumentationPair(pyMinor, requested); err != nil {
+			return nil, "", err
+		}
+		version = requested
+	}
+	if version == nil || *version == "" {
+		return version, "", nil
+	}
+	// For an existing (not freshly-requested) pin, guard against a Python
+	// version that changed since the pin was set — build-parameters only
+	// re-validates the lowest environment's pin, so a non-lowest env's pin can
+	// silently become Python-incompatible. Building the image from an
+	// incompatible pair (or an unparseable Python version) would yield an
+	// init-container tag that doesn't exist (ImagePullBackOff). Keep the
+	// persisted pin but skip the per-env image override so the deployment falls
+	// back to the Component's image instead of a broken tag. A freshly-requested
+	// version is already strictly validated above.
+	if requested == nil {
+		if pyMinor == "" {
+			s.logger.Warn("Cannot determine Python version for instrumentation image; keeping component default",
+				"languageVersion", languageVersion, "instrumentationVersion", *version)
+			return version, "", nil
+		}
+		if err := s.validatePythonInstrumentationPair(pyMinor, *version); err != nil {
+			s.logger.Warn("Pinned instrumentation version is not compatible with the current Python version; keeping component default",
+				"languageVersion", languageVersion, "instrumentationVersion", *version, "error", err)
+			return version, "", nil
+		}
+	}
+	image, err := client.BuildInstrumentationImage(languageVersion, *version)
+	if err != nil {
+		if requested != nil {
+			return nil, "", fmt.Errorf("%w: %s", utils.ErrInvalidInput, err.Error())
+		}
+		// Defensive: the compatibility guard above should already have caught
+		// this; keep the Component default rather than failing a valid redeploy.
+		s.logger.Warn("Failed to build instrumentation image from existing pin; keeping component default",
+			"languageVersion", languageVersion, "instrumentationVersion", *version, "error", err)
+		return version, "", nil
+	}
+	return version, image, nil
 }
 
 // persistInstrumentationConfig saves the instrumentation config to the database.
@@ -1157,6 +1239,16 @@ func (s *agentManagerService) createComponentAgent(ctx context.Context, orgName,
 				kindEnvVars = createAgentReq.Configurations.Env
 				kindFileVars = createAgentReq.Configurations.Files
 			}
+			// Kind-sourced agents bypass the build/workflow system, so the LLM env vars
+			// written into the Component workflow params by createAgentLLMConfigs never reach
+			// the container. The Workload CR is authoritative for these agents, so resolve the
+			// system-managed LLM env vars from the persisted config and inject them here.
+			kindEnvVars, envErr := s.mergeKindWorkloadLLMEnvVars(ctx, req.Name, orgName, projectName, firstEnv, kindEnvVars, len(req.ModelConfig) > 0)
+			if envErr != nil {
+				s.logger.Error("Failed to resolve LLM env vars for kind-sourced agent workload", "agentName", req.Name, "environment", firstEnv, "error", envErr)
+				rollbackAgentCreate("LLM env var resolution failure")
+				return envErr
+			}
 			kindEndpoints := inputInterfaceToEndpoints(createAgentReq.InputInterface, req.Name)
 			if err := s.ocClient.CreateInternalAgentFromKindWorkload(ctx, orgName, projectName, req.Name, client.InternalAgentFromKindWorkloadRequest{
 				ImageID:   imageID,
@@ -1193,6 +1285,34 @@ func (s *agentManagerService) createComponentAgent(ctx context.Context, orgName,
 		s.persistInstrumentationConfig(ctx, orgName, projectName, req.Name, enableAutoInstrumentation, instrumentationVersion)
 	}
 
+	// AgentID provisioning: one Thunder identity per org-level environment (not
+	// just this project's deployment pipeline — see the AgentID architecture
+	// doc, which project-level UIs filter down to their own pipeline
+	// environments when displaying bindings). Runs after every step above has
+	// succeeded, so a Thunder hiccup never rolls back an otherwise-successful
+	// agent creation; the write-ahead + retry reconciler make it durable
+	// without needing a place in the rollback chain above.
+	if envs, envErr := s.ocClient.ListEnvironments(ctx, orgName); envErr != nil {
+		s.logger.Warn("Failed to list org environments for agent thunder provisioning", "agentName", req.Name, "error", envErr)
+	} else if len(envs) > 0 {
+		envNames := make([]string, 0, len(envs))
+		for _, e := range envs {
+			envNames = append(envNames, e.Name)
+		}
+		ownership := models.AgentProvisioningType(req.Provisioning.Type)
+		// requestedBy is captured now, synchronously, because the retry reconciler
+		// may not attempt some of these bindings until minutes or hours later, long
+		// after this request's own caller identity would otherwise be gone. It is
+		// AMS's own audit record only — never sent to Thunder (see
+		// models.AgentThunderClient.RequestedBy for why Thunder's own "owner" field
+		// cannot carry this).
+		var requestedBy string
+		if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+			requestedBy = callerClaims.Sub
+		}
+		s.agentThunderProvisioning.ProvisionForAgent(ctx, orgName, projectName, req.Name, ownership, envNames, requestedBy)
+	}
+
 	s.logger.Info("Agent created successfully", "agentName", req.Name, "orgName", orgName, "projectName", projectName, "provisioningType", req.Provisioning.Type)
 	return nil
 }
@@ -1221,6 +1341,25 @@ func (s *agentManagerService) triggerInitialBuild(ctx context.Context, orgName, 
 	}
 	s.logger.Info("Agent component created and build triggered successfully", "agentName", req.Name, "orgName", orgName, "projectName", projectName, "buildName", build.Name, "commitId", commitId)
 	return nil
+}
+
+// mergeKindWorkloadLLMEnvVars appends the system-managed LLM env vars (proxy URL + API key
+// secret ref) for the first environment onto the user-supplied env vars of a kind-sourced agent.
+// Kind-sourced agents create their Workload CR directly, bypassing the build/workflow system that
+// otherwise carries these vars into the container, so they must be injected into the Workload here.
+// When the agent has no LLM configuration, userEnvVars is returned unchanged.
+func (s *agentManagerService) mergeKindWorkloadLLMEnvVars(
+	ctx context.Context, agentName, orgName, projectName, firstEnv string, userEnvVars []client.EnvVar, hasModelConfig bool,
+) ([]client.EnvVar, error) {
+	if !hasModelConfig {
+		return userEnvVars, nil
+	}
+	llmEnvVars, err := s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, projectName, firstEnv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build system-managed LLM env vars: agentName %s, orgName %s, projectName %s, env %s, error: %w",
+			agentName, orgName, projectName, firstEnv, err)
+	}
+	return append(userEnvVars, llmEnvVars...), nil
 }
 
 func (s *agentManagerService) createAgentLLMConfigs(
@@ -2038,6 +2177,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 				s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 			}
 			s.deleteAgentAPIArtifact(ctx, orgName, projectName, agentName)
+			go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), orgName, projectName, agentName)
 			return nil
 		}
 		s.logger.Error("Failed to delete oc agent", "agentName", agentName, "error", err)
@@ -2049,6 +2189,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, orgName string, p
 	// is not cancelled when the HTTP handler returns, while still inheriting any values
 	// (trace IDs, logger) from the request context.
 	go s.deleteAgentLLMConfigurations(context.WithoutCancel(ctx), orgName, projectName, agentName, isExternalAgent)
+	go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), orgName, projectName, agentName)
 
 	// Cleanup agent configs from database
 	if configErr := s.agentConfigRepo.DeleteAllByAgent(orgName, projectName, agentName); configErr != nil {
@@ -2407,7 +2548,18 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, orgName string, p
 	policies := buildPolicies(apiCfg)
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, isBallerinaBuildpack, enableAutoInstrumentation)
+	// Re-apply the agent's pinned instrumentation version as a per-env image
+	// override so a redeploy doesn't drop a version set via deploy-settings/promote
+	// back to the Component default. Deploy carries no version override of its own.
+	deployLanguageVersion := ""
+	if agent.Build != nil && agent.Build.Buildpack != nil {
+		deployLanguageVersion = agent.Build.Buildpack.LanguageVersion
+	}
+	_, deployInstrumentationImage, err := s.resolveInstrumentationImageOverride(isPythonBuildpack, deployLanguageVersion, nil, existingInstrumentationVersion)
+	if err != nil {
+		return "", err
+	}
+	deployTraitEnvConfigs := buildTraitEnvConfigs(agentName, policies, "", isPythonBuildpack, isBallerinaBuildpack, enableAutoInstrumentation, deployInstrumentationImage)
 
 	// Replace Component CR workflow parameters with env vars and file mounts from deploy request
 	// This replaces all existing env vars to ensure the component CR matches the deploy request
@@ -2797,7 +2949,10 @@ func buildComponentTypeEnvConfigs(env *models.EnvironmentResponse) map[string]in
 // For Python buildpack agents, instrumentationEnabled is set per-environment on the OTEL trait;
 // for Ballerina buildpack agents it is set on the ballerina-config-file trait. In both cases the
 // 'where' clause on patches enables/disables instrumentation independently per environment.
-func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack, isBallerinaBuildpack bool, autoInstrumentation bool) map[string]interface{} {
+// instrumentationImage, when non-empty, pins the OTEL init-container image for this environment
+// (overriding the Component's create-time default) so the AMP instrumentation version can be
+// changed per-environment on deploy/promote without re-attaching the Component trait.
+func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, artifactID string, isPythonBuildpack, isBallerinaBuildpack bool, autoInstrumentation bool, instrumentationImage string) map[string]interface{} {
 	instanceName := func(traitType client.TraitType) string {
 		return agentName + "-" + string(traitType)
 	}
@@ -2811,9 +2966,13 @@ func buildTraitEnvConfigs(agentName string, policies []map[string]interface{}, a
 		instanceName(client.TraitAPIManagement): apiTraitCfg,
 	}
 	if isPythonBuildpack {
-		traitEnvConfigs[instanceName(client.TraitOTELInstrumentation)] = map[string]interface{}{
+		otelCfg := map[string]interface{}{
 			"instrumentationEnabled": autoInstrumentation,
 		}
+		if instrumentationImage != "" {
+			otelCfg["instrumentationImage"] = instrumentationImage
+		}
+		traitEnvConfigs[instanceName(client.TraitOTELInstrumentation)] = otelCfg
 	}
 	if isBallerinaBuildpack {
 		traitEnvConfigs[instanceName(client.TraitBallerinaOTELInstrumentation)] = map[string]interface{}{
@@ -2849,6 +3008,208 @@ func findLowestEnvironment(promotionPaths []models.PromotionPath) string {
 		}
 	}
 	return ""
+}
+
+// allPipelineEnvironmentNames returns every environment name that appears
+// anywhere in a project's deployment pipeline (source or target). Used to
+// filter an agent's org-wide AgentID bindings (Section 2.1 of the AgentID
+// architecture doc: AgentIDs are provisioned per org-level environment, but a
+// project only ever shows the bindings for environments in its own pipeline).
+func allPipelineEnvironmentNames(promotionPaths []models.PromotionPath) map[string]bool {
+	names := make(map[string]bool)
+	for _, path := range promotionPaths {
+		names[path.SourceEnvironmentRef] = true
+		for _, target := range path.TargetEnvironmentRefs {
+			names[target.Name] = true
+		}
+	}
+	return names
+}
+
+// GetAgentIdentity returns the agent's AgentID binding for every environment in
+// this project's deployment pipeline. AgentIDs are provisioned across every
+// org-level environment (Section 2.1 of the AgentID architecture doc), but a
+// project only ever shows the bindings for environments in its own pipeline —
+// this filters the org-wide result down to that visibility rule. A safe GET:
+// it never returns or destroys a secret. Use ClaimAgentIdentitySecret to
+// actually retrieve an unclaimed External agent's secret.
+func (s *agentManagerService) GetAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
+	views, err := s.agentThunderProvisioning.GetIdentityViews(ctx, orgName, projectName, agentName)
+	if err != nil {
+		return nil, err
+	}
+
+	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, orgName, projectName)
+	if err != nil {
+		s.logger.Error("Failed to get deployment pipeline for agent identity visibility", "projectName", projectName, "error", err)
+		return nil, translatePipelineError(err)
+	}
+	visible := allPipelineEnvironmentNames(pipeline.PromotionPaths)
+
+	filtered := make([]models.AgentIdentityEnvironmentView, 0, len(views))
+	for _, v := range views {
+		if visible[v.EnvironmentName] {
+			filtered = append(filtered, v)
+		}
+	}
+	return filtered, nil
+}
+
+// ClaimAgentIdentitySecret performs the one-time claim of an External agent's
+// secret for one environment. Unlike GetAgentIdentity (a safe GET), calling
+// this IS the claim — the first successful call returns and permanently
+// destroys the stored secret. Internal agents are rejected; use
+// GetAgentCredentials instead.
+func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error) {
+	agent, err := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to fetch agent for identity secret claim", "agentName", agentName, "error", err)
+		return nil, translateAgentError(err)
+	}
+	if agent.Provisioning.Type != string(utils.ExternalAgent) {
+		return nil, fmt.Errorf(
+			"%w: agent %q is an internal agent — internal agent credentials are retrieved via GetAgentCredentials, not claim",
+			utils.ErrInvalidInput, agentName,
+		)
+	}
+
+	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.ClaimSecret(ctx, orgName, projectName, agentName, environmentName)
+	if err != nil {
+		return nil, err
+	}
+	return &models.AgentClaimSecretResponse{
+		EnvironmentName: environmentName,
+		AgentID:         agentID,
+		ClientID:        clientID,
+		ClientSecret:    clientSecret,
+		Status:          models.AgentClaimSecretStatus,
+	}, nil
+}
+
+// RegenerateAgentIdentitySecret rotates the AgentID secret for one environment.
+// The new secret is returned in the response for BOTH Internal and External
+// agents — the caller already holds agent:update and just explicitly asked
+// for a new credential, so withholding the value it produced would only
+// force a second call (GetAgentCredentials) to see it. ProvisioningType is
+// included so the caller can tell which kind of agent this is without a
+// separate lookup.
+func (s *agentManagerService) RegenerateAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error) {
+	ownership, clientID, newSecret, err := s.agentThunderProvisioning.RegenerateSecret(ctx, orgName, projectName, agentName, environmentName)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.AgentRegenerateSecretResponse{
+		EnvironmentName:  environmentName,
+		ProvisioningType: ownership,
+		ClientID:         clientID,
+		ClientSecret:     newSecret,
+		Status:           models.AgentRegenerateSecretStatus,
+	}, nil
+}
+
+// RevokeAgentIdentitySecret invalidates the AgentID secret for one environment.
+// It never returns a usable secret — an explicit regenerate is required
+// afterward to restore access.
+func (s *agentManagerService) RevokeAgentIdentitySecret(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error) {
+	clientID, err := s.agentThunderProvisioning.RevokeSecret(ctx, orgName, projectName, agentName, environmentName)
+	if err != nil {
+		return models.AgentRevokeSecretResponse{}, err
+	}
+	return models.AgentRevokeSecretResponse{
+		EnvironmentName: environmentName,
+		ClientID:        clientID,
+		Status:          models.AgentRevokeSecretStatus,
+	}, nil
+}
+
+// ProvisionAgentIdentity provisions an AgentID for one environment that doesn't
+// have one yet — for an External agent that existed before this environment
+// did (or before it entered the project's pipeline). Internal agents get their
+// AgentIDs automatically during PromoteAgent instead; this endpoint rejects
+// them with a clear pointer to that flow rather than silently doing nothing
+// useful (an Internal agent's identity is meaningless without also deploying
+// its workload there, which only promotion does).
+//
+// alreadyExisted is true when a binding for this environment was already
+// present (any status) — the caller uses this to choose between 200 (nothing
+// new happened, here's the current state) and 202 (provisioning was just
+// kicked off in the background).
+func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentIdentityEnvironmentView, bool, error) {
+	agent, err := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to fetch agent for identity provisioning", "agentName", agentName, "error", err)
+		return models.AgentIdentityEnvironmentView{}, false, translateAgentError(err)
+	}
+	if agent.Provisioning.Type != string(utils.ExternalAgent) {
+		return models.AgentIdentityEnvironmentView{}, false, fmt.Errorf(
+			"%w: agent %q is an internal agent — internal agents receive an AgentID automatically when promoted to a new environment, not via this endpoint",
+			utils.ErrInvalidInput, agentName,
+		)
+	}
+
+	if _, err := s.ocClient.GetEnvironment(ctx, orgName, environmentName); err != nil {
+		s.logger.Error("Failed to fetch environment for identity provisioning", "environmentName", environmentName, "error", err)
+		return models.AgentIdentityEnvironmentView{}, false, translateEnvironmentError(err)
+	}
+
+	var requestedBy string
+	if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+		requestedBy = callerClaims.Sub
+	}
+
+	alreadyExisted, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
+		ctx, orgName, projectName, agentName, environmentName, models.AgentProvisioningTypeExternal, requestedBy,
+	)
+	if err != nil {
+		return models.AgentIdentityEnvironmentView{}, false, err
+	}
+
+	views, err := s.agentThunderProvisioning.GetIdentityViews(ctx, orgName, projectName, agentName)
+	if err != nil {
+		return models.AgentIdentityEnvironmentView{}, alreadyExisted, err
+	}
+	for _, v := range views {
+		if v.EnvironmentName == environmentName {
+			return v, alreadyExisted, nil
+		}
+	}
+	// Upsert inside ProvisionForEnvironmentIfMissing is synchronous, so the row
+	// (at minimum PENDING) must already be visible to this read.
+	return models.AgentIdentityEnvironmentView{}, alreadyExisted, fmt.Errorf("agent thunder binding for %s/%s vanished immediately after being provisioned", agentName, environmentName)
+}
+
+// GetAgentCredentials returns the current client ID and secret for an Internal
+// agent in one environment — repeatable, unlike the External agent's one-time
+// claim via ClaimAgentIdentitySecret. Internal agents have no other way to
+// retrieve their own credential today; Gateway Binding (automatically injecting
+// it into the workload) is a later phase. Rejects External agents outright —
+// they already have their own retrieval path (ClaimAgentIdentitySecret's
+// one-time claim, or RegenerateAgentIdentitySecret), and letting them use this
+// endpoint too would defeat the point of that one-time claim design.
+func (s *agentManagerService) GetAgentCredentials(ctx context.Context, orgName string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error) {
+	agent, err := s.ocClient.GetComponent(ctx, orgName, projectName, agentName)
+	if err != nil {
+		s.logger.Error("Failed to fetch agent for credential retrieval", "agentName", agentName, "error", err)
+		return models.AgentCredentialsResponse{}, translateAgentError(err)
+	}
+	if agent.Provisioning.Type != string(utils.InternalAgent) {
+		return models.AgentCredentialsResponse{}, fmt.Errorf(
+			"%w: agent %q is an external agent — external agent credentials are retrieved via DELETE .../identities/secrets (one-time claim) or POST .../identities (regenerate), not this endpoint",
+			utils.ErrInvalidInput, agentName,
+		)
+	}
+
+	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.GetCredentials(ctx, orgName, projectName, agentName, environmentName)
+	if err != nil {
+		return models.AgentCredentialsResponse{}, err
+	}
+	return models.AgentCredentialsResponse{
+		EnvironmentName: environmentName,
+		AgentID:         agentID,
+		ClientID:        clientID,
+		ClientSecret:    clientSecret,
+	}, nil
 }
 
 // PromoteAgent promotes an agent from one environment to another.
@@ -2895,14 +3256,14 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	// System-managed env vars (LLM provider URL/key, MCP, etc.) live per-environment in
 	// agent_env_config_variables_mapping. Promotion must enforce this invariant: if the
 	// SOURCE environment has any system-managed vars, the TARGET environment must also
-	// have its own — otherwise the agent would silently lose its LLM. This check runs in
+	// have its own — otherwise the agent would silently lose those managed bindings. This check runs in
 	// both useConfigFromSourceEnv branches so the rule is uniform.
-	srcSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.SourceEnvironment)
+	srcSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, projectName, req.SourceEnvironment)
 	if err != nil {
 		s.logger.Error("Failed to fetch source env system-managed env var keys for promotion", "agentName", agentName, "error", err)
 		return fmt.Errorf("failed to fetch source env system-managed keys: %w", err)
 	}
-	tgtSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, req.TargetEnvironment)
+	tgtSystemKeys, err := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agentName, orgName, projectName, req.TargetEnvironment)
 	if err != nil {
 		s.logger.Error("Failed to fetch target env system-managed env var keys for promotion", "agentName", agentName, "error", err)
 		return fmt.Errorf("failed to fetch target env system-managed keys: %w", err)
@@ -2917,7 +3278,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	// whether we're cloning from source or taking user overrides.
 	var tgtSystemEnvVars []client.EnvVar
 	if len(tgtSystemKeys) > 0 {
-		tgtSystemEnvVars, err = s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, req.TargetEnvironment)
+		tgtSystemEnvVars, err = s.agentConfigurationService.BuildSystemManagedEnvVarsFromConfig(ctx, agentName, orgName, projectName, req.TargetEnvironment)
 		if err != nil {
 			s.logger.Error("Failed to build target env system-managed vars from config", "agentName", agentName, "error", err)
 			return fmt.Errorf("failed to build target env system-managed vars: %w", err)
@@ -3026,7 +3387,24 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 		targetArtifactID := artifact.UUID.String()
 		promotePythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 		promoteBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
+		// Resolve the instrumentation version for the target env: request override
+		// (validated) -> source env's pinned version. The resolved version is
+		// persisted below and its image is written as a per-env override.
+		promoteLanguageVersion := ""
+		if agent.Build != nil && agent.Build.Buildpack != nil {
+			promoteLanguageVersion = agent.Build.Buildpack.LanguageVersion
+		}
+		var existingInstrumentationVersion *string
+		if existingConfig != nil {
+			existingInstrumentationVersion = existingConfig.InstrumentationVersion
+		}
+		resolvedInstrumentationVersion, promoteInstrumentationImage, resolveErr := s.resolveInstrumentationImageOverride(
+			promotePythonBuildpack, promoteLanguageVersion, req.InstrumentationVersion.Get(), existingInstrumentationVersion,
+		)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, promoteInstrumentationImage)
 		promoteCTConfigs = buildComponentTypeEnvConfigs(targetEnv)
 
 		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, orgName, projectName, agentName, req.TargetEnvironment)
@@ -3056,6 +3434,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 			AgentName:                 agentName,
 			EnvironmentName:           req.TargetEnvironment,
 			EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+			InstrumentationVersion:    resolvedInstrumentationVersion,
 			EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
 			CORSEnabled:               apiCfg.CORSEnabled,
 			CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
@@ -3078,6 +3457,21 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, orgName string, 
 	if err := s.ocClient.PromoteComponent(ctx, orgName, projectName, agentName, req.SourceEnvironment, req.TargetEnvironment, envOverrides, fileOverrides, traitEnvConfigs, promoteCTConfigs); err != nil {
 		s.logger.Error("Failed to promote agent", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment, "error", err)
 		return fmt.Errorf("failed to promote agent: %w", err)
+	}
+
+	// Ensure the target environment has an AgentID. The target may not have
+	// existed (or been in this project's pipeline) yet when the agent was first
+	// created, so its binding could be missing entirely — best-effort and
+	// non-blocking, exactly like provisioning at agent-creation time, so a
+	// Thunder hiccup never rolls back an otherwise-successful promotion.
+	var requestedBy string
+	if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+		requestedBy = callerClaims.Sub
+	}
+	if _, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
+		ctx, orgName, projectName, agentName, req.TargetEnvironment, models.AgentProvisioningTypeInternal, requestedBy,
+	); err != nil {
+		s.logger.Warn("Failed to ensure AgentID for promoted agent's target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
 	}
 
 	s.logger.Info("Agent promoted successfully", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)
@@ -3141,7 +3535,24 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 	}
 	isPythonBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguagePython)
 	isBallerinaBuildpack := agent.Build != nil && agent.Build.Buildpack != nil && agent.Build.Buildpack.Language == string(utils.LanguageBallerina)
-	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation)
+	// Resolve the instrumentation version: request override (validated) -> the
+	// env's currently-pinned version. The resolved version is persisted below and
+	// its image is written as a per-env override on the OTEL trait.
+	languageVersion := ""
+	if agent.Build != nil && agent.Build.Buildpack != nil {
+		languageVersion = agent.Build.Buildpack.LanguageVersion
+	}
+	var existingInstrumentationVersion *string
+	if existingConfig != nil {
+		existingInstrumentationVersion = existingConfig.InstrumentationVersion
+	}
+	resolvedInstrumentationVersion, instrumentationImage, resolveErr := s.resolveInstrumentationImageOverride(
+		isPythonBuildpack, languageVersion, req.InstrumentationVersion.Get(), existingInstrumentationVersion,
+	)
+	if resolveErr != nil {
+		return resolveErr
+	}
+	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, instrumentationImage)
 
 	// Apply to the release binding (atomic: trait configs + component-type configs + restartedAt in a single update).
 	settingsCTConfigs := buildComponentTypeEnvConfigs(targetEnv)
@@ -3157,6 +3568,7 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		AgentName:                 agentName,
 		EnvironmentName:           req.EnvironmentName,
 		EnableAutoInstrumentation: tracingCfg.EnableAutoInstrumentation,
+		InstrumentationVersion:    resolvedInstrumentationVersion,
 		EnableApiKeySecurity:      apiCfg.EnableApiKeySecurity,
 		CORSEnabled:               apiCfg.CORSEnabled,
 		CORSAllowOrigins:          apiCfg.CORSAllowOrigins,
@@ -3169,10 +3581,6 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, org
 		OAuthHeaderName:           apiCfg.OAuthHeaderName,
 		OAuthAuthHeaderPrefix:     apiCfg.OAuthAuthHeaderPrefix,
 		OAuthForwardToken:         apiCfg.OAuthForwardToken,
-	}
-	if existingConfig != nil {
-		// Preserve any pinned instrumentation_version that wasn't part of this request.
-		agentConfig.InstrumentationVersion = existingConfig.InstrumentationVersion
 	}
 	if upsertErr := s.agentConfigRepo.Upsert(agentConfig); upsertErr != nil {
 		s.logger.Error("Failed to persist agent deploy settings", "agentName", agentName, "environment", req.EnvironmentName, "error", upsertErr)
@@ -3891,7 +4299,7 @@ func (s *agentManagerService) GetAgentConfigurations(ctx context.Context, orgNam
 	// boot-time vars (OTEL, agent API key).
 	systemKeys := map[string]bool{}
 	if agent, agentErr := s.ocClient.GetComponent(ctx, orgName, projectName, agentName); agentErr == nil && agent != nil && agent.UUID != "" {
-		if dbKeys, listErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agent.Name, orgName, environment); listErr == nil {
+		if dbKeys, listErr := s.agentConfigurationService.ListSystemManagedEnvVarKeys(ctx, agent.Name, orgName, projectName, environment); listErr == nil {
 			systemKeys = dbKeys
 		} else {
 			s.logger.Warn("Failed to list system-managed env var keys; falling back to allowlist only", "agentName", agentName, "environment", environment, "error", listErr)

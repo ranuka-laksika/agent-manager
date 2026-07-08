@@ -43,7 +43,6 @@ import {
   type PolicySelection as GuardrailSelection,
 } from "@agent-management-platform/shared-component";
 import { useListGateways } from "@agent-management-platform/api-client";
-import { useParams } from "react-router-dom";
 
 export type TemplateCard = {
   id: string;
@@ -78,11 +77,32 @@ export type TemplateCard = {
 export type { AddLLMProviderFormValues, GuardrailSelection };
 
 interface AddLLMProviderFormProps {
+  orgId: string;
   templates: TemplateCard[];
   isLoadingTemplates: boolean;
   missingParamsMessage?: string | null;
   errorMessage?: string | null;
   isSubmitting?: boolean;
+  submitLabel?: string;
+  /**
+   * Set to false to collapse the Basic Details section to just the Name
+   * field, hiding Version / Description / Context path. Their defaults
+   * (version `v1.0`, auto-derived context, empty description) are still
+   * submitted, so the provider is created with no extra input.
+   */
+  showAdvancedBasicDetails?: boolean;
+  /**
+   * Set to false to hide the Guardrails section, e.g. when the form is
+   * embedded in a flow that only needs a minimal provider (name, template,
+   * connection config).
+   */
+  showGuardrails?: boolean;
+  /**
+   * Set to false to hide the multi-gateway Deployment Configuration section.
+   * A gateway is still required and auto-selected under the hood; only the
+   * UI is simplified based on how many active gateways the org has.
+   */
+  showGatewaySelector?: boolean;
   onCancel: () => void;
   onSubmit: (
     values: AddLLMProviderFormValues,
@@ -115,11 +135,16 @@ const INITIAL_FORM_VALUES: AddLLMProviderFormValues = {
 const TEMPLATE_GRID_COLUMNS = "repeat(auto-fill, minmax(min(100%, 240px), 1fr))";
 
 export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
+  orgId,
   templates,
   isLoadingTemplates,
   missingParamsMessage,
   errorMessage,
   isSubmitting,
+  submitLabel = "Add provider",
+  showAdvancedBasicDetails = true,
+  showGuardrails = true,
+  showGatewaySelector = true,
   onCancel,
   onSubmit,
 }) => {
@@ -144,7 +169,6 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
     [formData.templateId, templates],
   );
 
-  const { orgId } = useParams<{ orgId: string }>();
   const { data: gatewaysData, isLoading: isLoadingGateways } = useListGateways({
     orgName: orgId,
   });
@@ -340,49 +364,65 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
               </Form.ElementWrapper>
             </Box>
 
-            <Box sx={{ flex: 1 }}>
-              <Form.ElementWrapper label="Version" name="version">
-                <TextField
-                  id="version"
-                  fullWidth
-                  value={formData.version}
-                  onChange={(e) => handleFieldChange("version", e.target.value)}
-                  placeholder="v1.0"
-                  error={Boolean(errors.version)}
-                  helperText={errors.version}
-                />
-              </Form.ElementWrapper>
-            </Box>
+            {showAdvancedBasicDetails && (
+              <Box sx={{ flex: 1 }}>
+                <Form.ElementWrapper label="Version" name="version">
+                  <TextField
+                    id="version"
+                    fullWidth
+                    value={formData.version}
+                    onChange={(e) =>
+                      handleFieldChange("version", e.target.value)
+                    }
+                    placeholder="v1.0"
+                    error={Boolean(errors.version)}
+                    helperText={errors.version}
+                  />
+                </Form.ElementWrapper>
+              </Box>
+            )}
           </Form.Stack>
 
-          <Form.ElementWrapper label="Description (optional)" name="description">
-            <TextField
-              id="description"
-              fullWidth
-              multiline
-              rows={2}
-              value={formData.description ?? ""}
-              onChange={(e) => handleFieldChange("description", e.target.value)}
-              placeholder="Primary LLM provider for production"
-              error={Boolean(errors.description)}
-              helperText={errors.description}
-            />
-          </Form.ElementWrapper>
+          {showAdvancedBasicDetails && (
+            <>
+              <Form.ElementWrapper
+                label="Description (optional)"
+                name="description"
+              >
+                <TextField
+                  id="description"
+                  fullWidth
+                  multiline
+                  rows={2}
+                  value={formData.description ?? ""}
+                  onChange={(e) =>
+                    handleFieldChange("description", e.target.value)
+                  }
+                  placeholder="Primary LLM provider for production"
+                  error={Boolean(errors.description)}
+                  helperText={errors.description}
+                />
+              </Form.ElementWrapper>
 
-          <Form.ElementWrapper label="Context path (optional)" name="context">
-            <TextField
-              id="context"
-              fullWidth
-              value={formData.context ?? ""}
-              onChange={(e) => handleFieldChange("context", e.target.value)}
-              placeholder="/my-provider"
-              error={Boolean(errors.context)}
-              helperText={
-                errors.context ??
-                "API context path (must start with /, no trailing slash)"
-              }
-            />
-          </Form.ElementWrapper>
+              <Form.ElementWrapper
+                label="Context path (optional)"
+                name="context"
+              >
+                <TextField
+                  id="context"
+                  fullWidth
+                  value={formData.context ?? ""}
+                  onChange={(e) => handleFieldChange("context", e.target.value)}
+                  placeholder="/my-provider"
+                  error={Boolean(errors.context)}
+                  helperText={
+                    errors.context ??
+                    "API context path (must start with /, no trailing slash)"
+                  }
+                />
+              </Form.ElementWrapper>
+            </>
+          )}
         </Form.Stack>
       </Form.Section>
 
@@ -558,46 +598,89 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
         </Form.Section>
       </Collapse>
       {/* Guardrails */}
-      <Collapse in={!!formData.templateId}>
-        <PolicyListSection
-          title="Guardrails"
-          description="Add safety policies to enforce consistent protections."
-          addButtonLabel="Add Guardrail"
-          drawerAddTitle="Add Guardrail"
-          drawerEditTitle="Edit Guardrail"
-          drawerAddSubtitle="Choose a guardrail to configure advanced options."
-          drawerEditSubtitle="Update the guardrail configuration."
-          policyNoun="guardrail"
-          loadingLabel="Loading guardrails..."
-          searchPlaceholder="Search guardrails..."
-          catalogErrorLabel="Failed to load guardrails."
-          emptySearchTitle="No guardrails match your search"
-          emptyCatalogTitle="No guardrails available"
-          emptyCatalogDescription="No guardrail policies are available in the catalog."
-          policies={guardrails}
-          onAdd={handleAddGuardrail}
-          onEdit={handleEditGuardrail}
-          onRemove={handleRemoveGuardrail}
-        />
-      </Collapse>
-      <Collapse in={!!formData.templateId}>
-        <Form.Section>
-          <Form.Subheader>Deployment Configuration</Form.Subheader>
-          <Form.ElementWrapper label="Gateway" name="gatewayIds">
-            {isLoadingGateways ? (
-              <Skeleton variant="rounded" height={40} />
-            ) : (
+      {showGuardrails && (
+        <Collapse in={!!formData.templateId}>
+          <PolicyListSection
+            title="Guardrails"
+            description="Add safety policies to enforce consistent protections."
+            addButtonLabel="Add Guardrail"
+            drawerAddTitle="Add Guardrail"
+            drawerEditTitle="Edit Guardrail"
+            drawerAddSubtitle="Choose a guardrail to configure advanced options."
+            drawerEditSubtitle="Update the guardrail configuration."
+            policyNoun="guardrail"
+            loadingLabel="Loading guardrails..."
+            searchPlaceholder="Search guardrails..."
+            catalogErrorLabel="Failed to load guardrails."
+            emptySearchTitle="No guardrails match your search"
+            emptyCatalogTitle="No guardrails available"
+            emptyCatalogDescription="No guardrail policies are available in the catalog."
+            policies={guardrails}
+            onAdd={handleAddGuardrail}
+            onEdit={handleEditGuardrail}
+            onRemove={handleRemoveGuardrail}
+          />
+        </Collapse>
+      )}
+      {showGatewaySelector ? (
+        <Collapse in={!!formData.templateId}>
+          <Form.Section>
+            <Form.Subheader>Deployment Configuration</Form.Subheader>
+            <Form.ElementWrapper label="Gateway" name="gatewayIds">
+              {isLoadingGateways ? (
+                <Skeleton variant="rounded" height={40} />
+              ) : (
+                <Autocomplete
+                  multiple
+                  options={gateways}
+                  size="small"
+                  value={gateways.filter((g) =>
+                    (formData.gatewayIds ?? []).includes(g.uuid),
+                  )}
+                  onChange={(_, newValue) => {
+                    handleFieldChange(
+                      "gatewayIds",
+                      newValue.map((g) => g.uuid),
+                    );
+                  }}
+                  getOptionLabel={(option) =>
+                    option.displayName || option.name || option.uuid
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Select gateway(s)"
+                      error={Boolean(errors.gatewayIds)}
+                      helperText={errors.gatewayIds}
+                    />
+                  )}
+                />
+              )}
+            </Form.ElementWrapper>
+          </Form.Section>
+        </Collapse>
+      ) : (
+        <Collapse in={!!formData.templateId}>
+          {!isLoadingGateways && gateways.length === 0 && (
+            <Alert severity="warning">
+              No active gateway is configured for this organization. Ask an
+              admin to configure one before creating an LLM provider.
+            </Alert>
+          )}
+          {!isLoadingGateways && gateways.length > 1 && (
+            <Form.ElementWrapper label="Gateway" name="gatewayIds">
               <Autocomplete
-                multiple
                 options={gateways}
                 size="small"
-                value={gateways.filter((g) =>
-                  (formData.gatewayIds ?? []).includes(g.uuid),
-                )}
+                value={
+                  gateways.find((g) =>
+                    (formData.gatewayIds ?? []).includes(g.uuid),
+                  ) ?? null
+                }
                 onChange={(_, newValue) => {
                   handleFieldChange(
                     "gatewayIds",
-                    newValue.map((g) => g.uuid),
+                    newValue ? [newValue.uuid] : [],
                   );
                 }}
                 getOptionLabel={(option) =>
@@ -606,16 +689,16 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    placeholder="Select gateway(s)"
+                    placeholder="Select gateway"
                     error={Boolean(errors.gatewayIds)}
                     helperText={errors.gatewayIds}
                   />
                 )}
               />
-            )}
-          </Form.ElementWrapper>
-        </Form.Section>
-      </Collapse>
+            </Form.ElementWrapper>
+          )}
+        </Collapse>
+      )}
       {errorMessage && (
         <Alert severity="error">
           <Typography variant="body2">{errorMessage}</Typography>
@@ -651,7 +734,7 @@ export const AddLLMProviderForm: React.FC<AddLLMProviderFormProps> = ({
             formData.gatewayIds?.length === 0
           }
         >
-          {isSubmitting ? "Creating..." : "Add provider"}
+          {isSubmitting ? "Creating..." : submitLabel}
         </Button>
       </Box>
     </Form.Stack>

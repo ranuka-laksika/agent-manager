@@ -73,4 +73,48 @@ func RegisterAgentConfigRoutes(rr *middleware.RouteRegistrar, ctrl controllers.A
 		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}",
 		rbac.AgentDelete, ctrl.DeleteAgentMCPConfig,
 	)
+
+	// Per-config MCP API keys (external agents): the key an agent uses to call its
+	// MCP server through the gateway, scoped to a configuration + environment.
+	rr.HandleFuncWithValidationAndAuthz(
+		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys",
+		rbac.AgentRead, ctrl.ListMCPConfigAPIKeys,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys",
+		rbac.AgentAPIKeyManage, ctrl.CreateMCPConfigAPIKey,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
+		rbac.AgentAPIKeyManage, ctrl.RotateMCPConfigAPIKey,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}",
+		rbac.AgentAPIKeyManage, ctrl.RevokeMCPConfigAPIKey,
+	)
+
+	// Per-config LLM API keys (external agents): the key an agent uses to call its
+	// LLM provider through the gateway, scoped to a configuration + environment.
+	rr.HandleFuncWithValidationAndAuthz(
+		"GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys",
+		rbac.AgentRead, ctrl.ListLLMConfigAPIKeys,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys",
+		rbac.AgentAPIKeyManage, ctrl.CreateLLMConfigAPIKey,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
+		rbac.AgentAPIKeyManage, ctrl.RotateLLMConfigAPIKey,
+	)
+
+	rr.HandleFuncWithValidationAndAuthz(
+		"DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}/environments/{envName}/api-keys/{keyName}",
+		rbac.AgentAPIKeyManage, ctrl.RevokeLLMConfigAPIKey,
+	)
 }

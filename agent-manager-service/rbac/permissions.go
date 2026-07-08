@@ -108,6 +108,7 @@ const (
 	MCPServerDelete             Permission = "mcp-server:delete"
 	MCPServerConfigureGuardrail Permission = "mcp-server:configure-guardrail"
 	MCPServerConnect            Permission = "mcp-server:connect"
+	MCPServerAPIKeyManage       Permission = "mcp-server:api-key-manage"
 )
 
 // LLM proxy permissions

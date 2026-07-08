@@ -242,6 +242,33 @@ install_observability_extension() {
     return 0
 }
 
+# Provision a per-environment Thunder instance for the default environment.
+# Downloads add-environment-thunder.sh from the published release and runs it using
+# ITS OWN default chart: the upstream ThunderID release chart
+# (oci://ghcr.io/thunder-id/helm-charts/thunderid), NOT the agent-manager
+# wso2-amp-thunder-extension chart. CHART_VERSION is intentionally left unset here
+# so the script pins its own validated ThunderID version — the agent-manager
+# release VERSION has no bearing on which ThunderID release env-Thunder runs.
+install_default_env_thunder() {
+    local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
+    local tmp_script
+    tmp_script="$(mktemp)"
+
+    if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
+        echo "Failed to download add-environment-thunder.sh from ${script_url}"
+        rm -f "${tmp_script}"
+        return 1
+    fi
+
+    ENV_NAME=default \
+        DISPLAY_NAME="Default" \
+        ORG_NAME=default \
+        bash "${tmp_script}"
+    local status=$?
+    rm -f "${tmp_script}"
+    return $status
+}
+
 # Install AMP Thunder Extension
 install_amp_thunder_extension() {
     local chart_ref="oci://${HELM_CHART_REGISTRY}/${THUNDER_EXTENSION_CHART_NAME}"
@@ -356,7 +383,35 @@ install_gateway_extension() {
     local chart_version="${VERSION}"
     local release_name="api-platform-default-default"
     local gateway_vhost="http://default-default.gateway.localhost:19080"
+    local idp_skip_tls_verify="${IDP_SKIP_TLS_VERIFY:-true}"
 
+    # Wire the gateway's ThunderKeyManager to the default environment's own Thunder
+    # instance when it exists, mirroring the THUNDER_PROVISIONED logic in
+    # add-environment.sh. keymanagers[0] is re-asserted alongside keymanagers[1]
+    # because this install uses no -f values file, so --set on keymanagers[1]
+    # alone would otherwise drop keymanagers[0] (verified via `helm template`).
+    local thunder_args=()
+    local thunder_release
+    thunder_release="$(thunder_release_name default default)"
+    if helm status "${thunder_release}" --namespace "${thunder_release}" &>/dev/null; then
+        local thunder_issuer_url thunder_jwks
+        thunder_issuer_url="$(thunder_issuer default default)"
+        thunder_jwks="http://${thunder_release}-service.${thunder_release}.svc.cluster.local:8090/oauth2/jwks"
+        thunder_args=(
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].name=agent-manager-service"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].issuer=agent-manager-service"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.uri=http://amp-api.wso2-amp.svc.cluster.local:9000/auth/external/jwks.json"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[0].jwks.remote.skipTlsVerify=true"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].name=ThunderKeyManager"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${thunder_issuer_url}"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${thunder_jwks}"
+            --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${idp_skip_tls_verify}"
+            --set "bootstrap.identityProviders[0].name=${thunder_release}"
+            --set "bootstrap.identityProviders[0].issuer=${thunder_issuer_url}"
+            --set "bootstrap.identityProviders[0].jwksUri=${thunder_jwks}"
+            --set "bootstrap.identityProviders[0].skipTlsVerify=${idp_skip_tls_verify}"
+        )
+    fi
 
     # Install Helm chart
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${DATA_PLANE_NS}" "${TIMEOUT_AMP_INSTALL}" \
@@ -364,6 +419,7 @@ install_gateway_extension() {
         --set agentManager.orgName=default \
         --set gateway.environment=default \
         --set gateway.vhost="${gateway_vhost}" \
+        "${thunder_args[@]}" \
         "${GATEWAY_HELM_ARGS[@]}"; then
         return 1
     fi
@@ -378,3 +434,14 @@ install_gateway_extension() {
 
     return 0
 }
+
+# ---------------------------------------------------------------------------
+# Load the shared Thunder naming helpers (thunder_release_name/etc.) — the
+# single source of truth for this derivation, see
+# deployments/scripts/thunder-naming.sh. Always run from a checked-out repo
+# (install.sh sources this file locally, never via curl | bash), so a plain
+# relative source is enough — no network-fetch fallback needed here.
+# ---------------------------------------------------------------------------
+# shellcheck source=../scripts/thunder-naming.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../scripts/thunder-naming.sh"
+

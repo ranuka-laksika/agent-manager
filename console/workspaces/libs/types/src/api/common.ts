@@ -141,6 +141,23 @@ export interface ErrorResponse {
   additionalData?: Record<string, unknown>;
 }
 
+// Masked, read-only view of a stored API key returned when listing an
+// artifact's keys (LLM providers, MCP proxies). The plain key value is never
+// returned — only the masked representation.
+export interface APIKeyInfo {
+  name: string;
+  displayName?: string;
+  maskedApiKey: string;
+  status: string;
+  createdAt: string;
+  expiresAt?: string;
+}
+
+// Response shape for listing an artifact's API keys.
+export interface ListAPIKeysResponse {
+  keys: APIKeyInfo[];
+}
+
 
 // Common path parameters
 export interface OrgPathParams {

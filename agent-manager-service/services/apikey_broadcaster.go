@@ -17,6 +17,7 @@
 package services
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -41,8 +42,8 @@ type apiKeyBroadcaster struct {
 // broadcastCreate generates an API key, persists it, and broadcasts to all gateways for the org.
 // apiID is the identifier sent to the gateway (UUID for providers, handle for proxies).
 // artifactUUID is the DB UUID for persistence (always a valid UUID).
-func (b *apiKeyBroadcaster) broadcastCreate(orgID, apiID, artifactUUID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
-	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
+func (b *apiKeyBroadcaster) broadcastCreate(ctx context.Context, orgID, apiID, artifactUUID string, req *models.CreateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
+	gateways, err := b.gatewayRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gateways: %w", err)
 	}
@@ -79,7 +80,7 @@ func (b *apiKeyBroadcaster) broadcastCreateToGateways(gateways []*models.Gateway
 
 	purpose := req.Purpose
 	if purpose == 0 {
-		purpose = models.APIKeyPurposePermanent
+		purpose = models.APIKeyPurposeUserManaged
 	}
 
 	keyUUID := uuid.Must(uuid.NewV7())
@@ -151,19 +152,19 @@ func (b *apiKeyBroadcaster) broadcastCreateToGateways(gateways []*models.Gateway
 	}, nil
 }
 
-func (b *apiKeyBroadcaster) broadcastRevoke(orgID, apiID, artifactUUID, keyName string) error {
-	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
+func (b *apiKeyBroadcaster) broadcastRevoke(ctx context.Context, orgID, apiID, artifactUUID, keyName string) error {
+	gateways, err := b.gatewayRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
 		return fmt.Errorf("failed to get gateways: %w", err)
 	}
 	if len(gateways) == 0 {
 		return utils.ErrGatewayNotFound
 	}
-	return b.broadcastRevokeToGateways(gateways, apiID, artifactUUID, keyName)
+	return b.broadcastRevokeToGateways(ctx, gateways, apiID, artifactUUID, keyName)
 }
 
 // broadcastRevokeToGateways removes a key from the store and broadcasts revocation to the given gateways only.
-func (b *apiKeyBroadcaster) broadcastRevokeToGateways(gateways []*models.Gateway, apiID, artifactUUID, keyName string) error {
+func (b *apiKeyBroadcaster) broadcastRevokeToGateways(ctx context.Context, gateways []*models.Gateway, apiID, artifactUUID, keyName string) error {
 	// Remove from persistent store
 	if b.apiKeyRepo != nil {
 		if err := b.apiKeyRepo.Delete(artifactUUID, keyName); err != nil {
@@ -189,8 +190,53 @@ func (b *apiKeyBroadcaster) broadcastRevokeToGateways(gateways []*models.Gateway
 	return nil
 }
 
-func (b *apiKeyBroadcaster) broadcastRotate(orgID, apiID, artifactUUID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
-	gateways, err := b.gatewayRepo.GetByOrganizationID(orgID)
+// broadcastRevokeUserManaged deletes and broadcasts revocation for every user-managed
+// API key belonging to an artifact. Console-managed and test keys are left untouched —
+// they are owned by internal provisioning flows, not the user-facing security toggle.
+// apiID is the identifier sent to gateways (UUID for providers, handle/UUID for proxies);
+// artifactUUID is the DB UUID used for lookup and deletion. Best-effort across keys: errors
+// are collected and joined so one failure does not abort the rest. A missing gateway set is
+// not an error — the stored keys are still deleted.
+func (b *apiKeyBroadcaster) broadcastRevokeUserManaged(ctx context.Context, orgID, apiID, artifactUUID string) error {
+	if b.apiKeyRepo == nil {
+		return nil
+	}
+	stored, err := b.apiKeyRepo.ListByArtifact(ctx, artifactUUID)
+	if err != nil {
+		return fmt.Errorf("failed to list API keys: %w", err)
+	}
+	gateways, err := b.gatewayRepo.GetByOrganizationID(ctx, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to get gateways: %w", err)
+	}
+
+	var errs []error
+	for _, k := range stored {
+		if k.Purpose != models.APIKeyPurposeUserManaged {
+			continue
+		}
+		if err := b.broadcastRevokeToGateways(ctx, gateways, apiID, artifactUUID, k.Name); err != nil {
+			errs = append(errs, fmt.Errorf("key %s: %w", k.Name, err))
+		}
+	}
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+	return nil
+}
+
+// isAPIKeyAuthEnabled reports whether API key authentication is enabled in a security
+// config. Mirrors the persisted shape written by the LLM provider / MCP proxy Security
+// tabs (security.apiKey.enabled === true, security not globally disabled).
+func isAPIKeyAuthEnabled(sec *models.SecurityConfig) bool {
+	return sec != nil &&
+		(sec.Enabled == nil || *sec.Enabled) &&
+		sec.APIKey != nil &&
+		sec.APIKey.Enabled != nil && *sec.APIKey.Enabled
+}
+
+func (b *apiKeyBroadcaster) broadcastRotate(ctx context.Context, orgID, apiID, artifactUUID, keyName string, req *models.RotateAPIKeyRequest) (*models.CreateAPIKeyResponse, error) {
+	gateways, err := b.gatewayRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gateways: %w", err)
 	}

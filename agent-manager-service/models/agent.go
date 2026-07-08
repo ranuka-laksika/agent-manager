@@ -17,6 +17,7 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -81,10 +82,16 @@ var SystemIdentityProviderNames = map[string]bool{
 	"ThunderKeyManager": true,
 }
 
+// EnvThunderIdentityProviderPrefix matches the env-Thunder release names
+// (amp-thunder-<org>-<env>) that the gateway bootstrap job seeds as identity
+// providers. Must stay in sync with thundersvc.ThunderReleaseName and
+// deployments/scripts/thunder-naming.sh.
+const EnvThunderIdentityProviderPrefix = "amp-thunder-"
+
 // IsSystemIdentityProvider reports whether the given identity provider name is a
 // platform-seeded system provider.
 func IsSystemIdentityProvider(name string) bool {
-	return SystemIdentityProviderNames[name]
+	return SystemIdentityProviderNames[name] || strings.HasPrefix(name, EnvThunderIdentityProviderPrefix)
 }
 
 type OAuthConfig struct {

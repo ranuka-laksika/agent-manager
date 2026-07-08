@@ -19,32 +19,34 @@ import React from "react";
 import { ListingTable, Skeleton, Stack } from "@wso2/oxygen-ui";
 
 interface ListingSkeletonRowsProps {
-  /** Number of placeholder rows to render. Defaults to 5. */
   rows?: number;
+  columns?: 1 | 2;
 }
 
 /**
- * Placeholder rows for the identity listing tables (Users / Roles / Groups),
- * which all share a "two text columns + a right-aligned actions cell" shape.
+ * Placeholder rows for the identity listing tables (Users / Roles / Groups).
  * Rendered inside ListingTable.Body while the list query is loading so the
  * table chrome stays stable instead of flashing a centered spinner.
  */
 export const ListingSkeletonRows: React.FC<ListingSkeletonRowsProps> = ({
   rows = 5,
+  columns = 2,
 }) => (
   <>
     {Array.from({ length: rows }).map((_, index) => (
-      <ListingTable.Row key={index} variant="card">
+      <ListingTable.Row key={index} variant="table">
         <ListingTable.Cell>
           <Stack direction="row" alignItems="center" spacing={2}>
-            <Skeleton variant="circular" width={36} height={36} />
+            <Skeleton variant="circular" width={28} height={28} />
             <Skeleton variant="text" width="40%" />
           </Stack>
         </ListingTable.Cell>
-        <ListingTable.Cell>
-          <Skeleton variant="text" width="70%" />
-        </ListingTable.Cell>
-        <ListingTable.Cell align="right" width="120px" />
+        {columns > 1 && (
+          <ListingTable.Cell>
+            <Skeleton variant="text" width="70%" />
+          </ListingTable.Cell>
+        )}
+        <ListingTable.Cell align="center" width="80px" />
       </ListingTable.Row>
     ))}
   </>

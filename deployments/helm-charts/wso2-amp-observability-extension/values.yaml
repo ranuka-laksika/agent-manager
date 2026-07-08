@@ -24,9 +24,13 @@ tracesObserver:
     idpClientId: "amp-api-client"
     idpClientSecret: "amp-api-client-secret"
   # JWT authentication — must match the agent-manager keyManager config so the
-  # same user token issued by Thunder is accepted by both services.
+  # same user token issued by Thunder is accepted by both services. Thunder
+  # (v0.45+) stamps the resource-server identifier "amp" as the token audience,
+  # so query tokens (console/CLI) carry aud=amp. Publisher tokens (aud
+  # amp-publisher-*) are matched by a separate regex in the observer's auth
+  # middleware and do not need to be listed here.
   auth:
     isLocalDevEnv: false
     jwksUrl: "http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/jwks"
     issuer: "http://thunder.amp.localhost:8080"
-    audience: "amp-console-client,amp-api-client,amp-publisher-client"
+    audience: "amp"

@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -45,6 +47,14 @@ type AgentConfigurationController interface {
 	ListAgentMCPConfigs(w http.ResponseWriter, r *http.Request)
 	UpdateAgentMCPConfig(w http.ResponseWriter, r *http.Request)
 	DeleteAgentMCPConfig(w http.ResponseWriter, r *http.Request)
+	ListMCPConfigAPIKeys(w http.ResponseWriter, r *http.Request)
+	CreateMCPConfigAPIKey(w http.ResponseWriter, r *http.Request)
+	RotateMCPConfigAPIKey(w http.ResponseWriter, r *http.Request)
+	RevokeMCPConfigAPIKey(w http.ResponseWriter, r *http.Request)
+	ListLLMConfigAPIKeys(w http.ResponseWriter, r *http.Request)
+	CreateLLMConfigAPIKey(w http.ResponseWriter, r *http.Request)
+	RotateLLMConfigAPIKey(w http.ResponseWriter, r *http.Request)
+	RevokeLLMConfigAPIKey(w http.ResponseWriter, r *http.Request)
 }
 
 type agentConfigurationController struct {
@@ -848,4 +858,261 @@ func getStringPtr(s string) *string {
 		return nil
 	}
 	return &s
+}
+
+// configEnvAPIKeyParams collects the common path parameters for the per-config
+// MCP API key handlers and validates the config ID.
+func (c *agentConfigurationController) configEnvAPIKeyParams(w http.ResponseWriter, r *http.Request) (orgName, projName, agentName, envName string, configUUID uuid.UUID, ok bool) {
+	orgName = r.PathValue(utils.PathParamOrgName)
+	projName = r.PathValue(utils.PathParamProjName)
+	agentName = r.PathValue(utils.PathParamAgentName)
+	envName = r.PathValue("envName")
+	configID := r.PathValue(utils.PathParamConfigId)
+	parsed, err := uuid.Parse(configID)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid configuration ID")
+		return "", "", "", "", uuid.Nil, false
+	}
+	return orgName, projName, agentName, envName, parsed, true
+}
+
+// writeConfigAPIKeyError maps the shared per-config API key service errors to HTTP
+// responses for the create/rotate/revoke handlers. operation labels the log line.
+func (c *agentConfigurationController) writeConfigAPIKeyError(w http.ResponseWriter, log *slog.Logger, operation string, err error) {
+	switch {
+	case errors.Is(err, utils.ErrAgentConfigNotFound):
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+	case errors.Is(err, utils.ErrAgentConfigNotExternal):
+		utils.WriteErrorResponse(w, http.StatusForbidden, "API key management is only available for external agents")
+	case errors.Is(err, utils.ErrGatewayNotFound):
+		utils.WriteErrorResponse(w, http.StatusServiceUnavailable, "No gateway connections available")
+	default:
+		log.Error(operation+": failed", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to manage API key")
+	}
+}
+
+// apiKeyCreateNameDisplayName unwraps the optional name/displayName fields of a
+// create-key request and enforces that at least one is provided. On failure it
+// writes a 400 and returns ok=false.
+func apiKeyCreateNameDisplayName(w http.ResponseWriter, name, displayName *string) (string, string, bool) {
+	n := ""
+	if name != nil {
+		n = *name
+	}
+	dn := ""
+	if displayName != nil {
+		dn = *displayName
+	}
+	if n == "" && dn == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "At least one of 'name' or 'displayName' must be provided")
+		return "", "", false
+	}
+	return n, dn, true
+}
+
+// ListMCPConfigAPIKeys handles GET .../mcp-configs/{configId}/environments/{envName}/api-keys
+func (c *agentConfigurationController) ListMCPConfigAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+
+	response, err := c.agentConfigService.ListMCPConfigAPIKeys(ctx, orgName, projName, agentName, configUUID, envName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("ListMCPConfigAPIKeys: failed to list API keys", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list API keys")
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
+}
+
+// CreateMCPConfigAPIKey handles POST .../mcp-configs/{configId}/environments/{envName}/api-keys
+func (c *agentConfigurationController) CreateMCPConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+
+	var specReq spec.CreateLLMAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	name, displayName, ok := apiKeyCreateNameDisplayName(w, specReq.Name, specReq.DisplayName)
+	if !ok {
+		return
+	}
+
+	response, err := c.agentConfigService.CreateMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
+		Name:        name,
+		DisplayName: displayName,
+		ExpiresAt:   specReq.ExpiresAt,
+	})
+	if err != nil {
+		c.writeConfigAPIKeyError(w, log, "CreateMCPConfigAPIKey", err)
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusCreated, response)
+}
+
+// RotateMCPConfigAPIKey handles PUT .../mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}
+func (c *agentConfigurationController) RotateMCPConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+	keyName := r.PathValue("keyName")
+
+	var specReq spec.RotateLLMAPIKeyRequest
+	// Body is optional for rotation: an empty body (io.EOF) is allowed, but any
+	// other decode error indicates a malformed request and must be rejected.
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil && !errors.Is(err, io.EOF) {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	response, err := c.agentConfigService.RotateMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
+		DisplayName: specReq.DisplayName,
+		ExpiresAt:   specReq.ExpiresAt,
+	})
+	if err != nil {
+		c.writeConfigAPIKeyError(w, log, "RotateMCPConfigAPIKey", err)
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
+}
+
+// RevokeMCPConfigAPIKey handles DELETE .../mcp-configs/{configId}/environments/{envName}/api-keys/{keyName}
+func (c *agentConfigurationController) RevokeMCPConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+	keyName := r.PathValue("keyName")
+
+	if err := c.agentConfigService.RevokeMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
+		c.writeConfigAPIKeyError(w, log, "RevokeMCPConfigAPIKey", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListLLMConfigAPIKeys handles GET .../model-configs/{configId}/environments/{envName}/api-keys
+func (c *agentConfigurationController) ListLLMConfigAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+
+	response, err := c.agentConfigService.ListLLMConfigAPIKeys(ctx, orgName, projName, agentName, configUUID, envName)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentConfigNotFound) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
+			return
+		}
+		log.Error("ListLLMConfigAPIKeys: failed to list API keys", "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list API keys")
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
+}
+
+// CreateLLMConfigAPIKey handles POST .../model-configs/{configId}/environments/{envName}/api-keys
+func (c *agentConfigurationController) CreateLLMConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+
+	var specReq spec.CreateLLMAPIKeyRequest
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	name, displayName, ok := apiKeyCreateNameDisplayName(w, specReq.Name, specReq.DisplayName)
+	if !ok {
+		return
+	}
+
+	response, err := c.agentConfigService.CreateLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
+		Name:        name,
+		DisplayName: displayName,
+		ExpiresAt:   specReq.ExpiresAt,
+	})
+	if err != nil {
+		c.writeConfigAPIKeyError(w, log, "CreateLLMConfigAPIKey", err)
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusCreated, response)
+}
+
+// RotateLLMConfigAPIKey handles PUT .../model-configs/{configId}/environments/{envName}/api-keys/{keyName}
+func (c *agentConfigurationController) RotateLLMConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+	keyName := r.PathValue("keyName")
+
+	var specReq spec.RotateLLMAPIKeyRequest
+	// Body is optional for rotation: an empty body (io.EOF) is allowed, but any
+	// other decode error indicates a malformed request and must be rejected.
+	if err := json.NewDecoder(r.Body).Decode(&specReq); err != nil && !errors.Is(err, io.EOF) {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	response, err := c.agentConfigService.RotateLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
+		DisplayName: specReq.DisplayName,
+		ExpiresAt:   specReq.ExpiresAt,
+	})
+	if err != nil {
+		c.writeConfigAPIKeyError(w, log, "RotateLLMConfigAPIKey", err)
+		return
+	}
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
+}
+
+// RevokeLLMConfigAPIKey handles DELETE .../model-configs/{configId}/environments/{envName}/api-keys/{keyName}
+func (c *agentConfigurationController) RevokeLLMConfigAPIKey(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	if !ok {
+		return
+	}
+	keyName := r.PathValue("keyName")
+
+	if err := c.agentConfigService.RevokeLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
+		c.writeConfigAPIKeyError(w, log, "RevokeLLMConfigAPIKey", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

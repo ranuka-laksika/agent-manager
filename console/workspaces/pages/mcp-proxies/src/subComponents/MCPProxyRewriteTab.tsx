@@ -38,6 +38,7 @@ import {
 import { ChevronDown, ChevronUp } from "@wso2/oxygen-ui-icons-react";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
 import type {
+  MCPEnvironmentConfig,
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
@@ -112,13 +113,13 @@ function getBackendId(
 }
 
 function buildDefaultsFromCapabilities(
-  proxy: MCPProxy | null | undefined,
+  config: MCPEnvironmentConfig | undefined,
 ): { state: RewriteState; meta: ItemMeta[] } {
   const state: RewriteState = { tool: {}, resource: {}, prompt: {} };
   const meta: ItemMeta[] = [];
-  const tools = proxy?.capabilities?.tools ?? [];
-  const resources = proxy?.capabilities?.resources ?? [];
-  const prompts = proxy?.capabilities?.prompts ?? [];
+  const tools = config?.capabilities?.tools ?? [];
+  const resources = config?.capabilities?.resources ?? [];
+  const prompts = config?.capabilities?.prompts ?? [];
 
   tools.forEach((raw) => {
     const id = getBackendId("tool", raw);
@@ -329,15 +330,17 @@ function buildPolicyParams(
 }
 
 export type MCPProxyRewriteTabProps = {
-  proxy: MCPProxy | null | undefined;
+  config: MCPEnvironmentConfig | undefined;
+  selectedEnvironmentId: string;
   orgName: string | undefined;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPProxy>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxyRewriteTab({
-  proxy,
+  config,
+  selectedEnvironmentId,
   orgName,
   isLoading = false,
   onUpdate,
@@ -372,10 +375,10 @@ export function MCPProxyRewriteTab({
   );
 
   useEffect(() => {
-    if (!proxy) return;
+    if (!config || !selectedEnvironmentId) return;
     const { state: defaults, meta: defaultsMeta } =
-      buildDefaultsFromCapabilities(proxy);
-    const existing = proxy.policies?.find(
+      buildDefaultsFromCapabilities(config);
+    const existing = config.policies?.find(
       (p) => p.name === REWRITE_POLICY_NAME,
     );
     const merged = mergeExistingPolicy(defaults, existing);
@@ -394,7 +397,7 @@ export function MCPProxyRewriteTab({
       const first = defaultsMeta[0];
       return first ? `${first.kind}::${first.backendId}` : null;
     });
-  }, [proxy]);
+  }, [config, selectedEnvironmentId]);
 
   const selected = useMemo(() => {
     if (!selectedKey) return null;
@@ -460,8 +463,8 @@ export function MCPProxyRewriteTab({
   );
 
   const handleSave = useCallback(async () => {
-    if (!proxy) return;
-    const existingPolicies = proxy.policies ?? [];
+    if (!config) return;
+    const existingPolicies = config.policies ?? [];
 
     let nextPolicies: MCPProxyPolicy[];
     if (enabled) {
@@ -510,7 +513,7 @@ export function MCPProxyRewriteTab({
         severity: "error",
       });
     }
-  }, [proxy, enabled, availableRewritePolicy, state, meta, onUpdate]);
+  }, [config, enabled, availableRewritePolicy, state, meta, onUpdate]);
 
   const handleDiscard = useCallback(() => {
     const saved = lastSavedRef.current;

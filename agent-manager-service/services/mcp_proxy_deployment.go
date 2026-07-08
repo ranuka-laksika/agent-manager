@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
+	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -80,99 +81,10 @@ type MCPProxyUpstream struct {
 	URL string `yaml:"url" json:"url"`
 }
 
-func (s *MCPProxyService) deployMCPProxyToSelectedGateways(ctx context.Context, proxy *models.MCPProxy, orgName string, gatewayIDs []string) error {
-	if s.deploymentRepo == nil || s.gatewayRepo == nil || s.gatewayEventsService == nil {
-		return nil
-	}
-
-	gateways, err := s.resolveSelectedMCPProxyGateways(ctx, orgName, gatewayIDs)
-	if err != nil {
-		return err
-	}
-	return s.deployMCPProxyToGateways(ctx, proxy, orgName, gateways)
-}
-
-func (s *MCPProxyService) redeployMCPProxyToCurrentGateways(ctx context.Context, proxy *models.MCPProxy, orgName string) error {
-	if s.deploymentRepo == nil || s.gatewayRepo == nil || s.gatewayEventsService == nil || proxy == nil {
-		return nil
-	}
-
-	// Include gateways whose last deploy left the proxy in UNDEPLOYED state: a save
-	// should retry those, and a previous failure must not strand future saves.
-	gatewayIDs, err := s.deploymentRepo.GetTrackedGatewaysByProvider(proxy.UUID, orgName)
-	if err != nil {
-		return fmt.Errorf("failed to list tracked gateways: %w", err)
-	}
-	if len(gatewayIDs) == 0 {
-		return nil
-	}
-
-	gateways, err := s.resolveSelectedMCPProxyGateways(ctx, orgName, gatewayIDs)
-	if err != nil {
-		return err
-	}
-	return s.deployMCPProxyToGateways(ctx, proxy, orgName, gateways)
-}
-
-func (s *MCPProxyService) resolveSelectedMCPProxyGateways(ctx context.Context, orgName string, gatewayIDs []string) ([]*models.Gateway, error) {
-	_ = ctx
-	if len(gatewayIDs) == 0 {
-		return nil, utils.ErrInvalidInput
-	}
-
-	gateways := make([]*models.Gateway, 0, len(gatewayIDs))
-	seen := map[string]struct{}{}
-	for _, gatewayID := range gatewayIDs {
-		gatewayID = strings.TrimSpace(gatewayID)
-		if gatewayID == "" {
-			return nil, fmt.Errorf("%w: gateway id is required", utils.ErrInvalidInput)
-		}
-		if _, err := uuid.Parse(gatewayID); err != nil {
-			return nil, fmt.Errorf("%w: invalid gateway id %q", utils.ErrInvalidInput, gatewayID)
-		}
-		if _, ok := seen[gatewayID]; ok {
-			continue
-		}
-		seen[gatewayID] = struct{}{}
-
-		gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get gateway %s: %w", gatewayID, err)
-		}
-		if gateway == nil {
-			return nil, fmt.Errorf("%w: gateway %s not found", utils.ErrInvalidInput, gatewayID)
-		}
-		if gateway.OrganizationName != orgName {
-			return nil, fmt.Errorf("%w: gateway %s does not belong to organization", utils.ErrInvalidInput, gatewayID)
-		}
-		if !gateway.IsActive {
-			return nil, fmt.Errorf("%w: gateway %s is not active", utils.ErrInvalidInput, gatewayID)
-		}
-		gateways = append(gateways, gateway)
-	}
-
-	if len(gateways) == 0 {
-		return nil, fmt.Errorf("%w: at least one gateway is required", utils.ErrInvalidInput)
-	}
-	return gateways, nil
-}
-
-func (s *MCPProxyService) deployMCPProxyToGateways(ctx context.Context, proxy *models.MCPProxy, orgName string, gateways []*models.Gateway) error {
-	var errs []error
-	for _, gateway := range gateways {
-		if gateway == nil {
-			continue
-		}
-		if err := s.deployMCPProxyToGateway(ctx, proxy, orgName, gateway); err != nil {
-			errs = append(errs, fmt.Errorf("gateway %s: %w", gateway.UUID, err))
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to deploy MCP proxy: %w", errors.Join(errs...))
-	}
-	return nil
-}
-
+// deployMCPProxyToGateway deploys a single MCP artifact to one gateway. It is used by
+// deployMCPProxyEnvironments for the proxy-owned per-environment artifacts and by the
+// agent-configuration flow for agent-scoped mapping artifacts; callers pass the already
+// flattened single-environment artifact to deploy.
 func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *models.MCPProxy, orgName string, gateway *models.Gateway) error {
 	_ = ctx
 	deploymentYAML, err := s.generateMCPProxyDeploymentYAML(proxy)
@@ -211,12 +123,202 @@ func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *mo
 	return nil
 }
 
-func agentMCPMappingContext(baseContext *string, mappingName string) string {
-	base := "/"
-	if baseContext != nil && strings.TrimSpace(*baseContext) != "" {
-		base = "/" + strings.Trim(strings.TrimSpace(*baseContext), "/")
+// mcpProxyEnvArtifactHandle builds the stable, org-unique handle/name for the single
+// gateway artifact an MCP proxy deploys for one environment. The org-level proxy handle
+// is unique per org and the environment-UUID suffix distinguishes the per-environment
+// artifacts, so the pair satisfies the artifacts table's UNIQUE(handle, org) constraint.
+func mcpProxyEnvArtifactHandle(proxyHandle, envID string) string {
+	suffix := strings.ReplaceAll(strings.TrimSpace(envID), "-", "")
+	return fmt.Sprintf("%s-%s", proxyHandle, suffix)
+}
+
+// buildMCPProxyEnvArtifact flattens one per-environment blueprint block into the flat,
+// single-environment MCPProxy that the deployment YAML builder consumes. Unlike the
+// agent-scoped mapping (buildAgentMCPConfigProxy) this is the proxy's OWN artifact: the
+// context is the proxy's base context — shared by every agent that references it — and
+// the artifact identity is the stable per-environment ArtifactUUID owned by the proxy.
+func buildMCPProxyEnvArtifact(source *models.MCPProxy, envID string, envCfg models.MCPEnvironmentConfig) *models.MCPProxy {
+	proxyHandle := source.Handle
+	if source.Artifact != nil && source.Artifact.Handle != "" {
+		proxyHandle = source.Artifact.Handle
 	}
-	return strings.TrimRight(base, "/") + "/" + url.PathEscape(mappingName)
+	handle := mcpProxyEnvArtifactHandle(proxyHandle, envID)
+
+	version := source.Version
+	if source.Artifact != nil && source.Artifact.Version != "" {
+		version = source.Artifact.Version
+	}
+	if version == "" {
+		version = source.Configuration.Version
+	}
+
+	var upstream models.UpstreamConfig
+	if envCfg.Upstream != nil {
+		endpoint := *envCfg.Upstream
+		upstream.Main = &endpoint
+	}
+
+	artifactUUID := uuid.Nil
+	if envCfg.ArtifactUUID != nil {
+		artifactUUID = *envCfg.ArtifactUUID
+	}
+
+	return &models.MCPProxy{
+		UUID:        artifactUUID,
+		Description: source.Description,
+		Status:      source.Status,
+		Configuration: models.MCPProxyConfig{
+			Name:         handle,
+			Version:      version,
+			Context:      source.Configuration.Context,
+			Vhost:        source.Configuration.Vhost,
+			SpecVersion:  source.Configuration.SpecVersion,
+			Upstream:     upstream,
+			Policies:     envCfg.Policies,
+			Capabilities: envCfg.Capabilities,
+			Security:     envCfg.Security,
+		},
+		OrganizationName: source.OrganizationName,
+		ID:               handle,
+		Name:             handle,
+		Handle:           handle,
+		Version:          version,
+	}
+}
+
+// ensureMCPProxyEnvArtifactRow creates the artifacts row backing a per-environment
+// gateway artifact when it does not already exist. The deployments and deployment_status
+// foreign keys require the row to be present before a deployment can be recorded. It is a
+// no-op when the row already exists (the ArtifactUUID is stable across proxy updates).
+func (s *MCPProxyService) ensureMCPProxyEnvArtifactRow(deployProxy *models.MCPProxy, orgName string) error {
+	if s.artifactRepo == nil {
+		return nil
+	}
+	if _, err := s.artifactRepo.GetByHandle(deployProxy.Handle, orgName); err == nil {
+		return nil
+	} else if !errors.Is(err, utils.ErrArtifactNotFound) && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check MCP proxy environment artifact: %w", err)
+	}
+	now := time.Now()
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		return s.artifactRepo.Create(tx, &models.Artifact{
+			UUID:             deployProxy.UUID,
+			Handle:           deployProxy.Handle,
+			Name:             deployProxy.Name,
+			Version:          deployProxy.Version,
+			Kind:             models.KindMCPMapping,
+			OrganizationName: orgName,
+			CreatedAt:        now,
+			UpdatedAt:        now,
+		})
+	})
+}
+
+// deployMCPProxyEnvironments deploys (or refreshes) the single gateway artifact for every
+// configured environment of the proxy. An environment with no active gateway is skipped
+// (it deploys on the next update once a gateway exists), mirroring the agent-config flow.
+// Best-effort: per-environment failures are aggregated and returned.
+func (s *MCPProxyService) deployMCPProxyEnvironments(ctx context.Context, proxy *models.MCPProxy, orgName string) error {
+	var errs []error
+	for envID, envCfg := range proxy.Configuration.Environments {
+		envUUID, err := uuid.Parse(strings.TrimSpace(envID))
+		if err != nil {
+			errs = append(errs, fmt.Errorf("environment %q: invalid id: %w", envID, err))
+			continue
+		}
+		if envCfg.ArtifactUUID == nil || *envCfg.ArtifactUUID == uuid.Nil {
+			errs = append(errs, fmt.Errorf("environment %q: missing artifact id", envID))
+			continue
+		}
+		gateway, err := s.resolveGatewayForEnvironment(ctx, envUUID, orgName)
+		if errors.Is(err, errNoActiveGatewayForEnvironment) {
+			s.logger.Info("Skipping MCP proxy environment deploy; no active gateway",
+				"proxyUUID", proxy.UUID, "environment", envID)
+			continue
+		}
+		if err != nil {
+			errs = append(errs, fmt.Errorf("environment %q: resolve gateway: %w", envID, err))
+			continue
+		}
+		deployProxy := buildMCPProxyEnvArtifact(proxy, envID, envCfg)
+		if err := s.ensureMCPProxyEnvArtifactRow(deployProxy, orgName); err != nil {
+			errs = append(errs, fmt.Errorf("environment %q: %w", envID, err))
+			continue
+		}
+		if err := s.deployMCPProxyToGateway(ctx, deployProxy, orgName, gateway); err != nil {
+			errs = append(errs, fmt.Errorf("environment %q: deploy: %w", envID, err))
+			continue
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// deleteMCPProxyEnvironmentArtifacts broadcast-deletes the given per-environment gateway
+// artifacts and removes their artifacts rows (cascading to deployments / deployment_status
+// via the FK). Used when environments are removed from a proxy and when the proxy itself
+// is deleted. Best-effort: per-artifact failures are aggregated.
+func (s *MCPProxyService) deleteMCPProxyEnvironmentArtifacts(ctx context.Context, artifactUUIDs []uuid.UUID, orgName string) error {
+	var errs []error
+	for _, artifactUUID := range artifactUUIDs {
+		if artifactUUID == uuid.Nil {
+			continue
+		}
+		s.BroadcastMCPArtifactDeletion(ctx, artifactUUID, orgName)
+		if s.artifactRepo == nil {
+			continue
+		}
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Where("artifact_uuid = ? AND organization_name = ?", artifactUUID, orgName).
+				Delete(&models.DeploymentStatusRecord{}).Error; err != nil {
+				return err
+			}
+			if err := tx.Where("artifact_uuid = ? AND organization_name = ?", artifactUUID, orgName).
+				Delete(&models.Deployment{}).Error; err != nil {
+				return err
+			}
+			if err := s.artifactRepo.Delete(tx, artifactUUID.String()); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			return nil
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("artifact %s: %w", artifactUUID, err))
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// resolveGatewayForEnvironment selects the environment's gateway with AI-first preference,
+// returning errNoActiveGatewayForEnvironment when the environment has no active gateway.
+func (s *MCPProxyService) resolveGatewayForEnvironment(ctx context.Context, envUUID uuid.UUID, orgName string) (*models.Gateway, error) {
+	_ = ctx
+	envIDStr := envUUID.String()
+	aiType := "ai"
+	activeStatus := true
+
+	gateways, err := s.gatewayRepo.ListWithFilters(repositories.GatewayFilterOptions{
+		OrganizationID:    orgName,
+		FunctionalityType: &aiType,
+		Status:            &activeStatus,
+		EnvironmentID:     &envIDStr,
+		Limit:             1,
+	})
+	if err == nil && len(gateways) > 0 {
+		return gateways[0], nil
+	}
+
+	gateways, err = s.gatewayRepo.ListWithFilters(repositories.GatewayFilterOptions{
+		OrganizationID: orgName,
+		Status:         &activeStatus,
+		EnvironmentID:  &envIDStr,
+		Limit:          1,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to find gateway: %w", err)
+	}
+	if len(gateways) == 0 {
+		return nil, errNoActiveGatewayForEnvironment
+	}
+	return gateways[0], nil
 }
 
 func (s *MCPProxyService) BroadcastMCPArtifactDeletion(ctx context.Context, artifactUUID uuid.UUID, orgName string) {

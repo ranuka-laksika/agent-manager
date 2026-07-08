@@ -630,7 +630,7 @@ func validateInputInterface(agentType spec.AgentType, inputInterface *spec.Input
 		)
 	}
 	if StrPointerAsStr(agentType.SubType, "") == string(AgentSubTypeCustomAPI) {
-		if inputInterface.Schema.Path == "" || !strings.HasPrefix(inputInterface.Schema.Path, "/") {
+		if inputInterface.Schema == nil || inputInterface.Schema.Path == "" || !strings.HasPrefix(inputInterface.Schema.Path, "/") {
 			return NewValidationError(
 				"Please provide a valid schema path starting with /",
 				"inputInterface.schema.path is required and must start with /",
@@ -748,11 +748,12 @@ func ValidatePromoteAgentRequest(payload *spec.PromoteAgentRequest) error {
 	if useSource {
 		if len(payload.Env) > 0 || len(payload.Files) > 0 ||
 			payload.EnableAutoInstrumentation != nil ||
+			payload.InstrumentationVersion.IsSet() ||
 			payload.EnableApiKeySecurity != nil ||
 			payload.CorsConfig != nil ||
 			payload.EnableOAuthSecurity != nil ||
 			payload.OauthConfig != nil {
-			return fmt.Errorf("useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig")
+			return fmt.Errorf("useConfigFromSourceEnv=true is mutually exclusive with env, files, enableAutoInstrumentation, instrumentationVersion, enableApiKeySecurity, corsConfig, enableOAuthSecurity, and oauthConfig")
 		}
 	}
 

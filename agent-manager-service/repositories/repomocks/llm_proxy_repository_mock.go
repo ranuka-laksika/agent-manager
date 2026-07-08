@@ -36,6 +36,9 @@ import (
 //			GetByIDFunc: func(proxyID string, orgName string) (*models.LLMProxy, error) {
 //				panic("mock out the GetByID method")
 //			},
+//			GetByIDAndProjectFunc: func(proxyID string, orgName string, projectUUID string) (*models.LLMProxy, error) {
+//				panic("mock out the GetByIDAndProject method")
+//			},
 //			ListFunc: func(orgName string, limit int, offset int) ([]*models.LLMProxy, error) {
 //				panic("mock out the List method")
 //			},
@@ -75,6 +78,9 @@ type LLMProxyRepositoryMock struct {
 
 	// GetByIDFunc mocks the GetByID method.
 	GetByIDFunc func(proxyID string, orgName string) (*models.LLMProxy, error)
+
+	// GetByIDAndProjectFunc mocks the GetByIDAndProject method.
+	GetByIDAndProjectFunc func(proxyID string, orgName string, projectUUID string) (*models.LLMProxy, error)
 
 	// ListFunc mocks the List method.
 	ListFunc func(orgName string, limit int, offset int) ([]*models.LLMProxy, error)
@@ -143,6 +149,15 @@ type LLMProxyRepositoryMock struct {
 			// OrgName is the orgName argument value.
 			OrgName string
 		}
+		// GetByIDAndProject holds details about calls to the GetByIDAndProject method.
+		GetByIDAndProject []struct {
+			// ProxyID is the proxyID argument value.
+			ProxyID string
+			// OrgName is the orgName argument value.
+			OrgName string
+			// ProjectUUID is the projectUUID argument value.
+			ProjectUUID string
+		}
 		// List holds details about calls to the List method.
 		List []struct {
 			// OrgName is the orgName argument value.
@@ -184,17 +199,18 @@ type LLMProxyRepositoryMock struct {
 			OrgName string
 		}
 	}
-	lockCount           sync.RWMutex
-	lockCountByProject  sync.RWMutex
-	lockCountByProvider sync.RWMutex
-	lockCreate          sync.RWMutex
-	lockDelete          sync.RWMutex
-	lockExists          sync.RWMutex
-	lockGetByID         sync.RWMutex
-	lockList            sync.RWMutex
-	lockListByProject   sync.RWMutex
-	lockListByProvider  sync.RWMutex
-	lockUpdate          sync.RWMutex
+	lockCount             sync.RWMutex
+	lockCountByProject    sync.RWMutex
+	lockCountByProvider   sync.RWMutex
+	lockCreate            sync.RWMutex
+	lockDelete            sync.RWMutex
+	lockExists            sync.RWMutex
+	lockGetByID           sync.RWMutex
+	lockGetByIDAndProject sync.RWMutex
+	lockList              sync.RWMutex
+	lockListByProject     sync.RWMutex
+	lockListByProvider    sync.RWMutex
+	lockUpdate            sync.RWMutex
 }
 
 // Count calls CountFunc.
@@ -454,6 +470,46 @@ func (mock *LLMProxyRepositoryMock) GetByIDCalls() []struct {
 	mock.lockGetByID.RLock()
 	calls = mock.calls.GetByID
 	mock.lockGetByID.RUnlock()
+	return calls
+}
+
+// GetByIDAndProject calls GetByIDAndProjectFunc.
+func (mock *LLMProxyRepositoryMock) GetByIDAndProject(proxyID string, orgName string, projectUUID string) (*models.LLMProxy, error) {
+	if mock.GetByIDAndProjectFunc == nil {
+		panic("LLMProxyRepositoryMock.GetByIDAndProjectFunc: method is nil but LLMProxyRepository.GetByIDAndProject was just called")
+	}
+	callInfo := struct {
+		ProxyID     string
+		OrgName     string
+		ProjectUUID string
+	}{
+		ProxyID:     proxyID,
+		OrgName:     orgName,
+		ProjectUUID: projectUUID,
+	}
+	mock.lockGetByIDAndProject.Lock()
+	mock.calls.GetByIDAndProject = append(mock.calls.GetByIDAndProject, callInfo)
+	mock.lockGetByIDAndProject.Unlock()
+	return mock.GetByIDAndProjectFunc(proxyID, orgName, projectUUID)
+}
+
+// GetByIDAndProjectCalls gets all the calls that were made to GetByIDAndProject.
+// Check the length with:
+//
+//	len(mockedLLMProxyRepository.GetByIDAndProjectCalls())
+func (mock *LLMProxyRepositoryMock) GetByIDAndProjectCalls() []struct {
+	ProxyID     string
+	OrgName     string
+	ProjectUUID string
+} {
+	var calls []struct {
+		ProxyID     string
+		OrgName     string
+		ProjectUUID string
+	}
+	mock.lockGetByIDAndProject.RLock()
+	calls = mock.calls.GetByIDAndProject
+	mock.lockGetByIDAndProject.RUnlock()
 	return calls
 }
 

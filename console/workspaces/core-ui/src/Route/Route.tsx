@@ -17,10 +17,18 @@
  */
 
 import { Suspense } from "react";
-import { BrowserRouter, Routes, Route, useParams, Outlet } from "react-router-dom";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  useParams,
+  Outlet,
+  Navigate,
+  generatePath,
+} from "react-router-dom";
 import { OxygenLayout } from "../Layouts";
 import { Protected } from "../Providers/Protected";
-import { ErrorPages } from '@agent-management-platform/shared-component';
+import { ErrorPages } from "@agent-management-platform/shared-component";
 import {
   Login,
   LazyOverviewOrg,
@@ -30,11 +38,13 @@ import {
   LazyLLMProvidersOrg,
   LazyMCPProxiesOrg,
   LazyAddLLMProvidersComponent,
-  LazyLLMProvidersComponent, LazyViewLLMProviderComponent, LazyAddLLMProvidersOrg,
-  LazyAddMCPServerComponent,
+  LazyLLMProvidersComponent,
+  LazyViewLLMProviderComponent,
+  LazyAddLLMProvidersOrg,
   LazyViewMCPServerComponent,
   LazyGatewaysOrg,
-  LazyIdentitiesOrg,
+  LazyThunderInstancesOrg,
+  LazySettingsOrg,
   LazyDeploymentPipelinesOrg,
   LazyEnvironmentsOrg,
   LazyCatalogOrg,
@@ -56,18 +66,35 @@ import {
   LazyCreateMonitorComponent,
   LazyViewMonitorComponent,
   LazyEditMonitorComponent,
-  LazyProfilePage,
-  LazyCompareMonitorComponent
+  LazyCompareMonitorComponent,
 } from "../pages";
 import { LoadingFallback } from "../components/LoadingFallback";
-import { relativeRouteMap } from "@agent-management-platform/types";
-import { useExternalPageModules, type ExternalPageModule } from "@agent-management-platform/views";
+import {
+  relativeRouteMap,
+  absoluteRouteMap,
+} from "@agent-management-platform/types";
+import {
+  useExternalPageModules,
+  type ExternalPageModule,
+} from "@agent-management-platform/views";
 import {
   useListOrganizations,
   useGetProject,
   useGetAgent,
 } from "@agent-management-platform/api-client";
 import { MountPoints } from "../types";
+
+// Back-compat redirect: the Identities pages (users/roles/groups) moved from
+// /org/:orgId/identities/* to /org/:orgId/settings/identities/*. Preserve any
+// trailing sub-path so existing deep links keep working.
+function LegacyIdentitiesRedirect() {
+  const { orgId, "*": rest } = useParams<{ orgId: string; "*": string }>();
+  const base = generatePath(
+    absoluteRouteMap.children.org.children.settings.children.identities.path,
+    { orgId },
+  );
+  return <Navigate to={rest ? `${base}/${rest}` : base} replace />;
+}
 
 // Remounts the Security page on agent change so per-agent component state
 // (Create-key dialog open flag, newly-issued-key banner) does not leak
@@ -93,7 +120,13 @@ function GuardedOutlet({
   if (isError) {
     return <ErrorPages.CustomError title={title} message={message} />;
   }
-  return <Outlet />;
+  // Suspense boundary for the lazy route components rendered below this
+  // guard, so every lazy import gets a loading fallback.
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 function OrgGuard() {
@@ -108,7 +141,9 @@ function OrgGuard() {
     <GuardedOutlet
       isLoading={isLoading}
       isError={loadFailed || (!isLoading && !orgExists)}
-      title={loadFailed ? "Failed to Load Organization" : "Organization Not Found"}
+      title={
+        loadFailed ? "Failed to Load Organization" : "Organization Not Found"
+      }
       message={
         loadFailed
           ? "Something went wrong while loading your organizations. Please try again."
@@ -120,7 +155,10 @@ function OrgGuard() {
 
 function ProjectGuard() {
   const { orgId, projectId } = useParams();
-  const { isLoading, isError } = useGetProject({ orgName: orgId, projName: projectId });
+  const { isLoading, isError } = useGetProject({
+    orgName: orgId,
+    projName: projectId,
+  });
   return (
     <GuardedOutlet
       isLoading={isLoading}
@@ -151,24 +189,24 @@ function AgentGuard() {
 export function RootRouter() {
   const externalOrgPageModules = useExternalPageModules();
 
-  const {
-    projectPageModules,
-    orgPageModules,
-    componentPageModules
-  } = externalOrgPageModules.reduce((acc, module) => {
-    if (module.mountPoint === MountPoints.ProjectLevelPage) {
-      acc.projectPageModules.push(module);
-    } else if (module.mountPoint === MountPoints.OrgLevelPage) {
-      acc.orgPageModules.push(module);
-    } else if (module.mountPoint === MountPoints.ComponentLevelPage) {
-      acc.componentPageModules.push(module);
-    }
-    return acc;
-  }, {
-    projectPageModules: [] as ExternalPageModule[],
-    orgPageModules: [] as ExternalPageModule[],
-    componentPageModules: [] as ExternalPageModule[]
-  });
+  const { projectPageModules, orgPageModules, componentPageModules } =
+    externalOrgPageModules.reduce(
+      (acc, module) => {
+        if (module.mountPoint === MountPoints.ProjectLevelPage) {
+          acc.projectPageModules.push(module);
+        } else if (module.mountPoint === MountPoints.OrgLevelPage) {
+          acc.orgPageModules.push(module);
+        } else if (module.mountPoint === MountPoints.ComponentLevelPage) {
+          acc.componentPageModules.push(module);
+        }
+        return acc;
+      },
+      {
+        projectPageModules: [] as ExternalPageModule[],
+        orgPageModules: [] as ExternalPageModule[],
+        componentPageModules: [] as ExternalPageModule[],
+      },
+    );
 
   // Monitor pages live under environment/:envId/evaluation/monitor; build the
   // shared prefix once instead of repeating the deep route chain per route.
@@ -196,44 +234,49 @@ export function RootRouter() {
             </Protected>
           }
         >
-          <Route path={relativeRouteMap.children.org.path} element={<OrgGuard />}>
+          <Route
+            path={relativeRouteMap.children.org.path}
+            element={<OrgGuard />}
+          >
             <Route index element={<LazyOverviewOrg />} />
+            {orgPageModules.map((module) => (
+              <Route
+                key={module.path}
+                path={module.path + "/*"}
+                element={
+                  <Suspense fallback={<LoadingFallback />}>
+                    <module.pageComponent />
+                  </Suspense>
+                }
+              />
+            ))}
             <Route
-              path={relativeRouteMap.children.org.children.profile.path}
+              path={
+                relativeRouteMap.children.org.children.thunderInstances.path +
+                "/*"
+              }
               element={
                 <Suspense fallback={<LoadingFallback />}>
-                  <LazyProfilePage />
+                  <LazyThunderInstancesOrg />
                 </Suspense>
               }
             />
-            {
-              orgPageModules.map((module) => (
-                <Route
-                  key={module.path}
-                  path={module.path + "/*"}
-                  element={
-                    <Suspense fallback={<LoadingFallback />}>
-                      <module.pageComponent />
-                    </Suspense>
-                  }
-                />
-              ))
-            }
             <Route
-              path={
-                relativeRouteMap.children.org.children.gateways.path + "/*"
-              }
+              path={relativeRouteMap.children.org.children.gateways.path + "/*"}
               element={<LazyGatewaysOrg />}
             />
             <Route
               path={
-                relativeRouteMap.children.org.children.identities.path + "/*"
+                relativeRouteMap.children.org.children.settings.path + "/*"
               }
-              element={<LazyIdentitiesOrg />}
+              element={<LazySettingsOrg />}
             />
+            {/* Back-compat: identities pages moved under Settings → IDP Settings */}
+            <Route path="identities/*" element={<LegacyIdentitiesRedirect />} />
             <Route
               path={
-                relativeRouteMap.children.org.children.deploymentPipelines.path + "/*"
+                relativeRouteMap.children.org.children.deploymentPipelines
+                  .path + "/*"
               }
               element={<LazyDeploymentPipelinesOrg />}
             />
@@ -257,8 +300,10 @@ export function RootRouter() {
             />
             <Route
               path={
-                relativeRouteMap.children.org.children.llmProviders.path + "/" +
-                relativeRouteMap.children.org.children.llmProviders.children.add.path
+                relativeRouteMap.children.org.children.llmProviders.path +
+                "/" +
+                relativeRouteMap.children.org.children.llmProviders.children.add
+                  .path
               }
               element={
                 <Suspense fallback={<LoadingFallback />}>
@@ -267,16 +312,15 @@ export function RootRouter() {
               }
             />
             <Route
-              path={
-                relativeRouteMap.children.org.children.evaluators.path
-              }
+              path={relativeRouteMap.children.org.children.evaluators.path}
               element={<LazyEvalEvaluatorsOrg />}
             />
             <Route
               path={
                 relativeRouteMap.children.org.children.evaluators.path +
                 "/" +
-                relativeRouteMap.children.org.children.evaluators.children.create.path
+                relativeRouteMap.children.org.children.evaluators.children
+                  .create.path
               }
               element={<LazyCreateEvaluatorOrg />}
             />
@@ -284,7 +328,8 @@ export function RootRouter() {
               path={
                 relativeRouteMap.children.org.children.evaluators.path +
                 "/" +
-                relativeRouteMap.children.org.children.evaluators.children.edit.path
+                relativeRouteMap.children.org.children.evaluators.children.edit
+                  .path
               }
               element={<LazyEditEvaluatorOrg />}
             />
@@ -292,14 +337,13 @@ export function RootRouter() {
               path={
                 relativeRouteMap.children.org.children.evaluators.path +
                 "/" +
-                relativeRouteMap.children.org.children.evaluators.children.view.path
+                relativeRouteMap.children.org.children.evaluators.children.view
+                  .path
               }
               element={<LazyViewEvaluatorOrg />}
             />
             <Route
-              path={
-                relativeRouteMap.children.org.children.catalog.path + "/*"
-              }
+              path={relativeRouteMap.children.org.children.catalog.path + "/*"}
               element={<LazyCatalogOrg />}
             />
             <Route
@@ -315,19 +359,17 @@ export function RootRouter() {
               element={<ProjectGuard />}
             >
               <Route index element={<LazyOverviewProject />} />
-              {
-                projectPageModules.map((module) => (
-                  <Route
-                    key={module.path}
-                    path={module.path + "/*"}
-                    element={
-                      <Suspense fallback={<LoadingFallback />}>
-                        <module.pageComponent />
-                      </Suspense>
-                    }
-                  />
-                ))
-              }
+              {projectPageModules.map((module) => (
+                <Route
+                  key={module.path}
+                  path={module.path + "/*"}
+                  element={
+                    <Suspense fallback={<LoadingFallback />}>
+                      <module.pageComponent />
+                    </Suspense>
+                  }
+                />
+              ))}
               <Route
                 path={
                   relativeRouteMap.children.org.children.projects.children
@@ -346,23 +388,18 @@ export function RootRouter() {
                 }
                 element={<AgentGuard />}
               >
-                <Route
-                  index
-                  element={<LazyOverviewComponent />}
-                />
-                {
-                  componentPageModules.map((module) => (
-                    <Route
-                      key={module.path}
-                      path={module.path + "/*"}
-                      element={
-                        <Suspense fallback={<LoadingFallback />}>
-                          <module.pageComponent />
-                        </Suspense>
-                      }
-                    />
-                  ))
-                }
+                <Route index element={<LazyOverviewComponent />} />
+                {componentPageModules.map((module) => (
+                  <Route
+                    key={module.path}
+                    path={module.path + "/*"}
+                    element={
+                      <Suspense fallback={<LoadingFallback />}>
+                        <module.pageComponent />
+                      </Suspense>
+                    }
+                  />
+                ))}
                 <Route
                   path={
                     relativeRouteMap.children.org.children.projects.children
@@ -393,7 +430,8 @@ export function RootRouter() {
                       .agents.children.configure.children.llmProviders.path +
                     "/" +
                     relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.llmProviders.children.add.path
+                      .agents.children.configure.children.llmProviders.children
+                      .add.path
                   }
                   element={
                     <Suspense fallback={<LoadingFallback />}>
@@ -410,7 +448,8 @@ export function RootRouter() {
                       .agents.children.configure.children.llmProviders.path +
                     "/" +
                     relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.llmProviders.children.edit.path
+                      .agents.children.configure.children.llmProviders.children
+                      .edit.path
                   }
                   element={
                     <Suspense fallback={<LoadingFallback />}>
@@ -427,7 +466,8 @@ export function RootRouter() {
                       .agents.children.configure.children.llmProviders.path +
                     "/" +
                     relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.llmProviders.children.view.path
+                      .agents.children.configure.children.llmProviders.children
+                      .view.path
                   }
                   element={
                     <Suspense fallback={<LoadingFallback />}>
@@ -444,24 +484,8 @@ export function RootRouter() {
                       .agents.children.configure.children.mcpProxies.path +
                     "/" +
                     relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.mcpProxies.children.add.path
-                  }
-                  element={
-                    <Suspense fallback={<LoadingFallback />}>
-                      <LazyAddMCPServerComponent />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path={
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.path +
-                    "/" +
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.mcpProxies.path +
-                    "/" +
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.mcpProxies.children.view.path
+                      .agents.children.configure.children.mcpProxies.children
+                      .view.path
                   }
                   element={
                     <Suspense fallback={<LoadingFallback />}>
@@ -516,7 +540,8 @@ export function RootRouter() {
                   <Route
                     path={
                       relativeRouteMap.children.org.children.projects.children
-                        .agents.children.environment.children.observability.path +
+                        .agents.children.environment.children.observability
+                        .path +
                       "/" +
                       relativeRouteMap.children.org.children.projects.children
                         .agents.children.environment.children.observability
@@ -527,7 +552,8 @@ export function RootRouter() {
                   <Route
                     path={
                       relativeRouteMap.children.org.children.projects.children
-                        .agents.children.environment.children.observability.path +
+                        .agents.children.environment.children.observability
+                        .path +
                       "/" +
                       relativeRouteMap.children.org.children.projects.children
                         .agents.children.environment.children.observability
@@ -538,7 +564,8 @@ export function RootRouter() {
                   <Route
                     path={
                       relativeRouteMap.children.org.children.projects.children
-                        .agents.children.environment.children.observability.path +
+                        .agents.children.environment.children.observability
+                        .path +
                       "/" +
                       relativeRouteMap.children.org.children.projects.children
                         .agents.children.environment.children.observability
@@ -551,7 +578,9 @@ export function RootRouter() {
                     element={<LazyEvalMonitorsComponent />}
                   />
                   <Route
-                    path={monitorBase + "/" + monitorRoutes.children.create.path}
+                    path={
+                      monitorBase + "/" + monitorRoutes.children.create.path
+                    }
                     element={<LazyCreateMonitorComponent />}
                   />
                   <Route
@@ -559,11 +588,18 @@ export function RootRouter() {
                     element={<LazyEditMonitorComponent />}
                   />
                   <Route
-                    path={monitorBase + "/" + monitorRoutes.children.compare.path}
+                    path={
+                      monitorBase + "/" + monitorRoutes.children.compare.path
+                    }
                     element={<LazyCompareMonitorComponent />}
                   />
                   <Route
-                    path={monitorBase + "/" + monitorRoutes.children.view.path + "/*"}
+                    path={
+                      monitorBase +
+                      "/" +
+                      monitorRoutes.children.view.path +
+                      "/*"
+                    }
                     element={<LazyViewMonitorComponent />}
                   />
                   <Route path="*" element={<ErrorPages.NotFound />} />

@@ -76,6 +76,8 @@ var (
 	ErrOrganizationNotFound           = errors.New("organization not found")
 	ErrBuildNotFound                  = errors.New("build not found")
 	ErrEnvironmentNotFound            = errors.New("environment not found")
+	ErrAgentIdentityNotProvisioned    = errors.New("agent identity not yet provisioned for this environment")
+	ErrAgentCredentialNotAvailable    = errors.New("agent credential not currently available for this environment")
 	ErrOrganizationAlreadyExists      = errors.New("organization already exists")
 	ErrProjectAlreadyExists           = errors.New("project already exists")
 	ErrDeploymentPipelineNotFound     = errors.New("deployment pipeline not found")
@@ -167,6 +169,11 @@ var (
 	// Agent Configuration errors
 	ErrAgentConfigNotFound      = errors.New("agent configuration not found")
 	ErrAgentConfigAlreadyExists = errors.New("agent configuration already exists for this agent")
+	// ErrAgentConfigNotExternal is returned when a user-managed API key action
+	// (create/rotate/revoke) is attempted against a configuration whose agent is
+	// managed/internal. Only external agents own their proxy API keys; managed
+	// agents have the platform inject them, so user-managed actions are rejected.
+	ErrAgentConfigNotExternal = errors.New("API key management is only available for external agents")
 
 	// Secret management errors
 	ErrSecretPathConflict = errors.New("secret path is owned by another system")

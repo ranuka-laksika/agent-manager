@@ -115,6 +115,12 @@ func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 				Name: environmentName,
 			}, nil
 		},
+		// Empty by default: CreateAgent's org-wide AgentID provisioning hook calls
+		// ListEnvironments and only acts when it returns at least one environment,
+		// so tests that don't care about AgentID provisioning stay unaffected by it.
+		ListEnvironmentsFunc: func(ctx context.Context, namespaceName string) ([]*models.EnvironmentResponse, error) {
+			return []*models.EnvironmentResponse{}, nil
+		},
 		DeleteComponentFunc: func(ctx context.Context, namespaceName string, projectName string, componentName string) error {
 			return nil
 		},

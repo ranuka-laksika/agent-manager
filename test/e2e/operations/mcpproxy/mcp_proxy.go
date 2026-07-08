@@ -85,18 +85,6 @@ func ListMCPProxies(g Gomega, client *framework.AMPClient, orgName string) frame
 	return framework.DecodeBody[framework.MCPProxyListResponse](g, resp)
 }
 
-// CreateMCPProxyAPIKey issues an API key for an MCP proxy.
-func CreateMCPProxyAPIKey(g Gomega, client *framework.AMPClient, orgName, proxyID string, req framework.CreateLLMAPIKeyRequest) framework.CreateLLMAPIKeyResponse {
-	path := fmt.Sprintf("/api/v1/orgs/%s/mcp-proxies/%s/api-keys", orgName, proxyID)
-
-	resp, err := client.Post(path, req)
-	g.Expect(err).NotTo(HaveOccurred(), "create MCP proxy API key request failed")
-	defer resp.Body.Close()
-	framework.ExpectStatus(g, resp, 201)
-
-	return framework.DecodeBody[framework.CreateLLMAPIKeyResponse](g, resp)
-}
-
 // DeleteMCPProxy deletes an MCP proxy by UUID or handle.
 func DeleteMCPProxy(g Gomega, client *framework.AMPClient, orgName, proxyID string) {
 	path := fmt.Sprintf("/api/v1/orgs/%s/mcp-proxies/%s", orgName, proxyID)

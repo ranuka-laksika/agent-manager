@@ -36,9 +36,11 @@ export default defineConfig({
       { find: '@agent-management-platform/llm-providers', replacement: path.resolve(__dirname, '../../workspaces/pages/llm-providers/src') },
       { find: '@agent-management-platform/mcp-proxies', replacement: path.resolve(__dirname, '../../workspaces/pages/mcp-proxies/src') },
       { find: '@agent-management-platform/gateways', replacement: path.resolve(__dirname, '../../workspaces/pages/gateways/src') },
+      { find: '@agent-management-platform/env-thunders', replacement: path.resolve(__dirname, '../../workspaces/pages/env-thunders/src') },
       { find: '@agent-management-platform/agent-security', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-security/src') },
       { find: '@agent-management-platform/agent-kind', replacement: path.resolve(__dirname, '../../workspaces/pages/agent-kind/src') },
       { find: '@agent-management-platform/identities', replacement: path.resolve(__dirname, '../../workspaces/pages/identities/src') },
+      { find: '@agent-management-platform/settings', replacement: path.resolve(__dirname, '../../workspaces/pages/settings/src') },
       { find: '@agent-management-platform/deployment-pipelines', replacement: path.resolve(__dirname, '../../workspaces/pages/deployment-pipelines/src') },
     ],
   },
@@ -46,6 +48,9 @@ export default defineConfig({
     port: 3000,
   },
   build: {
-    chunkSizeWarningLimit: 5000,
+    // The main app chunk sits at ~5 MB; PR builds bundle the branch merged with
+    // main, which pushes it just past a 5000 kB limit. Keep headroom so the Vite
+    // chunk-size warning (treated as a build failure by Rush) doesn't trip.
+    chunkSizeWarningLimit: 6000,
   },
 })

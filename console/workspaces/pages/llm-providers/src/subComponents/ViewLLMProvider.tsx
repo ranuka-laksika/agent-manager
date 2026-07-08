@@ -39,6 +39,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { generatePath, useParams } from "react-router-dom";
 import { LLMProviderAccessControlTab } from "./LLMProviderAccessControlTab";
+import { LLMProviderAPIKeysTab } from "./LLMProviderAPIKeysTab";
 import { LLMProviderConnectionTab } from "./LLMProviderConnectionTab";
 import { LLMProviderConsumersTab } from "./LLMProviderConsumersTab";
 import { LLMProviderGuardrailsTab } from "./LLMProviderGuardrailsTab";
@@ -55,6 +56,7 @@ const TABS = [
   "Connection",
   "Access Control",
   "Security",
+  "API Keys",
   "Rate Limiting",
   "Guardrails",
   "Consumers",
@@ -228,8 +230,20 @@ export const ViewLLMProvider: React.FC = () => {
               />
             </TabPanel>
 
-            {/* Rate Limiting tab */}
+            {/* API Keys tab */}
             <TabPanel value={tabIndex} index={4}>
+              <LLMProviderAPIKeysTab
+                providerData={providerData}
+                orgName={orgId}
+                providerId={providerId}
+                isLoading={isLoading}
+                error={providerError instanceof Error ? providerError
+                  : providerError ? new Error(getErrorMessage(providerError)) : null}
+              />
+            </TabPanel>
+
+            {/* Rate Limiting tab */}
+            <TabPanel value={tabIndex} index={5}>
               <LLMProviderRateLimitingTab
                 providerData={providerData}
                 openapiSpecUrl={openapiSpecUrl}
@@ -240,7 +254,7 @@ export const ViewLLMProvider: React.FC = () => {
             </TabPanel>
 
             {/* Guardrails tab */}
-            <TabPanel value={tabIndex} index={5}>
+            <TabPanel value={tabIndex} index={6}>
               <LLMProviderGuardrailsTab
                 providerData={providerData}
                 openapiSpecUrl={openapiSpecUrl}
@@ -253,7 +267,7 @@ export const ViewLLMProvider: React.FC = () => {
             </TabPanel>
 
             {/* Consumers tab */}
-            <TabPanel value={tabIndex} index={6}>
+            <TabPanel value={tabIndex} index={7}>
               <LLMProviderConsumersTab
                 orgName={orgId}
                 providerId={providerId}

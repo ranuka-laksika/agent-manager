@@ -103,6 +103,9 @@ func (r *agentConfigurationRepository) GetByUUID(ctx context.Context, configUUID
 		Preload("EnvVariables").
 		Where("uuid = ? AND organization_name = ?", configUUID, orgName).
 		First(&config).Error
+	if err == nil {
+		backfillLLMProxyHandles(&config)
+	}
 	return &config, err
 }
 
@@ -118,7 +121,29 @@ func (r *agentConfigurationRepository) GetByAgentID(ctx context.Context, agentID
 		Preload("EnvVariables").
 		Where("agent_id = ? AND organization_name = ?", agentID, orgName).
 		First(&config).Error
+	if err == nil {
+		backfillLLMProxyHandles(&config)
+	}
 	return &config, err
+}
+
+// backfillLLMProxyHandles populates the Handle field of each preloaded LLM proxy
+// from its Configuration.Name. LLMProxy.Handle is gorm:"-" (derived from the
+// artifact table, not a column on llm_proxies), so GORM Preload leaves it empty.
+// For agent-scoped proxies the handle and Configuration.Name are the same value by
+// construction (LLMProxyService.Create sets handle := Configuration.Name), so this
+// lets every consumer read mapping.LLMProxy.Handle directly instead of treating
+// Configuration.Name as a stand-in for the handle.
+func backfillLLMProxyHandles(config *models.AgentConfiguration) {
+	if config == nil {
+		return
+	}
+	for i := range config.EnvMappings {
+		proxy := config.EnvMappings[i].LLMProxy
+		if proxy != nil && proxy.Handle == "" {
+			proxy.Handle = proxy.Configuration.Name
+		}
+	}
 }
 
 func (r *agentConfigurationRepository) List(ctx context.Context, orgName string, limit, offset int) ([]models.AgentConfiguration, error) {

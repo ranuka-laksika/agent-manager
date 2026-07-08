@@ -31,6 +31,8 @@ type PromoteAgentRequest struct {
 	Files []FileMount `json:"files,omitempty"`
 	// Enable auto instrumentation for observability in the target environment
 	EnableAutoInstrumentation *bool `json:"enableAutoInstrumentation,omitempty"`
+	// AMP instrumentation version to pin for the agent in the target environment. Selects the pre-built init-container image (`amp-python-instrumentation-provider:<version>-python<X.Y>`) and the `traceloop-sdk` it bundles. Applies only to Python buildpack agents with auto-instrumentation enabled. Omit (or send null) to inherit the currently-pinned version. Must be one of the versions supported by the deployment; unknown or python-incompatible values are rejected.
+	InstrumentationVersion NullableString `json:"instrumentationVersion,omitempty"`
 	// Enable API key security for the agent endpoint in the target environment
 	EnableApiKeySecurity *bool       `json:"enableApiKeySecurity,omitempty"`
 	CorsConfig           *CORSConfig `json:"corsConfig,omitempty"`
@@ -234,6 +236,49 @@ func (o *PromoteAgentRequest) SetEnableAutoInstrumentation(v bool) {
 	o.EnableAutoInstrumentation = &v
 }
 
+// GetInstrumentationVersion returns the InstrumentationVersion field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *PromoteAgentRequest) GetInstrumentationVersion() string {
+	if o == nil || IsNil(o.InstrumentationVersion.Get()) {
+		var ret string
+		return ret
+	}
+	return *o.InstrumentationVersion.Get()
+}
+
+// GetInstrumentationVersionOk returns a tuple with the InstrumentationVersion field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *PromoteAgentRequest) GetInstrumentationVersionOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.InstrumentationVersion.Get(), o.InstrumentationVersion.IsSet()
+}
+
+// HasInstrumentationVersion returns a boolean if a field has been set.
+func (o *PromoteAgentRequest) HasInstrumentationVersion() bool {
+	if o != nil && o.InstrumentationVersion.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetInstrumentationVersion gets a reference to the given NullableString and assigns it to the InstrumentationVersion field.
+func (o *PromoteAgentRequest) SetInstrumentationVersion(v string) {
+	o.InstrumentationVersion.Set(&v)
+}
+
+// SetInstrumentationVersionNil sets the value for InstrumentationVersion to be an explicit nil
+func (o *PromoteAgentRequest) SetInstrumentationVersionNil() {
+	o.InstrumentationVersion.Set(nil)
+}
+
+// UnsetInstrumentationVersion ensures that no value is present for InstrumentationVersion, not even an explicit nil
+func (o *PromoteAgentRequest) UnsetInstrumentationVersion() {
+	o.InstrumentationVersion.Unset()
+}
+
 // GetEnableApiKeySecurity returns the EnableApiKeySecurity field value if set, zero value otherwise.
 func (o *PromoteAgentRequest) GetEnableApiKeySecurity() bool {
 	if o == nil || IsNil(o.EnableApiKeySecurity) {
@@ -385,6 +430,9 @@ func (o PromoteAgentRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.EnableAutoInstrumentation) {
 		toSerialize["enableAutoInstrumentation"] = o.EnableAutoInstrumentation
+	}
+	if o.InstrumentationVersion.IsSet() {
+		toSerialize["instrumentationVersion"] = o.InstrumentationVersion.Get()
 	}
 	if !IsNil(o.EnableApiKeySecurity) {
 		toSerialize["enableApiKeySecurity"] = o.EnableApiKeySecurity

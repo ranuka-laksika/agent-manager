@@ -18,9 +18,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import type {
-  CreateMCPProxyAPIKeyPathParams,
-  CreateMCPProxyAPIKeyRequest,
-  CreateMCPProxyAPIKeyResponse,
   CreateMCPProxyPathParams,
   DeleteMCPProxyPathParams,
   FetchMCPProxyServerInfoPathParams,
@@ -31,21 +28,14 @@ import type {
   MCPProxyListResponse,
   MCPServerInfoFetchRequest,
   MCPServerInfoFetchResponse,
-  RevokeMCPProxyAPIKeyPathParams,
-  RotateMCPProxyAPIKeyPathParams,
-  RotateMCPProxyAPIKeyRequest,
-  RotateMCPProxyAPIKeyResponse,
   UpdateMCPProxyPathParams,
 } from "@agent-management-platform/types";
 import {
-  createMCPProxyAPIKey,
   createMCPProxy,
   deleteMCPProxy,
   fetchMCPProxyServerInfo,
   getMCPProxy,
   listMCPProxies,
-  revokeMCPProxyAPIKey,
-  rotateMCPProxyAPIKey,
   updateMCPProxy,
 } from "../apis";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
@@ -129,39 +119,5 @@ export function useFetchMCPProxyServerInfo() {
     mutationFn: ({ params, body }) =>
       fetchMCPProxyServerInfo(params, body, getToken),
     showSuccess: false,
-  });
-}
-
-export function useCreateMCPProxyAPIKey() {
-  const { getToken } = useAuthHooks();
-  return useApiMutation<
-    CreateMCPProxyAPIKeyResponse,
-    unknown,
-    { params: CreateMCPProxyAPIKeyPathParams; body: CreateMCPProxyAPIKeyRequest }
-  >({
-    action: { verb: "create", target: "mcp proxy api key" },
-    mutationFn: ({ params, body }) =>
-      createMCPProxyAPIKey(params, body, getToken),
-  });
-}
-
-export function useRotateMCPProxyAPIKey() {
-  const { getToken } = useAuthHooks();
-  return useApiMutation<
-    RotateMCPProxyAPIKeyResponse,
-    unknown,
-    { params: RotateMCPProxyAPIKeyPathParams; body: RotateMCPProxyAPIKeyRequest }
-  >({
-    action: { verb: "rotate", target: "mcp proxy api key" },
-    mutationFn: ({ params, body }) =>
-      rotateMCPProxyAPIKey(params, body, getToken),
-  });
-}
-
-export function useRevokeMCPProxyAPIKey() {
-  const { getToken } = useAuthHooks();
-  return useApiMutation<void, unknown, RevokeMCPProxyAPIKeyPathParams>({
-    action: { verb: "revoke", target: "mcp proxy api key" },
-    mutationFn: (params) => revokeMCPProxyAPIKey(params, getToken),
   });
 }

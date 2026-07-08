@@ -17,6 +17,7 @@
  */
 
 import {
+  useAgentBuildOptions,
   useDeployAgent,
   useUpdateAgentDeploySettings,
   useGetAgent,
@@ -63,6 +64,7 @@ import {
   IconButton,
   Menu,
   MenuItem,
+  Select,
   Skeleton,
   Stack,
   Switch,
@@ -89,6 +91,11 @@ import {
   TraceListTimeRange,
 } from "@agent-management-platform/types";
 import { extractBuildIdFromImageId } from "../utils/extractBuildIdFromImageId";
+import {
+  compatibleInstrumentationVersions,
+  normalizePythonMinor,
+  pickInstrumentationVersion,
+} from "../utils/instrumentation";
 import { formatDistanceToNow } from "date-fns";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditResourceConfigsDrawer } from "./EditResourceConfigsDrawer";
@@ -398,6 +405,10 @@ export function DeployCard(props: DeployCardProps) {
     agent?.build?.type === "buildpack" &&
     "buildpack" in (agent.build ?? {}) &&
     (agent.build as { buildpack?: { language?: string } }).buildpack?.language === "python";
+  const agentPythonVersion = normalizePythonMinor(
+    (agent?.build as { buildpack?: { languageVersion?: string } } | undefined)
+      ?.buildpack?.languageVersion,
+  );
 
   // Inline toggle: tracing. Endpoint authentication (none/api-key/oauth) is
   // managed in the security drawer since it spans three mutually-exclusive
@@ -405,12 +416,59 @@ export function DeployCard(props: DeployCardProps) {
   const [tracingEnabled, setTracingEnabled] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
+  // AMP instrumentation version shown for this environment. Seeded for display
+  // from the agent's current config; it is only PERSISTED when the user
+  // explicitly changes it (versionDirty), so merely toggling tracing never
+  // converts an unpinned agent into an explicit pin.
+  const [instrumentationVersion, setInstrumentationVersion] = useState<string>("");
+  const [versionDirty, setVersionDirty] = useState(false);
+
+  // Server instrumentation catalog (Python runtimes + version→SDK mapping),
+  // shared with the create wizard.
+  const { data: buildOptions } = useAgentBuildOptions({ orgName: orgId ?? "" });
+  // Instrumentation versions compatible with this agent's Python runtime.
+  const compatibleInstrumentation = useMemo(
+    () => compatibleInstrumentationVersions(buildOptions, agentPythonVersion),
+    [buildOptions, agentPythonVersion],
+  );
 
   useEffect(() => {
     if (agent?.configurations?.enableAutoInstrumentation !== undefined) {
       setTracingEnabled(agent.configurations.enableAutoInstrumentation);
     }
   }, [agent?.configurations?.enableAutoInstrumentation]);
+
+  // Reset per-agent selector state when the viewed agent changes, so a version
+  // from a previously-viewed agent never leaks onto (or gets persisted for) a
+  // different agent when this card instance is reused across navigation.
+  useEffect(() => {
+    setInstrumentationVersion("");
+    setVersionDirty(false);
+  }, [agentId, currentEnvironment.name]);
+
+  // Seed the selector for DISPLAY once BOTH the agent (for its Python version)
+  // and the catalog have loaded — waiting avoids seeding from the all-versions
+  // set while agentPythonVersion is still undefined. Re-seed whenever the
+  // current value is not in the compatible set (self-corrects a stale seed);
+  // a valid user selection is always in the set, so this never clobbers it.
+  useEffect(() => {
+    if (!buildOptions || !agent) return;
+    const inSet = compatibleInstrumentation.some(
+      (v) => v.version === instrumentationVersion,
+    );
+    if (inSet) return;
+    const seed = pickInstrumentationVersion(
+      compatibleInstrumentation,
+      agent?.configurations?.instrumentationVersion,
+      buildOptions.instrumentation.defaultVersion,
+    );
+    setInstrumentationVersion(seed);
+  }, [
+    buildOptions,
+    agent,
+    compatibleInstrumentation,
+    instrumentationVersion,
+  ]);
 
   const authMode: "none" | "apikey" | "oauth" = agent?.configurations
     ?.enableOAuthSecurity
@@ -435,9 +493,25 @@ export function DeployCard(props: DeployCardProps) {
   const { mutate: deployAgentMutate } = useDeployAgent();
   const { mutate: updateDeploySettingsMutate } = useUpdateAgentDeploySettings();
 
-  // Stable debounced redeploy — reads latest values via ref at fire time
-  const latestToggleRef = useRef({ tracing: tracingEnabled });
-  latestToggleRef.current = { tracing: tracingEnabled };
+  // Stable debounced redeploy — reads latest values via ref at fire time.
+  // `versionInSet` gates whether the selected version is safe to send (it must
+  // be compatible with the agent's Python), and `versionDirty` whether the user
+  // actually changed it (vs. a display-only seed).
+  const versionInCompatibleSet = compatibleInstrumentation.some(
+    (v) => v.version === instrumentationVersion,
+  );
+  const latestToggleRef = useRef({
+    tracing: tracingEnabled,
+    instrumentationVersion,
+    versionDirty,
+    versionInCompatibleSet,
+  });
+  latestToggleRef.current = {
+    tracing: tracingEnabled,
+    instrumentationVersion,
+    versionDirty,
+    versionInCompatibleSet,
+  };
 
   const redeployContextRef = useRef({
     orgId, projectId, agentId, currentEnvironment, isApiAgent, isPythonBuildpack,
@@ -470,16 +544,28 @@ export function DeployCard(props: DeployCardProps) {
         isPythonBuildpack: isPy,
       } = redeployContextRef.current;
       if (!o || !p || !a || !env?.name) return;
-      const { tracing } = latestToggleRef.current;
+      const {
+        tracing,
+        instrumentationVersion: version,
+        versionDirty: dirty,
+        versionInCompatibleSet: inSet,
+      } = latestToggleRef.current;
       setIsSavingConfig(true);
       // Auth + CORS are omitted so resolveAPIConfig preserves them from the
-      // existing DB config; only the tracing toggle is changed here.
+      // existing DB config; only the tracing toggle and instrumentation version
+      // are changed here. The version is sent only when the user actually
+      // changed it to a compatible value while tracing is on — otherwise it is
+      // omitted so the backend preserves the existing pin (and an unpinned agent
+      // keeps floating with the platform default rather than being frozen).
       updateDeploySettingsRef.current(
         {
           params: { orgName: o, projName: p, agentName: a },
           body: {
             environmentName: env.name,
             ...(isPy && { enableAutoInstrumentation: tracing }),
+            ...(isPy && tracing && dirty && inSet && version
+              ? { instrumentationVersion: version }
+              : {}),
           },
         },
         { onSuccess: () => setIsSavingConfig(false), onError: () => setIsSavingConfig(false) },
@@ -791,6 +877,42 @@ export function DeployCard(props: DeployCardProps) {
                           debouncedRedeploy();
                         }}
                       />
+                    </Box>
+                  )}
+
+                  {/* AMP Instrumentation Version — pins the init-container image
+                      + bundled OpenLLMetry SDK for this environment. */}
+                  {isPythonBuildpack && tracingEnabled && (
+                    <Box display="flex" alignItems="center" justifyContent="space-between">
+                      <Box display="flex" alignItems="center" gap={1}>
+                        <Info size={14} style={{ opacity: 0.6 }} />
+                        <Typography variant="body2">Instrumentation Version</Typography>
+                      </Box>
+                      {compatibleInstrumentation.length === 0 && buildOptions ? (
+                        <Typography variant="caption" color="text.secondary">
+                          None available for Python {agentPythonVersion ?? "runtime"}
+                        </Typography>
+                      ) : (
+                        <Select
+                          size="small"
+                          value={versionInCompatibleSet ? instrumentationVersion : ""}
+                          disabled={isSavingConfig || !buildOptions}
+                          onChange={(e) => {
+                            setInstrumentationVersion(e.target.value as string);
+                            setVersionDirty(true);
+                            debouncedRedeploy();
+                          }}
+                          sx={{ minWidth: 200 }}
+                        >
+                          {compatibleInstrumentation.map((v) => (
+                            <MenuItem key={v.version} value={v.version}>
+                              {v.traceloopSdk
+                                ? `${v.version} (OpenLLMetry v${v.traceloopSdk})`
+                                : v.version}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      )}
                     </Box>
                   )}
                 </Stack>

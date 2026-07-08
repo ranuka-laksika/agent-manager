@@ -84,7 +84,7 @@ export function EnvironmentsOrganization() {
         />
       </Routes>
 
-      {orgId && (
+      {createOpen && orgId && (
         <CreateDrawer
           open={createOpen}
           onClose={() => setCreateOpen(false)}

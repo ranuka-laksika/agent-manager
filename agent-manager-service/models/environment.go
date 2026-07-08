@@ -46,7 +46,7 @@ type CreateEnvironmentRequest struct {
 	DisplayName      string       `json:"displayName" validate:"required,max=128"`
 	Description      string       `json:"description,omitempty"`
 	IsolationTier    string       `json:"isolationTier,omitempty"`
-	DataplaneRef     string       `json:"dataplaneRef" validate:"required,max=100"`
+	DataplaneRef     string       `json:"dataplaneRef,omitempty" validate:"omitempty,max=100"`
 	DNSPrefix        string       `json:"dnsPrefix" validate:"required,max=100"`
 	IsProduction     bool         `json:"isProduction"`
 	Gateway          *GatewaySpec `json:"gateway,omitempty"`

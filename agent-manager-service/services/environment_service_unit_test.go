@@ -20,6 +20,7 @@
 //
 //   - repositories.GatewayRepository -> repomocks.GatewayRepositoryMock
 //   - occlient.OpenChoreoClient      -> clientmocks.OpenChoreoClientMock
+//   - thundersvc.Prober              -> clientmocks.ThunderProberMock
 //
 // The goal is to exercise the service's OWN logic (error mapping to sentinels,
 // validation gates, pagination, fan-out/aggregation, transformation) without a
@@ -39,15 +40,25 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
 // newEnvService wires the service with a discard logger and the two mocked deps.
+// The Thunder prober is left unconfigured (panics if called) since only the
+// ListThunderInstances tests exercise it — see newEnvServiceWithProber.
 func newEnvService(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock) EnvironmentService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewEnvironmentService(logger, repo, oc)
+	return NewEnvironmentService(logger, repo, oc, &clientmocks.ThunderProberMock{}, nil)
+}
+
+// newEnvServiceWithProber is like newEnvService but with a configured Thunder prober,
+// for tests that exercise ListThunderInstances' reachability branch.
+func newEnvServiceWithProber(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock, prober thundersvc.Prober) EnvironmentService {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return NewEnvironmentService(logger, repo, oc, prober, nil)
 }
 
 // -----------------------------------------------------------------------------
@@ -323,6 +334,63 @@ func TestEnvironmentService_UpdateEnvironment(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
+// pipelineReferencesEnvironment — the pure predicate DeleteEnvironment uses to
+// decide whether a pipeline blocks deletion (as source or as a promotion target).
+// -----------------------------------------------------------------------------
+
+func TestPipelineReferencesEnvironment(t *testing.T) {
+	tests := []struct {
+		name     string
+		pipeline *models.DeploymentPipelineResponse
+		envName  string
+		want     bool
+	}{
+		{
+			name:     "no promotion paths",
+			pipeline: &models.DeploymentPipelineResponse{Name: "p"},
+			envName:  "development",
+			want:     false,
+		},
+		{
+			name: "matches source environment",
+			pipeline: &models.DeploymentPipelineResponse{
+				PromotionPaths: []models.PromotionPath{{SourceEnvironmentRef: "development"}},
+			},
+			envName: "development",
+			want:    true,
+		},
+		{
+			name: "matches target environment",
+			pipeline: &models.DeploymentPipelineResponse{
+				PromotionPaths: []models.PromotionPath{{
+					SourceEnvironmentRef:  "development",
+					TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "production"}},
+				}},
+			},
+			envName: "production",
+			want:    true,
+		},
+		{
+			name: "no match",
+			pipeline: &models.DeploymentPipelineResponse{
+				PromotionPaths: []models.PromotionPath{{
+					SourceEnvironmentRef:  "development",
+					TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "production"}},
+				}},
+			},
+			envName: "staging",
+			want:    false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, pipelineReferencesEnvironment(tt.pipeline, tt.envName))
+		})
+	}
+}
+
+// -----------------------------------------------------------------------------
 // DeleteEnvironment — the richest method: lookup, UUID parse, pipeline-reference
 // guard, OC delete (idempotent on not-found), then local mapping cleanup.
 // -----------------------------------------------------------------------------
@@ -380,6 +448,8 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 		err := svc.DeleteEnvironment(context.Background(), org, envID)
 
 		assert.ErrorIs(t, err, utils.ErrEnvironmentInUse)
+		assert.Contains(t, err.Error(), "pipeline-a")
+		assert.Empty(t, oc.DeleteEnvironmentCalls())
 	})
 
 	t.Run("blocks deletion when referenced as a pipeline target", func(t *testing.T) {
@@ -417,6 +487,7 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 			ListDeploymentPipelinesFunc: func(_ context.Context, _ string) ([]*models.DeploymentPipelineResponse, error) {
 				return nil, boom
 			},
+			// DeleteEnvironment must NOT be reached — leaving it nil asserts that.
 		}
 		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
 
@@ -424,6 +495,7 @@ func TestEnvironmentService_DeleteEnvironment(t *testing.T) {
 
 		require.Error(t, err)
 		assert.ErrorIs(t, err, boom)
+		assert.Empty(t, oc.DeleteEnvironmentCalls())
 	})
 
 	t.Run("surfaces a non-not-found OC delete error without local cleanup", func(t *testing.T) {
@@ -649,5 +721,107 @@ func TestEnvironmentService_GetEnvironmentGateways(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, resp, 1)
 		assert.Equal(t, string(models.GatewayStatusInactive), resp[0].Status)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// ListThunderInstances — gates returning Thunder instance info on whether
+// the env-Thunder JWKS endpoint is actually reachable (live HTTP probe).
+// -----------------------------------------------------------------------------
+
+func TestEnvironmentService_ListThunderInstances(t *testing.T) {
+	const org = "acme"
+
+	t.Run("wraps list environments error", func(t *testing.T) {
+		boom := errors.New("oc down")
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return nil, boom
+			},
+		}
+		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
+
+		_, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.Error(t, err)
+		assert.ErrorIs(t, err, boom)
+	})
+
+	t.Run("skips environments with unreachable Thunder", func(t *testing.T) {
+		// The prober reports every env as unreachable, so the result list must be
+		// empty — proving that gateway mappings alone are NOT sufficient to advertise
+		// Thunder endpoints.
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{
+					{UUID: "u1", Name: "dev", DisplayName: "Dev", IsProduction: false},
+					{UUID: "u2", Name: "staging", DisplayName: "Staging", IsProduction: false},
+				}, nil
+			},
+		}
+		prober := &clientmocks.ThunderProberMock{
+			ProbeFunc: func(_ context.Context, _, _ string) bool { return false },
+		}
+		svc := newEnvServiceWithProber(&repomocks.GatewayRepositoryMock{}, oc, prober)
+
+		resp, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Empty(t, resp.ThunderInstances)
+	})
+
+	t.Run("skips nil and empty-name environments", func(t *testing.T) {
+		// newEnvService's prober is unconfigured (panics if called) — proving the
+		// nil/empty-name guard skips these entries before ever probing them.
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{
+					nil,
+					{UUID: "u1", Name: ""},
+				}, nil
+			},
+		}
+		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
+
+		resp, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		assert.Empty(t, resp.ThunderInstances)
+	})
+
+	t.Run("includes reachable Thunder instances with correctly constructed URLs", func(t *testing.T) {
+		oc := &clientmocks.OpenChoreoClientMock{
+			ListEnvironmentsFunc: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+				return []*models.EnvironmentResponse{
+					{UUID: "u1", Name: "dev", DisplayName: "Dev", IsProduction: false},
+					{UUID: "u2", Name: "staging", DisplayName: "Staging", IsProduction: true},
+				}, nil
+			},
+		}
+		prober := &clientmocks.ThunderProberMock{
+			ProbeFunc: func(_ context.Context, _, _ string) bool { return true },
+		}
+		svc := newEnvServiceWithProber(&repomocks.GatewayRepositoryMock{}, oc, prober)
+
+		resp, err := svc.ListThunderInstances(context.Background(), org)
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Len(t, resp.ThunderInstances, 2)
+
+		dev := resp.ThunderInstances[0]
+		assert.Equal(t, "dev", dev.EnvName)
+		assert.Equal(t, "Dev", dev.DisplayName)
+		assert.False(t, dev.IsProduction)
+		assert.Equal(t, thundersvc.ThunderIssuerURL(org, "dev"), dev.IssuerURL)
+		assert.Equal(t, thundersvc.ThunderExternalTokenURL(org, "dev"), dev.TokenURL)
+		assert.Equal(t, thundersvc.ThunderExternalJWKSURL(org, "dev"), dev.JWKSURL)
+		assert.Equal(t, thundersvc.ThunderNamespace(org, "dev"), dev.Namespace)
+
+		staging := resp.ThunderInstances[1]
+		assert.Equal(t, "staging", staging.EnvName)
+		assert.True(t, staging.IsProduction)
 	})
 }

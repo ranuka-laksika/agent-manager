@@ -160,7 +160,7 @@ jobs:
             traceloop-sdk ${LATEST} against the supported frameworks first.
           - Check that the wrapt<2.0.0 constraint
             (libs/amp-instrumentation/pyproject.toml and
-            python-instrumentation-provider/requirements.txt) still holds.
+            python-instrumentation-provider/requirements.in) still holds.
 
           Filed automatically by .github/workflows/traceloop-release-watch.yaml
           EOF

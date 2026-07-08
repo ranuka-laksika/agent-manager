@@ -42,3 +42,4 @@ export * from './git-secrets';
 export * from './identities';
 export * from './agent-kinds';
 export * from './agent-build-options';
+export * from './thunder-instances';

@@ -32,4 +32,5 @@ func registerEnvironmentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.E
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envID}", rbac.EnvironmentDelete, ctrl.DeleteEnvironment)
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/environments/{envID}/gateways", ctrl.GetEnvironmentGateways,
 		rbac.EnvironmentRead, rbac.GatewayRead)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/thunder-instances", rbac.EnvironmentRead, ctrl.ListThunderInstances)
 }

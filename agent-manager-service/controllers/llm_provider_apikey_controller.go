@@ -30,6 +30,7 @@ import (
 
 // LLMProviderAPIKeyController handles API key operations for LLM providers
 type LLMProviderAPIKeyController interface {
+	ListAPIKeys(w http.ResponseWriter, r *http.Request)
 	CreateAPIKey(w http.ResponseWriter, r *http.Request)
 	RevokeAPIKey(w http.ResponseWriter, r *http.Request)
 	RotateAPIKey(w http.ResponseWriter, r *http.Request)
@@ -46,6 +47,33 @@ func NewLLMProviderAPIKeyController(
 	return &llmProviderAPIKeyController{
 		apiKeyService: apiKeyService,
 	}
+}
+
+// ListAPIKeys handles GET /api/v1/orgs/{orgName}/llm-providers/{id}/api-keys
+func (c *llmProviderAPIKeyController) ListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	providerID := r.PathValue("id")
+
+	log.Info("ListLLMProviderAPIKeys: starting", "orgName", orgName, "providerID", providerID)
+
+	response, err := c.apiKeyService.ListAPIKeys(ctx, orgName, providerID)
+	if err != nil {
+		switch {
+		case errors.Is(err, utils.ErrLLMProviderNotFound):
+			log.Warn("ListLLMProviderAPIKeys: provider not found", "orgName", orgName, "providerID", providerID)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "LLM provider not found")
+			return
+		default:
+			log.Error("ListLLMProviderAPIKeys: failed to list API keys", "orgName", orgName, "providerID", providerID, "error", err)
+			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list API keys")
+			return
+		}
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
 // CreateAPIKey handles POST /api/v1/orgs/{orgName}/llm-providers/{id}/api-keys

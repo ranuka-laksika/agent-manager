@@ -109,6 +109,13 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		os.Exit(1)
 	}
 
+	// Start the AgentID provisioning retry reconciler with its own background context
+	agentThunderReconcilerCtx, agentThunderReconcilerCancel := context.WithCancel(context.Background())
+	if err := dependencies.AgentThunderReconciler.Start(agentThunderReconcilerCtx); err != nil {
+		slog.Error("failed to start agent thunder provisioning reconciler", "error", err)
+		os.Exit(1)
+	}
+
 	// Load built-in LLM provider templates into memory
 	if err := loadBuiltInLLMTemplates(dependencies); err != nil {
 		slog.Error("Failed to load built-in LLM provider templates", "error", err)
@@ -147,6 +154,11 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		schedulerCancel()
 		if err := dependencies.MonitorScheduler.Stop(); err != nil {
 			slog.Error("error stopping monitor scheduler", "error", err)
+		}
+
+		agentThunderReconcilerCancel()
+		if err := dependencies.AgentThunderReconciler.Stop(); err != nil {
+			slog.Error("error stopping agent thunder provisioning reconciler", "error", err)
 		}
 
 		// Shutdown WebSocket manager in a goroutine since it blocks

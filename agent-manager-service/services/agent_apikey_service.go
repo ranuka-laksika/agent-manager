@@ -143,7 +143,7 @@ func (s *AgentAPIKeyService) RevokeAPIKey(
 		return err
 	}
 	artifactUUID := artifact.UUID.String()
-	return s.broadcaster.broadcastRevokeToGateways(gateways, artifactUUID, artifactUUID, keyName)
+	return s.broadcaster.broadcastRevokeToGateways(ctx, gateways, artifactUUID, artifactUUID, keyName)
 }
 
 // RotateAPIKey generates a new API key value and broadcasts the update to the environment's gateways.

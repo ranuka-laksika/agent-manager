@@ -16,9 +16,6 @@
  */
 
 import type {
-  CreateMCPProxyAPIKeyPathParams,
-  CreateMCPProxyAPIKeyRequest,
-  CreateMCPProxyAPIKeyResponse,
   CreateMCPProxyPathParams,
   DeleteMCPProxyPathParams,
   FetchMCPProxyServerInfoPathParams,
@@ -31,10 +28,6 @@ import type {
   MCPProxyListResponse,
   MCPServerInfoFetchRequest,
   MCPServerInfoFetchResponse,
-  RevokeMCPProxyAPIKeyPathParams,
-  RotateMCPProxyAPIKeyPathParams,
-  RotateMCPProxyAPIKeyRequest,
-  RotateMCPProxyAPIKeyResponse,
   UpdateMCPProxyPathParams,
 } from "@agent-management-platform/types";
 import {
@@ -161,57 +154,4 @@ export async function fetchMCPProxyServerInfo(
   );
   if (!res.ok) throw await res.json();
   return res.json();
-}
-
-export async function createMCPProxyAPIKey(
-  params: CreateMCPProxyAPIKeyPathParams,
-  body: CreateMCPProxyAPIKeyRequest,
-  getToken?: () => Promise<string>,
-): Promise<CreateMCPProxyAPIKeyResponse> {
-  const org = encodeRequired(params.orgName, "orgName");
-  const proxyId = encodeRequired(params.proxyId, "proxyId");
-  const token = getToken ? await getToken() : undefined;
-
-  const res = await httpPOST(
-    `${SERVICE_BASE}/orgs/${org}/mcp-proxies/${proxyId}/api-keys`,
-    body,
-    { token },
-  );
-  if (!res.ok) throw await res.json();
-  return res.json();
-}
-
-export async function rotateMCPProxyAPIKey(
-  params: RotateMCPProxyAPIKeyPathParams,
-  body: RotateMCPProxyAPIKeyRequest,
-  getToken?: () => Promise<string>,
-): Promise<RotateMCPProxyAPIKeyResponse> {
-  const org = encodeRequired(params.orgName, "orgName");
-  const proxyId = encodeRequired(params.proxyId, "proxyId");
-  const keyName = encodeRequired(params.keyName, "keyName");
-  const token = getToken ? await getToken() : undefined;
-
-  const res = await httpPUT(
-    `${SERVICE_BASE}/orgs/${org}/mcp-proxies/${proxyId}/api-keys/${keyName}`,
-    body,
-    { token },
-  );
-  if (!res.ok) throw await res.json();
-  return res.json();
-}
-
-export async function revokeMCPProxyAPIKey(
-  params: RevokeMCPProxyAPIKeyPathParams,
-  getToken?: () => Promise<string>,
-): Promise<void> {
-  const org = encodeRequired(params.orgName, "orgName");
-  const proxyId = encodeRequired(params.proxyId, "proxyId");
-  const keyName = encodeRequired(params.keyName, "keyName");
-  const token = getToken ? await getToken() : undefined;
-
-  const res = await httpDELETE(
-    `${SERVICE_BASE}/orgs/${org}/mcp-proxies/${proxyId}/api-keys/${keyName}`,
-    { token },
-  );
-  if (!res.ok) throw await res.json();
 }

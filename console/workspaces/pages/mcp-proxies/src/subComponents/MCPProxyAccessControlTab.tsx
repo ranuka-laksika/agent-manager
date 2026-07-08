@@ -24,6 +24,7 @@ import {
 } from "@agent-management-platform/shared-component";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
 import type {
+  MCPEnvironmentConfig,
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
@@ -142,15 +143,17 @@ function buildAclPolicyParams(
 }
 
 export type MCPProxyAccessControlTabProps = {
-  proxy: MCPProxy | null | undefined;
+  config: MCPEnvironmentConfig | undefined;
+  selectedEnvironmentId: string;
   orgName: string | undefined;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPProxy>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxyAccessControlTab({
-  proxy,
+  config,
+  selectedEnvironmentId,
   orgName,
   isLoading = false,
   onUpdate,
@@ -174,7 +177,7 @@ export function MCPProxyAccessControlTab({
   );
 
   const items = useMemo<AccessControlItem[]>(() => {
-    const capabilities = proxy?.capabilities;
+    const capabilities = config?.capabilities;
     if (!capabilities) return [];
     const result: AccessControlItem[] = [];
     const kinds: Array<{ kind: CapabilityKind; entries?: Record<string, unknown>[] }> = [
@@ -195,18 +198,18 @@ export function MCPProxyAccessControlTab({
       });
     }
     return result;
-  }, [proxy?.capabilities]);
+  }, [config?.capabilities]);
 
   const capabilitiesPresent = useMemo<Record<CapabilityKind, boolean>>(
     () => ({
-      tool: Boolean(proxy?.capabilities?.tools?.length),
-      resource: Boolean(proxy?.capabilities?.resources?.length),
-      prompt: Boolean(proxy?.capabilities?.prompts?.length),
+      tool: Boolean(config?.capabilities?.tools?.length),
+      resource: Boolean(config?.capabilities?.resources?.length),
+      prompt: Boolean(config?.capabilities?.prompts?.length),
     }),
     [
-      proxy?.capabilities?.tools,
-      proxy?.capabilities?.resources,
-      proxy?.capabilities?.prompts,
+      config?.capabilities?.tools,
+      config?.capabilities?.resources,
+      config?.capabilities?.prompts,
     ],
   );
 
@@ -216,13 +219,13 @@ export function MCPProxyAccessControlTab({
     capabilitiesPresent.prompt;
 
   useEffect(() => {
-    if (!proxy) return;
-    const existing = proxy.policies?.find((p) => p.name === ACL_POLICY_NAME);
+    if (!selectedEnvironmentId) return;
+    const existing = config?.policies?.find((p) => p.name === ACL_POLICY_NAME);
     const parsed = parseExistingAclPolicy(existing);
     setMode(parsed.mode);
     setExceptionKeys(parsed.exceptionKeys);
     lastSavedRef.current = parsed;
-  }, [proxy]);
+  }, [config, selectedEnvironmentId]);
 
   const isDirty = useMemo(() => {
     const saved = lastSavedRef.current;
@@ -233,7 +236,7 @@ export function MCPProxyAccessControlTab({
   }, [mode, exceptionKeys]);
 
   const handleSave = useCallback(async () => {
-    if (!proxy) return;
+    if (!config) return;
     if (!availableAclPolicy) {
       setStatus({
         message:
@@ -261,7 +264,7 @@ export function MCPProxyAccessControlTab({
       displayName: availableAclPolicy.displayName,
       params,
     };
-    const existingPolicies = proxy.policies ?? [];
+    const existingPolicies = config.policies ?? [];
     const existingIndex = existingPolicies.findIndex(
       (p) => p.name === ACL_POLICY_NAME,
     );
@@ -284,7 +287,7 @@ export function MCPProxyAccessControlTab({
       });
     }
   }, [
-    proxy,
+    config,
     availableAclPolicy,
     hasAnyCapability,
     mode,
@@ -302,7 +305,7 @@ export function MCPProxyAccessControlTab({
     setStatus(null);
   }, []);
 
-  if (!isLoading && proxy && !hasAnyCapability) {
+  if (!isLoading && config && !hasAnyCapability) {
     return (
       <Stack
         alignItems="center"

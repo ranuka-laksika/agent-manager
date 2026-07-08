@@ -28,6 +28,7 @@ import (
 // LLMProviderAPIKeyService handles API key management for LLM providers
 type LLMProviderAPIKeyService struct {
 	providerRepo repositories.LLMProviderRepository
+	apiKeyRepo   repositories.APIKeyRepository
 	broadcaster  apiKeyBroadcaster
 }
 
@@ -40,12 +41,35 @@ func NewLLMProviderAPIKeyService(
 ) *LLMProviderAPIKeyService {
 	return &LLMProviderAPIKeyService{
 		providerRepo: providerRepo,
+		apiKeyRepo:   apiKeyRepo,
 		broadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
 			gatewayService: gatewayService,
 			apiKeyRepo:     apiKeyRepo,
 		},
 	}
+}
+
+// ListAPIKeys returns the masked, user-managed (permanent) API keys for an LLM provider.
+// The plain key value is never returned — only the masked representation.
+func (s *LLMProviderAPIKeyService) ListAPIKeys(
+	ctx context.Context,
+	orgID, providerID string,
+) (*models.ListAPIKeysResponse, error) {
+	provider, err := s.providerRepo.GetByUUID(providerID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get LLM provider: %w", err)
+	}
+	if provider == nil {
+		return nil, utils.ErrLLMProviderNotFound
+	}
+
+	stored, err := s.apiKeyRepo.ListByArtifact(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list API keys: %w", err)
+	}
+
+	return &models.ListAPIKeysResponse{Keys: models.ToUserManagedAPIKeyInfos(stored)}, nil
 }
 
 // CreateAPIKey generates an API key for an LLM provider and broadcasts it to all gateways
@@ -61,7 +85,7 @@ func (s *LLMProviderAPIKeyService) CreateAPIKey(
 	if provider == nil {
 		return nil, utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastCreate(orgID, providerID, providerID, req)
+	return s.broadcaster.broadcastCreate(ctx, orgID, providerID, providerID, req)
 }
 
 // RevokeAPIKey broadcasts an API key revocation event to all gateways for this organization.
@@ -76,7 +100,23 @@ func (s *LLMProviderAPIKeyService) RevokeAPIKey(
 	if provider == nil {
 		return utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastRevoke(orgID, providerID, providerID, keyName)
+	return s.broadcaster.broadcastRevoke(ctx, orgID, providerID, providerID, keyName)
+}
+
+// RevokeAllUserManagedKeys revokes every user-managed API key for an LLM provider and
+// broadcasts the revocations to all gateways. Used when API key security is disabled.
+func (s *LLMProviderAPIKeyService) RevokeAllUserManagedKeys(
+	ctx context.Context,
+	orgID, providerID string,
+) error {
+	provider, err := s.providerRepo.GetByUUID(providerID, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to get LLM provider: %w", err)
+	}
+	if provider == nil {
+		return utils.ErrLLMProviderNotFound
+	}
+	return s.broadcaster.broadcastRevokeUserManaged(ctx, orgID, providerID, providerID)
 }
 
 // RotateAPIKey generates a new API key value and broadcasts the update to all gateways.
@@ -93,5 +133,5 @@ func (s *LLMProviderAPIKeyService) RotateAPIKey(
 	if provider == nil {
 		return nil, utils.ErrLLMProviderNotFound
 	}
-	return s.broadcaster.broadcastRotate(orgID, providerID, providerID, keyName, req)
+	return s.broadcaster.broadcastRotate(ctx, orgID, providerID, providerID, keyName, req)
 }

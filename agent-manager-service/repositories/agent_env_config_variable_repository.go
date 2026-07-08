@@ -70,7 +70,17 @@ func (r *agentEnvConfigVariableRepository) CreateBatch(ctx context.Context, tx *
 	if len(variables) == 0 {
 		return nil
 	}
-	return tx.WithContext(ctx).Create(&variables).Error
+	return tx.WithContext(ctx).
+		Clauses(clause.OnConflict{
+			Columns: []clause.Column{
+				{Name: "config_uuid"},
+				{Name: "environment_uuid"},
+				{Name: "variable_name"},
+				{Name: "variable_key"},
+			},
+			DoNothing: true,
+		}).
+		Create(&variables).Error
 }
 
 func (r *agentEnvConfigVariableRepository) ListByConfigAndEnv(ctx context.Context, configUUID, envUUID uuid.UUID) ([]models.AgentEnvConfigVariable, error) {

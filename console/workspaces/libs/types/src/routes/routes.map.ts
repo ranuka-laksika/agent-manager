@@ -32,7 +32,19 @@ export const rootRouteMap: AppRoute = {
             children: {
                 profile: {
                     path: 'profile',
+                    index: true,
                     children: {},
+                },
+                thunderInstances: {
+                    path: 'thunder-instances',
+                    index: true,
+                    children: {
+                        view: {
+                            path: 'view/:envName',
+                            index: true,
+                            children: {},
+                        },
+                    },
                 },
                 gateways: {
                     path: 'gateways',
@@ -77,38 +89,55 @@ export const rootRouteMap: AppRoute = {
                         }
                     },
                 },
-                identities: {
-                    path: 'identities',
+                settings: {
+                    path: 'settings',
                     index: true,
                     children: {
-                        users: {
-                            path: 'users',
+                        identities: {
+                            path: 'identities',
                             index: true,
                             children: {
-                                detail: {
-                                    path: ':userId',
+                                users: {
+                                    path: 'users',
                                     index: true,
-                                    children: {},
+                                    children: {
+                                        detail: {
+                                            path: ':userId',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
+                                },
+                                roles: {
+                                    path: 'roles',
+                                    index: true,
+                                    children: {
+                                        detail: {
+                                            path: ':roleId',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
+                                },
+                                groups: {
+                                    path: 'groups',
+                                    index: true,
+                                    children: {
+                                        detail: {
+                                            path: ':groupId',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
                                 },
                             },
                         },
-                        roles: {
-                            path: 'roles',
+                        appearance: {
+                            path: 'appearance',
                             index: true,
                             children: {
-                                detail: {
-                                    path: ':roleId',
-                                    index: true,
-                                    children: {},
-                                },
-                            },
-                        },
-                        groups: {
-                            path: 'groups',
-                            index: true,
-                            children: {
-                                detail: {
-                                    path: ':groupId',
+                                theme: {
+                                    path: 'theme',
                                     index: true,
                                     children: {},
                                 },

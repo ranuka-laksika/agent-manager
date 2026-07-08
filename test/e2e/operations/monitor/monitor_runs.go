@@ -148,8 +148,10 @@ type WaitForMonitorRunParams struct {
 	Timeout     time.Duration // default: 10 minutes
 }
 
-// WaitForMonitorRun polls until a monitor run reaches "completed" status.
-// Returns the first completed run.
+// WaitForMonitorRun polls until a monitor run reaches "success" status with at
+// least one evaluator score, and returns that run. A scoreless success is
+// treated as still in progress, because a run can report success before its
+// scores are persisted (see the success case below).
 func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunParams) framework.MonitorRunResponse {
 	timeout := params.Timeout
 	if timeout == 0 {
@@ -180,11 +182,26 @@ func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunPar
 		statuses := make([]string, 0, len(runs.Runs))
 		for i := range runs.Runs {
 			run := runs.Runs[i]
-			statuses = append(statuses, run.Status)
+			status := run.Status
+			if run.Status == "success" {
+				status = fmt.Sprintf("success(scores=%d)", len(run.Scores))
+			}
+			statuses = append(statuses, status)
 			switch run.Status {
 			case "success":
-				completedRun = run
-				found = true
+				// A run can briefly report "success" before its evaluator
+				// scores are persisted. This is most visible for future
+				// monitors, whose scheduled run may fire and complete before
+				// freshly generated traces have been ingested and evaluated,
+				// yielding a scoreless success. Treat that as still in
+				// progress so we keep polling for a scored run (the next
+				// scheduled run picks up the ingested traces).
+				if len(run.Scores) > 0 {
+					completedRun = run
+					found = true
+				} else {
+					pending = true
+				}
 			case "failed":
 				if failedRun == nil {
 					failedRun = &runs.Runs[i]
@@ -211,11 +228,11 @@ func WaitForMonitorRun(client *framework.AMPClient, params *WaitForMonitorRunPar
 			StopTrying(fmt.Sprintf("monitor run %s failed (%s): %s", failedRun.ID, scope, errMsg)).Now()
 		}
 
-		lastDiag = fmt.Sprintf("%s | attempt %d | %d run(s) statuses=%v, no success yet", scope, attempt, len(runs.Runs), statuses)
+		lastDiag = fmt.Sprintf("%s | attempt %d | %d run(s) statuses=%v, no scored success yet", scope, attempt, len(runs.Runs), statuses)
 		if !found && len(runs.Runs) > 0 {
 			ginkgo.GinkgoWriter.Printf("Monitor runs: %d, statuses=%v\n", len(runs.Runs), statuses)
 		}
-		g.Expect(found).To(BeTrue(), "no successful monitor run found yet for %s (%d run(s), statuses=%v)", scope, len(runs.Runs), statuses)
+		g.Expect(found).To(BeTrue(), "no scored successful monitor run found yet for %s (%d run(s), statuses=%v)", scope, len(runs.Runs), statuses)
 	}).WithTimeout(timeout).WithPolling(15 * time.Second).Should(Succeed())
 
 	return completedRun

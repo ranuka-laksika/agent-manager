@@ -132,6 +132,9 @@ function buildScript(
 
   const chartVersion = getAmpVersionHelm();
 
+  // The env-creation script chains into the Thunder provisioning script to also
+  // stand up this environment's identity (Thunder) instance. Pass the version-matched
+  // URL so the chained call fetches the script from the same git ref as this one.
   const lines = [
     `curl -fsSL ${getRawScriptUrl("add-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
@@ -146,6 +149,7 @@ function buildScript(
       ? [`    AGENT_MANAGER_INTERNAL_BASE_URL=${internalBase} \\`]
       : []),
     ...(internalCp ? [`    AGENT_MANAGER_INTERNAL_CP=${internalCp} \\`] : []),
+    `    THUNDER_SCRIPT_URL=${getRawScriptUrl("add-environment-thunder.sh")} \\`,
     "    bash",
   ];
   return lines.join("\n");
@@ -302,10 +306,11 @@ export function CreateEnvironmentDrawer({
         <Stack spacing={3}>
           <Typography variant="body2" color="text.secondary">
             Environments are provisioned by a script that creates the
-            environment in Agent Manager and installs its API Platform Gateway
-            via Helm. Fill in the details below, then copy and run the command
-            in a terminal with <code>kubectl</code> and <code>helm</code>{" "}
-            configured against your cluster.
+            environment in Agent Manager, installs its API Platform Gateway, and
+            stands up its dedicated identity (Thunder) instance via Helm. Fill
+            in the details below, then copy and run the command in a terminal
+            with <code>kubectl</code> and <code>helm</code> configured against
+            your cluster.
           </Typography>
 
           <Stack spacing={2}>

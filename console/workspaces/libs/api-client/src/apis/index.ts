@@ -38,5 +38,6 @@ export * from './agent-mcp-proxies';
 export * from './gateways';
 export * from './git-secrets';
 export * from './identities';
+export * from './thunder-instances';
 export * from './agent-kinds';
 export * from './agent-build-options';

@@ -72,6 +72,7 @@ type AppParams struct {
 	GitSecretController              controllers.GitSecretController
 	IdentityController               controllers.IdentityController
 	MonitorScheduler                 services.MonitorSchedulerService
+	AgentThunderReconciler           services.AgentThunderReconcilerService
 
 	// Services
 	LLMTemplateStore         *services.LLMTemplateStore

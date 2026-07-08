@@ -134,11 +134,22 @@ export interface UpstreamEndpoint {
   url?: string;
   ref?: string;
   auth?: UpstreamAuth;
+  /**
+   * Environment UUIDs this endpoint serves. UUIDs (not names) are stored so the
+   * mapping survives environment renames. Used by MCP proxies that configure a
+   * separate upstream per environment; empty for the classic main/sandbox shape.
+   */
+  environments?: string[];
 }
 
 export interface UpstreamConfig {
   main?: UpstreamEndpoint;
   sandbox?: UpstreamEndpoint;
+  /**
+   * Per-environment upstream endpoints. When present, `main` is derived from these
+   * server-side for backwards compatibility.
+   */
+  endpoints?: UpstreamEndpoint[];
 }
 
 export type AccessControlMode = "allow_all" | "deny_all";
@@ -214,7 +225,7 @@ export interface LLMRateLimitingConfig {
   consumerLevel?: RateLimitingScopeConfig;
 }
 
-export type APIKeyLocation = "header" | "query" | "cookie";
+export type APIKeyLocation = "header" | "query";
 
 export interface APIKeySecurity {
   enabled?: boolean;
@@ -487,6 +498,7 @@ export interface LLMProviderAPIKeyPathParams extends LLMProviderPathParams {
 export type CreateLLMProviderAPIKeyPathParams = LLMProviderPathParams;
 export type RotateLLMProviderAPIKeyPathParams = LLMProviderAPIKeyPathParams;
 export type RevokeLLMProviderAPIKeyPathParams = LLMProviderAPIKeyPathParams;
+export type ListLLMProviderAPIKeysPathParams = LLMProviderPathParams;
 
 // -----------------------------------------------------------------------------
 // LLM API keys (proxy)
@@ -499,6 +511,7 @@ export interface LLMProxyAPIKeyPathParams extends LLMProxyPathParams {
 export type CreateLLMProxyAPIKeyPathParams = LLMProxyPathParams;
 export type RotateLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
 export type RevokeLLMProxyAPIKeyPathParams = LLMProxyAPIKeyPathParams;
+export type ListLLMProxyAPIKeysPathParams = LLMProxyPathParams;
 
 // -----------------------------------------------------------------------------
 // LLM provider consumers
