@@ -17,6 +17,13 @@ tracesObserver:
     cpu: 250m
   service:
     type: LoadBalancer
+  # Exposes the Traces Observer through the observability-plane kgateway
+  # (gateway-default) so it does not need its own LoadBalancer service.
+  ocIngress:
+    enabled: true
+    gatewayName: gateway-default
+    hostname: traces.amp.localhost
+    requestTimeout: 60s
   # Observer Service connection — the upstream service that provides trace data.
   observer:
     baseUrl: "http://observer.openchoreo-observability-plane.svc.cluster.local:8080"

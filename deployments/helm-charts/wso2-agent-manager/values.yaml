@@ -31,6 +31,14 @@ postgresql:
         memory: 512Mi
         cpu: 500m
 
+# OpenChoreo ingress configuration — routes the Console and Agent Manager API
+# through the OpenChoreo control-plane kgateway (gateway-default) so they do
+# not need their own LoadBalancer services.
+ocIngress:
+  enabled: true
+  gatewayName: gateway-default
+  gatewayNamespace: openchoreo-control-plane
+
 # Agent Manager Service Configuration
 agentManagerService:
   enabled: true
@@ -51,6 +59,13 @@ agentManagerService:
     type: LoadBalancer
     port: 9243
     targetPort: 9243
+
+  # Hostname the API is served on via the OpenChoreo control-plane gateway
+  # (see the top-level ocIngress block)
+  ocIngress:
+    hostname: api.amp.localhost
+    # Gateway request timeout for API routes; /mcp streams are exempt (no timeout)
+    requestTimeout: 60s
 
   # Internal server configuration
   internalServer:
@@ -290,6 +305,11 @@ console:
     type: LoadBalancer
     port: 3000
     targetPort: 3000
+
+  # Hostname the Console is served on via the OpenChoreo control-plane gateway
+  # (see the top-level ocIngress block)
+  ocIngress:
+    hostname: console.amp.localhost
 
   resources:
     requests:

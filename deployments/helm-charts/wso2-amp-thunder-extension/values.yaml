@@ -149,6 +149,7 @@ thunder:
     cors:
       allowedOrigins:
         - "http://localhost:3000"
+        - "http://console.amp.localhost:8080"
   setup:
     enabled: true
     backoffLimit: 3
@@ -418,6 +419,7 @@ thunder:
       logoUrl: "https://wso2.cachefly.net/wso2/sites/all/image_resources/logos/WSO2-Pulse-Orange.webp"
       redirectUris:
         - "http://localhost:3000/login"
+        - "http://console.amp.localhost:8080/login"
       grantTypes:
         - "authorization_code"
         - "refresh_token"
