@@ -3269,6 +3269,365 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: List an agent's AgentID bindings
+      description: |
+        Returns the agent's AgentID for every environment in the project's
+        deployment pipeline. This is a safe read only: it never returns or
+        removes a secret. Check `hasUnclaimedSecret` on each entry to see if
+        an externally hosted agent has a secret waiting, then use
+        `DELETE .../identities/secrets` to fetch it.
+
+        Pass `environment` to narrow the result to one environment.
+      operationId: getAgentIdentity
+      parameters:
+        - name: environment
+          in: query
+          required: false
+          description: Environment name to filter the result to a single binding
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's AgentID bindings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Agent Identity
+      summary: Provision an AgentID for a missing environment
+      description: |
+        Creates an AgentID for an externally hosted agent in an environment
+        that was added after the agent already existed. Platform-hosted
+        agents get an AgentID automatically when promoted, so they are
+        rejected here.
+
+        Safe to call more than once: if a binding already exists it is left
+        as is and returned with `200`. A genuinely missing binding is
+        created and provisioned in the background, returning `202`.
+      operationId: provisionAgentIdentity
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to provision the AgentID in
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A binding already existed for this environment; returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "202":
+          description: No binding existed; provisioning has been kicked off in the background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "400":
+          description: Missing `environment` query parameter, or the agent is a Platform-Hosted agent (use promotion instead)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent or environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - Agent Identity
+      summary: Regenerate an agent's AgentID secret
+      description: |
+        Rotates the AgentID secret for one environment and returns the new
+        value straight away, for both platform-hosted and externally hosted
+        agents. Note that this endpoint takes `environment` in the request
+        body, not as a query parameter, since the other identity endpoints
+        have no body to carry it in.
+
+        A token minted from the old secret keeps working until it expires
+        naturally.
+      operationId: regenerateAgentIdentitySecret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityActionRequest"
+      responses:
+        "200":
+          description: Secret regenerated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegenerateSecretResponse"
+        "400":
+          description: Missing or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Agent Identity
+      summary: Revoke an agent's AgentID secret
+      description: |
+        Turns off the AgentID secret for one environment without issuing a
+        new one. Call regenerate afterward to restore access.
+
+        This only stops new tokens from being minted. A token issued before
+        the revoke stays valid until it expires naturally.
+      operationId: revokeAgentIdentitySecret
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to revoke the AgentID secret in
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Secret revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRevokeSecretResponse"
+        "400":
+          description: Missing `environment` query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities/secrets:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: Get a platform-hosted agent's current AgentID credential
+      description: |
+        Returns the current client ID and secret for a platform-hosted agent
+        in one environment. You can call this as many times as you like, it
+        always returns the same valid credential.
+
+        Platform-hosted agents already get this credential injected into
+        their running workload automatically, so this endpoint is mainly for
+        checking or verifying it manually. Externally hosted agents should
+        use the claim or regenerate endpoints instead.
+      operationId: getAgentCredentials
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to read the AgentID credential for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's current AgentID credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentCredentialsResponse"
+        "400":
+          description: Missing `environment` query parameter, or the agent is an Externally-Hosted agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment, or no credential is currently stored (e.g. right after a revoke)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Agent Identity
+      summary: Claim an externally hosted agent's AgentID secret
+      description: |
+        One-time retrieval of the AgentID secret for an externally hosted
+        agent. Calling this is the claim itself: the first successful call
+        returns the secret and deletes it from storage, so save it right
+        away. Every call after that returns `404` until you regenerate a
+        new secret.
+
+        This uses `DELETE` instead of `GET` because it changes state by
+        consuming the secret, unlike the plain read at `GET .../identities`.
+        Platform-hosted agents should use `GET .../identities/secrets`
+        instead.
+      operationId: claimAgentIdentitySecret
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to claim the AgentID secret for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Secret claimed. This is the only response that will ever include this secret value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentClaimSecretResponse"
+        "400":
+          description: Missing `environment` query parameter, or the agent is a Platform-Hosted agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment, or no unclaimed secret is currently available (call regenerate to obtain a new one)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs:
     post:
       summary: Create agent model configuration
@@ -16499,3 +16858,182 @@ components:
           type: integer
           format: int32
           description: Total number of consumers
+
+    AgentProvisioningType:
+      type: string
+      description: Whether the agent runs on the platform or outside it
+      enum:
+        - internal
+        - external
+      example: internal
+
+    AgentThunderStatus:
+      type: string
+      description: |
+        Provisioning status of one AgentID binding. Goes from `pending` to
+        `in_progress` to `completed`, or to `failed` if it runs out of
+        retries (5 attempts over about 15 minutes).
+      enum:
+        - pending
+        - in_progress
+        - completed
+        - failed
+      example: completed
+
+    AgentIdentityEnvironmentView:
+      type: object
+      description: |
+        One environment's AgentID binding. This is a safe view that never
+        includes a secret, even if one is waiting to be claimed. Check
+        `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has
+        anything to return.
+      required:
+        - environmentName
+        - provisioningType
+        - status
+        - hasUnclaimedSecret
+      properties:
+        environmentName:
+          type: string
+          description: Environment this binding belongs to
+          example: production
+        provisioningType:
+          $ref: "#/components/schemas/AgentProvisioningType"
+        status:
+          $ref: "#/components/schemas/AgentThunderStatus"
+        agentId:
+          type: string
+          description: |
+            Thunder's own ID for this identity. This is different from
+            `clientId`, which is the OAuth2 client ID. Empty until
+            provisioning reaches Thunder.
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          description: OAuth2 client ID for this AgentID
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        lastError:
+          type: string
+          description: Most recent provisioning error, if the last attempt failed
+        hasUnclaimedSecret:
+          type: boolean
+          description: |
+            True only when this is a completed external-agent binding whose
+            secret hasn't been claimed yet. Always false for platform-hosted
+            agents and already-claimed bindings.
+        requestedBy:
+          type: string
+          description: Who requested this binding, kept for audit purposes only
+
+    AgentIdentityActionRequest:
+      type: object
+      description: Request body for regenerating an AgentID secret
+      required:
+        - environment
+      properties:
+        environment:
+          type: string
+          description: Environment name to regenerate the AgentID secret in
+          example: production
+
+    AgentClaimSecretResponse:
+      type: object
+      description: |
+        Response for the one-time claim of an external agent's secret. This
+        is the only response that will ever include this secret value.
+      required:
+        - environmentName
+        - agentId
+        - clientId
+        - clientSecret
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        agentId:
+          type: string
+          description: Thunder's own ID for this identity, different from `clientId`
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          description: The OAuth2 client secret. Save it now, since it can't be fetched this way again.
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        status:
+          type: string
+          example: claimed
+
+    AgentRegenerateSecretResponse:
+      type: object
+      description: Response for rotating an AgentID secret
+      required:
+        - environmentName
+        - provisioningType
+        - clientId
+        - clientSecret
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        provisioningType:
+          $ref: "#/components/schemas/AgentProvisioningType"
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          description: The newly generated OAuth2 client secret, sent back to both platform-hosted and external agents
+          example: f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3
+        status:
+          type: string
+          example: regenerated
+
+    AgentRevokeSecretResponse:
+      type: object
+      description: |
+        Response for revoking an AgentID secret. Never includes a
+        `clientSecret`, since revoke turns access off rather than rotating it.
+      required:
+        - environmentName
+        - clientId
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        status:
+          type: string
+          example: revoked
+
+    AgentCredentialsResponse:
+      type: object
+      description: |
+        A platform-hosted agent's current AgentID credential. Unlike the
+        other identity responses, `clientSecret` is always included here
+        and you can call this endpoint as many times as you like.
+      required:
+        - environmentName
+        - agentId
+        - clientId
+        - clientSecret
+      properties:
+        environmentName:
+          type: string
+          example: production
+        agentId:
+          type: string
+          description: Thunder's own ID for this identity, different from `clientId`
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
