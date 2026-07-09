@@ -139,6 +139,12 @@ type agentThunderProvisioningService struct {
 	bindingLocks keyedMutex
 }
 
+// resolveNamespace resolves the OpenChoreo namespace (organization) name for
+// an OU
+func (s *agentThunderProvisioningService) resolveNamespace(_ string) string {
+	return config.GetConfig().OpenChoreo.DefaultNamespace
+}
+
 // NewOpenBaoAgentThunderProvisioning returns the deployment factory that builds
 // the OpenBao-backed provisioning service once the DB is available (see
 // app.Options.AgentThunderProvisioning). Used by the open-source deployment,
@@ -314,7 +320,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		return
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, binding.OUID, binding.EnvironmentName)
+	thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(binding.OUID), binding.EnvironmentName)
 	if err != nil {
 		s.recordFailure(ctx, binding, "", "", err)
 		return
@@ -439,7 +445,7 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, ouID, envName)
+	thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(ouID), envName)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -506,7 +512,7 @@ func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, ouID
 		return "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
 	}
 
-	thunderClient, err := s.envResolver.Resolve(ctx, ouID, envName)
+	thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(ouID), envName)
 	if err != nil {
 		return "", err
 	}
@@ -633,7 +639,7 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		if b.ThunderAgentID == "" {
 			continue // never made it to Thunder — nothing to delete there
 		}
-		thunderClient, err := s.envResolver.Resolve(ctx, ouID, b.EnvironmentName)
+		thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(ouID), b.EnvironmentName)
 		if err != nil {
 			s.logger.Warn("Env-thunder resolver error during agent binding cleanup", "agentName", agentName, "env", b.EnvironmentName, "error", err)
 			continue

@@ -242,6 +242,9 @@ func fullClientMock(compUID, envUID, projUID string) *clientmocks.OpenChoreoClie
 		GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
 			return &models.ProjectResponse{UUID: projUID}, nil
 		},
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "acme-namespace"}}, nil
+		},
 	}
 }
 
@@ -317,7 +320,7 @@ func TestAgentTokenManager_GenerateToken_HappyPath(t *testing.T) {
 	assert.Equal(t, "env-uuid", claims.EnvironmentUid)
 	assert.Equal(t, "proj-uuid", claims.ProjectUid)
 	assert.Equal(t, "org-123", claims.OrgId)
-	assert.Equal(t, "acme", claims.Namespace)
+	assert.Equal(t, "acme-namespace", claims.Namespace, "namespace claim must come from GetOrganization, not the raw OU id")
 	assert.Equal(t, "my-agent", claims.Subject)
 	assert.Equal(t, "agent-manager-test", claims.Issuer)
 	assert.Equal(t, "key-1", parsed.Header["kid"])

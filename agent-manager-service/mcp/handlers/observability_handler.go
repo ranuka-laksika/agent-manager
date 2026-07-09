@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	traceobserversvc "github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -30,10 +31,18 @@ import (
 type ObservabilityHandler struct {
 	agentSvc    services.AgentManagerService
 	traceClient traceobserversvc.TraceObserverSvcClient
+	ocClient    occlient.OpenChoreoClient
 }
 
-func NewObservabilityHandler(agentSvc services.AgentManagerService, traceClient traceobserversvc.TraceObserverSvcClient) *ObservabilityHandler {
-	return &ObservabilityHandler{agentSvc: agentSvc, traceClient: traceClient}
+func NewObservabilityHandler(agentSvc services.AgentManagerService, traceClient traceobserversvc.TraceObserverSvcClient, ocClient occlient.OpenChoreoClient) *ObservabilityHandler {
+	return &ObservabilityHandler{agentSvc: agentSvc, traceClient: traceClient, ocClient: ocClient}
+}
+
+// resolveNamespace resolves the OpenChoreo namespace for an OU. The trace
+// observer scopes queries by the OpenChoreo namespace the workloads run in,
+// not the OU ID.
+func (h *ObservabilityHandler) resolveNamespace(ctx context.Context, _ string) (string, error) {
+	return services.ResolveNamespace(ctx, h.ocClient)
 }
 
 func (h *ObservabilityHandler) GetRuntimeLogs(ctx context.Context, ouID string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error) {
@@ -49,8 +58,13 @@ func (h *ObservabilityHandler) ListTraces(ctx context.Context, ouID string, proj
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
+	namespace, err := h.resolveNamespace(ctx, ouID)
+	if err != nil {
+		return nil, err
+	}
+
 	params := traceobserversvc.TraceListParams{
-		Organization: ouID,
+		Organization: namespace,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -68,8 +82,13 @@ func (h *ObservabilityHandler) ExportTraces(ctx context.Context, ouID string, pr
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
+	namespace, err := h.resolveNamespace(ctx, ouID)
+	if err != nil {
+		return nil, err
+	}
+
 	params := traceobserversvc.TraceListParams{
-		Organization: ouID,
+		Organization: namespace,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -87,9 +106,14 @@ func (h *ObservabilityHandler) GetTraceDetails(ctx context.Context, ouID string,
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
+	namespace, err := h.resolveNamespace(ctx, ouID)
+	if err != nil {
+		return nil, err
+	}
+
 	params := traceobserversvc.TraceDetailsParams{
 		TraceID:      traceID,
-		Organization: ouID,
+		Organization: namespace,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,
@@ -106,10 +130,15 @@ func (h *ObservabilityHandler) GetSpanDetails(ctx context.Context, ouID string, 
 		return nil, fmt.Errorf("trace observer client is not configured")
 	}
 
+	namespace, err := h.resolveNamespace(ctx, ouID)
+	if err != nil {
+		return nil, err
+	}
+
 	params := traceobserversvc.SpanDetailsParams{
 		TraceID:      traceID,
 		SpanID:       spanID,
-		Organization: ouID,
+		Organization: namespace,
 		Project:      projectName,
 		Component:    agentName,
 		Environment:  environment,

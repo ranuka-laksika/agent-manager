@@ -51,6 +51,7 @@ func MakeHTTPHandler(params *wiring.AppParams, extraAPIRoutes func(*http.ServeMu
 		AgentManagerService:      params.AgentManagerService,
 		AgentTokenManagerService: params.AgentTokenManagerService,
 		TraceObserverSvcClient:   params.TraceObserverSvcClient,
+		OpenChoreoClient:         params.OpenChoreoClient,
 	}, params.AuthMiddleware)
 
 	// Create a sub-mux for API v1 routes (JWT-authenticated)
