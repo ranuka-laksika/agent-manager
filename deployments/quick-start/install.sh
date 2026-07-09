@@ -1561,11 +1561,11 @@ if ! install_gateway_extension; then
     log_warning "Gateway Extension installation failed (non-fatal)"
     echo "The platform is installed but the API Platform Gateway may not be registered."
     echo ""
-    echo "Troubleshooting steps:"
-    echo "  1. Check bootstrap job: kubectl get jobs -n ${DATA_PLANE_NS}"
-    echo "  2. Check bootstrap logs: kubectl logs -n ${DATA_PLANE_NS} -l app.kubernetes.io/component=gateway-bootstrap"
-    echo "  3. Check APIGateway CR: kubectl get apigateway api-platform-default-default -n ${DATA_PLANE_NS}"
-    echo "  4. Check Helm release: helm list -n ${DATA_PLANE_NS}"
+    echo "Troubleshooting steps (the gateway stack lives in its per-org-env namespace):"
+    echo "  1. Check bootstrap job: kubectl get jobs -n default-default"
+    echo "  2. Check bootstrap logs: kubectl logs -n default-default -l app.kubernetes.io/component=gateway-bootstrap"
+    echo "  3. Check APIGateway CR: kubectl get apigateway api-platform-default-default -n default-default"
+    echo "  4. Check Helm release: helm list -n default-default"
 else
     log_success "Gateway Extension installed successfully"
 fi
@@ -1577,7 +1577,7 @@ log_info "Applying OTEL RestApi resource..."
 if kubectl apply -f "${RESTAPI_FILE}" &>/dev/null; then
     log_info "Waiting for RestApi to be programmed..."
     if kubectl wait --for=condition=Programmed restapi/amp-otel-collector-tracing-rest-api \
-            -n openchoreo-data-plane --timeout=120s &>/dev/null; then
+            -n default-default --timeout=120s &>/dev/null; then
         log_success "RestApi resource applied and programmed"
     else
         log_warning "RestApi applied but did not reach Programmed condition within 120s"
@@ -1613,7 +1613,7 @@ log_info "Cluster: ${CLUSTER_CONTEXT}"
 # print their own reachable URLs instead.
 if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
   log_info "Agent Management Platform Console: http://localhost:3000"
-  log_info "Observability Gateway (for traces): http://localhost:22893/otel"
+  log_info "Observability Gateway (for traces): http://default-default.gateway.localhost:19080/otel"
 fi
 
 # Print the default environment's Thunder ID console + admin credentials — the

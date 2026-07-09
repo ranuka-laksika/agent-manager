@@ -141,7 +141,8 @@ services:
       # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z).
       # Keep in sync with the agent-manager-service AMP_VERSION above.
       - AMP_VERSION=v0.16.0
-      - INSTRUMENTATION_URL=http://localhost:22893/otel
+      # kgateway-routed vhost — no port-forward to the gateway runtime needed.
+      - INSTRUMENTATION_URL=http://default-default.gateway.localhost:19080/otel
       # Cluster-internal URLs the gateway uses to reach Agent Manager — piped
       # into the add-environment.sh command rendered by the Create Environment
       # drawer. In docker-compose mode AMS is on the host, so the gateway

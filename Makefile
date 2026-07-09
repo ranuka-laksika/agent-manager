@@ -69,7 +69,6 @@ setup: setup-colima setup-k3d setup-openchoreo setup-platform setup-console-loca
 	@echo ""
 	@echo "   Console:                 http://localhost:3000"
 	@echo "   API:                     http://localhost:8080"
-	@echo "   API Platform Gateway:    http://localhost:22893"
 	@echo ""
 	@echo "Run 'make stop-port-forward' to stop port-forwards"
 	@echo "Run 'make port-forward' to restart in a dedicated terminal"
@@ -203,13 +202,11 @@ openchoreo-status:
 
 # Port forwarding for OpenChoreo
 PLATFORM   ?=
-GATEWAY    ?=
 BACKGROUND ?=
 
 port-forward:
 	@cd deployments/setup && ./port-forward.sh \
 		$(if $(filter true,$(PLATFORM)),--platform) \
-		$(if $(filter true,$(GATEWAY)),--gateway) \
 		$(if $(filter true,$(BACKGROUND)),--background)
 
 stop-port-forward:

@@ -1998,7 +1998,7 @@ func (s *agentManagerService) GenerateName(ctx context.Context, ouID string, pay
 			return "", fmt.Errorf("failed to check env name availability: %w", err)
 		}
 		// Name is taken, generate unique name with suffix
-		uniqueName, err := s.generateUniqueEnvName(ctx, org.Name, candidateName)
+		uniqueName, err := s.generateUniqueEnvName(ctx, ouID, org.Name, candidateName)
 		if err != nil {
 			s.logger.Error("Failed to generate unique env name", "baseName", candidateName, "ouID", org.Name, "error", err)
 			return "", fmt.Errorf("failed to generate unique env name: %w", err)
@@ -2038,10 +2038,10 @@ func (s *agentManagerService) generateUniqueProjectName(ctx context.Context, ouI
 }
 
 // generateUniqueEnvName creates a unique name by appending a random suffix
-func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, baseName string) (string, error) {
+func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, orgName string, baseName string) (string, error) {
 	// Bound the base so the resulting "<base>-XX" stays within the per-org env-name
 	// limit (which keeps the gateway runtime Service name ≤ 63 chars).
-	maxBaseLen := utils.MaxEnvNameLength(ouID) - utils.RandomSuffixLength - 1 // 1 for hyphen
+	maxBaseLen := utils.MaxEnvNameLength(orgName) - utils.RandomSuffixLength - 1 // 1 for hyphen
 	if maxBaseLen < 1 {
 		maxBaseLen = 1
 	}
