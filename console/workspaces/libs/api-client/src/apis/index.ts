@@ -41,3 +41,5 @@ export * from './identities';
 export * from './thunder-instances';
 export * from './agent-kinds';
 export * from './agent-build-options';
+export * from './scopes';
+export * from './agent-identity';
