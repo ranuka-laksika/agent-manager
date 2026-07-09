@@ -28,33 +28,28 @@ import {
 import { Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
-  useDeleteGroup,
-  useListGroups,
+  useDeleteAgentIdentityGroup,
+  useListAgentIdentityGroups,
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import {
-  absoluteRouteMap,
-  globalConfig,
-  type ThunderGroup,
-} from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderGroup } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
 const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 
 export const GroupsPage: React.FC = () => {
-  const { orgId } = useParams<{ orgId: string }>();
+  const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
   const navigate = useNavigate();
-  const isUserManagementEnabled = globalConfig.featureFlags?.enableUserManagement === true;
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [search, setSearch] = useState("");
 
-  const { data, isLoading, error } = useListGroups(
-    { orgName: orgId },
+  const { data, isLoading, error } = useListAgentIdentityGroups(
+    { orgName: orgId, envName: envName ?? "" },
     { offset: page * rowsPerPage, limit: rowsPerPage },
   );
-  const { mutateAsync: deleteGroup } = useDeleteGroup();
+  const { mutateAsync: deleteGroup } = useDeleteAgentIdentityGroup();
   const { addConfirmation } = useConfirmationDialog();
 
   const groups = useMemo(() => data?.groups ?? [], [data]);
@@ -69,19 +64,17 @@ export const GroupsPage: React.FC = () => {
     }
   }, [groups.length, total, page, rowsPerPage]);
 
-  const identitiesRoute =
-    absoluteRouteMap.children.org.children.settings.children.identities;
+  const groupsNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.groups;
 
-  const createPath = orgId
-    ? generatePath(identitiesRoute.children.groups.path + "/create", { orgId })
-    : "#";
+  const createPath =
+    orgId && envName
+      ? generatePath(groupsNode.children.create.path, { orgId, envName })
+      : "#";
 
   const editGroupPath = (groupId: string) =>
-    orgId
-      ? generatePath(identitiesRoute.children.groups.path + "/:groupId", {
-          orgId,
-          groupId,
-        })
+    orgId && envName
+      ? generatePath(groupsNode.children.detail.path, { orgId, envName, groupId })
       : "#";
 
   const filteredGroups = useMemo(() => {
@@ -101,7 +94,8 @@ export const GroupsPage: React.FC = () => {
       confirmButtonText: "Delete",
       confirmButtonColor: "error",
       confirmButtonIcon: <Trash size={16} />,
-      onConfirm: () => deleteGroup({ orgName: orgId, groupId: group.id }),
+      onConfirm: () =>
+        deleteGroup({ orgName: orgId, envName: envName ?? "", groupId: group.id }),
     });
   };
 
@@ -123,7 +117,6 @@ export const GroupsPage: React.FC = () => {
                 variant="contained"
                 startIcon={<Plus />}
                 onClick={() => navigate(createPath)}
-                disabled={!isUserManagementEnabled}
               >
                 Create Group
               </Button>
@@ -211,3 +204,5 @@ export const GroupsPage: React.FC = () => {
     </>
   );
 };
+
+export default GroupsPage;

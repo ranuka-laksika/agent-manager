@@ -1,0 +1,237 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import React, { useCallback, useState } from "react";
+import {
+  Alert,
+  Autocomplete,
+  Box,
+  Button,
+  Chip,
+  Collapse,
+  Form,
+  TextField,
+} from "@wso2/oxygen-ui";
+import { Plus } from "@wso2/oxygen-ui-icons-react";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
+import {
+  useCreateAgentIdentityRole,
+  useListScopes,
+} from "@agent-management-platform/api-client";
+import { useFormValidation, useDirtyState } from "@agent-management-platform/views";
+import { absoluteRouteMap, type ScopeResponse } from "@agent-management-platform/types";
+import {
+  createAgentIdentityRoleSchema,
+  type CreateAgentIdentityRoleFormValues,
+} from "./schemas";
+
+export const RoleCreatePage: React.FC = () => {
+  const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState<CreateAgentIdentityRoleFormValues>({
+    name: "",
+    description: "",
+  });
+  const [selectedScopes, setSelectedScopes] = useState<ScopeResponse[]>([]);
+
+  const { data: scopesData } = useListScopes({ orgName: orgId });
+  const scopes = scopesData?.scopes ?? [];
+
+  const { errors, validateField, validateForm, clearErrors, setFieldError } =
+    useFormValidation<CreateAgentIdentityRoleFormValues>(createAgentIdentityRoleSchema);
+  const { checkDirty, resetDirty } = useDirtyState(formData);
+  const [lastSubmittedValidationErrors, setLastSubmittedValidationErrors] =
+    useState<typeof errors>({});
+
+  const {
+    mutateAsync: createRole,
+    isPending: isCreating,
+    error: createError,
+  } = useCreateAgentIdentityRole();
+
+  const rolesNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.roles;
+
+  const rolesPath =
+    orgId && envName ? generatePath(rolesNode.path, { orgId, envName }) : "#";
+
+  const handleFieldChange = useCallback(
+    (field: keyof CreateAgentIdentityRoleFormValues, value: string) => {
+      const newData = { ...formData, [field]: value };
+      setFormData(newData);
+      checkDirty(newData);
+      setFieldError(field, validateField(field, value));
+    },
+    [formData, checkDirty, validateField, setFieldError],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!validateForm(formData)) {
+      setLastSubmittedValidationErrors(errors);
+      return;
+    }
+    setLastSubmittedValidationErrors({});
+
+    try {
+      const created = await createRole({
+        params: { orgName: orgId, envName: envName ?? "" },
+        body: {
+          name: formData.name.trim(),
+          description: formData.description?.trim() || undefined,
+          scopes: selectedScopes.map((s) => s.name),
+        },
+      });
+      resetDirty();
+      clearErrors();
+      navigate(
+        generatePath(rolesNode.children.detail.path, {
+          orgId,
+          envName,
+          roleId: created.id,
+        }),
+      );
+    } catch {
+      // createError state is set by React Query and displayed in the Alert above
+    }
+  }, [
+    formData,
+    validateForm,
+    errors,
+    createRole,
+    orgId,
+    envName,
+    selectedScopes,
+    resetDirty,
+    clearErrors,
+    navigate,
+    rolesNode,
+  ]);
+
+  const submitErrors = Object.values(lastSubmittedValidationErrors);
+
+  return (
+    <>
+      <Box display="flex" flexDirection="column" gap={2}>
+        {createError != null && (
+          <Alert severity="error">
+            {(createError as Error)?.message ?? "Failed to create role"}
+          </Alert>
+        )}
+
+        <Form.Stack spacing={3}>
+          <Form.Section>
+            <Form.Subheader>Role Details</Form.Subheader>
+            <Form.Stack spacing={2}>
+              <Form.ElementWrapper label="Name" name="name">
+                <TextField
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleFieldChange("name", e.target.value)}
+                  placeholder="agent-admin"
+                  autoComplete="off"
+                  error={!!errors.name}
+                  helperText={errors.name}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
+
+              <Form.ElementWrapper
+                label="Description (optional)"
+                name="description"
+              >
+                <TextField
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) =>
+                    handleFieldChange("description", e.target.value)
+                  }
+                  placeholder="Describe the role's purpose and permissions"
+                  multiline
+                  minRows={2}
+                  maxRows={6}
+                  error={!!errors.description}
+                  helperText={errors.description}
+                  fullWidth
+                />
+              </Form.ElementWrapper>
+
+              <Form.ElementWrapper label="Scopes (optional)" name="scopes">
+                <Autocomplete
+                  id="scopes"
+                  multiple
+                  disableCloseOnSelect
+                  options={scopes}
+                  value={selectedScopes}
+                  onChange={(_e, value) => setSelectedScopes(value as ScopeResponse[])}
+                  getOptionLabel={(option) => (option as ScopeResponse).name}
+                  isOptionEqualToValue={(option, value) =>
+                    (option as ScopeResponse).id === (value as ScopeResponse).id
+                  }
+                  renderTags={(value, getTagProps) =>
+                    value.map((option, index) => (
+                      <Chip
+                        {...getTagProps({ index })}
+                        key={option.id}
+                        label={option.name}
+                        size="small"
+                      />
+                    ))
+                  }
+                  renderInput={(params) => (
+                    <TextField {...params} placeholder="Search scopes..." />
+                  )}
+                  noOptionsText="No scopes in the catalog"
+                />
+              </Form.ElementWrapper>
+            </Form.Stack>
+          </Form.Section>
+        </Form.Stack>
+
+        <Box display="flex" flexDirection="column" gap={3}>
+          <Collapse in={submitErrors.length > 0} timeout="auto" unmountOnExit>
+            <Alert severity="error">
+              {submitErrors.map((error, index) => (
+                <Box key={index}>{error}</Box>
+              ))}
+            </Alert>
+          </Collapse>
+          <Box display="flex" flexDirection="row" gap={1} alignItems="center">
+            <Button
+              variant="outlined"
+              color="primary"
+              onClick={() => navigate(rolesPath)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<Plus size={16} />}
+              onClick={handleSubmit}
+              disabled={isCreating || !formData.name.trim()}
+            >
+              Create Role
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+    </>
+  );
+};
+
+export default RoleCreatePage;

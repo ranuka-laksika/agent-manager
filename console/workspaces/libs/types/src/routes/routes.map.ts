@@ -42,7 +42,45 @@ export const rootRouteMap: AppRoute = {
                         view: {
                             path: 'view/:envName',
                             index: true,
-                            children: {},
+                            children: {
+                                agents: {
+                                    path: 'agents',
+                                    index: true,
+                                    children: {},
+                                },
+                                groups: {
+                                    path: 'groups',
+                                    index: true,
+                                    children: {
+                                        create: {
+                                            path: 'create',
+                                            index: true,
+                                            children: {},
+                                        },
+                                        detail: {
+                                            path: ':groupId',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
+                                },
+                                roles: {
+                                    path: 'roles',
+                                    index: true,
+                                    children: {
+                                        create: {
+                                            path: 'create',
+                                            index: true,
+                                            children: {},
+                                        },
+                                        detail: {
+                                            path: ':roleId',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
+                                },
+                            },
                         },
                     },
                 },

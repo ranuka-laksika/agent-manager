@@ -1,0 +1,579 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  Autocomplete,
+  Box,
+  Button,
+  Chip,
+  Form,
+  IconButton,
+  ListingTable,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@wso2/oxygen-ui";
+import { Trash } from "@wso2/oxygen-ui-icons-react";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
+import {
+  useListAgentIdentityAgents,
+  useListAgentIdentityGroups,
+  useGetAgentIdentityRole,
+  useGetAgentIdentityRoleAssignments,
+  useAddAgentIdentityRoleAssignees,
+  useRemoveAgentIdentityRoleAssignees,
+  useUpdateAgentIdentityRole,
+  useListScopes,
+} from "@agent-management-platform/api-client";
+import {
+  absoluteRouteMap,
+  type AgentIdentityAgentResponse,
+  type ScopeResponse,
+  type ThunderGroup,
+} from "@agent-management-platform/types";
+import { BackButton } from "./components/BackButton";
+import { EditFormSkeleton } from "./components/EditFormSkeleton";
+import { EntityHeader } from "./components/EntityHeader";
+import { useAgentLookup } from "./useAgentLookup";
+
+type ActiveTab = "permissions" | "agents" | "groups";
+
+// Groups assigned to a role are picked from one generous page rather than a
+// dedicated "fetch all" hook — mirrors the convention used elsewhere in this
+// feature area (see GroupEditPage's members picker).
+const GROUPS_PAGE_SIZE = 100;
+
+export const RoleEditPage: React.FC = () => {
+  const { orgId, envName, roleId } = useParams<{
+    orgId: string;
+    envName: string;
+    roleId: string;
+  }>();
+  const navigate = useNavigate();
+
+  const [activeTab, setActiveTab] = useState<ActiveTab>("permissions");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>();
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const params = { orgName: orgId, envName: envName ?? "", roleId: roleId ?? "" };
+
+  const { data: roleData, isLoading: isLoadingRole } = useGetAgentIdentityRole(params);
+  const isPermissionsReadOnly = roleData?.isReadOnly ?? false;
+  const { data: assignmentsData, isLoading: isLoadingAssignments } =
+    useGetAgentIdentityRoleAssignments(params);
+  const { data: agentsData, isLoading: isLoadingAgents } = useListAgentIdentityAgents({
+    orgName: orgId,
+    envName: envName ?? "",
+  });
+  const { data: groupsData, isLoading: isLoadingGroups } = useListAgentIdentityGroups(
+    { orgName: orgId, envName: envName ?? "" },
+    { offset: 0, limit: GROUPS_PAGE_SIZE },
+  );
+  const { data: scopesData, isLoading: isLoadingScopes } = useListScopes({ orgName: orgId });
+
+  const { mutateAsync: addAssignees } = useAddAgentIdentityRoleAssignees();
+  const { mutateAsync: removeAssignees } = useRemoveAgentIdentityRoleAssignees();
+  const { mutateAsync: updateRole } = useUpdateAgentIdentityRole();
+
+  // --- Derived server state ---
+  const { agents, displayName } = useAgentLookup(agentsData?.agents ?? []);
+  const allGroups: ThunderGroup[] = useMemo(() => groupsData?.groups ?? [], [groupsData]);
+  const catalogScopes: ScopeResponse[] = useMemo(() => scopesData?.scopes ?? [], [scopesData]);
+
+  const initialAgentIds: string[] = useMemo(
+    () => (assignmentsData?.users ?? []).map((u) => u.id),
+    [assignmentsData],
+  );
+  const initialGroups: ThunderGroup[] = useMemo(
+    () => assignmentsData?.groups ?? [],
+    [assignmentsData],
+  );
+  const initialScopeNames: string[] = useMemo(
+    () => roleData?.permissions?.flatMap((rp) => rp.permissions) ?? [],
+    [roleData],
+  );
+
+  // --- Agent tab delta tracking ---
+  const [pendingAgentAdds, setPendingAgentAdds] = useState<AgentIdentityAgentResponse[]>([]);
+  const [removedAgentIds, setRemovedAgentIds] = useState<Set<string>>(new Set());
+
+  // --- Group tab delta tracking ---
+  const [pendingGroupAdds, setPendingGroupAdds] = useState<ThunderGroup[]>([]);
+  const [removedGroupIds, setRemovedGroupIds] = useState<Set<string>>(new Set());
+
+  // --- Permissions tab: full selected-state approach ---
+  const [selectedScopes, setSelectedScopes] = useState<ScopeResponse[]>([]);
+  const hasEditedScopes = useRef(false);
+
+  useEffect(() => {
+    if (!hasEditedScopes.current && catalogScopes.length > 0) {
+      const nameSet = new Set(initialScopeNames);
+      setSelectedScopes(catalogScopes.filter((s) => nameSet.has(s.name)));
+    }
+  }, [initialScopeNames, catalogScopes]);
+
+  const rolesNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.roles;
+  const rolesPath =
+    orgId && envName ? generatePath(rolesNode.path, { orgId, envName }) : "#";
+
+  // --- Derived displayed lists ---
+  const displayedAgentIds = useMemo(() => {
+    const base = initialAgentIds.filter((id) => !removedAgentIds.has(id));
+    return [...base, ...pendingAgentAdds.map((a) => a.thunderAgentId as string)];
+  }, [initialAgentIds, pendingAgentAdds, removedAgentIds]);
+
+  const displayedGroups = useMemo(() => {
+    const base = initialGroups.filter((g) => !removedGroupIds.has(g.id));
+    return [...base, ...pendingGroupAdds];
+  }, [initialGroups, pendingGroupAdds, removedGroupIds]);
+
+  const displayedGroupIds = useMemo(
+    () => new Set(displayedGroups.map((g) => g.id)),
+    [displayedGroups],
+  );
+
+  const availableAgents = useMemo(() => {
+    const excluded = new Set(displayedAgentIds);
+    return agents.filter((a) => !excluded.has(a.thunderAgentId as string));
+  }, [agents, displayedAgentIds]);
+  const availableGroups = useMemo(
+    () => allGroups.filter((g) => !displayedGroupIds.has(g.id)),
+    [allGroups, displayedGroupIds],
+  );
+
+  const selectedScopeNames = useMemo(
+    () => new Set(selectedScopes.map((s) => s.name)),
+    [selectedScopes],
+  );
+
+  // --- Agent handlers ---
+  const handleAddAgent = (
+    _e: React.SyntheticEvent,
+    value: AgentIdentityAgentResponse | null,
+  ) => {
+    if (!value?.thunderAgentId) return;
+    if (removedAgentIds.has(value.thunderAgentId)) {
+      setRemovedAgentIds((prev) => {
+        const n = new Set(prev);
+        n.delete(value.thunderAgentId as string);
+        return n;
+      });
+    } else {
+      setPendingAgentAdds((prev) => [...prev, value]);
+    }
+  };
+
+  const handleRemoveAgent = (thunderAgentId: string) => {
+    if (pendingAgentAdds.find((a) => a.thunderAgentId === thunderAgentId)) {
+      setPendingAgentAdds((prev) => prev.filter((a) => a.thunderAgentId !== thunderAgentId));
+    } else {
+      setRemovedAgentIds((prev) => new Set([...prev, thunderAgentId]));
+    }
+  };
+
+  // --- Group handlers ---
+  const handleAddGroup = (_e: React.SyntheticEvent, value: ThunderGroup | null) => {
+    if (!value) return;
+    if (removedGroupIds.has(value.id)) {
+      setRemovedGroupIds((prev) => {
+        const n = new Set(prev);
+        n.delete(value.id);
+        return n;
+      });
+    } else {
+      setPendingGroupAdds((prev) => [...prev, value]);
+    }
+  };
+
+  const handleRemoveGroup = (groupId: string) => {
+    if (pendingGroupAdds.find((g) => g.id === groupId)) {
+      setPendingGroupAdds((prev) => prev.filter((g) => g.id !== groupId));
+    } else {
+      setRemovedGroupIds((prev) => new Set([...prev, groupId]));
+    }
+  };
+
+  // --- Permissions handlers ---
+  const handleScopesChange = (_e: React.SyntheticEvent, newValue: ScopeResponse[]) => {
+    hasEditedScopes.current = true;
+    setSelectedScopes(newValue);
+  };
+
+  const handleRemoveScope = (name: string) => {
+    hasEditedScopes.current = true;
+    setSelectedScopes((prev) => prev.filter((s) => s.name !== name));
+  };
+
+  // --- Save ---
+  const handleSave = async () => {
+    if (!orgId || !envName || !roleId) return;
+    setSaveError(undefined);
+    setSaveSuccess(false);
+    setIsSaving(true);
+    try {
+      const addAgentIds = pendingAgentAdds.map((a) => a.thunderAgentId as string);
+      const removeAgentIdList = [...removedAgentIds];
+      const addGroupIds = pendingGroupAdds.map((g) => g.id);
+      const removeGroupIdList = [...removedGroupIds];
+
+      // None of these calls depends on another's result, so they run
+      // concurrently rather than paying for round-trips one at a time.
+      await Promise.all([
+        addAgentIds.length > 0
+          ? addAssignees({
+              params,
+              body: { assignments: addAgentIds.map((id) => ({ id, type: "agent" as const })) },
+            })
+          : null,
+        removeAgentIdList.length > 0
+          ? removeAssignees({
+              params,
+              body: {
+                assignments: removeAgentIdList.map((id) => ({ id, type: "agent" as const })),
+              },
+            })
+          : null,
+        addGroupIds.length > 0
+          ? addAssignees({
+              params,
+              body: { assignments: addGroupIds.map((id) => ({ id, type: "group" as const })) },
+            })
+          : null,
+        removeGroupIdList.length > 0
+          ? removeAssignees({
+              params,
+              body: {
+                assignments: removeGroupIdList.map((id) => ({ id, type: "group" as const })),
+              },
+            })
+          : null,
+        // The backend reconciles add/remove scope permissions server-side from
+        // the full desired set, so a single update call is enough here.
+        hasEditedScopes.current && !isPermissionsReadOnly && roleData
+          ? updateRole({
+              params,
+              body: {
+                name: roleData.name,
+                description: roleData.description,
+                scopes: selectedScopes.map((s) => s.name),
+              },
+            })
+          : null,
+      ]);
+
+      setSaveSuccess(true);
+      setPendingAgentAdds([]);
+      setRemovedAgentIds(new Set());
+      setPendingGroupAdds([]);
+      setRemovedGroupIds(new Set());
+      hasEditedScopes.current = false;
+    } catch {
+      setSaveError("Failed to update role. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isLoading =
+    isLoadingRole || isLoadingAssignments || isLoadingAgents || isLoadingGroups || isLoadingScopes;
+
+  const scopesDirty = useMemo(() => {
+    if (isPermissionsReadOnly) return false;
+    const initial = new Set(initialScopeNames);
+    return (
+      initial.size !== selectedScopes.length ||
+      selectedScopes.some((s) => !initial.has(s.name))
+    );
+  }, [isPermissionsReadOnly, initialScopeNames, selectedScopes]);
+
+  const isDirty =
+    scopesDirty ||
+    pendingAgentAdds.length > 0 ||
+    removedAgentIds.size > 0 ||
+    pendingGroupAdds.length > 0 ||
+    removedGroupIds.size > 0;
+
+  if (isLoading) {
+    return (
+      <>
+        <BackButton to={rolesPath} label="Roles" />
+        <EditFormSkeleton tabs={3} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <BackButton to={rolesPath} label="Roles" />
+      <Stack spacing={3}>
+        <EntityHeader
+          fallback="R"
+          name={roleData?.name ?? ""}
+          subtitle={roleData?.description}
+          id={roleId ?? ""}
+          badge={isPermissionsReadOnly ? <Chip label="Read-only" size="small" /> : undefined}
+        />
+        {saveError != null && <Alert severity="error">{saveError}</Alert>}
+        {saveSuccess && <Alert severity="success">Role updated successfully.</Alert>}
+
+        <Form.Section>
+          <Tabs
+            value={activeTab}
+            onChange={(_e, v) => setActiveTab(v as ActiveTab)}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab label="Permissions" value="permissions" />
+            <Tab label="Agents" value="agents" />
+            <Tab label="Groups" value="groups" />
+          </Tabs>
+
+          {/* ── Permissions tab ── */}
+          {activeTab === "permissions" && (
+            <>
+              <Form.Header>Permissions</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                {isPermissionsReadOnly
+                  ? "Permissions for predefined roles cannot be modified."
+                  : "Search and select catalog scopes to assign to this role."}
+              </Typography>
+
+              <Box sx={{ mt: 1 }}>
+                {!isPermissionsReadOnly && (
+                  <Form.ElementWrapper label="Add scopes" name="addScopes">
+                    <Autocomplete
+                      id="addScopes"
+                      multiple
+                      disableCloseOnSelect
+                      options={catalogScopes}
+                      value={selectedScopes}
+                      onChange={handleScopesChange}
+                      getOptionLabel={(option) => (option as ScopeResponse).name}
+                      isOptionEqualToValue={(option, value) =>
+                        (option as ScopeResponse).id === (value as ScopeResponse).id
+                      }
+                      renderTags={() => null}
+                      renderOption={(props, option) => (
+                        <li {...props} key={(option as ScopeResponse).id}>
+                          <Box>
+                            <Typography variant="body2">
+                              {(option as ScopeResponse).name}
+                            </Typography>
+                            {(option as ScopeResponse).description && (
+                              <Typography variant="caption" color="text.secondary">
+                                {(option as ScopeResponse).description}
+                              </Typography>
+                            )}
+                          </Box>
+                        </li>
+                      )}
+                      renderInput={(autocompleteParams) => (
+                        <TextField {...autocompleteParams} placeholder="Search scopes..." />
+                      )}
+                      noOptionsText="No scopes in the catalog"
+                      sx={{ mb: 3 }}
+                    />
+                  </Form.ElementWrapper>
+                )}
+
+                {selectedScopes.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary">
+                    No scopes assigned yet.
+                  </Typography>
+                ) : (
+                  <Stack direction="row" flexWrap="wrap" gap={1}>
+                    {catalogScopes
+                      .filter((s) => selectedScopeNames.has(s.name))
+                      .map((s) => (
+                        <Chip
+                          key={s.id}
+                          label={s.name}
+                          size="small"
+                          onDelete={
+                            !isPermissionsReadOnly
+                              ? () => handleRemoveScope(s.name)
+                              : undefined
+                          }
+                        />
+                      ))}
+                  </Stack>
+                )}
+              </Box>
+            </>
+          )}
+
+          {/* ── Agents tab ── */}
+          {activeTab === "agents" && (
+            <>
+              <Form.Header>Assigned Agents</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Search and add agents to this role.
+              </Typography>
+
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Form.ElementWrapper label="Add Agent" name="addAgent">
+                  <Autocomplete
+                    id="addAgent"
+                    options={availableAgents}
+                    getOptionLabel={(option) =>
+                      (option as AgentIdentityAgentResponse).agentName
+                    }
+                    onChange={handleAddAgent}
+                    value={null}
+                    renderInput={(autocompleteParams) => (
+                      <TextField {...autocompleteParams} placeholder="Search agents..." />
+                    )}
+                    noOptionsText="No agents available"
+                  />
+                </Form.ElementWrapper>
+              </Box>
+
+              {displayedAgentIds.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No agents assigned yet. Search and add agents above.
+                </Typography>
+              ) : (
+                <ListingTable.Container>
+                  <ListingTable>
+                    <ListingTable.Head>
+                      <ListingTable.Row>
+                        <ListingTable.Cell>Agent</ListingTable.Cell>
+                        <ListingTable.Cell>Thunder Agent ID</ListingTable.Cell>
+                        <ListingTable.Cell />
+                      </ListingTable.Row>
+                    </ListingTable.Head>
+                    <ListingTable.Body>
+                      {displayedAgentIds.map((id) => (
+                        <ListingTable.Row key={id}>
+                          <ListingTable.Cell>{displayName(id)}</ListingTable.Cell>
+                          <ListingTable.Cell>{id}</ListingTable.Cell>
+                          <ListingTable.Cell align="right">
+                            <Tooltip title="Remove from role">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveAgent(id)}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </ListingTable.Cell>
+                        </ListingTable.Row>
+                      ))}
+                    </ListingTable.Body>
+                  </ListingTable>
+                </ListingTable.Container>
+              )}
+            </>
+          )}
+
+          {/* ── Groups tab ── */}
+          {activeTab === "groups" && (
+            <>
+              <Form.Header>Assigned Groups</Form.Header>
+              <Typography variant="body2" color="text.secondary">
+                Search and add groups to this role.
+              </Typography>
+              {(groupsData?.total ?? 0) > GROUPS_PAGE_SIZE && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Showing the first {GROUPS_PAGE_SIZE} of {groupsData?.total} groups in this
+                  environment. The add-group picker below only excludes groups from this page.
+                </Alert>
+              )}
+
+              <Box sx={{ mt: 1, mb: 2 }}>
+                <Form.ElementWrapper label="Add Group" name="addGroup">
+                  <Autocomplete
+                    id="addGroup"
+                    options={availableGroups}
+                    getOptionLabel={(option) => (option as ThunderGroup).name}
+                    onChange={handleAddGroup}
+                    value={null}
+                    renderInput={(autocompleteParams) => (
+                      <TextField {...autocompleteParams} placeholder="Search groups..." />
+                    )}
+                    noOptionsText="No groups available"
+                  />
+                </Form.ElementWrapper>
+              </Box>
+
+              {displayedGroups.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No groups assigned yet. Search and add groups above.
+                </Typography>
+              ) : (
+                <ListingTable.Container>
+                  <ListingTable>
+                    <ListingTable.Head>
+                      <ListingTable.Row>
+                        <ListingTable.Cell>Name</ListingTable.Cell>
+                        <ListingTable.Cell>Description</ListingTable.Cell>
+                        <ListingTable.Cell />
+                      </ListingTable.Row>
+                    </ListingTable.Head>
+                    <ListingTable.Body>
+                      {displayedGroups.map((group) => (
+                        <ListingTable.Row key={group.id}>
+                          <ListingTable.Cell>{group.name}</ListingTable.Cell>
+                          <ListingTable.Cell>
+                            {group.description ?? "-"}
+                          </ListingTable.Cell>
+                          <ListingTable.Cell align="right">
+                            <Tooltip title="Remove from role">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveGroup(group.id)}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </ListingTable.Cell>
+                        </ListingTable.Row>
+                      ))}
+                    </ListingTable.Body>
+                  </ListingTable>
+                </ListingTable.Container>
+              )}
+            </>
+          )}
+        </Form.Section>
+
+        {isDirty && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate(rolesPath)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </Stack>
+        )}
+      </Stack>
+    </>
+  );
+};
+
+export default RoleEditPage;

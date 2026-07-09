@@ -40,7 +40,7 @@ export const ThunderInstancesOrganization: React.FC = () => {
           </PageLayout>
         }
       />
-      <Route path="view/:envName" element={<ViewThunderInstance />} />
+      <Route path="view/:envName/*" element={<ViewThunderInstance />} />
       <Route
         path="*"
         element={

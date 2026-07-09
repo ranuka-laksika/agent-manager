@@ -25,83 +25,77 @@ import {
   TablePagination,
   Tooltip,
 } from "@wso2/oxygen-ui";
-import { Folder, Plus, Trash } from "@wso2/oxygen-ui-icons-react";
+import { Plus, Shield, Trash } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
-  useDeleteGroup,
-  useListGroups,
+  useDeleteAgentIdentityRole,
+  useListAgentIdentityRoles,
 } from "@agent-management-platform/api-client";
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
-import {
-  absoluteRouteMap,
-  globalConfig,
-  type ThunderGroup,
-} from "@agent-management-platform/types";
+import { absoluteRouteMap, type ThunderRole } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
 const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 
-export const GroupsPage: React.FC = () => {
-  const { orgId } = useParams<{ orgId: string }>();
+export const RolesPage: React.FC = () => {
+  const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
   const navigate = useNavigate();
-  const isUserManagementEnabled = globalConfig.featureFlags?.enableUserManagement === true;
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [search, setSearch] = useState("");
 
-  const { data, isLoading, error } = useListGroups(
-    { orgName: orgId },
+  const { data, isLoading, error } = useListAgentIdentityRoles(
+    { orgName: orgId, envName: envName ?? "" },
     { offset: page * rowsPerPage, limit: rowsPerPage },
   );
-  const { mutateAsync: deleteGroup } = useDeleteGroup();
+  const { mutateAsync: deleteRole } = useDeleteAgentIdentityRole();
   const { addConfirmation } = useConfirmationDialog();
 
-  const groups = useMemo(() => data?.groups ?? [], [data]);
+  const roles = useMemo(() => data?.roles ?? [], [data]);
   const total = data?.total ?? 0;
 
   useEffect(() => {
-    if (groups.length === 0 && total > 0) {
+    if (roles.length === 0 && total > 0) {
       const lastPage = Math.max(0, Math.ceil(total / rowsPerPage) - 1);
       if (page !== lastPage) {
         setPage(lastPage);
       }
     }
-  }, [groups.length, total, page, rowsPerPage]);
+  }, [roles.length, total, page, rowsPerPage]);
 
-  const identitiesRoute =
-    absoluteRouteMap.children.org.children.settings.children.identities;
+  const rolesNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.roles;
 
-  const createPath = orgId
-    ? generatePath(identitiesRoute.children.groups.path + "/create", { orgId })
-    : "#";
-
-  const editGroupPath = (groupId: string) =>
-    orgId
-      ? generatePath(identitiesRoute.children.groups.path + "/:groupId", {
-          orgId,
-          groupId,
-        })
+  const createPath =
+    orgId && envName
+      ? generatePath(rolesNode.children.create.path, { orgId, envName })
       : "#";
 
-  const filteredGroups = useMemo(() => {
-    if (!search) return groups;
-    const q = search.toLowerCase();
-    return groups.filter(
-      (g) =>
-        g.name.toLowerCase().includes(q) ||
-        (g.description ?? "").toLowerCase().includes(q),
-    );
-  }, [groups, search]);
+  const editRolePath = (roleId: string) =>
+    orgId && envName
+      ? generatePath(rolesNode.children.detail.path, { orgId, envName, roleId })
+      : "#";
 
-  const handleDelete = (group: ThunderGroup) => {
+  const filteredRoles = useMemo(() => {
+    if (!search) return roles;
+    const q = search.toLowerCase();
+    return roles.filter(
+      (r) =>
+        r.name.toLowerCase().includes(q) ||
+        (r.description ?? "").toLowerCase().includes(q),
+    );
+  }, [roles, search]);
+
+  const handleDelete = (role: ThunderRole) => {
     addConfirmation({
-      title: "Delete Group",
-      description: `Are you sure you want to delete "${group.name}"? This action cannot be undone.`,
+      title: "Delete Role",
+      description: `Are you sure you want to delete "${role.name}"? This action cannot be undone.`,
       confirmButtonText: "Delete",
       confirmButtonColor: "error",
       confirmButtonIcon: <Trash size={16} />,
-      onConfirm: () => deleteGroup({ orgName: orgId, groupId: group.id }),
+      onConfirm: () =>
+        deleteRole({ orgName: orgId, envName: envName ?? "", roleId: role.id }),
     });
   };
 
@@ -109,7 +103,7 @@ export const GroupsPage: React.FC = () => {
     <>
       {error != null && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          Failed to load groups
+          Failed to load roles
         </Alert>
       )}
 
@@ -117,29 +111,28 @@ export const GroupsPage: React.FC = () => {
         <ListingTable.Container>
           <ListingTable.Toolbar
             showSearch
-            searchPlaceholder="Search groups..."
+            searchPlaceholder="Search roles..."
             actions={
               <Button
                 variant="contained"
                 startIcon={<Plus />}
                 onClick={() => navigate(createPath)}
-                disabled={!isUserManagementEnabled}
               >
-                Create Group
+                Create Role
               </Button>
             }
           />
           {!isLoading && total === 0 ? (
             <ListingTable.EmptyState
-              illustration={<Folder size={64} />}
-              title="No groups yet"
-              description='Click "Create Group" to add one.'
+              illustration={<Shield size={64} />}
+              title="No roles yet"
+              description='Click "Create Role" to add one.'
             />
-          ) : !isLoading && filteredGroups.length === 0 ? (
+          ) : !isLoading && filteredRoles.length === 0 ? (
             <ListingTable.EmptyState
-              illustration={<Folder size={64} />}
-              title="No groups found"
-              description={`No groups match "${search}". Try a different search term.`}
+              illustration={<Shield size={64} />}
+              title="No roles found"
+              description={`No roles match "${search}". Try a different search term.`}
             />
           ) : (
             <ListingTable variant="table">
@@ -152,39 +145,41 @@ export const GroupsPage: React.FC = () => {
               <ListingTable.Body>
                 {isLoading && <ListingSkeletonRows rows={Math.ceil(rowsPerPage / 2)} columns={1} />}
                 {!isLoading &&
-                  filteredGroups.map((group: ThunderGroup) => (
+                  filteredRoles.map((role: ThunderRole) => (
                     <ListingTable.Row
-                      key={group.id}
+                      key={role.id}
                       variant="table"
                       hover
                       clickable
-                      onClick={() => navigate(editGroupPath(group.id))}
+                      onClick={() => navigate(editRolePath(role.id))}
                     >
                       <ListingTable.Cell>
                         <ListingTable.CellIcon
                           icon={
                             <Avatar sx={AVATAR_SX}>
-                              {group.name.charAt(0).toUpperCase() || "G"}
+                              {role.name.charAt(0).toUpperCase() || "R"}
                             </Avatar>
                           }
-                          primary={group.name}
-                          secondary={group.description ?? undefined}
+                          primary={role.name}
+                          secondary={role.description ?? undefined}
                         />
                       </ListingTable.Cell>
                       <ListingTable.Cell align="center">
                         <ListingTable.RowActions visibility="hover">
-                          <Tooltip title="Delete group">
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDelete(group);
-                              }}
-                            >
-                              <Trash size={16} />
-                            </IconButton>
-                          </Tooltip>
+                          {!role.isReadOnly && (
+                            <Tooltip title="Delete role">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(role);
+                                }}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
                         </ListingTable.RowActions>
                       </ListingTable.Cell>
                     </ListingTable.Row>
@@ -211,3 +206,5 @@ export const GroupsPage: React.FC = () => {
     </>
   );
 };
+
+export default RolesPage;
