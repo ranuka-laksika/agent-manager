@@ -99,7 +99,7 @@ func (c *TracingController) GetTraceOverviews(ctx context.Context, params TraceQ
 		Limit:     &params.Limit,
 		SortOrder: &sortOrder,
 		SearchScope: observer.ComponentSearchScope{
-			Namespace:   params.Organization,
+			Namespace:   c.observerClient.NamespaceFor(params.Organization),
 			Project:     params.Project,
 			Component:   params.Agent,
 			Environment: params.Environment,
@@ -318,7 +318,7 @@ func (c *TracingController) fetchTraceSpanSummaries(
 		EndTime:   params.EndTime,
 		Limit:     &spanLimit,
 		SearchScope: observer.ComponentSearchScope{
-			Namespace:   params.Organization,
+			Namespace:   c.observerClient.NamespaceFor(params.Organization),
 			Project:     params.Project,
 			Component:   params.Agent,
 			Environment: params.Environment,
@@ -481,7 +481,7 @@ func (c *TracingController) GetTraceSpans(ctx context.Context, traceID string, p
 		Limit:     &params.Limit,
 		SortOrder: &sortOrder,
 		SearchScope: observer.ComponentSearchScope{
-			Namespace:   params.Organization,
+			Namespace:   c.observerClient.NamespaceFor(params.Organization),
 			Project:     params.Project,
 			Component:   params.Agent,
 			Environment: params.Environment,
@@ -543,7 +543,7 @@ func (c *TracingController) ExportTraces(ctx context.Context, params TraceQueryP
 		Limit:     &params.Limit,
 		SortOrder: &sortOrder,
 		SearchScope: observer.ComponentSearchScope{
-			Namespace:   params.Organization,
+			Namespace:   c.observerClient.NamespaceFor(params.Organization),
 			Project:     params.Project,
 			Component:   params.Agent,
 			Environment: params.Environment,
@@ -602,7 +602,7 @@ func (c *TracingController) ExportTraces(ctx context.Context, params TraceQueryP
 				Limit:             &spanLimit,
 				IncludeAttributes: true,
 				SearchScope: observer.ComponentSearchScope{
-					Namespace:   params.Organization,
+					Namespace:   c.observerClient.NamespaceFor(params.Organization),
 					Project:     params.Project,
 					Component:   params.Agent,
 					Environment: params.Environment,

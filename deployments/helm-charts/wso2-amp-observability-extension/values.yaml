@@ -23,6 +23,7 @@ tracesObserver:
     idpTokenUrl: "http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token"
     idpClientId: "amp-api-client"
     idpClientSecret: "amp-api-client-secret"
+    defaultNamespace: "default"
   # JWT authentication — must match the agent-manager keyManager config so the
   # same user token issued by Thunder is accepted by both services. Thunder
   # (v0.45+) stamps the resource-server identifier "amp" as the token audience,
