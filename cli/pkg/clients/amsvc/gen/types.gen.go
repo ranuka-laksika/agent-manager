@@ -3806,7 +3806,7 @@ type MCPProxyRequest struct {
 	// Description Description of the MCP proxy
 	Description *string `json:"description,omitempty"`
 
-	// Endpoints Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint.
+	// Endpoints Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint. At least one endpoint is required.
 	Endpoints *[]MCPProxyEndpoint `json:"endpoints,omitempty"`
 
 	// Gateways Gateway UUIDs to deploy the MCP proxy to after creation

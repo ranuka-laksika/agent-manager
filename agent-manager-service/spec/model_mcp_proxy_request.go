@@ -33,7 +33,7 @@ type MCPProxyRequest struct {
 	Vhost *string `json:"vhost,omitempty"`
 	// MCP specification version implemented by the upstream server
 	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
-	// Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint.
+	// Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint. At least one endpoint is required.
 	Endpoints []MCPProxyEndpoint `json:"endpoints,omitempty"`
 	// Whether the MCP proxy is available in the catalog
 	InCatalog *bool `json:"inCatalog,omitempty"`
