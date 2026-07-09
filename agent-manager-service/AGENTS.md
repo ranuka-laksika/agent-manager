@@ -75,7 +75,8 @@ Generated files are checked in and **never hand-edited**. Regenerate and commit 
 
 - **Errors** — map the specific sentinel (`gorm.ErrRecordNotFound` → `utils.ErrXxxNotFound`); wrap everything else `fmt.Errorf("...: %w", err)`. Never flatten an unexpected error into not-found; never silently fall back to a default on a non-not-found error. Compare sentinels with `errors.Is`, never `==` or string match.
 - **Context** — every I/O method takes `context.Context` first and propagates it. HTTP clients use `NewRequestWithContext`.
-- **Multi-tenancy** — always derive the org identifier (Thunder OU ID / `ouID`) from the caller's token, never from the request path or body. Missing tenant identity is an error, not a wildcard.
+- **Org scoping** — always set `org_id` from the caller's token (Thunder OU ID / `ouID`), never from the request path or body. Missing tenant identity is an error, not a wildcard. Every org-scoped table maps the tenant column as `ou_id`.
+- **Tenant isolation is DB-only** — org isolation happens at the DB (`ou_id`) layer alone. All OpenChoreo API calls resolve to a single default namespace from config (`OPEN_CHOREO_DEFAULT_NAMESPACE`, default `"default"`, `config.OpenChoreo.DefaultNamespace`), so there is no namespace-level tenant separation yet.
 - **Concurrency** — never hold a lock across I/O. Atomic upserts (`ON CONFLICT`), not read-then-write. Serialize expensive side effects per-key, not globally.
 - **Config** — validate at startup, not first use; check co-dependent values together.
 - **Observability** — log with correlation context (org, resource ID, request ID). Debug = hot paths, Info = rare events, Error = destructive ops.
