@@ -48,6 +48,9 @@ type fakeObserverClient struct {
 
 	getSpanDetailsCalls  int32
 	queryTraceSpansCalls int32
+
+	// defaultNamespace is returned by NamespaceFor, mirroring the real client.
+	defaultNamespace string
 }
 
 func (f *fakeObserverClient) QueryTraces(_ context.Context, _ observer.TracesQueryRequest) (*observer.TracesQueryResponse, error) {
@@ -60,8 +63,8 @@ func (f *fakeObserverClient) QueryTraceSpans(_ context.Context, _ string, req ob
 	return &observer.TraceSpansQueryResponse{Spans: f.spans, Total: len(f.spans)}, nil
 }
 
-func (f *fakeObserverClient) NamespaceFor(organization string) string {
-	return organization
+func (f *fakeObserverClient) NamespaceFor(_ string) string {
+	return f.defaultNamespace
 }
 
 func (f *fakeObserverClient) GetSpanDetails(_ context.Context, _, spanID string) (*observer.SpanDetailsResponse, error) {
