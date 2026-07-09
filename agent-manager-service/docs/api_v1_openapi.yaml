@@ -17571,10 +17571,7 @@ components:
 
     AgentProvisioningType:
       type: string
-      description: Whether the agent runs on the platform or outside it
-      enum:
-        - internal
-        - external
+      description: Whether the agent runs on the platform (`internal`) or outside it (`external`)
       example: internal
 
     AgentThunderStatus:

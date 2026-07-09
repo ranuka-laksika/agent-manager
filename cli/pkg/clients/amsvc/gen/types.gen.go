@@ -81,6 +81,30 @@ func (e AgentKindVersionResponseAgentSubType) Valid() bool {
 	}
 }
 
+// Defines values for AgentThunderStatus.
+const (
+	AgentThunderStatusCompleted  AgentThunderStatus = "completed"
+	AgentThunderStatusFailed     AgentThunderStatus = "failed"
+	AgentThunderStatusInProgress AgentThunderStatus = "in_progress"
+	AgentThunderStatusPending    AgentThunderStatus = "pending"
+)
+
+// Valid indicates whether the value is a known member of the AgentThunderStatus enum.
+func (e AgentThunderStatus) Valid() bool {
+	switch e {
+	case AgentThunderStatusCompleted:
+		return true
+	case AgentThunderStatusFailed:
+		return true
+	case AgentThunderStatusInProgress:
+		return true
+	case AgentThunderStatusPending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for BatchTimeSeriesResponseGranularity.
 const (
 	BatchTimeSeriesResponseGranularityDay    BatchTimeSeriesResponseGranularity = "day"
@@ -824,22 +848,22 @@ func (e MonitorResponseType) Valid() bool {
 
 // Defines values for MonitorRunResponseStatus.
 const (
-	MonitorRunResponseStatusFailed  MonitorRunResponseStatus = "failed"
-	MonitorRunResponseStatusPending MonitorRunResponseStatus = "pending"
-	MonitorRunResponseStatusRunning MonitorRunResponseStatus = "running"
-	MonitorRunResponseStatusSuccess MonitorRunResponseStatus = "success"
+	Failed  MonitorRunResponseStatus = "failed"
+	Pending MonitorRunResponseStatus = "pending"
+	Running MonitorRunResponseStatus = "running"
+	Success MonitorRunResponseStatus = "success"
 )
 
 // Valid indicates whether the value is a known member of the MonitorRunResponseStatus enum.
 func (e MonitorRunResponseStatus) Valid() bool {
 	switch e {
-	case MonitorRunResponseStatusFailed:
+	case Failed:
 		return true
-	case MonitorRunResponseStatusPending:
+	case Pending:
 		return true
-	case MonitorRunResponseStatusRunning:
+	case Running:
 		return true
-	case MonitorRunResponseStatusSuccess:
+	case Success:
 		return true
 	default:
 		return false
@@ -1212,6 +1236,36 @@ type AgentBuildOptionsResponse struct {
 	Python          AgentBuildOptionsPython          `json:"python"`
 }
 
+// AgentClaimSecretResponse Response for the one-time claim of an external agent's secret. This
+// is the only response that will ever include this secret value.
+type AgentClaimSecretResponse struct {
+	// AgentId Thunder's own ID for this identity, different from `clientId`
+	AgentId  string `json:"agentId"`
+	ClientId string `json:"clientId"`
+
+	// ClientSecret The OAuth2 client secret. Save it now, since it can't be fetched this way again.
+	ClientSecret    string `json:"clientSecret"`
+	EnvironmentName string `json:"environmentName"`
+	Status          string `json:"status"`
+}
+
+// AgentCredentialsResponse A platform-hosted agent's current AgentID credential. Unlike the
+// other identity responses, `clientSecret` is always included here
+// and you can call this endpoint as many times as you like.
+type AgentCredentialsResponse struct {
+	// AgentId Thunder's own ID for this identity, different from `clientId`
+	AgentId         string `json:"agentId"`
+	ClientId        string `json:"clientId"`
+	ClientSecret    string `json:"clientSecret"`
+	EnvironmentName string `json:"environmentName"`
+}
+
+// AgentIdentityActionRequest Request body for regenerating an AgentID secret
+type AgentIdentityActionRequest struct {
+	// Environment Environment name to regenerate the AgentID secret in
+	Environment string `json:"environment"`
+}
+
 // AgentIdentityAgentListResponse defines model for AgentIdentityAgentListResponse.
 type AgentIdentityAgentListResponse struct {
 	Agents []AgentIdentityAgentResponse `json:"agents"`
@@ -1237,6 +1291,42 @@ type AgentIdentityAssignmentsRequest struct {
 
 // AgentIdentityAssignmentsRequestAssignmentsType defines model for AgentIdentityAssignmentsRequest.Assignments.Type.
 type AgentIdentityAssignmentsRequestAssignmentsType string
+
+// AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never
+// includes a secret, even if one is waiting to be claimed. Check
+// `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has
+// anything to return.
+type AgentIdentityEnvironmentView struct {
+	// AgentId Thunder's own ID for this identity. This is different from
+	// `clientId`, which is the OAuth2 client ID. Empty until
+	// provisioning reaches Thunder.
+	AgentId *string `json:"agentId,omitempty"`
+
+	// ClientId OAuth2 client ID for this AgentID
+	ClientId *string `json:"clientId,omitempty"`
+
+	// EnvironmentName Environment this binding belongs to
+	EnvironmentName string `json:"environmentName"`
+
+	// HasUnclaimedSecret True only when this is a completed external-agent binding whose
+	// secret hasn't been claimed yet. Always false for platform-hosted
+	// agents and already-claimed bindings.
+	HasUnclaimedSecret bool `json:"hasUnclaimedSecret"`
+
+	// LastError Most recent provisioning error, if the last attempt failed
+	LastError *string `json:"lastError,omitempty"`
+
+	// ProvisioningType Whether the agent runs on the platform (`internal`) or outside it (`external`)
+	ProvisioningType AgentProvisioningType `json:"provisioningType"`
+
+	// RequestedBy Who requested this binding, kept for audit purposes only
+	RequestedBy *string `json:"requestedBy,omitempty"`
+
+	// Status Provisioning status of one AgentID binding. Goes from `pending` to
+	// `in_progress` to `completed`, or to `failed` if it runs out of
+	// retries (5 attempts over about 15 minutes).
+	Status AgentThunderStatus `json:"status"`
+}
 
 // AgentIdentityGroupRequest defines model for AgentIdentityGroupRequest.
 type AgentIdentityGroupRequest struct {
@@ -1414,6 +1504,22 @@ type AgentModelConfigResponse struct {
 	Uuid openapi_types.UUID `json:"uuid"`
 }
 
+// AgentProvisioningType Whether the agent runs on the platform (`internal`) or outside it (`external`)
+type AgentProvisioningType = string
+
+// AgentRegenerateSecretResponse Response for rotating an AgentID secret
+type AgentRegenerateSecretResponse struct {
+	ClientId string `json:"clientId"`
+
+	// ClientSecret The newly generated OAuth2 client secret, sent back to both platform-hosted and external agents
+	ClientSecret    string `json:"clientSecret"`
+	EnvironmentName string `json:"environmentName"`
+
+	// ProvisioningType Whether the agent runs on the platform (`internal`) or outside it (`external`)
+	ProvisioningType AgentProvisioningType `json:"provisioningType"`
+	Status           string                `json:"status"`
+}
+
 // AgentResourceConfigsResponse defines model for AgentResourceConfigsResponse.
 type AgentResourceConfigsResponse struct {
 	AutoScaling *AutoScalingConfig `json:"autoScaling,omitempty"`
@@ -1445,6 +1551,19 @@ type AgentResponse struct {
 	Status *string `json:"status,omitempty"`
 	Uuid   string  `json:"uuid"`
 }
+
+// AgentRevokeSecretResponse Response for revoking an AgentID secret. Never includes a
+// `clientSecret`, since revoke turns access off rather than rotating it.
+type AgentRevokeSecretResponse struct {
+	ClientId        string `json:"clientId"`
+	EnvironmentName string `json:"environmentName"`
+	Status          string `json:"status"`
+}
+
+// AgentThunderStatus Provisioning status of one AgentID binding. Goes from `pending` to
+// `in_progress` to `completed`, or to `failed` if it runs out of
+// retries (5 attempts over about 15 minutes).
+type AgentThunderStatus string
 
 // AgentTraceScoresResponse defines model for AgentTraceScoresResponse.
 type AgentTraceScoresResponse struct {
@@ -5350,6 +5469,36 @@ type GetAgentEndpointsParams struct {
 	Environment string `form:"environment" json:"environment"`
 }
 
+// RevokeAgentIdentitySecretParams defines parameters for RevokeAgentIdentitySecret.
+type RevokeAgentIdentitySecretParams struct {
+	// Environment Environment name to revoke the AgentID secret in
+	Environment string `form:"environment" json:"environment"`
+}
+
+// GetAgentIdentityParams defines parameters for GetAgentIdentity.
+type GetAgentIdentityParams struct {
+	// Environment Environment name to filter the result to a single binding
+	Environment *string `form:"environment,omitempty" json:"environment,omitempty"`
+}
+
+// ProvisionAgentIdentityParams defines parameters for ProvisionAgentIdentity.
+type ProvisionAgentIdentityParams struct {
+	// Environment Environment name to provision the AgentID in
+	Environment string `form:"environment" json:"environment"`
+}
+
+// ClaimAgentIdentitySecretParams defines parameters for ClaimAgentIdentitySecret.
+type ClaimAgentIdentitySecretParams struct {
+	// Environment Environment name to claim the AgentID secret for
+	Environment string `form:"environment" json:"environment"`
+}
+
+// GetAgentCredentialsParams defines parameters for GetAgentCredentials.
+type GetAgentCredentialsParams struct {
+	// Environment Environment name to read the AgentID credential for
+	Environment string `form:"environment" json:"environment"`
+}
+
 // ListAgentMCPConfigsParams defines parameters for ListAgentMCPConfigs.
 type ListAgentMCPConfigsParams struct {
 	// Limit Maximum number of results to return
@@ -5646,6 +5795,9 @@ type CreateAgentAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 
 // RotateAgentAPIKeyJSONRequestBody defines body for RotateAgentAPIKey for application/json ContentType.
 type RotateAgentAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
+
+// RegenerateAgentIdentitySecretJSONRequestBody defines body for RegenerateAgentIdentitySecret for application/json ContentType.
+type RegenerateAgentIdentitySecretJSONRequestBody = AgentIdentityActionRequest
 
 // CreateAgentMCPConfigJSONRequestBody defines body for CreateAgentMCPConfig for application/json ContentType.
 type CreateAgentMCPConfigJSONRequestBody = CreateAgentModelConfigRequest

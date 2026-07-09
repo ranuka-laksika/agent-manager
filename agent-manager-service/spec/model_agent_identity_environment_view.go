@@ -20,9 +20,10 @@ var _ MappedNullable = &AgentIdentityEnvironmentView{}
 // AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never includes a secret, even if one is waiting to be claimed. Check `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has anything to return.
 type AgentIdentityEnvironmentView struct {
 	// Environment this binding belongs to
-	EnvironmentName  string                `json:"environmentName"`
-	ProvisioningType AgentProvisioningType `json:"provisioningType"`
-	Status           AgentThunderStatus    `json:"status"`
+	EnvironmentName string `json:"environmentName"`
+	// Whether the agent runs on the platform (`internal`) or outside it (`external`)
+	ProvisioningType string             `json:"provisioningType"`
+	Status           AgentThunderStatus `json:"status"`
 	// Thunder's own ID for this identity. This is different from `clientId`, which is the OAuth2 client ID. Empty until provisioning reaches Thunder.
 	AgentId *string `json:"agentId,omitempty"`
 	// OAuth2 client ID for this AgentID
@@ -39,7 +40,7 @@ type AgentIdentityEnvironmentView struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentIdentityEnvironmentView(environmentName string, provisioningType AgentProvisioningType, status AgentThunderStatus, hasUnclaimedSecret bool) *AgentIdentityEnvironmentView {
+func NewAgentIdentityEnvironmentView(environmentName string, provisioningType string, status AgentThunderStatus, hasUnclaimedSecret bool) *AgentIdentityEnvironmentView {
 	this := AgentIdentityEnvironmentView{}
 	this.EnvironmentName = environmentName
 	this.ProvisioningType = provisioningType
@@ -81,9 +82,9 @@ func (o *AgentIdentityEnvironmentView) SetEnvironmentName(v string) {
 }
 
 // GetProvisioningType returns the ProvisioningType field value
-func (o *AgentIdentityEnvironmentView) GetProvisioningType() AgentProvisioningType {
+func (o *AgentIdentityEnvironmentView) GetProvisioningType() string {
 	if o == nil {
-		var ret AgentProvisioningType
+		var ret string
 		return ret
 	}
 
@@ -92,7 +93,7 @@ func (o *AgentIdentityEnvironmentView) GetProvisioningType() AgentProvisioningTy
 
 // GetProvisioningTypeOk returns a tuple with the ProvisioningType field value
 // and a boolean to check if the value has been set.
-func (o *AgentIdentityEnvironmentView) GetProvisioningTypeOk() (*AgentProvisioningType, bool) {
+func (o *AgentIdentityEnvironmentView) GetProvisioningTypeOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -100,7 +101,7 @@ func (o *AgentIdentityEnvironmentView) GetProvisioningTypeOk() (*AgentProvisioni
 }
 
 // SetProvisioningType sets field value
-func (o *AgentIdentityEnvironmentView) SetProvisioningType(v AgentProvisioningType) {
+func (o *AgentIdentityEnvironmentView) SetProvisioningType(v string) {
 	o.ProvisioningType = v
 }
 

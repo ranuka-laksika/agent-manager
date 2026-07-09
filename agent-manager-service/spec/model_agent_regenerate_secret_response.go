@@ -19,9 +19,10 @@ var _ MappedNullable = &AgentRegenerateSecretResponse{}
 
 // AgentRegenerateSecretResponse Response for rotating an AgentID secret
 type AgentRegenerateSecretResponse struct {
-	EnvironmentName  string                `json:"environmentName"`
-	ProvisioningType AgentProvisioningType `json:"provisioningType"`
-	ClientId         string                `json:"clientId"`
+	EnvironmentName string `json:"environmentName"`
+	// Whether the agent runs on the platform (`internal`) or outside it (`external`)
+	ProvisioningType string `json:"provisioningType"`
+	ClientId         string `json:"clientId"`
 	// The newly generated OAuth2 client secret, sent back to both platform-hosted and external agents
 	ClientSecret string `json:"clientSecret"`
 	Status       string `json:"status"`
@@ -31,7 +32,7 @@ type AgentRegenerateSecretResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentRegenerateSecretResponse(environmentName string, provisioningType AgentProvisioningType, clientId string, clientSecret string, status string) *AgentRegenerateSecretResponse {
+func NewAgentRegenerateSecretResponse(environmentName string, provisioningType string, clientId string, clientSecret string, status string) *AgentRegenerateSecretResponse {
 	this := AgentRegenerateSecretResponse{}
 	this.EnvironmentName = environmentName
 	this.ProvisioningType = provisioningType
@@ -74,9 +75,9 @@ func (o *AgentRegenerateSecretResponse) SetEnvironmentName(v string) {
 }
 
 // GetProvisioningType returns the ProvisioningType field value
-func (o *AgentRegenerateSecretResponse) GetProvisioningType() AgentProvisioningType {
+func (o *AgentRegenerateSecretResponse) GetProvisioningType() string {
 	if o == nil {
-		var ret AgentProvisioningType
+		var ret string
 		return ret
 	}
 
@@ -85,7 +86,7 @@ func (o *AgentRegenerateSecretResponse) GetProvisioningType() AgentProvisioningT
 
 // GetProvisioningTypeOk returns a tuple with the ProvisioningType field value
 // and a boolean to check if the value has been set.
-func (o *AgentRegenerateSecretResponse) GetProvisioningTypeOk() (*AgentProvisioningType, bool) {
+func (o *AgentRegenerateSecretResponse) GetProvisioningTypeOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -93,7 +94,7 @@ func (o *AgentRegenerateSecretResponse) GetProvisioningTypeOk() (*AgentProvision
 }
 
 // SetProvisioningType sets field value
-func (o *AgentRegenerateSecretResponse) SetProvisioningType(v AgentProvisioningType) {
+func (o *AgentRegenerateSecretResponse) SetProvisioningType(v string) {
 	o.ProvisioningType = v
 }
 
