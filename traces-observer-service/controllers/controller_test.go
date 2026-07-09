@@ -60,6 +60,10 @@ func (f *fakeObserverClient) QueryTraceSpans(_ context.Context, _ string, req ob
 	return &observer.TraceSpansQueryResponse{Spans: f.spans, Total: len(f.spans)}, nil
 }
 
+func (f *fakeObserverClient) NamespaceFor(organization string) string {
+	return organization
+}
+
 func (f *fakeObserverClient) GetSpanDetails(_ context.Context, _, spanID string) (*observer.SpanDetailsResponse, error) {
 	atomic.AddInt32(&f.getSpanDetailsCalls, 1)
 	if f.rootSpan != nil && spanID == f.rootSpan.SpanID {
