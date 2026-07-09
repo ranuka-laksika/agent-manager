@@ -99,6 +99,9 @@ func TestExecuteMonitorRun_CRStructure(t *testing.T) {
 	var capturedReq client.CreateWorkflowRunRequest
 	var capturedNamespace string
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			capturedNamespace = namespaceName
 			capturedReq = req
@@ -171,6 +174,9 @@ func TestExecuteMonitorRun_EvaluatorsJSON(t *testing.T) {
 
 	var capturedReq client.CreateWorkflowRunRequest
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			capturedReq = req
 			return &client.WorkflowRunResponse{
@@ -264,6 +270,9 @@ func TestExecuteMonitorRun_DBRecordCreated(t *testing.T) {
 	monitor := seedMonitor(t)
 
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			return &client.WorkflowRunResponse{
 				Name:         "test-workflow-run-123",
@@ -376,6 +385,9 @@ func TestExecuteMonitorRun_LLMCredentials(t *testing.T) {
 
 	var capturedReq client.CreateWorkflowRunRequest
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, _ string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			capturedReq = req
 			return &client.WorkflowRunResponse{Name: "run-1", WorkflowName: req.WorkflowName, Status: "Running", OrgName: monitor.OUID}, nil
@@ -412,6 +424,9 @@ func TestExecuteMonitorRun_NilEvaluatorsReturnsError(t *testing.T) {
 	monitor := seedMonitor(t)
 
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			t.Fatal("CreateWorkflowRun should not be called with nil evaluators")
 			return nil, errors.New("unexpected call")
@@ -452,6 +467,9 @@ func TestExecuteMonitorRun_PerOrgPublisherCredentials(t *testing.T) {
 
 	var capturedReq client.CreateWorkflowRunRequest
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			capturedReq = req
 			return &client.WorkflowRunResponse{
@@ -488,6 +506,9 @@ func TestExecuteMonitorRun_FallbackPublisherCredentials(t *testing.T) {
 
 	var capturedReq client.CreateWorkflowRunRequest
 	mockClient := &clientmocks.OpenChoreoClientMock{
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			capturedReq = req
 			return &client.WorkflowRunResponse{

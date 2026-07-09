@@ -74,6 +74,11 @@ func createBaseMockChoreoClient() *clientmocks.OpenChoreoClientMock {
 		NamespaceForFunc: func(ouID string) string {
 			return config.GetConfig().OpenChoreo.DefaultNamespace
 		},
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{
+				{Namespace: config.GetConfig().OpenChoreo.DefaultNamespace},
+			}, nil
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			return &client.WorkflowRunResponse{
 				Name:         "test-workflow-run-123",
