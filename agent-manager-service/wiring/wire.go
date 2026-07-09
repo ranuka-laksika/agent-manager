@@ -332,6 +332,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideLLMProviderRepository,
 	ProvideLLMProxyRepository,
 	ProvideMCPProxyRepository,
+	repositories.NewMCPProxyEndpointRepository,
 	ProvideDeploymentRepository,
 	ProvideArtifactRepository,
 	ProvideScoreRepository,

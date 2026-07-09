@@ -77,6 +77,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 		return nil, err
 	}
 	llmProxyService := services.NewLLMProxyService(llmProxyRepository, llmProviderRepository, v)
+	mcpProxyEndpointRepository := repositories.NewMCPProxyEndpointRepository(db)
 	deploymentRepository := ProvideDeploymentRepository(db)
 	eventHub, err := ProvideEventHub(db, logger)
 	if err != nil {
@@ -85,7 +86,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
 	scopeRepository := repositories.NewScopeRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, scopeRepository, logger, v)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, scopeRepository, logger, v)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
 	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
@@ -252,6 +253,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		return nil, err
 	}
 	llmProxyService := services.NewLLMProxyService(llmProxyRepository, llmProviderRepository, v)
+	mcpProxyEndpointRepository := repositories.NewMCPProxyEndpointRepository(db)
 	deploymentRepository := ProvideDeploymentRepository(db)
 	eventHub, err := ProvideEventHub(db, logger)
 	if err != nil {
@@ -260,7 +262,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
 	scopeRepository := repositories.NewScopeRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, scopeRepository, logger, v)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, scopeRepository, logger, v)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
 	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
@@ -612,8 +614,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideLLMProviderTemplateRepository,
 	ProvideLLMProviderRepository,
 	ProvideLLMProxyRepository,
-	ProvideMCPProxyRepository,
-	ProvideDeploymentRepository,
+	ProvideMCPProxyRepository, repositories.NewMCPProxyEndpointRepository, ProvideDeploymentRepository,
 	ProvideArtifactRepository,
 	ProvideScoreRepository,
 	ProvideCatalogRepository,

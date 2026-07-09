@@ -23,7 +23,6 @@ import {
 } from "@agent-management-platform/api-client";
 import {
   absoluteRouteMap,
-  type MCPEnvironmentConfig,
   type MCPProxy,
 } from "@agent-management-platform/types";
 import {
@@ -41,7 +40,7 @@ import {
 import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
 import { EndpointRow } from "./EndpointRow";
-import { DEFAULT_ENDPOINT_SECURITY } from "./mcpEndpoints";
+import { draftToEndpoint } from "./mcpEndpoints";
 import { MCP_SPEC_VERSION } from "../constants";
 
 interface AddMCPProxyFormProps {
@@ -129,40 +128,9 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
 
     const name = proxyName.trim();
 
-    // Each endpoint may serve several environments; materialise one per-environment
-    // config block for each, keyed by environment UUID, carrying that endpoint's
-    // upstream, fetched capabilities and default security. The org-level proxy is a
-    // blueprint and deploys nothing.
-    const environmentsConfig: Record<string, MCPEnvironmentConfig> =
-      Object.fromEntries(
-        endpoints.flatMap((endpoint) =>
-          endpoint.environments.map(
-            (environmentId): [string, MCPEnvironmentConfig] => [
-              environmentId,
-              {
-                upstream: {
-                  url: endpoint.url,
-                  auth:
-                    endpoint.authHeader && endpoint.authValue
-                      ? {
-                          type: "api-key" as const,
-                          header: endpoint.authHeader,
-                          value: endpoint.authValue,
-                        }
-                      : undefined,
-                },
-                capabilities: {
-                  tools: endpoint.fetchedInfo.tools,
-                  resources: endpoint.fetchedInfo.resources,
-                  prompts: endpoint.fetchedInfo.prompts,
-                },
-                security: DEFAULT_ENDPOINT_SECURITY,
-              },
-            ],
-          ),
-        ),
-      );
-
+    // Each endpoint carries its own upstream, fetched capabilities and default security,
+    // and is bound to one or more environments. The org-level proxy is a grouping and
+    // deploys nothing itself.
     const body: MCPProxy = {
       id: toHandle(name),
       name,
@@ -170,7 +138,12 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
       description: proxyDescription.trim() || undefined,
       context: proxyContext.trim() || undefined,
       mcpSpecVersion: MCP_SPEC_VERSION,
-      environments: environmentsConfig,
+      endpoints: (() => {
+        const usedHandles = new Set<string>();
+        return endpoints.map((endpoint, index) =>
+          draftToEndpoint(endpoint, index, undefined, usedHandles),
+        );
+      })(),
     };
 
     await createMCPProxy.mutateAsync({ params: { orgName: orgId }, body });

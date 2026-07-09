@@ -56,9 +56,13 @@ import { useSnackBar } from "@agent-management-platform/views";
 import { validateEndpointUrl } from "@agent-management-platform/shared-component";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
 
-// EndpointDraft is a single per-environment upstream endpoint captured in the form.
+// EndpointDraft is a single endpoint captured in the form. Its `id` maps to the backend
+// endpoint handle (unique within the parent proxy); a fresh draft carries a temporary
+// client id that the save path replaces with a handle derived from `name`/URL.
 export interface EndpointDraft {
   id: string;
+  // Human-readable endpoint name; the backend handle is derived from it when empty.
+  name: string;
   url: string;
   authHeader: string;
   authValue: string;
@@ -99,6 +103,7 @@ export function AddEndpointDialog({
 
   const isEditing = Boolean(initialDraft);
 
+  const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [authHeader, setAuthHeader] = useState("");
   const [authValue, setAuthValue] = useState("");
@@ -114,6 +119,7 @@ export function AddEndpointDialog({
   const resetState = useCallback(() => {
     if (initialDraft) {
       const hasStoredCredential = Boolean(initialDraft.authHeader);
+      setName(initialDraft.name);
       setUrl(initialDraft.url);
       setAuthHeader(initialDraft.authHeader);
       setAuthValue(hasStoredCredential ? MASKED_CREDENTIAL_VALUE : "");
@@ -122,6 +128,7 @@ export function AddEndpointDialog({
       setSelectedEnvIds(initialDraft.environments);
       setFetchedInfo(initialDraft.fetchedInfo);
     } else {
+      setName("");
       setUrl("");
       setAuthHeader("");
       setAuthValue("");
@@ -150,6 +157,7 @@ export function AddEndpointDialog({
   // when it returns different capabilities (e.g. newly added tools).
   const hasChanges =
     !initialDraft ||
+    name.trim() !== initialDraft.name ||
     trimmedUrl !== initialDraft.url ||
     authHeader.trim() !== initialDraft.authHeader ||
     (!isCredentialMasked && authValue.trim().length > 0) ||
@@ -231,6 +239,7 @@ export function AddEndpointDialog({
     // authValue so the save path omits it and the backend preserves the secret.
     const resolvedAuthValue = isCredentialMasked ? "" : authValue.trim();
     onAdd({
+      name: name.trim(),
       url: trimmedUrl,
       authHeader: authHeader.trim(),
       authValue: resolvedAuthValue,
@@ -250,6 +259,7 @@ export function AddEndpointDialog({
     fetchedInfo,
     initialDraft,
     isCredentialMasked,
+    name,
     onAdd,
     resetState,
     selectedEnvIds,
@@ -278,6 +288,17 @@ export function AddEndpointDialog({
             Point to your MCP server, fetch its capabilities, and choose the
             environments this endpoint serves.
           </Typography>
+
+          <FormControl fullWidth>
+            <FormLabel>Endpoint Name</FormLabel>
+            <TextField
+              fullWidth
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Primary"
+              helperText="Optional. A handle is derived from the name (or URL) when left blank."
+            />
+          </FormControl>
 
           <FormControl fullWidth error={Boolean(urlError)}>
             <FormLabel required>MCP Proxy Endpoint URL</FormLabel>

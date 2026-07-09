@@ -21,7 +21,7 @@ import {
   type MCPPolicyDefinition,
 } from "@agent-management-platform/api-client";
 import type {
-  MCPEnvironmentConfig,
+  MCPEndpointConfig,
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
@@ -58,10 +58,10 @@ function selectionsToMCPPolicies(
 }
 
 export type MCPProxyPoliciesTabProps = {
-  config: MCPEnvironmentConfig | undefined;
-  selectedEnvironmentId: string;
+  config: MCPEndpointConfig | undefined;
+  selectedEndpointId: string;
   orgName?: string;
-  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 

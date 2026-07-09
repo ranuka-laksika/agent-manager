@@ -14961,7 +14961,6 @@ components:
         - id
         - name
         - version
-        - upstream
       properties:
         id:
           type: string
@@ -14990,22 +14989,15 @@ components:
           type: string
           description: MCP specification version implemented by the upstream server
           example: "2025-03-26"
-        upstream:
-          $ref: "#/components/schemas/UpstreamConfig"
-        policies:
+        endpoints:
           type: array
-          description: Policies applied to the MCP proxy
+          minItems: 1
+          description: >-
+            Deployable endpoint definitions of the MCP proxy. Each endpoint is
+            deployed to one or more environments; within a proxy an environment
+            maps to at most one endpoint. At least one endpoint is required.
           items:
-            $ref: "#/components/schemas/MCPPolicy"
-        capabilities:
-          $ref: "#/components/schemas/MCPProxyCapabilities"
-        security:
-          $ref: "#/components/schemas/SecurityConfig"
-        environments:
-          type: object
-          description: Per-environment configuration blocks keyed by environment UUID
-          additionalProperties:
-            $ref: "#/components/schemas/MCPEnvironmentConfig"
+            $ref: "#/components/schemas/MCPProxyEndpoint"
         inCatalog:
           type: boolean
           description: Whether the MCP proxy is available in the catalog
@@ -15023,7 +15015,6 @@ components:
         - id
         - name
         - version
-        - upstream
       properties:
         id:
           type: string
@@ -15049,22 +15040,14 @@ components:
         mcpSpecVersion:
           type: string
           description: MCP specification version implemented by the upstream server
-        upstream:
-          $ref: "#/components/schemas/UpstreamConfig"
-        policies:
+        endpoints:
           type: array
-          description: Policies applied to the MCP proxy
+          minItems: 1
+          description: >-
+            Deployable endpoint definitions of the MCP proxy. Each endpoint
+            reports its per-environment deployment status.
           items:
-            $ref: "#/components/schemas/MCPPolicy"
-        capabilities:
-          $ref: "#/components/schemas/MCPProxyCapabilities"
-        security:
-          $ref: "#/components/schemas/SecurityConfig"
-        environments:
-          type: object
-          description: Per-environment configuration blocks keyed by environment UUID
-          additionalProperties:
-            $ref: "#/components/schemas/MCPEnvironmentConfig"
+            $ref: "#/components/schemas/MCPProxyEndpoint"
         inCatalog:
           type: boolean
           description: Whether the MCP proxy is available in the catalog
@@ -15163,16 +15146,26 @@ components:
           example:
             - repo:read.all
 
-    MCPEnvironmentConfig:
+    MCPProxyEndpoint:
       type: object
-      description: Per-environment blueprint block of an MCP proxy, keyed by environment UUID.
+      description: >-
+        One deployable endpoint of an MCP proxy. An endpoint carries the upstream
+        (URL + auth), policies, capabilities, security, and tool-scope bindings,
+        and is deployed to one or more environments. Within a proxy an endpoint's
+        id is unique and an environment maps to at most one endpoint.
+      required:
+        - id
+        - upstream
       properties:
-        artifactUuid:
+        id:
           type: string
-          format: uuid
-          readOnly: true
+          description: Endpoint handle, unique within the parent proxy
+          example: primary
+        name:
+          type: string
+          description: Human-readable endpoint name
         upstream:
-          $ref: "#/components/schemas/UpstreamEndpoint"
+          $ref: "#/components/schemas/UpstreamConfig"
         policies:
           type: array
           items:
@@ -15185,9 +15178,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/MCPToolScopeBinding"
+        environments:
+          type: array
+          description: Environments this endpoint is deployed to.
+          items:
+            $ref: "#/components/schemas/MCPEndpointEnvironment"
+
+    MCPEndpointEnvironment:
+      type: object
+      description: One endpoint→environment binding.
+      required:
+        - environmentUuid
+      properties:
+        environmentUuid:
+          type: string
+          format: uuid
+          description: Target environment UUID.
         deploymentStatus:
           type: string
+          description: Per-environment deployment status.
           readOnly: true
+          enum:
+            - Deployed
+            - Undeployed
 
     MCPPolicy:
       type: object

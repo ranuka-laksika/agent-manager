@@ -24,7 +24,7 @@ import {
 } from "@agent-management-platform/shared-component";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
 import type {
-  MCPEnvironmentConfig,
+  MCPEndpointConfig,
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
@@ -143,17 +143,17 @@ function buildAclPolicyParams(
 }
 
 export type MCPProxyAccessControlTabProps = {
-  config: MCPEnvironmentConfig | undefined;
-  selectedEnvironmentId: string;
+  config: MCPEndpointConfig | undefined;
+  selectedEndpointId: string;
   orgName: string | undefined;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxyAccessControlTab({
   config,
-  selectedEnvironmentId,
+  selectedEndpointId,
   orgName,
   isLoading = false,
   onUpdate,
@@ -219,13 +219,13 @@ export function MCPProxyAccessControlTab({
     capabilitiesPresent.prompt;
 
   useEffect(() => {
-    if (!selectedEnvironmentId) return;
+    if (!selectedEndpointId) return;
     const existing = config?.policies?.find((p) => p.name === ACL_POLICY_NAME);
     const parsed = parseExistingAclPolicy(existing);
     setMode(parsed.mode);
     setExceptionKeys(parsed.exceptionKeys);
     lastSavedRef.current = parsed;
-  }, [config, selectedEnvironmentId]);
+  }, [config, selectedEndpointId]);
 
   const isDirty = useMemo(() => {
     const saved = lastSavedRef.current;

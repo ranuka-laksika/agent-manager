@@ -16,7 +16,8 @@
  */
 
 import type {
-  MCPEnvironmentConfig,
+  MCPEndpointConfig,
+  MCPEndpointEnvironment,
   MCPProxy,
 } from "@agent-management-platform/types";
 import { Card, Chip, Grid, Skeleton, Stack, Typography } from "@wso2/oxygen-ui";
@@ -24,13 +25,16 @@ import { ACL_POLICY_NAME } from "../constants";
 
 export type MCPProxyOverviewTabProps = {
   proxy: MCPProxy | null | undefined;
-  config: MCPEnvironmentConfig | undefined;
+  config: MCPEndpointConfig | undefined;
+  // Environment bindings of the selected endpoint, used to summarise its deployment.
+  environments?: MCPEndpointEnvironment[];
   isLoading?: boolean;
 };
 
 export function MCPProxyOverviewTab({
   proxy,
   config,
+  environments = [],
   isLoading = false,
 }: MCPProxyOverviewTabProps) {
   if (isLoading) {
@@ -60,9 +64,20 @@ export function MCPProxyOverviewTab({
     (policy) => policy.name === ACL_POLICY_NAME,
   );
 
-  // Whether this environment's single gateway artifact is currently deployed. The backend
-  // computes it per environment from the artifact's deployment records.
-  const isDeployed = config?.deploymentStatus === "Deployed";
+  // Per-environment deployment summary for the selected endpoint. The backend computes
+  // each binding's status from its gateway artifact's deployment records.
+  const deployedCount = environments.filter(
+    (env) => env.deploymentStatus === "Deployed",
+  ).length;
+  const isDeployed = environments.length > 0 && deployedCount === environments.length;
+  const deploymentLabel =
+    environments.length === 0
+      ? "No environments"
+      : deployedCount === environments.length
+        ? "Deployed"
+        : deployedCount === 0
+          ? "Undeployed"
+          : `Deployed in ${deployedCount} of ${environments.length}`;
 
   // Auth Type reflects the proxy's inbound security (the Security tab), i.e. whether
   // clients must present an API key — not the upstream auth used to reach the backend.
@@ -92,7 +107,7 @@ export function MCPProxyOverviewTab({
             </Card>
           </Grid>
         )}
-        {config?.upstream?.url && (
+        {config?.upstream?.main?.url && (
           <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Stack spacing={0.5}>
@@ -107,7 +122,7 @@ export function MCPProxyOverviewTab({
                   variant="body2"
                   sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
                 >
-                  {config.upstream.url}
+                  {config.upstream.main.url}
                 </Typography>
               </Stack>
             </Card>
@@ -160,7 +175,7 @@ export function MCPProxyOverviewTab({
                 Deployment
               </Typography>
               <Chip
-                label={isDeployed ? "Deployed" : "Undeployed"}
+                label={deploymentLabel}
                 size="small"
                 variant="outlined"
                 color={isDeployed ? "success" : "default"}
