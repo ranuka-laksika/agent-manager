@@ -20,14 +20,14 @@ Before registering a gateway, ensure you have:
 
 :::note External gateways need the gateway-management endpoint exposed
 
-A gateway running **outside** the Agent Manager cluster connects to the gateway-management (xDS) endpoint on port `9243`. That endpoint is a `ClusterIP` service by default, so expose it before registering an external gateway:
+A gateway running **outside** the Agent Manager cluster connects to the gateway-management (xDS) endpoint on port `9243`. On the **quick-start** install this works out of the box (the installer exposes the endpoint and maps host port `9243`). On other Kubernetes installs the endpoint is a `ClusterIP` service by default, so expose it before registering an external gateway:
 
 ```bash
 helm upgrade <release> oci://ghcr.io/wso2/helm-charts/wso2-agent-manager -n wso2-amp \
   --reuse-values --set agentManagerService.gatewayMgtService.type=LoadBalancer
 ```
 
-On the quick-start k3d install, also map the host port by adding `9243:9243` to the `ports:` list in `deployments/quick-start/k3d-config.yaml` before creating the cluster. Gateways deployed inside the cluster reach the endpoint via cluster DNS and need no changes.
+Gateways deployed inside the cluster reach the endpoint via cluster DNS and need no changes.
 
 :::
 

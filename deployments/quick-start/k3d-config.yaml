@@ -11,6 +11,12 @@ kubeAPI:
 # AMP services (Console, API, Traces Observer) ride the plane gateways below —
 # they have no host ports of their own.
 ports:
+  # Gateway control plane (xDS/WS) — lets external AI gateways started via the
+  # console's quick start connect to host.docker.internal:9243 (the installer
+  # sets gatewayMgtService.type=LoadBalancer for this dev flavor)
+  - port: 9243:9243
+    nodeFilters:
+      - loadbalancer
   # Control Plane uses port range 8xxx
   # HTTP traffic to OpenChoreo UI and API (Kgateway LoadBalancer)
   - port: 8080:8080

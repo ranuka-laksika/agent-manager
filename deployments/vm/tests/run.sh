@@ -186,11 +186,6 @@ assert_eq "k3d rebinds 3000" \
 assert_eq "k3d rebinds mismatched ports" \
   "  - port: 127.0.0.1:11082:9200" \
   "$(grep -F '11082' <<<"$k3d_out")"
-# The base config no longer carries 9243; the renderer re-adds it (loopback)
-# for the external-gateway cp path.
-assert_eq "k3d appends 9243 gateway-control port" \
-  "  - port: 127.0.0.1:9243:9243" \
-  "$(grep -F '9243' <<<"$k3d_out")"
 assert_eq "k3d leaves nodeFilters intact" \
   "    nodeFilters:" \
   "$(grep -F 'nodeFilters' <<<"$k3d_out" | head -1)"

@@ -250,22 +250,9 @@ build_thunder_helm_args() {
 #     separately by render_coredns_vm_config; this covers the node containerd path.
 render_k3d_vm_config() {
   local node_host="${1:-k3d-amp-local-server-0}"
-  # The awk stage re-adds the 9243 gateway-control port the base config no
-  # longer carries (external AI gateways dial it through Caddy's cp site; the
-  # mapping is a harmless dead-end when gatewayMgtService stays ClusterIP).
-  # Already loopback-bound, so it is emitted after the sed loopback rewrite.
   sed -E \
     -e 's/^([[:space:]]*- port: )([0-9]+:[0-9]+)/\1127.0.0.1:\2/' \
-    -e "s#^([[:space:]]*- )http://host\\.k3d\\.internal:10082#\\1http://${node_host}:10082#" \
-  | awk '
-      { print }
-      /^ports:/ && !done {
-        print "  # Gateway control plane (xDS/WS) for external AI gateways"
-        print "  - port: 127.0.0.1:9243:9243"
-        print "    nodeFilters:"
-        print "      - loadbalancer"
-        done=1
-      }'
+    -e "s#^([[:space:]]*- )http://host\\.k3d\\.internal:10082#\\1http://${node_host}:10082#"
 }
 
 # render_coredns_vm_config <node_host>
