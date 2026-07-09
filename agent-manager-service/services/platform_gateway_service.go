@@ -149,17 +149,17 @@ type Pagination struct {
 
 // RegisterGateway registers a new gateway with organization validation
 func (s *PlatformGatewayService) RegisterGateway(
-	orgName, name, displayName, description, vhost string,
+	ouID, name, displayName, description, vhost string,
 	isCritical bool, functionalityType string,
 	properties map[string]interface{},
 ) (*GatewayResponse, error) {
 	// 1. Validate inputs
-	if err := s.validateGatewayInput(orgName, name, displayName, vhost, functionalityType); err != nil {
+	if err := s.validateGatewayInput(ouID, name, displayName, vhost, functionalityType); err != nil {
 		return nil, err
 	}
 
 	// 3. Check gateway name uniqueness within organization
-	existing, err := s.gatewayRepo.GetByNameAndOrgID(name, orgName)
+	existing, err := s.gatewayRepo.GetByNameAndOrgID(name, ouID)
 	if err != nil && !errors.Is(err, utils.ErrGatewayNotFound) {
 		return nil, fmt.Errorf("failed to check gateway name uniqueness: %w", err)
 	}
@@ -183,7 +183,7 @@ func (s *PlatformGatewayService) RegisterGateway(
 
 	gateway := &models.Gateway{
 		UUID:                     gatewayUUID,
-		OrganizationName:         orgName,
+		OUID:                     ouID,
 		Name:                     name,
 		DisplayName:              displayName,
 		Description:              description,
@@ -202,7 +202,7 @@ func (s *PlatformGatewayService) RegisterGateway(
 
 	response := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -226,15 +226,15 @@ type GatewayListFilters struct {
 }
 
 // ListGateways retrieves gateways with constitution-compliant envelope structure and DB-level pagination
-func (s *PlatformGatewayService) ListGateways(orgName *string, filters *GatewayListFilters, limit, offset int) (*GatewayListResponse, error) {
+func (s *PlatformGatewayService) ListGateways(ouID *string, filters *GatewayListFilters, limit, offset int) (*GatewayListResponse, error) {
 	// Build filter options
 	filterOpts := repositories.GatewayFilterOptions{
 		Limit:  limit,
 		Offset: offset,
 	}
 
-	if orgName != nil && *orgName != "" {
-		filterOpts.OrganizationID = *orgName
+	if ouID != nil && *ouID != "" {
+		filterOpts.OrganizationID = *ouID
 	}
 
 	if filters != nil {
@@ -260,7 +260,7 @@ func (s *PlatformGatewayService) ListGateways(orgName *string, filters *GatewayL
 	for _, gw := range gateways {
 		responses = append(responses, GatewayResponse{
 			ID:                gw.UUID.String(),
-			OrganizationID:    gw.OrganizationName,
+			OrganizationID:    gw.OUID,
 			Name:              gw.Name,
 			DisplayName:       gw.DisplayName,
 			Description:       gw.Description,
@@ -289,7 +289,7 @@ func (s *PlatformGatewayService) ListGateways(orgName *string, filters *GatewayL
 }
 
 // GetGateway retrieves a gateway by ID
-func (s *PlatformGatewayService) GetGateway(gatewayID, orgName string) (*GatewayResponse, error) {
+func (s *PlatformGatewayService) GetGateway(gatewayID, ouID string) (*GatewayResponse, error) {
 	// Validate UUID format
 	if _, err := uuid.Parse(gatewayID); err != nil {
 		return nil, errors.New("invalid UUID format")
@@ -304,13 +304,13 @@ func (s *PlatformGatewayService) GetGateway(gatewayID, orgName string) (*Gateway
 		return nil, utils.ErrGatewayNotFound
 	}
 
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
 	response := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -344,7 +344,7 @@ func (s *PlatformGatewayService) SaveGatewayPolicyManifest(gatewayID string, man
 
 // UpdateGateway updates gateway details
 func (s *PlatformGatewayService) UpdateGateway(
-	gatewayID, orgName string,
+	gatewayID, ouID string,
 	description, displayName *string,
 	isCritical *bool,
 	properties *map[string]interface{},
@@ -357,7 +357,7 @@ func (s *PlatformGatewayService) UpdateGateway(
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -382,7 +382,7 @@ func (s *PlatformGatewayService) UpdateGateway(
 
 	updatedGateway := &GatewayResponse{
 		ID:                gateway.UUID.String(),
-		OrganizationID:    gateway.OrganizationName,
+		OrganizationID:    gateway.OUID,
 		Name:              gateway.Name,
 		DisplayName:       gateway.DisplayName,
 		Description:       gateway.Description,
@@ -398,7 +398,7 @@ func (s *PlatformGatewayService) UpdateGateway(
 }
 
 // DeleteGateway deletes a gateway after verifying no active deployments exist
-func (s *PlatformGatewayService) DeleteGateway(gatewayID, orgName string) error {
+func (s *PlatformGatewayService) DeleteGateway(gatewayID, ouID string) error {
 	// Validate UUID format
 	if _, err := uuid.Parse(gatewayID); err != nil {
 		return errors.New("invalid UUID format")
@@ -412,12 +412,12 @@ func (s *PlatformGatewayService) DeleteGateway(gatewayID, orgName string) error 
 	if gateway == nil {
 		return utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return utils.ErrGatewayNotFound
 	}
 
 	// Reject deletion if the gateway has active deployments (LLM providers/proxies)
-	hasDeployments, err := s.gatewayRepo.HasGatewayDeployments(gatewayID, orgName)
+	hasDeployments, err := s.gatewayRepo.HasGatewayDeployments(gatewayID, ouID)
 	if err != nil {
 		return fmt.Errorf("failed to check gateway deployments: %w", err)
 	}
@@ -425,7 +425,7 @@ func (s *PlatformGatewayService) DeleteGateway(gatewayID, orgName string) error 
 		return utils.ErrGatewayHasDeployments
 	}
 
-	err = s.gatewayRepo.Delete(gatewayID, orgName)
+	err = s.gatewayRepo.Delete(gatewayID, ouID)
 	if err != nil {
 		return err
 	}
@@ -523,7 +523,7 @@ func (s *PlatformGatewayService) VerifyToken(plainToken string) (*models.Platfor
 }
 
 // RotateToken generates a new token for a gateway (max 2 active tokens)
-func (s *PlatformGatewayService) RotateToken(gatewayID, orgName string) (*TokenRotationResponse, error) {
+func (s *PlatformGatewayService) RotateToken(gatewayID, ouID string) (*TokenRotationResponse, error) {
 	// 1. Validate gateway exists
 	gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
 	if err != nil {
@@ -532,7 +532,7 @@ func (s *PlatformGatewayService) RotateToken(gatewayID, orgName string) (*TokenR
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -592,7 +592,7 @@ func (s *PlatformGatewayService) RotateToken(gatewayID, orgName string) (*TokenR
 }
 
 // ListTokens retrieves all active tokens for a gateway (metadata only - no secret values)
-func (s *PlatformGatewayService) ListTokens(gatewayID, orgName string) (*GatewayTokenListResponse, error) {
+func (s *PlatformGatewayService) ListTokens(gatewayID, ouID string) (*GatewayTokenListResponse, error) {
 	// 1. Validate gateway exists and belongs to organization
 	gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
 	if err != nil {
@@ -601,7 +601,7 @@ func (s *PlatformGatewayService) ListTokens(gatewayID, orgName string) (*Gateway
 	if gateway == nil {
 		return nil, utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return nil, utils.ErrGatewayNotFound
 	}
 
@@ -629,7 +629,7 @@ func (s *PlatformGatewayService) ListTokens(gatewayID, orgName string) (*Gateway
 }
 
 // RevokeTokenByID revokes a token and invalidates it from cache
-func (s *PlatformGatewayService) RevokeTokenByID(tokenID, gatewayID, orgName string) error {
+func (s *PlatformGatewayService) RevokeTokenByID(tokenID, gatewayID, ouID string) error {
 	// 1. Validate gateway exists and belongs to organization
 	gateway, err := s.gatewayRepo.GetByUUID(gatewayID)
 	if err != nil {
@@ -638,7 +638,7 @@ func (s *PlatformGatewayService) RevokeTokenByID(tokenID, gatewayID, orgName str
 	if gateway == nil {
 		return utils.ErrGatewayNotFound
 	}
-	if gateway.OrganizationName != orgName {
+	if gateway.OUID != ouID {
 		return utils.ErrGatewayNotFound
 	}
 
@@ -678,9 +678,9 @@ func (s *PlatformGatewayService) InvalidateGatewayTokensCache(gatewayUUID uuid.U
 }
 
 // GetGatewayStatus retrieves gateway status information for polling
-func (s *PlatformGatewayService) GetGatewayStatus(ctx context.Context, orgName string, gatewayID *string) (*GatewayStatusListResponse, error) {
+func (s *PlatformGatewayService) GetGatewayStatus(ctx context.Context, ouID string, gatewayID *string) (*GatewayStatusListResponse, error) {
 	// Validate organizationId is provided and valid
-	if strings.TrimSpace(orgName) == "" {
+	if strings.TrimSpace(ouID) == "" {
 		return nil, errors.New("organization name is required")
 	}
 
@@ -697,13 +697,13 @@ func (s *PlatformGatewayService) GetGatewayStatus(ctx context.Context, orgName s
 			return nil, utils.ErrGatewayNotFound
 		}
 		// Check organization access
-		if gateway.OrganizationName != orgName {
+		if gateway.OUID != ouID {
 			return nil, utils.ErrGatewayNotFound
 		}
 		gateways = []*models.Gateway{gateway}
 	} else {
 		// Get all gateways for organization
-		gateways, err = s.gatewayRepo.GetByOrganizationID(ctx, orgName)
+		gateways, err = s.gatewayRepo.GetByOrganizationID(ctx, ouID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list gateways: %w", err)
 		}
@@ -741,15 +741,15 @@ func (s *PlatformGatewayService) UpdateGatewayActiveStatus(gatewayID string, isA
 
 // resolveGatewayUUID resolves a gateway identifier (UUID or name) to its UUID,
 // scoped to the organization.
-func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, orgName string) (string, error) {
-	if gw, err := s.gatewayRepo.GetByNameAndOrgID(gatewayID, orgName); err == nil {
+func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, ouID string) (string, error) {
+	if gw, err := s.gatewayRepo.GetByNameAndOrgID(gatewayID, ouID); err == nil {
 		return gw.UUID.String(), nil
 	}
 	gw, err := s.gatewayRepo.GetByUUID(gatewayID)
 	if err != nil {
 		return "", utils.ErrGatewayNotFound
 	}
-	if gw.OrganizationName != orgName {
+	if gw.OUID != ouID {
 		return "", utils.ErrGatewayNotFound
 	}
 	return gw.UUID.String(), nil
@@ -763,11 +763,11 @@ func (s *PlatformGatewayService) resolveGatewayUUID(gatewayID, orgName string) (
 // apply fails the mirror is left untouched. System providers are bootstrapped into the
 // gateway out of band, so only custom providers are applied here. Open-source builds
 // (nil applier) write the mirror only and rely on manage-identity-provider.sh.
-func (s *PlatformGatewayService) UpsertIdentityProvider(ctx context.Context, gatewayID, orgName, name, issuer, jwksURI, description string, skipTLS bool) (*models.GatewayIdentityProvider, error) {
+func (s *PlatformGatewayService) UpsertIdentityProvider(ctx context.Context, gatewayID, ouID, name, issuer, jwksURI, description string, skipTLS bool) (*models.GatewayIdentityProvider, error) {
 	if name == models.ReservedIdentityProviderName {
 		return nil, utils.ErrInvalidInput
 	}
-	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, ouID)
 	if err != nil {
 		return nil, err
 	}
@@ -796,7 +796,7 @@ func (s *PlatformGatewayService) UpsertIdentityProvider(ctx context.Context, gat
 	// row the gateway does not honor.
 	applied := false
 	if s.gatewayApplier != nil && providerType == models.IdentityProviderTypeCustom {
-		if err := s.gatewayApplier.ApplyIdentityProvider(ctx, gatewayID, orgName, *provider); err != nil {
+		if err := s.gatewayApplier.ApplyIdentityProvider(ctx, gatewayID, ouID, *provider); err != nil {
 			return nil, err
 		}
 		applied = true
@@ -820,14 +820,14 @@ func (s *PlatformGatewayService) UpsertIdentityProvider(ctx context.Context, gat
 // removed from the gateway runtime config before the mirror row, keeping the two in
 // sync; if the apply fails the mirror is left untouched. System providers are skipped
 // (the repository rejects their deletion), so only custom providers are applied here.
-func (s *PlatformGatewayService) DeleteIdentityProvider(ctx context.Context, gatewayID, orgName, name string) error {
-	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+func (s *PlatformGatewayService) DeleteIdentityProvider(ctx context.Context, gatewayID, ouID, name string) error {
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, ouID)
 	if err != nil {
 		return err
 	}
 	removed := false
 	if s.gatewayApplier != nil && !models.IsSystemIdentityProvider(name) {
-		if err := s.gatewayApplier.DeleteIdentityProvider(ctx, gatewayID, orgName, name); err != nil {
+		if err := s.gatewayApplier.DeleteIdentityProvider(ctx, gatewayID, ouID, name); err != nil {
 			return err
 		}
 		removed = true
@@ -845,8 +845,8 @@ func (s *PlatformGatewayService) DeleteIdentityProvider(ctx context.Context, gat
 }
 
 // ListIdentityProvidersByGateway lists the identity providers mirrored for a gateway.
-func (s *PlatformGatewayService) ListIdentityProvidersByGateway(gatewayID, orgName string) ([]models.GatewayIdentityProvider, error) {
-	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, orgName)
+func (s *PlatformGatewayService) ListIdentityProvidersByGateway(gatewayID, ouID string) ([]models.GatewayIdentityProvider, error) {
+	gwUUIDStr, err := s.resolveGatewayUUID(gatewayID, ouID)
 	if err != nil {
 		return nil, err
 	}
@@ -861,8 +861,8 @@ func (s *PlatformGatewayService) ListIdentityProvidersByEnvironment(environmentI
 
 // ListIdentityProvidersByOrg lists every identity provider across the org's
 // gateways, enriched with gateway + environment context.
-func (s *PlatformGatewayService) ListIdentityProvidersByOrg(orgName string) ([]repositories.IdentityProviderWithContext, error) {
-	return s.gatewayRepo.ListIdentityProvidersByOrg(orgName)
+func (s *PlatformGatewayService) ListIdentityProvidersByOrg(ouID string) ([]repositories.IdentityProviderWithContext, error) {
+	return s.gatewayRepo.ListIdentityProvidersByOrg(ouID)
 }
 
 // AssignGatewayToEnvironment creates a mapping between a gateway and an environment
@@ -983,9 +983,9 @@ func (s *PlatformGatewayService) DeleteGatewayEnvironmentMappings(gatewayID stri
 }
 
 // validateGatewayInput validates gateway registration inputs
-func (s *PlatformGatewayService) validateGatewayInput(orgName, name, displayName, vhost, functionalityType string) error {
+func (s *PlatformGatewayService) validateGatewayInput(ouID, name, displayName, vhost, functionalityType string) error {
 	// Organization ID validation
-	if strings.TrimSpace(orgName) == "" {
+	if strings.TrimSpace(ouID) == "" {
 		return errors.New("organization name is required")
 	}
 

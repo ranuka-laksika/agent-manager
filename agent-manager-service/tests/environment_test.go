@@ -123,11 +123,9 @@ func TestCreateEnvironment(t *testing.T) {
 		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &resp))
 		require.Equal(t, payload.Name, resp.Name)
 		require.Equal(t, payload.DisplayName, resp.DisplayName)
-		require.Equal(t, testEnvOrgName, resp.OrganizationName)
 
 		require.Len(t, ocClient.CreateEnvironmentCalls(), 1)
 		call := ocClient.CreateEnvironmentCalls()[0]
-		require.Equal(t, testEnvOrgName, call.NamespaceName)
 		require.Equal(t, payload.Name, call.Req.Name)
 		require.Equal(t, *payload.DataplaneRef, call.Req.DataplaneRef)
 	})

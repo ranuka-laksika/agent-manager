@@ -133,15 +133,15 @@ func listDeployments(handler DeploymentToolsetHandler) func(context.Context, *go
 			return nil, nil, fmt.Errorf("agent_name is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
-		deployments, err := handler.GetAgentDeployments(ctx, orgName, input.ProjectName, input.AgentName)
+		deployments, err := handler.GetAgentDeployments(ctx, ouID, input.ProjectName, input.AgentName)
 		if err != nil {
 			return nil, nil, wrapToolError("list_deployments", err)
 		}
 
 		response := listDeploymentsOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: input.ProjectName,
 			AgentName:   input.AgentName,
 			Deployments: utils.ConvertToDeploymentDetailsResponse(deployments),
@@ -163,7 +163,7 @@ func deployAgent(handler DeploymentToolsetHandler) func(context.Context, *gomcp.
 			return nil, nil, fmt.Errorf("image_id is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		env := make([]spec.EnvironmentVariable, 0, len(input.Env))
 		for _, item := range input.Env {
@@ -181,13 +181,13 @@ func deployAgent(handler DeploymentToolsetHandler) func(context.Context, *gomcp.
 			EnableAutoInstrumentation: input.EnableAutoInstrumentation,
 		}
 
-		environment, err := handler.DeployAgent(ctx, orgName, input.ProjectName, input.AgentName, req)
+		environment, err := handler.DeployAgent(ctx, ouID, input.ProjectName, input.AgentName, req)
 		if err != nil {
 			return nil, nil, wrapToolError("deploy_agent", err)
 		}
 
 		response := deployAgentOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: input.ProjectName,
 			AgentName:   input.AgentName,
 			Environment: environment,
@@ -222,15 +222,15 @@ func updateDeploymentState(handler DeploymentToolsetHandler) func(context.Contex
 			return nil, nil, fmt.Errorf("state must be redeploy or undeploy")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
-		if err := handler.UpdateDeploymentState(ctx, orgName, input.ProjectName, input.AgentName, input.Environment, state); err != nil {
+		if err := handler.UpdateDeploymentState(ctx, ouID, input.ProjectName, input.AgentName, input.Environment, state); err != nil {
 			return nil, nil, wrapToolError("update_deployment_state", err)
 		}
 
 		response := updateDeploymentStateOutput{
 			Message:     fmt.Sprintf("Deployment state transition request accepted. %s'.", actionMessage),
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: input.ProjectName,
 			AgentName:   input.AgentName,
 			Environment: input.Environment,

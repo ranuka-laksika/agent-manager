@@ -103,8 +103,8 @@ func NewGatewayInternalAPIService(
 // given UUID on this gateway. The UUID may identify a source MCP proxy (mcp_proxies) or an
 // agent-scoped mapping artifact (artifacts); both live in the deployments table keyed by
 // artifact_uuid, so a single lookup handles both cases.
-func (s *GatewayInternalAPIService) GetActiveMCPProxyDeploymentByGateway(ctx context.Context, proxyID, orgName, gatewayID string) (map[string]string, error) {
-	deployment, err := s.deploymentRepo.GetCurrentByGateway(proxyID, gatewayID, orgName)
+func (s *GatewayInternalAPIService) GetActiveMCPProxyDeploymentByGateway(ctx context.Context, proxyID, ouID, gatewayID string) (map[string]string, error) {
+	deployment, err := s.deploymentRepo.GetCurrentByGateway(proxyID, gatewayID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}
@@ -123,9 +123,9 @@ func (s *GatewayInternalAPIService) GetActiveMCPProxyDeploymentByGateway(ctx con
 }
 
 // GetActiveDeploymentByGateway retrieves the currently deployed API artifact for a specific gateway
-func (s *GatewayInternalAPIService) GetActiveDeploymentByGateway(apiID, orgName, gatewayID string) (map[string]string, error) {
+func (s *GatewayInternalAPIService) GetActiveDeploymentByGateway(apiID, ouID, gatewayID string) (map[string]string, error) {
 	// Get the active deployment for this API on this gateway
-	deployment, err := s.deploymentRepo.GetCurrentByGateway(apiID, gatewayID, orgName)
+	deployment, err := s.deploymentRepo.GetCurrentByGateway(apiID, gatewayID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}
@@ -143,8 +143,8 @@ func (s *GatewayInternalAPIService) GetActiveDeploymentByGateway(apiID, orgName,
 }
 
 // GetActiveLLMProviderDeploymentByGateway retrieves the currently deployed LLM provider artifact
-func (s *GatewayInternalAPIService) GetActiveLLMProviderDeploymentByGateway(ctx context.Context, providerID, orgName, gatewayID string) (map[string]string, error) {
-	provider, err := s.providerRepo.GetByUUID(providerID, orgName)
+func (s *GatewayInternalAPIService) GetActiveLLMProviderDeploymentByGateway(ctx context.Context, providerID, ouID, gatewayID string) (map[string]string, error) {
+	provider, err := s.providerRepo.GetByUUID(providerID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM provider: %w", err)
 	}
@@ -152,7 +152,7 @@ func (s *GatewayInternalAPIService) GetActiveLLMProviderDeploymentByGateway(ctx 
 		return nil, fmt.Errorf("LLM provider not found")
 	}
 
-	deployment, err := s.deploymentRepo.GetCurrentByGateway(provider.UUID.String(), gatewayID, orgName)
+	deployment, err := s.deploymentRepo.GetCurrentByGateway(provider.UUID.String(), gatewayID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}
@@ -177,8 +177,8 @@ func (s *GatewayInternalAPIService) GetActiveLLMProviderDeploymentByGateway(ctx 
 }
 
 // GetActiveLLMProxyDeploymentByGateway retrieves the currently deployed LLM proxy artifact
-func (s *GatewayInternalAPIService) GetActiveLLMProxyDeploymentByGateway(ctx context.Context, proxyID, orgName, gatewayID string) (map[string]string, error) {
-	proxy, err := s.proxyRepo.GetByID(proxyID, orgName)
+func (s *GatewayInternalAPIService) GetActiveLLMProxyDeploymentByGateway(ctx context.Context, proxyID, ouID, gatewayID string) (map[string]string, error) {
+	proxy, err := s.proxyRepo.GetByID(proxyID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get LLM proxy: %w", err)
 	}
@@ -186,7 +186,7 @@ func (s *GatewayInternalAPIService) GetActiveLLMProxyDeploymentByGateway(ctx con
 		return nil, utils.ErrLLMProxyNotFound
 	}
 
-	deployment, err := s.deploymentRepo.GetCurrentByGateway(proxy.UUID.String(), gatewayID, orgName)
+	deployment, err := s.deploymentRepo.GetCurrentByGateway(proxy.UUID.String(), gatewayID, ouID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get deployment: %w", err)
 	}

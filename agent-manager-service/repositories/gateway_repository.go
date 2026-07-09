@@ -55,19 +55,19 @@ type GatewayRepository interface {
 	// Gateway operations
 	Create(gateway *models.Gateway) error
 	GetByUUID(gatewayId string) (*models.Gateway, error)
-	GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error)
-	GetByNameAndOrgID(name, orgName string) (*models.Gateway, error)
+	GetByOrganizationID(ctx context.Context, ouID string) ([]*models.Gateway, error)
+	GetByNameAndOrgID(name, ouID string) (*models.Gateway, error)
 	List() ([]*models.Gateway, error)
 	ListWithFilters(filters GatewayFilterOptions) ([]*models.Gateway, error)
 	CountWithFilters(filters GatewayFilterOptions) (int64, error)
-	Delete(gatewayID, orgName string) error
+	Delete(gatewayID, ouID string) error
 	UpdateGateway(gateway *models.Gateway) error
 	UpdateActiveStatus(gatewayId string, isActive bool) error
 
 	// Gateway association checking operations
-	HasGatewayDeployments(gatewayID, orgName string) (bool, error)
-	HasGatewayAssociations(gatewayID, orgName string) (bool, error)
-	HasGatewayAssociationsOrDeployments(gatewayID, orgName string) (bool, error)
+	HasGatewayDeployments(gatewayID, ouID string) (bool, error)
+	HasGatewayAssociations(gatewayID, ouID string) (bool, error)
+	HasGatewayAssociationsOrDeployments(gatewayID, ouID string) (bool, error)
 
 	// Token operations
 	CreateToken(token *models.GatewayToken) error
@@ -93,7 +93,7 @@ type GatewayRepository interface {
 	DeleteIdentityProvider(gatewayID, name string) error
 	ListIdentityProvidersByGateway(gatewayID string) ([]models.GatewayIdentityProvider, error)
 	ListIdentityProvidersByEnvironment(environmentID string) ([]models.GatewayIdentityProvider, error)
-	ListIdentityProvidersByOrg(orgName string) ([]IdentityProviderWithContext, error)
+	ListIdentityProvidersByOrg(ouID string) ([]IdentityProviderWithContext, error)
 }
 
 // GatewayRepo implements GatewayRepository using GORM
@@ -128,18 +128,18 @@ func (r *GatewayRepo) GetByUUID(gatewayId string) (*models.Gateway, error) {
 }
 
 // GetByOrganizationID retrieves all gateways for an organization
-func (r *GatewayRepo) GetByOrganizationID(ctx context.Context, orgName string) ([]*models.Gateway, error) {
+func (r *GatewayRepo) GetByOrganizationID(ctx context.Context, ouID string) ([]*models.Gateway, error) {
 	var gateways []*models.Gateway
-	err := r.db.WithContext(ctx).Where("organization_name = ?", orgName).
+	err := r.db.WithContext(ctx).Where("ou_id = ?", ouID).
 		Order("created_at DESC").
 		Find(&gateways).Error
 	return gateways, err
 }
 
 // GetByNameAndOrgID checks if a gateway with the given name exists within an organization
-func (r *GatewayRepo) GetByNameAndOrgID(name, orgName string) (*models.Gateway, error) {
+func (r *GatewayRepo) GetByNameAndOrgID(name, ouID string) (*models.Gateway, error) {
 	var gateway models.Gateway
-	err := r.db.Where("name = ? AND organization_name = ?", name, orgName).First(&gateway).Error
+	err := r.db.Where("name = ? AND ou_id = ?", name, ouID).First(&gateway).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, utils.ErrGatewayNotFound
@@ -192,7 +192,7 @@ func (r *GatewayRepo) buildFilterQuery(filters GatewayFilterOptions) *gorm.DB {
 
 	// Filter by organization
 	if filters.OrganizationID != "" {
-		query = query.Where("organization_name = ?", filters.OrganizationID)
+		query = query.Where("ou_id = ?", filters.OrganizationID)
 	}
 
 	// Filter by functionality type
@@ -219,15 +219,15 @@ func (r *GatewayRepo) buildFilterQuery(filters GatewayFilterOptions) *gorm.DB {
 // Uses Unscoped() to bypass GORM soft delete so FK ON DELETE CASCADE
 // fires and cleans up child tables (tokens, deployments, mappings).
 // API associations have no FK to gateways and must be cleaned up explicitly.
-func (r *GatewayRepo) Delete(gatewayID, orgName string) error {
+func (r *GatewayRepo) Delete(gatewayID, ouID string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("resource_uuid = ? AND association_type = ? AND organization_name = ?",
-			gatewayID, "gateway", orgName).
+		if err := tx.Where("resource_uuid = ? AND association_type = ? AND ou_id = ?",
+			gatewayID, "gateway", ouID).
 			Delete(&models.APIAssociation{}).Error; err != nil {
 			return err
 		}
 
-		result := tx.Unscoped().Where("uuid = ? AND organization_name = ?", gatewayID, orgName).
+		result := tx.Unscoped().Where("uuid = ? AND ou_id = ?", gatewayID, ouID).
 			Delete(&models.Gateway{})
 		if result.Error != nil {
 			return result.Error
@@ -351,11 +351,11 @@ func (r *GatewayRepo) CountActiveTokens(gatewayId string) (int, error) {
 }
 
 // HasGatewayDeployments checks if a gateway has any deployments
-func (r *GatewayRepo) HasGatewayDeployments(gatewayID, orgName string) (bool, error) {
+func (r *GatewayRepo) HasGatewayDeployments(gatewayID, ouID string) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.DeploymentStatusRecord{}).
-		Where("gateway_uuid = ? AND organization_name = ?",
-			gatewayID, orgName).
+		Where("gateway_uuid = ? AND ou_id = ?",
+			gatewayID, ouID).
 		Count(&count).Error
 	if err != nil {
 		return false, err
@@ -364,11 +364,11 @@ func (r *GatewayRepo) HasGatewayDeployments(gatewayID, orgName string) (bool, er
 }
 
 // HasGatewayAssociations checks if a gateway has any associations
-func (r *GatewayRepo) HasGatewayAssociations(gatewayID, orgName string) (bool, error) {
+func (r *GatewayRepo) HasGatewayAssociations(gatewayID, ouID string) (bool, error) {
 	var count int64
 	err := r.db.Model(&models.APIAssociation{}).
-		Where("resource_uuid = ? AND association_type = ? AND organization_name = ?",
-			gatewayID, "gateway", orgName).
+		Where("resource_uuid = ? AND association_type = ? AND ou_id = ?",
+			gatewayID, "gateway", ouID).
 		Count(&count).Error
 	if err != nil {
 		return false, err
@@ -377,9 +377,9 @@ func (r *GatewayRepo) HasGatewayAssociations(gatewayID, orgName string) (bool, e
 }
 
 // HasGatewayAssociationsOrDeployments checks if a gateway has any associations (deployments or associations)
-func (r *GatewayRepo) HasGatewayAssociationsOrDeployments(gatewayID, orgName string) (bool, error) {
+func (r *GatewayRepo) HasGatewayAssociationsOrDeployments(gatewayID, ouID string) (bool, error) {
 	// Check deployments first
-	hasDeployments, err := r.HasGatewayDeployments(gatewayID, orgName)
+	hasDeployments, err := r.HasGatewayDeployments(gatewayID, ouID)
 	if err != nil {
 		return false, err
 	}
@@ -389,7 +389,7 @@ func (r *GatewayRepo) HasGatewayAssociationsOrDeployments(gatewayID, orgName str
 	}
 
 	// Check associations
-	return r.HasGatewayAssociations(gatewayID, orgName)
+	return r.HasGatewayAssociations(gatewayID, ouID)
 }
 
 // CreateEnvironmentMapping creates a mapping between a gateway and an environment
@@ -537,13 +537,13 @@ func (r *GatewayRepo) ListIdentityProvidersByEnvironment(environmentID string) (
 // organization's gateways, enriched with gateway + environment context. The
 // reserved internal provider is excluded. A provider whose gateway maps to
 // multiple environments appears once per environment.
-func (r *GatewayRepo) ListIdentityProvidersByOrg(orgName string) ([]IdentityProviderWithContext, error) {
+func (r *GatewayRepo) ListIdentityProvidersByOrg(ouID string) ([]IdentityProviderWithContext, error) {
 	var results []IdentityProviderWithContext
 	err := r.db.Table("gateway_identity_providers").
 		Select("gateway_identity_providers.*, gateways.name AS gateway_name, gateway_environment_mappings.environment_uuid::text AS environment_uuid").
 		Joins("JOIN gateways ON gateways.uuid = gateway_identity_providers.gateway_uuid").
 		Joins("LEFT JOIN gateway_environment_mappings ON gateway_environment_mappings.gateway_uuid = gateway_identity_providers.gateway_uuid").
-		Where("gateways.organization_name = ? AND gateway_identity_providers.name <> ?", orgName, models.ReservedIdentityProviderName).
+		Where("gateways.ou_id = ? AND gateway_identity_providers.name <> ?", ouID, models.ReservedIdentityProviderName).
 		Order("gateway_identity_providers.name ASC").
 		Scan(&results).Error
 	return results, err

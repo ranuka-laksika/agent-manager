@@ -41,7 +41,6 @@ import {
   LazyLLMProvidersComponent,
   LazyViewLLMProviderComponent,
   LazyAddLLMProvidersOrg,
-  LazyAddMCPServerComponent,
   LazyViewMCPServerComponent,
   LazyGatewaysOrg,
   LazyThunderInstancesOrg,
@@ -473,24 +472,6 @@ export function RootRouter() {
                   element={
                     <Suspense fallback={<LoadingFallback />}>
                       <LazyViewLLMProviderComponent />
-                    </Suspense>
-                  }
-                />
-                <Route
-                  path={
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.path +
-                    "/" +
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.mcpProxies.path +
-                    "/" +
-                    relativeRouteMap.children.org.children.projects.children
-                      .agents.children.configure.children.mcpProxies.children
-                      .add.path
-                  }
-                  element={
-                    <Suspense fallback={<LoadingFallback />}>
-                      <LazyAddMCPServerComponent />
                     </Suspense>
                   }
                 />

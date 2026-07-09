@@ -45,6 +45,7 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 		agentName   string
 		proxyID     string
 		gatewayUUID string
+		envUUID     string
 
 		proxyURL    string
 		proxyAPIKey string
@@ -78,8 +79,9 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 	})
 
 	It("should have a running AI gateway", func() {
-		gatewayUUID = gateway.WaitForActiveGatewayForEnv(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
+		gatewayUUID, envUUID = gateway.WaitForActiveGatewayForEnvWithEnvUUID(Client, Cfg.DefaultOrg, Cfg.DefaultEnv, 3*time.Minute)
 		Expect(gatewayUUID).NotTo(BeEmpty())
+		Expect(envUUID).NotTo(BeEmpty(), "expected an environment UUID for %s", Cfg.DefaultEnv)
 	})
 
 	It("should create an MCP proxy with api-key security deployed to the gateway", func() {
@@ -92,18 +94,22 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 				Name:    "E2E MCP Inv Proxy " + suffix,
 				Version: "v1.0",
 				Context: &ctx,
-				Upstream: framework.UpstreamConfig{
-					Main: &framework.UpstreamEndpoint{URL: &upstreamURL},
-				},
-				Security: &framework.SecurityConfig{
-					Enabled: true,
-					APIKey: &framework.SecurityAPIKey{
-						Enabled: true,
-						Key:     "X-API-Key",
-						In:      "header",
+				// The api-key security policy lives on the DefaultEnv blueprint block; the
+				// proxy deploys that block's artifact to the env's gateway, and per-agent
+				// inbound keys are minted against it.
+				Environments: map[string]framework.MCPEnvironmentConfig{
+					envUUID: {
+						Upstream: &framework.UpstreamEndpoint{URL: &upstreamURL},
+						Security: &framework.SecurityConfig{
+							Enabled: true,
+							APIKey: &framework.SecurityAPIKey{
+								Enabled: true,
+								Key:     "X-API-Key",
+								In:      "header",
+							},
+						},
 					},
 				},
-				Gateways: []string{gatewayUUID},
 			})
 		Expect(proxy.ID).To(Equal(proxyID))
 	})

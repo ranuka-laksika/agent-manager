@@ -36,6 +36,7 @@ import {
 import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import {
   absoluteRouteMap,
+  globalConfig,
   type ThunderUser,
 } from "@agent-management-platform/types";
 import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
@@ -45,6 +46,7 @@ const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 export const UsersPage: React.FC = () => {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
+  const isUserManagementEnabled = globalConfig.featureFlags?.enableUserManagement === true;
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -129,6 +131,7 @@ export const UsersPage: React.FC = () => {
                   variant="outlined"
                   startIcon={<Plus />}
                   onClick={() => navigate(addUserPath)}
+                  disabled={!isUserManagementEnabled}
                 >
                   Add User
                 </Button>
@@ -136,6 +139,7 @@ export const UsersPage: React.FC = () => {
                   variant="contained"
                   startIcon={<Plus />}
                   onClick={() => navigate(invitePath)}
+                  disabled={!isUserManagementEnabled}
                 >
                   Invite User
                 </Button>

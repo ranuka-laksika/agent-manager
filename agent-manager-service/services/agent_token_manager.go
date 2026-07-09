@@ -246,7 +246,7 @@ func (s *agentTokenManagerService) GenerateToken(ctx context.Context, req Genera
 	s.logger.Info(
 		"Generating token for agent",
 		"agentName", req.AgentName,
-		"orgName", req.OrgName,
+		"ouID", req.OrgName,
 		"projectName", req.ProjectName,
 	)
 

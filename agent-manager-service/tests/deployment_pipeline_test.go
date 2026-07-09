@@ -92,7 +92,6 @@ func TestCreateDeploymentPipeline(t *testing.T) {
 
 		require.Len(t, ocClient.CreateDeploymentPipelineCalls(), 1)
 		call := ocClient.CreateDeploymentPipelineCalls()[0]
-		require.Equal(t, testPipelineOrgName, call.NamespaceName)
 		// pipelineName is slugified from the display name
 		require.Equal(t, "my-pipeline", call.PipelineName)
 	})

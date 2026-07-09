@@ -97,6 +97,8 @@ type APIClient struct {
 	MCPAPIKeysAPI *MCPAPIKeysAPIService
 
 	MCPProxiesAPI *MCPProxiesAPIService
+
+	ScopesAPI *ScopesAPIService
 }
 
 type service struct {
@@ -140,6 +142,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.LLMProxiesAPI = (*LLMProxiesAPIService)(&c.common)
 	c.MCPAPIKeysAPI = (*MCPAPIKeysAPIService)(&c.common)
 	c.MCPProxiesAPI = (*MCPProxiesAPIService)(&c.common)
+	c.ScopesAPI = (*ScopesAPIService)(&c.common)
 
 	return c
 }

@@ -31,8 +31,8 @@ func TestList_Success(t *testing.T) {
 		Offset: 0,
 		Total:  2,
 		Projects: []amsvc.ProjectListItem{
-			{Name: "alpha", DisplayName: "Alpha", OrgName: "acme"},
-			{Name: "beta", DisplayName: "Beta", OrgName: "acme"},
+			{Name: "alpha", DisplayName: "Alpha"},
+			{Name: "beta", DisplayName: "Beta"},
 		},
 	})
 	defer closeFn()

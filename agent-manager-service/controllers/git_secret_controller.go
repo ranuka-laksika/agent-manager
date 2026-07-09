@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -44,13 +45,13 @@ func NewGitSecretController(gitSecretService *services.GitSecretService) GitSecr
 	}
 }
 
-// CreateGitSecret handles POST /orgs/{orgName}/git-secrets
+// CreateGitSecret handles POST /orgs/{ouID}/git-secrets
 func (c *gitSecretController) CreateGitSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
-	log.Info("CreateGitSecret: starting", "orgName", orgName)
+	log.Info("CreateGitSecret: starting", "ouID", ouID)
 
 	var req spec.CreateGitSecretRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -66,7 +67,7 @@ func (c *gitSecretController) CreateGitSecret(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	created, err := c.gitSecretService.Create(ctx, orgName, &req)
+	created, err := c.gitSecretService.Create(ctx, ouID, &req)
 	if err != nil {
 		log.Error("CreateGitSecret: failed to create git secret", "error", err)
 		handleCommonErrors(w, err, "Failed to create git secret")
@@ -77,17 +78,17 @@ func (c *gitSecretController) CreateGitSecret(w http.ResponseWriter, r *http.Req
 		Name: created.Name,
 	}
 
-	log.Info("CreateGitSecret: completed", "orgName", orgName, "name", created.Name)
+	log.Info("CreateGitSecret: completed", "ouID", ouID, "name", created.Name)
 	utils.WriteSuccessResponse(w, http.StatusCreated, response)
 }
 
-// ListGitSecrets handles GET /orgs/{orgName}/git-secrets
+// ListGitSecrets handles GET /orgs/{ouID}/git-secrets
 func (c *gitSecretController) ListGitSecrets(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 
-	log.Info("ListGitSecrets: starting", "orgName", orgName)
+	log.Info("ListGitSecrets: starting", "ouID", ouID)
 
 	// Parse pagination parameters
 	limit := getIntQueryParam(r, "limit", 20)
@@ -104,9 +105,9 @@ func (c *gitSecretController) ListGitSecrets(w http.ResponseWriter, r *http.Requ
 		offset = 0
 	}
 
-	secrets, totalCount, err := c.gitSecretService.List(ctx, orgName, limit, offset)
+	secrets, totalCount, err := c.gitSecretService.List(ctx, ouID, limit, offset)
 	if err != nil {
-		log.Error("ListGitSecrets: failed to list git secrets", "orgName", orgName, "error", err)
+		log.Error("ListGitSecrets: failed to list git secrets", "ouID", ouID, "error", err)
 		handleCommonErrors(w, err, "Failed to list git secrets")
 		return
 	}
@@ -126,25 +127,25 @@ func (c *gitSecretController) ListGitSecrets(w http.ResponseWriter, r *http.Requ
 		Offset:  int32(offset),
 	}
 
-	log.Info("ListGitSecrets: completed", "orgName", orgName, "count", len(secrets), "total", totalCount)
+	log.Info("ListGitSecrets: completed", "ouID", ouID, "count", len(secrets), "total", totalCount)
 	utils.WriteSuccessResponse(w, http.StatusOK, response)
 }
 
-// DeleteGitSecret handles DELETE /orgs/{orgName}/git-secrets/{gitSecretName}
+// DeleteGitSecret handles DELETE /orgs/{ouID}/git-secrets/{gitSecretName}
 func (c *gitSecretController) DeleteGitSecret(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	gitSecretName := r.PathValue(utils.PathParamSecretName)
 
-	log.Info("DeleteGitSecret: starting", "orgName", orgName, "gitSecretName", gitSecretName)
+	log.Info("DeleteGitSecret: starting", "ouID", ouID, "gitSecretName", gitSecretName)
 
-	if err := c.gitSecretService.Delete(ctx, orgName, gitSecretName); err != nil {
+	if err := c.gitSecretService.Delete(ctx, ouID, gitSecretName); err != nil {
 		log.Error("DeleteGitSecret: failed to delete git secret", "error", err)
 		handleCommonErrors(w, err, "Failed to delete git secret")
 		return
 	}
 
-	log.Info("DeleteGitSecret: completed", "orgName", orgName, "gitSecretName", gitSecretName)
+	log.Info("DeleteGitSecret: completed", "ouID", ouID, "gitSecretName", gitSecretName)
 	utils.WriteSuccessResponse(w, http.StatusNoContent, struct{}{})
 }

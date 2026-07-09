@@ -26,6 +26,7 @@ import { EnvironmentTable } from "./subComponents/EnvironmentTable";
 import { EditEnvironmentDrawer } from "./subComponents/EditEnvironmentDrawer";
 import { CreateEnvironmentDrawer } from "./subComponents/CreateEnvironmentDrawer";
 import { DeleteEnvironmentDrawer } from "./subComponents/DeleteEnvironmentDrawer";
+import { EnvironmentViewPage } from "./EnvironmentViewPage";
 
 const ENVIRONMENT_CREATE_DRAWER_MOUNT_POINT = "environment-create-drawer";
 const ENVIRONMENT_DELETE_DRAWER_MOUNT_POINT = "environment-delete-drawer";
@@ -78,6 +79,7 @@ export function EnvironmentsOrganization() {
             </PageLayout>
           }
         />
+        <Route path=":envName" element={<EnvironmentViewPage />} />
         <Route
           path="*"
           element={<Navigate to={`/org/${orgId}/environments`} replace />}
@@ -94,7 +96,7 @@ export function EnvironmentsOrganization() {
 
       {envToEdit && orgId && (
         <EditEnvironmentDrawer
-          open={envToEdit !== null}
+          open
           onClose={() => setEnvToEdit(null)}
           environment={envToEdit}
           orgId={orgId}
@@ -103,7 +105,7 @@ export function EnvironmentsOrganization() {
 
       {envToDelete && orgId && (
         <DeleteDrawer
-          open={envToDelete !== null}
+          open
           onClose={() => setEnvToDelete(null)}
           environment={envToDelete}
           orgId={orgId}

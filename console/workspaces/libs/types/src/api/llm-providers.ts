@@ -134,11 +134,22 @@ export interface UpstreamEndpoint {
   url?: string;
   ref?: string;
   auth?: UpstreamAuth;
+  /**
+   * Environment UUIDs this endpoint serves. UUIDs (not names) are stored so the
+   * mapping survives environment renames. Used by MCP proxies that configure a
+   * separate upstream per environment; empty for the classic main/sandbox shape.
+   */
+  environments?: string[];
 }
 
 export interface UpstreamConfig {
   main?: UpstreamEndpoint;
   sandbox?: UpstreamEndpoint;
+  /**
+   * Per-environment upstream endpoints. When present, `main` is derived from these
+   * server-side for backwards compatibility.
+   */
+  endpoints?: UpstreamEndpoint[];
 }
 
 export type AccessControlMode = "allow_all" | "deny_all";

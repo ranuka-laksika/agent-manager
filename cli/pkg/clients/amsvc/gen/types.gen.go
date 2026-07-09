@@ -30,6 +30,24 @@ func (e APIKeySecurityIn) Valid() bool {
 	}
 }
 
+// Defines values for AgentIdentityAssignmentsRequestAssignmentsType.
+const (
+	AgentIdentityAssignmentsRequestAssignmentsTypeAgent AgentIdentityAssignmentsRequestAssignmentsType = "agent"
+	AgentIdentityAssignmentsRequestAssignmentsTypeGroup AgentIdentityAssignmentsRequestAssignmentsType = "group"
+)
+
+// Valid indicates whether the value is a known member of the AgentIdentityAssignmentsRequestAssignmentsType enum.
+func (e AgentIdentityAssignmentsRequestAssignmentsType) Valid() bool {
+	switch e {
+	case AgentIdentityAssignmentsRequestAssignmentsTypeAgent:
+		return true
+	case AgentIdentityAssignmentsRequestAssignmentsTypeGroup:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentKindResponseKind.
 const (
 	AgentKindResponseKindAgentKind AgentKindResponseKind = "AgentKind"
@@ -221,13 +239,13 @@ func (e CatalogEntryKind) Valid() bool {
 
 // Defines values for CatalogLLMProviderEntryKind.
 const (
-	CatalogLLMProviderEntryKindLlmProvider CatalogLLMProviderEntryKind = "LlmProvider"
+	LlmProvider CatalogLLMProviderEntryKind = "LlmProvider"
 )
 
 // Valid indicates whether the value is a known member of the CatalogLLMProviderEntryKind enum.
 func (e CatalogLLMProviderEntryKind) Valid() bool {
 	switch e {
-	case CatalogLLMProviderEntryKindLlmProvider:
+	case LlmProvider:
 		return true
 	default:
 		return false
@@ -1194,6 +1212,53 @@ type AgentBuildOptionsResponse struct {
 	Python          AgentBuildOptionsPython          `json:"python"`
 }
 
+// AgentIdentityAgentListResponse defines model for AgentIdentityAgentListResponse.
+type AgentIdentityAgentListResponse struct {
+	Agents []AgentIdentityAgentResponse `json:"agents"`
+}
+
+// AgentIdentityAgentResponse defines model for AgentIdentityAgentResponse.
+type AgentIdentityAgentResponse struct {
+	AgentName   string `json:"agentName"`
+	ProjectName string `json:"projectName"`
+
+	// Status Thunder binding status (pending/in_progress/completed/failed)
+	Status         string  `json:"status"`
+	ThunderAgentId *string `json:"thunderAgentId,omitempty"`
+}
+
+// AgentIdentityAssignmentsRequest defines model for AgentIdentityAssignmentsRequest.
+type AgentIdentityAssignmentsRequest struct {
+	Assignments []struct {
+		Id   string                                         `json:"id"`
+		Type AgentIdentityAssignmentsRequestAssignmentsType `json:"type"`
+	} `json:"assignments"`
+}
+
+// AgentIdentityAssignmentsRequestAssignmentsType defines model for AgentIdentityAssignmentsRequest.Assignments.Type.
+type AgentIdentityAssignmentsRequestAssignmentsType string
+
+// AgentIdentityGroupRequest defines model for AgentIdentityGroupRequest.
+type AgentIdentityGroupRequest struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+}
+
+// AgentIdentityMembersRequest defines model for AgentIdentityMembersRequest.
+type AgentIdentityMembersRequest struct {
+	// AgentIds Thunder agent IDs (from the agents picker)
+	AgentIds []string `json:"agentIds"`
+}
+
+// AgentIdentityRoleRequest defines model for AgentIdentityRoleRequest.
+type AgentIdentityRoleRequest struct {
+	Description *string `json:"description,omitempty"`
+	Name        string  `json:"name"`
+
+	// Scopes Catalog scope names carried as the role's permissions
+	Scopes *[]string `json:"scopes,omitempty"`
+}
+
 // AgentKindConfigSchemaItem defines model for AgentKindConfigSchemaItem.
 type AgentKindConfigSchemaItem struct {
 	// DefaultValue Default value if not provided by the user
@@ -1235,11 +1300,10 @@ type AgentKindResponse struct {
 	LatestVersion *string `json:"latestVersion,omitempty"`
 
 	// Name Unique slug name of the Agent Kind within the organization
-	Name             string                     `json:"name"`
-	OrganizationName string                     `json:"organizationName"`
-	UpdatedAt        *time.Time                 `json:"updatedAt,omitempty"`
-	Uuid             openapi_types.UUID         `json:"uuid"`
-	Versions         []AgentKindVersionResponse `json:"versions"`
+	Name      string                     `json:"name"`
+	UpdatedAt *time.Time                 `json:"updatedAt,omitempty"`
+	Uuid      openapi_types.UUID         `json:"uuid"`
+	Versions  []AgentKindVersionResponse `json:"versions"`
 }
 
 // AgentKindResponseKind Resource type discriminator (always "AgentKind" for this schema)
@@ -1300,9 +1364,6 @@ type AgentModelConfigListItem struct {
 	// Name Configuration name
 	Name string `json:"name"`
 
-	// OrganizationName Organization name
-	OrganizationName string `json:"organizationName"`
-
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
 
@@ -1339,9 +1400,6 @@ type AgentModelConfigResponse struct {
 
 	// Name Name of the configuration
 	Name string `json:"name"`
-
-	// OrganizationName Organization name
-	OrganizationName string `json:"organizationName"`
 
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
@@ -1978,6 +2036,9 @@ type CreateGatewayRequest struct {
 	// Name Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
+	// OrgId OU ID of the organization the gateway belongs to.
+	OrgId *string `json:"orgId,omitempty"`
+
 	// Region Deployment region (optional)
 	Region *string `json:"region,omitempty"`
 
@@ -2029,6 +2090,12 @@ type CreateLLMAPIKeyResponse struct {
 	// ApiKey Generated API key value. Returned only once; store it securely.
 	ApiKey *string `json:"apiKey,omitempty"`
 
+	// GatewayConnected Whether every target gateway had a live websocket connection to the
+	// control plane when the key was created. When false, the key has
+	// been stored but will only become usable once the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
+
 	// KeyId Unique identifier of the created key.
 	KeyId *string `json:"keyId,omitempty"`
 
@@ -2065,7 +2132,9 @@ type CreateLLMProviderRequest struct {
 	// Policies List of policies applied to this provider
 	Policies     *[]LLMPolicy           `json:"policies,omitempty"`
 	RateLimiting *LLMRateLimitingConfig `json:"rateLimiting,omitempty"`
-	Security     *SecurityConfig        `json:"security,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
+	Security *SecurityConfig `json:"security,omitempty"`
 
 	// Template Template identifier being used
 	Template string         `json:"template"`
@@ -2203,9 +2272,6 @@ type DataPlane struct {
 
 	// Name Name of the data plane
 	Name string `json:"name"`
-
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
 }
 
 // DataPlaneListResponse List of data planes
@@ -2305,9 +2371,6 @@ type DeploymentPipelineResponse struct {
 
 	// Name Name of the deployment pipeline
 	Name string `json:"name"`
-
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
 
 	// PromotionPaths List of promotion paths in the pipeline
 	PromotionPaths []PromotionPath `json:"promotionPaths"`
@@ -2664,9 +2727,6 @@ type GatewayEnvironmentResponse struct {
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
-	// OrganizationName Organization UUID
-	OrganizationName string `json:"organizationName"`
-
 	// UpdatedAt Timestamp when the environment was last updated
 	UpdatedAt time.Time `json:"updatedAt"`
 }
@@ -2724,9 +2784,6 @@ type GatewayResponse struct {
 
 	// Name Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
-
-	// OrganizationName Organization UUID
-	OrganizationName string `json:"organizationName"`
 
 	// Region Deployment region
 	Region *string `json:"region,omitempty"`
@@ -2953,6 +3010,12 @@ type IdentityProviderListResponse struct {
 	List []IdentityProvider `json:"list"`
 }
 
+// IdentitySecurity Agent Identity security — callers present a JWT issued by the environment's IdP. v1 pins the issuer to the ThunderKeyManager key manager.
+type IdentitySecurity struct {
+	// Enabled Whether Agent Identity security is enabled
+	Enabled *bool `json:"enabled,omitempty"`
+}
+
 // InputInterface Endpoint configurations
 type InputInterface struct {
 	// BasePath Base path for the endpoint
@@ -2979,6 +3042,12 @@ type IssueTestAPIKeyResponse struct {
 
 	// ExpiresAt Expiry timestamp (RFC3339); the console rotates the key before this elapses.
 	ExpiresAt time.Time `json:"expiresAt"`
+
+	// GatewayConnected Whether every gateway serving the agent's environment had a live
+	// websocket connection to the control plane when the key was issued.
+	// When false, the key has been stored but will only become usable
+	// once the gateway reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 
 	// KeyId The fixed name "console-test".
 	KeyId   *string `json:"keyId,omitempty"`
@@ -3170,7 +3239,9 @@ type LLMProviderResponse struct {
 	// Policies List of policies applied to this provider
 	Policies     *[]LLMPolicy           `json:"policies,omitempty"`
 	RateLimiting *LLMRateLimitingConfig `json:"rateLimiting,omitempty"`
-	Security     *SecurityConfig        `json:"security,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
+	Security *SecurityConfig `json:"security,omitempty"`
 
 	// Status Provider status
 	Status LLMProviderResponseStatus `json:"status"`
@@ -3273,7 +3344,9 @@ type LLMProxyConfig struct {
 	Policies *[]LLMPolicy `json:"policies,omitempty"`
 
 	// Provider Provider reference
-	Provider *string         `json:"provider,omitempty"`
+	Provider *string `json:"provider,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
 	Security *SecurityConfig `json:"security,omitempty"`
 
 	// Version Proxy version
@@ -3476,6 +3549,19 @@ type MCPConfigRequest struct {
 	ProxyName string `json:"proxyName"`
 }
 
+// MCPEnvironmentConfig Per-environment blueprint block of an MCP proxy, keyed by environment UUID.
+type MCPEnvironmentConfig struct {
+	ArtifactUuid     *openapi_types.UUID   `json:"artifactUuid,omitempty"`
+	Capabilities     *MCPProxyCapabilities `json:"capabilities,omitempty"`
+	DeploymentStatus *string               `json:"deploymentStatus,omitempty"`
+	Policies         *[]MCPPolicy          `json:"policies,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
+	Security          *SecurityConfig        `json:"security,omitempty"`
+	ToolScopeBindings *[]MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
+	Upstream          *UpstreamEndpoint      `json:"upstream,omitempty"`
+}
+
 // MCPPolicy defines model for MCPPolicy.
 type MCPPolicy struct {
 	// DisplayName Human-readable policy name
@@ -3566,6 +3652,9 @@ type MCPProxyRequest struct {
 	// Description Description of the MCP proxy
 	Description *string `json:"description,omitempty"`
 
+	// Environments Per-environment configuration blocks keyed by environment UUID
+	Environments *map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+
 	// Gateways Gateway UUIDs to deploy the MCP proxy to after creation
 	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
 
@@ -3582,7 +3671,9 @@ type MCPProxyRequest struct {
 	Name string `json:"name"`
 
 	// Policies Policies applied to the MCP proxy
-	Policies *[]MCPPolicy    `json:"policies,omitempty"`
+	Policies *[]MCPPolicy `json:"policies,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
 	Security *SecurityConfig `json:"security,omitempty"`
 	Upstream UpstreamConfig  `json:"upstream"`
 
@@ -3609,6 +3700,9 @@ type MCPProxyResponse struct {
 	// Description Description of the MCP proxy
 	Description *string `json:"description,omitempty"`
 
+	// Environments Per-environment configuration blocks keyed by environment UUID
+	Environments *map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+
 	// Gateways Gateway UUIDs associated with the MCP proxy
 	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
 
@@ -3625,7 +3719,9 @@ type MCPProxyResponse struct {
 	Name string `json:"name"`
 
 	// Policies Policies applied to the MCP proxy
-	Policies *[]MCPPolicy    `json:"policies,omitempty"`
+	Policies *[]MCPPolicy `json:"policies,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
 	Security *SecurityConfig `json:"security,omitempty"`
 
 	// UpdatedAt Timestamp when the resource was last updated
@@ -3658,6 +3754,15 @@ type MCPServerInfoFetchResponse struct {
 	// ServerInfo MCP server metadata returned by initialize
 	ServerInfo *map[string]interface{}   `json:"serverInfo,omitempty"`
 	Tools      *[]map[string]interface{} `json:"tools,omitempty"`
+}
+
+// MCPToolScopeBinding defines model for MCPToolScopeBinding.
+type MCPToolScopeBinding struct {
+	// Scopes Catalog scope names required to call the tool
+	Scopes []string `json:"scopes"`
+
+	// Tool Name of the MCP tool the scopes gate
+	Tool string `json:"tool"`
 }
 
 // MetricDataPoint A single metric data point with timestamp and value
@@ -3785,9 +3890,6 @@ type MonitorResponse struct {
 
 	// NextRunTime Next scheduled run time (only for 'future' type)
 	NextRunTime *time.Time `json:"nextRunTime,omitempty"`
-
-	// OrgName Organization name
-	OrgName string `json:"orgName"`
 
 	// ProjectName Project name
 	ProjectName string `json:"projectName"`
@@ -3972,10 +4074,7 @@ type ProjectListItem struct {
 
 	// Name Name of the project
 	Name string `json:"name"`
-
-	// OrgName Name of the organization
-	OrgName string `json:"orgName"`
-	Uuid    string `json:"uuid"`
+	Uuid string `json:"uuid"`
 }
 
 // ProjectListResponse defines model for ProjectListResponse.
@@ -4004,10 +4103,7 @@ type ProjectResponse struct {
 
 	// Name Name of the project
 	Name string `json:"name"`
-
-	// OrgName Name of the organization
-	OrgName string `json:"orgName"`
-	Uuid    string `json:"uuid"`
+	Uuid string `json:"uuid"`
 }
 
 // PromoteAgentRequest defines model for PromoteAgentRequest.
@@ -4356,6 +4452,12 @@ type RotateLLMAPIKeyResponse struct {
 	// ApiKey New API key value. Returned only once; store it securely.
 	ApiKey *string `json:"apiKey,omitempty"`
 
+	// GatewayConnected Whether every target gateway had a live websocket connection to the
+	// control plane when the key was rotated. When false, the new key has
+	// been stored but will only become usable once the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
+
 	// KeyId Unique identifier of the rotated key.
 	KeyId *string `json:"keyId,omitempty"`
 
@@ -4375,6 +4477,37 @@ type RouteException struct {
 	Path string `json:"path"`
 }
 
+// ScopeListResponse defines model for ScopeListResponse.
+type ScopeListResponse struct {
+	Scopes []ScopeResponse `json:"scopes"`
+}
+
+// ScopeRequest defines model for ScopeRequest.
+type ScopeRequest struct {
+	// Description Human-readable description of the scope
+	Description *string `json:"description,omitempty"`
+
+	// Name Scope name (org-global, resource-agnostic)
+	Name string `json:"name"`
+}
+
+// ScopeResponse defines model for ScopeResponse.
+type ScopeResponse struct {
+	// BindingCount Number of MCP proxy environment tool bindings referencing this scope
+	BindingCount *int                `json:"bindingCount,omitempty"`
+	CreatedAt    *time.Time          `json:"createdAt,omitempty"`
+	Description  *string             `json:"description,omitempty"`
+	Id           *openapi_types.UUID `json:"id,omitempty"`
+	Name         string              `json:"name"`
+	UpdatedAt    *time.Time          `json:"updatedAt,omitempty"`
+}
+
+// ScopeUpdateRequest defines model for ScopeUpdateRequest.
+type ScopeUpdateRequest struct {
+	// Description Human-readable description of the scope
+	Description *string `json:"description,omitempty"`
+}
+
 // ScoreLabelGroup defines model for ScoreLabelGroup.
 type ScoreLabelGroup struct {
 	Evaluators []LabelEvaluatorSummary `json:"evaluators"`
@@ -4383,12 +4516,15 @@ type ScoreLabelGroup struct {
 	Label string `json:"label"`
 }
 
-// SecurityConfig defines model for SecurityConfig.
+// SecurityConfig Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
 type SecurityConfig struct {
 	ApiKey *APIKeySecurity `json:"apiKey,omitempty"`
 
 	// Enabled Whether security is enabled
 	Enabled *bool `json:"enabled,omitempty"`
+
+	// Identity Agent Identity security — callers present a JWT issued by the environment's IdP. v1 pins the issuer to the ThunderKeyManager key manager.
+	Identity *IdentitySecurity `json:"identity,omitempty"`
 }
 
 // SecuritySummary Security configuration summary
@@ -4420,9 +4556,6 @@ type StoredAPIKey struct {
 
 	// Name Unique name of the API key within the agent.
 	Name string `json:"name"`
-
-	// OrganizationName Organization name the key belongs to.
-	OrganizationName string `json:"organizationName"`
 
 	// Purpose Internal purpose code of the API key.
 	Purpose int32 `json:"purpose"`
@@ -4775,7 +4908,9 @@ type UpdateLLMProviderRequest struct {
 	// Policies Updated list of policies
 	Policies     *[]LLMPolicy           `json:"policies,omitempty"`
 	RateLimiting *LLMRateLimitingConfig `json:"rateLimiting,omitempty"`
-	Security     *SecurityConfig        `json:"security,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
+	Security *SecurityConfig `json:"security,omitempty"`
 
 	// Template Updated template identifier
 	Template *string         `json:"template,omitempty"`
@@ -4943,6 +5078,24 @@ type UserResponse struct {
 	OuId *string `json:"ouId,omitempty"`
 }
 
+// AgentIdentityEnvName defines model for AgentIdentityEnvName.
+type AgentIdentityEnvName = string
+
+// AgentIdentityGroupID defines model for AgentIdentityGroupID.
+type AgentIdentityGroupID = string
+
+// AgentIdentityLimit defines model for AgentIdentityLimit.
+type AgentIdentityLimit = int
+
+// AgentIdentityOffset defines model for AgentIdentityOffset.
+type AgentIdentityOffset = int
+
+// AgentIdentityOrgName defines model for AgentIdentityOrgName.
+type AgentIdentityOrgName = string
+
+// AgentIdentityRoleID defines model for AgentIdentityRoleID.
+type AgentIdentityRoleID = string
+
 // ListOrganizationsParams defines parameters for ListOrganizations.
 type ListOrganizationsParams struct {
 	// Limit Maximum number of results to return
@@ -4992,6 +5145,33 @@ type ListEnvironmentsParams struct {
 
 	// Offset Number of results to skip
 	Offset *int32 `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// ListAgentIdentityGroupsParams defines parameters for ListAgentIdentityGroups.
+type ListAgentIdentityGroupsParams struct {
+	// Offset Number of results to skip
+	Offset *AgentIdentityOffset `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *AgentIdentityLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetAgentIdentityGroupMembersParams defines parameters for GetAgentIdentityGroupMembers.
+type GetAgentIdentityGroupMembersParams struct {
+	// Offset Number of results to skip
+	Offset *AgentIdentityOffset `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *AgentIdentityLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListAgentIdentityRolesParams defines parameters for ListAgentIdentityRoles.
+type ListAgentIdentityRolesParams struct {
+	// Offset Number of results to skip
+	Offset *AgentIdentityOffset `form:"offset,omitempty" json:"offset,omitempty"`
+
+	// Limit Maximum number of results to return
+	Limit *AgentIdentityLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListGatewaysParams defines parameters for ListGateways.
@@ -5338,6 +5518,30 @@ type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest
 // UpdateEnvironmentJSONRequestBody defines body for UpdateEnvironment for application/json ContentType.
 type UpdateEnvironmentJSONRequestBody = UpdateEnvironmentRequest
 
+// CreateAgentIdentityGroupJSONRequestBody defines body for CreateAgentIdentityGroup for application/json ContentType.
+type CreateAgentIdentityGroupJSONRequestBody = AgentIdentityGroupRequest
+
+// UpdateAgentIdentityGroupJSONRequestBody defines body for UpdateAgentIdentityGroup for application/json ContentType.
+type UpdateAgentIdentityGroupJSONRequestBody = AgentIdentityGroupRequest
+
+// AddAgentIdentityGroupMembersJSONRequestBody defines body for AddAgentIdentityGroupMembers for application/json ContentType.
+type AddAgentIdentityGroupMembersJSONRequestBody = AgentIdentityMembersRequest
+
+// RemoveAgentIdentityGroupMembersJSONRequestBody defines body for RemoveAgentIdentityGroupMembers for application/json ContentType.
+type RemoveAgentIdentityGroupMembersJSONRequestBody = AgentIdentityMembersRequest
+
+// CreateAgentIdentityRoleJSONRequestBody defines body for CreateAgentIdentityRole for application/json ContentType.
+type CreateAgentIdentityRoleJSONRequestBody = AgentIdentityRoleRequest
+
+// UpdateAgentIdentityRoleJSONRequestBody defines body for UpdateAgentIdentityRole for application/json ContentType.
+type UpdateAgentIdentityRoleJSONRequestBody = AgentIdentityRoleRequest
+
+// AddAgentIdentityRoleAssigneesJSONRequestBody defines body for AddAgentIdentityRoleAssignees for application/json ContentType.
+type AddAgentIdentityRoleAssigneesJSONRequestBody = AgentIdentityAssignmentsRequest
+
+// RemoveAgentIdentityRoleAssigneesJSONRequestBody defines body for RemoveAgentIdentityRoleAssignees for application/json ContentType.
+type RemoveAgentIdentityRoleAssigneesJSONRequestBody = AgentIdentityAssignmentsRequest
+
 // CreateCustomEvaluatorJSONRequestBody defines body for CreateCustomEvaluator for application/json ContentType.
 type CreateCustomEvaluatorJSONRequestBody = CreateCustomEvaluatorRequest
 
@@ -5409,12 +5613,6 @@ type FetchMCPProxyServerInfoJSONRequestBody = MCPServerInfoFetchRequest
 
 // UpdateMCPProxyJSONRequestBody defines body for UpdateMCPProxy for application/json ContentType.
 type UpdateMCPProxyJSONRequestBody = MCPProxyRequest
-
-// CreateMCPProxyAPIKeyJSONRequestBody defines body for CreateMCPProxyAPIKey for application/json ContentType.
-type CreateMCPProxyAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
-
-// RotateMCPProxyAPIKeyJSONRequestBody defines body for RotateMCPProxyAPIKey for application/json ContentType.
-type RotateMCPProxyAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
@@ -5508,6 +5706,12 @@ type CreateLLMProxyAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 
 // RotateLLMProxyAPIKeyJSONRequestBody defines body for RotateLLMProxyAPIKey for application/json ContentType.
 type RotateLLMProxyAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
+
+// CreateScopeJSONRequestBody defines body for CreateScope for application/json ContentType.
+type CreateScopeJSONRequestBody = ScopeRequest
+
+// UpdateScopeJSONRequestBody defines body for UpdateScope for application/json ContentType.
+type UpdateScopeJSONRequestBody = ScopeUpdateRequest
 
 // GetNameByDisplayNameJSONRequestBody defines body for GetNameByDisplayName for application/json ContentType.
 type GetNameByDisplayNameJSONRequestBody = ResourceNameRequest

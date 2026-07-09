@@ -37,7 +37,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "GetRuntimeLogs",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -62,7 +62,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "GetMetrics",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -87,7 +87,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "ListTraces",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -112,7 +112,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "ExportTraces",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -138,7 +138,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "GetTraceDetails",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)
@@ -168,7 +168,7 @@ func observabilityToolSpecs() []toolTestSpec {
 			expectedMethod: "GetSpanDetails",
 			validateCall: func(t *testing.T, args []interface{}) {
 				if got, want := args[0], testOrgName; got != want {
-					t.Errorf("orgName: got %v, want %q", got, want)
+					t.Errorf("ouID: got %v, want %q", got, want)
 				}
 				if got, want := args[1], testProjectName; got != want {
 					t.Errorf("projectName: got %v, want %q", got, want)

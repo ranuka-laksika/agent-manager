@@ -42,37 +42,37 @@ func (m *MockToolsetHandler) recordCall(method string, args ...interface{}) {
 // Project Toolset Handler
 
 func (m *MockToolsetHandler) ListProjects(
-	ctx context.Context, orgName string, limit int, offset int,
+	ctx context.Context, ouID string, limit int, offset int,
 ) ([]*models.ProjectResponse, int32, error) {
-	m.recordCall("ListProjects", orgName, limit, offset)
+	m.recordCall("ListProjects", ouID, limit, offset)
 	return []*models.ProjectResponse{
 		{Name: "test-project", CreatedAt: time.Time{}},
 	}, 1, nil
 }
 
 func (m *MockToolsetHandler) CreateProject(
-	ctx context.Context, orgName string, payload spec.CreateProjectRequest,
+	ctx context.Context, ouID string, payload spec.CreateProjectRequest,
 ) (*models.ProjectResponse, error) {
-	m.recordCall("CreateProject", orgName, payload)
+	m.recordCall("CreateProject", ouID, payload)
 	return &models.ProjectResponse{Name: payload.Name, CreatedAt: time.Time{}}, nil
 }
 
 // Agent Toolset Handler
 
 func (m *MockToolsetHandler) ListAgents(
-	ctx context.Context, orgName string, projName string, limit int32, offset int32,
+	ctx context.Context, ouID string, projName string, limit int32, offset int32,
 ) ([]*models.AgentResponse, int32, error) {
-	m.recordCall("ListAgents", orgName, projName, limit, offset)
+	m.recordCall("ListAgents", ouID, projName, limit, offset)
 	return []*models.AgentResponse{
 		{Name: "test-agent"},
 	}, 1, nil
 }
 
 func (m *MockToolsetHandler) GenerateToken(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	environment string, expiresIn string,
 ) (*spec.TokenResponse, error) {
-	m.recordCall("GenerateToken", orgName, projectName, agentName, environment, expiresIn)
+	m.recordCall("GenerateToken", ouID, projectName, agentName, environment, expiresIn)
 	return &spec.TokenResponse{
 		Token:     "test-token",
 		ExpiresAt: 0,
@@ -80,35 +80,35 @@ func (m *MockToolsetHandler) GenerateToken(
 }
 
 func (m *MockToolsetHandler) CreateAgent(
-	ctx context.Context, orgName string, projectName string, req *spec.CreateAgentRequest,
+	ctx context.Context, ouID string, projectName string, req *spec.CreateAgentRequest,
 ) error {
-	m.recordCall("CreateAgent", orgName, projectName, req)
+	m.recordCall("CreateAgent", ouID, projectName, req)
 	return nil
 }
 
 func (m *MockToolsetHandler) GetAgent(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 ) (*models.AgentResponse, error) {
-	m.recordCall("GetAgent", orgName, projectName, agentName)
+	m.recordCall("GetAgent", ouID, projectName, agentName)
 	return &models.AgentResponse{Name: agentName}, nil
 }
 
 // Build Toolset Handler
 
 func (m *MockToolsetHandler) ListAgentBuilds(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	limit int32, offset int32,
 ) ([]*models.BuildResponse, int32, error) {
-	m.recordCall("ListAgentBuilds", orgName, projectName, agentName, limit, offset)
+	m.recordCall("ListAgentBuilds", ouID, projectName, agentName, limit, offset)
 	return []*models.BuildResponse{
 		{Name: "test-build", Status: "BuildSucceeded"},
 	}, 1, nil
 }
 
 func (m *MockToolsetHandler) GetBuild(
-	ctx context.Context, orgName string, projectName string, agentName string, buildName string,
+	ctx context.Context, ouID string, projectName string, agentName string, buildName string,
 ) (*models.BuildDetailsResponse, error) {
-	m.recordCall("GetBuild", orgName, projectName, agentName, buildName)
+	m.recordCall("GetBuild", ouID, projectName, agentName, buildName)
 	return &models.BuildDetailsResponse{
 		BuildResponse: models.BuildResponse{
 			Name:   buildName,
@@ -118,16 +118,16 @@ func (m *MockToolsetHandler) GetBuild(
 }
 
 func (m *MockToolsetHandler) BuildAgent(
-	ctx context.Context, orgName string, projectName string, agentName string, commitId string,
+	ctx context.Context, ouID string, projectName string, agentName string, commitId string,
 ) (*models.BuildResponse, error) {
-	m.recordCall("BuildAgent", orgName, projectName, agentName, commitId)
+	m.recordCall("BuildAgent", ouID, projectName, agentName, commitId)
 	return &models.BuildResponse{Name: "test-build", Status: "BuildInitiated"}, nil
 }
 
 func (m *MockToolsetHandler) GetBuildLogs(
-	ctx context.Context, orgName string, projectName string, agentName string, buildName string,
+	ctx context.Context, ouID string, projectName string, agentName string, buildName string,
 ) (*models.LogsResponse, error) {
-	m.recordCall("GetBuildLogs", orgName, projectName, agentName, buildName)
+	m.recordCall("GetBuildLogs", ouID, projectName, agentName, buildName)
 	return &models.LogsResponse{
 		Logs:       []models.LogEntry{},
 		TotalCount: 0,
@@ -137,74 +137,74 @@ func (m *MockToolsetHandler) GetBuildLogs(
 // Deployment Toolset Handler
 
 func (m *MockToolsetHandler) GetAgentDeployments(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 ) ([]*models.DeploymentResponse, error) {
-	m.recordCall("GetAgentDeployments", orgName, projectName, agentName)
+	m.recordCall("GetAgentDeployments", ouID, projectName, agentName)
 	return []*models.DeploymentResponse{}, nil
 }
 
 func (m *MockToolsetHandler) DeployAgent(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	req *spec.DeployAgentRequest,
 ) (string, error) {
-	m.recordCall("DeployAgent", orgName, projectName, agentName, req)
+	m.recordCall("DeployAgent", ouID, projectName, agentName, req)
 	return testEnvName, nil
 }
 
 func (m *MockToolsetHandler) UpdateDeploymentState(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	environment string, state string,
 ) error {
-	m.recordCall("UpdateDeploymentState", orgName, projectName, agentName, environment, state)
+	m.recordCall("UpdateDeploymentState", ouID, projectName, agentName, environment, state)
 	return nil
 }
 
 // Observability Toolset Handler
 
 func (m *MockToolsetHandler) GetRuntimeLogs(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	payload spec.LogFilterRequest,
 ) (*models.LogsResponse, error) {
-	m.recordCall("GetRuntimeLogs", orgName, projectName, agentName, payload)
+	m.recordCall("GetRuntimeLogs", ouID, projectName, agentName, payload)
 	return &models.LogsResponse{Logs: []models.LogEntry{}, TotalCount: 0}, nil
 }
 
 func (m *MockToolsetHandler) GetMetrics(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	payload spec.MetricsFilterRequest,
 ) (*spec.MetricsResponse, error) {
-	m.recordCall("GetMetrics", orgName, projectName, agentName, payload)
+	m.recordCall("GetMetrics", ouID, projectName, agentName, payload)
 	return &spec.MetricsResponse{}, nil
 }
 
 func (m *MockToolsetHandler) ListTraces(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	environment string, startTime string, endTime string, sortOrder string, limit int,
 ) (map[string]any, error) {
-	m.recordCall("ListTraces", orgName, projectName, agentName, environment, startTime, endTime, sortOrder, limit)
+	m.recordCall("ListTraces", ouID, projectName, agentName, environment, startTime, endTime, sortOrder, limit)
 	return map[string]any{"traces": []any{}, "totalCount": 0}, nil
 }
 
 func (m *MockToolsetHandler) ExportTraces(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	environment string, startTime string, endTime string, sortOrder string, limit int,
 ) (map[string]any, error) {
-	m.recordCall("ExportTraces", orgName, projectName, agentName, environment, startTime, endTime, sortOrder, limit)
+	m.recordCall("ExportTraces", ouID, projectName, agentName, environment, startTime, endTime, sortOrder, limit)
 	return map[string]any{"traces": []any{}, "totalCount": 0}, nil
 }
 
 func (m *MockToolsetHandler) GetTraceDetails(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	traceID string, environment string, startTime string, endTime string, limit int,
 ) (map[string]any, error) {
-	m.recordCall("GetTraceDetails", orgName, projectName, agentName, traceID, environment)
+	m.recordCall("GetTraceDetails", ouID, projectName, agentName, traceID, environment)
 	return map[string]any{"spans": []any{}, "totalCount": 0}, nil
 }
 
 func (m *MockToolsetHandler) GetSpanDetails(
-	ctx context.Context, orgName string, projectName string, agentName string,
+	ctx context.Context, ouID string, projectName string, agentName string,
 	traceID string, spanID string, environment string,
 ) (map[string]any, error) {
-	m.recordCall("GetSpanDetails", orgName, projectName, agentName, traceID, spanID, environment)
+	m.recordCall("GetSpanDetails", ouID, projectName, agentName, traceID, spanID, environment)
 	return map[string]any{}, nil
 }

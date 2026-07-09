@@ -31,12 +31,16 @@ import (
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/env_agent_mcp_mapping_repository_mock.go . EnvAgentMCPMappingRepository:EnvAgentMCPMappingRepositoryMock
 type EnvAgentMCPMappingRepository interface {
-	Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, orgName string) error
+	Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, ouID string) error
 	ListByConfig(ctx context.Context, configUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
 	// ListByMCPProxy returns every mapping that derives from the given source proxy.
 	// Used by the redeploy-on-update cascade so agent-scoped artifacts pick up new
 	// upstream/auth/policies on their respective gateways.
 	ListByMCPProxy(ctx context.Context, mcpProxyUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
+	// ListByEnvironment returns every mapping deployed into the given environment,
+	// across all agent configs. Used by the environment-deletion cascade to tear down
+	// all agent-scoped MCP artifacts for a disappearing environment.
+	ListByEnvironment(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error)
 	Update(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping) error
 	Delete(ctx context.Context, tx *gorm.DB, mappingID uint) error
 	DeleteByConfig(ctx context.Context, tx *gorm.DB, configUUID uuid.UUID) error
@@ -55,7 +59,7 @@ func NewEnvAgentMCPMappingRepository(db *gorm.DB) EnvAgentMCPMappingRepository {
 	}
 }
 
-func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, orgName string) error {
+func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, mapping *models.EnvAgentMCPMapping, proxyMapping *models.MCPProxyMapping, handle, name, version, ouID string) error {
 	if mapping.ArtifactUUID == uuid.Nil {
 		mapping.ArtifactUUID = uuid.New()
 	}
@@ -76,14 +80,14 @@ func (r *envAgentMCPMappingRepository) Create(ctx context.Context, tx *gorm.DB, 
 	}
 	now := time.Now()
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
-		UUID:             mapping.ArtifactUUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindMCPMapping,
-		OrganizationName: orgName,
-		CreatedAt:        now,
-		UpdatedAt:        now,
+		UUID:      mapping.ArtifactUUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindMCPMapping,
+		OUID:      ouID,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}); err != nil {
 		return fmt.Errorf("failed to create MCP config artifact: %w", err)
 	}
@@ -119,6 +123,21 @@ func (r *envAgentMCPMappingRepository) ListByMCPProxy(ctx context.Context, mcpPr
 		Preload("MCPProxyMapping.SourceMCPProxy").
 		Preload("MCPProxyMapping.SourceMCPProxy.Artifact").
 		Where("mcp_proxy_uuid = ?", mcpProxyUUID).
+		Find(&mappings).Error
+	return mappings, err
+}
+
+func (r *envAgentMCPMappingRepository) ListByEnvironment(ctx context.Context, envUUID uuid.UUID) ([]models.EnvAgentMCPMapping, error) {
+	var mappings []models.EnvAgentMCPMapping
+	err := r.db.WithContext(ctx).
+		Preload("Artifact").
+		Preload("MCPProxy").
+		Preload("MCPProxy.Artifact").
+		Preload("MCPProxyMapping").
+		Preload("MCPProxyMapping.Artifact").
+		Preload("MCPProxyMapping.SourceMCPProxy").
+		Preload("MCPProxyMapping.SourceMCPProxy.Artifact").
+		Where("environment_uuid = ?", envUUID).
 		Find(&mappings).Error
 	return mappings, err
 }

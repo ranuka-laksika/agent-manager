@@ -20,7 +20,11 @@ import {
   useMCPPoliciesCatalog,
   type MCPPolicyDefinition,
 } from "@agent-management-platform/api-client";
-import type { MCPProxyPolicy } from "@agent-management-platform/types";
+import type {
+  MCPEnvironmentConfig,
+  MCPProxy,
+  MCPProxyPolicy,
+} from "@agent-management-platform/types";
 import {
   PolicyListSection,
   type PolicySelection,
@@ -54,21 +58,34 @@ function selectionsToMCPPolicies(
 }
 
 export type MCPProxyPoliciesTabProps = {
+  config: MCPEnvironmentConfig | undefined;
+  selectedEnvironmentId: string;
   orgName?: string;
-  policies: MCPProxyPolicy[];
-  onPoliciesChange: (policies: MCPProxyPolicy[]) => void;
+  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
+  isUpdating: boolean;
 };
 
 export function MCPProxyPoliciesTab({
+  config,
   orgName,
-  policies,
-  onPoliciesChange,
+  onUpdate,
 }: MCPProxyPoliciesTabProps) {
   const {
     data: catalogData,
     isLoading: isLoadingCatalog,
     error: catalogError,
   } = useMCPPoliciesCatalog(orgName);
+
+  // The selected environment's policies (all of them, including managed ones the
+  // other tabs own). Edits are persisted immediately to that environment's block.
+  const policies = useMemo(() => config?.policies ?? [], [config?.policies]);
+
+  const onPoliciesChange = useCallback(
+    (nextPolicies: MCPProxyPolicy[]) => {
+      void onUpdate({ policies: nextPolicies });
+    },
+    [onUpdate],
+  );
 
   const visibleSelections = useMemo(
     () =>

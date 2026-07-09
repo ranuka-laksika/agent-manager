@@ -107,18 +107,18 @@ func (b *apiKeyBroadcaster) broadcastCreateToGateways(gateways []*models.Gateway
 	// Persist API key for bulk-sync
 	if b.apiKeyRepo != nil {
 		storedKey := &models.StoredAPIKey{
-			UUID:             keyUUID,
-			Name:             keyName,
-			DisplayName:      displayName,
-			ArtifactUUID:     parsedArtifactUUID,
-			OrganizationName: orgID,
-			APIKeyHash:       apiKeyHash,
-			MaskedAPIKey:     maskAPIKey(apiKey),
-			Status:           "active",
-			Purpose:          purpose,
-			CreatedAt:        nowTime,
-			UpdatedAt:        nowTime,
-			ExpiresAt:        expiresAt,
+			UUID:         keyUUID,
+			Name:         keyName,
+			DisplayName:  displayName,
+			ArtifactUUID: parsedArtifactUUID,
+			OUID:         orgID,
+			APIKeyHash:   apiKeyHash,
+			MaskedAPIKey: maskAPIKey(apiKey),
+			Status:       "active",
+			Purpose:      purpose,
+			CreatedAt:    nowTime,
+			UpdatedAt:    nowTime,
+			ExpiresAt:    expiresAt,
 		}
 		if err := b.apiKeyRepo.Upsert(storedKey); err != nil {
 			return nil, fmt.Errorf("failed to persist API key: %w", err)
@@ -277,16 +277,16 @@ func (b *apiKeyBroadcaster) broadcastRotateToGateways(gateways []*models.Gateway
 	// Update key in persistent store
 	if b.apiKeyRepo != nil {
 		storedKey := &models.StoredAPIKey{
-			UUID:             uuid.Must(uuid.NewV7()),
-			Name:             keyName,
-			ArtifactUUID:     parsedArtifactUUID,
-			OrganizationName: orgID,
-			APIKeyHash:       hashAPIKeySHA256(newAPIKey),
-			MaskedAPIKey:     maskAPIKey(newAPIKey),
-			Status:           "active",
-			CreatedAt:        nowTime,
-			UpdatedAt:        nowTime,
-			ExpiresAt:        expiresAt,
+			UUID:         uuid.Must(uuid.NewV7()),
+			Name:         keyName,
+			ArtifactUUID: parsedArtifactUUID,
+			OUID:         orgID,
+			APIKeyHash:   hashAPIKeySHA256(newAPIKey),
+			MaskedAPIKey: maskAPIKey(newAPIKey),
+			Status:       "active",
+			CreatedAt:    nowTime,
+			UpdatedAt:    nowTime,
+			ExpiresAt:    expiresAt,
 		}
 		if err := b.apiKeyRepo.Upsert(storedKey); err != nil {
 			return nil, fmt.Errorf("failed to persist rotated API key: %w", err)

@@ -59,8 +59,10 @@ var clientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
+	// EnvThunderResolver is wired for AgentIdentityController's passthrough
+	// endpoints. The OpenBao-backed AgentSecretStore is not wired here; AgentID
+	// provisioning is injected via app.Options.AgentThunderProvisioning.
 	ProvideEnvThunderResolver,
-	ProvideAgentSecretStore,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -74,7 +76,8 @@ var serviceProviderSet = wire.NewSet(
 	services.NewMonitorManagerService,
 	ProvideThunderConfig,
 	services.NewMonitorSchedulerService,
-	services.NewAgentThunderProvisioningService,
+	// Provisioning service is injected (see InitializeAppParams); only the
+	// reconciler that consumes it is wired here.
 	services.NewAgentThunderReconcilerService,
 	services.NewEvaluatorManagerService,
 	services.NewEnvironmentService,
@@ -88,7 +91,6 @@ var serviceProviderSet = wire.NewSet(
 	services.NewAgentAPIKeyService,
 	services.NewLLMProxyDeploymentService,
 	services.NewMCPProxyService,
-	services.NewMCPProxyAPIKeyService,
 	services.NewGatewayInternalAPIService,
 	services.NewMonitorScoresService,
 	services.NewCatalogService,
@@ -97,6 +99,7 @@ var serviceProviderSet = wire.NewSet(
 	services.NewLLMTemplateStore,
 	services.NewGitSecretService,
 	services.NewAIApplicationService,
+	services.NewScopeService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -120,7 +123,6 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentAPIKeyController,
 	controllers.NewLLMProxyDeploymentController,
 	controllers.NewMCPProxyController,
-	controllers.NewMCPProxyAPIKeyController,
 	ProvideWebSocketController,
 	controllers.NewGatewayInternalController,
 	controllers.NewMonitorController,
@@ -132,6 +134,8 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentConfigurationController,
 	controllers.NewGitSecretController,
 	controllers.NewIdentityController,
+	controllers.NewScopeController,
+	controllers.NewAgentIdentityController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -145,6 +149,12 @@ var testClientProviderSet = wire.NewSet(
 	thundersvc.NewProber,
 	ProvideEnvThunderResolver,
 	ProvideAgentSecretStore,
+)
+
+// thunderProvisioningTestSet builds the OpenBao-backed provisioning service for
+// the test wiring only; production injects it via InitializeAppParams.
+var thunderProvisioningTestSet = wire.NewSet(
+	services.NewAgentThunderProvisioningService,
 )
 
 // ProvideLogger provides the configured slog.Logger instance
@@ -251,8 +261,9 @@ func ProvideAgentBuildOptionsController(
 // ProvideOCClient creates the OpenChoreo client
 func ProvideOCClient(cfg config.Config, authProvider occlient.AuthProvider) (occlient.OpenChoreoClient, error) {
 	return occlient.NewOpenChoreoClient(&occlient.Config{
-		BaseURL:      cfg.OpenChoreo.BaseURL,
-		AuthProvider: authProvider,
+		BaseURL:          cfg.OpenChoreo.BaseURL,
+		DefaultNamespace: cfg.OpenChoreo.DefaultNamespace,
+		AuthProvider:     authProvider,
 	})
 }
 
@@ -337,14 +348,22 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
+	repositories.NewScopeRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
 	ProvideEventHub,
 	ProvideWebSocketManager,
+	ProvideGatewayConnectionChecker,
 	services.NewGatewayEventsService,
 	ProvideDeploymentAckHandler,
 )
+
+// ProvideGatewayConnectionChecker exposes the websocket manager through the
+// narrow connectivity interface consumed by services.
+func ProvideGatewayConnectionChecker(m *websocket.Manager) services.GatewayConnectionChecker {
+	return m
+}
 
 // Test client providers
 func ProvideTestOpenChoreoClient(testClients TestClients) occlient.OpenChoreoClient {
@@ -500,8 +519,9 @@ func ProvideOrgResolver(client thundersvc.IdentityClient) middleware.OrgResolver
 	return middleware.NewOrgResolver(client)
 }
 
-// InitializeAppParams wires up all application dependencies
-func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier) (*AppParams, error) {
+// InitializeAppParams wires up all application dependencies. agentThunderProvisioning
+// is the deployment-injected AgentID provisioning implementation (nil to disable).
+func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier, agentThunderProvisioning services.AgentThunderProvisioningService) (*AppParams, error) {
 	wire.Build(
 		configProviderSet,
 		clientProviderSet,
@@ -528,6 +548,7 @@ func InitializeTestAppParamsWithClientMocks(
 ) (*AppParams, error) {
 	wire.Build(
 		testClientProviderSet,
+		thunderProvisioningTestSet,
 		loggerProviderSet,
 		repositoryProviderSet,
 		websocketProviderSet,

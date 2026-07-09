@@ -42,6 +42,11 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+// A freshly issued test key takes a couple of seconds to reach the gateway's
+// policy engine (control plane -> event hub -> websocket -> policy snapshot),
+// so a single delayed retry with the same key rides out that window.
+const TEST_KEY_PROPAGATION_RETRY_DELAY_MS = 2000;
+
 export function AgentChat() {
   const [endpoint, setEndpoint] = useState("");
   const [message, setMessage] = useState("");
@@ -55,6 +60,11 @@ export function AgentChat() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRetryingAuth, setIsRetryingAuth] = useState(false);
+  const [keyAlert, setKeyAlert] = useState<"unauthorized" | "refreshed" | null>(
+    null,
+  );
+  const [isRefreshingKey, setIsRefreshingKey] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { agentId, orgId, projectId, envId } = useParams();
   const { data: endpoints, isLoading: isEndpointsLoading } =
@@ -82,6 +92,7 @@ export function AgentChat() {
     data: testKey,
     isLoading: isLoadingTestKey,
     error: testKeyError,
+    refetch: refetchTestKey,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
     { enabled: securityEnabled && !oauthOnly },
@@ -120,6 +131,7 @@ export function AgentChat() {
     setMessages((prev) => [...prev, userMessage]);
     setMessage("");
     setError(null);
+    setKeyAlert(null);
     setIsLoading(true);
 
     try {
@@ -128,19 +140,67 @@ export function AgentChat() {
         message: userMessage.content,
       };
 
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
+      const sendChatRequest = (apiKey?: string) => {
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (securityEnabled && apiKey) {
+          headers["X-API-Key"] = apiKey;
+        }
+        return fetch(endpoint, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
+          referrerPolicy: "",
+        });
       };
-      if (securityEnabled && testKey?.apiKey) {
-        headers["X-API-Key"] = testKey.apiKey;
+      // The gateway strips CORS headers from auth-rejected responses, so a
+      // cross-origin 401 surfaces as a thrown TypeError ("Failed to fetch")
+      // rather than a readable status. While security is enabled, treat both
+      // shapes as a possible auth failure (null = auth-like failure).
+      const attemptSend = async (): Promise<Response | null> => {
+        try {
+          const res = await sendChatRequest(testKey?.apiKey);
+          return securityEnabled && res.status === 401 ? null : res;
+        } catch (err) {
+          if (securityEnabled && err instanceof TypeError) {
+            return null;
+          }
+          throw err;
+        }
+      };
+
+      let apiResponse = await attemptSend();
+
+      // Retry once with the same key: an auth failure right after key
+      // issuance usually just means the gateway has not finished loading the
+      // key. Refetching here would rotate the key and restart that
+      // propagation window.
+      if (apiResponse === null) {
+        setIsRetryingAuth(true);
+        try {
+          await new Promise((resolve) =>
+            setTimeout(resolve, TEST_KEY_PROPAGATION_RETRY_DELAY_MS),
+          );
+          apiResponse = await attemptSend();
+        } finally {
+          setIsRetryingAuth(false);
+        }
       }
 
-      const apiResponse = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody),
-        referrerPolicy: "",
-      });
+      // Persistent auth failure: hand control back to the user instead of
+      // retrying blindly — restore the message so it can be resent with one
+      // click after the key is refreshed. When the gateway is offline the
+      // standing warning banner already explains the failure and refreshing
+      // the key cannot help, so no additional alert is shown.
+      if (apiResponse === null) {
+        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id));
+        setMessage(userMessage.content);
+        if (testKey?.gatewayConnected !== false) {
+          setKeyAlert("unauthorized");
+        }
+        return;
+      }
 
       let responseData: any;
       const contentType = apiResponse.headers.get("content-type");
@@ -206,6 +266,56 @@ export function AgentChat() {
     }
   };
 
+  const handleRefreshTestKey = async () => {
+    setIsRefreshingKey(true);
+    try {
+      await refetchTestKey();
+      setKeyAlert("refreshed");
+    } finally {
+      setIsRefreshingKey(false);
+    }
+  };
+
+  const keyAlertBanner = (
+    <>
+      {securityEnabled && testKey?.gatewayConnected === false && (
+        <Alert severity="warning" sx={{ borderRadius: 1 }}>
+          The gateway is not connected to the control plane right now. The
+          test API key has been stored but will only work once the gateway
+          reconnects.
+        </Alert>
+      )}
+      {keyAlert === "unauthorized" && (
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={handleRefreshTestKey}
+              disabled={isRefreshingKey}
+            >
+              {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
+            </Button>
+          }
+          sx={{ borderRadius: 1 }}
+        >
+          The request was not authorized. The test API key may not be active
+          on the gateway yet.
+        </Alert>
+      )}
+      {keyAlert === "refreshed" && (
+        <Alert
+          severity="info"
+          onClose={() => setKeyAlert(null)}
+          sx={{ borderRadius: 1 }}
+        >
+          Test key refreshed. Send your message again.
+        </Alert>
+      )}
+    </>
+  );
+
   const inputDisabled =
     oauthOnly ||
     isLoading ||
@@ -249,7 +359,8 @@ export function AgentChat() {
               Send a message to begin chatting with the agent
             </Typography>
           </Box>
-          <Box width="100%" maxWidth={600}>
+          <Box width="100%" maxWidth={600} display="flex" flexDirection="column" gap={1}>
+            {keyAlertBanner}
             <Box
               width="100%"
               display="flex"
@@ -324,7 +435,9 @@ export function AgentChat() {
                   color="text.secondary"
                   sx={{ fontSize: "0.875rem" }}
                 >
-                  Loading...
+                  {isRetryingAuth
+                    ? "Waiting for the test API key to become active..."
+                    : "Loading..."}
                 </Typography>
               </Box>
             </Box>
@@ -333,6 +446,7 @@ export function AgentChat() {
         </Box>
 
         {/* Error Display */}
+        {keyAlertBanner}
         {error && (
           <Alert
             severity="error"

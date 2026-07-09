@@ -67,11 +67,6 @@ export const LazyViewLLMProviderComponent = lazy(() =>
     default: m.ViewLLMProviderComponent as ComponentType,
   }))
 );
-export const LazyAddMCPServerComponent = lazy(() =>
-  import("@agent-management-platform/configure-agent").then((m) => ({
-    default: m.AddMCPServerComponent as ComponentType,
-  }))
-);
 export const LazyViewMCPServerComponent = lazy(() =>
   import("@agent-management-platform/configure-agent").then((m) => ({
     default: m.ViewMCPServerComponent as ComponentType,

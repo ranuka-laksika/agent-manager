@@ -58,11 +58,11 @@ type ScoreRepository interface {
 	GetScoresGroupedByLabel(monitorID uuid.UUID, startTime, endTime time.Time, level string) ([]LabelAggregation, error)
 
 	// Trace-level queries (cross-monitor)
-	GetScoresByTraceID(traceID string, orgName, projName, agentName string) ([]ScoreWithMonitor, error)
-	GetAgentTraceScores(orgName, projName, agentName string, startTime, endTime time.Time, limit, offset int, sortOrder string) ([]TraceAggregation, int, error)
+	GetScoresByTraceID(traceID string, ouID, projName, agentName string) ([]ScoreWithMonitor, error)
+	GetAgentTraceScores(ouID, projName, agentName string, startTime, endTime time.Time, limit, offset int, sortOrder string) ([]TraceAggregation, int, error)
 
 	// Monitor lookup
-	GetMonitorID(orgName, projName, agentName, monitorName string) (uuid.UUID, error)
+	GetMonitorID(ouID, projName, agentName, monitorName string) (uuid.UUID, error)
 }
 
 // ScoreFilters contains optional filters for querying scores
@@ -228,7 +228,7 @@ func (r *ScoreRepo) DeleteStaleScores(monitorID uuid.UUID, currentRunEvaluatorID
 }
 
 // GetScoresByTraceID fetches all scores for a specific trace across all monitors
-func (r *ScoreRepo) GetScoresByTraceID(traceID string, orgName, projName, agentName string) ([]ScoreWithMonitor, error) {
+func (r *ScoreRepo) GetScoresByTraceID(traceID string, ouID, projName, agentName string) ([]ScoreWithMonitor, error) {
 	var results []ScoreWithMonitor
 
 	err := r.db.Table("scores s").
@@ -236,7 +236,7 @@ func (r *ScoreRepo) GetScoresByTraceID(traceID string, orgName, projName, agentN
 		Joins("JOIN monitor_run_evaluators mre ON s.run_evaluator_id = mre.id").
 		Joins("JOIN monitors m ON s.monitor_id = m.id").
 		Where("s.trace_id = ?", traceID).
-		Where("m.org_name = ? AND m.project_name = ? AND m.agent_name = ?", orgName, projName, agentName).
+		Where("m.ou_id = ? AND m.project_name = ? AND m.agent_name = ?", ouID, projName, agentName).
 		Order("m.name, mre.evaluator_name, s.created_at").
 		Find(&results).Error
 
@@ -244,11 +244,11 @@ func (r *ScoreRepo) GetScoresByTraceID(traceID string, orgName, projName, agentN
 }
 
 // GetMonitorID resolves monitor name to monitor ID
-func (r *ScoreRepo) GetMonitorID(orgName, projName, agentName, monitorName string) (uuid.UUID, error) {
+func (r *ScoreRepo) GetMonitorID(ouID, projName, agentName, monitorName string) (uuid.UUID, error) {
 	var monitor models.Monitor
 	if err := r.db.Where(
-		"name = ? AND org_name = ? AND project_name = ? AND agent_name = ?",
-		monitorName, orgName, projName, agentName,
+		"name = ? AND ou_id = ? AND project_name = ? AND agent_name = ?",
+		monitorName, ouID, projName, agentName,
 	).Select("id").First(&monitor).Error; err != nil {
 		return uuid.Nil, err
 	}
@@ -407,14 +407,14 @@ func resolveSortDirection(sortOrder string) string {
 // GetAgentTraceScores returns scores aggregated per trace across all monitors for an agent within a time window.
 // Returns the paginated results and the total count of traces with scores.
 func (r *ScoreRepo) GetAgentTraceScores(
-	orgName, projName, agentName string,
+	ouID, projName, agentName string,
 	startTime, endTime time.Time,
 	limit, offset int,
 	sortOrder string,
 ) ([]TraceAggregation, int, error) {
 	baseQuery := r.db.Table("scores s").
 		Joins("JOIN monitors m ON s.monitor_id = m.id").
-		Where("m.org_name = ? AND m.project_name = ? AND m.agent_name = ?", orgName, projName, agentName).
+		Where("m.ou_id = ? AND m.project_name = ? AND m.agent_name = ?", ouID, projName, agentName).
 		Where("s.trace_start_time BETWEEN ? AND ?", startTime, endTime)
 
 	// Count distinct traces with scores
@@ -422,7 +422,7 @@ func (r *ScoreRepo) GetAgentTraceScores(
 	if err := baseQuery.Session(&gorm.Session{NewDB: true}).
 		Table("scores s").
 		Joins("JOIN monitors m ON s.monitor_id = m.id").
-		Where("m.org_name = ? AND m.project_name = ? AND m.agent_name = ?", orgName, projName, agentName).
+		Where("m.ou_id = ? AND m.project_name = ? AND m.agent_name = ?", ouID, projName, agentName).
 		Where("s.trace_start_time BETWEEN ? AND ?", startTime, endTime).
 		Distinct("s.trace_id").
 		Count(&totalCount).Error; err != nil {

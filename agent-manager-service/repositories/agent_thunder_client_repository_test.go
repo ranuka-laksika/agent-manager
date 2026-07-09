@@ -35,7 +35,7 @@ import (
 
 func newTestAgentThunderClient(org, project, agent, env string) *models.AgentThunderClient {
 	return &models.AgentThunderClient{
-		OrgName:          org,
+		OUID:             org,
 		ProjectName:      project,
 		AgentName:        agent,
 		EnvironmentName:  env,
@@ -156,7 +156,7 @@ func TestAgentThunderClientRepo_FindDue(t *testing.T) {
 
 	dueEnvs := make(map[string]bool)
 	for _, row := range due {
-		if row.OrgName == org && row.ProjectName == project && row.AgentName == agent {
+		if row.OUID == org && row.ProjectName == project && row.AgentName == agent {
 			dueEnvs[row.EnvironmentName] = true
 		}
 	}

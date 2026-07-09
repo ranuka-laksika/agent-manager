@@ -65,14 +65,14 @@ func (r *CatalogRepo) ListByKind(orgUUID, kind string, limit, offset int) ([]mod
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		// Count total matching records
 		if err := tx.Model(&models.CatalogEntry{}).
-			Where("organization_name = ? AND kind = ? AND in_catalog = ?", orgUUID, kind, true).
+			Where("ou_id = ? AND kind = ? AND in_catalog = ?", orgUUID, kind, true).
 			Count(&total).Error; err != nil {
 			return err
 		}
 
 		// Retrieve paginated results
 		if err := tx.
-			Where("organization_name = ? AND kind = ? AND in_catalog = ?", orgUUID, kind, true).
+			Where("ou_id = ? AND kind = ? AND in_catalog = ?", orgUUID, kind, true).
 			Order("created_at DESC").
 			Limit(limit).
 			Offset(offset).
@@ -98,14 +98,14 @@ func (r *CatalogRepo) ListAll(orgUUID string, limit, offset int) ([]models.Catal
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		// Count total matching records
 		if err := tx.Model(&models.CatalogEntry{}).
-			Where("organization_name = ? AND in_catalog = ?", orgUUID, true).
+			Where("ou_id = ? AND in_catalog = ?", orgUUID, true).
 			Count(&total).Error; err != nil {
 			return err
 		}
 
 		// Retrieve paginated results
 		if err := tx.
-			Where("organization_name = ? AND in_catalog = ?", orgUUID, true).
+			Where("ou_id = ? AND in_catalog = ?", orgUUID, true).
 			Order("created_at DESC").
 			Limit(limit).
 			Offset(offset).
@@ -138,13 +138,13 @@ func (r *CatalogRepo) ListLLMProviders(filters *models.CatalogListFilters) ([]mo
 	// Build base query with common joins and conditions
 	baseQuery := r.db.Model(&models.LLMProvider{}).
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ? AND a.in_catalog = ?",
+		Where("a.ou_id = ? AND a.kind = ? AND a.in_catalog = ?",
 			filters.OrganizationName, models.KindLLMProvider, true)
 
 	// Apply environment filter if provided (join with deployment_status)
 	if filters.HasEnvironmentFilter() {
 		baseQuery = baseQuery.
-			Joins("JOIN deployment_status ds ON llm_providers.uuid = ds.artifact_uuid AND ds.organization_name = a.organization_name").
+			Joins("JOIN deployment_status ds ON llm_providers.uuid = ds.artifact_uuid AND ds.ou_id = a.ou_id").
 			Joins("JOIN gateways g ON ds.gateway_uuid = g.uuid AND g.deleted_at IS NULL").
 			Joins("JOIN gateway_environment_mappings gem ON ds.gateway_uuid = gem.gateway_uuid").
 			Where("gem.environment_uuid = ? AND ds.status = ?",
@@ -169,16 +169,16 @@ func (r *CatalogRepo) ListLLMProviders(filters *models.CatalogListFilters) ([]mo
 			a.uuid, a.handle, a.name, a.version, a.kind, a.in_catalog, a.created_at,
 			llm_providers.description, llm_providers.created_by, llm_providers.status,
 			llm_providers.configuration, llm_providers.model_list,
-			a.organization_name
+			a.ou_id
 		`).
 		Table("llm_providers").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ? AND a.in_catalog = ?",
+		Where("a.ou_id = ? AND a.kind = ? AND a.in_catalog = ?",
 			filters.OrganizationName, models.KindLLMProvider, true)
 
 	if filters.HasEnvironmentFilter() {
 		query = query.
-			Joins("JOIN deployment_status ds ON llm_providers.uuid = ds.artifact_uuid AND ds.organization_name = a.organization_name").
+			Joins("JOIN deployment_status ds ON llm_providers.uuid = ds.artifact_uuid AND ds.ou_id = a.ou_id").
 			Joins("JOIN gateways g ON ds.gateway_uuid = g.uuid AND g.deleted_at IS NULL").
 			Joins("JOIN gateway_environment_mappings gem ON ds.gateway_uuid = gem.gateway_uuid").
 			Where("gem.environment_uuid = ? AND ds.status = ?",
@@ -356,7 +356,7 @@ func (r *CatalogRepo) populateDeploymentsInBatch(entries []models.CatalogLLMProv
 		`).
 		Joins("JOIN gateways g ON ds.gateway_uuid = g.uuid AND g.deleted_at IS NULL").
 		Joins("LEFT JOIN gateway_environment_mappings gem ON ds.gateway_uuid = gem.gateway_uuid").
-		Where("ds.artifact_uuid IN ? AND ds.organization_name = ? AND ds.status = ?",
+		Where("ds.artifact_uuid IN ? AND ds.ou_id = ? AND ds.status = ?",
 			providerUUIDs, orgUUID, models.DeploymentStatusDeployed)
 
 	if err := query.Scan(&deploymentRows).Error; err != nil {

@@ -78,7 +78,7 @@ func (t *Toolsets) registerProjectTools(server *gomcp.Server) {
 
 func listProjects(handler ProjectToolsetHandler) func(context.Context, *gomcp.CallToolRequest, listProjectsInput) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, input listProjectsInput) (*gomcp.CallToolResult, any, error) {
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		// Apply default limit. Validate bounds.
 		limit := utils.DefaultLimit
@@ -97,7 +97,7 @@ func listProjects(handler ProjectToolsetHandler) func(context.Context, *gomcp.Ca
 			return nil, nil, fmt.Errorf("offset must be >= %d", utils.MinOffset)
 		}
 		// Calls the service-layer interface
-		projects, total, err := handler.ListProjects(ctx, orgName, limit, offset)
+		projects, total, err := handler.ListProjects(ctx, ouID, limit, offset)
 		if err != nil {
 			return nil, nil, wrapToolError("list_projects", err)
 		}
@@ -113,7 +113,7 @@ func listProjects(handler ProjectToolsetHandler) func(context.Context, *gomcp.Ca
 			})
 		}
 		response := listProjectsOutput{
-			OrgName:  orgName,
+			OrgName:  ouID,
 			Total:    total,
 			Projects: formatted,
 		}
@@ -123,7 +123,7 @@ func listProjects(handler ProjectToolsetHandler) func(context.Context, *gomcp.Ca
 
 func createProject(handler ProjectToolsetHandler) func(context.Context, *gomcp.CallToolRequest, createProjectInput) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, input createProjectInput) (*gomcp.CallToolResult, any, error) {
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 		projectName := strings.TrimSpace(input.ProjectName)
 		displayName := strings.TrimSpace(input.DisplayName)
 
@@ -142,12 +142,12 @@ func createProject(handler ProjectToolsetHandler) func(context.Context, *gomcp.C
 			DeploymentPipeline: "default",
 			Description:        normalizeOptionalString(input.Description),
 		}
-		project, err := handler.CreateProject(ctx, orgName, req)
+		project, err := handler.CreateProject(ctx, ouID, req)
 		if err != nil {
 			return nil, nil, wrapToolError("create_project", err)
 		}
 		response := map[string]any{
-			"org_name": orgName,
+			"org_name": ouID,
 			"project":  utils.ConvertToProjectResponse(project),
 		}
 		return handleToolResult(response, nil)

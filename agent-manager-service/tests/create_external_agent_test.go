@@ -213,7 +213,7 @@ func TestCreateExternalAgent(t *testing.T) {
 		},
 		{
 			name:           "return 404 on organization not found for external agent",
-			authMiddleware: authMiddleware,
+			authMiddleware: jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"),
 			payload: map[string]interface{}{
 				"name":        fmt.Sprintf("test-external-agent-%s", uuid.New().String()[:5]),
 				"displayName": "Test External Agent",

@@ -41,7 +41,7 @@ import (
 // re-validate and only ever receives custom providers.
 type GatewayConfigApplier interface {
 	// ApplyIdentityProvider upserts the identity provider in the gateway config.
-	ApplyIdentityProvider(ctx context.Context, gatewayID, orgName string, idp models.GatewayIdentityProvider) error
+	ApplyIdentityProvider(ctx context.Context, gatewayID, ouID string, idp models.GatewayIdentityProvider) error
 	// DeleteIdentityProvider removes the identity provider from the gateway config.
-	DeleteIdentityProvider(ctx context.Context, gatewayID, orgName, name string) error
+	DeleteIdentityProvider(ctx context.Context, gatewayID, ouID, name string) error
 }

@@ -70,8 +70,13 @@ interface AgentConfigTableSectionProps {
   isLoading: boolean;
   error: unknown;
   labels: AgentConfigTableLabels;
-  /** Absolute path to the "add" page for this config type. */
-  addPath: string;
+  /** Absolute path to the "add" page for this config type. Ignored when `onAdd` is set. */
+  addPath?: string;
+  /**
+   * When provided, the Add button triggers this callback (e.g. to open an inline panel)
+   * instead of navigating to `addPath`. Used by the MCP tab's master-detail flow.
+   */
+  onAdd?: () => void;
   /** Builds the absolute path to a config's detail page. */
   getViewPath: (configId: string) => string;
   onRemove: (configId: string) => void;
@@ -95,6 +100,7 @@ export function AgentConfigTableSection({
   error,
   labels,
   addPath,
+  onAdd,
   getViewPath,
   onRemove,
   isRemoving = false,
@@ -157,19 +163,31 @@ export function AgentConfigTableSection({
     });
   };
 
-  const addButton = (variant: "contained" | "outlined") => (
-    <Button
-      component={Link}
-      to={addPath}
-      variant={variant}
-      color="primary"
-      size="small"
-      startIcon={<Plus size={16} />}
-      disabled={!canAdd}
-    >
-      {labels.addButtonLabel}
-    </Button>
-  );
+  const addButton = (variant: "contained" | "outlined") =>
+    onAdd ? (
+      <Button
+        variant={variant}
+        color="primary"
+        size="small"
+        startIcon={<Plus size={16} />}
+        disabled={!canAdd}
+        onClick={onAdd}
+      >
+        {labels.addButtonLabel}
+      </Button>
+    ) : (
+      <Button
+        component={Link}
+        to={addPath ?? "#"}
+        variant={variant}
+        color="primary"
+        size="small"
+        startIcon={<Plus size={16} />}
+        disabled={!canAdd}
+      >
+        {labels.addButtonLabel}
+      </Button>
+    );
 
   const toolbar = (
     <ListingTable.Toolbar

@@ -22,8 +22,6 @@ var _ MappedNullable = &GatewayResponse{}
 type GatewayResponse struct {
 	// Unique identifier for the gateway
 	Uuid string `json:"uuid"`
-	// Organization UUID
-	OrganizationName string `json:"organizationName"`
 	// Unique gateway name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 	// Human-readable display name
@@ -48,10 +46,9 @@ type GatewayResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewGatewayResponse(uuid string, organizationName string, name string, displayName string, gatewayType GatewayType, vhost string, isCritical bool, status GatewayStatus, createdAt time.Time, updatedAt time.Time) *GatewayResponse {
+func NewGatewayResponse(uuid string, name string, displayName string, gatewayType GatewayType, vhost string, isCritical bool, status GatewayStatus, createdAt time.Time, updatedAt time.Time) *GatewayResponse {
 	this := GatewayResponse{}
 	this.Uuid = uuid
-	this.OrganizationName = organizationName
 	this.Name = name
 	this.DisplayName = displayName
 	this.GatewayType = gatewayType
@@ -93,30 +90,6 @@ func (o *GatewayResponse) GetUuidOk() (*string, bool) {
 // SetUuid sets field value
 func (o *GatewayResponse) SetUuid(v string) {
 	o.Uuid = v
-}
-
-// GetOrganizationName returns the OrganizationName field value
-func (o *GatewayResponse) GetOrganizationName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrganizationName
-}
-
-// GetOrganizationNameOk returns a tuple with the OrganizationName field value
-// and a boolean to check if the value has been set.
-func (o *GatewayResponse) GetOrganizationNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrganizationName, true
-}
-
-// SetOrganizationName sets field value
-func (o *GatewayResponse) SetOrganizationName(v string) {
-	o.OrganizationName = v
 }
 
 // GetName returns the Name field value
@@ -386,7 +359,6 @@ func (o GatewayResponse) MarshalJSON() ([]byte, error) {
 func (o GatewayResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["uuid"] = o.Uuid
-	toSerialize["organizationName"] = o.OrganizationName
 	toSerialize["name"] = o.Name
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["gatewayType"] = o.GatewayType

@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -66,13 +67,13 @@ func NewAgentConfigurationController(service services.AgentConfigurationService)
 	return &agentConfigurationController{agentConfigService: service}
 }
 
-// CreateAgentModelConfig handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs
+// CreateAgentModelConfig handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/model-configs
 func (c *agentConfigurationController) CreateAgentModelConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -108,7 +109,7 @@ func (c *agentConfigurationController) CreateAgentModelConfig(w http.ResponseWri
 	}
 
 	// Call service
-	response, err := c.agentConfigService.Create(ctx, orgName, projectName, agentName, req, createdBy)
+	response, err := c.agentConfigService.Create(ctx, ouID, projectName, agentName, req, createdBy)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrAgentConfigAlreadyExists):
@@ -147,12 +148,12 @@ func (c *agentConfigurationController) CreateAgentModelConfig(w http.ResponseWri
 	utils.WriteSuccessResponse(w, http.StatusCreated, specResponse)
 }
 
-// GetAgentModelConfig handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}
+// GetAgentModelConfig handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/model-configs/{configId}
 func (c *agentConfigurationController) GetAgentModelConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -164,7 +165,7 @@ func (c *agentConfigurationController) GetAgentModelConfig(w http.ResponseWriter
 		return
 	}
 
-	response, err := c.agentConfigService.Get(ctx, configUUID, orgName, projectName, agentName)
+	response, err := c.agentConfigService.Get(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -185,12 +186,12 @@ func (c *agentConfigurationController) GetAgentModelConfig(w http.ResponseWriter
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// ListAgentModelConfigs handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs
+// ListAgentModelConfigs handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/model-configs
 func (c *agentConfigurationController) ListAgentModelConfigs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	limit := getIntQueryParam(r, "limit", 20)
@@ -207,7 +208,7 @@ func (c *agentConfigurationController) ListAgentModelConfigs(w http.ResponseWrit
 		offset = 0
 	}
 
-	response, err := c.agentConfigService.ListByType(ctx, orgName, projectName, agentName, models.AgentConfigTypeIDLLM, limit, offset)
+	response, err := c.agentConfigService.ListByType(ctx, ouID, projectName, agentName, models.AgentConfigTypeIDLLM, limit, offset)
 	if err != nil {
 		log.Error("ListAgentModelConfigs: failed to list configurations", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list configurations")
@@ -219,12 +220,12 @@ func (c *agentConfigurationController) ListAgentModelConfigs(w http.ResponseWrit
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// UpdateAgentModelConfig handles PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}
+// UpdateAgentModelConfig handles PUT /orgs/{ouID}/projects/{projName}/agents/{agentName}/model-configs/{configId}
 func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -260,7 +261,7 @@ func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWri
 		return
 	}
 
-	existing, err := c.agentConfigService.Get(ctx, configUUID, orgName, projectName, agentName)
+	existing, err := c.agentConfigService.Get(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -275,7 +276,7 @@ func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWri
 		return
 	}
 
-	response, err := c.agentConfigService.Update(ctx, configUUID, orgName, projectName, agentName, req)
+	response, err := c.agentConfigService.Update(ctx, configUUID, ouID, projectName, agentName, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrAgentConfigNotFound):
@@ -305,12 +306,12 @@ func (c *agentConfigurationController) UpdateAgentModelConfig(w http.ResponseWri
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// DeleteAgentModelConfig handles DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs/{configId}
+// DeleteAgentModelConfig handles DELETE /orgs/{ouID}/projects/{projName}/agents/{agentName}/model-configs/{configId}
 func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -322,7 +323,7 @@ func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWri
 		return
 	}
 
-	existing, err := c.agentConfigService.Get(ctx, configUUID, orgName, projectName, agentName)
+	existing, err := c.agentConfigService.Get(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -337,7 +338,7 @@ func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWri
 		return
 	}
 
-	if err := c.agentConfigService.Delete(ctx, configUUID, orgName, projectName, agentName); err != nil {
+	if err := c.agentConfigService.Delete(ctx, configUUID, ouID, projectName, agentName); err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
 			return
@@ -350,12 +351,12 @@ func (c *agentConfigurationController) DeleteAgentModelConfig(w http.ResponseWri
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// CreateAgentMCPConfig handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs
+// CreateAgentMCPConfig handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/mcp-configs
 func (c *agentConfigurationController) CreateAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	createdBy := "system"
@@ -382,7 +383,7 @@ func (c *agentConfigurationController) CreateAgentMCPConfig(w http.ResponseWrite
 		return
 	}
 
-	response, err := c.agentConfigService.Create(ctx, orgName, projectName, agentName, req, createdBy)
+	response, err := c.agentConfigService.Create(ctx, ouID, projectName, agentName, req, createdBy)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrAgentConfigAlreadyExists):
@@ -414,12 +415,12 @@ func (c *agentConfigurationController) CreateAgentMCPConfig(w http.ResponseWrite
 	utils.WriteSuccessResponse(w, http.StatusCreated, specResponse)
 }
 
-// GetAgentMCPConfig handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+// GetAgentMCPConfig handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
 func (c *agentConfigurationController) GetAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -431,7 +432,7 @@ func (c *agentConfigurationController) GetAgentMCPConfig(w http.ResponseWriter, 
 		return
 	}
 
-	response, err := c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	response, err := c.agentConfigService.GetMCP(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -445,12 +446,12 @@ func (c *agentConfigurationController) GetAgentMCPConfig(w http.ResponseWriter, 
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// ListAgentMCPConfigs handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs
+// ListAgentMCPConfigs handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/mcp-configs
 func (c *agentConfigurationController) ListAgentMCPConfigs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	limit := getIntQueryParam(r, "limit", 20)
@@ -466,7 +467,7 @@ func (c *agentConfigurationController) ListAgentMCPConfigs(w http.ResponseWriter
 		offset = 0
 	}
 
-	response, err := c.agentConfigService.ListMCP(ctx, orgName, projectName, agentName, limit, offset)
+	response, err := c.agentConfigService.ListMCP(ctx, ouID, projectName, agentName, limit, offset)
 	if err != nil {
 		log.Error("ListAgentMCPConfigs: failed to list configurations", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list configurations")
@@ -477,12 +478,12 @@ func (c *agentConfigurationController) ListAgentMCPConfigs(w http.ResponseWriter
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// UpdateAgentMCPConfig handles PUT /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+// UpdateAgentMCPConfig handles PUT /orgs/{ouID}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
 func (c *agentConfigurationController) UpdateAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -494,7 +495,7 @@ func (c *agentConfigurationController) UpdateAgentMCPConfig(w http.ResponseWrite
 		return
 	}
 
-	_, err = c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	_, err = c.agentConfigService.GetMCP(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -527,7 +528,7 @@ func (c *agentConfigurationController) UpdateAgentMCPConfig(w http.ResponseWrite
 		return
 	}
 
-	response, err := c.agentConfigService.UpdateMCP(ctx, configUUID, orgName, projectName, agentName, req)
+	response, err := c.agentConfigService.UpdateMCP(ctx, configUUID, ouID, projectName, agentName, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, utils.ErrAgentConfigNotFound):
@@ -550,12 +551,12 @@ func (c *agentConfigurationController) UpdateAgentMCPConfig(w http.ResponseWrite
 	utils.WriteSuccessResponse(w, http.StatusOK, specResponse)
 }
 
-// DeleteAgentMCPConfig handles DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
+// DeleteAgentMCPConfig handles DELETE /orgs/{ouID}/projects/{projName}/agents/{agentName}/mcp-configs/{configId}
 func (c *agentConfigurationController) DeleteAgentMCPConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projectName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	configID := r.PathValue(utils.PathParamConfigId)
@@ -567,7 +568,7 @@ func (c *agentConfigurationController) DeleteAgentMCPConfig(w http.ResponseWrite
 		return
 	}
 
-	_, err = c.agentConfigService.GetMCP(ctx, configUUID, orgName, projectName, agentName)
+	_, err = c.agentConfigService.GetMCP(ctx, configUUID, ouID, projectName, agentName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -577,7 +578,7 @@ func (c *agentConfigurationController) DeleteAgentMCPConfig(w http.ResponseWrite
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete configuration")
 		return
 	}
-	if err := c.agentConfigService.DeleteMCP(ctx, configUUID, orgName, projectName, agentName); err != nil {
+	if err := c.agentConfigService.DeleteMCP(ctx, configUUID, ouID, projectName, agentName); err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
 			return
@@ -733,7 +734,6 @@ func convertAgentModelConfigResponse(modelResp models.AgentModelConfigResponse) 
 		Description:          getStringPtr(modelResp.Description),
 		AgentId:              modelResp.AgentID,
 		Type:                 modelResp.Type,
-		OrganizationName:     modelResp.OrganizationName,
 		ProjectName:          modelResp.ProjectName,
 		EnvMappings:          envModelConfig,
 		EnvironmentVariables: envVars,
@@ -763,14 +763,13 @@ func convertAgentModelConfigListResponse(modelResp models.AgentModelConfigListRe
 	configs := make([]spec.AgentModelConfigListItem, len(modelResp.Configs))
 	for i, config := range modelResp.Configs {
 		configs[i] = spec.AgentModelConfigListItem{
-			Uuid:             config.UUID,
-			Name:             config.Name,
-			Description:      getStringPtr(config.Description),
-			AgentId:          config.AgentID,
-			Type:             config.Type,
-			OrganizationName: config.OrganizationName,
-			ProjectName:      config.ProjectName,
-			CreatedAt:        config.CreatedAt,
+			Uuid:        config.UUID,
+			Name:        config.Name,
+			Description: getStringPtr(config.Description),
+			AgentId:     config.AgentID,
+			Type:        config.Type,
+			ProjectName: config.ProjectName,
+			CreatedAt:   config.CreatedAt,
 		}
 	}
 

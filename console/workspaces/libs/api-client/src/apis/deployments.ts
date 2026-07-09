@@ -33,6 +33,7 @@ import type {
   GetAgentConfigurationsPathParams,
   ConfigurationResponse,
   ListEnvironmentsPathParams,
+  GetEnvironmentPathParams,
   EnvironmentListResponse,
   GetDeploymentPipelinePathParams,
   DeploymentPipelineResponse,
@@ -323,6 +324,24 @@ export async function deleteDeploymentPipeline(
     if (res.status === 204 || res.headers.get('content-length') === '0') {
         return;
     }
+}
+
+// eslint-disable-next-line max-len
+export async function getEnvironment(params: GetEnvironmentPathParams, getToken?: () => Promise<string>)
+: Promise<Environment> {
+    const { orgName = "default", envName } = params;
+
+    if (!envName) {
+        throw new Error("envName is required");
+    }
+
+    const token = getToken ? await getToken() : undefined;
+    const res = await httpGET(
+        `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}/environments/${encodeURIComponent(envName)}`,
+        { token },
+    );
+    if (!res.ok) throw await res.json();
+    return res.json();
 }
 
 // eslint-disable-next-line max-len

@@ -22,11 +22,15 @@ import {
   useTestAgentAPIKey,
 } from "@agent-management-platform/api-client";
 import { getErrorMessage } from "@agent-management-platform/shared-component";
-import { Alert, Box, Skeleton, Typography } from "@wso2/oxygen-ui";
+import { Alert, Box, Button, Skeleton, Typography } from "@wso2/oxygen-ui";
 import { useParams } from "react-router-dom";
-import { useMemo, lazy, Suspense } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 
 const SwaggerUI = lazy(() => import("swagger-ui-react"));
+
+// A freshly issued test key takes a couple of seconds to reach the gateway's
+// policy engine, so one delayed retry with the same key rides out that window.
+const TEST_KEY_PROPAGATION_RETRY_DELAY_MS = 2000;
 
 const disableAuthorizeAndInfoPluginCustomSecuritySchema = {
   statePlugins: {
@@ -70,13 +74,25 @@ export function Swagger() {
     isLoading: isLoadingTestKey,
     isError: isTestKeyError,
     error: testKeyError,
+    refetch: refetchTestKey,
   } = useTestAgentAPIKey(
     { orgName: orgId, projName: projectId, agentName: agentId, envId },
     { enabled: securityEnabled && !oauthOnly },
   );
   const testApiKey = testKey?.apiKey;
+  const [keyAlert, setKeyAlert] = useState<"unauthorized" | "refreshed" | null>(
+    null,
+  );
+  const [isRefreshingKey, setIsRefreshingKey] = useState(false);
+
+  const gatewayOffline = testKey?.gatewayConnected === false;
 
   const endpoint = useMemo(() => Object.keys(data ?? {})?.[0] ?? "", [data]);
+
+  // The gateway drops CORS headers on 401s, so a cross-origin 401 rejects
+  // fetch with a TypeError before swagger-ui's responseInterceptor runs.
+  // Inject a custom fetch (req.userFetch) instead: retry once to ride out key
+  // propagation, then surface the refresh alert on a persistent 401/TypeError.
   const requestInterceptor = useMemo(
     () => (req: any) => {
       const targetUrl = data?.[endpoint]?.url;
@@ -100,10 +116,52 @@ export function Swagger() {
         req.headers = req.headers ?? {};
         req.headers["X-API-Key"] = testApiKey;
       }
+
+      if (securityEnabled && !gatewayOffline) {
+        req.userFetch = async (url: string, options: RequestInit) => {
+          const sleep = () =>
+            new Promise((resolve) =>
+              setTimeout(resolve, TEST_KEY_PROPAGATION_RETRY_DELAY_MS),
+            );
+          try {
+            const res = await fetch(url, options);
+            if (res.status !== 401) {
+              return res;
+            }
+            await sleep();
+            const retry = await fetch(url, options);
+            if (retry.status === 401) {
+              setKeyAlert("unauthorized");
+            }
+            return retry;
+          } catch (err) {
+            if (!(err instanceof TypeError)) {
+              throw err;
+            }
+            await sleep();
+            try {
+              return await fetch(url, options);
+            } catch (retryErr) {
+              setKeyAlert("unauthorized");
+              throw retryErr;
+            }
+          }
+        };
+      }
       return req;
     },
-    [data, endpoint, securityEnabled, testApiKey]
+    [data, endpoint, securityEnabled, testApiKey, gatewayOffline]
   );
+
+  const handleRefreshTestKey = async () => {
+    setIsRefreshingKey(true);
+    try {
+      await refetchTestKey();
+      setKeyAlert("refreshed");
+    } finally {
+      setIsRefreshingKey(false);
+    }
+  };
 
   if (isLoading || (securityEnabled && isLoadingTestKey)) {
     return <Skeleton variant="rounded" height={500} />;
@@ -137,6 +195,41 @@ export function Swagger() {
             OAuth is enabled — test this endpoint out-of-band with an{" "}
             <code>Authorization: Bearer &lt;token&gt;</code> header.
           </Typography>
+        </Alert>
+      )}
+      {securityEnabled && gatewayOffline && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          The gateway is not connected to the control plane right now. The
+          test API key has been stored but will only work once the gateway
+          reconnects.
+        </Alert>
+      )}
+      {keyAlert === "unauthorized" && (
+        <Alert
+          severity="error"
+          action={
+            <Button
+              color="inherit"
+              size="small"
+              onClick={handleRefreshTestKey}
+              disabled={isRefreshingKey}
+            >
+              {isRefreshingKey ? "Refreshing..." : "Refresh test key"}
+            </Button>
+          }
+          sx={{ mb: 2 }}
+        >
+          The test API key is not authorized on the gateway yet. Execute the
+          request again, or refresh the test key.
+        </Alert>
+      )}
+      {keyAlert === "refreshed" && (
+        <Alert
+          severity="info"
+          onClose={() => setKeyAlert(null)}
+          sx={{ mb: 2 }}
+        >
+          Test key refreshed. Execute the request again.
         </Alert>
       )}
       <Box sx={{ "& .swagger-ui .wrapper": { padding: 0 } }}>

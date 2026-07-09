@@ -35,6 +35,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -67,6 +68,12 @@ func timePtr(t time.Time) *time.Time {
 // for dependencies required by monitor tests
 func createBaseMockChoreoClient() *clientmocks.OpenChoreoClientMock {
 	return &clientmocks.OpenChoreoClientMock{
+		// Resolve the namespace the same way the real client does — from the
+		// configured default namespace — so callers (e.g. GetMonitorRunLogs) get a
+		// realistic value rather than triggering the "method is nil" panic.
+		NamespaceForFunc: func(ouID string) string {
+			return config.GetConfig().OpenChoreo.DefaultNamespace
+		},
 		CreateWorkflowRunFunc: func(ctx context.Context, namespaceName string, req client.CreateWorkflowRunRequest) (*client.WorkflowRunResponse, error) {
 			return &client.WorkflowRunResponse{
 				Name:         "test-workflow-run-123",
@@ -715,7 +722,8 @@ func TestListMonitors(t *testing.T) {
 
 // TestListMonitors_Empty tests listing monitors when none exist
 func TestListMonitors_Empty(t *testing.T) {
-	authMiddleware := jwtassertion.NewMockMiddleware(t)
+	// Monitors are scoped by the token OU ID, so use a unique one to guarantee an empty list.
+	authMiddleware := jwtassertion.NewMockMiddlewareWithOUID(t, fmt.Sprintf("empty-ou-%d", time.Now().UnixNano()))
 	mockChoreoClient := createBaseMockChoreoClient()
 	testClients := wiring.TestClients{OpenChoreoClient: mockChoreoClient}
 	app := apitestutils.MakeAppClientWithDeps(t, testClients, authMiddleware)
@@ -1086,7 +1094,7 @@ func TestUpdateMonitor_ClearLLMProvider_RejectedWhenLLMJudgePresent(t *testing.T
 		Name:            monitorName,
 		DisplayName:     "Clear LLM Guard Test",
 		Type:            models.MonitorTypeFuture,
-		OrgName:         "test-org",
+		OUID:            jwtassertion.MockOUID,
 		ProjectName:     "test-project",
 		AgentName:       "test-agent",
 		EnvironmentName: "dev",
@@ -1489,7 +1497,7 @@ func TestGetMonitorRunLogs(t *testing.T) {
 	// Verify the correct namespace was passed to the observability client
 	calls := mockObservabilityClient.GetWorkflowRunLogsCalls()
 	require.Len(t, calls, 1)
-	assert.Equal(t, "test-org", calls[0].NamespaceName)
+	assert.Equal(t, config.GetConfig().OpenChoreo.DefaultNamespace, calls[0].NamespaceName)
 }
 
 // TestStopMonitor tests stopping a future monitor

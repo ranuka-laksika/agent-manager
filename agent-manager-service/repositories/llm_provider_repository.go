@@ -72,15 +72,15 @@ func (r *LLMProviderRepo) Create(tx *gorm.DB, p *models.LLMProvider, handle, nam
 	// Insert into artifacts table first
 	slog.Info("LLMProviderRepo.Create: creating artifact", "handle", handle, "uuid", p.UUID, "kind", models.KindLLMProvider)
 	if err := r.artifactRepo.Create(tx, &models.Artifact{
-		UUID:             p.UUID,
-		Handle:           handle,
-		Name:             name,
-		Version:          version,
-		Kind:             models.KindLLMProvider,
-		OrganizationName: orgUUID,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		InCatalog:        true,
+		UUID:      p.UUID,
+		Handle:    handle,
+		Name:      name,
+		Version:   version,
+		Kind:      models.KindLLMProvider,
+		OUID:      orgUUID,
+		CreatedAt: now,
+		UpdatedAt: now,
+		InCatalog: true,
 	}); err != nil {
 		slog.Error("LLMProviderRepo.Create: failed to create artifact", "handle", handle, "uuid", p.UUID, "error", err)
 		return fmt.Errorf("failed to create artifact: %w", err)
@@ -105,7 +105,7 @@ func (r *LLMProviderRepo) GetByUUID(providerID, orgUUID string) (*models.LLMProv
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.uuid = ? AND a.organization_name = ? AND a.kind = ?", providerID, orgUUID, models.KindLLMProvider).
+		Where("a.uuid = ? AND a.ou_id = ? AND a.kind = ?", providerID, orgUUID, models.KindLLMProvider).
 		First(&provider).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -133,7 +133,7 @@ func (r *LLMProviderRepo) GetByHandle(handle, orgUUID string) (*models.LLMProvid
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.handle = ? AND a.organization_name = ? AND a.kind = ?", handle, orgUUID, models.KindLLMProvider).
+		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindLLMProvider).
 		First(&provider).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -160,7 +160,7 @@ func (r *LLMProviderRepo) List(orgUUID string, limit, offset int) ([]*models.LLM
 	err := r.db.
 		Preload("Artifact").
 		Joins("JOIN artifacts a ON llm_providers.uuid = a.uuid").
-		Where("a.organization_name = ? AND a.kind = ?", orgUUID, models.KindLLMProvider).
+		Where("a.ou_id = ? AND a.kind = ?", orgUUID, models.KindLLMProvider).
 		Order("a.created_at DESC").
 		Limit(limit).
 		Offset(offset).
@@ -241,7 +241,7 @@ func (r *LLMProviderRepo) Delete(providerID, orgUUID string) error {
 		var artifact struct{ UUID uuid.UUID }
 		result := tx.Table("artifacts").
 			Select("uuid").
-			Where("uuid = ? AND organization_name = ? AND kind = ?", providerUUID, orgUUID, models.KindLLMProvider).
+			Where("uuid = ? AND ou_id = ? AND kind = ?", providerUUID, orgUUID, models.KindLLMProvider).
 			Take(&artifact)
 		if result.Error != nil {
 			if errors.Is(result.Error, gorm.ErrRecordNotFound) {
