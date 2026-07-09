@@ -1394,6 +1394,76 @@ func TestExtractToolExecutionDetails_OTelMessagesFallback(t *testing.T) {
 			t.Errorf("output = %q, want 'entity result'", output)
 		}
 	})
+
+	t.Run("reads OTel gen_ai.tool.call.arguments/result (Agent Framework)", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			"gen_ai.tool.name":           "GetWeather",
+			"gen_ai.tool.call.arguments": `{"city":"Tokyo"}`,
+			"gen_ai.tool.call.result":    "The weather in Tokyo is sunny.",
+		}
+		name, input, output, _ := ExtractToolExecutionDetails(attrs, "OK")
+		if name != "GetWeather" {
+			t.Errorf("name = %q", name)
+		}
+		if input != `{"city":"Tokyo"}` {
+			t.Errorf("input = %q", input)
+		}
+		if output != "The weather in Tokyo is sunny." {
+			t.Errorf("output = %q", output)
+		}
+	})
+}
+
+func TestPopulateAgentAttributes_OTelMessagesFlattened(t *testing.T) {
+	attrs := map[string]interface{}{
+		"gen_ai.agent.name":      "WeatherAgent",
+		"gen_ai.input.messages":  `[{"role":"user","parts":[{"type":"text","content":"weather in Tokyo?"}]}]`,
+		"gen_ai.output.messages": `[{"role":"assistant","parts":[{"type":"text","content":"It is sunny in Tokyo."}]}]`,
+	}
+	amp := &AmpAttributes{}
+	populateAgentAttributes(amp, attrs)
+
+	inMsgs, ok := amp.Input.([]PromptMessage)
+	if !ok {
+		t.Fatalf("Input type = %T, want []PromptMessage (flattened, not raw JSON string)", amp.Input)
+	}
+	if !containsContent(inMsgs, "weather in Tokyo?") {
+		t.Errorf("input = %+v, want flattened user content", inMsgs)
+	}
+
+	outMsgs, ok := amp.Output.([]PromptMessage)
+	if !ok {
+		t.Fatalf("Output type = %T, want []PromptMessage", amp.Output)
+	}
+	if !containsContent(outMsgs, "It is sunny in Tokyo.") {
+		t.Errorf("output = %+v, want flattened assistant content", outMsgs)
+	}
+}
+
+func TestPopulateAgentAttributes_TraceloopFallback(t *testing.T) {
+	attrs := map[string]interface{}{
+		"gen_ai.agent.name":       "Agent",
+		"traceloop.entity.input":  "some input",
+		"traceloop.entity.output": "some output",
+	}
+	amp := &AmpAttributes{}
+	populateAgentAttributes(amp, attrs)
+
+	if amp.Input != "some input" {
+		t.Errorf("Input = %v, want traceloop.entity.input passthrough", amp.Input)
+	}
+	if amp.Output != "some output" {
+		t.Errorf("Output = %v, want traceloop.entity.output passthrough", amp.Output)
+	}
+}
+
+func containsContent(msgs []PromptMessage, want string) bool {
+	for _, m := range msgs {
+		if strings.Contains(m.Content, want) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestPopulateRetrieverAttributes verifies db.system.name precedence over the
@@ -1560,11 +1630,21 @@ func TestProcessSpan_PureOTelGenAISpans(t *testing.T) {
 		if amp.Kind != string(SpanTypeAgent) {
 			t.Fatalf("kind = %q, want agent", amp.Kind)
 		}
-		if amp.Input != `[{"role":"user","content":"research X"}]` {
-			t.Errorf("input = %#v", amp.Input)
+		// Agent input/output are flattened to structured messages (same as LLM
+		// spans), not passed through as the raw gen_ai.*.messages JSON string.
+		inMsgs, ok := amp.Input.([]PromptMessage)
+		if !ok {
+			t.Fatalf("input type = %T, want []PromptMessage", amp.Input)
 		}
-		if amp.Output != `[{"role":"assistant","content":"here is X"}]` {
-			t.Errorf("output = %#v", amp.Output)
+		if !containsContent(inMsgs, "research X") {
+			t.Errorf("input = %#v, want flattened user content", amp.Input)
+		}
+		outMsgs, ok := amp.Output.([]PromptMessage)
+		if !ok {
+			t.Fatalf("output type = %T, want []PromptMessage", amp.Output)
+		}
+		if !containsContent(outMsgs, "here is X") {
+			t.Errorf("output = %#v, want flattened assistant content", amp.Output)
 		}
 		data, ok := amp.Data.(AgentData)
 		if !ok {
@@ -1639,16 +1719,48 @@ func TestIsLLMLeafSpan(t *testing.T) {
 		{"LangChain ChatOpenAI", "ChatOpenAI.chat", true},
 		{"Anthropic", "anthropic.chat", true},
 		{"Cohere", "cohere.chat", true},
+		{"OTel native chat leaf", "chat gpt-4o-mini", true},
+		{"OTel native chat, bare", "chat", true},
 		{"LangGraph workflow chain — not a leaf", "LangGraph.workflow", false},
 		{"invoke_agent root", "invoke_agent LangGraph", false},
 		{"execute_task chain", "execute_task call_model", false},
 		{"embedding span", "openai.embeddings", false},
+		{"OTel native embeddings — not a leaf", "embeddings text-embedding-3-small", false},
 		{"empty", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := IsLLMLeafSpan(tc.in); got != tc.want {
 				t.Errorf("IsLLMLeafSpan(%q) = %v, want %v", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDetermineSpanKindFromName(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want SpanType
+	}{
+		// OTel GenAI native "{operation} {model}" names.
+		{"OTel chat", "chat gpt-4o-mini", SpanTypeLLM},
+		{"OTel text_completion", "text_completion gpt-3.5-turbo-instruct", SpanTypeLLM},
+		{"OTel embeddings", "embeddings text-embedding-3-small", SpanTypeEmbedding},
+		{"OTel invoke_agent", "invoke_agent WeatherAgent(abc123)", SpanTypeAgent},
+		{"OTel create_agent", "create_agent WeatherAgent", SpanTypeAgent},
+		{"OTel execute_tool", "execute_tool GetWeather", SpanTypeTool},
+		// Traceloop "{vendor}.{operation}" names still classify.
+		{"Traceloop openai.chat", "openai.chat", SpanTypeLLM},
+		{"Traceloop openai.embeddings", "openai.embeddings", SpanTypeEmbedding},
+		{"Traceloop LangGraph.workflow", "LangGraph.workflow", SpanTypeChain},
+		{"unknown", "some random span", SpanTypeUnknown},
+		{"empty", "", SpanTypeUnknown},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := DetermineSpanKindFromName(tc.in); got != tc.want {
+				t.Errorf("DetermineSpanKindFromName(%q) = %v, want %v", tc.in, got, tc.want)
 			}
 		})
 	}

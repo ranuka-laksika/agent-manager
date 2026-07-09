@@ -22,6 +22,15 @@ providers:
     versions: ["0.1.0"]
     contractSchema: "v1"
 
+  otel-genai:
+    # OTel-GenAI-native shape (Microsoft Agent Framework / OpenAI .NET SDK, i.e.
+    # samples/dotnet-agent/). Emission-only, like the manual provider — no
+    # init-container, so no instrumentationVersions. The cell re-expresses the
+    # native span shape in Python; the concrete OTel SDK version is pinned via
+    # the framework package below.
+    versions: ["0.1.0"]
+    contractSchema: "v1"
+
 frameworks:
   # Auto-instrumentation frameworks below all use `provider: traceloop` —
   # otherwise the manual provider would cross-product into each one and
@@ -92,6 +101,15 @@ frameworks:
     versions: ["2.38.0"]
     samplePath: cells/manual_rag_sample.py
     spanKinds: [agent, chain, embedding, retriever, rerank, llm, tool]
+    extras: []
+
+  - name: otel-native
+    provider: otel-genai      # restricts this framework to the otel-genai provider only
+    package: opentelemetry-sdk # the synthetic cell's only runtime dep
+    versions: ["1.43.0"]
+    samplePath: cells/otel_native_agent_sample.py
+    # The .NET/OTel-native trace tree: invoke_agent -> chat -> execute_tool.
+    spanKinds: [agent, llm, tool]
     extras: []
 
   - name: anthropic-direct
