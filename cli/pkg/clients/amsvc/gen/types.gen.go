@@ -3150,8 +3150,11 @@ type InputInterface struct {
 
 // InputInterfaceSchema defines model for InputInterfaceSchema.
 type InputInterfaceSchema struct {
+	// Content Inline schema content (e.g., OpenAPI definition); response-only
+	Content *string `json:"content,omitempty"`
+
 	// Path Path to OpenAPI schema file
-	Path string `json:"path"`
+	Path *string `json:"path,omitempty"`
 }
 
 // IssueTestAPIKeyResponse defines model for IssueTestAPIKeyResponse.

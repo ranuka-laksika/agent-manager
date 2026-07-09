@@ -301,6 +301,7 @@ type workflowEndpoint struct {
 	BasePath       string   `json:"basePath"`
 	Visibility     []string `json:"visibility"`
 	SchemaFilePath string   `json:"schemaFilePath,omitempty"`
+	SchemaContent  string   `json:"schemaContent,omitempty"`
 }
 
 // CreateSecretReferenceRequest contains data for creating a SecretReference CR

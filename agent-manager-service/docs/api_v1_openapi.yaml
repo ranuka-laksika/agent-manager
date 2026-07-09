@@ -11719,8 +11719,9 @@ components:
           description: Path to OpenAPI schema file
           pattern: "^/.*"
           example: "/openapi.yaml"
-      required:
-        - path
+        content:
+          type: string
+          description: Inline schema content (e.g., OpenAPI definition); response-only
     EndpointSchema:
       type: object
       required:
