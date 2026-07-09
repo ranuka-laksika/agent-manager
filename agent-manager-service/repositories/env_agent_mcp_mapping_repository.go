@@ -103,6 +103,8 @@ func (r *envAgentMCPMappingRepository) ListByConfig(ctx context.Context, configU
 		Preload("Artifact").
 		Preload("MCPProxy").
 		Preload("MCPProxy.Artifact").
+		Preload("MCPProxy.Endpoints").
+		Preload("MCPProxy.Endpoints.Environments").
 		Preload("MCPProxyMapping").
 		Preload("MCPProxyMapping.Artifact").
 		Preload("MCPProxyMapping.SourceMCPProxy").
@@ -118,6 +120,8 @@ func (r *envAgentMCPMappingRepository) ListByMCPProxy(ctx context.Context, mcpPr
 		Preload("Artifact").
 		Preload("MCPProxy").
 		Preload("MCPProxy.Artifact").
+		Preload("MCPProxy.Endpoints").
+		Preload("MCPProxy.Endpoints.Environments").
 		Preload("MCPProxyMapping").
 		Preload("MCPProxyMapping.Artifact").
 		Preload("MCPProxyMapping.SourceMCPProxy").
@@ -133,6 +137,8 @@ func (r *envAgentMCPMappingRepository) ListByEnvironment(ctx context.Context, en
 		Preload("Artifact").
 		Preload("MCPProxy").
 		Preload("MCPProxy.Artifact").
+		Preload("MCPProxy.Endpoints").
+		Preload("MCPProxy.Endpoints.Environments").
 		Preload("MCPProxyMapping").
 		Preload("MCPProxyMapping.Artifact").
 		Preload("MCPProxyMapping.SourceMCPProxy").

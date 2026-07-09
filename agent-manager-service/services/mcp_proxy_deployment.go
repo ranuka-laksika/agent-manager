@@ -130,25 +130,26 @@ func (s *MCPProxyService) deployMCPProxyToGateway(ctx context.Context, proxy *mo
 }
 
 // mcpProxyEnvArtifactHandle builds the stable, org-unique handle/name for the single
-// gateway artifact an MCP proxy deploys for one environment. The org-level proxy handle
-// is unique per org and the environment-UUID suffix distinguishes the per-environment
-// artifacts, so the pair satisfies the artifacts table's UNIQUE(handle, org) constraint.
-func mcpProxyEnvArtifactHandle(proxyHandle, envID string) string {
+// gateway artifact an MCP proxy endpoint deploys for one environment. The org-level proxy
+// handle is unique per org; the endpoint handle (unique within the proxy) and the
+// environment-UUID suffix distinguish the per-(endpoint,environment) artifacts, so the
+// triple satisfies the artifacts table's UNIQUE(handle, org) constraint.
+func mcpProxyEnvArtifactHandle(proxyHandle, endpointHandle, envID string) string {
 	suffix := strings.ReplaceAll(strings.TrimSpace(envID), "-", "")
-	return fmt.Sprintf("%s-%s", proxyHandle, suffix)
+	return fmt.Sprintf("%s-%s-%s", proxyHandle, strings.TrimSpace(endpointHandle), suffix)
 }
 
-// buildMCPProxyEnvArtifact flattens one per-environment blueprint block into the flat,
-// single-environment MCPProxy that the deployment YAML builder consumes. Unlike the
-// agent-scoped mapping (buildAgentMCPConfigProxy) this is the proxy's OWN artifact: the
-// context is the proxy's base context — shared by every agent that references it — and
-// the artifact identity is the stable per-environment ArtifactUUID owned by the proxy.
-func buildMCPProxyEnvArtifact(source *models.MCPProxy, envID string, envCfg models.MCPEnvironmentConfig) *models.MCPProxy {
+// buildMCPProxyEnvArtifact flattens one endpoint's config into the flat, single-environment
+// MCPProxy that the deployment YAML builder consumes. Unlike the agent-scoped mapping
+// (buildAgentMCPConfigProxy) this is the proxy's OWN artifact: the context/version/vhost
+// inherit from the parent proxy's shared metadata — shared by every agent that references
+// it — and the artifact identity is the stable (endpoint, environment) ArtifactUUID.
+func buildMCPProxyEnvArtifact(source *models.MCPProxy, endpoint *models.MCPProxyEndpoint, ee *models.MCPProxyEndpointEnvironment) *models.MCPProxy {
 	proxyHandle := source.Handle
 	if source.Artifact != nil && source.Artifact.Handle != "" {
 		proxyHandle = source.Artifact.Handle
 	}
-	handle := mcpProxyEnvArtifactHandle(proxyHandle, envID)
+	handle := mcpProxyEnvArtifactHandle(proxyHandle, endpoint.Handle, ee.EnvironmentUUID.String())
 
 	version := source.Version
 	if source.Artifact != nil && source.Artifact.Version != "" {
@@ -158,19 +159,15 @@ func buildMCPProxyEnvArtifact(source *models.MCPProxy, envID string, envCfg mode
 		version = source.Configuration.Version
 	}
 
+	cfg := endpoint.Configuration
 	var upstream models.UpstreamConfig
-	if envCfg.Upstream != nil {
-		endpoint := *envCfg.Upstream
-		upstream.Main = &endpoint
-	}
-
-	artifactUUID := uuid.Nil
-	if envCfg.ArtifactUUID != nil {
-		artifactUUID = *envCfg.ArtifactUUID
+	if cfg.Upstream != nil {
+		endpointCopy := *cfg.Upstream
+		upstream.Main = &endpointCopy
 	}
 
 	return &models.MCPProxy{
-		UUID:        artifactUUID,
+		UUID:        ee.ArtifactUUID,
 		Description: source.Description,
 		Status:      source.Status,
 		Configuration: models.MCPProxyConfig{
@@ -180,10 +177,10 @@ func buildMCPProxyEnvArtifact(source *models.MCPProxy, envID string, envCfg mode
 			Vhost:             source.Configuration.Vhost,
 			SpecVersion:       source.Configuration.SpecVersion,
 			Upstream:          upstream,
-			Policies:          envCfg.Policies,
-			Capabilities:      envCfg.Capabilities,
-			Security:          envCfg.Security,
-			ToolScopeBindings: envCfg.ToolScopeBindings,
+			Policies:          cfg.Policies,
+			Capabilities:      cfg.Capabilities,
+			Security:          cfg.Security,
+			ToolScopeBindings: cfg.ToolScopeBindings,
 		},
 		OrganizationName: source.OrganizationName,
 		ID:               handle,
@@ -221,40 +218,40 @@ func (s *MCPProxyService) ensureMCPProxyEnvArtifactRow(deployProxy *models.MCPPr
 	})
 }
 
-// deployMCPProxyEnvironments deploys (or refreshes) the single gateway artifact for every
-// configured environment of the proxy. An environment with no active gateway is skipped
-// (it deploys on the next update once a gateway exists), mirroring the agent-config flow.
-// Best-effort: per-environment failures are aggregated and returned.
-func (s *MCPProxyService) deployMCPProxyEnvironments(ctx context.Context, proxy *models.MCPProxy, ouID string) error {
+// deployMCPProxyEndpoints deploys (or refreshes) the single gateway artifact for every
+// (endpoint, environment) binding of the proxy. An environment with no active gateway is
+// skipped (it deploys on the next update once a gateway exists), mirroring the agent-config
+// flow. Best-effort: per-(endpoint,environment) failures are aggregated and returned.
+func (s *MCPProxyService) deployMCPProxyEndpoints(ctx context.Context, proxy *models.MCPProxy, ouID string) error {
 	var errs []error
-	for envID, envCfg := range proxy.Configuration.Environments {
-		envUUID, err := uuid.Parse(strings.TrimSpace(envID))
-		if err != nil {
-			errs = append(errs, fmt.Errorf("environment %q: invalid id: %w", envID, err))
-			continue
-		}
-		if envCfg.ArtifactUUID == nil || *envCfg.ArtifactUUID == uuid.Nil {
-			errs = append(errs, fmt.Errorf("environment %q: missing artifact id", envID))
-			continue
-		}
-		gateway, err := s.resolveGatewayForEnvironment(ctx, envUUID, ouID)
-		if errors.Is(err, errNoActiveGatewayForEnvironment) {
-			s.logger.Info("Skipping MCP proxy environment deploy; no active gateway",
-				"proxyUUID", proxy.UUID, "environment", envID)
-			continue
-		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf("environment %q: resolve gateway: %w", envID, err))
-			continue
-		}
-		deployProxy := buildMCPProxyEnvArtifact(proxy, envID, envCfg)
-		if err := s.ensureMCPProxyEnvArtifactRow(deployProxy, ouID); err != nil {
-			errs = append(errs, fmt.Errorf("environment %q: %w", envID, err))
-			continue
-		}
-		if err := s.deployMCPProxyToGateway(ctx, deployProxy, ouID, gateway); err != nil {
-			errs = append(errs, fmt.Errorf("environment %q: deploy: %w", envID, err))
-			continue
+	for i := range proxy.Endpoints {
+		endpoint := &proxy.Endpoints[i]
+		for j := range endpoint.Environments {
+			ee := &endpoint.Environments[j]
+			envID := ee.EnvironmentUUID.String()
+			if ee.ArtifactUUID == uuid.Nil {
+				errs = append(errs, fmt.Errorf("endpoint %q environment %q: missing artifact id", endpoint.Handle, envID))
+				continue
+			}
+			gateway, err := s.resolveGatewayForEnvironment(ctx, ee.EnvironmentUUID, ouID)
+			if errors.Is(err, errNoActiveGatewayForEnvironment) {
+				s.logger.Info("Skipping MCP proxy endpoint deploy; no active gateway",
+					"proxyUUID", proxy.UUID, "endpoint", endpoint.Handle, "environment", envID)
+				continue
+			}
+			if err != nil {
+				errs = append(errs, fmt.Errorf("endpoint %q environment %q: resolve gateway: %w", endpoint.Handle, envID, err))
+				continue
+			}
+			deployProxy := buildMCPProxyEnvArtifact(proxy, endpoint, ee)
+			if err := s.ensureMCPProxyEnvArtifactRow(deployProxy, ouID); err != nil {
+				errs = append(errs, fmt.Errorf("endpoint %q environment %q: %w", endpoint.Handle, envID, err))
+				continue
+			}
+			if err := s.deployMCPProxyToGateway(ctx, deployProxy, ouID, gateway); err != nil {
+				errs = append(errs, fmt.Errorf("endpoint %q environment %q: deploy: %w", endpoint.Handle, envID, err))
+				continue
+			}
 		}
 	}
 	return errors.Join(errs...)

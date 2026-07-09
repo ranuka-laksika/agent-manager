@@ -197,13 +197,18 @@ export const ViewMCPServerComponent = () => {
     orgName: orgId,
     proxyId: configProxyName ?? "",
   });
-  // Security lives per-environment on the source proxy blueprint. Resolve the block
-  // for the selected environment (matched by UUID) to derive the header name.
+  // Security lives on the source proxy's endpoint. Resolve the endpoint bound to the
+  // selected environment (matched by UUID; at most one per environment) to derive the
+  // header name.
   const selectedEnvUuid = environments.find(
     (env) => env.name === selectedEnvName,
   )?.id;
   const sourceProxySecurity = selectedEnvUuid
-    ? sourceProxyDetails?.environments?.[selectedEnvUuid]?.security
+    ? sourceProxyDetails?.endpoints?.find((endpoint) =>
+        endpoint.environments?.some(
+          (binding) => binding.environmentUuid === selectedEnvUuid,
+        ),
+      )?.security
     : undefined;
   const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
 

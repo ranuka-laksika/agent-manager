@@ -21,7 +21,10 @@ import {
   useListEnvironments,
   useUpdateMCPProxy,
 } from "@agent-management-platform/api-client";
-import type { MCPEnvironmentConfig } from "@agent-management-platform/types";
+import type {
+  MCPEndpointConfig,
+  MCPProxyEndpoint,
+} from "@agent-management-platform/types";
 import {
   Alert,
   Avatar,
@@ -77,7 +80,7 @@ export function ViewMCPProxy() {
   const { orgId, proxyId } = useParams<{ orgId: string; proxyId: string }>();
   const routeProxyId = proxyId ?? "";
   const [tabIndex, setTabIndex] = useState(0);
-  const [selectedEnvId, setSelectedEnvId] = useState("");
+  const [selectedEndpointId, setSelectedEndpointId] = useState("");
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [manageEndpointsOpen, setManageEndpointsOpen] = useState(false);
   const [name, setName] = useState("");
@@ -104,62 +107,77 @@ export function ViewMCPProxy() {
   });
   const updateMCPProxy = useUpdateMCPProxy();
 
-  const configuredEnvIds = useMemo<string[]>(
-    () => Object.keys(proxy?.environments ?? {}),
-    [proxy?.environments],
+  const endpoints = useMemo<MCPProxyEndpoint[]>(
+    () => proxy?.endpoints ?? [],
+    [proxy?.endpoints],
   );
 
-  // Options for the environment dropdown, labelled with the human-friendly display
-  // name (falling back to the raw name, then the UUID) resolved from the org's
-  // environment list.
-  const environmentOptions = useMemo(() => {
-    return configuredEnvIds.map((envId) => {
-      const env = environments.find((item) => item.id === envId);
-      return {
-        id: envId,
-        label: env?.displayName ?? env?.name ?? envId,
-      };
-    });
-  }, [configuredEnvIds, environments]);
+  // Options for the endpoint dropdown, labelled with the endpoint name (falling back to
+  // its handle).
+  const endpointOptions = useMemo(() => {
+    return endpoints.map((endpoint) => ({
+      id: endpoint.id,
+      label: endpoint.name || endpoint.id,
+    }));
+  }, [endpoints]);
 
-  // Keep the selected environment valid: default to the first configured block and
-  // reset when the current selection is no longer present.
+  // Keep the selected endpoint valid: default to the first endpoint and reset when the
+  // current selection is no longer present.
   useEffect(() => {
-    if (configuredEnvIds.length === 0) {
+    if (endpoints.length === 0) {
       return;
     }
-    if (!configuredEnvIds.includes(selectedEnvId)) {
-      setSelectedEnvId(configuredEnvIds[0]);
+    if (!endpoints.some((endpoint) => endpoint.id === selectedEndpointId)) {
+      setSelectedEndpointId(endpoints[0].id);
     }
-  }, [configuredEnvIds, selectedEnvId]);
+  }, [endpoints, selectedEndpointId]);
 
-  const selectedConfig = useMemo<MCPEnvironmentConfig | undefined>(
-    () => proxy?.environments?.[selectedEnvId],
-    [proxy?.environments, selectedEnvId],
+  const selectedEndpoint = useMemo<MCPProxyEndpoint | undefined>(
+    () => endpoints.find((endpoint) => endpoint.id === selectedEndpointId),
+    [endpoints, selectedEndpointId],
   );
 
-  // Merge-and-save callback used by every config tab. It merges a partial into the
-  // selected environment's blueprint block, keyed by environment UUID, and PUTs the
-  // whole proxy — the per-environment equivalent of the old whole-proxy merge.
-  const updateSelectedEnvConfig = useCallback(
-    async (fields: Partial<MCPEnvironmentConfig>) => {
-      if (!orgId || !proxy?.id || !selectedEnvId) {
-        throw new Error("MCP proxy or environment is not loaded.");
-      }
-      const existing = proxy.environments ?? {};
-      const mergedBlock: MCPEnvironmentConfig = {
-        ...existing[selectedEnvId],
-        ...fields,
+  // The selected endpoint's flat config, consumed by every config tab. Environment
+  // bindings and per-env deployment status are surfaced separately as chips.
+  const selectedConfig = useMemo<MCPEndpointConfig | undefined>(
+    () => selectedEndpoint,
+    [selectedEndpoint],
+  );
+
+  // Chips describing each environment the selected endpoint is bound to, with its
+  // per-environment deployment status.
+  const selectedEnvChips = useMemo(() => {
+    return (selectedEndpoint?.environments ?? []).map((binding) => {
+      const env = environments.find(
+        (item) => item.id === binding.environmentUuid,
+      );
+      return {
+        id: binding.environmentUuid,
+        label: env?.displayName ?? env?.name ?? binding.environmentUuid,
+        status: binding.deploymentStatus,
       };
+    });
+  }, [selectedEndpoint, environments]);
+
+  // Merge-and-save callback used by every config tab. It merges a partial into the
+  // selected endpoint's flat config and PUTs the whole proxy with that one endpoint
+  // replaced.
+  const updateSelectedEndpointConfig = useCallback(
+    async (fields: Partial<MCPEndpointConfig>) => {
+      if (!orgId || !proxy?.id || !selectedEndpointId) {
+        throw new Error("MCP proxy or endpoint is not loaded.");
+      }
+      const nextEndpoints = (proxy.endpoints ?? []).map((endpoint) =>
+        endpoint.id === selectedEndpointId
+          ? { ...endpoint, ...fields }
+          : endpoint,
+      );
       return updateMCPProxy.mutateAsync({
         params: { orgName: orgId, proxyId: proxy.id },
-        body: {
-          ...proxy,
-          environments: { ...existing, [selectedEnvId]: mergedBlock },
-        },
+        body: { ...proxy, endpoints: nextEndpoints },
       });
     },
-    [orgId, proxy, selectedEnvId, updateMCPProxy],
+    [orgId, proxy, selectedEndpointId, updateMCPProxy],
   );
 
   const displayName = proxy?.name ?? proxy?.id ?? proxyId ?? "MCP Proxy";
@@ -261,7 +279,7 @@ export function ViewMCPProxy() {
     );
   }
 
-  const hasEnvironments = configuredEnvIds.length > 0;
+  const hasEndpoints = endpoints.length > 0;
 
   return (
     <PageContent fullWidth>
@@ -389,25 +407,52 @@ export function ViewMCPProxy() {
           alignItems="center"
           justifyContent="space-between"
         >
-          {hasEnvironments ? (
-            <Stack direction="row" spacing={2} alignItems="center">
+          {hasEndpoints ? (
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              flexWrap="wrap"
+              useFlexGap
+            >
               <Typography variant="body2" color="text.secondary">
-                Environment
+                Endpoint
               </Typography>
               <FormControl size="small" sx={{ minWidth: 260 }}>
                 <Select
-                  value={selectedEnvId}
+                  value={selectedEndpointId}
                   onChange={(event) =>
-                    setSelectedEnvId(event.target.value as string)
+                    setSelectedEndpointId(event.target.value as string)
                   }
                 >
-                  {environmentOptions.map((option) => (
+                  {endpointOptions.map((option) => (
                     <MenuItem key={option.id} value={option.id}>
                       {option.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
+              {selectedEnvChips.length > 0 ? (
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                >
+                  {selectedEnvChips.map((chip) => (
+                    <Chip
+                      key={chip.id}
+                      label={
+                        chip.status ? `${chip.label} · ${chip.status}` : chip.label
+                      }
+                      size="small"
+                      variant="outlined"
+                      color={chip.status === "Deployed" ? "success" : "default"}
+                    />
+                  ))}
+                </Stack>
+              ) : null}
             </Stack>
           ) : (
             <span />
@@ -421,7 +466,7 @@ export function ViewMCPProxy() {
           </Button>
         </Stack>
 
-        {hasEnvironments ? (
+        {hasEndpoints ? (
           <Card variant="outlined">
             <Tabs
               value={tabIndex}
@@ -437,6 +482,7 @@ export function ViewMCPProxy() {
                 <MCPProxyOverviewTab
                   proxy={proxy}
                   config={selectedConfig}
+                  environments={selectedEndpoint?.environments}
                   isLoading={isLoading}
                 />
               )}
@@ -451,47 +497,47 @@ export function ViewMCPProxy() {
               {tabIndex === 2 && (
                 <MCPProxyConnectionTab
                   config={selectedConfig}
-                  selectedEnvironmentId={selectedEnvId}
+                  selectedEndpointId={selectedEndpointId}
                   isLoading={isLoading}
-                  onUpdate={updateSelectedEnvConfig}
+                  onUpdate={updateSelectedEndpointConfig}
                   isUpdating={updateMCPProxy.isPending}
                 />
               )}
               {tabIndex === 3 && (
                 <MCPProxyAccessControlTab
                   config={selectedConfig}
-                  selectedEnvironmentId={selectedEnvId}
+                  selectedEndpointId={selectedEndpointId}
                   orgName={orgId}
                   isLoading={isLoading}
-                  onUpdate={updateSelectedEnvConfig}
+                  onUpdate={updateSelectedEndpointConfig}
                   isUpdating={updateMCPProxy.isPending}
                 />
               )}
               {tabIndex === 4 && (
                 <MCPProxySecurityTab
                   config={selectedConfig}
-                  selectedEnvironmentId={selectedEnvId}
+                  selectedEndpointId={selectedEndpointId}
                   isLoading={isLoading}
-                  onUpdate={updateSelectedEnvConfig}
+                  onUpdate={updateSelectedEndpointConfig}
                   isUpdating={updateMCPProxy.isPending}
                 />
               )}
               {tabIndex === 5 && (
                 <MCPProxyRewriteTab
                   config={selectedConfig}
-                  selectedEnvironmentId={selectedEnvId}
+                  selectedEndpointId={selectedEndpointId}
                   orgName={orgId}
                   isLoading={isLoading}
-                  onUpdate={updateSelectedEnvConfig}
+                  onUpdate={updateSelectedEndpointConfig}
                   isUpdating={updateMCPProxy.isPending}
                 />
               )}
               {tabIndex === 6 && (
                 <MCPProxyPoliciesTab
                   config={selectedConfig}
-                  selectedEnvironmentId={selectedEnvId}
+                  selectedEndpointId={selectedEndpointId}
                   orgName={orgId}
-                  onUpdate={updateSelectedEnvConfig}
+                  onUpdate={updateSelectedEndpointConfig}
                   isUpdating={updateMCPProxy.isPending}
                 />
               )}

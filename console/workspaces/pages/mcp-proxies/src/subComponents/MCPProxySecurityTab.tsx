@@ -18,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   APIKeyLocation,
-  MCPEnvironmentConfig,
+  MCPEndpointConfig,
   MCPProxy,
 } from "@agent-management-platform/types";
 import {
@@ -41,7 +41,7 @@ const KEY_LOCATION_OPTIONS: { value: APIKeyLocation; label: string }[] = [
   { value: "query", label: "query" },
 ];
 
-function isAPIKeySecurityEnabled(config: MCPEnvironmentConfig): boolean {
+function isAPIKeySecurityEnabled(config: MCPEndpointConfig): boolean {
   const apiKeyConfig = config.security?.apiKey;
   return (
     config.security?.enabled !== false &&
@@ -51,16 +51,16 @@ function isAPIKeySecurityEnabled(config: MCPEnvironmentConfig): boolean {
 }
 
 export type MCPProxySecurityTabProps = {
-  config: MCPEnvironmentConfig | undefined;
-  selectedEnvironmentId: string;
+  config: MCPEndpointConfig | undefined;
+  selectedEndpointId: string;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxySecurityTab({
   config,
-  selectedEnvironmentId,
+  selectedEndpointId,
   isLoading = false,
   onUpdate,
   isUpdating,
@@ -89,13 +89,13 @@ export function MCPProxySecurityTab({
   }, [config, authenticationType, keyValue, keyIn]);
 
   useEffect(() => {
-    if (!config || !selectedEnvironmentId) return;
+    if (!config || !selectedEndpointId) return;
     const hasApiKey = isAPIKeySecurityEnabled(config);
     setAuthenticationType(hasApiKey ? "apiKey" : "");
     setKeyValue(config.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
-  }, [config, selectedEnvironmentId]);
+  }, [config, selectedEndpointId]);
 
   const handleDiscard = useCallback(() => {
     if (!config) return;
