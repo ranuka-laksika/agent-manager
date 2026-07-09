@@ -33,7 +33,7 @@ set -euo pipefail
 #     When set, CHART_VERSION is ignored and the local chart is used directly.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - ENV_INGRESS_HOST (default: am-gateway.localhost): agent-facing gateway host.
 #   - ENV_INGRESS_HTTPS_HOST (default: unset): on TLS deployments, advertises an
 #     https listener variant. Set ENV_INGRESS_HTTPS_HOST=$ENV_INGRESS_HOST for

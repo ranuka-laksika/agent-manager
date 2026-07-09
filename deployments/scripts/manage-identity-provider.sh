@@ -38,7 +38,7 @@ set -euo pipefail
 #   - ACTION (upsert|delete, default: upsert)
 #   - IDP_SKIP_TLS_VERIFY (default: false)
 #   - ORG_NAME (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
 
 # --- Required inputs ---

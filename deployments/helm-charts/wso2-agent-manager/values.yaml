@@ -49,14 +49,19 @@ agentManagerService:
     tag: "0.0.0-dev"
     pullPolicy: IfNotPresent
 
+  # Reachable externally via the control-plane gateway (see ocIngress);
+  # set type to LoadBalancer to restore a dedicated external endpoint.
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 9000
     targetPort: 8080
     annotations: {}
 
+  # Internal gateway-management (xDS) endpoint. In-cluster AI gateways reach
+  # it via cluster DNS; set type to LoadBalancer only when external gateways
+  # must connect from outside the cluster.
   gatewayMgtService:
-    type: LoadBalancer
+    type: ClusterIP
     port: 9243
     targetPort: 9243
 
@@ -302,8 +307,10 @@ console:
     tag: "0.0.0-dev"
     pullPolicy: Always
 
+  # Reachable externally via the control-plane gateway (see ocIngress);
+  # set type to LoadBalancer to restore a dedicated external endpoint.
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 3000
     targetPort: 3000
 
@@ -495,52 +502,6 @@ jwtSigning:
   existingSecret: ""
 
 # Ingress Configuration
-ingress:
-  enabled: false
-  className: "nginx"
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-  hosts:
-  - host: amp.local
-    http:
-      paths:
-      - path: /v1/traces
-        pathType: Prefix
-        backend:
-          service:
-            name: data-prepper-external
-            port:
-              number: 21893
-
-      - path: /api/trace
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-traces-observer-external
-            port:
-              number: 9098
-
-      - path: /api/v1
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-api
-            port:
-              number: 8080
-
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-console
-            port:
-              number: 3000
-  tls: []
-
 # ServiceAccount Configuration
 serviceAccount:
   create: true

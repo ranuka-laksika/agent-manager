@@ -20,7 +20,7 @@ set -euo pipefail
 #   - AGENT_MANAGER_TOKEN: bearer token authorized to delete environments
 # Optional:
 #   - ORG_NAME (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
 #   - DEPROVISION_THUNDER (default: true) — set to false to skip Thunder removal
 #   - THUNDER_SCRIPT_URL — override the URL of remove-environment-thunder.sh

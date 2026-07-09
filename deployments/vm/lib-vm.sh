@@ -48,9 +48,20 @@ amp_helm_args() {
     "--set" "console.config.obsApiBaseUrl=https://${AMP_HOST_OBSERVER}" \
     "--set" "console.config.instrumentationUrl=https://${AMP_HOST_GATEWAY}/otel"
 
+  # Console and API are ClusterIP behind the OC control-plane kgateway; their
+  # HTTPRoutes must match the public hosts Caddy forwards (Host is preserved).
+  # Older charts (agentManager key era) predate ocIngress and ignore these.
+  printf '%s\n' \
+    "--set" "console.ocIngress.hostname=${AMP_HOST_CONSOLE}" \
+    "--set" "agentManagerService.ocIngress.hostname=${AMP_HOST_API}"
+
   if [[ -n "$AMP_HOST_CP" ]]; then
     # Full URL: the console parses it with new URL() to build gateway setup commands.
     printf '%s\n' "--set" "console.config.gatewayControlPlaneUrl=https://${AMP_HOST_CP}"
+    # External gateways dial the xDS/WS endpoint from outside the cluster; the
+    # chart default is ClusterIP, so restore the LoadBalancer that klipper
+    # publishes on the node (Caddy proxies the cp host to loopback 9243).
+    printf '%s\n' "--set" "agentManagerService.gatewayMgtService.type=LoadBalancer"
   fi
 }
 
@@ -112,18 +123,21 @@ build_gateway_helm_args() {
 # Prints OBSERVABILITY_HELM_ARGS tokens. The traces observer validates the same
 # user token (its `iss` must match), so the console's traces page 401s until its
 # issuer is the public Thunder URL too. jwksUrl stays on the in-cluster service.
-# observability_helm_args — hostname-driven core. Reads AMP_HOST_THUNDER.
-# shellcheck disable=SC2154  # AMP_HOST_THUNDER comes from the caller's scope by design.
+# observability_helm_args — hostname-driven core. Reads AMP_HOST_THUNDER and
+# AMP_HOST_OBSERVER.
+# shellcheck disable=SC2154  # AMP_HOST_* come from the caller's scope by design.
 observability_helm_args() {
   printf '%s\n' \
-    "--set" "tracesObserver.auth.issuer=https://${AMP_HOST_THUNDER}"
+    "--set" "tracesObserver.auth.issuer=https://${AMP_HOST_THUNDER}" \
+    "--set" "tracesObserver.ocIngress.hostname=${AMP_HOST_OBSERVER}"
 }
 
 # build_observability_helm_args <ip> — sslip.io-from-IP wrapper.
 build_observability_helm_args() {
   local ip="$1"
-  local AMP_HOST_THUNDER
+  local AMP_HOST_THUNDER AMP_HOST_OBSERVER
   AMP_HOST_THUNDER="$(vm_host thunder "$ip")"
+  AMP_HOST_OBSERVER="$(vm_host observer "$ip")"
   observability_helm_args
 }
 
@@ -236,9 +250,22 @@ build_thunder_helm_args() {
 #     separately by render_coredns_vm_config; this covers the node containerd path.
 render_k3d_vm_config() {
   local node_host="${1:-k3d-amp-local-server-0}"
+  # The awk stage re-adds the 9243 gateway-control port the base config no
+  # longer carries (external AI gateways dial it through Caddy's cp site; the
+  # mapping is a harmless dead-end when gatewayMgtService stays ClusterIP).
+  # Already loopback-bound, so it is emitted after the sed loopback rewrite.
   sed -E \
     -e 's/^([[:space:]]*- port: )([0-9]+:[0-9]+)/\1127.0.0.1:\2/' \
-    -e "s#^([[:space:]]*- )http://host\\.k3d\\.internal:10082#\\1http://${node_host}:10082#"
+    -e "s#^([[:space:]]*- )http://host\\.k3d\\.internal:10082#\\1http://${node_host}:10082#" \
+  | awk '
+      { print }
+      /^ports:/ && !done {
+        print "  # Gateway control plane (xDS/WS) for external AI gateways"
+        print "  - port: 127.0.0.1:9243:9243"
+        print "    nodeFilters:"
+        print "      - loadbalancer"
+        done=1
+      }'
 }
 
 # render_coredns_vm_config <node_host>
@@ -362,8 +389,11 @@ caddyfile() {
       "$([[ "$scheme" == http ]] && printf 'http://')" "$1$addr_suffix" "$tls_block" "$2"
   }
 
-  _site "$AMP_HOST_CONSOLE"  3000   # console UI
-  _site "$AMP_HOST_API"      9000   # agent-manager REST API
+  # Console and API are ClusterIP behind the OC control-plane kgateway (8080),
+  # which discriminates by Host header via their HTTPRoutes (amp_helm_args sets
+  # the route hostnames to these public hosts; Caddy preserves Host).
+  _site "$AMP_HOST_CONSOLE"  8080   # console UI (OC kgateway, host-routed)
+  _site "$AMP_HOST_API"      8080   # agent-manager REST API (OC kgateway, host-routed)
   _site "$AMP_HOST_THUNDER"  8080   # Thunder OAuth (OC kgateway, host-routed)
 
   # Env-Thunder instances: one per org/environment, created dynamically after
@@ -377,7 +407,10 @@ caddyfile() {
   printf '%s*.%s%s {\n%s\treverse_proxy 127.0.0.1:8080\n}\n\n' \
     "$([[ "$scheme" == http ]] && printf 'http://')" "$AMP_HOST_THUNDER" "$addr_suffix" "$agent_tls"
 
-  _site "$AMP_HOST_OBSERVER" 9098   # traces observer
+  # Traces observer is ClusterIP behind the OC observability-plane kgateway
+  # (11080), host-routed the same way (observability_helm_args sets the route
+  # hostname).
+  _site "$AMP_HOST_OBSERVER" 11080  # traces observer (OC kgateway, host-routed)
   # The api-platform gateway runtime is a ClusterIP service (ports 22893/22894 are
   # not node-published), so it is reached through the kgateway data plane on 19080 —
   # which has a catch-all HTTPRoute for AMP_HOST_GATEWAY that forwards to the runtime

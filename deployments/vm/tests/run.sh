@@ -75,14 +75,26 @@ assert_eq "amp console instrumentationUrl" \
 assert_eq "amp console signInRedirectURL" \
   "console.config.auth.signInRedirectURL=https://console.amp.203.0.113.10.sslip.io/login" \
   "$(grep -F 'signInRedirectURL' <<<"$amp")"
-# external gateways on by default => full-URL gatewayControlPlaneUrl
+# Console/API HTTPRoute hostnames must match the public hosts Caddy forwards.
+assert_eq "amp console ocIngress hostname" \
+  "console.ocIngress.hostname=console.amp.203.0.113.10.sslip.io" \
+  "$(grep -F 'console.ocIngress.hostname' <<<"$amp")"
+assert_eq "amp api ocIngress hostname" \
+  "agentManagerService.ocIngress.hostname=api.amp.203.0.113.10.sslip.io" \
+  "$(grep -F 'agentManagerService.ocIngress.hostname' <<<"$amp")"
+# external gateways on by default => full-URL gatewayControlPlaneUrl + the
+# gateway-management service restored to LoadBalancer (chart default ClusterIP)
 assert_eq "amp cp url by default" \
   "console.config.gatewayControlPlaneUrl=https://cp.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'gatewayControlPlaneUrl' <<<"$amp")"
+assert_eq "amp gatewayMgtService LB when cp on" \
+  "agentManagerService.gatewayMgtService.type=LoadBalancer" \
+  "$(grep -F 'gatewayMgtService.type' <<<"$amp")"
 
 # --- build_amp_helm_args (external gateways disabled) ---
 amp_nocp="$(build_amp_helm_args 203.0.113.10 false)"
 assert_eq "amp no cp when disabled" "" "$(grep -F 'gatewayControlPlaneUrl' <<<"$amp_nocp")"
+assert_eq "amp no gatewayMgtService LB when cp off" "" "$(grep -F 'gatewayMgtService.type' <<<"$amp_nocp")"
 
 # --- build_gateway_helm_args sets the published vhost + user-token keymanager issuer ---
 gw="$(build_gateway_helm_args 203.0.113.10)"
@@ -107,6 +119,9 @@ obs="$(build_observability_helm_args 203.0.113.10)"
 assert_eq "observability traces issuer -> public thunder" \
   "tracesObserver.auth.issuer=https://thunder.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'tracesObserver.auth.issuer' <<<"$obs")"
+assert_eq "observability traces ocIngress hostname" \
+  "tracesObserver.ocIngress.hostname=observer.amp.203.0.113.10.sslip.io" \
+  "$(grep -F 'tracesObserver.ocIngress.hostname' <<<"$obs")"
 
 # --- render_dataplane_external_ingress: public host on :443, both http+https entries
 #     bound to the internal http listener (amp-api advertises the https variant) ---
@@ -171,6 +186,11 @@ assert_eq "k3d rebinds 3000" \
 assert_eq "k3d rebinds mismatched ports" \
   "  - port: 127.0.0.1:11082:9200" \
   "$(grep -F '11082' <<<"$k3d_out")"
+# The base config no longer carries 9243; the renderer re-adds it (loopback)
+# for the external-gateway cp path.
+assert_eq "k3d appends 9243 gateway-control port" \
+  "  - port: 127.0.0.1:9243:9243" \
+  "$(grep -F '9243' <<<"$k3d_out")"
 assert_eq "k3d leaves nodeFilters intact" \
   "    nodeFilters:" \
   "$(grep -F 'nodeFilters' <<<"$k3d_out" | head -1)"
@@ -195,11 +215,12 @@ assert_eq "k3d registry mirror key untouched" \
 cf="$(render_caddyfile 203.0.113.10 "ops@example.com" false)"
 assert_eq "caddy email block" "	email ops@example.com" "$(grep -F 'email ops@example.com' <<<"$cf")"
 assert_eq "caddy console site" "console.amp.203.0.113.10.sslip.io {" "$(grep -F 'console.amp' <<<"$cf" | head -1)"
-assert_eq "caddy console upstream" "	reverse_proxy 127.0.0.1:3000" "$(grep -F '127.0.0.1:3000' <<<"$cf")"
-# Two sites proxy to 8080: the fixed platform-Thunder host, and the env-Thunder
-# wildcard (*.thunder.<domain>) added right after it — kgateway itself
-# discriminates by Host header from there (see add-environment-thunder.sh).
-assert_eq "caddy thunder upstream" "2" "$(grep -cF '127.0.0.1:8080' <<<"$cf")"
+assert_eq "caddy console upstream (via kgateway)" "	reverse_proxy 127.0.0.1:8080" \
+  "$(grep -F -A8 'console.amp.203.0.113.10.sslip.io {' <<<"$cf" | grep -F 'reverse_proxy' | head -1)"
+# Four sites proxy to the CP kgateway (8080): console, api, the fixed
+# platform-Thunder host, and the env-Thunder wildcard (*.thunder.<domain>) —
+# kgateway itself discriminates by Host header via each backend's HTTPRoute.
+assert_eq "caddy cp-kgateway upstream count" "4" "$(grep -cF '127.0.0.1:8080' <<<"$cf")"
 assert_eq "caddy env-thunder wildcard site" "*.thunder.amp.203.0.113.10.sslip.io {" \
   "$(grep -F '*.thunder.amp' <<<"$cf" | head -1)"
 # gateway host routes through the kgateway data plane (19080), not the ClusterIP
@@ -209,8 +230,11 @@ assert_eq "caddy gateway upstream (via kgateway)" "	reverse_proxy 127.0.0.1:1908
   "$(grep -F -A8 'gateway.amp.203.0.113.10.sslip.io {' <<<"$cf" | grep -F 'reverse_proxy' | head -1)"
 assert_eq "caddy no 22893 dead-end" "" "$(grep -F '127.0.0.1:22893' <<<"$cf")"
 assert_eq "caddy no cp when disabled" "" "$(grep -F 'cp.amp' <<<"$cf")"
-assert_eq "caddy api upstream" "	reverse_proxy 127.0.0.1:9000" "$(grep -F '127.0.0.1:9000' <<<"$cf")"
-assert_eq "caddy observer upstream" "	reverse_proxy 127.0.0.1:9098" "$(grep -F '127.0.0.1:9098' <<<"$cf")"
+assert_eq "caddy api upstream (via kgateway)" "	reverse_proxy 127.0.0.1:8080" \
+  "$(grep -F -A8 'api.amp.203.0.113.10.sslip.io {' <<<"$cf" | grep -F 'reverse_proxy' | head -1)"
+assert_eq "caddy observer upstream (via kgateway)" "	reverse_proxy 127.0.0.1:11080" "$(grep -F '127.0.0.1:11080' <<<"$cf")"
+# The old dedicated-service upstreams must be gone (ClusterIP, not node-published).
+assert_eq "caddy no 3000/9000/9098 dead-ends" "" "$(grep -E '127\.0\.0\.1:(3000|9000|9098)' <<<"$cf")"
 
 # --- render_caddyfile: always 443-only TLS-ALPN-01 (disable_redirects + per-site
 #     issuer acme/disable_http_challenge); no http mode, no port-80 redirect ---
@@ -364,7 +388,7 @@ assert_eq "agent site on_demand + disable_http_challenge" "yes" \
   AMP_AGENTS_BASE=agents.amp.example.com
   cf_le="$(caddyfile letsencrypt "ops@example.com" "" "" "")"
   assert_eq "core caddy LE console site" "yes" "$(has "$cf_le" 'console.amp.example.com {')"
-  assert_eq "core caddy LE console upstream" "yes" "$(has "$cf_le" 'reverse_proxy 127.0.0.1:3000')"
+  assert_eq "core caddy LE console upstream" "yes" "$(has "$cf_le" 'reverse_proxy 127.0.0.1:8080')"
   assert_eq "core caddy LE issuer acme" "yes" "$(has "$cf_le" 'issuer acme')"
   assert_eq "core caddy LE disable_http_challenge" "yes" "$(has "$cf_le" 'disable_http_challenge')"
   assert_eq "core caddy LE email" "yes" "$(has "$cf_le" 'email ops@example.com')"
@@ -406,7 +430,7 @@ assert_eq "agent site on_demand + disable_http_challenge" "yes" \
   assert_eq "upstream sets http_port" "yes" "$(has "$cf_up" 'http_port 8080')"
   assert_eq "upstream trusts proxy headers" "yes" "$(has "$cf_up" 'trusted_proxies static 0.0.0.0/0')"
   assert_eq "upstream console site is plain http" "yes" "$(has "$cf_up" 'http://console.amp.example.com:8080 {')"
-  assert_eq "upstream console upstream port" "yes" "$(has "$cf_up" 'reverse_proxy 127.0.0.1:3000')"
+  assert_eq "upstream console upstream port" "yes" "$(has "$cf_up" 'reverse_proxy 127.0.0.1:8080')"
   assert_eq "upstream no acme" "no" "$(has "$cf_up" 'issuer acme')"
   assert_eq "upstream no tls cert directive" "no" "$(has "$cf_up" 'tls /')"
   assert_eq "upstream agent wildcard plain http" "yes" "$(has "$cf_up" 'http://*.agents.amp.example.com:8080 {')"
