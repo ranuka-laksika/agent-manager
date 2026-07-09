@@ -133,7 +133,9 @@ agentManagerService:
     # OpenTelemetry configuration
     otel:
       traceContent: "true"
-      exporterEndpoint: "http://api-platform-default-default-gateway-gateway-runtime.openchoreo-data-plane.svc.cluster.local:22893/otel"
+      # kgateway-routed vhost ("<env>-<org>.gateway.localhost") — independent of
+      # the namespace the api-platform gateway runtime is deployed in.
+      exporterEndpoint: "http://default-default.gateway.localhost:19080/otel"
       # Platform default AMP instrumentation version. Must exist in the
       # effective catalog (embedded baseline ∪ additionalInstrumentationVersions);
       # otherwise the server fails to start.
@@ -339,7 +341,9 @@ console:
     # Placeholder is substituted with the real release version by the release
     # pipeline (.github/scripts/update-helm-charts.sh); dev builds fall back to main.
     ampVersion: "0.0.0-dev"
-    instrumentationUrl: "https://localhost:22894/otel"
+    # Trace-export URL shown to external agent developers. kgateway-routed
+    # vhost — independent of the gateway runtime's namespace; no port-forward.
+    instrumentationUrl: "http://default-default.gateway.localhost:19080/otel"
     # Cluster-internal URLs the API Platform Gateway uses to reach Agent
     # Manager when add-environment.sh installs a new gateway. The Create
     # Environment drawer pipes these into the rendered curl|bash command so

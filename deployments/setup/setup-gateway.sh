@@ -48,13 +48,21 @@ until curl -sf "$AGENT_MANAGER_HEALTH_URL" > /dev/null 2>&1; do
 done
 echo "✅ Agent Manager is healthy"
 
+# Per-org-env namespace isolation: the gateway stack lives in its own
+# "<org>-<env>" namespace (see add-environment.sh). apiGateway.namespace must
+# match --namespace — it drives where the chart renders the APIGateway CR,
+# config, RestApis, kgateway backendRef and token secret.
+GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"
+
 # Wire the gateway's ThunderKeyManager to this environment's own Thunder instance
 # when it exists, mirroring the THUNDER_PROVISIONED logic in add-environment.sh.
 THUNDER_RELEASE="$(thunder_release_name "${ORG_NAME}" "${ENV_NAME}")"
 HELM_ARGS=(
     upgrade --install "api-platform-${ORG_NAME}-${ENV_NAME}"
     "${SCRIPT_DIR}/../helm-charts/wso2-amp-api-platform-gateway-extension"
-    --namespace openchoreo-data-plane
+    --namespace "${GATEWAY_NAMESPACE}"
+    --create-namespace
+    --set apiGateway.namespace="${GATEWAY_NAMESPACE}"
     --set agentManager.orgName="${ORG_NAME}"
     --set gateway.environment="${ENV_NAME}"
     --set gateway.vhost="${GATEWAY_VHOST}"
@@ -86,7 +94,7 @@ echo "🌐 Installing gateway chart..."
 helm "${HELM_ARGS[@]}"
 
 echo "⏳ Waiting for Gateway to be ready..."
-if kubectl wait --for=condition=Programmed "apigateway/api-platform-${ORG_NAME}-${ENV_NAME}" -n openchoreo-data-plane --timeout=180s; then
+if kubectl wait --for=condition=Programmed "apigateway/api-platform-${ORG_NAME}-${ENV_NAME}" -n "${GATEWAY_NAMESPACE}" --timeout=180s; then
     echo "✅ Gateway is programmed"
 else
     echo "⚠️  Gateway did not become ready in time"
@@ -101,11 +109,11 @@ fi
 OTEL_RESTAPI="api-platform-${ORG_NAME}-${ENV_NAME}-otel-restapi"
 
 echo "⏳ Waiting for OTEL ingest RestApi to be programmed..."
-if kubectl wait --for=condition=Programmed "restapi/${OTEL_RESTAPI}" -n openchoreo-data-plane --timeout=300s; then
+if kubectl wait --for=condition=Programmed "restapi/${OTEL_RESTAPI}" -n "${GATEWAY_NAMESPACE}" --timeout=300s; then
     echo "✅ OTEL ingest RestApi is programmed"
 else
     echo "❌ RestApi ${OTEL_RESTAPI} did not become Programmed in time"
-    kubectl describe "restapi/${OTEL_RESTAPI}" -n openchoreo-data-plane || true
+    kubectl describe "restapi/${OTEL_RESTAPI}" -n "${GATEWAY_NAMESPACE}" || true
     exit 1
 fi
 

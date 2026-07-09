@@ -89,7 +89,8 @@ esac
 ORG_NAME="${ORG_NAME:-default}"
 AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+# Must match the per-org-env namespace add-environment.sh installs into.
+GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"
 
 # Release name must match the gateway runtime release (api-platform-<org>-<env>),
 # truncated to Helm's 53-char limit. DO NOT duplicate the org segment.
