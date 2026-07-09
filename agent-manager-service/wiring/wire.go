@@ -59,8 +59,10 @@ var clientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
-	// OpenBao-backed EnvThunderResolver/AgentSecretStore are not wired here;
-	// AgentID provisioning is injected via app.Options.AgentThunderProvisioning.
+	// EnvThunderResolver is wired for AgentIdentityController's passthrough
+	// endpoints. The OpenBao-backed AgentSecretStore is not wired here; AgentID
+	// provisioning is injected via app.Options.AgentThunderProvisioning.
+	ProvideEnvThunderResolver,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -97,6 +99,7 @@ var serviceProviderSet = wire.NewSet(
 	services.NewLLMTemplateStore,
 	services.NewGitSecretService,
 	services.NewAIApplicationService,
+	services.NewScopeService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -131,6 +134,8 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentConfigurationController,
 	controllers.NewGitSecretController,
 	controllers.NewIdentityController,
+	controllers.NewScopeController,
+	controllers.NewAgentIdentityController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -343,6 +348,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
+	repositories.NewScopeRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
