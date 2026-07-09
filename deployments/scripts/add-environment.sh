@@ -90,7 +90,7 @@ if [ "${#ENV_NAME}" -gt "$MAX_ENV_NAME_LEN" ]; then
     exit 1
 fi
 DATAPLANE_REF="${DATAPLANE_REF:-default}"
-AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
+AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://api.amp.localhost:8080}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
 # Per-org-env namespace isolation: each environment's gateway stack (APIGateway
 # CR, runtime, RestApis, token secret) lives in its own "<org>-<env>" namespace.

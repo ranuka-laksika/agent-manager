@@ -36,7 +36,7 @@ fi
 
 # --- Configuration ---
 ORG_NAME="${ORG_NAME:-default}"
-AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
+AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://api.amp.localhost:8080}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
 # Must match the per-org-env namespace add-environment.sh installs into.
 GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"

@@ -1641,7 +1641,7 @@ log_info "Cluster: ${CLUSTER_CONTEXT}"
 # with a reverse proxy (e.g. the VM installer) set SHOW_LOCALHOST_URLS=false and
 # print their own reachable URLs instead.
 if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
-  log_info "Agent Management Platform Console: http://localhost:3000"
+  log_info "Agent Management Platform Console: http://console.amp.localhost:8080"
   log_info "Observability Gateway (for traces): http://default-default.gateway.localhost:19080/otel"
 fi
 
