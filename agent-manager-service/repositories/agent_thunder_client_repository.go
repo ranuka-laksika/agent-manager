@@ -43,10 +43,14 @@ type AgentThunderClientRepository interface {
 	Upsert(ctx context.Context, client *models.AgentThunderClient) error
 
 	// FindByAgent returns every binding for the given agent, across all environments.
-	FindByAgent(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentThunderClient, error)
+	FindByAgent(ctx context.Context, ouID, projectName, agentName string) ([]models.AgentThunderClient, error)
+
+	// FindByOuAndEnvironment returns every binding row for the org (ou_id)+environment,
+	// the source for the agent-identity assignment picker (name, status, ThunderAgentID).
+	FindByOuAndEnvironment(ctx context.Context, ouID, environmentName string) ([]models.AgentThunderClient, error)
 
 	// Get returns the binding for a specific agent in a specific environment.
-	Get(ctx context.Context, orgName, projectName, agentName, environmentName string) (*models.AgentThunderClient, error)
+	Get(ctx context.Context, ouID, projectName, agentName, environmentName string) (*models.AgentThunderClient, error)
 
 	// FindDue returns up to limit bindings ready for an attempt: PENDING rows
 	// whose next retry time has arrived (or was never set — the write-ahead row
@@ -88,7 +92,7 @@ type AgentThunderClientRepository interface {
 	// DeleteByAgent removes every binding for the given agent. Test-cleanup use
 	// only — production deletion goes through DeleteByIDs so a concurrent
 	// recreate of the same agent name can't have its fresh rows swept up too.
-	DeleteByAgent(ctx context.Context, orgName, projectName, agentName string) error
+	DeleteByAgent(ctx context.Context, ouID, projectName, agentName string) error
 
 	// DeleteByIDs removes exactly the given binding rows. No-op if ids is empty.
 	DeleteByIDs(ctx context.Context, ids []uuid.UUID) error
@@ -135,7 +139,7 @@ func (r *AgentThunderClientRepo) Upsert(ctx context.Context, c *models.AgentThun
 	// this binding" rather than assume c now reflects a real row.
 	if err := r.db.WithContext(ctx).Select("*").Clauses(clause.OnConflict{
 		Columns: []clause.Column{
-			{Name: "org_name"}, {Name: "project_name"}, {Name: "agent_name"}, {Name: "environment_name"},
+			{Name: "ou_id"}, {Name: "project_name"}, {Name: "agent_name"}, {Name: "environment_name"},
 		},
 		DoNothing: true,
 	}).Create(c).Error; err != nil {
@@ -144,19 +148,30 @@ func (r *AgentThunderClientRepo) Upsert(ctx context.Context, c *models.AgentThun
 	return nil
 }
 
-func (r *AgentThunderClientRepo) FindByAgent(ctx context.Context, orgName, projectName, agentName string) ([]models.AgentThunderClient, error) {
+func (r *AgentThunderClientRepo) FindByAgent(ctx context.Context, ouID, projectName, agentName string) ([]models.AgentThunderClient, error) {
 	var rows []models.AgentThunderClient
-	if err := r.db.WithContext(ctx).Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+	if err := r.db.WithContext(ctx).Where("ou_id = ? AND project_name = ? AND agent_name = ?", ouID, projectName, agentName).
 		Order("environment_name").Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find agent thunder clients by agent: %w", err)
 	}
 	return rows, nil
 }
 
-func (r *AgentThunderClientRepo) Get(ctx context.Context, orgName, projectName, agentName, environmentName string) (*models.AgentThunderClient, error) {
+func (r *AgentThunderClientRepo) FindByOuAndEnvironment(ctx context.Context, ouID, environmentName string) ([]models.AgentThunderClient, error) {
+	var rows []models.AgentThunderClient
+	if err := r.db.WithContext(ctx).
+		Where("ou_id = ? AND environment_name = ?", ouID, environmentName).
+		Order("project_name asc, agent_name asc").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to list agent thunder bindings for %s/%s: %w", ouID, environmentName, err)
+	}
+	return rows, nil
+}
+
+func (r *AgentThunderClientRepo) Get(ctx context.Context, ouID, projectName, agentName, environmentName string) (*models.AgentThunderClient, error) {
 	var c models.AgentThunderClient
-	err := r.db.WithContext(ctx).Where("org_name = ? AND project_name = ? AND agent_name = ? AND environment_name = ?",
-		orgName, projectName, agentName, environmentName).First(&c).Error
+	err := r.db.WithContext(ctx).Where("ou_id = ? AND project_name = ? AND agent_name = ? AND environment_name = ?",
+		ouID, projectName, agentName, environmentName).First(&c).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrAgentThunderClientNotFound
@@ -251,8 +266,8 @@ func (r *AgentThunderClientRepo) ClearClaim(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
-func (r *AgentThunderClientRepo) DeleteByAgent(ctx context.Context, orgName, projectName, agentName string) error {
-	if err := r.db.WithContext(ctx).Where("org_name = ? AND project_name = ? AND agent_name = ?", orgName, projectName, agentName).
+func (r *AgentThunderClientRepo) DeleteByAgent(ctx context.Context, ouID, projectName, agentName string) error {
+	if err := r.db.WithContext(ctx).Where("ou_id = ? AND project_name = ? AND agent_name = ?", ouID, projectName, agentName).
 		Delete(&models.AgentThunderClient{}).Error; err != nil {
 		return fmt.Errorf("delete agent thunder clients by agent: %w", err)
 	}

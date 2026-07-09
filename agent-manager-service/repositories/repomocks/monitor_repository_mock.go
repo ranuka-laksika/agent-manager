@@ -31,7 +31,7 @@ import (
 //			DeleteMonitorFunc: func(monitor *models.Monitor) error {
 //				panic("mock out the DeleteMonitor method")
 //			},
-//			FindActiveMonitorsByEvaluatorIdentifierFunc: func(orgName string, identifier string) ([]models.Monitor, error) {
+//			FindActiveMonitorsByEvaluatorIdentifierFunc: func(ouID string, identifier string) ([]models.Monitor, error) {
 //				panic("mock out the FindActiveMonitorsByEvaluatorIdentifier method")
 //			},
 //			GetLatestMonitorRunFunc: func(monitorID uuid.UUID) (*models.MonitorRun, error) {
@@ -43,7 +43,7 @@ import (
 //			GetMonitorByIDFunc: func(monitorID uuid.UUID) (*models.Monitor, error) {
 //				panic("mock out the GetMonitorByID method")
 //			},
-//			GetMonitorByNameFunc: func(orgName string, projectName string, agentName string, monitorName string) (*models.Monitor, error) {
+//			GetMonitorByNameFunc: func(ouID string, projectName string, agentName string, monitorName string) (*models.Monitor, error) {
 //				panic("mock out the GetMonitorByName method")
 //			},
 //			GetMonitorRunByIDFunc: func(runID uuid.UUID, monitorID uuid.UUID) (*models.MonitorRun, error) {
@@ -58,10 +58,10 @@ import (
 //			ListMonitorRunsFunc: func(monitorID uuid.UUID, limit int, offset int) ([]models.MonitorRun, error) {
 //				panic("mock out the ListMonitorRuns method")
 //			},
-//			ListMonitorsByAgentFunc: func(orgName string, projectName string, agentName string) ([]models.Monitor, error) {
+//			ListMonitorsByAgentFunc: func(ouID string, projectName string, agentName string) ([]models.Monitor, error) {
 //				panic("mock out the ListMonitorsByAgent method")
 //			},
-//			ListMonitorsByAgentEnvironmentFunc: func(orgName string, projectName string, agentName string, environmentName string) ([]models.Monitor, error) {
+//			ListMonitorsByAgentEnvironmentFunc: func(ouID string, projectName string, agentName string, environmentName string) ([]models.Monitor, error) {
 //				panic("mock out the ListMonitorsByAgentEnvironment method")
 //			},
 //			ListPendingOrRunningRunsFunc: func(limit int) ([]models.MonitorRun, error) {
@@ -102,7 +102,7 @@ type MonitorRepositoryMock struct {
 	DeleteMonitorFunc func(monitor *models.Monitor) error
 
 	// FindActiveMonitorsByEvaluatorIdentifierFunc mocks the FindActiveMonitorsByEvaluatorIdentifier method.
-	FindActiveMonitorsByEvaluatorIdentifierFunc func(orgName string, identifier string) ([]models.Monitor, error)
+	FindActiveMonitorsByEvaluatorIdentifierFunc func(ouID string, identifier string) ([]models.Monitor, error)
 
 	// GetLatestMonitorRunFunc mocks the GetLatestMonitorRun method.
 	GetLatestMonitorRunFunc func(monitorID uuid.UUID) (*models.MonitorRun, error)
@@ -114,7 +114,7 @@ type MonitorRepositoryMock struct {
 	GetMonitorByIDFunc func(monitorID uuid.UUID) (*models.Monitor, error)
 
 	// GetMonitorByNameFunc mocks the GetMonitorByName method.
-	GetMonitorByNameFunc func(orgName string, projectName string, agentName string, monitorName string) (*models.Monitor, error)
+	GetMonitorByNameFunc func(ouID string, projectName string, agentName string, monitorName string) (*models.Monitor, error)
 
 	// GetMonitorRunByIDFunc mocks the GetMonitorRunByID method.
 	GetMonitorRunByIDFunc func(runID uuid.UUID, monitorID uuid.UUID) (*models.MonitorRun, error)
@@ -129,10 +129,10 @@ type MonitorRepositoryMock struct {
 	ListMonitorRunsFunc func(monitorID uuid.UUID, limit int, offset int) ([]models.MonitorRun, error)
 
 	// ListMonitorsByAgentFunc mocks the ListMonitorsByAgent method.
-	ListMonitorsByAgentFunc func(orgName string, projectName string, agentName string) ([]models.Monitor, error)
+	ListMonitorsByAgentFunc func(ouID string, projectName string, agentName string) ([]models.Monitor, error)
 
 	// ListMonitorsByAgentEnvironmentFunc mocks the ListMonitorsByAgentEnvironment method.
-	ListMonitorsByAgentEnvironmentFunc func(orgName string, projectName string, agentName string, environmentName string) ([]models.Monitor, error)
+	ListMonitorsByAgentEnvironmentFunc func(ouID string, projectName string, agentName string, environmentName string) ([]models.Monitor, error)
 
 	// ListPendingOrRunningRunsFunc mocks the ListPendingOrRunningRuns method.
 	ListPendingOrRunningRunsFunc func(limit int) ([]models.MonitorRun, error)
@@ -176,8 +176,8 @@ type MonitorRepositoryMock struct {
 		}
 		// FindActiveMonitorsByEvaluatorIdentifier holds details about calls to the FindActiveMonitorsByEvaluatorIdentifier method.
 		FindActiveMonitorsByEvaluatorIdentifier []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// Identifier is the identifier argument value.
 			Identifier string
 		}
@@ -198,8 +198,8 @@ type MonitorRepositoryMock struct {
 		}
 		// GetMonitorByName holds details about calls to the GetMonitorByName method.
 		GetMonitorByName []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -237,8 +237,8 @@ type MonitorRepositoryMock struct {
 		}
 		// ListMonitorsByAgent holds details about calls to the ListMonitorsByAgent method.
 		ListMonitorsByAgent []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -246,8 +246,8 @@ type MonitorRepositoryMock struct {
 		}
 		// ListMonitorsByAgentEnvironment holds details about calls to the ListMonitorsByAgentEnvironment method.
 		ListMonitorsByAgentEnvironment []struct {
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// ProjectName is the projectName argument value.
 			ProjectName string
 			// AgentName is the agentName argument value.
@@ -442,21 +442,21 @@ func (mock *MonitorRepositoryMock) DeleteMonitorCalls() []struct {
 }
 
 // FindActiveMonitorsByEvaluatorIdentifier calls FindActiveMonitorsByEvaluatorIdentifierFunc.
-func (mock *MonitorRepositoryMock) FindActiveMonitorsByEvaluatorIdentifier(orgName string, identifier string) ([]models.Monitor, error) {
+func (mock *MonitorRepositoryMock) FindActiveMonitorsByEvaluatorIdentifier(ouID string, identifier string) ([]models.Monitor, error) {
 	if mock.FindActiveMonitorsByEvaluatorIdentifierFunc == nil {
 		panic("MonitorRepositoryMock.FindActiveMonitorsByEvaluatorIdentifierFunc: method is nil but MonitorRepository.FindActiveMonitorsByEvaluatorIdentifier was just called")
 	}
 	callInfo := struct {
-		OrgName    string
+		OuID       string
 		Identifier string
 	}{
-		OrgName:    orgName,
+		OuID:       ouID,
 		Identifier: identifier,
 	}
 	mock.lockFindActiveMonitorsByEvaluatorIdentifier.Lock()
 	mock.calls.FindActiveMonitorsByEvaluatorIdentifier = append(mock.calls.FindActiveMonitorsByEvaluatorIdentifier, callInfo)
 	mock.lockFindActiveMonitorsByEvaluatorIdentifier.Unlock()
-	return mock.FindActiveMonitorsByEvaluatorIdentifierFunc(orgName, identifier)
+	return mock.FindActiveMonitorsByEvaluatorIdentifierFunc(ouID, identifier)
 }
 
 // FindActiveMonitorsByEvaluatorIdentifierCalls gets all the calls that were made to FindActiveMonitorsByEvaluatorIdentifier.
@@ -464,11 +464,11 @@ func (mock *MonitorRepositoryMock) FindActiveMonitorsByEvaluatorIdentifier(orgNa
 //
 //	len(mockedMonitorRepository.FindActiveMonitorsByEvaluatorIdentifierCalls())
 func (mock *MonitorRepositoryMock) FindActiveMonitorsByEvaluatorIdentifierCalls() []struct {
-	OrgName    string
+	OuID       string
 	Identifier string
 } {
 	var calls []struct {
-		OrgName    string
+		OuID       string
 		Identifier string
 	}
 	mock.lockFindActiveMonitorsByEvaluatorIdentifier.RLock()
@@ -574,17 +574,17 @@ func (mock *MonitorRepositoryMock) GetMonitorByIDCalls() []struct {
 }
 
 // GetMonitorByName calls GetMonitorByNameFunc.
-func (mock *MonitorRepositoryMock) GetMonitorByName(orgName string, projectName string, agentName string, monitorName string) (*models.Monitor, error) {
+func (mock *MonitorRepositoryMock) GetMonitorByName(ouID string, projectName string, agentName string, monitorName string) (*models.Monitor, error) {
 	if mock.GetMonitorByNameFunc == nil {
 		panic("MonitorRepositoryMock.GetMonitorByNameFunc: method is nil but MonitorRepository.GetMonitorByName was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		MonitorName string
 	}{
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 		MonitorName: monitorName,
@@ -592,7 +592,7 @@ func (mock *MonitorRepositoryMock) GetMonitorByName(orgName string, projectName 
 	mock.lockGetMonitorByName.Lock()
 	mock.calls.GetMonitorByName = append(mock.calls.GetMonitorByName, callInfo)
 	mock.lockGetMonitorByName.Unlock()
-	return mock.GetMonitorByNameFunc(orgName, projectName, agentName, monitorName)
+	return mock.GetMonitorByNameFunc(ouID, projectName, agentName, monitorName)
 }
 
 // GetMonitorByNameCalls gets all the calls that were made to GetMonitorByName.
@@ -600,13 +600,13 @@ func (mock *MonitorRepositoryMock) GetMonitorByName(orgName string, projectName 
 //
 //	len(mockedMonitorRepository.GetMonitorByNameCalls())
 func (mock *MonitorRepositoryMock) GetMonitorByNameCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 	MonitorName string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 		MonitorName string
@@ -762,23 +762,23 @@ func (mock *MonitorRepositoryMock) ListMonitorRunsCalls() []struct {
 }
 
 // ListMonitorsByAgent calls ListMonitorsByAgentFunc.
-func (mock *MonitorRepositoryMock) ListMonitorsByAgent(orgName string, projectName string, agentName string) ([]models.Monitor, error) {
+func (mock *MonitorRepositoryMock) ListMonitorsByAgent(ouID string, projectName string, agentName string) ([]models.Monitor, error) {
 	if mock.ListMonitorsByAgentFunc == nil {
 		panic("MonitorRepositoryMock.ListMonitorsByAgentFunc: method is nil but MonitorRepository.ListMonitorsByAgent was just called")
 	}
 	callInfo := struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}{
-		OrgName:     orgName,
+		OuID:        ouID,
 		ProjectName: projectName,
 		AgentName:   agentName,
 	}
 	mock.lockListMonitorsByAgent.Lock()
 	mock.calls.ListMonitorsByAgent = append(mock.calls.ListMonitorsByAgent, callInfo)
 	mock.lockListMonitorsByAgent.Unlock()
-	return mock.ListMonitorsByAgentFunc(orgName, projectName, agentName)
+	return mock.ListMonitorsByAgentFunc(ouID, projectName, agentName)
 }
 
 // ListMonitorsByAgentCalls gets all the calls that were made to ListMonitorsByAgent.
@@ -786,12 +786,12 @@ func (mock *MonitorRepositoryMock) ListMonitorsByAgent(orgName string, projectNa
 //
 //	len(mockedMonitorRepository.ListMonitorsByAgentCalls())
 func (mock *MonitorRepositoryMock) ListMonitorsByAgentCalls() []struct {
-	OrgName     string
+	OuID        string
 	ProjectName string
 	AgentName   string
 } {
 	var calls []struct {
-		OrgName     string
+		OuID        string
 		ProjectName string
 		AgentName   string
 	}
@@ -802,17 +802,17 @@ func (mock *MonitorRepositoryMock) ListMonitorsByAgentCalls() []struct {
 }
 
 // ListMonitorsByAgentEnvironment calls ListMonitorsByAgentEnvironmentFunc.
-func (mock *MonitorRepositoryMock) ListMonitorsByAgentEnvironment(orgName string, projectName string, agentName string, environmentName string) ([]models.Monitor, error) {
+func (mock *MonitorRepositoryMock) ListMonitorsByAgentEnvironment(ouID string, projectName string, agentName string, environmentName string) ([]models.Monitor, error) {
 	if mock.ListMonitorsByAgentEnvironmentFunc == nil {
 		panic("MonitorRepositoryMock.ListMonitorsByAgentEnvironmentFunc: method is nil but MonitorRepository.ListMonitorsByAgentEnvironment was just called")
 	}
 	callInfo := struct {
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string
 	}{
-		OrgName:         orgName,
+		OuID:            ouID,
 		ProjectName:     projectName,
 		AgentName:       agentName,
 		EnvironmentName: environmentName,
@@ -820,7 +820,7 @@ func (mock *MonitorRepositoryMock) ListMonitorsByAgentEnvironment(orgName string
 	mock.lockListMonitorsByAgentEnvironment.Lock()
 	mock.calls.ListMonitorsByAgentEnvironment = append(mock.calls.ListMonitorsByAgentEnvironment, callInfo)
 	mock.lockListMonitorsByAgentEnvironment.Unlock()
-	return mock.ListMonitorsByAgentEnvironmentFunc(orgName, projectName, agentName, environmentName)
+	return mock.ListMonitorsByAgentEnvironmentFunc(ouID, projectName, agentName, environmentName)
 }
 
 // ListMonitorsByAgentEnvironmentCalls gets all the calls that were made to ListMonitorsByAgentEnvironment.
@@ -828,13 +828,13 @@ func (mock *MonitorRepositoryMock) ListMonitorsByAgentEnvironment(orgName string
 //
 //	len(mockedMonitorRepository.ListMonitorsByAgentEnvironmentCalls())
 func (mock *MonitorRepositoryMock) ListMonitorsByAgentEnvironmentCalls() []struct {
-	OrgName         string
+	OuID            string
 	ProjectName     string
 	AgentName       string
 	EnvironmentName string
 } {
 	var calls []struct {
-		OrgName         string
+		OuID            string
 		ProjectName     string
 		AgentName       string
 		EnvironmentName string

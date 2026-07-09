@@ -525,16 +525,16 @@ func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
 // embed, which is fine since these tests never exercise them.
 type stubAgentConfigurationServiceForPromote struct {
 	AgentConfigurationService
-	SystemKeysFunc func(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error)
-	SystemVarsFunc func(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error)
+	SystemKeysFunc func(ctx context.Context, agentID, ouID, projectName, environmentName string) (map[string]bool, error)
+	SystemVarsFunc func(ctx context.Context, agentID, ouID, projectName, environmentName string) ([]client.EnvVar, error)
 }
 
-func (s *stubAgentConfigurationServiceForPromote) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, orgName, environmentName string) (map[string]bool, error) {
-	return s.SystemKeysFunc(ctx, agentID, orgName, environmentName)
+func (s *stubAgentConfigurationServiceForPromote) ListSystemManagedEnvVarKeys(ctx context.Context, agentID, ouID, projectName, environmentName string) (map[string]bool, error) {
+	return s.SystemKeysFunc(ctx, agentID, ouID, projectName, environmentName)
 }
 
-func (s *stubAgentConfigurationServiceForPromote) BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, orgName, environmentName string) ([]client.EnvVar, error) {
-	return s.SystemVarsFunc(ctx, agentID, orgName, environmentName)
+func (s *stubAgentConfigurationServiceForPromote) BuildSystemManagedEnvVarsFromConfig(ctx context.Context, agentID, ouID, projectName, environmentName string) ([]client.EnvVar, error) {
+	return s.SystemVarsFunc(ctx, agentID, ouID, projectName, environmentName)
 }
 
 // promoteAgentTestFixture builds the minimal set of mocks PromoteAgent needs
@@ -567,8 +567,8 @@ func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, t
 	}
 
 	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
-		SystemKeysFunc: func(_ context.Context, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
-		SystemVarsFunc: func(_ context.Context, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
 	}
 
 	identityInjector := &agentIdentityInjectorStub{

@@ -21,6 +21,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -53,13 +54,13 @@ func (c *agentTokenController) GenerateToken(w http.ResponseWriter, r *http.Requ
 	log := logger.GetLogger(ctx)
 
 	// Extract path parameters
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
 	log.Info(
 		"GenerateToken request received",
-		"orgName", orgName,
+		"ouID", ouID,
 		"projName", projName,
 		"agentName", agentName,
 	)
@@ -92,7 +93,7 @@ func (c *agentTokenController) GenerateToken(w http.ResponseWriter, r *http.Requ
 	}
 
 	req := services.GenerateTokenRequest{
-		OrgName:     orgName,
+		OrgName:     ouID,
 		ProjectName: projName,
 		AgentName:   agentName,
 		Environment: environment,

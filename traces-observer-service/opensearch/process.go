@@ -259,13 +259,20 @@ func populateRetrieverAttributes(ampAttrs *AmpAttributes, attrs map[string]inter
 
 // populateAgentAttributes extracts and populates agent-specific attributes
 func populateAgentAttributes(ampAttrs *AmpAttributes, attrs map[string]interface{}) {
-	// For Otel agent spans, we could also check gen_ai.input.message and gen_ai.output.message
-	if input, ok := attrs["gen_ai.input.messages"].(string); ok {
-		ampAttrs.Input = input
+	// OTel-native agent spans (e.g. Microsoft Agent Framework "invoke_agent")
+	// carry gen_ai.input.messages / gen_ai.output.messages. Flatten them through
+	// the same parts-aware extractors the LLM path uses, so agent-level
+	// evaluators and the detail view receive structured messages instead of the
+	// raw parts[] JSON string.
+	if _, ok := attrs["gen_ai.input.messages"].(string); ok {
+		if msgs := ExtractPromptMessages(attrs); len(msgs) > 0 {
+			ampAttrs.Input = msgs
+		}
 	}
-
-	if output, ok := attrs["gen_ai.output.messages"].(string); ok {
-		ampAttrs.Output = output
+	if _, ok := attrs["gen_ai.output.messages"].(string); ok {
+		if msgs := ExtractCompletionMessages(attrs); len(msgs) > 0 {
+			ampAttrs.Output = msgs
+		}
 	}
 
 	// For standard agent spans, use traceloop.entity attributes
@@ -620,11 +627,13 @@ func ExtractTokenUsage(spans []Span) *TokenUsage {
 }
 
 // IsLLMLeafSpan reports whether a span name looks like a leaf LLM call.
-// Narrow match on the ".chat" suffix covers ChatOpenAI.chat, openai.chat,
-// anthropic.chat, cohere.chat, etc., while avoiding chain / agent / tool
-// spans whose names share the gen_ai surface.
+// Matches the Traceloop ".chat" suffix (ChatOpenAI.chat, openai.chat,
+// anthropic.chat, cohere.chat, etc.) and the OTel GenAI native "chat {model}"
+// name (e.g. "chat gpt-4o-mini"), while avoiding chain / agent / tool spans
+// whose names share the gen_ai surface.
 func IsLLMLeafSpan(spanName string) bool {
-	return strings.HasSuffix(spanName, ".chat")
+	lower := strings.ToLower(strings.TrimSpace(spanName))
+	return strings.HasSuffix(lower, ".chat") || lower == "chat" || strings.HasPrefix(lower, "chat ")
 }
 
 // ExtractInputPreviewFromLeaf returns a short preview of the user-facing
@@ -1794,6 +1803,8 @@ func ExtractToolExecutionDetails(attrs map[string]interface{}, spanStatus string
 		input = funcArgs
 	} else if genAIArgs, ok := attrs["gen_ai.tool.arguments"].(string); ok { // OTEL-ish
 		input = genAIArgs
+	} else if genAICallArgs, ok := attrs["gen_ai.tool.call.arguments"].(string); ok { // OTel GenAI (Agent Framework)
+		input = genAICallArgs
 	} else if genAIInputMessages, ok := attrs["gen_ai.input.messages"].(string); ok && genAIInputMessages != "" {
 		// OTel GenAI structured messages — last-resort tool-input fallback
 		// (lower priority than the traceloop.entity.* / tool.* / function.* keys above).
@@ -1811,6 +1822,8 @@ func ExtractToolExecutionDetails(attrs map[string]interface{}, spanStatus string
 		output = funcResult
 	} else if genAIOutput, ok := attrs["gen_ai.tool.output"].(string); ok { // OTEL-ish
 		output = genAIOutput
+	} else if genAICallResult, ok := attrs["gen_ai.tool.call.result"].(string); ok { // OTel GenAI (Agent Framework)
+		output = genAICallResult
 	} else if genAIOutputMessages, ok := attrs["gen_ai.output.messages"].(string); ok && genAIOutputMessages != "" {
 		// OTel GenAI structured messages — last-resort tool-output fallback.
 		output = genAIOutputMessages
@@ -2003,12 +2016,27 @@ func DetermineSpanKindFromName(name string) SpanType {
 
 	// Traceloop / LangGraph action prefixes (e.g. "invoke_agent LangGraph").
 	switch {
-	case strings.HasPrefix(lower, "invoke_agent"), strings.HasPrefix(lower, "execute_agent"):
+	case strings.HasPrefix(lower, "invoke_agent"), strings.HasPrefix(lower, "execute_agent"),
+		strings.HasPrefix(lower, "create_agent"):
 		return SpanTypeAgent
 	case strings.HasPrefix(lower, "execute_tool"):
 		return SpanTypeTool
 	case strings.HasPrefix(lower, "execute_task"):
 		return SpanTypeChain
+	}
+
+	// OTel GenAI native names are "{operation} {model}" with no "." separator
+	// (e.g. "chat gpt-4o-mini", "embeddings text-embedding-3-small"). Classify
+	// on the leading operation token. Traceloop instead names spans
+	// "{vendor}.{operation}" (e.g. "openai.chat"), handled by the "."-segment
+	// switch below.
+	if i := strings.IndexByte(lower, ' '); i > 0 {
+		switch lower[:i] {
+		case "chat", "text_completion", "completion", "generate_content":
+			return SpanTypeLLM
+		case "embeddings", "embedding":
+			return SpanTypeEmbedding
+		}
 	}
 
 	// Last "."-segment (e.g. "openai.embeddings" → "embeddings").

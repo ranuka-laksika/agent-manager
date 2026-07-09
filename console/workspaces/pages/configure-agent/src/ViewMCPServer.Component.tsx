@@ -10,47 +10,45 @@
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
+ * KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations
  * under the License.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import {
   DrawerContent,
   DrawerHeader,
   DrawerWrapper,
   PageLayout,
-  SelectionDrawer,
   TextInput,
 } from "@agent-management-platform/views";
-import { CodeBlock } from "@agent-management-platform/shared-component";
+import {
+  CodeBlock,
+  usePipelineEnvironmentsState,
+} from "@agent-management-platform/shared-component";
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
   Divider,
   Form,
+  FormControl,
   FormLabel,
   IconButton,
+  MenuItem,
+  Select,
   Skeleton,
   Stack,
-  Tab,
-  Tabs,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
 import {
   AlertTriangle,
   BookOpen,
-  Edit,
   ExternalLink,
-  Link,
-  ServerCog,
 } from "@wso2/oxygen-ui-icons-react";
 import {
   useGetAgent,
@@ -71,10 +69,8 @@ import {
   useNavigate,
   useParams,
 } from "react-router-dom";
-import { MCPLogo } from "@agent-management-platform/mcp-proxies";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
 import { MCPServerDisplay } from "./Configure/subComponents/MCPServerDisplay";
-import { EmptyConfigCard } from "./Configure/subComponents/EmptyConfigCard";
 import { MCPProxyAPIKeysSection } from "./Configure/subComponents/MCPProxyAPIKeysSection";
 
 type AuthInfoEntry = {
@@ -92,6 +88,8 @@ export const ViewMCPServerComponent = () => {
     proxyId: string;
   }>();
   const decodedConfigId = useMemo(() => decodeRouteParam(proxyId), [proxyId]);
+  const environmentSelectId = useId();
+  const environmentSelectLabelId = useId();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -102,19 +100,16 @@ export const ViewMCPServerComponent = () => {
     } | null
   )?.authInfoByEnv;
 
-  const [selectedEnvIndex, setSelectedEnvIndex] = useState(0);
-  const [panelOpen, setPanelOpen] = useState(
-    () => Boolean(
-      (location.state as { openEnvPanel?: boolean } | null)?.openEnvPanel || authInfoByEnv,
+  const [panelOpen, setPanelOpen] = useState(() =>
+    Boolean(
+      (location.state as { openEnvPanel?: boolean } | null)?.openEnvPanel ||
+        authInfoByEnv,
     ),
   );
+  // Selected environment drives only the external connect / API-key panels; the
+  // deployment-status list itself is not a per-env editor.
+  const [selectedEnvName, setSelectedEnvName] = useState("");
   const [envVarNames, setEnvVarNames] = useState<Record<string, string>>({});
-  const [serverDrawerOpen, setServerDrawerOpen] = useState(false);
-  // Pending MCP server change per env — set when the user picks in the drawer,
-  // applied on save.
-  const [pendingServerByEnv, setPendingServerByEnv] = useState<
-    Record<string, string>
-  >({});
 
   const {
     data: config,
@@ -136,7 +131,11 @@ export const ViewMCPServerComponent = () => {
   const isExternal = agent?.provisioning?.type === "external";
 
   const { data: environments = [] } = useListEnvironments({ orgName: orgId });
-  const { data: proxiesData, isLoading: isLoadingProxies } = useListMCPProxies(
+  const { environments: pipelineEnvs } = usePipelineEnvironmentsState(
+    orgId,
+    projectId,
+  );
+  const { data: proxiesData } = useListMCPProxies(
     { orgName: orgId },
     { limit: 50, offset: 0 },
   );
@@ -146,39 +145,67 @@ export const ViewMCPServerComponent = () => {
   const backHref =
     orgId && projectId && agentId
       ? generatePath(
-        absoluteRouteMap.children.org.children.projects.children.agents
-          .children.configure.path,
-        { orgId, projectId, agentId },
-      )
+          absoluteRouteMap.children.org.children.projects.children.agents
+            .children.configure.path,
+          { orgId, projectId, agentId },
+        )
       : "#";
 
+  // Show every environment the agent deploys to (pipeline order), plus any mapped
+  // envs no longer in the pipeline, so each carries a deployment status.
   const envNames = useMemo(() => {
     const configured = Object.keys(config?.envMappings ?? {});
-    const ordered = environments
-      .map((env) => env.name)
-      .filter((name) => configured.includes(name));
-    return ordered.length > 0 ? ordered : configured;
-  }, [config, environments]);
+    const ordered = pipelineEnvs.map((env) => env.name);
+    const extras = configured.filter((name) => !ordered.includes(name));
+    const union = [...ordered, ...extras];
+    return union.length > 0 ? union : configured;
+  }, [config, pipelineEnvs]);
 
-  // Tabs and labels should show the human-friendly environment display name,
-  // falling back to the raw name when no display name is set.
-  const envDisplayName = (name: string) =>
-    environments.find((e) => e.name === name)?.displayName ?? name;
-
-  const selectedEnvName = envNames[selectedEnvIndex] ?? envNames[0] ?? "";
-  const envMapping = config?.envMappings?.[selectedEnvName];
-  const providerConfig = envMapping?.configuration;
-
-  const sourceProxyName = getMCPProxyName(providerConfig);
-  const sourceProxy = useMemo(
-    () => (proxiesData?.list ?? []).find((proxy) => proxy.id === sourceProxyName),
-    [proxiesData, sourceProxyName],
+  // The tool config references a single, environment-agnostic MCP proxy. Derive it
+  // from any environment that has a mapping.
+  const configProxyName = useMemo(() => {
+    for (const mapping of Object.values(config?.envMappings ?? {})) {
+      const name = getMCPProxyName(mapping.configuration);
+      if (name) return name;
+    }
+    return undefined;
+  }, [config]);
+  const configProxy = useMemo(
+    () => servers.find((s) => s.id === configProxyName),
+    [servers, configProxyName],
   );
+  const configProxyHref =
+    orgId && configProxyName
+      ? generatePath(
+          absoluteRouteMap.children.org.children.mcpProxies.children.view.path,
+          { orgId, proxyId: configProxyName },
+        )
+      : undefined;
+
+  // Default the selected environment (external connect / API-key panels) to the
+  // first environment once names resolve, and keep it valid.
+  useEffect(() => {
+    if (envNames.length === 0) return;
+    if (!envNames.includes(selectedEnvName)) {
+      setSelectedEnvName(envNames[0]);
+    }
+  }, [envNames, selectedEnvName]);
+
+  const providerConfig = config?.envMappings?.[selectedEnvName]?.configuration;
+
   const { data: sourceProxyDetails } = useGetMCPProxy({
     orgName: orgId,
-    proxyId: sourceProxyName ?? "",
+    proxyId: configProxyName ?? "",
   });
-  const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxyDetails?.security);
+  // Security lives per-environment on the source proxy blueprint. Resolve the block
+  // for the selected environment (matched by UUID) to derive the header name.
+  const selectedEnvUuid = environments.find(
+    (env) => env.name === selectedEnvName,
+  )?.id;
+  const sourceProxySecurity = selectedEnvUuid
+    ? sourceProxyDetails?.environments?.[selectedEnvUuid]?.security
+    : undefined;
+  const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
@@ -199,39 +226,19 @@ export const ViewMCPServerComponent = () => {
   const isDirty = envVarRows.some(
     (envVar) => (envVarNames[envVar.key] ?? envVar.name) !== envVar.name,
   );
-  // A pending selection that differs from the env's saved server is an edit.
-  const proxyChangesDirty = Object.entries(pendingServerByEnv).some(
-    ([envName, id]) =>
-      id !== getMCPProxyName(config?.envMappings?.[envName]?.configuration),
-  );
 
   const handleSave = () => {
-    if (!orgId || !projectId || !agentId || !decodedConfigId || hasEmptyEnvVarName) {
+    if (
+      !orgId ||
+      !projectId ||
+      !agentId ||
+      !decodedConfigId ||
+      hasEmptyEnvVarName
+    ) {
       return;
     }
-
-    // Only send envMappings when a server actually changed, so a plain env-var
-    // rename never risks touching the existing per-env server mappings. When it
-    // does change, send all envs (existing + newly picked) so none are dropped.
-    let envMappings:
-      | Record<string, { proxyId?: string; configuration: Record<string, never> }>
-      | undefined;
-    if (proxyChangesDirty) {
-      envMappings = {};
-      const editedEnvNames = new Set([
-        ...Object.keys(config?.envMappings ?? {}),
-        ...Object.keys(pendingServerByEnv),
-      ]);
-      for (const envName of editedEnvNames) {
-        const existingId = getMCPProxyName(
-          config?.envMappings?.[envName]?.configuration,
-        );
-        const resolvedId = pendingServerByEnv[envName] ?? existingId;
-        if (!resolvedId) continue;
-        envMappings[envName] = { proxyId: resolvedId, configuration: {} };
-      }
-    }
-
+    // Only the shared env var NAMES are editable here. Deployment is handled at the
+    // org-level MCP proxy + gateways, so no server mappings are sent.
     updateConfig.mutate(
       {
         params: {
@@ -245,14 +252,10 @@ export const ViewMCPServerComponent = () => {
             key: envVar.key,
             name: (envVarNames[envVar.key] ?? envVar.name).trim(),
           })),
-          ...(envMappings ? { envMappings } : {}),
         },
       },
       {
-        onSuccess: () => {
-          setPanelOpen(false);
-          setPendingServerByEnv({});
-        },
+        onSuccess: () => setPanelOpen(false),
       },
     );
   };
@@ -314,12 +317,14 @@ export const ViewMCPServerComponent = () => {
     );
   }
 
-  const pageTitle = config.name || sourceProxy?.name || sourceProxyName;
-  const showPanel = (isExternal && !!providerConfig)
-    || (!isExternal && envVarRows.length > 0);
+  const pageTitle =
+    config.name || configProxy?.name || configProxyName || "Tool Configuration";
+  const showPanel =
+    (isExternal && !!providerConfig) || (!isExternal && envVarRows.length > 0);
 
-  const envVarsPanel = showPanel && (
-    isExternal && providerConfig ? (
+  const envVarsPanel =
+    showPanel &&
+    (isExternal && providerConfig ? (
       <DrawerWrapper
         open={panelOpen}
         onClose={(_, reason) => {
@@ -336,7 +341,8 @@ export const ViewMCPServerComponent = () => {
         />
         <DrawerContent>
           {(() => {
-            const authEntry = authInfoByEnv?.[selectedEnvName] ?? providerConfig.authInfo;
+            const authEntry =
+              authInfoByEnv?.[selectedEnvName] ?? providerConfig.authInfo;
             const headerName = apiKeyHeaderName || authEntry?.name || "api-key";
             const headerValue = authEntry?.value || "<api-key>";
             const curlCode = [
@@ -349,21 +355,23 @@ export const ViewMCPServerComponent = () => {
                   <>
                     <Alert severity="info">
                       <Typography variant="body2">
-                        Configure your external agent with the endpoint and API key below to call
-                        this MCP server through the gateway.
+                        Configure your external agent with the endpoint and API
+                        key below to call this MCP server through the gateway.
                       </Typography>
                     </Alert>
                     <Alert severity="warning">
                       <Typography variant="body2" fontWeight={600}>
-                        Make sure to copy your API key now. You will not be able to see it again.
+                        Make sure to copy your API key now. You will not be able
+                        to see it again.
                       </Typography>
                     </Alert>
                   </>
                 ) : (
                   <Alert severity="info">
                     <Typography variant="body2">
-                      The endpoint is available below. If the MCP server requires an API key, the
-                      key was only displayed when this configuration was created.
+                      The endpoint is available below. If the MCP server
+                      requires an API key, the key was only displayed when this
+                      configuration was created.
                     </Typography>
                   </Alert>
                 )}
@@ -397,8 +405,14 @@ export const ViewMCPServerComponent = () => {
                   />
                 )}
                 <Box>
-                  <FormLabel sx={{ display: "block", mb: 0.5 }}>Example cURL</FormLabel>
-                  <CodeBlock code={curlCode} language="bash" fieldId="mcp-curl" />
+                  <FormLabel sx={{ display: "block", mb: 0.5 }}>
+                    Example cURL
+                  </FormLabel>
+                  <CodeBlock
+                    code={curlCode}
+                    language="bash"
+                    fieldId="mcp-curl"
+                  />
                 </Box>
               </Stack>
             );
@@ -436,8 +450,8 @@ export const ViewMCPServerComponent = () => {
               Integration Guide
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Copy this pattern into your agent code to load MCP tools through the injected proxy
-              URL and API key.
+              Copy this pattern into your agent code to load MCP tools through
+              the injected proxy URL and API key.
             </Typography>
           </Stack>
           <CodeBlock
@@ -447,8 +461,7 @@ export const ViewMCPServerComponent = () => {
           />
         </Stack>
       </EnvironmentVariablesGuideDrawer>
-    )
-  );
+    ));
 
   return (
     <PageLayout
@@ -464,7 +477,9 @@ export const ViewMCPServerComponent = () => {
             startIcon={<BookOpen size={16} />}
             onClick={() => setPanelOpen(true)}
           >
-            {isExternal ? "Connect to MCP Server" : "Environment Variables & Integration Guide"}
+            {isExternal
+              ? "Connect to MCP Server"
+              : "Environment Variables & Integration Guide"}
           </Button>
         ) : undefined
       }
@@ -472,249 +487,72 @@ export const ViewMCPServerComponent = () => {
       <Stack spacing={3}>
         <Form.Section>
           <Form.Subheader>MCP Server</Form.Subheader>
-          <Stack spacing={2.5}>
-            {envNames.length > 1 && (
-              <>
-                <Typography variant="body2" color="text.secondary">
-                  Each environment uses a separate MCP server mapping.
-                </Typography>
-                <Tabs
-                  value={selectedEnvIndex}
-                  onChange={(_, value: number) => setSelectedEnvIndex(value)}
-                  sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}
-                >
-                  {envNames.map((envName, index) => (
-                    <Tab
-                      key={envName}
-                      label={envDisplayName(envName)}
-                      value={index}
-                    />
-                  ))}
-                </Tabs>
-              </>
-            )}
-            {(() => {
-              const pendingId = pendingServerByEnv[selectedEnvName];
-              const effectiveId = pendingId ?? sourceProxyName;
-              const isPendingChange = !!pendingId && pendingId !== sourceProxyName;
-
-              // No server mapped for this env and nothing picked yet — let the
-              // user add one instead of showing an empty, non-actionable card.
-              if (!effectiveId) {
-                return (
-                  <EmptyConfigCard
-                    message="No MCP server is configured for this environment yet."
-                    actionLabel="Select MCP Server"
-                    actionIcon={<Link size={16} />}
-                    onAction={() => setServerDrawerOpen(true)}
-                    disabled={isLoadingProxies}
-                  />
-                );
-              }
-
-              const displayProxy = servers.find((s) => s.id === effectiveId);
-              const proxyHref =
-                orgId && effectiveId
-                  ? generatePath(
-                    absoluteRouteMap.children.org.children.mcpProxies.children
-                      .view.path,
-                    { orgId, proxyId: effectiveId },
-                  )
-                  : undefined;
-
-              // The per-env URL is minted by the backend on save, so a pending
-              // server change can't show a real URL/context yet.
-              const contextValue =
-                displayProxy?.context ??
-                (isPendingChange ? "-" : getPathname(providerConfig?.url)) ??
-                "Not configured";
-              const envUrlValue = isPendingChange
-                ? "Generated after saving"
-                : (providerConfig?.url ?? "Not configured");
-              const envUrlColor =
-                !isPendingChange && providerConfig?.url
-                  ? "text.primary"
-                  : "text.disabled";
-
-              return (
-                <Card variant="outlined">
-                  <CardContent sx={{ position: "relative" }}>
-                    <Stack
-                      direction="row"
-                      spacing={0.5}
+          {configProxy ? (
+            <Card variant="outlined">
+              <CardContent sx={{ position: "relative" }}>
+                {configProxyHref && (
+                  <Tooltip title="View MCP proxy" placement="top" arrow>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => navigate(configProxyHref)}
+                      aria-label={`View MCP proxy ${configProxy.name ?? configProxyName} in the organization`}
                       sx={{ position: "absolute", top: 8, right: 8 }}
                     >
-                      <Tooltip title="Change MCP server" placement="top" arrow>
-                        <IconButton
-                          size="small"
-                          color="primary"
-                          onClick={() => setServerDrawerOpen(true)}
-                          aria-label="Change MCP server"
-                        >
-                          <Edit size={16} />
-                        </IconButton>
-                      </Tooltip>
-                      {proxyHref && (
-                        <Tooltip title="View MCP proxy" placement="top" arrow>
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => navigate(proxyHref)}
-                            aria-label={`View MCP proxy ${displayProxy?.name ?? effectiveId} in the organization`}
-                          >
-                            <ExternalLink size={16} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </Stack>
-                    <Stack
-                      direction="row"
-                      spacing={2}
-                      flexGrow={1}
-                      alignItems="flex-start"
-                    >
-                      <Avatar
-                        sx={{
-                          height: 36,
-                          width: 36,
-                          backgroundColor: "action.selected",
-                        }}
-                      >
-                        <Box sx={{ color: "text.secondary", display: "inline-flex" }}>
-                          <MCPLogo size={20} />
-                        </Box>
-                      </Avatar>
-                      <Stack spacing={0.5} flexGrow={1} sx={{ minWidth: 0 }}>
-                        <Stack
-                          direction="row"
-                          spacing={0.75}
-                          alignItems="center"
-                          flexWrap="wrap"
-                          useFlexGap
-                          sx={{ minHeight: 36 }}
-                        >
-                          <Typography variant="h6">
-                            {displayProxy?.name ?? effectiveId ?? config.name}
-                          </Typography>
-                          {displayProxy?.version && (
-                            <Chip
-                              label={displayProxy.version}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Stack>
-                        <Typography variant="caption" color="text.secondary">
-                          Context:{" "}
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color={
-                              displayProxy?.context
-                                ? "text.primary"
-                                : "text.disabled"
-                            }
-                          >
-                            {contextValue}
-                          </Typography>
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Environment URL:{" "}
-                          <Typography
-                            component="span"
-                            variant="caption"
-                            color={envUrlColor}
-                            sx={{ wordBreak: "break-all" }}
-                          >
-                            {envUrlValue}
-                          </Typography>
-                        </Typography>
-                      </Stack>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              );
-            })()}
-
-            {proxyChangesDirty && (
-              <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => setPendingServerByEnv({})}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={handleSave}
-                  disabled={updateConfig.isPending}
-                >
-                  {updateConfig.isPending ? "Saving…" : "Save"}
-                </Button>
-              </Stack>
-            )}
-
-            <SelectionDrawer
-              open={serverDrawerOpen}
-              onClose={() => setServerDrawerOpen(false)}
-              icon={<ServerCog size={24} />}
-              title="Select MCP Server"
-              description={
-                envNames.length > 1
-                  ? `Choose the MCP server for the ${envDisplayName(selectedEnvName)} environment.`
-                  : "Choose the MCP server for this agent."
-              }
-              searchPlaceholder="Search MCP servers"
-              items={servers}
-              isLoading={isLoadingProxies}
-              getItemKey={(server) => server.id ?? ""}
-              isItemSelected={(server) =>
-                (pendingServerByEnv[selectedEnvName] ?? sourceProxyName) ===
-                server.id
-              }
-              matchesSearch={(server, query) =>
-                (server.name ?? "").toLowerCase().includes(query) ||
-                (server.description ?? "").toLowerCase().includes(query) ||
-                (server.context ?? "").toLowerCase().includes(query)
-              }
-              onSelect={(server) => {
-                if (selectedEnvName && server.id) {
-                  setPendingServerByEnv((prev) => ({
-                    ...prev,
-                    [selectedEnvName]: server.id as string,
-                  }));
-                }
-              }}
-              renderItem={(server, isSelected) => (
-                <MCPServerDisplay server={server} isSelected={isSelected} />
-              )}
-              getItemAriaLabel={(server, isSelected) =>
-                `${server.name}. ${isSelected ? "Selected" : "Click to select"}`
-              }
-              emptyState={{
-                title: "No MCP servers available",
-                description:
-                  "No MCP servers are available in the organization.",
-              }}
-              searchEmptyState={{
-                title: "No MCP servers match your search",
-                description:
-                  "Try a different keyword or clear the search filter.",
-              }}
-            />
-          </Stack>
+                      <ExternalLink size={16} />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                <MCPServerDisplay
+                  server={configProxy}
+                  isSelected={false}
+                  hideCheckbox
+                />
+              </CardContent>
+            </Card>
+          ) : (
+            <Typography variant="body2" color="text.secondary">
+              {configProxyName ?? "No MCP server referenced."}
+            </Typography>
+          )}
         </Form.Section>
 
         {isExternal && providerConfig && (
-          <MCPProxyAPIKeysSection
-            orgName={orgId}
-            projName={projectId}
-            agentName={agentId}
-            configId={decodedConfigId}
-            envName={selectedEnvName}
-          />
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <Typography
+                id={environmentSelectLabelId}
+                variant="body2"
+                color="text.secondary"
+              >
+                Environment
+              </Typography>
+              <FormControl size="small" sx={{ minWidth: 260 }}>
+                <Select
+                  id={environmentSelectId}
+                  labelId={environmentSelectLabelId}
+                  value={selectedEnvName}
+                  onChange={(event) =>
+                    setSelectedEnvName(event.target.value as string)
+                  }
+                >
+                  {envNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {environments.find((e) => e.name === name)?.displayName ??
+                        name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Stack>
+            <MCPProxyAPIKeysSection
+              orgName={orgId}
+              projName={projectId}
+              agentName={agentId}
+              configId={decodedConfigId}
+              envName={selectedEnvName}
+            />
+          </Stack>
         )}
       </Stack>
 
@@ -732,7 +570,9 @@ function decodeRouteParam(value?: string) {
   }
 }
 
-function getMCPProxyName(config?: EnvProviderConfigMappings["configuration"]): string | undefined {
+function getMCPProxyName(
+  config?: EnvProviderConfigMappings["configuration"],
+): string | undefined {
   return (
     config?.proxyName ??
     config?.proxyId ??
@@ -742,9 +582,10 @@ function getMCPProxyName(config?: EnvProviderConfigMappings["configuration"]): s
   );
 }
 
-function getMCPAPIKeyHeaderName(
-  security?: { enabled?: boolean; apiKey?: { enabled?: boolean; key?: string } },
-): string | undefined {
+function getMCPAPIKeyHeaderName(security?: {
+  enabled?: boolean;
+  apiKey?: { enabled?: boolean; key?: string };
+}): string | undefined {
   if (security?.enabled === false || security?.apiKey?.enabled === false) {
     return undefined;
   }
@@ -752,25 +593,21 @@ function getMCPAPIKeyHeaderName(
   return headerName || "X-API-Key";
 }
 
-function getPathname(value?: string) {
-  if (!value) return undefined;
-  try {
-    return new URL(value).pathname;
-  } catch {
-    return value;
-  }
-}
-
 function describeMCPEnvVar(key: string): string {
   if (/url/i.test(key)) return "Base URL of the MCP server endpoint";
-  if (/api[-_]?key/i.test(key)) return "API key for authenticating with the MCP server endpoint";
-  return key.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase());
+  if (/api[-_]?key/i.test(key))
+    return "API key for authenticating with the MCP server endpoint";
+  return key
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (str) => str.toUpperCase());
 }
 
 function buildMCPPythonSnippet(rows: { key: string; name: string }[]): string {
-  const urlEnvVar = rows.find((row) => /url/i.test(row.key))?.name ?? "MCP_SERVER_URL";
+  const urlEnvVar =
+    rows.find((row) => /url/i.test(row.key))?.name ?? "MCP_SERVER_URL";
   const apiKeyEnvVar =
-    rows.find((row) => /api[-_]?key/i.test(row.key))?.name ?? "MCP_SERVER_API_KEY";
+    rows.find((row) => /api[-_]?key/i.test(row.key))?.name ??
+    "MCP_SERVER_API_KEY";
 
   return [
     "import os",
@@ -778,16 +615,16 @@ function buildMCPPythonSnippet(rows: { key: string; name: string }[]): string {
     "from langchain_mcp_adapters.client import MultiServerMCPClient",
     "",
     `raw_urls = os.environ.get("${urlEnvVar}", "")`,
-    "mcp_server_urls = [url.strip() for url in raw_urls.split(\",\") if url.strip()]",
+    'mcp_server_urls = [url.strip() for url in raw_urls.split(",") if url.strip()]',
     `mcp_api_key = os.environ.get("${apiKeyEnvVar}", "").strip()`,
     "",
     "server_configs: dict[str, dict[str, Any]] = {",
-    "    f\"mcp_server_{i}\": {",
-    "        \"url\": url,",
-    "        \"transport\": \"streamable_http\",",
-    "        \"headers\": {",
-    "            \"API-Key\": mcp_api_key,",
-    "            \"Authorization\": \"\",",
+    '    f"mcp_server_{i}": {',
+    '        "url": url,',
+    '        "transport": "streamable_http",',
+    '        "headers": {',
+    '            "API-Key": mcp_api_key,',
+    '            "Authorization": "",',
     "        },",
     "    }",
     "    for i, url in enumerate(mcp_server_urls)",

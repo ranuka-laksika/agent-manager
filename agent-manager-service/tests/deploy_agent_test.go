@@ -98,7 +98,6 @@ func TestDeployAgent(t *testing.T) {
 
 		// Validate call parameters
 		deployCall := openChoreoClient.DeployCalls()[0]
-		require.Equal(t, deployTestOrgName, deployCall.NamespaceName)
 		require.Equal(t, deployTestProjName, deployCall.ProjectName)
 		require.Equal(t, deployTestAgentName, deployCall.ComponentName)
 		require.Equal(t, "registry.example.com/myapp:v1.0.0", deployCall.Req.ImageID)
@@ -168,7 +167,6 @@ func TestDeployAgent(t *testing.T) {
 
 		// Validate call parameters
 		deployCall := openChoreoClient.DeployCalls()[0]
-		require.Equal(t, deployTestOrgName, deployCall.NamespaceName)
 		require.Equal(t, deployTestProjName, deployCall.ProjectName)
 		require.Equal(t, deployTestAgentName, deployCall.ComponentName)
 		require.Equal(t, "registry.example.com/myapp:v1.2.0", deployCall.Req.ImageID)

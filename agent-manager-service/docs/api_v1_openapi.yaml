@@ -3269,6 +3269,365 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: List an agent's AgentID bindings
+      description: |
+        Returns the agent's AgentID for every environment in the project's
+        deployment pipeline. This is a safe read only: it never returns or
+        removes a secret. Check `hasUnclaimedSecret` on each entry to see if
+        an externally hosted agent has a secret waiting, then use
+        `DELETE .../identities/secrets` to fetch it.
+
+        Pass `environment` to narrow the result to one environment.
+      operationId: getAgentIdentity
+      parameters:
+        - name: environment
+          in: query
+          required: false
+          description: Environment name to filter the result to a single binding
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's AgentID bindings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    put:
+      tags:
+        - Agent Identity
+      summary: Provision an AgentID for a missing environment
+      description: |
+        Creates an AgentID for an externally hosted agent in an environment
+        that was added after the agent already existed. Platform-hosted
+        agents get an AgentID automatically when promoted, so they are
+        rejected here.
+
+        Safe to call more than once: if a binding already exists it is left
+        as is and returned with `200`. A genuinely missing binding is
+        created and provisioned in the background, returning `202`.
+      operationId: provisionAgentIdentity
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to provision the AgentID in
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A binding already existed for this environment; returned unchanged
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "202":
+          description: No binding existed; provisioning has been kicked off in the background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityEnvironmentView"
+        "400":
+          description: Missing `environment` query parameter, or the agent is a Platform-Hosted agent (use promotion instead)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent or environment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      tags:
+        - Agent Identity
+      summary: Regenerate an agent's AgentID secret
+      description: |
+        Rotates the AgentID secret for one environment and returns the new
+        value straight away, for both platform-hosted and externally hosted
+        agents. Note that this endpoint takes `environment` in the request
+        body, not as a query parameter, since the other identity endpoints
+        have no body to carry it in.
+
+        A token minted from the old secret keeps working until it expires
+        naturally.
+      operationId: regenerateAgentIdentitySecret
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityActionRequest"
+      responses:
+        "200":
+          description: Secret regenerated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRegenerateSecretResponse"
+        "400":
+          description: Missing or invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Agent Identity
+      summary: Revoke an agent's AgentID secret
+      description: |
+        Turns off the AgentID secret for one environment without issuing a
+        new one. Call regenerate afterward to restore access.
+
+        This only stops new tokens from being minted. A token issued before
+        the revoke stays valid until it expires naturally.
+      operationId: revokeAgentIdentitySecret
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to revoke the AgentID secret in
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Secret revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentRevokeSecretResponse"
+        "400":
+          description: Missing `environment` query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities/secrets:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: Get a platform-hosted agent's current AgentID credential
+      description: |
+        Returns the current client ID and secret for a platform-hosted agent
+        in one environment. You can call this as many times as you like, it
+        always returns the same valid credential.
+
+        Platform-hosted agents already get this credential injected into
+        their running workload automatically, so this endpoint is mainly for
+        checking or verifying it manually. Externally hosted agents should
+        use the claim or regenerate endpoints instead.
+      operationId: getAgentCredentials
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to read the AgentID credential for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's current AgentID credential
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentCredentialsResponse"
+        "400":
+          description: Missing `environment` query parameter, or the agent is an Externally-Hosted agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment, or no credential is currently stored (e.g. right after a revoke)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Agent Identity
+      summary: Claim an externally hosted agent's AgentID secret
+      description: |
+        One-time retrieval of the AgentID secret for an externally hosted
+        agent. Calling this is the claim itself: the first successful call
+        returns the secret and deletes it from storage, so save it right
+        away. Every call after that returns `404` until you regenerate a
+        new secret.
+
+        This uses `DELETE` instead of `GET` because it changes state by
+        consuming the secret, unlike the plain read at `GET .../identities`.
+        Platform-hosted agents should use `GET .../identities/secrets`
+        instead.
+      operationId: claimAgentIdentitySecret
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to claim the AgentID secret for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Secret claimed. This is the only response that will ever include this secret value
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentClaimSecretResponse"
+        "400":
+          description: Missing `environment` query parameter, or the agent is a Platform-Hosted agent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent identity not yet provisioned for this environment, or no unclaimed secret is currently available (call regenerate to obtain a new one)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs:
     post:
       summary: Create agent model configuration
@@ -6579,214 +6938,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name/handle
-        schema:
-          type: string
-      - name: proxyId
-        in: path
-        required: true
-        description: MCP proxy UUID or handle
-        schema:
-          type: string
-
-    get:
-      tags:
-        - MCP API Keys
-      summary: List API keys for an MCP proxy
-      description: Returns the list of API keys for an MCP proxy (masked values only).
-      operationId: listMCPProxyAPIKeys
-      responses:
-        "200":
-          description: List of API keys
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ListAPIKeysResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: MCP proxy not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    post:
-      tags:
-        - MCP API Keys
-      summary: Create an API key for an MCP proxy
-      description: Generates a new API key for an MCP proxy and broadcasts it to all connected gateways. The key is returned only once in the response.
-      operationId: createMCPProxyAPIKey
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateLLMAPIKeyRequest"
-      responses:
-        "201":
-          description: API key created and broadcast to gateways
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CreateLLMAPIKeyResponse"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: MCP proxy not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: No gateway connections available
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-  /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name/handle
-        schema:
-          type: string
-      - name: proxyId
-        in: path
-        required: true
-        description: MCP proxy UUID or handle
-        schema:
-          type: string
-      - name: keyName
-        in: path
-        required: true
-        description: API key name/identifier
-        schema:
-          type: string
-
-    put:
-      tags:
-        - MCP API Keys
-      summary: Rotate an MCP proxy API key
-      description: Generates a new API key value for the given key name and broadcasts the update to all connected gateways. The new key is returned only once in the response.
-      operationId: rotateMCPProxyAPIKey
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RotateLLMAPIKeyRequest"
-      responses:
-        "200":
-          description: API key rotated and broadcast to gateways
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/RotateLLMAPIKeyResponse"
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: MCP proxy not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: No gateway connections available
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
-    delete:
-      tags:
-        - MCP API Keys
-      summary: Revoke an MCP proxy API key
-      description: Revokes an API key for an MCP proxy and broadcasts the revocation to all connected gateways.
-      operationId: revokeMCPProxyAPIKey
-      responses:
-        "204":
-          description: API key revoked successfully
-        "400":
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "401":
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "404":
-          description: MCP proxy not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "503":
-          description: No gateway connections available
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/environments/{envID}/api-keys:
     parameters:
       - name: orgName
@@ -9606,8 +9757,879 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/scopes:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+    get:
+      tags:
+        - Scopes
+      summary: List scopes
+      description: Lists the organization's scope catalog (org-global, resource-agnostic).
+      operationId: listScopes
+      responses:
+        "200":
+          description: Scope list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeListResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Scopes
+      summary: Create scope
+      operationId: createScope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScopeRequest"
+      responses:
+        "201":
+          description: Scope created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeResponse"
+        "400":
+          description: Invalid scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: A scope with this name already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /orgs/{orgName}/scopes/{scopeName}:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: scopeName
+        in: path
+        required: true
+        description: Scope name
+        schema:
+          type: string
+    put:
+      tags:
+        - Scopes
+      summary: Update scope description
+      operationId: updateScope
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScopeUpdateRequest"
+      responses:
+        "200":
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScopeResponse"
+        "404":
+          description: Scope not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Scopes
+      summary: Delete scope
+      description: Fails with 409 while the scope is referenced by any MCP proxy environment tool binding.
+      operationId: deleteScope
+      responses:
+        "204":
+          description: Scope deleted
+        "404":
+          description: Scope not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Scope is still referenced by one or more tool bindings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+    get:
+      tags:
+        - Agent Identity
+      summary: List agent identity groups
+      description: Lists the environment Thunder groups used to grant scopes to agent identities.
+      operationId: listAgentIdentityGroups
+      parameters:
+        - $ref: "#/components/parameters/AgentIdentityOffset"
+        - $ref: "#/components/parameters/AgentIdentityLimit"
+      responses:
+        "200":
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Agent Identity
+      summary: Create an agent identity group
+      operationId: createAgentIdentityGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityGroupRequest"
+      responses:
+        "201":
+          description: Group created
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityGroupID"
+    get:
+      tags:
+        - Agent Identity
+      summary: Get an agent identity group
+      operationId: getAgentIdentityGroup
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Agent Identity
+      summary: Update an agent identity group
+      operationId: updateAgentIdentityGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityGroupRequest"
+      responses:
+        "200":
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Agent Identity
+      summary: Delete an agent identity group
+      operationId: deleteAgentIdentityGroup
+      responses:
+        "204":
+          description: Group deleted
+        "404":
+          description: Group not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityGroupID"
+    get:
+      tags:
+        - Agent Identity
+      summary: List agent identity group members
+      operationId: getAgentIdentityGroupMembers
+      parameters:
+        - $ref: "#/components/parameters/AgentIdentityOffset"
+        - $ref: "#/components/parameters/AgentIdentityLimit"
+      responses:
+        "200":
+          description: Group members
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/add:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityGroupID"
+    post:
+      tags:
+        - Agent Identity
+      summary: Add agent identity group members
+      operationId: addAgentIdentityGroupMembers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityMembersRequest"
+      responses:
+        "200":
+          description: Members added
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/members/remove:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityGroupID"
+    post:
+      tags:
+        - Agent Identity
+      summary: Remove agent identity group members
+      operationId: removeAgentIdentityGroupMembers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityMembersRequest"
+      responses:
+        "200":
+          description: Members removed
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/groups/{groupID}/roles:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityGroupID"
+    get:
+      tags:
+        - Agent Identity
+      summary: List roles assigned to an agent identity group
+      operationId: getAgentIdentityGroupRoles
+      responses:
+        "200":
+          description: Group roles
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/roles:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+    get:
+      tags:
+        - Agent Identity
+      summary: List agent identity roles
+      operationId: listAgentIdentityRoles
+      parameters:
+        - $ref: "#/components/parameters/AgentIdentityOffset"
+        - $ref: "#/components/parameters/AgentIdentityLimit"
+      responses:
+        "200":
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      tags:
+        - Agent Identity
+      summary: Create an agent identity role
+      description: Creates a role carrying the given catalog scopes as its permissions.
+      operationId: createAgentIdentityRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityRoleRequest"
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request or unknown scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The environment's identity provider rejected the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityRoleID"
+    get:
+      tags:
+        - Agent Identity
+      summary: Get an agent identity role
+      operationId: getAgentIdentityRole
+      responses:
+        "200":
+          description: Role details
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      tags:
+        - Agent Identity
+      summary: Update an agent identity role
+      description: Updates the role metadata and reconciles its scope permissions to match the request.
+      operationId: updateAgentIdentityRole
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityRoleRequest"
+      responses:
+        "200":
+          description: Role updated
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request or unknown scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "502":
+          description: The environment's identity provider rejected the request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      tags:
+        - Agent Identity
+      summary: Delete an agent identity role
+      operationId: deleteAgentIdentityRole
+      responses:
+        "204":
+          description: Role deleted
+        "404":
+          description: Role not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityRoleID"
+    get:
+      tags:
+        - Agent Identity
+      summary: List agent identity role assignments
+      operationId: getAgentIdentityRoleAssignments
+      responses:
+        "200":
+          description: Role assignments
+          content:
+            application/json:
+              schema:
+                type: object
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/add:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityRoleID"
+    post:
+      tags:
+        - Agent Identity
+      summary: Add agent identity role assignees
+      operationId: addAgentIdentityRoleAssignees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityAssignmentsRequest"
+      responses:
+        "200":
+          description: Assignees added
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/roles/{roleID}/assignments/remove:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+      - $ref: "#/components/parameters/AgentIdentityRoleID"
+    post:
+      tags:
+        - Agent Identity
+      summary: Remove agent identity role assignees
+      operationId: removeAgentIdentityRoleAssignees
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AgentIdentityAssignmentsRequest"
+      responses:
+        "200":
+          description: Assignees removed
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "503":
+          description: The environment's identity provider is not available
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/environments/{envName}/agent-identities/agents:
+    parameters:
+      - $ref: "#/components/parameters/AgentIdentityOrgName"
+      - $ref: "#/components/parameters/AgentIdentityEnvName"
+    get:
+      tags:
+        - Agent Identity
+      summary: List agent identity bindings for the environment
+      description: Lists the agent identities provisioned in this environment's Thunder, used as the assignment picker.
+      operationId: listAgentIdentityAgents
+      responses:
+        "200":
+          description: List of agent identity bindings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityAgentListResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
+  parameters:
+    AgentIdentityOrgName:
+      name: orgName
+      in: path
+      required: true
+      description: Organization name/handle
+      schema:
+        type: string
+    AgentIdentityEnvName:
+      name: envName
+      in: path
+      required: true
+      description: Environment name
+      schema:
+        type: string
+    AgentIdentityGroupID:
+      name: groupID
+      in: path
+      required: true
+      description: Thunder group ID
+      schema:
+        type: string
+    AgentIdentityRoleID:
+      name: roleID
+      in: path
+      required: true
+      description: Thunder role ID
+      schema:
+        type: string
+    AgentIdentityOffset:
+      name: offset
+      in: query
+      required: false
+      description: Number of results to skip
+      schema:
+        type: integer
+        default: 0
+        minimum: 0
+    AgentIdentityLimit:
+      name: limit
+      in: query
+      required: false
+      description: Maximum number of results to return
+      schema:
+        type: integer
+        default: 20
+        minimum: 1
+        maximum: 100
   schemas:
+    ScopeRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          pattern: '^[A-Za-z0-9:._\-]{1,256}$'
+          description: Scope name (org-global, resource-agnostic)
+          example: "repo:read.all"
+        description:
+          type: string
+          description: Human-readable description of the scope
+    ScopeUpdateRequest:
+      type: object
+      properties:
+        description:
+          type: string
+          description: Human-readable description of the scope
+    ScopeResponse:
+      type: object
+      required:
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "repo:read.all"
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        bindingCount:
+          type: integer
+          description: Number of MCP proxy environment tool bindings referencing this scope
+    ScopeListResponse:
+      type: object
+      required:
+        - scopes
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScopeResponse"
+    AgentIdentityGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+    AgentIdentityMembersRequest:
+      type: object
+      required:
+        - agentIds
+      properties:
+        agentIds:
+          type: array
+          items:
+            type: string
+          description: Thunder agent IDs (from the agents picker)
+    AgentIdentityRoleRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Catalog scope names carried as the role's permissions
+    AgentIdentityAssignmentsRequest:
+      type: object
+      required:
+        - assignments
+      properties:
+        assignments:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - type
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+                enum:
+                  - agent
+                  - group
+    AgentIdentityAgentResponse:
+      type: object
+      required:
+        - agentName
+        - projectName
+        - status
+      properties:
+        agentName:
+          type: string
+        projectName:
+          type: string
+        status:
+          type: string
+          description: Thunder binding status (pending/in_progress/completed/failed)
+        thunderAgentId:
+          type: string
+    AgentIdentityAgentListResponse:
+      type: object
+      required:
+        - agents
+      properties:
+        agents:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentIdentityAgentResponse"
     ConfigResponse:
       type: object
       required:
@@ -9648,6 +10670,13 @@ components:
         apiKey:
           type: string
           description: Generated API key value. Returned only once; store it securely.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every target gateway had a live websocket connection to the
+            control plane when the key was created. When false, the key has
+            been stored but will only become usable once the gateway
+            reconnects and syncs.
 
     ListAPIKeysResponse:
       type: object
@@ -9699,7 +10728,6 @@ components:
         - name
         - displayName
         - artifactUuid
-        - organizationName
         - maskedApiKey
         - status
         - purpose
@@ -9720,9 +10748,6 @@ components:
           type: string
           format: uuid
           description: UUID of the artifact this key is bound to.
-        organizationName:
-          type: string
-          description: Organization name the key belongs to.
         maskedApiKey:
           type: string
           description: Masked representation of the API key (full value is shown only once at creation).
@@ -9765,6 +10790,13 @@ components:
           type: string
           format: date-time
           description: Expiry timestamp (RFC3339); the console rotates the key before this elapses.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every gateway serving the agent's environment had a live
+            websocket connection to the control plane when the key was issued.
+            When false, the key has been stored but will only become usable
+            once the gateway reconnects and syncs.
 
     RotateLLMAPIKeyRequest:
       type: object
@@ -9794,6 +10826,13 @@ components:
         apiKey:
           type: string
           description: New API key value. Returned only once; store it securely.
+        gatewayConnected:
+          type: boolean
+          description: |
+            Whether every target gateway had a live websocket connection to the
+            control plane when the key was rotated. When false, the new key has
+            been stored but will only become usable once the gateway
+            reconnects and syncs.
 
     CreateOrganizationRequest:
       type: object
@@ -10859,9 +11898,6 @@ components:
         description:
           type: string
           description: Description of the data plane
-        orgName:
-          type: string
-          description: Organization name
         createdAt:
           type: string
           format: date-time
@@ -10870,7 +11906,6 @@ components:
         - name
         - displayName
         - description
-        - orgName
         - createdAt
 
     DataPlaneListResponse:
@@ -10891,9 +11926,6 @@ components:
         description:
           type: string
           description: Description of the deployment pipeline
-        orgName:
-          type: string
-          description: Organization name
         createdAt:
           type: string
           format: date-time
@@ -10907,7 +11939,6 @@ components:
         - name
         - displayName
         - description
-        - orgName
         - createdAt
         - promotionPaths
 
@@ -11121,9 +12152,6 @@ components:
         name:
           type: string
           description: Name of the project
-        orgName:
-          type: string
-          description: Name of the organization
         displayName:
           type: string
           description: Display name of the project
@@ -11140,7 +12168,6 @@ components:
       required:
         - uuid
         - name
-        - orgName
         - displayName
         - description
         - deploymentPipeline
@@ -11154,9 +12181,6 @@ components:
         name:
           type: string
           description: Name of the project
-        orgName:
-          type: string
-          description: Name of the organization
         displayName:
           type: string
           description: Display name of the project
@@ -11173,7 +12197,6 @@ components:
       required:
         - uuid
         - name
-        - orgName
         - displayName
         - createdAt
 
@@ -11324,7 +12347,6 @@ components:
         - name
         - displayName
         - type
-        - orgName
         - projectName
         - agentName
         - environmentName
@@ -11354,10 +12376,6 @@ components:
           description: Monitor type
           enum: [future, past]
           example: "future"
-        orgName:
-          type: string
-          description: Organization name
-          example: "default"
         projectName:
           type: string
           description: Project name
@@ -12678,7 +13696,6 @@ components:
       type: object
       required:
         - id
-        - organizationName
         - name
         - displayName
         - dataplaneRef
@@ -12691,10 +13708,6 @@ components:
           type: string
           description: Unique identifier for the environment
           example: 550e8400-e29b-41d4-a716-446655440000
-        organizationName:
-          type: string
-          description: Organization UUID
-          example: 123e4567-e89b-12d3-a456-426614174000
         name:
           type: string
           description: Unique environment name (lowercase, alphanumeric with hyphens)
@@ -13009,7 +14022,6 @@ components:
       type: object
       required:
         - uuid
-        - organizationName
         - name
         - displayName
         - gatewayType
@@ -13023,10 +14035,6 @@ components:
           type: string
           description: Unique identifier for the gateway
           example: 7c4a8d09-ca3f-4b0a-82e9-2e85b96dd8a7
-        organizationName:
-          type: string
-          description: Organization UUID
-          example: 123e4567-e89b-12d3-a456-426614174000
         name:
           type: string
           description: Unique gateway name (lowercase, alphanumeric with hyphens)
@@ -13300,6 +14308,11 @@ components:
           example:
             - 550e8400-e29b-41d4-a716-446655440000
             - 550e8400-e29b-41d4-a716-446655440001
+        orgId:
+          type: string
+          description: >-
+            OU ID of the organization the gateway belongs to.
+          example: 550e8400-e29b-41d4-a716-446655440000
 
     UpdateGatewayRequest:
       type: object
@@ -13988,6 +15001,11 @@ components:
           $ref: "#/components/schemas/MCPProxyCapabilities"
         security:
           $ref: "#/components/schemas/SecurityConfig"
+        environments:
+          type: object
+          description: Per-environment configuration blocks keyed by environment UUID
+          additionalProperties:
+            $ref: "#/components/schemas/MCPEnvironmentConfig"
         inCatalog:
           type: boolean
           description: Whether the MCP proxy is available in the catalog
@@ -14042,6 +15060,11 @@ components:
           $ref: "#/components/schemas/MCPProxyCapabilities"
         security:
           $ref: "#/components/schemas/SecurityConfig"
+        environments:
+          type: object
+          description: Per-environment configuration blocks keyed by environment UUID
+          additionalProperties:
+            $ref: "#/components/schemas/MCPEnvironmentConfig"
         inCatalog:
           type: boolean
           description: Whether the MCP proxy is available in the catalog
@@ -14121,6 +15144,50 @@ components:
             $ref: "#/components/schemas/MCPProxyListItem"
         pagination:
           $ref: "#/components/schemas/PaginationInfo"
+
+    MCPToolScopeBinding:
+      type: object
+      required:
+        - tool
+        - scopes
+      properties:
+        tool:
+          type: string
+          description: Name of the MCP tool the scopes gate
+          example: list_repos
+        scopes:
+          type: array
+          description: Catalog scope names required to call the tool
+          items:
+            type: string
+          example:
+            - repo:read.all
+
+    MCPEnvironmentConfig:
+      type: object
+      description: Per-environment blueprint block of an MCP proxy, keyed by environment UUID.
+      properties:
+        artifactUuid:
+          type: string
+          format: uuid
+          readOnly: true
+        upstream:
+          $ref: "#/components/schemas/UpstreamEndpoint"
+        policies:
+          type: array
+          items:
+            $ref: "#/components/schemas/MCPPolicy"
+        capabilities:
+          $ref: "#/components/schemas/MCPProxyCapabilities"
+        security:
+          $ref: "#/components/schemas/SecurityConfig"
+        toolScopeBindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/MCPToolScopeBinding"
+        deploymentStatus:
+          type: string
+          readOnly: true
 
     MCPPolicy:
       type: object
@@ -14573,6 +15640,9 @@ components:
 
     SecurityConfig:
       type: object
+      description: >-
+        Security configuration. Exactly one variant is active: apiKey or identity
+        (both omitted / enabled=false means no security).
       properties:
         enabled:
           type: boolean
@@ -14580,6 +15650,8 @@ components:
           example: true
         apiKey:
           $ref: "#/components/schemas/APIKeySecurity"
+        identity:
+          $ref: "#/components/schemas/IdentitySecurity"
 
     APIKeySecurity:
       type: object
@@ -14598,6 +15670,16 @@ components:
             - header
             - query
           example: header
+
+    IdentitySecurity:
+      type: object
+      description: >-
+        Agent Identity security — callers present a JWT issued by the environment's
+        IdP. v1 pins the issuer to the ThunderKeyManager key manager.
+      properties:
+        enabled:
+          type: boolean
+          description: Whether Agent Identity security is enabled
 
     # ============================================================================
     # Evaluation Score Schemas
@@ -15269,7 +16351,6 @@ components:
         - name
         - agentId
         - type
-        - organizationName
         - projectName
         - envMappings
         - environmentVariables
@@ -15297,10 +16378,6 @@ components:
           type: string
           description: Type of configuration
           example: "llm"
-        organizationName:
-          type: string
-          description: Organization name
-          example: "acme-corp"
         projectName:
           type: string
           description: Project name
@@ -15484,7 +16561,6 @@ components:
         - name
         - agentId
         - type
-        - organizationName
         - projectName
         - createdAt
       properties:
@@ -15509,10 +16585,6 @@ components:
           type: string
           description: Configuration type
           example: "llm"
-        organizationName:
-          type: string
-          description: Organization name
-          example: "acme-corp"
         projectName:
           type: string
           description: Project name
@@ -15979,7 +17051,6 @@ components:
         - uuid
         - name
         - displayName
-        - organizationName
         - versions
         - createdAt
         - kind
@@ -15996,8 +17067,6 @@ components:
           description: Human-readable name
           example: "Weather Assistant"
         description:
-          type: string
-        organizationName:
           type: string
         kind:
           type: string
@@ -16499,3 +17568,179 @@ components:
           type: integer
           format: int32
           description: Total number of consumers
+
+    AgentProvisioningType:
+      type: string
+      description: Whether the agent runs on the platform (`internal`) or outside it (`external`)
+      example: internal
+
+    AgentThunderStatus:
+      type: string
+      description: |
+        Provisioning status of one AgentID binding. Goes from `pending` to
+        `in_progress` to `completed`, or to `failed` if it runs out of
+        retries (5 attempts over about 15 minutes).
+      enum:
+        - pending
+        - in_progress
+        - completed
+        - failed
+      example: completed
+
+    AgentIdentityEnvironmentView:
+      type: object
+      description: |
+        One environment's AgentID binding. This is a safe view that never
+        includes a secret, even if one is waiting to be claimed. Check
+        `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has
+        anything to return.
+      required:
+        - environmentName
+        - provisioningType
+        - status
+        - hasUnclaimedSecret
+      properties:
+        environmentName:
+          type: string
+          description: Environment this binding belongs to
+          example: production
+        provisioningType:
+          $ref: "#/components/schemas/AgentProvisioningType"
+        status:
+          $ref: "#/components/schemas/AgentThunderStatus"
+        agentId:
+          type: string
+          description: |
+            Thunder's own ID for this identity. This is different from
+            `clientId`, which is the OAuth2 client ID. Empty until
+            provisioning reaches Thunder.
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          description: OAuth2 client ID for this AgentID
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        lastError:
+          type: string
+          description: Most recent provisioning error, if the last attempt failed
+        hasUnclaimedSecret:
+          type: boolean
+          description: |
+            True only when this is a completed external-agent binding whose
+            secret hasn't been claimed yet. Always false for platform-hosted
+            agents and already-claimed bindings.
+        requestedBy:
+          type: string
+          description: Who requested this binding, kept for audit purposes only
+
+    AgentIdentityActionRequest:
+      type: object
+      description: Request body for regenerating an AgentID secret
+      required:
+        - environment
+      properties:
+        environment:
+          type: string
+          description: Environment name to regenerate the AgentID secret in
+          example: production
+
+    AgentClaimSecretResponse:
+      type: object
+      description: |
+        Response for the one-time claim of an external agent's secret. This
+        is the only response that will ever include this secret value.
+      required:
+        - environmentName
+        - agentId
+        - clientId
+        - clientSecret
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        agentId:
+          type: string
+          description: Thunder's own ID for this identity, different from `clientId`
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          description: The OAuth2 client secret. Save it now, since it can't be fetched this way again.
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4
+        status:
+          type: string
+          example: claimed
+
+    AgentRegenerateSecretResponse:
+      type: object
+      description: Response for rotating an AgentID secret
+      required:
+        - environmentName
+        - provisioningType
+        - clientId
+        - clientSecret
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        provisioningType:
+          $ref: "#/components/schemas/AgentProvisioningType"
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          description: The newly generated OAuth2 client secret, sent back to both platform-hosted and external agents
+          example: f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3
+        status:
+          type: string
+          example: regenerated
+
+    AgentRevokeSecretResponse:
+      type: object
+      description: |
+        Response for revoking an AgentID secret. Never includes a
+        `clientSecret`, since revoke turns access off rather than rotating it.
+      required:
+        - environmentName
+        - clientId
+        - status
+      properties:
+        environmentName:
+          type: string
+          example: production
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        status:
+          type: string
+          example: revoked
+
+    AgentCredentialsResponse:
+      type: object
+      description: |
+        A platform-hosted agent's current AgentID credential. Unlike the
+        other identity responses, `clientSecret` is always included here
+        and you can call this endpoint as many times as you like.
+      required:
+        - environmentName
+        - agentId
+        - clientId
+        - clientSecret
+      properties:
+        environmentName:
+          type: string
+          example: production
+        agentId:
+          type: string
+          description: Thunder's own ID for this identity, different from `clientId`
+          example: 3fa2c8e1-6b4d-4e2a-9c1a-2f8e7d5b1a90
+        clientId:
+          type: string
+          example: 9c1b7a44-3e2f-4d8a-b1c5-6a9f0e2d7c81
+        clientSecret:
+          type: string
+          example: a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4

@@ -37,6 +37,8 @@ type ObserverConfig struct {
 	TokenURL     string
 	ClientID     string
 	ClientSecret string
+	// DefaultNamespace scopes all trace queries to a single namespace.
+	DefaultNamespace string
 }
 
 // AuthConfig holds JWT authentication configuration
@@ -59,10 +61,11 @@ func Load() (*Config, error) {
 			Port: getEnvAsInt("TRACES_OBSERVER_PORT", 9098),
 		},
 		Observer: ObserverConfig{
-			BaseURL:      getEnv("OBSERVER_BASE_URL", ""),
-			TokenURL:     getEnv("IDP_TOKEN_URL", ""),
-			ClientID:     getEnv("IDP_CLIENT_ID", ""),
-			ClientSecret: getEnv("IDP_CLIENT_SECRET", ""),
+			BaseURL:          getEnv("OBSERVER_BASE_URL", ""),
+			TokenURL:         getEnv("IDP_TOKEN_URL", ""),
+			ClientID:         getEnv("IDP_CLIENT_ID", ""),
+			ClientSecret:     getEnv("IDP_CLIENT_SECRET", ""),
+			DefaultNamespace: getEnv("OBSERVER_DEFAULT_NAMESPACE", "default"),
 		},
 		LogLevel: getEnv("LOG_LEVEL", "INFO"),
 		Auth: AuthConfig{

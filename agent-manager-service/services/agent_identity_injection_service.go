@@ -129,7 +129,7 @@ type AgentIdentityInjectionService interface {
 	// error. A non-nil error means the current state could not be determined
 	// (or the SecretReference could not be ensured) and the caller must NOT
 	// proceed with an env-var rewrite that would silently drop the vars.
-	EnvVarsForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error)
+	EnvVarsForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) ([]client.EnvVar, error)
 
 	// InjectForEnvironment pushes the identity env vars into the agent's live
 	// workload for one environment (ReleaseBinding merge + pod rollout).
@@ -137,13 +137,13 @@ type AgentIdentityInjectionService interface {
 	// not deployed in that environment yet (the deploy flow injects at deploy
 	// time). Used by the post-provisioning hook so an agent deployed BEFORE
 	// its AgentID finished provisioning still receives the credential.
-	InjectForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) error
+	InjectForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) error
 
 	// RefreshAfterRotation re-asserts the SecretReference CR with a fresh
 	// rotated-at annotation (forcing OpenChoreo to re-read the rotated value
 	// from OpenBao) and rolls the pod so it starts with the new secret.
 	// No-op for external agents and unprovisioned bindings.
-	RefreshAfterRotation(ctx context.Context, orgName, projectName, agentName, envName string) error
+	RefreshAfterRotation(ctx context.Context, ouID, projectName, agentName, envName string) error
 
 	// RemoveForEnvironment removes the identity env vars from the agent's
 	// workload for one environment and deletes the backing SecretReference CR
@@ -154,13 +154,13 @@ type AgentIdentityInjectionService interface {
 	// that environment's vars at Workload level, shared by all environments —
 	// removing them while revoking a DIFFERENT environment's credential would
 	// break the lowest environment's pod).
-	RemoveForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error
+	RemoveForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string, includeWorkloadLevel bool) error
 
 	// CleanupForEnvironment deletes the AgentID SecretReference CR for one
 	// (agent, environment) — used on agent deletion, where the workload itself
 	// is being deleted so env var removal is pointless but the CR would leak.
 	// Best-effort: not-found is success.
-	CleanupForEnvironment(ctx context.Context, orgName, agentName, envName string) error
+	CleanupForEnvironment(ctx context.Context, ouID, agentName, envName string) error
 }
 
 type agentIdentityInjectionService struct {
@@ -292,8 +292,8 @@ func (s *agentIdentityInjectionService) resolveAgentIdentityScopes(_ context.Con
 
 // injectableBinding returns the binding when it is in an injectable state, or
 // nil when there is (legitimately) nothing to inject for this agent+env.
-func (s *agentIdentityInjectionService) injectableBinding(ctx context.Context, orgName, projectName, agentName, envName string) (*models.AgentThunderClient, error) {
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+func (s *agentIdentityInjectionService) injectableBinding(ctx context.Context, ouID, projectName, agentName, envName string) (*models.AgentThunderClient, error) {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return nil, nil //nolint:nilnil // documented "nothing to inject" state, checked by every caller
@@ -319,7 +319,7 @@ func (s *agentIdentityInjectionService) injectableBinding(ctx context.Context, o
 func (s *agentIdentityInjectionService) ensureSecretReference(ctx context.Context, binding *models.AgentThunderClient, templateAnnotations map[string]string) (string, error) {
 	refName := AgentIdentitySecretRefName(binding.AgentName, binding.EnvironmentName)
 	req := client.CreateSecretReferenceRequest{
-		Namespace:           binding.OrgName,
+		Namespace:           binding.OUID,
 		Name:                refName,
 		ProjectName:         binding.ProjectName,
 		ComponentName:       binding.AgentName,
@@ -329,24 +329,24 @@ func (s *agentIdentityInjectionService) ensureSecretReference(ctx context.Contex
 		TemplateAnnotations: templateAnnotations,
 	}
 
-	_, getErr := s.ocClient.GetSecretReference(ctx, binding.OrgName, refName)
+	_, getErr := s.ocClient.GetSecretReference(ctx, binding.OUID, refName)
 	if getErr != nil {
 		if !errors.Is(getErr, utils.ErrNotFound) {
 			return "", fmt.Errorf("check agent identity SecretReference %q: %w", refName, getErr)
 		}
-		if _, createErr := s.ocClient.CreateSecretReference(ctx, binding.OrgName, req); createErr != nil {
+		if _, createErr := s.ocClient.CreateSecretReference(ctx, binding.OUID, req); createErr != nil {
 			// A concurrent caller may have created it between Get and Create.
 			if !errors.Is(createErr, utils.ErrConflict) {
 				return "", fmt.Errorf("create agent identity SecretReference %q: %w", refName, createErr)
 			}
-			if _, updateErr := s.ocClient.UpdateSecretReference(ctx, binding.OrgName, refName, req); updateErr != nil {
+			if _, updateErr := s.ocClient.UpdateSecretReference(ctx, binding.OUID, refName, req); updateErr != nil {
 				return "", fmt.Errorf("update agent identity SecretReference %q after create conflict: %w", refName, updateErr)
 			}
 		}
 		return refName, nil
 	}
 
-	if _, updateErr := s.ocClient.UpdateSecretReference(ctx, binding.OrgName, refName, req); updateErr != nil {
+	if _, updateErr := s.ocClient.UpdateSecretReference(ctx, binding.OUID, refName, req); updateErr != nil {
 		return "", fmt.Errorf("update agent identity SecretReference %q: %w", refName, updateErr)
 	}
 	return refName, nil
@@ -357,7 +357,7 @@ func (s *agentIdentityInjectionService) ensureSecretReference(ctx context.Contex
 // the cluster, matching the convention that internal agents reach platform
 // services via in-cluster addresses (see buildProxyURL).
 func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, binding *models.AgentThunderClient, secretRefName string) []client.EnvVar {
-	scopes := s.resolveAgentIdentityScopes(ctx, binding.OrgName, binding.ProjectName, binding.AgentName, binding.EnvironmentName)
+	scopes := s.resolveAgentIdentityScopes(ctx, binding.OUID, binding.ProjectName, binding.AgentName, binding.EnvironmentName)
 	return []client.EnvVar{
 		{Key: client.EnvVarAgentIdentityClientID, Value: binding.ThunderClientID},
 		{
@@ -369,13 +369,13 @@ func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, bindin
 				},
 			},
 		},
-		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(binding.OrgName, binding.EnvironmentName)},
+		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(binding.OUID, binding.EnvironmentName)},
 		{Key: client.EnvVarAgentIdentityScopes, Value: strings.Join(scopes, " ")},
 	}
 }
 
-func (s *agentIdentityInjectionService) envVarsForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string, templateAnnotations map[string]string) ([]client.EnvVar, error) {
-	binding, err := s.injectableBinding(ctx, orgName, projectName, agentName, envName)
+func (s *agentIdentityInjectionService) envVarsForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string, templateAnnotations map[string]string) ([]client.EnvVar, error) {
+	binding, err := s.injectableBinding(ctx, ouID, projectName, agentName, envName)
 	if err != nil || binding == nil {
 		return nil, err
 	}
@@ -386,12 +386,12 @@ func (s *agentIdentityInjectionService) envVarsForEnvironment(ctx context.Contex
 	return s.buildEnvVars(ctx, binding, refName), nil
 }
 
-func (s *agentIdentityInjectionService) EnvVarsForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error) {
-	return s.envVarsForEnvironment(ctx, orgName, projectName, agentName, envName, nil)
+func (s *agentIdentityInjectionService) EnvVarsForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) ([]client.EnvVar, error) {
+	return s.envVarsForEnvironment(ctx, ouID, projectName, agentName, envName, nil)
 }
 
-func (s *agentIdentityInjectionService) InjectForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) error {
-	envVars, err := s.EnvVarsForEnvironment(ctx, orgName, projectName, agentName, envName)
+func (s *agentIdentityInjectionService) InjectForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) error {
+	envVars, err := s.EnvVarsForEnvironment(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		return err
 	}
@@ -404,7 +404,7 @@ func (s *agentIdentityInjectionService) InjectForEnvironment(ctx context.Context
 	// deployed in this environment yet (kind-sourced agents, which have no
 	// ReleaseBinding, pick the vars up on their next deploy instead).
 	if err := withReleaseBindingRetry(func() error {
-		return s.ocClient.UpdateReleaseBindingEnvVars(ctx, orgName, projectName, agentName, envName, envVars)
+		return s.ocClient.UpdateReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, envVars)
 	}); err != nil {
 		return fmt.Errorf("inject agent identity env vars into release binding: %w", err)
 	}
@@ -412,11 +412,11 @@ func (s *agentIdentityInjectionService) InjectForEnvironment(ctx context.Context
 	return nil
 }
 
-func (s *agentIdentityInjectionService) RefreshAfterRotation(ctx context.Context, orgName, projectName, agentName, envName string) error {
+func (s *agentIdentityInjectionService) RefreshAfterRotation(ctx context.Context, ouID, projectName, agentName, envName string) error {
 	annotations := map[string]string{
 		secretRotatedAtAnnotation: s.now().UTC().Format(secretRotatedAtFormat),
 	}
-	envVars, err := s.envVarsForEnvironment(ctx, orgName, projectName, agentName, envName, annotations)
+	envVars, err := s.envVarsForEnvironment(ctx, ouID, projectName, agentName, envName, annotations)
 	if err != nil {
 		return err
 	}
@@ -427,7 +427,7 @@ func (s *agentIdentityInjectionService) RefreshAfterRotation(ctx context.Context
 	// stamps restartedAt on the ReleaseBinding — the pod rollout that makes the
 	// workload actually pick up the refreshed Secret.
 	if err := withReleaseBindingRetry(func() error {
-		return s.ocClient.UpdateReleaseBindingEnvVars(ctx, orgName, projectName, agentName, envName, envVars)
+		return s.ocClient.UpdateReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, envVars)
 	}); err != nil {
 		return fmt.Errorf("roll out pod after agent identity secret rotation: %w", err)
 	}
@@ -435,8 +435,8 @@ func (s *agentIdentityInjectionService) RefreshAfterRotation(ctx context.Context
 	return nil
 }
 
-func (s *agentIdentityInjectionService) RemoveForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error {
-	binding, err := s.repo.Get(ctx, orgName, projectName, agentName, envName)
+func (s *agentIdentityInjectionService) RemoveForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string, includeWorkloadLevel bool) error {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
 	if err != nil {
 		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
 			return nil
@@ -455,7 +455,7 @@ func (s *agentIdentityInjectionService) RemoveForEnvironment(ctx context.Context
 	// Remove from the per-environment ReleaseBinding overrides (idempotent —
 	// nil when not deployed) and roll the pod.
 	if err := withReleaseBindingRetry(func() error {
-		return s.ocClient.RemoveReleaseBindingEnvVars(ctx, orgName, projectName, agentName, envName, keys)
+		return s.ocClient.RemoveReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, keys)
 	}); err != nil {
 		return fmt.Errorf("remove agent identity env vars from release binding: %w", err)
 	}
@@ -464,26 +464,26 @@ func (s *agentIdentityInjectionService) RemoveForEnvironment(ctx context.Context
 	// revoking that environment's credential.
 	if includeWorkloadLevel {
 		if err := withReleaseBindingRetry(func() error {
-			return s.ocClient.RemoveWorkloadEnvVars(ctx, orgName, agentName, keys)
+			return s.ocClient.RemoveWorkloadEnvVars(ctx, ouID, agentName, keys)
 		}); err != nil {
 			return fmt.Errorf("remove agent identity env vars from workload: %w", err)
 		}
 	}
 
-	if err := s.deleteSecretReference(ctx, orgName, agentName, envName); err != nil {
+	if err := s.deleteSecretReference(ctx, ouID, agentName, envName); err != nil {
 		return err
 	}
 	s.logger.Info("Removed agent identity env vars from workload", "agentName", agentName, "envName", envName, "includeWorkloadLevel", includeWorkloadLevel)
 	return nil
 }
 
-func (s *agentIdentityInjectionService) CleanupForEnvironment(ctx context.Context, orgName, agentName, envName string) error {
-	return s.deleteSecretReference(ctx, orgName, agentName, envName)
+func (s *agentIdentityInjectionService) CleanupForEnvironment(ctx context.Context, ouID, agentName, envName string) error {
+	return s.deleteSecretReference(ctx, ouID, agentName, envName)
 }
 
-func (s *agentIdentityInjectionService) deleteSecretReference(ctx context.Context, orgName, agentName, envName string) error {
+func (s *agentIdentityInjectionService) deleteSecretReference(ctx context.Context, ouID, agentName, envName string) error {
 	refName := AgentIdentitySecretRefName(agentName, envName)
-	if err := s.ocClient.DeleteSecretReference(ctx, orgName, refName); err != nil {
+	if err := s.ocClient.DeleteSecretReference(ctx, ouID, refName); err != nil {
 		if errors.Is(err, utils.ErrNotFound) {
 			return nil
 		}

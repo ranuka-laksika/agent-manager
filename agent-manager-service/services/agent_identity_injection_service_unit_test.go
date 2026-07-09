@@ -45,7 +45,7 @@ const (
 
 func completedInternalBinding() *models.AgentThunderClient {
 	return &models.AgentThunderClient{
-		OrgName:          testIdentityOrg,
+		OUID:             testIdentityOrg,
 		ProjectName:      testIdentityProject,
 		AgentName:        testIdentityAgent,
 		EnvironmentName:  testIdentityEnv,

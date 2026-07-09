@@ -92,7 +92,6 @@ func TestBuildAgent(t *testing.T) {
 
 		// Validate call parameters
 		triggerBuildCall := openChoreoClient.TriggerBuildCalls()[0]
-		require.Equal(t, buildTestOrgName, triggerBuildCall.NamespaceName)
 		require.Equal(t, buildTestProjName, triggerBuildCall.ProjectName)
 		require.Equal(t, buildTestAgentName, triggerBuildCall.ComponentName)
 		require.Equal(t, commitId, triggerBuildCall.CommitID)
@@ -141,7 +140,6 @@ func TestBuildAgent(t *testing.T) {
 
 		// Validate call parameters - commitId is empty when not provided
 		triggerBuildCall := openChoreoClient.TriggerBuildCalls()[0]
-		require.Equal(t, buildTestOrgName, triggerBuildCall.NamespaceName)
 		require.Equal(t, buildTestProjName, triggerBuildCall.ProjectName)
 		require.Equal(t, buildTestAgentName, triggerBuildCall.ComponentName)
 		require.Equal(t, "", triggerBuildCall.CommitID)

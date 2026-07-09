@@ -46,7 +46,7 @@ func (s *LLMTemplateSeeder) SetTemplates(templates []*models.LLMProviderTemplate
 }
 
 // SeedForOrg seeds default LLM provider templates for a specific organization
-func (s *LLMTemplateSeeder) SeedForOrg(orgName string) error {
+func (s *LLMTemplateSeeder) SeedForOrg(ouID string) error {
 	if s == nil || s.templateRepo == nil {
 		return nil
 	}
@@ -56,13 +56,13 @@ func (s *LLMTemplateSeeder) SeedForOrg(orgName string) error {
 	}
 
 	// Get count of existing templates
-	totalCount, err := s.templateRepo.Count(orgName)
+	totalCount, err := s.templateRepo.Count(ouID)
 	if err != nil {
 		return fmt.Errorf("failed to count existing templates: %w", err)
 	}
 
 	// Get all existing templates for this organization
-	existing, err := s.templateRepo.List(orgName, totalCount, 0)
+	existing, err := s.templateRepo.List(ouID, totalCount, 0)
 	if err != nil {
 		return fmt.Errorf("failed to list existing templates: %w", err)
 	}
@@ -108,7 +108,7 @@ func (s *LLMTemplateSeeder) SeedForOrg(orgName string) error {
 
 		// Create new template
 		toCreate := &models.LLMProviderTemplate{
-			OrganizationName: orgName,
+			OUID:             ouID,
 			Handle:           tpl.Handle,
 			Name:             tpl.Name,
 			Description:      tpl.Description,
@@ -125,7 +125,7 @@ func (s *LLMTemplateSeeder) SeedForOrg(orgName string) error {
 
 		if err := s.templateRepo.Create(toCreate); err != nil {
 			// Be tolerant to concurrent startup / repeated seeding
-			exists, existsErr := s.templateRepo.Exists(tpl.Handle, orgName)
+			exists, existsErr := s.templateRepo.Exists(tpl.Handle, ouID)
 			if existsErr == nil && exists {
 				continue
 			}

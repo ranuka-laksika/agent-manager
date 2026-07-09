@@ -1,5 +1,5 @@
 #!/bin/bash
-# Registers the Agent Manager (amp) resource server and all 81 permissions in Thunder.
+# Registers the Agent Manager (amp) resource server and all 104 permissions in Thunder.
 # Runs against the external Thunder endpoint using amp-system-client credentials.
 #
 # Usage:
@@ -171,15 +171,19 @@ R_GIT=$(create_or_get_resource     "$RS_ID" "Git Secret"            "git-secret"
 R_LLMT=$(create_or_get_resource    "$RS_ID" "LLM Provider Template" "llm-provider-template" "LLM provider template management")
 R_LLM=$(create_or_get_resource     "$RS_ID" "LLM Provider"          "llm-provider"          "LLM provider management")
 R_MCP=$(create_or_get_resource     "$RS_ID" "MCP Server"            "mcp-server"            "MCP server management")
+R_SCOPE=$(create_or_get_resource   "$RS_ID" "Scope"                 "scope"                 "Scope catalog management")
+R_AGENTID=$(create_or_get_resource "$RS_ID" "Agent Identity"        "agent-identity"        "Agent identity management")
 R_PROXY=$(create_or_get_resource   "$RS_ID" "LLM Proxy"             "llm-proxy"             "LLM proxy management")
 R_EVAL=$(create_or_get_resource    "$RS_ID" "Evaluator"             "evaluator"             "Evaluator management")
 R_AGENT=$(create_or_get_resource   "$RS_ID" "Agent"                 "agent"                 "Agent management")
+R_KIND=$(create_or_get_resource    "$RS_ID" "Agent Kind"            "agent-kind"            "Agent kind management")
 R_MON=$(create_or_get_resource     "$RS_ID" "Monitor"               "monitor"               "Monitor management")
 R_OBS=$(create_or_get_resource     "$RS_ID" "Observability"         "observability"         "Observability dashboards and metrics")
 R_ROLE=$(create_or_get_resource    "$RS_ID" "Role"                  "role"                  "Role management")
 R_GROUP=$(create_or_get_resource   "$RS_ID" "Group"                 "group"                 "Group management")
 R_CAT=$(create_or_get_resource     "$RS_ID" "Catalog"               "catalog"               "Resource catalog")
 R_REPO=$(create_or_get_resource    "$RS_ID" "Repository"            "repository"            "Source repository browsing")
+R_PROFILE=$(create_or_get_resource "$RS_ID" "Profile"               "profile"               "User profile management")
 log_info "Level-1 resources created."
 
 # ===========================================================================
@@ -188,9 +192,11 @@ log_info "Level-1 resources created."
 log_info "Creating level-2 sub-resources..."
 R_GW_TOKEN=$(create_or_get_resource    "$RS_ID" "Gateway Token"        "token"   "Gateway token management"           "$R_GW")
 R_LLM_KEY=$(create_or_get_resource     "$RS_ID" "LLM Provider API Key" "api-key" "LLM provider API key management"    "$R_LLM")
+R_MCP_KEY=$(create_or_get_resource     "$RS_ID" "MCP Server API Key"   "api-key" "MCP server API key management"      "$R_MCP")
 R_PROXY_KEY=$(create_or_get_resource   "$RS_ID" "LLM Proxy API Key"    "api-key" "LLM proxy API key management"       "$R_PROXY")
 R_AGENT_DEPLOY=$(create_or_get_resource "$RS_ID" "Agent Deployment"    "deploy"  "Agent deployment operations"        "$R_AGENT")
 R_AGENT_TOKEN=$(create_or_get_resource  "$RS_ID" "Agent Token"         "token"   "Agent token management"             "$R_AGENT")
+R_AGENT_KEY=$(create_or_get_resource    "$RS_ID" "Agent API Key"       "api-key" "Agent API key management"           "$R_AGENT")
 R_MON_SCORE=$(create_or_get_resource   "$RS_ID" "Monitor Score"        "score"   "Monitor score management"           "$R_MON")
 log_info "Level-2 sub-resources created."
 
@@ -253,6 +259,17 @@ create_action "$RS_ID" "$R_MCP"          "Update"              "update"         
 create_action "$RS_ID" "$R_MCP"          "Delete"              "delete"              "Delete an MCP server"
 create_action "$RS_ID" "$R_MCP"          "Configure Guardrail" "configure-guardrail" "Configure guardrails on an MCP server"
 create_action "$RS_ID" "$R_MCP"          "Connect"             "connect"             "Connect an agent to an MCP server"
+create_action "$RS_ID" "$R_MCP_KEY"      "Manage"              "manage"              "Create, update, and delete MCP server API keys"
+
+create_action "$RS_ID" "$R_SCOPE"        "Create"  "create"  "Create a scope"
+create_action "$RS_ID" "$R_SCOPE"        "Read"    "read"    "View scopes"
+create_action "$RS_ID" "$R_SCOPE"        "Update"  "update"  "Update a scope"
+create_action "$RS_ID" "$R_SCOPE"        "Delete"  "delete"  "Delete a scope"
+
+create_action "$RS_ID" "$R_AGENTID"      "Create"  "create"  "Create an agent identity"
+create_action "$RS_ID" "$R_AGENTID"      "Read"    "read"    "View agent identities"
+create_action "$RS_ID" "$R_AGENTID"      "Update"  "update"  "Update an agent identity"
+create_action "$RS_ID" "$R_AGENTID"      "Delete"  "delete"  "Delete an agent identity"
 
 create_action "$RS_ID" "$R_PROXY"        "Create"  "create"  "Create an LLM proxy"
 create_action "$RS_ID" "$R_PROXY"        "Read"    "read"    "View LLM proxies and deployments"
@@ -277,6 +294,12 @@ create_action "$RS_ID" "$R_AGENT"        "Suspend"  "suspend"  "Suspend or stop 
 create_action "$RS_ID" "$R_AGENT_DEPLOY" "Non-Production" "non-production" "Deploy an agent to a non-production environment"
 create_action "$RS_ID" "$R_AGENT_DEPLOY" "Production"     "production"     "Deploy an agent to a production environment"
 create_action "$RS_ID" "$R_AGENT_TOKEN"  "Manage"         "manage"         "Generate agent tokens"
+create_action "$RS_ID" "$R_AGENT_KEY"    "Manage"         "manage"         "Create, update, and delete agent API keys"
+
+create_action "$RS_ID" "$R_KIND"         "Create"  "create"  "Create an agent kind"
+create_action "$RS_ID" "$R_KIND"         "Read"    "read"    "View agent kinds and versions"
+create_action "$RS_ID" "$R_KIND"         "Update"  "update"  "Update an agent kind"
+create_action "$RS_ID" "$R_KIND"         "Delete"  "delete"  "Delete an agent kind"
 
 create_action "$RS_ID" "$R_MON"          "Create"   "create"   "Create a monitor"
 create_action "$RS_ID" "$R_MON"          "Read"     "read"     "View monitors, runs, and run logs"
@@ -303,4 +326,7 @@ create_action "$RS_ID" "$R_GROUP"        "Delete"  "delete"  "Delete a group"
 create_action "$RS_ID" "$R_CAT"          "Read"    "read"    "View the resource catalog"
 create_action "$RS_ID" "$R_REPO"         "Read"    "read"    "Browse repository branches and commits"
 
-log_success "Agent Manager resource server registration complete (84 permissions registered)."
+create_action "$RS_ID" "$R_PROFILE"      "Read"              "read"              "View user profile information"
+create_action "$RS_ID" "$R_PROFILE"      "Update Attributes" "update-attributes" "Update user attributes"
+
+log_success "Agent Manager resource server registration complete (104 permissions registered)."

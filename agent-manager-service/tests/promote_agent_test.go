@@ -89,7 +89,7 @@ func envVarValue(envVars []client.EnvVar, key string) string {
 func seedReadyAgentIdentityRow(t *testing.T, orgName, projectName, agentName, envName string) {
 	t.Helper()
 	binding := &models.AgentThunderClient{
-		OrgName:          orgName,
+		OUID:             orgName,
 		ProjectName:      projectName,
 		AgentName:        agentName,
 		EnvironmentName:  envName,
@@ -127,7 +127,12 @@ func TestPromoteAgent(t *testing.T) {
 	// aren't blocked by it. Seeded once (not per-subtest) because the table
 	// has a unique constraint on (org, project, agent, env) and every
 	// subtest shares this same agentName/org/env combination.
-	seedReadyAgentIdentityRow(t, testPromoteOrgName, "my-project", agentName, "production")
+	//
+	// Seeded under jwtassertion.MockOUID, not testPromoteOrgName: the mock
+	// middleware always mints tokens with OUID=MockOUID regardless of the
+	// org handle in the URL path (see its doc comment), and PromoteAgent's
+	// identity lookup is keyed by that token OUID — not the path org.
+	seedReadyAgentIdentityRow(t, jwtassertion.MockOUID, "my-project", agentName, "production")
 
 	promoteURL := func(org string) string {
 		return fmt.Sprintf("/api/v1/orgs/%s/projects/my-project/agents/%s/promote", org, agentName)
@@ -322,7 +327,7 @@ func TestPromoteAgent(t *testing.T) {
 
 	t.Run("returns 404 when the organization is not found", func(t *testing.T) {
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
-		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, authMiddleware)
+		app := apitestutils.MakeAppClientWithDeps(t, wiring.TestClients{OpenChoreoClient: ocClient}, jwtassertion.NewMockMiddlewareWithOUID(t, "nonexistent-org"))
 
 		payload := spec.PromoteAgentRequest{SourceEnvironment: "development", TargetEnvironment: "production"}
 		body, _ := json.Marshal(payload)

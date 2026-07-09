@@ -179,6 +179,9 @@ type OpenBaoConfig struct {
 type OpenChoreoConfig struct {
 	// BaseURL is the OpenChoreo API base URL
 	BaseURL string
+	// DefaultNamespace is the OpenChoreo namespace (organization) all API
+	// calls are scoped to. The deployment runs single-namespace.
+	DefaultNamespace string
 }
 
 // GitHubConfig holds GitHub API configuration

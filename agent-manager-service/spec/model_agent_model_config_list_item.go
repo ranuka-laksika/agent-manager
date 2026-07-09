@@ -30,8 +30,6 @@ type AgentModelConfigListItem struct {
 	AgentId string `json:"agentId"`
 	// Configuration type
 	Type string `json:"type"`
-	// Organization name
-	OrganizationName string `json:"organizationName"`
 	// Project name
 	ProjectName string `json:"projectName"`
 	// Creation timestamp
@@ -42,13 +40,12 @@ type AgentModelConfigListItem struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentModelConfigListItem(uuid string, name string, agentId string, type_ string, organizationName string, projectName string, createdAt time.Time) *AgentModelConfigListItem {
+func NewAgentModelConfigListItem(uuid string, name string, agentId string, type_ string, projectName string, createdAt time.Time) *AgentModelConfigListItem {
 	this := AgentModelConfigListItem{}
 	this.Uuid = uuid
 	this.Name = name
 	this.AgentId = agentId
 	this.Type = type_
-	this.OrganizationName = organizationName
 	this.ProjectName = projectName
 	this.CreatedAt = createdAt
 	return &this
@@ -190,30 +187,6 @@ func (o *AgentModelConfigListItem) SetType(v string) {
 	o.Type = v
 }
 
-// GetOrganizationName returns the OrganizationName field value
-func (o *AgentModelConfigListItem) GetOrganizationName() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.OrganizationName
-}
-
-// GetOrganizationNameOk returns a tuple with the OrganizationName field value
-// and a boolean to check if the value has been set.
-func (o *AgentModelConfigListItem) GetOrganizationNameOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.OrganizationName, true
-}
-
-// SetOrganizationName sets field value
-func (o *AgentModelConfigListItem) SetOrganizationName(v string) {
-	o.OrganizationName = v
-}
-
 // GetProjectName returns the ProjectName field value
 func (o *AgentModelConfigListItem) GetProjectName() string {
 	if o == nil {
@@ -279,7 +252,6 @@ func (o AgentModelConfigListItem) ToMap() (map[string]interface{}, error) {
 	}
 	toSerialize["agentId"] = o.AgentId
 	toSerialize["type"] = o.Type
-	toSerialize["organizationName"] = o.OrganizationName
 	toSerialize["projectName"] = o.ProjectName
 	toSerialize["createdAt"] = o.CreatedAt
 	return toSerialize, nil

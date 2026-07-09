@@ -50,6 +50,8 @@ spec:
               value: "{{ .Values.tracesObserver.observer.baseUrl }}"
             - name: IDP_TOKEN_URL
               value: "{{ .Values.tracesObserver.observer.idpTokenUrl }}"
+            - name: OBSERVER_DEFAULT_NAMESPACE
+              value: "{{ .Values.tracesObserver.observer.defaultNamespace }}"
             - name: IDP_CLIENT_ID
               valueFrom:
                 secretKeyRef:

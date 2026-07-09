@@ -32,14 +32,14 @@ func NewDeploymentHandler(agentSvc services.AgentManagerService) *DeploymentHand
 	return &DeploymentHandler{agentSvc: agentSvc}
 }
 
-func (h *DeploymentHandler) GetAgentDeployments(ctx context.Context, orgName string, projectName string, agentName string) ([]*models.DeploymentResponse, error) {
-	return h.agentSvc.GetAgentDeployments(ctx, orgName, projectName, agentName)
+func (h *DeploymentHandler) GetAgentDeployments(ctx context.Context, ouID string, projectName string, agentName string) ([]*models.DeploymentResponse, error) {
+	return h.agentSvc.GetAgentDeployments(ctx, ouID, projectName, agentName)
 }
 
-func (h *DeploymentHandler) DeployAgent(ctx context.Context, orgName string, projectName string, agentName string, req *spec.DeployAgentRequest) (string, error) {
-	return h.agentSvc.DeployAgent(ctx, orgName, projectName, agentName, req)
+func (h *DeploymentHandler) DeployAgent(ctx context.Context, ouID string, projectName string, agentName string, req *spec.DeployAgentRequest) (string, error) {
+	return h.agentSvc.DeployAgent(ctx, ouID, projectName, agentName, req)
 }
 
-func (h *DeploymentHandler) UpdateDeploymentState(ctx context.Context, orgName string, projectName string, agentName string, environment string, state string) error {
-	return h.agentSvc.UpdateAgentDeploymentState(ctx, orgName, projectName, agentName, environment, state)
+func (h *DeploymentHandler) UpdateDeploymentState(ctx context.Context, ouID string, projectName string, agentName string, environment string, state string) error {
+	return h.agentSvc.UpdateAgentDeploymentState(ctx, ouID, projectName, agentName, environment, state)
 }

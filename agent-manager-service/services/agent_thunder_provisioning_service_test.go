@@ -99,7 +99,7 @@ func TestAttemptProvision_Success_CreatesIdentityAndStoresSecret(t *testing.T) {
 	svc := newTestProvisioningService(repo, resolver, store)
 	bindingID := uuid.New()
 	binding := models.AgentThunderClient{
-		ID: bindingID, OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: bindingID, OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
 	}
 
@@ -147,7 +147,7 @@ func TestAttemptProvision_AlreadyHasThunderAgentID_SkipsCreate(t *testing.T) {
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 		ThunderAgentID: "already-created", ThunderClientID: "already-client-id",
 		// SecretRefPath deliberately empty: models a binding whose identity was
 		// created on a prior attempt, but that attempt failed before a secret
@@ -200,7 +200,7 @@ func TestAttemptProvision_AlreadyHasSecretRef_SkipsRecovery(t *testing.T) {
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 		ThunderAgentID: "already-created", ThunderClientID: "already-client-id", SecretRefPath: "existing/path",
 	}
 
@@ -248,7 +248,7 @@ func TestAttemptProvision_ConflictFallback_RegeneratesSecretToRecover(t *testing
 
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 	}
 	svc.AttemptProvision(context.Background(), binding)
 
@@ -290,7 +290,7 @@ func TestAttemptProvision_TransientFailure_SchedulesRetryWithBackoff(t *testing.
 			}
 			svc := newTestProvisioningService(repo, resolver, store)
 			binding := models.AgentThunderClient{
-				ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+				ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 				EnvironmentName: "staging", AttemptCount: tt.attemptCountSoFar,
 			}
 
@@ -328,7 +328,7 @@ func TestAttemptProvision_FifthFailure_MarksFailedNoMoreRetries(t *testing.T) {
 	svc := newTestProvisioningService(repo, resolver, store)
 	// 4 attempts already made; this is the 5th (and final, per the max-5 budget).
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", AttemptCount: 4,
 	}
 
@@ -374,7 +374,7 @@ func TestAttemptProvision_ThunderNotProvisioned_RetriesLikeAnyOtherFailure(t *te
 	}
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "no-thunder-env",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "no-thunder-env",
 	}
 
 	svc.AttemptProvision(context.Background(), binding)
@@ -420,7 +420,7 @@ func TestAttemptProvision_ClaimFails_SkipsWithoutTouchingThunder(t *testing.T) {
 	}
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 	}
 
 	svc.AttemptProvision(context.Background(), binding)
@@ -450,7 +450,7 @@ func TestAttemptProvision_PanicIsRecovered_MarksBindingRetryable(t *testing.T) {
 	}
 	svc := newTestProvisioningService(repo, resolver, store)
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent", EnvironmentName: "staging",
 	}
 
 	assert.NotPanics(t, func() {
@@ -1687,7 +1687,7 @@ func TestAttemptProvision_Success_InternalAgent_InjectsWorkloadCredentials(t *te
 	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
 
 	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
 	})
 
@@ -1704,7 +1704,7 @@ func TestAttemptProvision_Success_ExternalAgent_SkipsWorkloadInjection(t *testin
 	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, &agentIdentityInjectorStub{})
 
 	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeExternal,
 	})
 
@@ -1723,7 +1723,7 @@ func TestAttemptProvision_InjectorFailure_DoesNotAffectCompletion(t *testing.T) 
 	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
 
 	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
 	})
 
@@ -1751,19 +1751,19 @@ func TestAttemptProvision_RecordFailure_SkipsInjection(t *testing.T) {
 	svc := newTestProvisioningServiceWithInjector(repo, resolver, &clientmocks.AgentSecretStoreMock{}, &agentIdentityInjectorStub{})
 
 	svc.AttemptProvision(context.Background(), models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "staging", ProvisioningType: models.AgentProvisioningTypeInternal,
 	})
 }
 
 func TestDeleteAllBindings_CleansUpIdentitySecretReferences(t *testing.T) {
 	internalBinding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "dev", ProvisioningType: models.AgentProvisioningTypeInternal,
 		ThunderAgentID: "t-1", SecretRefPath: "p1",
 	}
 	externalBinding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "prod", ProvisioningType: models.AgentProvisioningTypeExternal,
 		ThunderAgentID: "t-2", SecretRefPath: "p2",
 	}
@@ -1802,7 +1802,7 @@ func TestDeleteAllBindings_CleansUpIdentitySecretReferences(t *testing.T) {
 
 func TestDeleteAllBindings_ContinuesExternalCleanupWhenDBRowDeleteFails(t *testing.T) {
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: "acme", ProjectName: "proj1", AgentName: "my-agent",
+		ID: uuid.New(), OUID: "acme", ProjectName: "proj1", AgentName: "my-agent",
 		EnvironmentName: "dev", ProvisioningType: models.AgentProvisioningTypeInternal,
 		ThunderAgentID: "t-1", SecretRefPath: "p1",
 	}
@@ -1880,7 +1880,7 @@ func TestAttemptProvision_SerializesWithRegenerateSecret(t *testing.T) {
 		StoreFunc: func(_ context.Context, _, _, _, _, _, _ string) (string, error) { return "some/path", nil },
 	}
 	binding := models.AgentThunderClient{
-		ID: uuid.New(), OrgName: org, ProjectName: proj, AgentName: agent,
+		ID: uuid.New(), OUID: org, ProjectName: proj, AgentName: agent,
 		EnvironmentName: env, ProvisioningType: models.AgentProvisioningTypeInternal,
 		ThunderAgentID: "already-created", ThunderClientID: "client-abc", SecretRefPath: "", // triggers the recovery branch
 	}

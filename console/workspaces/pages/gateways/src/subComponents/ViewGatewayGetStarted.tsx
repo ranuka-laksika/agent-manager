@@ -23,29 +23,20 @@ import {
   Button,
   Card,
   CardContent,
-  IconButton,
   Stack,
   Tab,
   Tabs,
-  TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Copy, Computer, Server, Cloud } from "@wso2/oxygen-ui-icons-react";
-import { globalConfig } from "@agent-management-platform/types";
-import { getGatewayVersionHelm } from "@agent-management-platform/shared-component";
-
-function getGatewayEnvFile(): string {
-  return `wso2apip-ai-gateway-${getGatewayVersionHelm()}/configs/keys.env`;
-}
-
-const DEFAULT_GATEWAY_CONTROL_PLANE_URL = "http://localhost:9243";
-
-function getGatewayControlPlaneUrl(): string {
-  const url =
-    globalConfig.gatewayControlPlaneUrl?.trim() ||
-    globalConfig.apiBaseUrl?.trim();
-  return url || DEFAULT_GATEWAY_CONTROL_PLANE_URL;
-}
+import { Computer, Server, Cloud } from "@wso2/oxygen-ui-icons-react";
+import {
+  getConfigureGatewayDisplayCommand,
+  getGatewayEnvFile,
+  getGatewayVersionHelm,
+  getK8sGatewayHelmCommand,
+  useCopyOnSuccess,
+} from "@agent-management-platform/shared-component";
+import { CommandField } from "./CommandField";
 
 const getSetupGatewayDisplayCommand = () => {
   const v = getGatewayVersionHelm();
@@ -53,36 +44,9 @@ const getSetupGatewayDisplayCommand = () => {
 unzip wso2apip-ai-gateway-${v}.zip`;
 };
 
-const getConfigureGatewayDisplayCommand = (registrationToken: string | null) => {
-  const controlPlaneHost = new URL(getGatewayControlPlaneUrl());
-  const tokenValue = registrationToken || "<your-gateway-token>";
-  return `cat > "${getGatewayEnvFile()}" << 'ENVFILE'
-GATEWAY_CONTROLPLANE_HOST=${controlPlaneHost}
-GATEWAY_REGISTRATION_TOKEN=${tokenValue}
-ENVFILE`;
-};
-
 const getStep3NavigateCommand = () => `cd wso2apip-ai-gateway-${getGatewayVersionHelm()}`;
 
-const getStartGatewayDisplayCommand = () =>
-  `docker compose --env-file configs/keys.env up`;
-
-const getK8sCustomHelmDisplayCommand = (registrationToken: string | null) => {
-  const controlPlaneHost = new URL(getGatewayControlPlaneUrl()).hostname;
-  const tokenValue = registrationToken || "your-gateway-token";
-  return `helm install gateway oci://ghcr.io/wso2/api-platform/helm-charts/gateway --version ${getGatewayVersionHelm()} \\
-  --set gateway.controller.controlPlane.host="${controlPlaneHost}" \\
-  --set gateway.controller.controlPlane.port=443 \\
-  --set gateway.controller.controlPlane.token.value="${tokenValue}" \\
-  --set gateway.config.analytics.enabled=true`;
-};
-
-const commandTextFieldSx = {
-  "& .MuiInputBase-input": {
-    fontFamily: "monospace",
-    fontSize: "0.875rem",
-  },
-};
+const getStartGatewayDisplayCommand = () => `docker compose --env-file configs/keys.env up`;
 
 type TabPanelProps = {
   value: number;
@@ -98,41 +62,6 @@ function TabPanel({ value, index, children }: TabPanelProps) {
   );
 }
 
-interface CommandFieldProps {
-  value: string;
-  multiline?: boolean;
-  minRows?: number;
-  onCopy: () => void;
-  copyLabel: string;
-}
-
-function CommandField({
-  value,
-  multiline,
-  minRows = 1,
-  onCopy,
-  copyLabel,
-}: CommandFieldProps) {
-  return (
-    <TextField
-      fullWidth
-      multiline={multiline}
-      minRows={minRows}
-      value={value}
-      slotProps={{
-        input: {
-          readOnly: true,
-          endAdornment: (
-            <IconButton size="small" onClick={onCopy} aria-label={`Copy ${copyLabel}`}>
-              <Copy size={16} />
-            </IconButton>
-          ),
-        },
-      }}
-      sx={commandTextFieldSx}
-    />
-  );
-}
 
 interface ViewGatewayGetStartedProps {
   isConfigured: boolean;
@@ -175,13 +104,7 @@ export function ViewGatewayGetStarted({
     [setSearchParams],
   );
 
-  const handleCopy = useCallback(
-    (text: string, label: string) => {
-      navigator.clipboard.writeText(text);
-      onCopy(text, label);
-    },
-    [onCopy],
-  );
+  const handleCopy = useCopyOnSuccess(onCopy);
 
   const renderStep2 = () => {
     if (registrationToken) {
@@ -534,12 +457,12 @@ export function ViewGatewayGetStarted({
           configurations:
         </Typography>
         <CommandField
-          value={getK8sCustomHelmDisplayCommand(registrationToken)}
+          value={getK8sGatewayHelmCommand(registrationToken)}
           multiline
           minRows={2}
           onCopy={() =>
             handleCopy(
-              getK8sCustomHelmDisplayCommand(registrationToken),
+              getK8sGatewayHelmCommand(registrationToken),
               "Helm install command",
             )
           }

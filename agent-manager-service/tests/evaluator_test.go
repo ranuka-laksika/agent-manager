@@ -185,7 +185,7 @@ func TestListEvaluators_Success(t *testing.T) {
 
 	mockEvaluators := createMockEvaluators()
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    20,
 		Offset:   0,
 		Tags:     nil,
@@ -223,7 +223,7 @@ func TestListEvaluators_WithProviderFilter(t *testing.T) {
 		createMockEvaluators()[2], // deepeval/argument-correctness
 	}
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    20,
 		Offset:   0,
 		Tags:     nil,
@@ -261,7 +261,7 @@ func TestListEvaluators_WithTagsFilter(t *testing.T) {
 		createMockEvaluators()[1], // has deepeval and action tags
 	}
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    20,
 		Offset:   0,
 		Tags:     []string{"deepeval", "action"},
@@ -295,7 +295,7 @@ func TestListEvaluators_WithSearchFilter(t *testing.T) {
 		createMockEvaluators()[2], // argument-correctness
 	}
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    20,
 		Offset:   0,
 		Tags:     nil,
@@ -326,7 +326,7 @@ func TestListEvaluators_WithPagination(t *testing.T) {
 
 	mockEvaluators := createMockEvaluators()[:2]
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    5,
 		Offset:   10,
 		Tags:     nil,
@@ -362,7 +362,7 @@ func TestListEvaluators_LimitCappedAt100(t *testing.T) {
 	mockEvaluators := createMockEvaluators()
 
 	// Expect limit to be capped at 100
-	mockService.On("ListEvaluators", mock.Anything, "test-org", services.EvaluatorFilters{
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", services.EvaluatorFilters{
 		Limit:    100,
 		Offset:   0,
 		Tags:     nil,
@@ -392,7 +392,7 @@ func TestListEvaluators_ServiceError(t *testing.T) {
 	mockService := new(MockEvaluatorService)
 	controller := controllers.NewEvaluatorController(mockService)
 
-	mockService.On("ListEvaluators", mock.Anything, "test-org", mock.Anything).
+	mockService.On("ListEvaluators", mock.Anything, "test-org-id", mock.Anything).
 		Return(nil, int32(0), assert.AnError)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators", nil)
@@ -413,7 +413,7 @@ func TestGetEvaluator_Success(t *testing.T) {
 
 	mockEvaluator := createMockEvaluators()[0]
 
-	mockService.On("GetEvaluator", mock.Anything, "test-org", "answer_relevancy").
+	mockService.On("GetEvaluator", mock.Anything, "test-org-id", "answer_relevancy").
 		Return(mockEvaluator, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/answer_relevancy", nil)
@@ -445,7 +445,7 @@ func TestGetEvaluator_URLEncodedIdentifier(t *testing.T) {
 	mockEvaluator := createMockEvaluators()[1] // deepeval/tool-correctness
 
 	// Service should receive decoded identifier
-	mockService.On("GetEvaluator", mock.Anything, "test-org", "deepeval/tool-correctness").
+	mockService.On("GetEvaluator", mock.Anything, "test-org-id", "deepeval/tool-correctness").
 		Return(mockEvaluator, nil)
 
 	// Request with URL-encoded identifier
@@ -472,7 +472,7 @@ func TestGetEvaluator_NotFound(t *testing.T) {
 	mockService := new(MockEvaluatorService)
 	controller := controllers.NewEvaluatorController(mockService)
 
-	mockService.On("GetEvaluator", mock.Anything, "test-org", "nonexistent").
+	mockService.On("GetEvaluator", mock.Anything, "test-org-id", "nonexistent").
 		Return(nil, utils.ErrEvaluatorNotFound)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/nonexistent", nil)
@@ -508,7 +508,7 @@ func TestGetEvaluator_ServiceError(t *testing.T) {
 	mockService := new(MockEvaluatorService)
 	controller := controllers.NewEvaluatorController(mockService)
 
-	mockService.On("GetEvaluator", mock.Anything, "test-org", "answer_relevancy").
+	mockService.On("GetEvaluator", mock.Anything, "test-org-id", "answer_relevancy").
 		Return(nil, assert.AnError)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/answer_relevancy", nil)
@@ -566,7 +566,7 @@ func TestGetEvaluator_ConfigSchemaConversion(t *testing.T) {
 		},
 	}
 
-	mockService.On("GetEvaluator", mock.Anything, "test-org", "test_evaluator").
+	mockService.On("GetEvaluator", mock.Anything, "test-org-id", "test_evaluator").
 		Return(mockEvaluator, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/orgs/test-org/evaluators/test_evaluator", nil)

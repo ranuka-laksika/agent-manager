@@ -29,6 +29,9 @@ export interface CreateAgentAPIKeyResponse {
   message: string;
   keyId?: string;
   apiKey?: string;
+  /** False when the environment's gateway had no live websocket connection
+   * at creation time; the key only activates once the gateway reconnects. */
+  gatewayConnected?: boolean;
 }
 
 export interface RotateAgentAPIKeyRequest {
@@ -41,6 +44,9 @@ export interface RotateAgentAPIKeyResponse {
   message: string;
   keyId?: string;
   apiKey?: string;
+  /** False when the environment's gateway had no live websocket connection
+   * at rotation time; the new key only activates once the gateway reconnects. */
+  gatewayConnected?: boolean;
 }
 
 export interface AgentAPIKeyListItem {
@@ -76,4 +82,7 @@ export interface IssueTestAgentAPIKeyResponse {
   keyId?: string;
   apiKey?: string;
   expiresAt: string;
+  /** False when the environment's gateway had no live websocket connection
+   * at issuance time; the key only activates once the gateway reconnects. */
+  gatewayConnected?: boolean;
 }

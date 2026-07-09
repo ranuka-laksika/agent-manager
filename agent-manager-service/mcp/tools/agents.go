@@ -222,7 +222,7 @@ func listAgents(handler AgentToolsetHandler) func(context.Context, *gomcp.CallTo
 		if input.ProjectName == "" {
 			return nil, nil, fmt.Errorf("project_name is required")
 		}
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		limit := utils.DefaultLimit
 		if input.Limit != nil {
@@ -239,7 +239,7 @@ func listAgents(handler AgentToolsetHandler) func(context.Context, *gomcp.CallTo
 			return nil, nil, fmt.Errorf("offset must be >= %d", utils.MinOffset)
 		}
 		// Calls the service-layer interface
-		agents, total, err := handler.ListAgents(ctx, orgName, input.ProjectName, int32(limit), int32(offset))
+		agents, total, err := handler.ListAgents(ctx, ouID, input.ProjectName, int32(limit), int32(offset))
 		if err != nil {
 			return nil, nil, wrapToolError("list_agents", err)
 		}
@@ -256,7 +256,7 @@ func listAgents(handler AgentToolsetHandler) func(context.Context, *gomcp.CallTo
 			})
 		}
 		response := listAgentsOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			Total:       total,
 			ProjectName: input.ProjectName,
 			Agents:      formatted,
@@ -280,7 +280,7 @@ func listProjectAgentPairs(agentHandler AgentToolsetHandler, projectHandler Proj
 			return nil, nil, fmt.Errorf("agent_offset must be >= %d", utils.MinOffset)
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		projectLimit := utils.DefaultLimit
 		if input.ProjectLimit != nil {
@@ -298,7 +298,7 @@ func listProjectAgentPairs(agentHandler AgentToolsetHandler, projectHandler Proj
 		if input.AgentOffset != nil {
 			agentOffset = *input.AgentOffset
 		}
-		projects, _, err := projectHandler.ListProjects(ctx, orgName, projectLimit, projectOffset)
+		projects, _, err := projectHandler.ListProjects(ctx, ouID, projectLimit, projectOffset)
 		if err != nil {
 			return nil, nil, wrapToolError("list_project_agent_pairs", err)
 		}
@@ -310,7 +310,7 @@ func listProjectAgentPairs(agentHandler AgentToolsetHandler, projectHandler Proj
 			if !matchesSearch(project.Name, input.ProjectSearch) {
 				continue
 			}
-			agents, _, err := agentHandler.ListAgents(ctx, orgName, project.Name, int32(agentLimit), int32(agentOffset))
+			agents, _, err := agentHandler.ListAgents(ctx, ouID, project.Name, int32(agentLimit), int32(agentOffset))
 			if err != nil {
 				return nil, nil, wrapToolError("list_project_agent_pairs", err)
 			}
@@ -364,7 +364,7 @@ func createExternalAgent(handler AgentToolsetHandler) func(context.Context, *gom
 			return nil, nil, fmt.Errorf("create_external_agent: unsupported language %q (use python or ballerina)", language)
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		// external agent creation
 		req := buildExternalAgentRequest(agentName, input.DisplayName, normalizeOptionalString(input.Description))
@@ -372,13 +372,13 @@ func createExternalAgent(handler AgentToolsetHandler) func(context.Context, *gom
 			return nil, nil, err
 		}
 
-		if err := handler.CreateAgent(ctx, orgName, input.ProjectName, &req); err != nil {
+		if err := handler.CreateAgent(ctx, ouID, input.ProjectName, &req); err != nil {
 			return nil, nil, wrapToolError("create_external_agent", err)
 		}
 
 		// generate a token for the agent that allows instrumentation
 		expiresIn := "8760h"
-		tokenResp, err := handler.GenerateToken(ctx, orgName, input.ProjectName, agentName, "", expiresIn)
+		tokenResp, err := handler.GenerateToken(ctx, ouID, input.ProjectName, agentName, "", expiresIn)
 		if err != nil {
 			return nil, nil, fmt.Errorf("create_external_agent: agent %q was created but token generation failed: %w", agentName, err)
 		}
@@ -399,7 +399,7 @@ func createExternalAgent(handler AgentToolsetHandler) func(context.Context, *gom
 		}
 
 		response := createExternalAgentOutput{
-			OrgName:     orgName,
+			OrgName:     ouID,
 			ProjectName: input.ProjectName,
 			AgentName:   agentName,
 			Language:    language,
@@ -451,7 +451,7 @@ func createInternalAgentPython(handler AgentToolsetHandler) func(context.Context
 			return nil, nil, fmt.Errorf("env is required")
 		}
 
-		orgName := resolveOrgName(input.OrgName)
+		ouID := resolveOUID(ctx)
 
 		req, err := buildInternalAgentRequest(agentName, input.DisplayName, normalizeOptionalString(input.Description), internalAgentInput{
 			RepositoryURL:             input.RepositoryURL,
@@ -476,12 +476,12 @@ func createInternalAgentPython(handler AgentToolsetHandler) func(context.Context
 			return nil, nil, err
 		}
 
-		if err := handler.CreateAgent(ctx, orgName, input.ProjectName, req); err != nil {
+		if err := handler.CreateAgent(ctx, ouID, input.ProjectName, req); err != nil {
 			return nil, nil, wrapToolError("create_internal_agent_python", err)
 		}
 
 		response := map[string]any{
-			"org_name":     orgName,
+			"org_name":     ouID,
 			"project_name": input.ProjectName,
 			"agent_name":   agentName,
 			"display_name": input.DisplayName,

@@ -36,7 +36,6 @@ func TestCreate_Success(t *testing.T) {
 	clientFn, captured, closeFn := newTestClient(t, http.StatusAccepted, amsvc.ProjectResponse{
 		Name:               "alpha",
 		DisplayName:        "Alpha Project",
-		OrgName:            "acme",
 		DeploymentPipeline: "default",
 		Description:        "a test project",
 	})
@@ -93,7 +92,6 @@ func TestCreate_NoDescription(t *testing.T) {
 	clientFn, _, closeFn := newTestClient(t, http.StatusAccepted, amsvc.ProjectResponse{
 		Name:               "alpha",
 		DisplayName:        "Alpha",
-		OrgName:            "acme",
 		DeploymentPipeline: "default",
 	})
 	defer closeFn()
@@ -200,7 +198,6 @@ func TestCreate_PositionalName(t *testing.T) {
 	clientFn, captured, closeFn := newTestClient(t, http.StatusAccepted, amsvc.ProjectResponse{
 		Name:               "alpha",
 		DisplayName:        "Alpha Project",
-		OrgName:            "acme",
 		DeploymentPipeline: "default",
 	})
 	defer closeFn()

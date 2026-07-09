@@ -74,3 +74,36 @@ export function getScriptRef(): string {
 export function getRawScriptUrl(scriptName: string): string {
   return `https://raw.githubusercontent.com/wso2/agent-manager/${getScriptRef()}/deployments/scripts/${scriptName}`;
 }
+
+const DEFAULT_GATEWAY_CONTROL_PLANE_URL = "http://localhost:9243";
+
+export function getGatewayControlPlaneUrl(): string {
+  const url = globalConfig.gatewayControlPlaneUrl?.trim() || globalConfig.apiBaseUrl?.trim();
+  return url || DEFAULT_GATEWAY_CONTROL_PLANE_URL;
+}
+
+export function getGatewayEnvFile(): string {
+  return `wso2apip-ai-gateway-${getGatewayVersionHelm()}/configs/keys.env`;
+}
+
+export function getConfigureGatewayDisplayCommand(registrationToken: string | null): string {
+  const controlPlaneHost = new URL(getGatewayControlPlaneUrl());
+  const tokenValue = registrationToken || "<your-gateway-token>";
+  return `cat > "${getGatewayEnvFile()}" << 'ENVFILE'
+GATEWAY_CONTROLPLANE_HOST=${controlPlaneHost}
+GATEWAY_REGISTRATION_TOKEN=${tokenValue}
+ENVFILE`;
+}
+
+export function getK8sGatewayHelmCommand(
+  registrationToken: string | null,
+  verb: "install" | "upgrade" = "install",
+): string {
+  const controlPlaneHost = new URL(getGatewayControlPlaneUrl()).hostname;
+  const tokenValue = registrationToken || "your-gateway-token";
+  return `helm ${verb} gateway oci://ghcr.io/wso2/api-platform/helm-charts/gateway --version ${getGatewayVersionHelm()} \\
+  --set gateway.controller.controlPlane.host="${controlPlaneHost}" \\
+  --set gateway.controller.controlPlane.port=443 \\
+  --set gateway.controller.controlPlane.token.value="${tokenValue}" \\
+  --set gateway.config.analytics.enabled=true`;
+}

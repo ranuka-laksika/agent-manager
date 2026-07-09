@@ -34,10 +34,10 @@ func agentEnvAPIArtifactHandle(projectName, agentName, environmentID string) str
 func ensureAgentEnvAPIArtifact(
 	db *gorm.DB,
 	artifactRepo repositories.ArtifactRepository,
-	orgName, projectName, agentName, environmentID string,
+	ouID, projectName, agentName, environmentID string,
 ) (*models.Artifact, error) {
 	handle := agentEnvAPIArtifactHandle(projectName, agentName, environmentID)
-	artifact, err := artifactRepo.GetByHandle(handle, orgName)
+	artifact, err := artifactRepo.GetByHandle(handle, ouID)
 	if err == nil {
 		if artifact.Kind != models.KindAgent {
 			return nil, fmt.Errorf("agent API artifact handle %q exists with kind %q", handle, artifact.Kind)
@@ -50,15 +50,15 @@ func ensureAgentEnvAPIArtifact(
 
 	artifactUUID := uuid.Must(uuid.NewV7())
 	artifact = &models.Artifact{
-		UUID:             artifactUUID,
-		Handle:           handle,
-		Name:             fmt.Sprintf("%s-%s-api-%s", agentName, environmentID, artifactUUID.String()[:8]),
-		Version:          "v1.0",
-		Kind:             models.KindAgent,
-		OrganizationName: orgName,
+		UUID:    artifactUUID,
+		Handle:  handle,
+		Name:    fmt.Sprintf("%s-%s-api-%s", agentName, environmentID, artifactUUID.String()[:8]),
+		Version: "v1.0",
+		Kind:    models.KindAgent,
+		OUID:    ouID,
 	}
 	if err := artifactRepo.Create(db, artifact); err != nil {
-		existing, getErr := artifactRepo.GetByHandle(handle, orgName)
+		existing, getErr := artifactRepo.GetByHandle(handle, ouID)
 		if getErr == nil {
 			return existing, nil
 		}

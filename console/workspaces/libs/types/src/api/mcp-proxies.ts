@@ -17,13 +17,9 @@
 
 import type { ListQuery, OrgPathParams } from "./common";
 import type {
-  CreateLLMAPIKeyRequest,
-  CreateLLMAPIKeyResponse,
-  RotateLLMAPIKeyRequest,
-  RotateLLMAPIKeyResponse,
   SecurityConfig,
   UpstreamAuth,
-  UpstreamConfig,
+  UpstreamEndpoint,
 } from "./llm-providers";
 
 export interface MCPProxyCapabilities {
@@ -50,21 +46,39 @@ export interface MCPPolicyAvailabilityResponse {
   list: MCPPolicyAvailableItem[];
 }
 
+/**
+ * MCPEnvironmentConfig is one per-environment blueprint block on an org-level MCP proxy,
+ * stored in MCPProxy.environments keyed by environment UUID. upstream holds the single
+ * backend endpoint (URL + auth) for that environment.
+ */
+export interface MCPEnvironmentConfig {
+  upstream?: UpstreamEndpoint;
+  policies?: MCPProxyPolicy[];
+  capabilities?: MCPProxyCapabilities;
+  security?: SecurityConfig;
+  /**
+   * Response-only indicator of whether this environment's single gateway artifact is
+   * currently deployed ("Deployed") or not ("Undeployed"). Computed on read; never sent.
+   */
+  deploymentStatus?: string;
+}
+
+/**
+ * MCPProxy is an org-level blueprint. Name/version/context/vhost/mcpSpecVersion are shared
+ * across environments; per-environment upstream, policies, capabilities and security live in
+ * environments, keyed by environment UUID. The blueprint deploys nothing to any gateway.
+ */
 export interface MCPProxy {
   id: string;
   inCatalog?: boolean;
   name: string;
   version: string;
-  upstream: UpstreamConfig;
   description?: string;
   createdBy?: string;
   context?: string;
   vhost?: string;
-  gateways?: string[];
   mcpSpecVersion?: string;
-  policies?: MCPProxyPolicy[];
-  capabilities?: MCPProxyCapabilities;
-  security?: SecurityConfig;
+  environments: Record<string, MCPEnvironmentConfig>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -115,16 +129,3 @@ export type ListMCPProxiesPathParams = OrgPathParams;
 export type ListAvailableMCPPoliciesPathParams = OrgPathParams;
 export type ListMCPProxiesQuery = ListQuery;
 export type FetchMCPProxyServerInfoPathParams = OrgPathParams;
-
-export interface MCPProxyAPIKeyPathParams extends GetMCPProxyPathParams {
-  keyName: string;
-}
-
-export type CreateMCPProxyAPIKeyPathParams = GetMCPProxyPathParams;
-export type RotateMCPProxyAPIKeyPathParams = MCPProxyAPIKeyPathParams;
-export type RevokeMCPProxyAPIKeyPathParams = MCPProxyAPIKeyPathParams;
-export type ListMCPProxyAPIKeysPathParams = GetMCPProxyPathParams;
-export type CreateMCPProxyAPIKeyRequest = CreateLLMAPIKeyRequest;
-export type CreateMCPProxyAPIKeyResponse = CreateLLMAPIKeyResponse;
-export type RotateMCPProxyAPIKeyRequest = RotateLLMAPIKeyRequest;
-export type RotateMCPProxyAPIKeyResponse = RotateLLMAPIKeyResponse;

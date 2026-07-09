@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/services"
@@ -55,12 +56,12 @@ func NewMonitorController(monitorService services.MonitorManagerService) Monitor
 	}
 }
 
-// CreateMonitor handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors
+// CreateMonitor handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors
 func (c *monitorController) CreateMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -105,7 +106,7 @@ func (c *monitorController) CreateMonitor(w http.ResponseWriter, r *http.Request
 	// Convert spec request to models request with path parameters
 	modelReq := utils.ConvertToCreateMonitorRequest(&req, projName, agentName)
 
-	monitor, err := c.monitorService.CreateMonitor(ctx, orgName, modelReq)
+	monitor, err := c.monitorService.CreateMonitor(ctx, ouID, modelReq)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorAlreadyExists) {
 			utils.WriteErrorResponse(w, http.StatusConflict, "Monitor already exists")
@@ -134,17 +135,17 @@ func (c *monitorController) CreateMonitor(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// GetMonitor handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
+// GetMonitor handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
 func (c *monitorController) GetMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 
-	monitor, err := c.monitorService.GetMonitor(ctx, orgName, projName, agentName, monitorName)
+	monitor, err := c.monitorService.GetMonitor(ctx, ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -164,17 +165,17 @@ func (c *monitorController) GetMonitor(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ListMonitors handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors
+// ListMonitors handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors
 func (c *monitorController) ListMonitors(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	environmentName := r.URL.Query().Get("environment")
 
-	result, err := c.monitorService.ListMonitors(ctx, orgName, projName, agentName, environmentName)
+	result, err := c.monitorService.ListMonitors(ctx, ouID, projName, agentName, environmentName)
 	if err != nil {
 		log.Error("Failed to list monitors", "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list monitors")
@@ -190,17 +191,17 @@ func (c *monitorController) ListMonitors(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// DeleteMonitor handles DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
+// DeleteMonitor handles DELETE /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
 func (c *monitorController) DeleteMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 
-	err := c.monitorService.DeleteMonitor(ctx, orgName, projName, agentName, monitorName)
+	err := c.monitorService.DeleteMonitor(ctx, ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -214,12 +215,12 @@ func (c *monitorController) DeleteMonitor(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UpdateMonitor handles PATCH /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
+// UpdateMonitor handles PATCH /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}
 func (c *monitorController) UpdateMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -240,7 +241,7 @@ func (c *monitorController) UpdateMonitor(w http.ResponseWriter, r *http.Request
 	// Convert spec request to models request
 	modelReq := utils.ConvertToUpdateMonitorRequest(&req)
 
-	monitor, err := c.monitorService.UpdateMonitor(ctx, orgName, projName, agentName, monitorName, modelReq)
+	monitor, err := c.monitorService.UpdateMonitor(ctx, ouID, projName, agentName, monitorName, modelReq)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -264,12 +265,12 @@ func (c *monitorController) UpdateMonitor(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// ListMonitorRuns handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs
+// ListMonitorRuns handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs
 func (c *monitorController) ListMonitorRuns(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
@@ -293,7 +294,7 @@ func (c *monitorController) ListMonitorRuns(w http.ResponseWriter, r *http.Reque
 
 	includeScores := r.URL.Query().Get("includeScores") == "true"
 
-	result, err := c.monitorService.ListMonitorRuns(ctx, orgName, projName, agentName, monitorName, limit, offset, includeScores)
+	result, err := c.monitorService.ListMonitorRuns(ctx, ouID, projName, agentName, monitorName, limit, offset, includeScores)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -313,18 +314,18 @@ func (c *monitorController) ListMonitorRuns(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// RerunMonitor handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/rerun
+// RerunMonitor handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/rerun
 func (c *monitorController) RerunMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 	runID := r.PathValue(utils.PathParamRunId)
 
-	result, err := c.monitorService.RerunMonitor(ctx, orgName, projName, agentName, monitorName, runID)
+	result, err := c.monitorService.RerunMonitor(ctx, ouID, projName, agentName, monitorName, runID)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -353,18 +354,18 @@ func (c *monitorController) RerunMonitor(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// GetMonitorRunLogs handles GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/logs
+// GetMonitorRunLogs handles GET /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/runs/{runId}/logs
 func (c *monitorController) GetMonitorRunLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 	runID := r.PathValue(utils.PathParamRunId)
 
-	result, err := c.monitorService.GetMonitorRunLogs(ctx, orgName, projName, agentName, monitorName, runID)
+	result, err := c.monitorService.GetMonitorRunLogs(ctx, ouID, projName, agentName, monitorName, runID)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -383,17 +384,17 @@ func (c *monitorController) GetMonitorRunLogs(w http.ResponseWriter, r *http.Req
 	utils.WriteSuccessResponse(w, http.StatusOK, logsResponse)
 }
 
-// StopMonitor handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/stop
+// StopMonitor handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/stop
 func (c *monitorController) StopMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 
-	result, err := c.monitorService.StopMonitor(ctx, orgName, projName, agentName, monitorName)
+	result, err := c.monitorService.StopMonitor(ctx, ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")
@@ -421,17 +422,17 @@ func (c *monitorController) StopMonitor(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// StartMonitor handles POST /orgs/{orgName}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/start
+// StartMonitor handles POST /orgs/{ouID}/projects/{projName}/agents/{agentName}/monitors/{monitorName}/start
 func (c *monitorController) StartMonitor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	monitorName := r.PathValue(utils.PathParamMonitorName)
 
-	result, err := c.monitorService.StartMonitor(ctx, orgName, projName, agentName, monitorName)
+	result, err := c.monitorService.StartMonitor(ctx, ouID, projName, agentName, monitorName)
 	if err != nil {
 		if errors.Is(err, utils.ErrMonitorNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Monitor not found")

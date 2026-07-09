@@ -22,10 +22,9 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
-// RegisterMCPProxyAPIKeyRoutes registers API key routes for source MCP proxies.
-func RegisterMCPProxyAPIKeyRoutes(rr *middleware.RouteRegistrar, ctrl controllers.MCPProxyAPIKeyController) {
-	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys", rbac.MCPServerAPIKeyManage, ctrl.ListAPIKeys)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys", rbac.MCPServerAPIKeyManage, ctrl.CreateAPIKey)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}", rbac.MCPServerAPIKeyManage, ctrl.RevokeAPIKey)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}/api-keys/{keyName}", rbac.MCPServerAPIKeyManage, ctrl.RotateAPIKey)
+func registerScopeRoutes(rr *middleware.RouteRegistrar, ctrl controllers.ScopeController) {
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/scopes", rbac.ScopeRead, ctrl.ListScopes)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/scopes", rbac.ScopeCreate, ctrl.CreateScope)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/scopes/{scopeName}", rbac.ScopeUpdate, ctrl.UpdateScope)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/scopes/{scopeName}", rbac.ScopeDelete, ctrl.DeleteScope)
 }
