@@ -37,21 +37,30 @@ type Client interface {
 
 	// GetSpanDetails fetches the full details (including OTEL attributes) for a single span.
 	GetSpanDetails(ctx context.Context, traceID, spanID string) (*SpanDetailsResponse, error)
+
+	// NamespaceFor resolves the namespace a trace query is scoped to.
+	NamespaceFor(organization string) string
 }
 
 type clientImpl struct {
-	baseURL      string
-	authProvider *AuthProvider
-	httpClient   *http.Client
+	baseURL          string
+	authProvider     *AuthProvider
+	httpClient       *http.Client
+	defaultNamespace string
 }
 
 // NewClient creates a new observer service client.
-func NewClient(baseURL string, auth *AuthProvider) Client {
+func NewClient(baseURL string, auth *AuthProvider, defaultNamespace string) Client {
 	return &clientImpl{
-		baseURL:      baseURL,
-		authProvider: auth,
-		httpClient:   &http.Client{Timeout: 30 * time.Second},
+		baseURL:          baseURL,
+		authProvider:     auth,
+		httpClient:       &http.Client{Timeout: 30 * time.Second},
+		defaultNamespace: defaultNamespace,
 	}
+}
+
+func (c *clientImpl) NamespaceFor(_ string) string {
+	return c.defaultNamespace
 }
 
 func (c *clientImpl) QueryTraces(ctx context.Context, req TracesQueryRequest) (*TracesQueryResponse, error) {
