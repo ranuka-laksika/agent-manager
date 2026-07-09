@@ -14991,10 +14991,11 @@ components:
           example: "2025-03-26"
         endpoints:
           type: array
+          minItems: 1
           description: >-
             Deployable endpoint definitions of the MCP proxy. Each endpoint is
             deployed to one or more environments; within a proxy an environment
-            maps to at most one endpoint.
+            maps to at most one endpoint. At least one endpoint is required.
           items:
             $ref: "#/components/schemas/MCPProxyEndpoint"
         inCatalog:
@@ -15041,6 +15042,7 @@ components:
           description: MCP specification version implemented by the upstream server
         endpoints:
           type: array
+          minItems: 1
           description: >-
             Deployable endpoint definitions of the MCP proxy. Each endpoint
             reports its per-environment deployment status.

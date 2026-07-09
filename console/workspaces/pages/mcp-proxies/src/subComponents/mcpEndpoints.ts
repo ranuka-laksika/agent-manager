@@ -228,16 +228,32 @@ function pruneAclPolicy(
 /**
  * Derives an endpoint handle (id) from its name, falling back to the URL host and finally
  * a positional `endpoint-N`. The result is slugified to the `[a-z0-9-]` handle charset.
+ *
+ * When `usedHandles` is supplied, the derived handle is de-duplicated against it (two new
+ * endpoints sharing a name or URL host would otherwise collide, which the backend rejects
+ * via UNIQUE(mcp_proxy_uuid, handle)): a numeric suffix is appended until unique, and the
+ * chosen handle is added to the set so subsequent calls see it.
  */
 export function deriveEndpointHandle(
   draft: Pick<EndpointDraft, "name" | "url">,
   index: number,
+  usedHandles?: Set<string>,
 ): string {
-  const fromName = slugify(draft.name ?? "");
-  if (fromName) return fromName;
-  const fromUrl = slugify(hostFromUrl(draft.url));
-  if (fromUrl) return fromUrl;
-  return `endpoint-${index + 1}`;
+  const base =
+    slugify(draft.name ?? "") ||
+    slugify(hostFromUrl(draft.url)) ||
+    `endpoint-${index + 1}`;
+
+  if (!usedHandles) return base;
+
+  let handle = base;
+  let suffix = 2;
+  while (usedHandles.has(handle)) {
+    handle = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  usedHandles.add(handle);
+  return handle;
 }
 
 /**
@@ -252,6 +268,7 @@ export function draftToEndpoint(
   draft: EndpointDraft,
   index: number,
   existing?: MCPProxyEndpoint,
+  usedHandles?: Set<string>,
 ): MCPProxyEndpoint {
   const auth = buildUpstreamAuth(draft);
   const capabilities: MCPProxyCapabilities = {
@@ -261,8 +278,18 @@ export function draftToEndpoint(
   };
   const name = (draft.name ?? "").trim();
 
+  // An edited endpoint keeps its handle; register it so freshly-derived handles for
+  // new endpoints in the same batch don't collide with it.
+  let id: string;
+  if (existing?.id !== undefined) {
+    id = existing.id;
+    usedHandles?.add(id);
+  } else {
+    id = deriveEndpointHandle(draft, index, usedHandles);
+  }
+
   return {
-    id: existing?.id ?? deriveEndpointHandle(draft, index),
+    id,
     name: name || undefined,
     upstream: { ...existing?.upstream, main: { url: draft.url, auth } },
     capabilities,

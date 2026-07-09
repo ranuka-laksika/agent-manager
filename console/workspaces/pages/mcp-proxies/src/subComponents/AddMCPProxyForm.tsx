@@ -138,9 +138,12 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
       description: proxyDescription.trim() || undefined,
       context: proxyContext.trim() || undefined,
       mcpSpecVersion: MCP_SPEC_VERSION,
-      endpoints: endpoints.map((endpoint, index) =>
-        draftToEndpoint(endpoint, index),
-      ),
+      endpoints: (() => {
+        const usedHandles = new Set<string>();
+        return endpoints.map((endpoint, index) =>
+          draftToEndpoint(endpoint, index, undefined, usedHandles),
+        );
+      })(),
     };
 
     await createMCPProxy.mutateAsync({ params: { orgName: orgId }, body });

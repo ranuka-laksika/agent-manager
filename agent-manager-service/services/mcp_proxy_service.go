@@ -552,7 +552,7 @@ func (s *MCPProxyService) RemoveEnvironmentFromEndpoints(ctx context.Context, pr
 						envUUID, proxy.UUID, endpoint.Handle, err))
 				}
 			}
-			if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 				return s.endpointRepo.RemoveEndpointEnvironment(ctx, tx, endpoint.UUID, envUUID)
 			}); err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 				errs = append(errs, fmt.Errorf("remove env %s binding from proxy %s endpoint %s: %w",
@@ -1202,10 +1202,13 @@ func (s *MCPProxyService) persistMCPEndpoints(ctx context.Context, tx *gorm.DB, 
 			// the backing artifacts row must exist before the join row is inserted. Create
 			// it now, in the same transaction, with the same stable handle the deploy path
 			// (ensureMCPProxyEnvArtifactRow) computes — so deploy-time creation no-ops. On
-			// update a preserved environment keeps its artifact UUID and row (join rows
-			// cascade-delete, artifacts rows do not), so skip creation when it already exists.
+			// update a preserved environment keeps its stable artifact UUID and row (join
+			// rows cascade-delete, artifacts rows do not); the row is keyed by that UUID
+			// (its primary key), so existence is checked by UUID — a preserved artifact
+			// whose environment remapped to a different endpoint (new handle) is still
+			// found, avoiding a primary-key collision on re-create.
 			artifactHandle := mcpProxyEnvArtifactHandle(proxyHandle, endpoint.handle, envUUIDStr)
-			if _, err := s.artifactRepo.GetByHandle(artifactHandle, ouID); errors.Is(err, utils.ErrArtifactNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
+			if _, err := s.artifactRepo.GetByUUID(artifactUUID.String(), ouID); errors.Is(err, utils.ErrArtifactNotFound) || errors.Is(err, gorm.ErrRecordNotFound) {
 				if err := s.artifactRepo.Create(tx.WithContext(ctx), &models.Artifact{
 					UUID:      artifactUUID,
 					Handle:    artifactHandle,

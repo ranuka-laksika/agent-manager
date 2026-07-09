@@ -137,8 +137,9 @@ export function ManageEndpointsDialog({
       const existingByHandle = new Map(
         (proxy.endpoints ?? []).map((endpoint) => [endpoint.id, endpoint]),
       );
+      const usedHandles = new Set<string>();
       const nextEndpoints = endpoints.map((draft, index) =>
-        draftToEndpoint(draft, index, existingByHandle.get(draft.id)),
+        draftToEndpoint(draft, index, existingByHandle.get(draft.id), usedHandles),
       );
       await updateMCPProxy.mutateAsync({
         params: { orgName: orgId, proxyId: proxy.id },

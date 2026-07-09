@@ -546,7 +546,7 @@ export function ViewMCPProxy() {
         ) : (
           <Card variant="outlined" sx={{ p: 3 }}>
             <Alert severity="info">
-              This MCP proxy has no environments configured.
+              This MCP proxy has no endpoints configured.
             </Alert>
           </Card>
         )}

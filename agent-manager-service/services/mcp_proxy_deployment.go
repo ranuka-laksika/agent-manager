@@ -198,7 +198,11 @@ func (s *MCPProxyService) ensureMCPProxyEnvArtifactRow(deployProxy *models.MCPPr
 	if s.artifactRepo == nil {
 		return nil
 	}
-	if _, err := s.artifactRepo.GetByHandle(deployProxy.Handle, ouID); err == nil {
+	// The artifacts row is keyed by its stable UUID (deployProxy.UUID == the join row's
+	// ArtifactUUID). Check existence by UUID, not handle: a preserved artifact whose
+	// environment remapped to a different endpoint carries a new handle but the same UUID,
+	// so a handle lookup would miss and re-create would hit a primary-key collision.
+	if _, err := s.artifactRepo.GetByUUID(deployProxy.UUID.String(), ouID); err == nil {
 		return nil
 	} else if !errors.Is(err, utils.ErrArtifactNotFound) && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("failed to check MCP proxy environment artifact: %w", err)

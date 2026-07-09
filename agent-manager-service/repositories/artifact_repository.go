@@ -36,6 +36,7 @@ type ArtifactRepository interface {
 	UpdateCatalogStatus(tx *gorm.DB, uuid, organizationUUID string, inCatalog bool) error
 	Exists(kind, handle, orgUUID string) (bool, error)
 	GetByHandle(handle, orgUUID string) (*models.Artifact, error)
+	GetByUUID(artifactUUID, orgUUID string) (*models.Artifact, error)
 	CountByKindAndOrg(kind, orgUUID string) (int, error)
 }
 
@@ -111,6 +112,21 @@ func (r *ArtifactRepo) Exists(kind, handle, orgUUID string) (bool, error) {
 func (r *ArtifactRepo) GetByHandle(handle, orgUUID string) (*models.Artifact, error) {
 	var artifact models.Artifact
 	err := r.db.Where("handle = ? AND ou_id = ?", handle, orgUUID).
+		First(&artifact).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, utils.ErrArtifactNotFound
+		}
+		return nil, err
+	}
+	return &artifact, nil
+}
+
+// GetByUUID retrieves an artifact by its stable UUID and organization. Returns
+// utils.ErrArtifactNotFound when no matching row exists.
+func (r *ArtifactRepo) GetByUUID(artifactUUID, orgUUID string) (*models.Artifact, error) {
+	var artifact models.Artifact
+	err := r.db.Where("uuid = ? AND ou_id = ?", artifactUUID, orgUUID).
 		First(&artifact).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

@@ -69,12 +69,14 @@ var migration032 = migration{
 				CONSTRAINT uq_endpoint_env UNIQUE(endpoint_uuid, environment_uuid),
 				CONSTRAINT uq_proxy_env_single UNIQUE(mcp_proxy_uuid, environment_uuid)
 			);
-			CREATE INDEX IF NOT EXISTS idx_mcp_endpoint_proxy ON mcp_proxy_endpoints(mcp_proxy_uuid);
-			CREATE INDEX IF NOT EXISTS idx_endpoint_env_endpoint ON mcp_proxy_endpoint_environments(endpoint_uuid);
+			-- Indexes are only created for columns not already covered by a unique
+			-- constraint's leading column: uq_mcp_endpoint_handle(mcp_proxy_uuid, handle),
+			-- uq_endpoint_env(endpoint_uuid, environment_uuid) and
+			-- uq_proxy_env_single(mcp_proxy_uuid, environment_uuid) already index
+			-- mcp_proxy_uuid and endpoint_uuid, so only environment_uuid and artifact_uuid
+			-- need their own index.
 			CREATE INDEX IF NOT EXISTS idx_endpoint_env_environment ON mcp_proxy_endpoint_environments(environment_uuid);
-			CREATE INDEX IF NOT EXISTS idx_endpoint_env_proxy ON mcp_proxy_endpoint_environments(mcp_proxy_uuid);
 			CREATE INDEX IF NOT EXISTS idx_endpoint_env_artifact ON mcp_proxy_endpoint_environments(artifact_uuid);
-			CREATE INDEX IF NOT EXISTS idx_endpoint_env_proxy_env ON mcp_proxy_endpoint_environments(mcp_proxy_uuid, environment_uuid);
 		`
 		return db.Transaction(func(tx *gorm.DB) error {
 			return runSQL(tx, sql)
