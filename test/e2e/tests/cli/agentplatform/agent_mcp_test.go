@@ -66,11 +66,12 @@ var _ = Describe("amctl agent mcp (CLI-owned agent)", Label("cli", "agent", "mcp
 				Name:    "CLI E2E MCP Proxy " + proxyID[len(proxyID)-8:],
 				Version: "v1.0",
 				Context: &ctx,
-				// Per-environment blueprint keyed by environment UUID; the DefaultEnv block
-				// deploys the gateway artifact that makes the proxy catalog-eligible.
-				Environments: map[string]framework.MCPEnvironmentConfig{
-					envUUID: {
-						Upstream: &framework.UpstreamEndpoint{URL: &upstreamURL},
+				// A single endpoint deployed to DefaultEnv, which deploys the gateway
+				// artifact that makes the proxy catalog-eligible.
+				Endpoints: []framework.MCPProxyEndpoint{
+					{
+						ID:       "primary",
+						Upstream: framework.UpstreamConfig{Main: &framework.UpstreamEndpoint{URL: &upstreamURL}},
 						Security: &framework.SecurityConfig{
 							Enabled: true,
 							APIKey: &framework.SecurityAPIKey{
@@ -78,6 +79,9 @@ var _ = Describe("amctl agent mcp (CLI-owned agent)", Label("cli", "agent", "mcp
 								Key:     "X-API-Key",
 								In:      "header",
 							},
+						},
+						Environments: []framework.MCPEndpointEnvironment{
+							{EnvironmentUUID: envUUID},
 						},
 					},
 				},
