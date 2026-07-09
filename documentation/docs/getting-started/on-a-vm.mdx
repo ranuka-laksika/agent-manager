@@ -79,13 +79,13 @@ flowchart TB
         caddy["Caddy reverse proxy<br/>host network · :443 · terminates TLS"]
 
         subgraph k3d["k3d cluster (host ports bound to 127.0.0.1)"]
-            console["Console<br/>:3000"]
-            api["amp-api<br/>:9000"]
-            thunder["Thunder OAuth<br/>:8080"]
-            observer["Traces Observer<br/>:9098"]
-            gw["Gateway · OTel ingest<br/>:22893"]
+            console["Console<br/>CP gateway :8080"]
+            api["amp-api<br/>CP gateway :8080"]
+            thunder["Thunder OAuth<br/>CP gateway :8080"]
+            observer["Traces Observer<br/>OP gateway :11080"]
+            gw["Gateway · OTel ingest<br/>DP gateway :19080"]
             cp["Gateway control plane<br/>:9243"]
-            agents["Deployed agents<br/>:19080"]
+            agents["Deployed agents<br/>DP gateway :19080"]
         end
     end
 
@@ -100,7 +100,7 @@ flowchart TB
     caddy -->|"*.agents.&lt;IP&gt;.sslip.io<br/>on-demand TLS"| agents
 ```
 
-Every public hostname resolves to the VM's IP (via sslip.io) and arrives at Caddy on `:443`; Caddy terminates TLS and reverse-proxies to the matching loopback port. Certificates are obtained over that same `:443` using the TLS-ALPN-01 challenge, so no inbound port 80 is needed. The deployed-agent wildcard gets its certificate on demand at first request.
+Every public hostname resolves to the VM's IP (via sslip.io) and arrives at Caddy on `:443`; Caddy terminates TLS and reverse-proxies to the matching loopback port. The Agent Manager services are ClusterIP inside the cluster: Caddy forwards the console, API, and Thunder hosts to the OpenChoreo control-plane kgateway (loopback `:8080`) and the traces observer host to the observability-plane kgateway (loopback `:11080`), each of which routes by the preserved `Host` header. Certificates are obtained over that same `:443` using the TLS-ALPN-01 challenge, so no inbound port 80 is needed. The deployed-agent wildcard gets its certificate on demand at first request.
 
 | URL | Purpose |
 |---|---|

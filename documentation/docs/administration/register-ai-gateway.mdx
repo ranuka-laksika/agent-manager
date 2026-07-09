@@ -18,11 +18,24 @@ Before registering a gateway, ensure you have:
   - **Virtual Machine**: cURL, unzip, and a Docker-compatible container runtime (Docker Desktop, Rancher Desktop, Colima, or Docker Engine + Compose plugin)
   - **Kubernetes**: cURL, unzip, Kubernetes 1.32+, Helm 3.18+
 
+:::note External gateways need the gateway-management endpoint exposed
+
+A gateway running **outside** the Agent Manager cluster connects to the gateway-management (xDS) endpoint on port `9243`. That endpoint is a `ClusterIP` service by default, so expose it before registering an external gateway:
+
+```bash
+helm upgrade <release> oci://ghcr.io/wso2/helm-charts/wso2-agent-manager -n wso2-amp \
+  --reuse-values --set agentManagerService.gatewayMgtService.type=LoadBalancer
+```
+
+On the quick-start k3d install, also map the host port by adding `9243:9243` to the `ports:` list in `deployments/quick-start/k3d-config.yaml` before creating the cluster. Gateways deployed inside the cluster reach the endpoint via cluster DNS and need no changes.
+
+:::
+
 ---
 
 ## Step 1: Navigate to AI Gateways
 
-1. Log in to the WSO2 Agent Manager Console (`http://localhost:3000`).
+1. Log in to the WSO2 Agent Manager Console (`http://console.amp.localhost:8080`).
 2. Go to Organization level by closing the projects section from the top navigation
 3. In the left sidebar, click **AI Gateways** under the **INFRASTRUCTURE** section.
 
