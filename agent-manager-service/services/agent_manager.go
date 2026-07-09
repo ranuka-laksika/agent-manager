@@ -85,6 +85,7 @@ type agentManagerService struct {
 	aiApplicationService      *AIApplicationService
 	gatewayRepo               repositories.GatewayRepository
 	agentThunderProvisioning  AgentThunderProvisioningService
+	monitorManagerService     MonitorManagerService
 	logger                    *slog.Logger
 }
 
@@ -102,6 +103,7 @@ func NewAgentManagerService(
 	aiApplicationService *AIApplicationService,
 	gatewayRepo repositories.GatewayRepository,
 	agentThunderProvisioning AgentThunderProvisioningService,
+	monitorManagerService MonitorManagerService,
 	logger *slog.Logger,
 ) AgentManagerService {
 	return &agentManagerService{
@@ -115,6 +117,7 @@ func NewAgentManagerService(
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
 		agentThunderProvisioning:  agentThunderProvisioning,
+		monitorManagerService:     monitorManagerService,
 		artifactRepo:              artifactRepo,
 		aiApplicationService:      aiApplicationService,
 		gatewayRepo:               gatewayRepo,
@@ -2183,6 +2186,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 			if s.agentThunderProvisioning != nil {
 				go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
 			}
+			s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
 			return nil
 		}
 		s.logger.Error("Failed to delete oc agent", "agentName", agentName, "error", err)
@@ -2207,8 +2211,19 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 	// Cleanup env-scoped API artifact record.
 	s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
 
+	// Cleanup monitors owned by this agent so they are not orphaned after deletion.
+	s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
+
 	s.logger.Debug("Agent deleted from OpenChoreo successfully", "ouID", ouID, "agentName", agentName)
 	return nil
+}
+
+// cleanupAgentMonitors removes all monitors owned by an agent. Best-effort: orphaned
+// monitors are logged but do not fail the delete, matching the other post-delete cleanups.
+func (s *agentManagerService) cleanupAgentMonitors(ctx context.Context, ouID, projectName, agentName string) {
+	if err := s.monitorManagerService.DeleteMonitorsByAgent(context.WithoutCancel(ctx), ouID, projectName, agentName); err != nil {
+		s.logger.Warn("Failed to delete monitors during agent deletion", "agentName", agentName, "error", err)
+	}
 }
 
 func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName string) {

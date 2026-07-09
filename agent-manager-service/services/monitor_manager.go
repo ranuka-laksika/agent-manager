@@ -52,6 +52,7 @@ type MonitorManagerService interface {
 	ListMonitors(ctx context.Context, ouID, projectName, agentName, environmentName string) (*models.MonitorListResponse, error)
 	UpdateMonitor(ctx context.Context, ouID, projectName, agentName, monitorName string, req *models.UpdateMonitorRequest) (*models.MonitorResponse, error)
 	DeleteMonitor(ctx context.Context, ouID, projectName, agentName, monitorName string) error
+	DeleteMonitorsByAgent(ctx context.Context, ouID, projectName, agentName string) error
 	StopMonitor(ctx context.Context, ouID, projectName, agentName, monitorName string) (*models.MonitorResponse, error)
 	StartMonitor(ctx context.Context, ouID, projectName, agentName, monitorName string) (*models.MonitorResponse, error)
 	ListMonitorRuns(ctx context.Context, ouID, projectName, agentName, monitorName string, limit, offset int, includeScores bool) (*models.MonitorRunsListResponse, error)
@@ -747,6 +748,33 @@ func (s *monitorManagerService) DeleteMonitor(ctx context.Context, ouID, project
 	}
 
 	s.logger.Info("Monitor deleted successfully", "name", monitorName)
+	return nil
+}
+
+// DeleteMonitorsByAgent deletes all monitors belonging to an agent. It is best-effort:
+// a failure deleting one monitor is logged and the rest are still attempted, and the
+// combined error (if any) is returned so callers can surface partial-cleanup failures.
+// Intended for agent deletion, where orphaned monitors would otherwise linger.
+func (s *monitorManagerService) DeleteMonitorsByAgent(ctx context.Context, ouID, projectName, agentName string) error {
+	monitors, err := s.monitorRepo.ListMonitorsByAgent(ouID, projectName, agentName)
+	if err != nil {
+		return fmt.Errorf("failed to list monitors for agent %s: %w", agentName, err)
+	}
+
+	var errs []error
+	for i := range monitors {
+		monitorName := monitors[i].Name
+		if delErr := s.DeleteMonitor(ctx, ouID, projectName, agentName, monitorName); delErr != nil {
+			s.logger.Error("Failed to delete monitor during agent cleanup",
+				"agentName", agentName, "monitorName", monitorName, "error", delErr)
+			errs = append(errs, fmt.Errorf("monitor %s: %w", monitorName, delErr))
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to delete %d monitor(s) for agent %s: %w", len(errs), agentName, errors.Join(errs...))
+	}
+
+	s.logger.Info("Deleted all monitors for agent", "agentName", agentName, "count", len(monitors))
 	return nil
 }
 
