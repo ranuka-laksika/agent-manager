@@ -245,22 +245,32 @@ install_observability_extension() {
 # so the script pins its own validated ThunderID version — the agent-manager
 # release VERSION has no bearing on which ThunderID release env-Thunder runs.
 install_default_env_thunder() {
-    local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
-    local tmp_script
-    tmp_script="$(mktemp)"
+    # Prefer the copy bundled next to the installer (DEPLOYMENTS_DIR is set by
+    # install.sh). Fetching it from raw.githubusercontent.com is a fallback for
+    # standalone use; GitHub rate-limits unauthenticated per-IP requests (429),
+    # so avoid the network whenever the bundled script is present.
+    local bundled_script="${DEPLOYMENTS_DIR:-}/scripts/add-environment-thunder.sh"
+    local script_path tmp_script=""
 
-    if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
-        echo "Failed to download add-environment-thunder.sh from ${script_url}"
-        rm -f "${tmp_script}"
-        return 1
+    if [[ -n "${DEPLOYMENTS_DIR:-}" && -f "${bundled_script}" ]]; then
+        script_path="${bundled_script}"
+    else
+        local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
+        tmp_script="$(mktemp)"
+        if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
+            echo "Failed to download add-environment-thunder.sh from ${script_url}"
+            rm -f "${tmp_script}"
+            return 1
+        fi
+        script_path="${tmp_script}"
     fi
 
     ENV_NAME=default \
         DISPLAY_NAME="Default" \
         ORG_NAME=default \
-        bash "${tmp_script}"
+        bash "${script_path}"
     local status=$?
-    rm -f "${tmp_script}"
+    [[ -n "${tmp_script}" ]] && rm -f "${tmp_script}"
     return $status
 }
 
