@@ -15,7 +15,13 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type SyntheticEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   useGetMCPProxy,
   useListEnvironments,
@@ -51,7 +57,7 @@ import {
   Edit,
   Settings,
 } from "@wso2/oxygen-ui-icons-react";
-import { useParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
   formatRelativeTime,
   getAvatarInitials,
@@ -76,11 +82,58 @@ const TABS = [
   "Policies",
 ] as const;
 
+// URL-safe stand-ins for each tab, index-aligned with TABS, so the selected
+// tab (and environment, below) are shareable/deep-linkable and survive a
+// page reload instead of resetting to Overview/first-environment.
+const TAB_SLUGS = [
+  "overview",
+  "capabilities",
+  "connection",
+  "access-control",
+  "security",
+  "rewrite",
+  "policies",
+] as const;
+
 export function ViewMCPProxy() {
   const { orgId, proxyId } = useParams<{ orgId: string; proxyId: string }>();
   const routeProxyId = proxyId ?? "";
-  const [tabIndex, setTabIndex] = useState(0);
-  const [selectedEndpointId, setSelectedEndpointId] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const tabSlug = searchParams.get("tab");
+  const tabIndex = tabSlug
+    ? Math.max(0, TAB_SLUGS.indexOf(tabSlug as (typeof TAB_SLUGS)[number]))
+    : 0;
+  const selectedEndpointId = searchParams.get("endpoint") ?? "";
+
+  const setSelectedEndpointId = useCallback(
+    (endpointId: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("endpoint", endpointId);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const handleTabChange = useCallback(
+    (_event: SyntheticEvent, value: number) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.set("tab", TAB_SLUGS[value]);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
   const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [manageEndpointsOpen, setManageEndpointsOpen] = useState(false);
   const [name, setName] = useState("");
@@ -130,7 +183,7 @@ export function ViewMCPProxy() {
     if (!endpoints.some((endpoint) => endpoint.id === selectedEndpointId)) {
       setSelectedEndpointId(endpoints[0].id);
     }
-  }, [endpoints, selectedEndpointId]);
+  }, [endpoints, selectedEndpointId, setSelectedEndpointId]);
 
   const selectedEndpoint = useMemo<MCPProxyEndpoint | undefined>(
     () => endpoints.find((endpoint) => endpoint.id === selectedEndpointId),
@@ -468,10 +521,7 @@ export function ViewMCPProxy() {
 
         {hasEndpoints ? (
           <Card variant="outlined">
-            <Tabs
-              value={tabIndex}
-              onChange={(_, value: number) => setTabIndex(value)}
-            >
+            <Tabs value={tabIndex} onChange={handleTabChange}>
               {TABS.map((tab) => (
                 <Tab key={tab} label={tab} />
               ))}

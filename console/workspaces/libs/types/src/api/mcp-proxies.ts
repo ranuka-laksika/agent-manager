@@ -36,6 +36,13 @@ export interface MCPProxyPolicy {
   params?: Record<string, unknown>;
 }
 
+export interface MCPToolScopeBinding {
+  /** Name of the MCP tool the scopes gate */
+  tool: string;
+  /** Catalog scope names required to call the tool */
+  scopes: string[];
+}
+
 export interface MCPPolicyAvailableItem {
   name: string;
   version: string;
@@ -44,15 +51,6 @@ export interface MCPPolicyAvailableItem {
 export interface MCPPolicyAvailabilityResponse {
   count: number;
   list: MCPPolicyAvailableItem[];
-}
-
-/**
- * MCPToolScopeBinding gates an MCP tool behind one or more catalog scopes: a caller must
- * hold every listed scope to invoke the named tool.
- */
-export interface MCPToolScopeBinding {
-  tool: string;
-  scopes: string[];
 }
 
 /**

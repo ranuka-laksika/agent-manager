@@ -15,13 +15,12 @@
  * under the License.
  */
 
-import React, { type ChangeEvent, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   Alert,
   Avatar,
   Chip,
   ListingTable,
-  SearchBar,
   Skeleton,
   Stack,
   Typography,
@@ -65,17 +64,6 @@ export const AgentsTab: React.FC = () => {
     return query ? agents.filter((a) => matchesQuery(a, query)) : agents;
   }, [agents, search]);
 
-  const toolbar = (
-    <SearchBar
-      placeholder="Search agents..."
-      size="small"
-      fullWidth
-      value={search}
-      onChange={(e: ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-      disabled={isLoading}
-    />
-  );
-
   if (error != null) {
     return (
       <Alert severity="error" icon={<AlertTriangle size={18} />}>
@@ -85,26 +73,22 @@ export const AgentsTab: React.FC = () => {
   }
 
   return (
-    <Stack spacing={1}>
-      {toolbar}
-      {!isLoading && agents.length === 0 ? (
-        <ListingTable.Container>
+    <ListingTable.Provider searchValue={search} onSearchChange={setSearch}>
+      <ListingTable.Container>
+        <ListingTable.Toolbar showSearch searchPlaceholder="Search agents..." />
+        {!isLoading && agents.length === 0 ? (
           <ListingTable.EmptyState
             illustration={<Users size={64} />}
             title="No agents yet"
             description="Agents provisioned in this environment will appear here."
           />
-        </ListingTable.Container>
-      ) : !isLoading && filteredAgents.length === 0 ? (
-        <ListingTable.Container>
+        ) : !isLoading && filteredAgents.length === 0 ? (
           <ListingTable.EmptyState
             illustration={<Search size={64} />}
             title="No agents found"
             description={`No agents match "${search}". Try a different search term.`}
           />
-        </ListingTable.Container>
-      ) : (
-        <ListingTable.Container>
+        ) : (
           <ListingTable variant="table">
             <ListingTable.Head>
               <ListingTable.Row>
@@ -160,9 +144,9 @@ export const AgentsTab: React.FC = () => {
                 ))}
             </ListingTable.Body>
           </ListingTable>
-        </ListingTable.Container>
-      )}
-    </Stack>
+        )}
+      </ListingTable.Container>
+    </ListingTable.Provider>
   );
 };
 

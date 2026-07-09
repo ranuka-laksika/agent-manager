@@ -35,6 +35,9 @@ import {
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
+import { isIdentitySecurityEnabled } from "./mcpEndpoints";
+
+type AuthenticationType = "apiKey" | "identity" | "";
 
 const KEY_LOCATION_OPTIONS: { value: APIKeyLocation; label: string }[] = [
   { value: "header", label: "header" },
@@ -48,6 +51,14 @@ function isAPIKeySecurityEnabled(config: MCPEndpointConfig): boolean {
     !!apiKeyConfig &&
     apiKeyConfig.enabled !== false
   );
+}
+
+function resolveAuthenticationType(
+  config: MCPEndpointConfig,
+): AuthenticationType {
+  if (isAPIKeySecurityEnabled(config)) return "apiKey";
+  if (isIdentitySecurityEnabled(config)) return "identity";
+  return "";
 }
 
 export type MCPProxySecurityTabProps = {
@@ -65,9 +76,8 @@ export function MCPProxySecurityTab({
   onUpdate,
   isUpdating,
 }: MCPProxySecurityTabProps) {
-  const [authenticationType, setAuthenticationType] = useState<"apiKey" | "">(
-    "apiKey",
-  );
+  const [authenticationType, setAuthenticationType] =
+    useState<AuthenticationType>("apiKey");
   const [keyValue, setKeyValue] = useState("");
   const [keyIn, setKeyIn] = useState<APIKeyLocation>("header");
   const [status, setStatus] = useState<{
@@ -78,8 +88,7 @@ export function MCPProxySecurityTab({
 
   const isDirty = useMemo(() => {
     if (!config) return false;
-    const hasApiKey = isAPIKeySecurityEnabled(config);
-    const savedType = hasApiKey ? "apiKey" : "";
+    const savedType = resolveAuthenticationType(config);
     const savedKey = config.security?.apiKey?.key ?? "";
     const savedIn = (config.security?.apiKey?.in as APIKeyLocation) ?? "header";
     if (authenticationType !== savedType) return true;
@@ -90,18 +99,22 @@ export function MCPProxySecurityTab({
 
   useEffect(() => {
     if (!config || !selectedEndpointId) return;
-    const hasApiKey = isAPIKeySecurityEnabled(config);
-    setAuthenticationType(hasApiKey ? "apiKey" : "");
-    setKeyValue(config.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
+    const nextType = resolveAuthenticationType(config);
+    setAuthenticationType(nextType);
+    setKeyValue(
+      config.security?.apiKey?.key ?? (nextType === "apiKey" ? "X-API-Key" : ""),
+    );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
   }, [config, selectedEndpointId]);
 
   const handleDiscard = useCallback(() => {
     if (!config) return;
-    const hasApiKey = isAPIKeySecurityEnabled(config);
-    setAuthenticationType(hasApiKey ? "apiKey" : "");
-    setKeyValue(config.security?.apiKey?.key ?? (hasApiKey ? "X-API-Key" : ""));
+    const nextType = resolveAuthenticationType(config);
+    setAuthenticationType(nextType);
+    setKeyValue(
+      config.security?.apiKey?.key ?? (nextType === "apiKey" ? "X-API-Key" : ""),
+    );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
     setStatus(null);
@@ -129,6 +142,9 @@ export function MCPProxySecurityTab({
             enabled: authenticationType === "apiKey",
             key: authenticationType === "apiKey" ? nextKey : "",
             in: nextIn,
+          },
+          identity: {
+            enabled: authenticationType === "identity",
           },
         },
       });
@@ -179,15 +195,25 @@ export function MCPProxySecurityTab({
               size="small"
               value={authenticationType || ""}
               onChange={(e) =>
-                setAuthenticationType((e.target.value as "apiKey" | "") || "")
+                setAuthenticationType(
+                  (e.target.value as AuthenticationType) || "",
+                )
               }
             >
               <MenuItem value="">None</MenuItem>
               <MenuItem value="apiKey">apiKey</MenuItem>
+              <MenuItem value="identity">identity</MenuItem>
             </Select>
           </FormControl>
         </Grid>
       </Grid>
+
+      {authenticationType === "identity" && (
+        <Alert severity="info">
+          Scopes for individual tools can be configured in the Access Control
+          tab.
+        </Alert>
+      )}
 
       {authenticationType === "apiKey" && (
         <Grid container spacing={3}>

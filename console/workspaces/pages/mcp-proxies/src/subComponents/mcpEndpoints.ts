@@ -16,6 +16,7 @@
  */
 
 import type {
+  MCPEndpointConfig,
   MCPProxyCapabilities,
   MCPProxyEndpoint,
   MCPProxyPolicy,
@@ -37,6 +38,18 @@ export const DEFAULT_ENDPOINT_SECURITY = {
     in: "header" as const,
   },
 };
+
+// Shared by the Security and Access Control tabs: Access Control swaps its
+// allow/deny view for a per-tool scope-binding table once Agent Identity
+// security is the active auth method for the endpoint.
+export function isIdentitySecurityEnabled(
+  config: MCPEndpointConfig | undefined,
+): boolean {
+  return (
+    config?.security?.enabled !== false &&
+    config?.security?.identity?.enabled === true
+  );
+}
 
 // Backend identifier of a capability entry, matching the resolution used by the
 // Rewrite / Access Control tabs (resources key on uri, tools/prompts on name).
