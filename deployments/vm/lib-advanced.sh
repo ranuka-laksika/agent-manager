@@ -177,6 +177,10 @@ _public_ip() {
     ip="$(echo "$ip" | tr -d '[:space:]')"
     [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && { echo "$ip"; return; }
   done
+  # Must succeed even when every endpoint is unreachable (egress-restricted VMs):
+  # the caller assigns the output under `set -e`, so a non-zero status here would
+  # abort the whole install instead of just skipping the public-IP DNS candidate.
+  return 0
 }
 
 # validate_dns <ip> [more_ips...] — confirm derived hosts resolve to one of the given
