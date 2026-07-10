@@ -87,9 +87,14 @@ func (r *mcpProxyScopeRepository) Create(ctx context.Context, scope *models.MCPP
 }
 
 func (r *mcpProxyScopeRepository) Update(ctx context.Context, scope *models.MCPProxyScope) error {
+	// Struct-based Updates (not a map) so GORM routes Tools through the
+	// field's serializer:json tag instead of the driver's default []string
+	// (postgres array) valuer; Select forces the zero-value Description
+	// through too.
 	res := r.db.WithContext(ctx).Model(&models.MCPProxyScope{}).
 		Where("mcp_proxy_uuid = ? AND action = ?", scope.MCPProxyUUID, scope.Action).
-		Updates(map[string]any{"description": scope.Description, "tools": scope.Tools, "updated_at": time.Now()})
+		Select("description", "tools", "updated_at").
+		Updates(models.MCPProxyScope{Description: scope.Description, Tools: scope.Tools, UpdatedAt: time.Now()})
 	if res.Error != nil {
 		return fmt.Errorf("failed to update mcp proxy scope: %w", res.Error)
 	}
