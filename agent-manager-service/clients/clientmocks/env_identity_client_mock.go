@@ -55,9 +55,6 @@ import (
 //			EnsureProxyResourceServerFunc: func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error) {
 //				panic("mock out the EnsureProxyResourceServer method")
 //			},
-//			EnsureScopeResourceServerFunc: func(ctx context.Context, scopes []string) (string, error) {
-//				panic("mock out the EnsureScopeResourceServer method")
-//			},
 //			GetDefaultOUIDFunc: func(ctx context.Context) (string, error) {
 //				panic("mock out the GetDefaultOUID method")
 //			},
@@ -181,9 +178,6 @@ type EnvIdentityClientMock struct {
 
 	// EnsureProxyResourceServerFunc mocks the EnsureProxyResourceServer method.
 	EnsureProxyResourceServerFunc func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error)
-
-	// EnsureScopeResourceServerFunc mocks the EnsureScopeResourceServer method.
-	EnsureScopeResourceServerFunc func(ctx context.Context, scopes []string) (string, error)
 
 	// GetDefaultOUIDFunc mocks the GetDefaultOUID method.
 	GetDefaultOUIDFunc func(ctx context.Context) (string, error)
@@ -369,13 +363,6 @@ type EnvIdentityClientMock struct {
 			DisplayName string
 			// Actions is the actions argument value.
 			Actions []string
-		}
-		// EnsureScopeResourceServer holds details about calls to the EnsureScopeResourceServer method.
-		EnsureScopeResourceServer []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Scopes is the scopes argument value.
-			Scopes []string
 		}
 		// GetDefaultOUID holds details about calls to the GetDefaultOUID method.
 		GetDefaultOUID []struct {
@@ -615,7 +602,6 @@ type EnvIdentityClientMock struct {
 	lockDeleteRole                      sync.RWMutex
 	lockDeleteUser                      sync.RWMutex
 	lockEnsureProxyResourceServer       sync.RWMutex
-	lockEnsureScopeResourceServer       sync.RWMutex
 	lockGetDefaultOUID                  sync.RWMutex
 	lockGetGroup                        sync.RWMutex
 	lockGetGroupMembers                 sync.RWMutex
@@ -1137,42 +1123,6 @@ func (mock *EnvIdentityClientMock) EnsureProxyResourceServerCalls() []struct {
 	mock.lockEnsureProxyResourceServer.RLock()
 	calls = mock.calls.EnsureProxyResourceServer
 	mock.lockEnsureProxyResourceServer.RUnlock()
-	return calls
-}
-
-// EnsureScopeResourceServer calls EnsureScopeResourceServerFunc.
-func (mock *EnvIdentityClientMock) EnsureScopeResourceServer(ctx context.Context, scopes []string) (string, error) {
-	if mock.EnsureScopeResourceServerFunc == nil {
-		panic("EnvIdentityClientMock.EnsureScopeResourceServerFunc: method is nil but EnvIdentityClient.EnsureScopeResourceServer was just called")
-	}
-	callInfo := struct {
-		Ctx    context.Context
-		Scopes []string
-	}{
-		Ctx:    ctx,
-		Scopes: scopes,
-	}
-	mock.lockEnsureScopeResourceServer.Lock()
-	mock.calls.EnsureScopeResourceServer = append(mock.calls.EnsureScopeResourceServer, callInfo)
-	mock.lockEnsureScopeResourceServer.Unlock()
-	return mock.EnsureScopeResourceServerFunc(ctx, scopes)
-}
-
-// EnsureScopeResourceServerCalls gets all the calls that were made to EnsureScopeResourceServer.
-// Check the length with:
-//
-//	len(mockedEnvIdentityClient.EnsureScopeResourceServerCalls())
-func (mock *EnvIdentityClientMock) EnsureScopeResourceServerCalls() []struct {
-	Ctx    context.Context
-	Scopes []string
-} {
-	var calls []struct {
-		Ctx    context.Context
-		Scopes []string
-	}
-	mock.lockEnsureScopeResourceServer.RLock()
-	calls = mock.calls.EnsureScopeResourceServer
-	mock.lockEnsureScopeResourceServer.RUnlock()
 	return calls
 }
 

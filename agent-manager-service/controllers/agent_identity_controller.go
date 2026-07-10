@@ -17,14 +17,20 @@
 package controllers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
+	"strings"
+
+	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
+	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -63,14 +69,18 @@ type AgentIdentityController interface {
 type agentIdentityController struct {
 	resolver    thundersvc.EnvThunderResolver
 	bindingRepo repositories.AgentThunderClientRepository
+	proxyRepo   repositories.MCPProxyRepository
+	scopeRepo   repositories.MCPProxyScopeRepository
 }
 
 // NewAgentIdentityController creates a new agent-identity passthrough controller.
 func NewAgentIdentityController(
 	resolver thundersvc.EnvThunderResolver,
 	bindingRepo repositories.AgentThunderClientRepository,
+	proxyRepo repositories.MCPProxyRepository,
+	scopeRepo repositories.MCPProxyScopeRepository,
 ) AgentIdentityController {
-	return &agentIdentityController{resolver: resolver, bindingRepo: bindingRepo}
+	return &agentIdentityController{resolver: resolver, bindingRepo: bindingRepo, proxyRepo: proxyRepo, scopeRepo: scopeRepo}
 }
 
 // envClient resolves the env-Thunder identity client for the request's org+env,
@@ -368,9 +378,12 @@ func (c *agentIdentityController) ListRoles(w http.ResponseWriter, r *http.Reque
 	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles, "total": total, "offset": offset, "limit": limit})
 }
 
-// CreateRole registers the requested catalog scopes with the environment's
-// Thunder before writing the role, so a role never references a permission the
-// environment does not yet know (the lazy-ensure ordering the spike established).
+// CreateRole validates the requested "<proxy-handle>:<action>" scopes against
+// mcp_proxy_scopes, ensures each referenced proxy's resource server exists in the
+// environment's Thunder before writing the role, then registers the scopes as the
+// role's permissions grouped by resource server. Ensuring every resource server
+// before any permission write means a role never references a permission the
+// environment does not yet know.
 func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -386,6 +399,12 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 	}
 	scopes := body.Scopes
 
+	groups, err := c.resolveScopeGroups(ctx, middleware.OUIDFromRequest(r), scopes)
+	if err != nil {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	client, ok := c.envClient(w, r)
 	if !ok {
 		return
@@ -397,14 +416,19 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	var rsID string
-	if len(scopes) > 0 {
-		rsID, err = client.EnsureScopeResourceServer(ctx, scopes)
+	// Ensure every referenced proxy's resource server (and its actions) exists
+	// before the role write, so no permission add below references an unknown
+	// resource server. rsIDByHandle keeps the ensured RS ID per proxy handle.
+	rsIDByHandle := make(map[string]string, len(groups))
+	for _, handle := range sortedKeys(groups) {
+		g := groups[handle]
+		rsID, err := client.EnsureProxyResourceServer(ctx, g.handle, displayName(g), g.actions)
 		if err != nil {
-			log.Error("agent-identity CreateRole: ensure scope resource server failed", "error", err)
+			log.Error("agent-identity CreateRole: ensure proxy resource server failed", "proxy", g.handle, "error", err)
 			utils.WriteErrorResponse(w, http.StatusBadGateway, "Failed to register scopes with the environment identity provider")
 			return
 		}
+		rsIDByHandle[handle] = rsID
 	}
 
 	role, err := client.CreateRole(ctx, thundersvc.CreateRoleRequest{
@@ -418,9 +442,10 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	if len(scopes) > 0 {
-		if err := client.AddRolePermissions(ctx, role.ID, thundersvc.RolePermissionRequest{ResourceServerID: rsID, Permissions: scopes}); err != nil {
-			log.Error("agent-identity CreateRole: add role permissions failed", "roleID", role.ID, "error", err)
+	for _, handle := range sortedKeys(groups) {
+		g := groups[handle]
+		if err := client.AddRolePermissions(ctx, role.ID, thundersvc.RolePermissionRequest{ResourceServerID: rsIDByHandle[handle], Permissions: g.scopes}); err != nil {
+			log.Error("agent-identity CreateRole: add role permissions failed", "roleID", role.ID, "proxy", g.handle, "error", err)
 			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Role created but scope permissions failed; edit the role to retry")
 			return
 		}
@@ -451,9 +476,10 @@ func (c *agentIdentityController) GetRole(w http.ResponseWriter, r *http.Request
 }
 
 // UpdateRole updates the role metadata and reconciles its scope permissions to
-// the requested set: scopes present in the request but not on the role are added
-// (after ensuring the resource server), and scopes on the role but not requested
-// are removed — both under the amp-scopes resource server.
+// the requested set per resource server: for each referenced proxy's RS, scopes
+// requested but not on the role are added and scopes on the role but not requested
+// are removed; a proxy dropped from the role entirely has all its permissions
+// removed from its RS.
 func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
@@ -500,35 +526,64 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Skip touching the resource server entirely when there are neither requested
+	// Skip touching any resource server entirely when there are neither requested
 	// scopes nor existing permissions to reconcile (a pure metadata update).
 	if len(scopes) == 0 && len(current.Permissions) == 0 {
 		utils.WriteSuccessResponse(w, http.StatusOK, updated)
 		return
 	}
 
-	rsID, err := client.EnsureScopeResourceServer(ctx, scopes)
+	groups, err := c.resolveScopeGroups(ctx, middleware.OUIDFromRequest(r), scopes)
 	if err != nil {
-		log.Error("agent-identity UpdateRole: ensure scope resource server failed", "roleID", roleID, "error", err)
-		utils.WriteErrorResponse(w, http.StatusBadGateway, "Failed to register scopes with the environment identity provider")
+		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	currentScopes := currentScopesForRS(current, rsID)
-	additions := stringSetDifference(scopes, currentScopes)
-	removals := stringSetDifference(currentScopes, scopes)
 
-	if len(additions) > 0 {
-		if err := client.AddRolePermissions(ctx, roleID, thundersvc.RolePermissionRequest{ResourceServerID: rsID, Permissions: additions}); err != nil {
-			log.Error("agent-identity UpdateRole: add role permissions failed", "roleID", roleID, "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role permissions")
+	// desired[rsID] is the requested scope set for that proxy's resource server,
+	// ensured to exist before any reconcile write.
+	desired := make(map[string][]string, len(groups))
+	for _, handle := range sortedKeys(groups) {
+		g := groups[handle]
+		rsID, err := client.EnsureProxyResourceServer(ctx, g.handle, displayName(g), g.actions)
+		if err != nil {
+			log.Error("agent-identity UpdateRole: ensure proxy resource server failed", "roleID", roleID, "proxy", g.handle, "error", err)
+			utils.WriteErrorResponse(w, http.StatusBadGateway, "Failed to register scopes with the environment identity provider")
 			return
 		}
+		desired[rsID] = g.scopes
 	}
-	if len(removals) > 0 {
-		if err := client.RemoveRolePermissions(ctx, roleID, thundersvc.RolePermissionRequest{ResourceServerID: rsID, Permissions: removals}); err != nil {
-			log.Error("agent-identity UpdateRole: remove role permissions failed", "roleID", roleID, "error", err)
-			utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role permissions")
-			return
+
+	// currentByRS is the role's existing permission set per resource server.
+	currentByRS := make(map[string][]string, len(current.Permissions))
+	for _, p := range current.Permissions {
+		currentByRS[p.ResourceServerID] = p.Permissions
+	}
+
+	// Reconcile every resource server the role touches — those newly desired and
+	// those it already carried (a proxy dropped from the role has have\desired = have).
+	rsIDs := make(map[string]struct{}, len(desired)+len(currentByRS))
+	for rsID := range desired {
+		rsIDs[rsID] = struct{}{}
+	}
+	for rsID := range currentByRS {
+		rsIDs[rsID] = struct{}{}
+	}
+	for _, rsID := range sortedStringSetKeys(rsIDs) {
+		additions := stringSetDifference(desired[rsID], currentByRS[rsID])
+		removals := stringSetDifference(currentByRS[rsID], desired[rsID])
+		if len(additions) > 0 {
+			if err := client.AddRolePermissions(ctx, roleID, thundersvc.RolePermissionRequest{ResourceServerID: rsID, Permissions: additions}); err != nil {
+				log.Error("agent-identity UpdateRole: add role permissions failed", "roleID", roleID, "resourceServerID", rsID, "error", err)
+				utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role permissions")
+				return
+			}
+		}
+		if len(removals) > 0 {
+			if err := client.RemoveRolePermissions(ctx, roleID, thundersvc.RolePermissionRequest{ResourceServerID: rsID, Permissions: removals}); err != nil {
+				log.Error("agent-identity UpdateRole: remove role permissions failed", "roleID", roleID, "resourceServerID", rsID, "error", err)
+				utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role permissions")
+				return
+			}
 		}
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, updated)
@@ -701,18 +756,81 @@ func decodeAgentIdentityAssignments(r *http.Request) (thundersvc.RoleAssignments
 	return thundersvc.RoleAssignmentsRequest{Assignments: entries}, nil
 }
 
-// currentScopesForRS returns the role's permission strings under the given
-// resource server, or nil if the role carries none.
-func currentScopesForRS(role *thundersvc.ThunderRole, rsID string) []string {
-	if role == nil {
-		return nil
-	}
-	for _, p := range role.Permissions {
-		if p.ResourceServerID == rsID {
-			return p.Permissions
+// proxyScopeGroup is one proxy's slice of a role's requested scopes.
+type proxyScopeGroup struct {
+	proxy   *models.MCPProxy
+	handle  string
+	actions []string // parsed actions, sorted
+	scopes  []string // full "<handle>:<action>" strings, sorted
+}
+
+// resolveScopeGroups parses and validates requested scope strings against
+// mcp_proxy_scopes, grouped by owning proxy. Every scope must be of the form
+// "<proxy-handle>:<action>", name an existing proxy in the org, and name an
+// action defined on that proxy. Errors name the offending string and map to
+// HTTP 400.
+func (c *agentIdentityController) resolveScopeGroups(ctx context.Context, ouID string, scopes []string) (map[string]*proxyScopeGroup, error) {
+	groups := map[string]*proxyScopeGroup{}
+	for _, s := range scopes {
+		idx := strings.Index(s, ":")
+		if idx <= 0 || idx == len(s)-1 {
+			return nil, fmt.Errorf("scope %q is not of the form <proxy-handle>:<action>", s)
 		}
+		handle, action := s[:idx], s[idx+1:]
+		g, ok := groups[handle]
+		if !ok {
+			proxy, err := c.proxyRepo.GetByHandle(ctx, handle, ouID)
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return nil, fmt.Errorf("scope %q references unknown MCP proxy %q", s, handle)
+				}
+				return nil, fmt.Errorf("failed to resolve MCP proxy for scope %q: %w", s, err)
+			}
+			g = &proxyScopeGroup{proxy: proxy, handle: handle}
+			groups[handle] = g
+		}
+		if _, err := c.scopeRepo.Get(ctx, g.proxy.UUID, action); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("scope %q is not defined on MCP proxy %q", s, handle)
+			}
+			return nil, fmt.Errorf("failed to look up scope %q: %w", s, err)
+		}
+		g.actions = append(g.actions, action)
+		g.scopes = append(g.scopes, s)
 	}
-	return nil
+	for _, g := range groups {
+		sort.Strings(g.actions)
+		sort.Strings(g.scopes)
+	}
+	return groups, nil
+}
+
+// displayName is the Thunder resource-server display name for a proxy group.
+func displayName(g *proxyScopeGroup) string {
+	if g.proxy.Artifact != nil && g.proxy.Artifact.Name != "" {
+		return g.proxy.Artifact.Name
+	}
+	return g.handle
+}
+
+// sortedKeys gives deterministic iteration order over the handle-keyed groups.
+func sortedKeys(groups map[string]*proxyScopeGroup) []string {
+	keys := make([]string, 0, len(groups))
+	for k := range groups {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// sortedStringSetKeys gives deterministic iteration order over a set of strings.
+func sortedStringSetKeys(set map[string]struct{}) []string {
+	keys := make([]string, 0, len(set))
+	for k := range set {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // stringSetDifference returns the elements of a that are not present in b.
