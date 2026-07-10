@@ -314,7 +314,7 @@ func TestMCPProxyScopeDelete_CleansThunderBestEffort(t *testing.T) {
 				return envAClient, nil
 			}
 			t.Fatalf("env %q has identity disabled and must not be resolved", envName)
-			return nil, nil
+			return nil, assert.AnError
 		},
 	}
 	redeployer := &recordingRedeployer{}
