@@ -312,31 +312,36 @@ func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, or
 			if rsID == "" {
 				continue // RS never projected into this env — nothing to sweep
 			}
-			s.sweepRolePermission(ctx, client, name, rsID, scopeStr)
+			sweepRolePermission(ctx, s.logger, client, name, scopeStr)
 		}
 	}
 }
 
-// sweepRolePermission strips scopeStr from every role carrying it under rsID.
+// sweepRolePermission strips scopeStr from every role carrying it, regardless of
+// which resource-server group holds it — RemoveRolePermissions uses the ID from
+// the matched group itself, so the caller doesn't need a resource-server ID up
+// front (e.g. after a whole-RS delete, which returns none). A package-level func
+// so both MCPProxyService.Delete and mcpProxyScopeService.cleanupDeletedScope can
+// share it without duplicating the env-Thunder-OU-trap-prone ListRoles walk.
 // ListRoles("") pages all roles WITH permissions populated, so filtering is
 // in-memory (same pattern as GetGroupRoles, identity_client.go).
-func (s *mcpProxyScopeService) sweepRolePermission(ctx context.Context, client thundersvc.EnvIdentityClient, envName, rsID, scopeStr string) {
+func sweepRolePermission(ctx context.Context, logger *slog.Logger, client thundersvc.EnvIdentityClient, envName, scopeStr string) {
 	const pageSize = 50
 	for offset := 0; ; {
 		roles, total, err := client.ListRoles(ctx, "", offset, pageSize)
 		if err != nil {
-			s.logger.Warn("scope cleanup: role sweep aborted", "env", envName, "scope", scopeStr, "error", err)
+			logger.Warn("scope cleanup: role sweep aborted", "env", envName, "scope", scopeStr, "error", err)
 			return
 		}
 		for _, role := range roles {
 			for _, grp := range role.Permissions {
-				if grp.ResourceServerID != rsID || !slices.Contains(grp.Permissions, scopeStr) {
+				if !slices.Contains(grp.Permissions, scopeStr) {
 					continue
 				}
 				if err := client.RemoveRolePermissions(ctx, role.ID, thundersvc.RolePermissionRequest{
-					ResourceServerID: rsID, Permissions: []string{scopeStr},
+					ResourceServerID: grp.ResourceServerID, Permissions: []string{scopeStr},
 				}); err != nil {
-					s.logger.Warn("scope cleanup: permission strip failed", "env", envName, "role", role.ID, "scope", scopeStr, "error", err)
+					logger.Warn("scope cleanup: permission strip failed", "env", envName, "role", role.ID, "scope", scopeStr, "error", err)
 				}
 			}
 		}

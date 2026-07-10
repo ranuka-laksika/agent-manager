@@ -85,10 +85,14 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
 	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository)
+	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository, envThunderResolver, infraResourceManager)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
-	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
 	llmProviderAPIKeyService := services.NewLLMProviderAPIKeyService(llmProviderRepository, gatewayRepository, gatewayEventsService, apiKeyRepository)
 	aiApplicationRepository := ProvideAIApplicationRepository(db)
 	aiApplicationService := services.NewAIApplicationService(aiApplicationRepository, gatewayRepository, gatewayEventsService, logger)
@@ -158,10 +162,6 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	gitSecretService := services.NewGitSecretService(openChoreoClient)
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
 	identityController := controllers.NewIdentityController(identityClient)
-	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
-	if err != nil {
-		return nil, err
-	}
 	mcpProxyScopeService := services.NewMCPProxyScopeService(mcpProxyScopeRepository, mcpProxyRepository, deploymentRepository, infraResourceManager, envThunderResolver, mcpProxyService, logger)
 	mcpProxyScopeController := controllers.NewMCPProxyScopeController(mcpProxyScopeService)
 	agentThunderClientRepository := ProvideAgentThunderClientRepository(db)
@@ -261,10 +261,14 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
 	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository)
+	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository, envThunderResolver, infraResourceManager)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
-	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
 	llmProviderAPIKeyService := services.NewLLMProviderAPIKeyService(llmProviderRepository, gatewayRepository, gatewayEventsService, apiKeyRepository)
 	aiApplicationRepository := ProvideAIApplicationRepository(db)
 	aiApplicationService := services.NewAIApplicationService(aiApplicationRepository, gatewayRepository, gatewayEventsService, logger)
@@ -273,10 +277,6 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
 	agentThunderClientRepository := ProvideAgentThunderClientRepository(db)
-	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
-	if err != nil {
-		return nil, err
-	}
 	agentSecretStore, err := ProvideAgentSecretStore(configConfig)
 	if err != nil {
 		return nil, err

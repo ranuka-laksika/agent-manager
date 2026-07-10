@@ -35,6 +35,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -76,6 +77,8 @@ type MCPProxyService struct {
 	client               *http.Client
 	logger               *slog.Logger
 	encryptionKey        []byte
+	resolver             thundersvc.EnvThunderResolver
+	infraManager         InfraResourceManager
 }
 
 // NewMCPProxyService creates a new MCP proxy service.
@@ -91,6 +94,8 @@ func NewMCPProxyService(
 	logger *slog.Logger,
 	encryptionKey []byte,
 	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
+	resolver thundersvc.EnvThunderResolver,
+	infraManager InfraResourceManager,
 ) *MCPProxyService {
 	return &MCPProxyService{
 		db:                   db,
@@ -110,6 +115,8 @@ func NewMCPProxyService(
 		client:        ssrf.NewClient(mcpRequestTimeout),
 		logger:        logger,
 		encryptionKey: encryptionKey,
+		resolver:      resolver,
+		infraManager:  infraManager,
 	}
 }
 
@@ -485,7 +492,7 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 // Delete removes an MCP proxy by handle. MCP proxy mappings are deployable artifacts
 // derived from an MCP proxy, so the source proxy cannot be deleted while mappings exist.
-func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) error {
+func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID string) error {
 	handle := strings.TrimSpace(proxyID)
 	if handle == "" {
 		return utils.ErrInvalidInput
@@ -509,6 +516,11 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 	if len(mappings) > 0 {
 		return utils.ErrMCPProxyHasMappings
 	}
+
+	// Capture the proxy's scope rows before the row delete cascades them away
+	// (mcp_proxy_scopes FK is ON DELETE CASCADE) — the Thunder cleanup below needs
+	// every scope string to strip from role permissions.
+	scopes, _ := s.mcpProxyScopeRepo.ListByProxy(ctx, proxy.UUID)
 
 	// Tear down the per-(endpoint,env) gateway artifacts this proxy deployed before removing
 	// the proxy row. The endpoint and join rows cascade-delete with the parent proxy; here we
@@ -534,7 +546,56 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 		return fmt.Errorf("failed to delete MCP proxy: %w", err)
 	}
 
+	s.cleanupProxyResourceServers(ctx, orgUUID, orgName, proxy, scopes)
+
 	return nil
+}
+
+// cleanupProxyResourceServers best-effort tears down the proxy's per-environment Thunder
+// resource servers and strips their scope strings from every role, after the proxy row
+// (and its cascaded scope rows) has already been deleted. Same endpoints->join-rows walk
+// and env-UUID->name map as cleanupDeletedScope; never fails the caller.
+func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, scopes []models.MCPProxyScope) {
+	handle := proxyHandleOf(proxy)
+	scopeStrs := make([]string, len(scopes))
+	for i, scope := range scopes {
+		scopeStrs[i] = scope.ScopeString(handle)
+	}
+
+	envs, err := s.infraManager.ListOrgEnvironments(ctx, ouID)
+	if err != nil {
+		s.logger.Warn("proxy delete: listing environments failed", "proxy", handle, "error", err)
+		return
+	}
+	envName := make(map[string]string, len(envs)) // env UUID -> name (resolver keys on names)
+	for _, env := range envs {
+		envName[env.UUID] = env.Name
+	}
+
+	for i := range proxy.Endpoints {
+		endpoint := &proxy.Endpoints[i]
+		if !mcpIdentityEnabled(endpoint.Configuration.Security) {
+			continue
+		}
+		for j := range endpoint.Environments {
+			name, ok := envName[endpoint.Environments[j].EnvironmentUUID.String()]
+			if !ok {
+				continue // environment no longer exists — nothing to clean
+			}
+			client, err := s.resolver.ResolveIdentity(ctx, orgName, name)
+			if err != nil {
+				s.logger.Warn("proxy delete: env-Thunder unavailable", "env", name, "proxy", handle, "error", err)
+				continue
+			}
+			if err := client.DeleteProxyResourceServer(ctx, handle); err != nil {
+				s.logger.Warn("proxy delete: resource server delete failed", "env", name, "proxy", handle, "error", err)
+				continue
+			}
+			for _, scopeStr := range scopeStrs {
+				sweepRolePermission(ctx, s.logger, client, name, scopeStr)
+			}
+		}
+	}
 }
 
 // RemoveEnvironmentFromEndpoints removes an environment's endpoint bindings from a proxy

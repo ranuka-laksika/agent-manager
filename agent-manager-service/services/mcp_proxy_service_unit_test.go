@@ -21,8 +21,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
@@ -150,4 +153,131 @@ func TestValidateMCPEndpointSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.
 		endpointWith("https://93.184.216.34", identityEnabledSecurity()),
 	}
 	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
+}
+
+// newDeleteTestProxy builds a proxy with one identity-enabled endpoint bound to envUUID,
+// ready for MCPProxyService.Delete's Thunder cleanup.
+func newDeleteTestProxy(handle string, envUUID uuid.UUID) *models.MCPProxy {
+	return &models.MCPProxy{
+		UUID:      uuid.New(),
+		Artifact:  &models.Artifact{Handle: handle},
+		Endpoints: []models.MCPProxyEndpoint{identityEnabledEndpoint("primary", envUUID, uuid.Nil, true)},
+	}
+}
+
+func TestMCPProxyDelete_CleansThunderResourceServers(t *testing.T) {
+	envUUID := uuid.New()
+	proxy := newDeleteTestProxy("gh-proxy", envUUID)
+
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		GetByHandleFunc: func(_ context.Context, handle, _ string) (*models.MCPProxy, error) { return proxy, nil },
+		DeleteFunc:      func(_ context.Context, _, _ string) error { return nil },
+	}
+	endpointRepo := &repomocks.MCPProxyEndpointRepositoryMock{
+		ListEndpointEnvironmentsByProxyFunc: func(_ context.Context, _ uuid.UUID) ([]models.MCPProxyEndpointEnvironment, error) {
+			return nil, nil
+		},
+	}
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		ListByProxyFunc: func(_ context.Context, _ uuid.UUID) ([]models.MCPProxyScope, error) {
+			return []models.MCPProxyScope{{Action: "read"}, {Action: "write"}}, nil
+		},
+	}
+	infra := stubInfraManager{listOrgEnvs: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+		return []*models.EnvironmentResponse{{Name: "env-a", UUID: envUUID.String()}}, nil
+	}}
+
+	var deletedHandle string
+	type removedPermission struct {
+		roleID string
+		req    thundersvc.RolePermissionRequest
+	}
+	var removed []removedPermission
+	envClient := &clientmocks.EnvIdentityClientMock{
+		DeleteProxyResourceServerFunc: func(_ context.Context, proxyHandle string) error {
+			deletedHandle = proxyHandle
+			return nil
+		},
+		ListRolesFunc: func(_ context.Context, ouID string, offset, _ int) ([]thundersvc.ThunderRole, int, error) {
+			assert.Equal(t, "", ouID, "role sweep must list every role in the env-Thunder, not filter by a platform OU")
+			if offset > 0 {
+				return nil, 1, nil
+			}
+			return []thundersvc.ThunderRole{
+				{ID: "role-1", Permissions: []thundersvc.RolePermissionRequest{
+					{ResourceServerID: "rs-1", Permissions: []string{"gh-proxy:read", "gh-proxy:write"}},
+				}},
+			}, 1, nil
+		},
+		RemoveRolePermissionsFunc: func(_ context.Context, roleID string, req thundersvc.RolePermissionRequest) error {
+			removed = append(removed, removedPermission{roleID: roleID, req: req})
+			return nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
+			assert.Equal(t, "org", orgName)
+			assert.Equal(t, "env-a", envName)
+			return envClient, nil
+		},
+	}
+
+	svc := &MCPProxyService{
+		repo:              proxyRepo,
+		endpointRepo:      endpointRepo,
+		mcpProxyScopeRepo: scopeRepo,
+		infraManager:      infra,
+		resolver:          resolver,
+		logger:            discardLogger(),
+	}
+
+	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy")
+
+	assert.NoError(t, err)
+	assert.Equal(t, "gh-proxy", deletedHandle)
+	if assert.Len(t, removed, 2) {
+		assert.Equal(t, thundersvc.RolePermissionRequest{ResourceServerID: "rs-1", Permissions: []string{"gh-proxy:read"}}, removed[0].req)
+		assert.Equal(t, thundersvc.RolePermissionRequest{ResourceServerID: "rs-1", Permissions: []string{"gh-proxy:write"}}, removed[1].req)
+	}
+}
+
+func TestMCPProxyDelete_CleanupSurvivesResolverError(t *testing.T) {
+	envUUID := uuid.New()
+	proxy := newDeleteTestProxy("gh-proxy", envUUID)
+
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		GetByHandleFunc: func(_ context.Context, _, _ string) (*models.MCPProxy, error) { return proxy, nil },
+		DeleteFunc:      func(_ context.Context, _, _ string) error { return nil },
+	}
+	endpointRepo := &repomocks.MCPProxyEndpointRepositoryMock{
+		ListEndpointEnvironmentsByProxyFunc: func(_ context.Context, _ uuid.UUID) ([]models.MCPProxyEndpointEnvironment, error) {
+			return nil, nil
+		},
+	}
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		ListByProxyFunc: func(_ context.Context, _ uuid.UUID) ([]models.MCPProxyScope, error) {
+			return []models.MCPProxyScope{{Action: "read"}}, nil
+		},
+	}
+	infra := stubInfraManager{listOrgEnvs: func(_ context.Context, _ string) ([]*models.EnvironmentResponse, error) {
+		return []*models.EnvironmentResponse{{Name: "env-a", UUID: envUUID.String()}}, nil
+	}}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return nil, assert.AnError
+		},
+	}
+
+	svc := &MCPProxyService{
+		repo:              proxyRepo,
+		endpointRepo:      endpointRepo,
+		mcpProxyScopeRepo: scopeRepo,
+		infraManager:      infra,
+		resolver:          resolver,
+		logger:            discardLogger(),
+	}
+
+	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy")
+
+	assert.NoError(t, err, "Thunder cleanup is best-effort and must never fail the delete")
 }
