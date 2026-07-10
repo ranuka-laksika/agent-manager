@@ -18,14 +18,9 @@ Before registering a gateway, ensure you have:
   - **Virtual Machine**: cURL, unzip, and a Docker-compatible container runtime (Docker Desktop, Rancher Desktop, Colima, or Docker Engine + Compose plugin)
   - **Kubernetes**: cURL, unzip, Kubernetes 1.32+, Helm 3.18+
 
-:::note How external gateways reach the control plane
+:::note
 
-A gateway running **outside** the Agent Manager cluster connects to the gateway-management endpoint (config-push WebSocket + REST) **through the OpenChoreo control-plane gateway**, like every other management endpoint — no dedicated LoadBalancer is needed.
-
-- **Quick start (k3d)**: works out of the box — the setup commands rendered by this page point the gateway at `http://host.docker.internal:8080`, which reaches the control-plane gateway from a Docker container on the same machine.
-- **Your own cluster**: pick a hostname (for example `cp.yourdomain.com`), point its DNS at the control-plane gateway LoadBalancer, and register it on the route: `--set "agentManagerService.ocIngress.gatewayMgmt.hostnames={cp.yourdomain.com}"` on the `wso2-agent-manager` release. Set `console.config.gatewayControlPlaneUrl=https://cp.yourdomain.com` so this page renders the right commands (external Kubernetes gateways connect on port 443).
-- Gateways deployed **inside** the cluster reach the endpoint via cluster DNS and need no changes.
-- Escape hatch for L4-only or air-gapped environments: a dedicated LoadBalancer is still available via `--set agentManagerService.gatewayMgtService.type=LoadBalancer`.
+The setup commands rendered by this page are pre-configured with the gateway control-plane URL for your installation, so no extra networking setup is needed here. Gateways deployed inside the Agent Manager cluster connect via cluster DNS; external gateways connect through the OpenChoreo control-plane gateway. If you installed Agent Manager on your own Kubernetes cluster, register a public hostname for the endpoint first — see the *External AI gateways* note in the [installation guide](../getting-started/on-your-environment.mdx).
 
 :::
 

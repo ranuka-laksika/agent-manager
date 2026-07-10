@@ -1,4 +1,8 @@
 {{- if and .Values.agentManagerService.enabled .Values.tlsCertsGeneration.enabled (not .Values.agentManagerService.certificates.certificatesSecret) }}
+{{- /* Same resolution as the BackendTLSPolicy in oc-ingress.yaml so an
+       operator override of caConfigMapName keeps both sides in sync. */}}
+{{- $gwMgmt := (.Values.agentManagerService.ocIngress).gatewayMgmt | default dict }}
+{{- $gwMgmtCaName := $gwMgmt.caConfigMapName | default (printf "%s-gateway-mgmt-ca" (include "agent-management-platform.agentManagerService.fullname" .)) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -62,7 +66,7 @@ spec:
               publish_ca_configmap() {
                 kubectl get secret {{ include "agent-management-platform.tlsCertsSecretName" . }} \
                   -n {{ .Release.Namespace }} -o jsonpath='{.data.cert\.pem}' | base64 -d > /tmp/ca.crt
-                kubectl create configmap {{ include "agent-management-platform.agentManagerService.fullname" . }}-gateway-mgmt-ca \
+                kubectl create configmap {{ $gwMgmtCaName }} \
                   --from-file=ca.crt=/tmp/ca.crt -n {{ .Release.Namespace }} \
                   --dry-run=client -o yaml | kubectl apply -f -
                 rm -f /tmp/ca.crt

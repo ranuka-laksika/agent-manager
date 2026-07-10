@@ -17,6 +17,13 @@ spec:
   to:
     - group: ""
       kind: Service
+      name: amp-console
+    - group: ""
+      kind: Service
+      name: amp-api
+    - group: ""
+      kind: Service
+      name: amp-api-gateway-manager
 {{- if .Values.console.enabled }}
 ---
 # HTTPRoute in the gateway namespace to route traffic to the Console.
