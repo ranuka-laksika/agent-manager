@@ -34,7 +34,7 @@ import { Edit } from "@wso2/oxygen-ui-icons-react";
 import { DrawerWrapper, DrawerHeader, DrawerContent, TextInput, PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { useGetAgentKind, useGetAgentKindVersion, useGetBuild, useUpdateAgentKind } from "@agent-management-platform/api-client";
-import { SwaggerSpecViewer, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { SwaggerSpecViewer, parseOpenApiSpecContent, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -107,7 +107,7 @@ export const PublishVersionDetails: React.FC = () => {
   });
 
   const apiSpec = useMemo(
-    () => build?.inputInterface?.schema?.content as unknown as Record<string, unknown> | undefined,
+    () => parseOpenApiSpecContent(build?.inputInterface?.schema?.content),
     [build],
   );
 

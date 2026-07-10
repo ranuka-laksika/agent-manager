@@ -36,7 +36,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
-import { SwaggerSpecViewer } from "@agent-management-platform/shared-component";
+import { SwaggerSpecViewer, parseOpenApiSpecContent } from "@agent-management-platform/shared-component";
 import { useGetAgentKind, useGetBuild, useListKindAgents, useListProjects, useGetAgentKindVersion } from "@agent-management-platform/api-client";
 import { ExternalLink, Plus } from "@wso2/oxygen-ui-icons-react";
 
@@ -66,7 +66,7 @@ export const CatalogKindDetails: React.FC = () => {
     versionTag: selectedVersionTag,
   });
 
-  const { data: build, isFetching: isBuildLoading } = useGetBuild({
+  const { data: build, isLoading: isBuildLoading } = useGetBuild({
     orgName: orgId ?? "",
     projName: kindVersion?.sourceProjectName,
     agentName: kindVersion?.sourceAgentName,
@@ -85,7 +85,7 @@ export const CatalogKindDetails: React.FC = () => {
   const [addInstanceAnchorEl, setAddInstanceAnchorEl] = useState<null | HTMLElement>(null);
 
   const apiSpec = useMemo(
-    () => build?.inputInterface?.schema?.content as unknown as Record<string, unknown> | undefined,
+    () => parseOpenApiSpecContent(build?.inputInterface?.schema?.content),
     [build],
   );
 
