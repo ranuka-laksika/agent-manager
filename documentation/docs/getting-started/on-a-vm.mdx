@@ -82,11 +82,11 @@ flowchart TB
             cpgw["Control-plane kgateway :8080<br/>routes by Host header"]
             opgw["Observability-plane<br/>kgateway :11080"]
             dpgw["Data-plane<br/>kgateway :19080"]
-            cp["Gateway control plane :9243<br/>(external AI gateways)"]
 
             console["Console"]
             api["amp-api"]
             thunder["Thunder OAuth"]
+            cp["Gateway control plane<br/>(external AI gateways)"]
             observer["Traces Observer"]
             gw["AI Gateway<br/>OTel ingest · LLM proxy"]
             agents["Deployed agents"]
@@ -95,19 +95,19 @@ flowchart TB
 
     browser -->|"HTTPS :443"| caddy
     le <-->|"TLS-ALPN-01<br/>inside the :443 handshake"| caddy
-    caddy -->|"console.amp.&lt;IP&gt;.sslip.io<br/>api.amp.&lt;IP&gt;.sslip.io<br/>thunder.amp.&lt;IP&gt;.sslip.io"| cpgw
+    caddy -->|"console.amp.&lt;IP&gt;.sslip.io<br/>api.amp.&lt;IP&gt;.sslip.io<br/>thunder.amp.&lt;IP&gt;.sslip.io<br/>cp.amp.&lt;IP&gt;.sslip.io"| cpgw
     caddy -->|"observer.amp.&lt;IP&gt;.sslip.io"| opgw
     caddy -->|"gateway.amp.&lt;IP&gt;.sslip.io<br/>*.agents.&lt;IP&gt;.sslip.io<br/>on-demand TLS"| dpgw
-    caddy -->|"cp.amp.&lt;IP&gt;.sslip.io"| cp
     cpgw --> console
     cpgw --> api
     cpgw --> thunder
+    cpgw --> cp
     opgw --> observer
     dpgw --> gw
     dpgw --> agents
 ```
 
-Every public hostname resolves to the VM's IP (via sslip.io) and arrives at Caddy on `:443`; Caddy terminates TLS and reverse-proxies to the matching loopback port. The Agent Manager services are ClusterIP inside the cluster: Caddy forwards the console, API, and Thunder hosts to the OpenChoreo control-plane kgateway (loopback `:8080`) and the traces observer host to the observability-plane kgateway (loopback `:11080`), each of which routes by the preserved `Host` header. Certificates are obtained over that same `:443` using the TLS-ALPN-01 challenge, so no inbound port 80 is needed. The deployed-agent wildcard gets its certificate on demand at first request.
+Every public hostname resolves to the VM's IP (via sslip.io) and arrives at Caddy on `:443`; Caddy terminates TLS and reverse-proxies to the matching loopback port. The Agent Manager services are ClusterIP inside the cluster: Caddy forwards the console, API, Thunder, and gateway-control-plane hosts to the OpenChoreo control-plane kgateway (loopback `:8080`) and the traces observer host to the observability-plane kgateway (loopback `:11080`), each of which routes by the preserved `Host` header. Certificates are obtained over that same `:443` using the TLS-ALPN-01 challenge, so no inbound port 80 is needed. The deployed-agent wildcard gets its certificate on demand at first request.
 
 | URL | Purpose |
 |---|---|

@@ -149,15 +149,10 @@ install_agent_management_platform() {
     local release_name="amp"
     local helm_log="/tmp/helm-amp-install.log"
 
-    # Install Helm chart.
-    # gatewayMgtService is ClusterIP by chart default (real clouds should not
-    # pay for an extra LB); the quick-start dev flavor restores the
-    # LoadBalancer so the console's external-AI-gateway quick start works out
-    # of the box — on k3d the "LB" is just the 9243 host port mapping.
+    # Install Helm chart
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${AMP_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
         --set console.config.instrumentationUrl="http://default-default.gateway.localhost:19080/otel" \
-        --set agentManagerService.gatewayMgtService.type=LoadBalancer \
         "${AMP_HELM_ARGS[@]}" >"${helm_log}" 2>&1; then
         echo "Helm installation log (last 50 lines):"
         tail -50 "${helm_log}" 2>/dev/null || cat "${helm_log}" 2>/dev/null || echo "Log file not available"

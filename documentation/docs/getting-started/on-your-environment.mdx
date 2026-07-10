@@ -135,6 +135,12 @@ Thunder registers the console's OAuth redirect URI at install time (Step 4) and 
 
 :::
 
+:::info External AI gateways
+
+AI gateways running outside this cluster also connect through the control-plane gateway. Pick a hostname (for example `cp.yourdomain.com`), point its DNS at the control-plane gateway LoadBalancer, and pass `--set "agentManagerService.ocIngress.gatewayMgmt.hostnames={cp.yourdomain.com}"` and `--set console.config.gatewayControlPlaneUrl=https://cp.yourdomain.com` to the Agent Manager install in Phase 2. See [Register an AI Gateway](../administration/register-ai-gateway.mdx).
+
+:::
+
 ---
 
 ## Phase 1: OpenChoreo Platform

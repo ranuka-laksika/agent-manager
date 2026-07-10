@@ -18,16 +18,14 @@ Before registering a gateway, ensure you have:
   - **Virtual Machine**: cURL, unzip, and a Docker-compatible container runtime (Docker Desktop, Rancher Desktop, Colima, or Docker Engine + Compose plugin)
   - **Kubernetes**: cURL, unzip, Kubernetes 1.32+, Helm 3.18+
 
-:::note External gateways need the gateway-management endpoint exposed
+:::note How external gateways reach the control plane
 
-A gateway running **outside** the Agent Manager cluster connects to the gateway-management (xDS) endpoint on port `9243`. On the **quick-start** install this works out of the box (the installer exposes the endpoint and maps host port `9243`). On other Kubernetes installs the endpoint is a `ClusterIP` service by default, so expose it before registering an external gateway:
+A gateway running **outside** the Agent Manager cluster connects to the gateway-management endpoint (config-push WebSocket + REST) **through the OpenChoreo control-plane gateway**, like every other management endpoint — no dedicated LoadBalancer is needed.
 
-```bash
-helm upgrade <release> oci://ghcr.io/wso2/helm-charts/wso2-agent-manager -n wso2-amp \
-  --reuse-values --set agentManagerService.gatewayMgtService.type=LoadBalancer
-```
-
-Gateways deployed inside the cluster reach the endpoint via cluster DNS and need no changes.
+- **Quick start (k3d)**: works out of the box — the setup commands rendered by this page point the gateway at `http://host.docker.internal:8080`, which reaches the control-plane gateway from a Docker container on the same machine.
+- **Your own cluster**: pick a hostname (for example `cp.yourdomain.com`), point its DNS at the control-plane gateway LoadBalancer, and register it on the route: `--set "agentManagerService.ocIngress.gatewayMgmt.hostnames={cp.yourdomain.com}"` on the `wso2-agent-manager` release. Set `console.config.gatewayControlPlaneUrl=https://cp.yourdomain.com` so this page renders the right commands (external Kubernetes gateways connect on port 443).
+- Gateways deployed **inside** the cluster reach the endpoint via cluster DNS and need no changes.
+- Escape hatch for L4-only or air-gapped environments: a dedicated LoadBalancer is still available via `--set agentManagerService.gatewayMgtService.type=LoadBalancer`.
 
 :::
 

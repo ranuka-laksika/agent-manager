@@ -71,6 +71,22 @@ agentManagerService:
     hostname: api.amp.localhost
     # Gateway request timeout for API routes; /mcp streams are exempt (no timeout)
     requestTimeout: 60s
+    # Exposes the gateway-management (xDS/WebSocket) endpoint through the
+    # control-plane gateway so external AI gateways connect without a
+    # dedicated LoadBalancer. The WebSocket stays healthy behind the gateway
+    # because the server pings every connection every 20s.
+    gatewayMgmt:
+      enabled: true
+      # Hostnames external gateways use. host.docker.internal serves gateways
+      # started via the console's Docker quick start on the same machine.
+      hostnames:
+        - cp.amp.localhost
+        - host.docker.internal
+      # ConfigMap holding the CA (key ca.crt) that validates the endpoint's
+      # TLS certificate on the gateway->service hop. Published automatically
+      # by the tls-certs job; set this when certificates.certificatesSecret
+      # supplies your own certificate.
+      caConfigMapName: ""
 
   # Internal server configuration
   internalServer:
@@ -362,8 +378,11 @@ console:
     # Traces Observer Service URL — browser calls this directly for trace data.
     # Routed through the OpenChoreo observability-plane gateway.
     obsApiBaseUrl: "http://traces.amp.localhost:11080"
-    # Gateway control plane URL for gateway setup commands (default: http://localhost:9243)
-    gatewayControlPlaneUrl: "host.docker.internal:9243"
+    # Gateway control plane URL rendered into external-gateway setup commands.
+    # Routed through the OpenChoreo control-plane gateway (see
+    # agentManagerService.ocIngress.gatewayMgmt); host.docker.internal lets a
+    # gateway container on the same machine reach it.
+    gatewayControlPlaneUrl: "http://host.docker.internal:8080"
     # Gateway version for setup commands (default: v1.0.0)
     gatewayVersion: "v1.0.0"
     # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z).

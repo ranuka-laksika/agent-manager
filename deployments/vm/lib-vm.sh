@@ -58,10 +58,9 @@ amp_helm_args() {
   if [[ -n "$AMP_HOST_CP" ]]; then
     # Full URL: the console parses it with new URL() to build gateway setup commands.
     printf '%s\n' "--set" "console.config.gatewayControlPlaneUrl=https://${AMP_HOST_CP}"
-    # External gateways dial the xDS/WS endpoint from outside the cluster; the
-    # chart default is ClusterIP, so restore the LoadBalancer that klipper
-    # publishes on the node (Caddy proxies the cp host to loopback 9243).
-    printf '%s\n' "--set" "agentManagerService.gatewayMgtService.type=LoadBalancer"
+    # External gateways ride the OC control-plane kgateway like everything
+    # else; the gateway-mgmt HTTPRoute must match the public cp host.
+    printf '%s\n' "--set" "agentManagerService.ocIngress.gatewayMgmt.hostnames={${AMP_HOST_CP}}"
   fi
 }
 
@@ -408,10 +407,10 @@ caddyfile() {
   _site "$AMP_HOST_GATEWAY"  19080  # api-platform gateway via kgateway (LLM proxy)
 
   if [[ -n "$AMP_HOST_CP" ]]; then
-    # 9243 is HTTPS with a self-signed cert -> proxy over TLS, skip verification.
+    # Gateway control plane rides the OC control-plane kgateway (host-routed;
+    # the kgateway re-encrypts to the TLS backend via BackendTLSPolicy).
     # reverse_proxy upgrades the gateway control WebSocket transparently.
-    printf '%s%s {\n%s\treverse_proxy 127.0.0.1:9243 {\n\t\ttransport http {\n\t\t\ttls\n\t\t\ttls_insecure_skip_verify\n\t\t}\n\t}\n}\n\n' \
-      "$([[ "$scheme" == http ]] && printf 'http://')" "${AMP_HOST_CP}$addr_suffix" "$tls_block"
+    _site "$AMP_HOST_CP" 8080
   fi
 
   # On-demand TLS ask endpoint exists only in letsencrypt mode (always-allow; Caddy

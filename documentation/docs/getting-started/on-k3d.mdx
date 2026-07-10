@@ -70,9 +70,8 @@ The following host ports must be free before installation. The Agent Manager ser
 | Port | Purpose |
 |------|---------|
 | 6550 | Kubernetes API |
-| 8080 | Control Plane Gateway (HTTP) — Console, API, Thunder, OpenChoreo API |
+| 8080 | Control Plane Gateway (HTTP) — Console, API, Thunder, OpenChoreo API, external AI gateway control plane |
 | 8443 | Control Plane Gateway (HTTPS) |
-| 9243 | Gateway control plane — external AI gateways (requires `agentManagerService.gatewayMgtService.type=LoadBalancer`; the quick-start installer sets this) |
 | 19080 | Data Plane Gateway (HTTP) — deployed agents, OTLP `/otel` ingest |
 | 19443 | Data Plane Gateway (HTTPS) |
 | 10082 | Container Registry (Workflow Plane) |

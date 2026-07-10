@@ -87,14 +87,14 @@ assert_eq "amp api ocIngress hostname" \
 assert_eq "amp cp url by default" \
   "console.config.gatewayControlPlaneUrl=https://cp.amp.203.0.113.10.sslip.io" \
   "$(grep -F 'gatewayControlPlaneUrl' <<<"$amp")"
-assert_eq "amp gatewayMgtService LB when cp on" \
-  "agentManagerService.gatewayMgtService.type=LoadBalancer" \
-  "$(grep -F 'gatewayMgtService.type' <<<"$amp")"
+assert_eq "amp gateway-mgmt route hostname when cp on" \
+  "agentManagerService.ocIngress.gatewayMgmt.hostnames={cp.amp.203.0.113.10.sslip.io}" \
+  "$(grep -F 'gatewayMgmt.hostnames' <<<"$amp")"
 
 # --- build_amp_helm_args (external gateways disabled) ---
 amp_nocp="$(build_amp_helm_args 203.0.113.10 false)"
 assert_eq "amp no cp when disabled" "" "$(grep -F 'gatewayControlPlaneUrl' <<<"$amp_nocp")"
-assert_eq "amp no gatewayMgtService LB when cp off" "" "$(grep -F 'gatewayMgtService.type' <<<"$amp_nocp")"
+assert_eq "amp no gateway-mgmt hostname when cp off" "" "$(grep -F 'gatewayMgmt.hostnames' <<<"$amp_nocp")"
 
 # --- build_gateway_helm_args sets the published vhost + user-token keymanager issuer ---
 gw="$(build_gateway_helm_args 203.0.113.10)"
@@ -249,7 +249,11 @@ assert_eq "no http:// public site"     "no"  "$(has "$cf_tls" 'http://console')"
 cf_default="$(render_caddyfile 203.0.113.10 "")"
 assert_eq "caddy cp on by default" "cp.amp.203.0.113.10.sslip.io {" "$(grep -F 'cp.amp' <<<"$cf_default" | head -1)"
 cf_cp="$(render_caddyfile 203.0.113.10 "" true)"
-assert_eq "caddy cp tls skip verify" "			tls_insecure_skip_verify" "$(grep -F 'tls_insecure_skip_verify' <<<"$cf_cp")"
+# cp rides the CP kgateway like console/api (BackendTLSPolicy handles the TLS
+# hop in-cluster) — no direct-to-9243 TLS transport anymore.
+assert_eq "caddy cp upstream (via kgateway)" "	reverse_proxy 127.0.0.1:8080" \
+  "$(grep -F -A8 'cp.amp.203.0.113.10.sslip.io {' <<<"$cf_cp" | grep -F 'reverse_proxy' | head -1)"
+assert_eq "caddy cp no direct 9243" "" "$(grep -F '127.0.0.1:9243' <<<"$cf_cp")"
 
 # --- build_platform_resources_helm_args: point the workload publisher at the
 #     Thunder service directly (the gateway path 404s once Thunder's vhost moves to

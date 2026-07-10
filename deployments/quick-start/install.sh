@@ -121,16 +121,16 @@ check_required_ports() {
     # AMP Console/API ride the control-plane gateway (8080) and the Traces
     # Observer rides the observability-plane gateway (11080); OTLP ingest
     # rides the data-plane gateway (19080) — none need their own host port.
-    # 8080  - Control Plane Gateway HTTP (Console, API, Thunder auth, OpenChoreo API)
+    # 8080  - Control Plane Gateway HTTP (Console, API, Thunder auth, OpenChoreo API,
+    #         external AI gateway control plane)
     # 8443  - Control Plane Gateway HTTPS
-    # 9243  - Gateway control plane (external AI gateways; dev-flavor LoadBalancer)
     # 10082 - Container Registry (Workflow Plane)
     # 11080 - Observability Plane Gateway HTTP (Traces Observer, Observer API)
     # 11082 - OpenSearch API
     # 11085 - OpenSearch HTTPS
     # 19080 - Data Plane Gateway HTTP (agent workloads, OTLP /otel)
     # 19443 - Data Plane Gateway HTTPS
-    local required_ports=(8080 8443 9243 10082 11080 11082 11085 19080 19443)
+    local required_ports=(8080 8443 10082 11080 11082 11085 19080 19443)
     local ports_in_use=()
 
     for port in "${required_ports[@]}"; do
