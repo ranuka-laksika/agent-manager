@@ -322,7 +322,7 @@ func mapInputInterface(specInterface *spec.InputInterface) *client.InputInterfac
 		config.BasePath = *specInterface.BasePath
 	}
 	if specInterface.Schema != nil {
-		config.SchemaPath = specInterface.Schema.Path
+		config.SchemaPath = utils.StrPointerAsStr(specInterface.Schema.Path, "")
 	}
 
 	return config
@@ -1006,7 +1006,7 @@ func (s *agentManagerService) CreateAgent(ctx context.Context, ouID string, proj
 				BasePath: &basePath,
 			}
 			if sourceComponent.InputInterface.Schema != nil && sourceComponent.InputInterface.Schema.Path != "" {
-				req.InputInterface.Schema = &spec.InputInterfaceSchema{Path: sourceComponent.InputInterface.Schema.Path}
+				req.InputInterface.Schema = &spec.InputInterfaceSchema{Path: &sourceComponent.InputInterface.Schema.Path}
 			}
 		}
 		imageID = kindVersion.ImageId

@@ -89,7 +89,7 @@ func TestBuildInterface_PrefixesSlash(t *testing.T) {
 	if iface.BasePath == nil || *iface.BasePath != "/v1" {
 		t.Errorf("BasePath = %v, want /v1", iface.BasePath)
 	}
-	if iface.Schema == nil || iface.Schema.Path != "/spec.yaml" {
+	if iface.Schema == nil || iface.Schema.Path == nil || *iface.Schema.Path != "/spec.yaml" {
 		t.Errorf("Schema.Path = %v, want /spec.yaml", iface.Schema)
 	}
 }
@@ -203,7 +203,7 @@ func TestBuildInterface_AgentAPI(t *testing.T) {
 	if iface.BasePath == nil || *iface.BasePath != "/v1" {
 		t.Errorf("BasePath = %v, want /v1", iface.BasePath)
 	}
-	if iface.Schema == nil || iface.Schema.Path != "/openapi.yaml" {
+	if iface.Schema == nil || iface.Schema.Path == nil || *iface.Schema.Path != "/openapi.yaml" {
 		t.Errorf("Schema.Path = %v, want /openapi.yaml", iface.Schema)
 	}
 }

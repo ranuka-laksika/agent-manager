@@ -193,9 +193,9 @@ func internalRequestViolations(req amsvc.CreateAgentRequest) []string {
 			v = append(v, "spec.inputInterface.basePath is required for subtype custom-api")
 		}
 		switch {
-		case req.InputInterface == nil || req.InputInterface.Schema == nil || req.InputInterface.Schema.Path == "":
+		case req.InputInterface == nil || req.InputInterface.Schema == nil || req.InputInterface.Schema.Path == nil || *req.InputInterface.Schema.Path == "":
 			v = append(v, "spec.inputInterface.schema.path is required for subtype custom-api")
-		case !strings.HasPrefix(req.InputInterface.Schema.Path, "/"):
+		case !strings.HasPrefix(*req.InputInterface.Schema.Path, "/"):
 			v = append(v, `spec.inputInterface.schema.path must start with "/"`)
 		}
 		if req.InputInterface != nil && req.InputInterface.Port == nil {

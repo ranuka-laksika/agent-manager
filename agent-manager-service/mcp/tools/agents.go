@@ -710,7 +710,7 @@ func buildInputInterface(interfaceType string, input internalAgentInput) (*spec.
 	port := int32(*input.Port)
 	inputInterface.Port = &port
 	inputInterface.BasePath = &basePath
-	inputInterface.Schema = &spec.InputInterfaceSchema{Path: openAPIPath}
+	inputInterface.Schema = &spec.InputInterfaceSchema{Path: &openAPIPath}
 	return inputInterface, nil
 }
 

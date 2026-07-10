@@ -337,7 +337,7 @@ func TestValidateRequest_CustomAPIRequiresPort(t *testing.T) {
 	req := validInternalReq(t)
 	req.AgentType.SubType = strPtr("custom-api")
 	req.InputInterface.BasePath = strPtr("/v1")
-	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: "/openapi.yaml"}
+	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: strPtr("/openapi.yaml")}
 	req.InputInterface.Port = nil
 	v := validateRequest(req)
 	assertViolation(t, v, "spec.inputInterface.port is required for subtype custom-api")
@@ -347,7 +347,7 @@ func TestValidateRequest_CustomAPISchemaPathLeadingSlash(t *testing.T) {
 	req := validInternalReq(t)
 	req.AgentType.SubType = strPtr("custom-api")
 	req.InputInterface.BasePath = strPtr("/v1")
-	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: "openapi.yaml"}
+	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: strPtr("openapi.yaml")}
 	v := validateRequest(req)
 	assertViolation(t, v, `spec.inputInterface.schema.path must start with "/"`)
 }
@@ -356,7 +356,7 @@ func TestValidateRequest_CustomAPIValid(t *testing.T) {
 	req := validInternalReq(t)
 	req.AgentType.SubType = strPtr("custom-api")
 	req.InputInterface.BasePath = strPtr("/v1")
-	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: "/openapi.yaml"}
+	req.InputInterface.Schema = &amsvc.InputInterfaceSchema{Path: strPtr("/openapi.yaml")}
 	assertNoViolations(t, validateRequest(req))
 }
 
