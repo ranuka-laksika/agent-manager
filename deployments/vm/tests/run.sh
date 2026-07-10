@@ -747,5 +747,18 @@ assert_eq "inotify empty current bumps"       "512"    "$(inotify_bump_target ""
 assert_eq "inotify non-numeric current bumps" "512"    "$(inotify_bump_target foo 512)"
 assert_eq "inotify watches floor"             "524288" "$(inotify_bump_target 8192 524288)"
 
+# --- _public_ip: succeeds with empty output when every endpoint is unreachable
+# (egress-restricted VM). install-advanced.sh assigns its output under set -e, so a
+# non-zero status would abort the install instead of skipping the public-IP candidate. ---
+(
+  # shellcheck disable=SC2329  # invoked indirectly by _public_ip
+  curl() { return 6; }   # shadow the binaries: every probe fails
+  # shellcheck disable=SC2329
+  wget() { return 4; }
+  out="$(_public_ip)"; rc=$?
+  assert_eq "_public_ip offline exit status"  "0" "$rc"
+  assert_eq "_public_ip offline output empty" ""  "$out"
+)
+
 if [[ -s "$FAILLOG" ]]; then echo "TESTS FAILED"; exit 1; fi
 echo "ALL TESTS PASSED"
