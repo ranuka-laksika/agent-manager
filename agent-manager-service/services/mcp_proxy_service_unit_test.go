@@ -18,6 +18,7 @@ package services
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -76,6 +77,16 @@ func TestDefaultMCPProxySecurity_IdentityVariantSkipsAPIKeyDefaults(t *testing.T
 	assert.Nil(t, out.APIKey, "identity mode must not default an API key on")
 	assert.NotNil(t, out.Identity)
 	assert.True(t, isBoolTrue(out.Identity.Enabled))
+}
+
+func TestMCPProxyCreate_RejectsNonKebabHandle(t *testing.T) {
+	svc := &MCPProxyService{}
+	for _, id := range []string{"Bad_Handle", "UPPER", "has space", "trail-", "-lead", "a--b", strings.Repeat("a", 101)} {
+		_, err := svc.Create(context.Background(), "org-uuid", "system",
+			&models.MCPProxyDTO{ID: id, Name: "x", Version: "v1"})
+		assert.ErrorIs(t, err, utils.ErrInvalidInput, "handle %q must be rejected", id)
+		assert.Contains(t, err.Error(), "kebab-case", "handle %q must be rejected by the kebab check, not a later validation", id)
+	}
 }
 
 func TestValidateMCPEndpoints_RejectsBothVariantsEnabled(t *testing.T) {

@@ -14970,6 +14970,8 @@ components:
         id:
           type: string
           description: Unique handle for the MCP proxy
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          maxLength: 100
           example: github-mcp
         name:
           type: string

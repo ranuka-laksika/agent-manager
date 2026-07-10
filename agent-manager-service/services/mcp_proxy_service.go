@@ -26,6 +26,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -39,6 +40,11 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/utils/ssrf"
 )
+
+// mcpProxyHandleRe constrains proxy handles to kebab-case. The handle becomes the
+// Thunder resource-server handle (delimiter ":"), so it must never contain ":" and
+// must fit Thunder's 100-char handle cap; kebab is a strict subset of both.
+var mcpProxyHandleRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 const (
 	mcpJSONRPCVersion      = "2.0"
@@ -123,6 +129,10 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 	version := strings.TrimSpace(req.Version)
 	if handle == "" || name == "" || version == "" {
 		return nil, utils.ErrInvalidInput
+	}
+
+	if len(handle) > 100 || !mcpProxyHandleRe.MatchString(handle) {
+		return nil, fmt.Errorf("%w: proxy id must be kebab-case (lowercase letters, digits, single hyphens) and at most 100 characters", utils.ErrInvalidInput)
 	}
 
 	if err := validateMCPEndpoints(ctx, req.Endpoints); err != nil {
