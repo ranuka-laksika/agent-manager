@@ -350,6 +350,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
 	repositories.NewScopeRepository,
+	repositories.NewMCPProxyScopeRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
