@@ -134,19 +134,25 @@ func (e BatchTimeSeriesResponseGranularity) Valid() bool {
 
 // Defines values for BuildDetailsResponseStatus.
 const (
-	BuildDetailsResponseStatusBuildCompleted  BuildDetailsResponseStatus = "BuildCompleted"
-	BuildDetailsResponseStatusBuildInProgress BuildDetailsResponseStatus = "BuildInProgress"
-	BuildDetailsResponseStatusBuildTriggered  BuildDetailsResponseStatus = "BuildTriggered"
+	BuildDetailsResponseStatusCompleted BuildDetailsResponseStatus = "Completed"
+	BuildDetailsResponseStatusFailed    BuildDetailsResponseStatus = "Failed"
+	BuildDetailsResponseStatusPending   BuildDetailsResponseStatus = "Pending"
+	BuildDetailsResponseStatusRunning   BuildDetailsResponseStatus = "Running"
+	BuildDetailsResponseStatusSucceeded BuildDetailsResponseStatus = "Succeeded"
 )
 
 // Valid indicates whether the value is a known member of the BuildDetailsResponseStatus enum.
 func (e BuildDetailsResponseStatus) Valid() bool {
 	switch e {
-	case BuildDetailsResponseStatusBuildCompleted:
+	case BuildDetailsResponseStatusCompleted:
 		return true
-	case BuildDetailsResponseStatusBuildInProgress:
+	case BuildDetailsResponseStatusFailed:
 		return true
-	case BuildDetailsResponseStatusBuildTriggered:
+	case BuildDetailsResponseStatusPending:
+		return true
+	case BuildDetailsResponseStatusRunning:
+		return true
+	case BuildDetailsResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -155,19 +161,25 @@ func (e BuildDetailsResponseStatus) Valid() bool {
 
 // Defines values for BuildResponseStatus.
 const (
-	BuildResponseStatusBuildCompleted  BuildResponseStatus = "BuildCompleted"
-	BuildResponseStatusBuildInProgress BuildResponseStatus = "BuildInProgress"
-	BuildResponseStatusBuildTriggered  BuildResponseStatus = "BuildTriggered"
+	BuildResponseStatusCompleted BuildResponseStatus = "Completed"
+	BuildResponseStatusFailed    BuildResponseStatus = "Failed"
+	BuildResponseStatusPending   BuildResponseStatus = "Pending"
+	BuildResponseStatusRunning   BuildResponseStatus = "Running"
+	BuildResponseStatusSucceeded BuildResponseStatus = "Succeeded"
 )
 
 // Valid indicates whether the value is a known member of the BuildResponseStatus enum.
 func (e BuildResponseStatus) Valid() bool {
 	switch e {
-	case BuildResponseStatusBuildCompleted:
+	case BuildResponseStatusCompleted:
 		return true
-	case BuildResponseStatusBuildInProgress:
+	case BuildResponseStatusFailed:
 		return true
-	case BuildResponseStatusBuildTriggered:
+	case BuildResponseStatusPending:
+		return true
+	case BuildResponseStatusRunning:
+		return true
+	case BuildResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -1682,16 +1694,18 @@ type BuildDetailsResponse struct {
 	InputInterface *InputInterface `json:"inputInterface,omitempty"`
 
 	// Percent Build completion percentage (0-100)
-	Percent     *float32                    `json:"percent,omitempty"`
-	ProjectName string                      `json:"projectName"`
-	StartedAt   time.Time                   `json:"startedAt"`
-	Status      *BuildDetailsResponseStatus `json:"status,omitempty"`
+	Percent     *float32  `json:"percent,omitempty"`
+	ProjectName string    `json:"projectName"`
+	StartedAt   time.Time `json:"startedAt"`
+
+	// Status Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
+	Status *BuildDetailsResponseStatus `json:"status,omitempty"`
 
 	// Steps Array of build steps with their status
 	Steps *[]BuildStep `json:"steps,omitempty"`
 }
 
-// BuildDetailsResponseStatus defines model for BuildDetailsResponse.Status.
+// BuildDetailsResponseStatus Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
 type BuildDetailsResponseStatus string
 
 // BuildParameters Parameters used for the build
@@ -1728,15 +1742,17 @@ type BuildResponse struct {
 	BuildName string  `json:"buildName"`
 
 	// BuildParameters Parameters used for the build
-	BuildParameters BuildParameters      `json:"buildParameters"`
-	EndedAt         *time.Time           `json:"endedAt,omitempty"`
-	ImageId         *string              `json:"imageId,omitempty"`
-	ProjectName     string               `json:"projectName"`
-	StartedAt       time.Time            `json:"startedAt"`
-	Status          *BuildResponseStatus `json:"status,omitempty"`
+	BuildParameters BuildParameters `json:"buildParameters"`
+	EndedAt         *time.Time      `json:"endedAt,omitempty"`
+	ImageId         *string         `json:"imageId,omitempty"`
+	ProjectName     string          `json:"projectName"`
+	StartedAt       time.Time       `json:"startedAt"`
+
+	// Status Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
+	Status *BuildResponseStatus `json:"status,omitempty"`
 }
 
-// BuildResponseStatus defines model for BuildResponse.Status.
+// BuildResponseStatus Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
 type BuildResponseStatus string
 
 // BuildStep defines model for BuildStep.

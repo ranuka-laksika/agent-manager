@@ -11431,7 +11431,11 @@ components:
           type: string
         status:
           type: string
-          enum: [BuildInProgress, BuildTriggered, BuildCompleted]
+          description: >-
+            Overall build status, derived from the underlying workflow phase.
+            Succeeded means the image was built and pushed; Completed additionally
+            means the workload CR was updated. Per-step progress is in `steps`.
+          enum: [Pending, Running, Succeeded, Completed, Failed]
         buildParameters:
           $ref: "#/components/schemas/BuildParameters"
       required:
