@@ -76,7 +76,7 @@ Three decisions shape the installation. Make them now — everything below is dr
 
 ### 1. Hostnames
 
-Pick a base domain you control (a delegated subdomain like `amp.yourdomain.com` works well). Every management surface is a hostname on one of the three plane gateway LoadBalancers — you publish exactly four DNS records after the platform installs:
+Pick a base domain you control (a delegated subdomain like `amp.yourdomain.com` works well). Every management surface is a hostname on one of the three plane gateway LoadBalancers — after the platform installs, you publish DNS records against just those three targets:
 
 | Hostname | Serves | DNS record → |
 |---|---|---|
@@ -88,7 +88,7 @@ Pick a base domain you control (a delegated subdomain like `amp.yourdomain.com` 
 | `traces.<base>` | Traces Observer | observability-plane gateway LB |
 | `*.agents.<base>` | Deployed-agent invocation endpoints (wildcard) | data-plane gateway LB |
 
-The first five share one record target (the control-plane gateway), so the four records are: `console`/`api-amp`/`thunder`/`cp`/`api` (five names, one LB — or a wildcard `*.<base>`), `traces`, and the `*.agents.<base>` wildcard.
+Concretely: `console`/`api-amp`/`thunder`/`cp`/`api` all point at the control-plane gateway (five records, or a single `*.<base>` wildcard), `traces` points at the observability-plane gateway, and `*.agents.<base>` plus the `agents.<base>` apex point at the data-plane gateway. [Step 10](#step-10-publish-dns-records) lists the exact records once the LoadBalancer addresses exist.
 
 ```bash
 export VERSION="0.0.0-dev"
