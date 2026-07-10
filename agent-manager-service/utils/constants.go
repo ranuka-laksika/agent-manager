@@ -76,6 +76,7 @@ const (
 	PathParamKindName     = "kindName"
 	PathParamVersionTag   = "versionTag"
 	PathParamScopeName    = "scopeName"
+	PathParamScopeAction  = "scopeAction"
 )
 
 // Pagination constants

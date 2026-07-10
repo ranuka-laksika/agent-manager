@@ -136,6 +136,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewGitSecretController,
 	controllers.NewIdentityController,
 	controllers.NewScopeController,
+	controllers.NewMCPProxyScopeController,
 	controllers.NewAgentIdentityController,
 )
 

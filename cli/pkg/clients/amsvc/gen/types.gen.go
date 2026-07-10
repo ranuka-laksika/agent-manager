@@ -3892,6 +3892,39 @@ type MCPProxyResponse struct {
 	Vhost *string `json:"vhost,omitempty"`
 }
 
+// MCPProxyScopeListResponse defines model for MCPProxyScopeListResponse.
+type MCPProxyScopeListResponse struct {
+	Scopes []MCPProxyScopeResponse `json:"scopes"`
+}
+
+// MCPProxyScopeRequest defines model for MCPProxyScopeRequest.
+type MCPProxyScopeRequest struct {
+	// Action Action name on the proxy's resource server; the token scope is "<proxy-handle>:<action>".
+	Action      string  `json:"action"`
+	Description *string `json:"description,omitempty"`
+
+	// Tools MCP tool names this scope authorizes.
+	Tools []string `json:"tools"`
+}
+
+// MCPProxyScopeResponse defines model for MCPProxyScopeResponse.
+type MCPProxyScopeResponse struct {
+	Action      string     `json:"action"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	Description *string    `json:"description,omitempty"`
+
+	// Scope Derived token scope string ("<proxy-handle>:<action>").
+	Scope     string     `json:"scope"`
+	Tools     []string   `json:"tools"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+}
+
+// MCPProxyScopeUpdateRequest defines model for MCPProxyScopeUpdateRequest.
+type MCPProxyScopeUpdateRequest struct {
+	Description *string   `json:"description,omitempty"`
+	Tools       *[]string `json:"tools,omitempty"`
+}
+
 // MCPServerInfoFetchRequest defines model for MCPServerInfoFetchRequest.
 type MCPServerInfoFetchRequest struct {
 	Auth *UpstreamAuth `json:"auth,omitempty"`
@@ -5800,6 +5833,12 @@ type FetchMCPProxyServerInfoJSONRequestBody = MCPServerInfoFetchRequest
 
 // UpdateMCPProxyJSONRequestBody defines body for UpdateMCPProxy for application/json ContentType.
 type UpdateMCPProxyJSONRequestBody = MCPProxyRequest
+
+// CreateMCPProxyScopeJSONRequestBody defines body for CreateMCPProxyScope for application/json ContentType.
+type CreateMCPProxyScopeJSONRequestBody = MCPProxyScopeRequest
+
+// UpdateMCPProxyScopeJSONRequestBody defines body for UpdateMCPProxyScope for application/json ContentType.
+type UpdateMCPProxyScopeJSONRequestBody = MCPProxyScopeUpdateRequest
 
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
