@@ -380,7 +380,11 @@ func (s *mcpProxyScopeService) ListEnvironmentScopes(ctx context.Context, ouID, 
 	found := false
 	for _, env := range envs {
 		if env.Name == envName {
-			envUUID = uuid.MustParse(env.UUID)
+			parsed, err := uuid.Parse(env.UUID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse environment UUID %q: %w", env.UUID, err)
+			}
+			envUUID = parsed
 			found = true
 			break
 		}
