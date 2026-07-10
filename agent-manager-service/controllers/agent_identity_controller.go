@@ -490,14 +490,8 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	// scopes is a full replacement of the role's permissions, not a delta: the
-	// reconcile below removes any existing permission not present here. Because
-	// AgentIdentityRoleRequest.Scopes is a non-pointer slice, an omitted "scopes"
-	// field is indistinguishable from an explicit [] — both clear all scopes. A
-	// metadata-only PUT must therefore echo back the role's current scopes to keep
-	// them; sending {"description": "..."} alone strips every permission.
-	scopes := body.Scopes
-
+	// scopes, when present, fully replaces the role's permissions. Decoding tells
+	// omitted (nil, preserve all) from explicit [] (non-nil, clear all) apart.
 	client, ok := c.envClient(w, r)
 	if !ok {
 		return
@@ -532,12 +526,14 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Skip touching any resource server entirely when there are neither requested
-	// scopes nor existing permissions to reconcile (a pure metadata update).
-	if len(scopes) == 0 && len(current.Permissions) == 0 {
+	// An omitted "scopes" (nil) is a metadata-only update: leave the role's
+	// permissions untouched and skip every resource-server write. An explicit
+	// (possibly empty) slice falls through to reconcile the permissions to it.
+	if body.Scopes == nil {
 		utils.WriteSuccessResponse(w, http.StatusOK, updated)
 		return
 	}
+	scopes := body.Scopes
 
 	groups, err := c.resolveScopeGroups(ctx, middleware.OUIDFromRequest(r), scopes)
 	if err != nil {

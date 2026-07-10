@@ -10596,7 +10596,11 @@ components:
           type: array
           items:
             type: string
-          description: Scope strings ("<proxy-handle>:<action>") carried as the role's permissions.
+          description: >-
+            Scope strings ("<proxy-handle>:<action>") carried as the role's
+            permissions. On update this is a full replacement of the role's
+            scopes: omit the field to leave existing scopes untouched, or send
+            an explicit empty array to clear them all.
     AgentIdentityAssignmentsRequest:
       type: object
       required:

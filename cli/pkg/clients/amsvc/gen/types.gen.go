@@ -1375,7 +1375,7 @@ type AgentIdentityRoleRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 
-	// Scopes Scope strings ("<proxy-handle>:<action>") carried as the role's permissions.
+	// Scopes Scope strings ("<proxy-handle>:<action>") carried as the role's permissions. On update this is a full replacement of the role's scopes: omit the field to leave existing scopes untouched, or send an explicit empty array to clear them all.
 	Scopes *[]string `json:"scopes,omitempty"`
 }
 

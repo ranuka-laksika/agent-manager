@@ -255,8 +255,8 @@ func TestAgentIdentityUpdateRole_ReconcilesAcrossResourceServers(t *testing.T) {
 
 // TestAgentIdentityUpdateRole_PreservesNameWhenOmitted proves that a role update
 // omitting "name" preserves the role's current name (Thunder's PUT is a full
-// replace, so an empty name would blank it). scopes and current permissions are
-// both empty, so the handler early-returns right after the metadata write.
+// replace, so an empty name would blank it). scopes is omitted (nil) and the role
+// has no permissions, so the handler returns right after the metadata write.
 func TestAgentIdentityUpdateRole_PreservesNameWhenOmitted(t *testing.T) {
 	var captured thundersvc.UpdateRoleRequest
 	envClient := &clientmocks.EnvIdentityClientMock{
@@ -288,6 +288,95 @@ func TestAgentIdentityUpdateRole_PreservesNameWhenOmitted(t *testing.T) {
 	assert.Equal(t, "readers", captured.Name, "omitted name must preserve the current role name")
 	assert.Equal(t, "ou-1", captured.OuID, "update must carry the role's ouId")
 	assert.Equal(t, "metadata only", captured.Description, "provided description must be applied")
+}
+
+// TestAgentIdentityUpdateRole_OmittedScopesPreservesPermissions proves that a
+// metadata-only PUT (no "scopes" field) leaves the role's existing permissions
+// untouched: omitting scopes decodes to nil, which skips the reconcile entirely,
+// so no resource server is written to.
+func TestAgentIdentityUpdateRole_OmittedScopesPreservesPermissions(t *testing.T) {
+	currentPerms := []thundersvc.RolePermissionRequest{
+		{ResourceServerID: "rs-gh", Permissions: []string{"gh-proxy:read", "gh-proxy:write"}},
+	}
+	envClient := &clientmocks.EnvIdentityClientMock{
+		GetRoleFunc: func(_ context.Context, roleID string) (*thundersvc.ThunderRole, error) {
+			return &thundersvc.ThunderRole{ID: roleID, OuID: "ou-1", Name: "readers", Permissions: currentPerms}, nil
+		},
+		UpdateRoleFunc: func(_ context.Context, roleID string, req thundersvc.UpdateRoleRequest) (*thundersvc.ThunderRole, error) {
+			return &thundersvc.ThunderRole{ID: roleID, OuID: req.OuID, Name: req.Name}, nil
+		},
+		AddRolePermissionsFunc: func(_ context.Context, _ string, _ thundersvc.RolePermissionRequest) error {
+			t.Fatal("metadata-only update must not add permissions")
+			return nil
+		},
+		RemoveRolePermissionsFunc: func(_ context.Context, _ string, _ thundersvc.RolePermissionRequest) error {
+			t.Fatal("metadata-only update must not remove permissions")
+			return nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return envClient, nil
+		},
+	}
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{}, &repomocks.MCPProxyRepositoryMock{}, &repomocks.MCPProxyScopeRepositoryMock{})
+
+	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/role-1",
+		strings.NewReader(`{"description":"metadata only"}`))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "role-1")
+	w := httptest.NewRecorder()
+
+	ctrl.UpdateRole(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}
+
+// TestAgentIdentityUpdateRole_ExplicitEmptyScopesClearsPermissions proves that an
+// explicit "scopes": [] clears every permission: unlike an omitted field, an empty
+// slice decodes to non-nil and drives the reconcile to remove all current scopes.
+func TestAgentIdentityUpdateRole_ExplicitEmptyScopesClearsPermissions(t *testing.T) {
+	removeByRS := map[string][]string{}
+	currentPerms := []thundersvc.RolePermissionRequest{
+		{ResourceServerID: "rs-gh", Permissions: []string{"gh-proxy:read", "gh-proxy:write"}},
+	}
+	envClient := &clientmocks.EnvIdentityClientMock{
+		GetRoleFunc: func(_ context.Context, roleID string) (*thundersvc.ThunderRole, error) {
+			return &thundersvc.ThunderRole{ID: roleID, OuID: "ou-1", Name: "readers", Permissions: currentPerms}, nil
+		},
+		UpdateRoleFunc: func(_ context.Context, roleID string, req thundersvc.UpdateRoleRequest) (*thundersvc.ThunderRole, error) {
+			return &thundersvc.ThunderRole{ID: roleID, OuID: req.OuID, Name: req.Name}, nil
+		},
+		AddRolePermissionsFunc: func(_ context.Context, _ string, _ thundersvc.RolePermissionRequest) error {
+			t.Fatal("clearing scopes must not add permissions")
+			return nil
+		},
+		RemoveRolePermissionsFunc: func(_ context.Context, _ string, req thundersvc.RolePermissionRequest) error {
+			removeByRS[req.ResourceServerID] = req.Permissions
+			return nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return envClient, nil
+		},
+	}
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{}, &repomocks.MCPProxyRepositoryMock{}, &repomocks.MCPProxyScopeRepositoryMock{})
+
+	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/role-1",
+		strings.NewReader(`{"scopes":[]}`))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "role-1")
+	req = req.WithContext(middleware.WithResolvedOrg(req.Context(), middleware.ResolvedOrg{OUID: "ou-org"}))
+	w := httptest.NewRecorder()
+
+	ctrl.UpdateRole(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.ElementsMatch(t, []string{"gh-proxy:read", "gh-proxy:write"}, removeByRS["rs-gh"],
+		"explicit empty scopes must remove all current permissions")
 }
 
 // TestAgentIdentityUpdateGroup_PreservesNameWhenOmitted proves the group update
