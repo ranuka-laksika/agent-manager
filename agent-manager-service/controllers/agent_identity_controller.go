@@ -450,6 +450,14 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	// The create response predates the permission writes above, so re-fetch to
+	// return the reconciled state. The role already exists, so a read failure
+	// here degrades to returning the pre-permission role rather than failing.
+	if reconciled, err := client.GetRole(ctx, role.ID); err != nil {
+		log.Warn("agent-identity CreateRole: re-fetch after permission write failed; returning role without reconciled scopes", "roleID", role.ID, "error", err)
+	} else {
+		role = reconciled
+	}
 	utils.WriteSuccessResponse(w, http.StatusCreated, role)
 }
 
@@ -587,6 +595,14 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 				return
 			}
 		}
+	}
+	// `updated` carries the pre-reconcile permissions echoed by NewRoleReplace,
+	// so re-fetch to return the reconciled state. The role is already updated,
+	// so a read failure here degrades to returning the pre-reconcile role.
+	if reconciled, err := client.GetRole(ctx, roleID); err != nil {
+		log.Warn("agent-identity UpdateRole: re-fetch after reconcile failed; returning role without reconciled scopes", "roleID", roleID, "error", err)
+	} else {
+		updated = reconciled
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, updated)
 }

@@ -58,6 +58,15 @@ func TestAgentIdentityCreateRole_EnsuresPerProxyRSBeforePermissionWrite(t *testi
 			addByRS[req.ResourceServerID] = req.Permissions
 			return nil
 		},
+		// The handler re-fetches after the permission writes so the response
+		// carries the reconciled scopes rather than the empty create payload.
+		GetRoleFunc: func(_ context.Context, roleID string) (*thundersvc.ThunderRole, error) {
+			calls = append(calls, "get")
+			return &thundersvc.ThunderRole{ID: roleID, Name: "readers", Permissions: []thundersvc.RolePermissionRequest{
+				{ResourceServerID: "rs-gh-proxy", Permissions: []string{"gh-proxy:read"}},
+				{ResourceServerID: "rs-jira-proxy", Permissions: []string{"jira-proxy:write"}},
+			}}, nil
+		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
 		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
@@ -94,9 +103,12 @@ func TestAgentIdentityCreateRole_EnsuresPerProxyRSBeforePermissionWrite(t *testi
 	assert.Equal(t, http.StatusCreated, w.Code)
 	// Both resource servers are ensured before the role write and before any
 	// permission add; proxies are processed in sorted-handle order.
-	assert.Equal(t, []string{"ensure:gh-proxy", "ensure:jira-proxy", "create", "add:rs-gh-proxy", "add:rs-jira-proxy"}, calls)
+	assert.Equal(t, []string{"ensure:gh-proxy", "ensure:jira-proxy", "create", "add:rs-gh-proxy", "add:rs-jira-proxy", "get"}, calls)
 	assert.Equal(t, []string{"gh-proxy:read"}, addByRS["rs-gh-proxy"])
 	assert.Equal(t, []string{"jira-proxy:write"}, addByRS["rs-jira-proxy"])
+	// The response body reflects the re-fetched, reconciled permissions.
+	assert.Contains(t, w.Body.String(), "gh-proxy:read")
+	assert.Contains(t, w.Body.String(), "jira-proxy:write")
 }
 
 // TestAgentIdentityCreateRole_UnknownProxyHandleRejected proves a scope naming a
