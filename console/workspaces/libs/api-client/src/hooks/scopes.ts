@@ -34,12 +34,12 @@ import { useApiMutation, useApiQuery } from "./react-query-notifications";
 /**
  * Hook to list the organization's scope catalog
  */
-export function useListScopes(params: ListScopesPathParams) {
+export function useListScopes(params: ListScopesPathParams, options?: { enabled?: boolean }) {
   const { getToken } = useAuthHooks();
   return useApiQuery<ScopeListResponse>({
     queryKey: ['scopes', params],
     queryFn: () => listScopes(params, getToken),
-    enabled: !!params.orgName,
+    enabled: options?.enabled ?? !!params.orgName,
   });
 }
 

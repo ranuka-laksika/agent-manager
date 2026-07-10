@@ -47,10 +47,13 @@ import {
   type AgentIdentityAgentResponse,
   type ThunderRole,
 } from "@agent-management-platform/types";
-import { BackButton } from "./components/BackButton";
-import { EditFormSkeleton } from "./components/EditFormSkeleton";
-import { EntityHeader } from "./components/EntityHeader";
+import {
+  BackButton,
+  EditFormSkeleton,
+  EntityHeader,
+} from "@agent-management-platform/shared-component";
 import { useAgentLookup } from "./useAgentLookup";
+import { useAssignmentDelta } from "./useAssignmentDelta";
 
 type ActiveTab = "agents" | "roles";
 
@@ -98,8 +101,11 @@ export const GroupEditPage: React.FC = () => {
   );
   const roles: ThunderRole[] = useMemo(() => rolesData?.roles ?? [], [rolesData]);
 
-  const [pendingAdds, setPendingAdds] = useState<AgentIdentityAgentResponse[]>([]);
-  const [removedIds, setRemovedIds] = useState<Set<string>>(new Set());
+  const memberDelta = useAssignmentDelta<AgentIdentityAgentResponse>(
+    initialMemberIds,
+    (a) => a.thunderAgentId as string,
+  );
+  const { pendingAdds, removedIds } = memberDelta;
 
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | undefined>();
@@ -110,42 +116,15 @@ export const GroupEditPage: React.FC = () => {
   const groupsPath =
     orgId && envName ? generatePath(groupsNode.path, { orgId, envName }) : "#";
 
-  const pageMemberIds = useMemo(
-    () => initialMemberIds.filter((id) => !removedIds.has(id)),
-    [initialMemberIds, removedIds],
+  const pageMemberIds = memberDelta.activeIds;
+
+  const availableAgents = useMemo(
+    () => agents.filter((a) => !memberDelta.excludedIds.has(a.thunderAgentId as string)),
+    [agents, memberDelta.excludedIds],
   );
 
-  const availableAgents = useMemo(() => {
-    const excluded = new Set([
-      ...initialMemberIds.filter((id) => !removedIds.has(id)),
-      ...pendingAdds.map((a) => a.thunderAgentId as string),
-    ]);
-    return agents.filter((a) => !excluded.has(a.thunderAgentId as string));
-  }, [agents, initialMemberIds, pendingAdds, removedIds]);
-
-  const handleAddAgent = (
-    _e: React.SyntheticEvent,
-    value: AgentIdentityAgentResponse | null,
-  ) => {
-    if (!value?.thunderAgentId) return;
-    if (removedIds.has(value.thunderAgentId)) {
-      setRemovedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(value.thunderAgentId as string);
-        return next;
-      });
-    } else {
-      setPendingAdds((prev) => [...prev, value]);
-    }
-  };
-
-  const handleRemoveAgent = (thunderAgentId: string) => {
-    if (pendingAdds.find((a) => a.thunderAgentId === thunderAgentId)) {
-      setPendingAdds((prev) => prev.filter((a) => a.thunderAgentId !== thunderAgentId));
-    } else {
-      setRemovedIds((prev) => new Set([...prev, thunderAgentId]));
-    }
-  };
+  const handleAddAgent = memberDelta.handleAdd;
+  const handleRemoveAgent = memberDelta.handleRemove;
 
   const handleSave = async () => {
     if (!orgId || !envName || !groupId) return;
@@ -162,8 +141,7 @@ export const GroupEditPage: React.FC = () => {
         idsToRemove.length > 0 ? removeMembers({ params, body: { agentIds: idsToRemove } }) : null,
       ]);
       setSaveSuccess(true);
-      setPendingAdds([]);
-      setRemovedIds(new Set());
+      memberDelta.reset();
     } catch {
       setSaveError("Failed to update group members. Please try again.");
     } finally {
@@ -182,7 +160,7 @@ export const GroupEditPage: React.FC = () => {
     );
   }
 
-  const isDirty = pendingAdds.length > 0 || removedIds.size > 0;
+  const isDirty = memberDelta.isDirty;
 
   return (
     <>

@@ -289,7 +289,7 @@ export function MCPProxyAccessControlTab({
     return entries;
   }, [config?.capabilities?.tools]);
 
-  const { data: scopesData } = useListScopes({ orgName });
+  const { data: scopesData } = useListScopes({ orgName }, { enabled: isIdentitySecurity });
   const catalogScopes: ScopeResponse[] = useMemo(
     () => scopesData?.scopes ?? [],
     [scopesData],
@@ -551,8 +551,7 @@ export function MCPProxyAccessControlTab({
 
   if (isIdentitySecurity) {
     const isRbacDisabled = isLoading || !config;
-    const noToolsForRbac =
-      identityMode === "rbac" && !isLoading && config && toolEntries.length === 0;
+    const noToolsForRbac = !isLoading && config && toolEntries.length === 0;
 
     return (
       <Stack spacing={2}>
@@ -593,7 +592,8 @@ export function MCPProxyAccessControlTab({
           </Alert>
         )}
 
-        {noToolsForRbac ? (
+        {identityMode === "rbac" && (
+          noToolsForRbac ? (
           <Stack
             alignItems="center"
             justifyContent="center"
@@ -608,8 +608,7 @@ export function MCPProxyAccessControlTab({
               tool.
             </Typography>
           </Stack>
-        ) : (
-          identityMode === "rbac" && (
+          ) : (
         <ListingTable.Container>
           <ListingTable.Toolbar
             actions={

@@ -17,17 +17,18 @@
 
 import { z } from "zod";
 
-// Zod schemas for the agent-identity group/role creation flows. Mirrors
+// Zod schema for the agent-identity group/role creation flows. Mirrors
 // pages/identities/src/forms/schemas.ts so these forms validate identically
 // (field-level on change, whole-form on submit) via the shared
-// useFormValidation hook.
+// useFormValidation hook. Groups and roles share the same name/description
+// shape, so both aliases point at one schema instead of two copies.
 
-export interface CreateAgentIdentityGroupFormValues {
+export interface NameDescriptionFormValues {
   name: string;
   description?: string;
 }
 
-export const createAgentIdentityGroupSchema = z.object({
+export const nameDescriptionSchema = z.object({
   name: z
     .string()
     .trim()
@@ -36,16 +37,8 @@ export const createAgentIdentityGroupSchema = z.object({
   description: z.string().trim().optional(),
 });
 
-export interface CreateAgentIdentityRoleFormValues {
-  name: string;
-  description?: string;
-}
+export type CreateAgentIdentityGroupFormValues = NameDescriptionFormValues;
+export const createAgentIdentityGroupSchema = nameDescriptionSchema;
 
-export const createAgentIdentityRoleSchema = z.object({
-  name: z
-    .string()
-    .trim()
-    .min(1, "Name is required")
-    .max(50, "Name must be at most 50 characters"),
-  description: z.string().trim().optional(),
-});
+export type CreateAgentIdentityRoleFormValues = NameDescriptionFormValues;
+export const createAgentIdentityRoleSchema = nameDescriptionSchema;

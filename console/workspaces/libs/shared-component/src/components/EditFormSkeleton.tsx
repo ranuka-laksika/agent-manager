@@ -5,7 +5,7 @@
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -24,10 +24,10 @@ interface EditFormSkeletonProps {
 }
 
 /**
- * Placeholder for the agent-identity edit pages (Role / Group) while their
- * data loads. Mirrors the real layout — a tabbed Form.Section card with a
- * header, description, an input, and a couple of list rows — so the page
- * keeps its shape instead of flashing a centered spinner.
+ * Placeholder for edit pages (User / Role / Group) while their data loads.
+ * Mirrors the real layout — a tabbed Form.Section card with a header,
+ * description, an input, and a couple of list rows — so the page keeps its
+ * shape instead of flashing a centered spinner.
  */
 export const EditFormSkeleton: React.FC<EditFormSkeletonProps> = ({
   tabs = 2,
@@ -54,5 +54,3 @@ export const EditFormSkeleton: React.FC<EditFormSkeletonProps> = ({
     </Stack>
   </Form.Section>
 );
-
-export default EditFormSkeleton;

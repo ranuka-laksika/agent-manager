@@ -5,7 +5,7 @@
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License. You may obtain a copy of the License at
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -24,9 +24,9 @@ interface ListingSkeletonRowsProps {
 }
 
 /**
- * Placeholder rows for the agent-identity listing tables (Roles / Groups).
- * Rendered inside ListingTable.Body while the list query is loading so the
- * table chrome stays stable instead of flashing a centered spinner.
+ * Placeholder rows for listing tables (Users / Roles / Groups). Rendered
+ * inside ListingTable.Body while the list query is loading so the table
+ * chrome stays stable instead of flashing a centered spinner.
  */
 export const ListingSkeletonRows: React.FC<ListingSkeletonRowsProps> = ({
   rows = 5,
@@ -51,5 +51,3 @@ export const ListingSkeletonRows: React.FC<ListingSkeletonRowsProps> = ({
     ))}
   </>
 );
-
-export default ListingSkeletonRows;

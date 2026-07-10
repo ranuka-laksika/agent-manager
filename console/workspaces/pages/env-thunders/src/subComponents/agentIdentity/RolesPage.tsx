@@ -31,9 +31,8 @@ import {
   useDeleteAgentIdentityRole,
   useListAgentIdentityRoles,
 } from "@agent-management-platform/api-client";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { ListingSkeletonRows, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { absoluteRouteMap, type ThunderRole } from "@agent-management-platform/types";
-import { ListingSkeletonRows } from "./components/ListingSkeletonRows";
 
 const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 
