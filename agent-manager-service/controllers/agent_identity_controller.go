@@ -17,7 +17,6 @@
 package controllers
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,17 +62,15 @@ type AgentIdentityController interface {
 
 type agentIdentityController struct {
 	resolver    thundersvc.EnvThunderResolver
-	scopeRepo   repositories.ScopeRepository
 	bindingRepo repositories.AgentThunderClientRepository
 }
 
 // NewAgentIdentityController creates a new agent-identity passthrough controller.
 func NewAgentIdentityController(
 	resolver thundersvc.EnvThunderResolver,
-	scopeRepo repositories.ScopeRepository,
 	bindingRepo repositories.AgentThunderClientRepository,
 ) AgentIdentityController {
-	return &agentIdentityController{resolver: resolver, scopeRepo: scopeRepo, bindingRepo: bindingRepo}
+	return &agentIdentityController{resolver: resolver, bindingRepo: bindingRepo}
 }
 
 // envClient resolves the env-Thunder identity client for the request's org+env,
@@ -388,10 +385,6 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	scopes := body.Scopes
-	if err := c.validateScopesInCatalog(ctx, r.PathValue(utils.PathParamOrgName), scopes); err != nil {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	client, ok := c.envClient(w, r)
 	if !ok {
@@ -472,10 +465,6 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	scopes := body.Scopes
-	if err := c.validateScopesInCatalog(ctx, r.PathValue(utils.PathParamOrgName), scopes); err != nil {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, err.Error())
-		return
-	}
 
 	client, ok := c.envClient(w, r)
 	if !ok {
@@ -666,32 +655,6 @@ func (c *agentIdentityController) ListAgents(w http.ResponseWriter, r *http.Requ
 }
 
 // --- helpers ---
-
-// validateScopesInCatalog rejects any scope not present in the org-global catalog
-// before the environment's Thunder is contacted, so the passthrough never
-// registers a scope AMS does not recognize.
-func (c *agentIdentityController) validateScopesInCatalog(ctx context.Context, orgName string, scopes []string) error {
-	if len(scopes) == 0 {
-		return nil
-	}
-	catalog, err := c.scopeRepo.List(ctx, orgName)
-	if err != nil {
-		// Callers surface this error's message directly to the HTTP client as a 400,
-		// so the cause is logged here rather than wrapped into the returned error.
-		logger.GetLogger(ctx).Error("agent-identity validateScopesInCatalog: load scope catalog failed", "orgName", orgName, "error", err)
-		return errors.New("failed to load scope catalog")
-	}
-	known := make(map[string]struct{}, len(catalog))
-	for _, sc := range catalog {
-		known[sc.Name] = struct{}{}
-	}
-	for _, s := range scopes {
-		if _, ok := known[s]; !ok {
-			return fmt.Errorf("scope %q is not in the catalog", s)
-		}
-	}
-	return nil
-}
 
 // paginationParams parses and clamps the offset/limit query parameters.
 func paginationParams(r *http.Request) (offset, limit int) {

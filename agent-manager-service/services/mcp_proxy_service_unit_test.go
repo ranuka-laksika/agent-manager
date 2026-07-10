@@ -131,56 +131,14 @@ func TestValidateMCPEndpoints_RejectsDuplicateEnvironmentAcrossEndpoints(t *test
 	assert.ErrorIs(t, err, utils.ErrMCPEnvAlreadyBound)
 }
 
-func TestValidateMCPEndpointSecurity_UnknownBindingScope(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, orgName string) ([]models.Scope, error) {
-			return []models.Scope{{OrgName: orgName, Name: "repo:read.all"}}, nil
-		},
-	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo}
-	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "create_issue", Scopes: []string{"repo:write.all"}},
-		}),
-	}
-	err := svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints)
-	assert.ErrorIs(t, err, utils.ErrInvalidInput)
-	assert.Contains(t, err.Error(), "repo:write.all")
-}
-
-func TestValidateMCPEndpointSecurity_KnownScopesPass(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}}, nil
-		},
-	}
-	gwRepo := &repomocks.GatewayRepositoryMock{
-		ListWithFiltersFunc: func(_ repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
-			return []*models.Gateway{gatewayWithPolicyManifest("mcp-auth", "v1", "mcp-authz", "v1")}, nil
-		},
-	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
-	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-		}),
-	}
-	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
-}
-
 func TestValidateMCPEndpointSecurity_IdentityNeedsGatewayPolicies(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}}, nil
-		},
-	}
 	// Gateway advertises mcp-auth but not mcp-authz.
 	gwRepo := &repomocks.GatewayRepositoryMock{
 		ListWithFiltersFunc: func(_ repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
 			return []*models.Gateway{gatewayWithPolicyManifest("mcp-auth", "v1")}, nil
 		},
 	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
+	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
 		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
 			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
@@ -191,17 +149,12 @@ func TestValidateMCPEndpointSecurity_IdentityNeedsGatewayPolicies(t *testing.T) 
 }
 
 func TestValidateMCPEndpointSecurity_IdentityAcceptedWithGatewayPolicies(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}}, nil
-		},
-	}
 	gwRepo := &repomocks.GatewayRepositoryMock{
 		ListWithFiltersFunc: func(_ repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
 			return []*models.Gateway{gatewayWithPolicyManifest("mcp-auth", "v1", "mcp-authz", "v1")}, nil
 		},
 	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
+	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
 		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
 			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
@@ -211,11 +164,6 @@ func TestValidateMCPEndpointSecurity_IdentityAcceptedWithGatewayPolicies(t *test
 }
 
 func TestValidateMCPEndpointSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}}, nil
-		},
-	}
 	// No active gateway for the environment yet: identity mode is allowed; policies
 	// are re-checked once a gateway exists.
 	gwRepo := &repomocks.GatewayRepositoryMock{
@@ -223,7 +171,7 @@ func TestValidateMCPEndpointSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.
 			return []*models.Gateway{}, nil
 		},
 	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
+	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
 		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
 			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},

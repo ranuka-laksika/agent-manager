@@ -70,7 +70,6 @@ type MCPProxyService struct {
 	gatewayRepo          repositories.GatewayRepository
 	envMCPMappingRepo    repositories.EnvAgentMCPMappingRepository
 	artifactRepo         repositories.ArtifactRepository
-	scopeRepo            repositories.ScopeRepository
 	gatewayEventsService *GatewayEventsService
 	apiKeyBroadcaster    apiKeyBroadcaster
 	client               *http.Client
@@ -88,7 +87,6 @@ func NewMCPProxyService(
 	envMCPMappingRepo repositories.EnvAgentMCPMappingRepository,
 	gatewayEventsService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
-	scopeRepo repositories.ScopeRepository,
 	logger *slog.Logger,
 	encryptionKey []byte,
 ) *MCPProxyService {
@@ -100,7 +98,6 @@ func NewMCPProxyService(
 		gatewayRepo:          gatewayRepo,
 		envMCPMappingRepo:    envMCPMappingRepo,
 		artifactRepo:         repositories.NewArtifactRepo(db),
-		scopeRepo:            scopeRepo,
 		gatewayEventsService: gatewayEventsService,
 		apiKeyBroadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
@@ -1029,30 +1026,13 @@ func validateMCPEndpoints(ctx context.Context, endpoints []models.MCPProxyEndpoi
 	return nil
 }
 
-// validateMCPEndpointSecurity enforces the cross-resource identity-mode rules:
-// every bound scope exists in the org catalog, and an identity-mode endpoint's target
-// environments each have a gateway advertising mcp-auth v1 + mcp-authz v1 in its policy
-// manifest. Bindings to tools absent from capabilities are deliberately accepted (tool
-// lists drift; the console flags them). It performs DB reads, so call it outside a
-// transaction.
+// validateMCPEndpointSecurity enforces the cross-resource identity-mode rule: an
+// identity-mode endpoint's target environments must each have a gateway advertising
+// mcp-auth v1 + mcp-authz v1 in its policy manifest. It performs DB reads, so call
+// it outside a transaction.
 func (s *MCPProxyService) validateMCPEndpointSecurity(ctx context.Context, orgName string, endpoints []models.MCPProxyEndpointDTO) error {
-	catalog, err := s.scopeRepo.List(ctx, orgName)
-	if err != nil {
-		return fmt.Errorf("failed to load scope catalog: %w", err)
-	}
-	known := make(map[string]struct{}, len(catalog))
-	for _, sc := range catalog {
-		known[sc.Name] = struct{}{}
-	}
 	for _, endpoint := range endpoints {
 		handle := strings.TrimSpace(endpoint.ID)
-		for _, b := range endpoint.ToolScopeBindings {
-			for _, scName := range b.Scopes {
-				if _, ok := known[scName]; !ok {
-					return fmt.Errorf("%w: endpoint %q: tool %q references unknown scope %q", utils.ErrInvalidInput, handle, b.Tool, scName)
-				}
-			}
-		}
 		if endpoint.Security == nil || !isBoolTrue(endpoint.Security.Enabled) ||
 			endpoint.Security.Identity == nil || !isBoolTrue(endpoint.Security.Identity.Enabled) {
 			continue

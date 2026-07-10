@@ -61,12 +61,7 @@ func TestAgentIdentityCreateRole_LazyEnsuresScopesBeforeRoleWrite(t *testing.T) 
 			return envClient, nil
 		},
 	}
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}}, nil
-		},
-	}
-	ctrl := NewAgentIdentityController(resolver, scopeRepo, &repomocks.AgentThunderClientRepositoryMock{})
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{})
 
 	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles",
 		strings.NewReader(`{"name":"readers","scopes":["repo:read.all"]}`))
@@ -78,30 +73,6 @@ func TestAgentIdentityCreateRole_LazyEnsuresScopesBeforeRoleWrite(t *testing.T) 
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 	assert.Equal(t, []string{"ensure", "create", "perms"}, calls, "scope RS must be ensured before the role write")
-}
-
-// TestAgentIdentityCreateRole_UnknownScopeRejected proves an unknown scope is
-// rejected with 400 before the environment's Thunder is even contacted (the
-// resolver's ResolveIdentityFunc is left nil, so any call would panic).
-func TestAgentIdentityCreateRole_UnknownScopeRejected(t *testing.T) {
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{}, nil
-		},
-	}
-	resolver := &clientmocks.EnvThunderResolverMock{} // ResolveIdentityFunc nil: must not be called
-	ctrl := NewAgentIdentityController(resolver, scopeRepo, &repomocks.AgentThunderClientRepositoryMock{})
-
-	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles",
-		strings.NewReader(`{"name":"readers","scopes":["repo:write.all"]}`))
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	w := httptest.NewRecorder()
-
-	ctrl.CreateRole(w, req)
-
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "repo:write.all")
 }
 
 // TestAgentIdentityUpdateRole_ReconcilesScopePermissions proves the role's scope
@@ -146,12 +117,7 @@ func TestAgentIdentityUpdateRole_ReconcilesScopePermissions(t *testing.T) {
 			return envClient, nil
 		},
 	}
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{{Name: "repo:read.all"}, {Name: "repo:write.all"}, {Name: "repo:delete.all"}}, nil
-		},
-	}
-	ctrl := NewAgentIdentityController(resolver, scopeRepo, &repomocks.AgentThunderClientRepositoryMock{})
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{})
 
 	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/role-1",
 		strings.NewReader(`{"name":"readers","scopes":["repo:write.all","repo:delete.all"]}`))
@@ -187,12 +153,7 @@ func TestAgentIdentityUpdateRole_PreservesNameWhenOmitted(t *testing.T) {
 			return envClient, nil
 		},
 	}
-	scopeRepo := &repomocks.ScopeRepositoryMock{
-		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
-			return []models.Scope{}, nil
-		},
-	}
-	ctrl := NewAgentIdentityController(resolver, scopeRepo, &repomocks.AgentThunderClientRepositoryMock{})
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{})
 
 	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/role-1",
 		strings.NewReader(`{"description":"metadata only"}`))
@@ -230,7 +191,7 @@ func TestAgentIdentityUpdateGroup_PreservesNameWhenOmitted(t *testing.T) {
 			return envClient, nil
 		},
 	}
-	ctrl := NewAgentIdentityController(resolver, &repomocks.ScopeRepositoryMock{}, &repomocks.AgentThunderClientRepositoryMock{})
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{})
 
 	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/groups/grp-1",
 		strings.NewReader(`{"description":"x"}`))
@@ -256,7 +217,7 @@ func TestAgentIdentityRoutes_EnvThunderUnavailable(t *testing.T) {
 			return nil, thundersvc.ErrThunderNotProvisioned
 		},
 	}
-	ctrl := NewAgentIdentityController(resolver, &repomocks.ScopeRepositoryMock{}, &repomocks.AgentThunderClientRepositoryMock{})
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{})
 
 	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/groups", nil)
 	req.SetPathValue("orgName", "o1")
@@ -289,7 +250,7 @@ func TestAgentIdentityListAgents_ReturnsBindings(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{} // must not be called
-	ctrl := NewAgentIdentityController(resolver, &repomocks.ScopeRepositoryMock{}, bindingRepo)
+	ctrl := NewAgentIdentityController(resolver, bindingRepo)
 
 	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/agents", nil)
 	req.SetPathValue("orgName", "o1")

@@ -21,7 +21,7 @@ var _ MappedNullable = &AgentIdentityRoleRequest{}
 type AgentIdentityRoleRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
-	// Catalog scope names carried as the role's permissions
+	// Scope strings (\"<proxy-handle>:<action>\") carried as the role's permissions.
 	Scopes []string `json:"scopes,omitempty"`
 }
 

@@ -1375,7 +1375,7 @@ type AgentIdentityRoleRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 
-	// Scopes Catalog scope names carried as the role's permissions
+	// Scopes Scope strings ("<proxy-handle>:<action>") carried as the role's permissions.
 	Scopes *[]string `json:"scopes,omitempty"`
 }
 
@@ -4682,37 +4682,6 @@ type RouteException struct {
 	Path string `json:"path"`
 }
 
-// ScopeListResponse defines model for ScopeListResponse.
-type ScopeListResponse struct {
-	Scopes []ScopeResponse `json:"scopes"`
-}
-
-// ScopeRequest defines model for ScopeRequest.
-type ScopeRequest struct {
-	// Description Human-readable description of the scope
-	Description *string `json:"description,omitempty"`
-
-	// Name Scope name (org-global, resource-agnostic)
-	Name string `json:"name"`
-}
-
-// ScopeResponse defines model for ScopeResponse.
-type ScopeResponse struct {
-	// BindingCount Number of MCP proxy environment tool bindings referencing this scope
-	BindingCount *int                `json:"bindingCount,omitempty"`
-	CreatedAt    *time.Time          `json:"createdAt,omitempty"`
-	Description  *string             `json:"description,omitempty"`
-	Id           *openapi_types.UUID `json:"id,omitempty"`
-	Name         string              `json:"name"`
-	UpdatedAt    *time.Time          `json:"updatedAt,omitempty"`
-}
-
-// ScopeUpdateRequest defines model for ScopeUpdateRequest.
-type ScopeUpdateRequest struct {
-	// Description Human-readable description of the scope
-	Description *string `json:"description,omitempty"`
-}
-
 // ScoreLabelGroup defines model for ScoreLabelGroup.
 type ScoreLabelGroup struct {
 	Evaluators []LabelEvaluatorSummary `json:"evaluators"`
@@ -5950,12 +5919,6 @@ type CreateLLMProxyAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 
 // RotateLLMProxyAPIKeyJSONRequestBody defines body for RotateLLMProxyAPIKey for application/json ContentType.
 type RotateLLMProxyAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
-
-// CreateScopeJSONRequestBody defines body for CreateScope for application/json ContentType.
-type CreateScopeJSONRequestBody = ScopeRequest
-
-// UpdateScopeJSONRequestBody defines body for UpdateScope for application/json ContentType.
-type UpdateScopeJSONRequestBody = ScopeUpdateRequest
 
 // GetNameByDisplayNameJSONRequestBody defines body for GetNameByDisplayName for application/json ContentType.
 type GetNameByDisplayNameJSONRequestBody = ResourceNameRequest
