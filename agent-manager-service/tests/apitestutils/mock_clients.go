@@ -41,6 +41,11 @@ func CreateMockOpenChoreoClient() *clientmocks.OpenChoreoClientMock {
 		NamespaceForFunc: func(ouID string) string {
 			return config.GetConfig().OpenChoreo.DefaultNamespace
 		},
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{
+				{Namespace: config.GetConfig().OpenChoreo.DefaultNamespace},
+			}, nil
+		},
 		GetOrganizationFunc: func(ctx context.Context, orgName string) (*models.OrganizationResponse, error) {
 			if orgName == "nonexistent-org" {
 				return nil, utils.ErrOrganizationNotFound

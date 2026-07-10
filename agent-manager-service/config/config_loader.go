@@ -121,8 +121,10 @@ func loadEnvs() {
 		// Tracing configuration
 		IsTraceContentEnabled: r.readOptionalBool("OTEL_TRACELOOP_TRACE_CONTENT", true),
 
-		// OTLP Exporter configuration
-		ExporterEndpoint: r.readOptionalString("OTEL_EXPORTER_OTLP_ENDPOINT", "http://api-platform-default-default-gateway-gateway-runtime.openchoreo-data-plane.svc.cluster.local:22893/otel"),
+		// OTLP Exporter configuration. Routed through kgateway by hostname
+		// ("<env>-<org>.gateway.localhost") like agent trace exports, so the
+		// endpoint stays independent of the gateway runtime's namespace.
+		ExporterEndpoint: r.readOptionalString("OTEL_EXPORTER_OTLP_ENDPOINT", "http://default-default.gateway.localhost:19080/otel"),
 	}
 
 	// Observer service configuration - temporarily use localhost for agent-manager-service to access observer service
@@ -244,14 +246,6 @@ func loadEnvs() {
 		MaxReplicas: int(r.readOptionalInt64("RESOURCE_MAX_REPLICAS", 10)),
 		MaxCPU:      r.readOptionalString("RESOURCE_MAX_CPU", "500m"),
 		MaxMemory:   r.readOptionalString("RESOURCE_MAX_MEMORY", "1Gi"),
-	}
-
-	// Gateway runtime addressing — how RestApi bindings reach the API Platform Gateway
-	// in-cluster. Override per deployment if the data-plane namespace or service-name
-	// suffix differs from the openchoreo defaults.
-	config.GatewayRuntime = GatewayRuntimeConfig{
-		HostSuffix: r.readOptionalString("GATEWAY_RUNTIME_HOST_SUFFIX", "-gateway-gateway-runtime.openchoreo-data-plane"),
-		Port:       int(r.readOptionalInt64("GATEWAY_RUNTIME_PORT", 22893)),
 	}
 
 	// Encryption key for secrets at rest (hex-encoded 32-byte AES-256 key)

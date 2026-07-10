@@ -2,7 +2,11 @@ apiVersion: gateway.api-platform.wso2.com/v1alpha1
 kind: RestApi
 metadata:
   name: amp-otel-collector-tracing-rest-api
-  namespace: openchoreo-data-plane
+  # Per-org-env namespace isolation: RestApis live in the gateway's own
+  # "<org>-<env>" namespace (default env). NOTE: superseded by the
+  # chart-managed gateway-otel-restapi (which carries the restapi-target
+  # binding label); kept for standalone/manual application only.
+  namespace: default-default
 spec:
   displayName: amp-otel-collector-tracing-rest-api
   version: v1.0

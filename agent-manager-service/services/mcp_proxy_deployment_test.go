@@ -727,11 +727,12 @@ func TestAppendMCPIdentityAuthPolicies(t *testing.T) {
 
 func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T) {
 	const proxyHandle = "shared-mcp-proxy"
+	const endpointHandle = "primary"
 	envID1 := "12345678-0000-0000-0000-000000000001"
 	envID2 := "12345678-ffff-ffff-ffff-ffffffffffff"
 
-	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, envID1)
-	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, envID2)
+	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, endpointHandle, envID1)
+	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, endpointHandle, envID2)
 
 	if handle1 == handle2 {
 		t.Fatalf("expected distinct handles for environments with the same first 8 UUID characters")
@@ -741,5 +742,17 @@ func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T)
 	}
 	if !strings.HasSuffix(handle2, "-12345678ffffffffffffffffffffffff") {
 		t.Fatalf("expected full compacted UUID suffix, got %q", handle2)
+	}
+}
+
+func TestMCPProxyEnvArtifactHandleDistinguishesEndpoints(t *testing.T) {
+	const proxyHandle = "shared-mcp-proxy"
+	envID := "12345678-0000-0000-0000-000000000001"
+
+	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, "primary", envID)
+	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, "secondary", envID)
+
+	if handle1 == handle2 {
+		t.Fatalf("expected distinct handles for different endpoints in the same environment")
 	}
 }

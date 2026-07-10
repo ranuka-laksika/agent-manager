@@ -91,9 +91,11 @@ spec:
           path: /spec/template/spec/containers/0/env/-
           value:
             name: ${parameters.otelEndpointEnvName}
-            # Derived from the apiGatewayName helper convention ("api-platform-<org>-<env>")
-            # + the gateway runtime in-cluster Service.
-            value: "http://api-platform-${metadata.componentNamespace}-${metadata.environmentName}-gateway-gateway-runtime.openchoreo-data-plane:22893/otel"
+            # kgateway-routed vhost ("<env>-<org>.<domain>"): traces flow through
+            # kgateway -> api-platform gateway runtime -> /otel RestApi, the same
+            # path external agents use. Routing by hostname keeps this URL
+            # independent of the namespace the gateway runtime is deployed in.
+            value: "http://${metadata.environmentName}-${metadata.componentNamespace}.{{ .Values.apiPlatformGatewayVhost.host }}:{{ .Values.apiPlatformGatewayVhost.port }}/otel"
         - op: add
           path: /spec/template/spec/containers/0/env/-
           value:

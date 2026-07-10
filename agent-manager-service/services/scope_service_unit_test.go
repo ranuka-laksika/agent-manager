@@ -47,15 +47,17 @@ func TestScopeService_Delete_BlockedWhileBound(t *testing.T) {
 			return &models.Scope{OrgName: orgName, Name: name}, nil
 		},
 	}
-	bound := &models.MCPProxy{Configuration: models.MCPProxyConfig{
-		Environments: map[string]models.MCPEnvironmentConfig{
-			"3fa85f64-5717-4562-b3fc-2c963f66afa6": {
-				ToolScopeBindings: []models.MCPToolScopeBinding{
-					{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+	bound := &models.MCPProxy{
+		Endpoints: []models.MCPProxyEndpoint{
+			{
+				Configuration: models.MCPEndpointConfig{
+					ToolScopeBindings: []models.MCPToolScopeBinding{
+						{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+					},
 				},
 			},
 		},
-	}}
+	}
 	proxyRepo := &repomocks.MCPProxyRepositoryMock{
 		ListFunc: func(_ context.Context, _ string, _, offset int) ([]*models.MCPProxy, error) {
 			if offset > 0 {

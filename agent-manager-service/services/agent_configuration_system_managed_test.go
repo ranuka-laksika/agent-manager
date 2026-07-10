@@ -47,8 +47,12 @@ func TestSystemManagedMCPURLReturnsProxyURLForMatchingMapping(t *testing.T) {
 						MCPProxy: &models.MCPProxy{
 							Configuration: models.MCPProxyConfig{
 								Context: &contextPath,
-								Environments: map[string]models.MCPEnvironmentConfig{
-									envUUID.String(): {ArtifactUUID: &sharedArtifactUUID},
+							},
+							Endpoints: []models.MCPProxyEndpoint{
+								{
+									Environments: []models.MCPProxyEndpointEnvironment{
+										{EnvironmentUUID: envUUID, ArtifactUUID: sharedArtifactUUID},
+									},
 								},
 							},
 						},
@@ -103,9 +107,11 @@ func TestSystemManagedMCPURLMissingSharedArtifactReturnsError(t *testing.T) {
 						MCPProxyUUID:    uuid.New(),
 						ArtifactUUID:    uuid.New(),
 						MCPProxy: &models.MCPProxy{
-							Configuration: models.MCPProxyConfig{
-								Environments: map[string]models.MCPEnvironmentConfig{
-									envUUID.String(): {},
+							Endpoints: []models.MCPProxyEndpoint{
+								{
+									Environments: []models.MCPProxyEndpointEnvironment{
+										{EnvironmentUUID: envUUID, ArtifactUUID: uuid.Nil},
+									},
 								},
 							},
 						},

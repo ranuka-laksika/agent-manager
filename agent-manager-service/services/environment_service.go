@@ -444,6 +444,16 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 		return nil, fmt.Errorf("list environments for org %s: %w", ouID, err)
 	}
 
+	// Thunder naming (release name, namespace, host, issuer URL) is keyed by the
+	// org NAME the provisioning scripts deployed with (ORG_NAME, e.g. "default"),
+	// which is the OpenChoreo namespace — not the OU id from the JWT. Probing or
+	// advertising URLs derived from the OU id would point at instances that don't
+	// exist.
+	orgNamespace, err := ResolveNamespace(ctx, s.ocClient)
+	if err != nil {
+		return nil, err
+	}
+
 	// Probe every environment's env-Thunder JWKS endpoint concurrently. Each probe can take
 	// up to ~8s in the worst case (ThunderProbe's 4-step fallback chain, 2s timeout each), so
 	// probing sequentially would scale request latency linearly with environment count.
@@ -456,7 +466,7 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 		wg.Add(1)
 		go func(idx int, envName string) {
 			defer wg.Done()
-			reachable[idx] = s.thunderProber.Probe(ctx, ouID, envName)
+			reachable[idx] = s.thunderProber.Probe(ctx, orgNamespace, envName)
 		}(i, env.Name)
 	}
 	wg.Wait()
@@ -484,10 +494,10 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 			EnvName:      env.Name,
 			DisplayName:  env.DisplayName,
 			IsProduction: env.IsProduction,
-			IssuerURL:    thundersvc.ThunderIssuerURL(ouID, env.Name),
-			TokenURL:     thundersvc.ThunderExternalTokenURL(ouID, env.Name),
-			JWKSURL:      thundersvc.ThunderExternalJWKSURL(ouID, env.Name),
-			Namespace:    thundersvc.ThunderNamespace(ouID, env.Name),
+			IssuerURL:    thundersvc.ThunderIssuerURL(orgNamespace, env.Name),
+			TokenURL:     thundersvc.ThunderExternalTokenURL(orgNamespace, env.Name),
+			JWKSURL:      thundersvc.ThunderExternalJWKSURL(orgNamespace, env.Name),
+			Namespace:    thundersvc.ThunderNamespace(orgNamespace, env.Name),
 		})
 	}
 	return &models.ThunderInstanceListResponse{ThunderInstances: instances}, nil

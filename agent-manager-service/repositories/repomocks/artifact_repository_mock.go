@@ -31,6 +31,9 @@ import (
 //			GetByHandleFunc: func(handle string, orgUUID string) (*models.Artifact, error) {
 //				panic("mock out the GetByHandle method")
 //			},
+//			GetByUUIDFunc: func(artifactUUID string, orgUUID string) (*models.Artifact, error) {
+//				panic("mock out the GetByUUID method")
+//			},
 //			UpdateFunc: func(tx *gorm.DB, artifact *models.Artifact) error {
 //				panic("mock out the Update method")
 //			},
@@ -58,6 +61,9 @@ type ArtifactRepositoryMock struct {
 
 	// GetByHandleFunc mocks the GetByHandle method.
 	GetByHandleFunc func(handle string, orgUUID string) (*models.Artifact, error)
+
+	// GetByUUIDFunc mocks the GetByUUID method.
+	GetByUUIDFunc func(artifactUUID string, orgUUID string) (*models.Artifact, error)
 
 	// UpdateFunc mocks the Update method.
 	UpdateFunc func(tx *gorm.DB, artifact *models.Artifact) error
@@ -104,6 +110,13 @@ type ArtifactRepositoryMock struct {
 			// OrgUUID is the orgUUID argument value.
 			OrgUUID string
 		}
+		// GetByUUID holds details about calls to the GetByUUID method.
+		GetByUUID []struct {
+			// ArtifactUUID is the artifactUUID argument value.
+			ArtifactUUID string
+			// OrgUUID is the orgUUID argument value.
+			OrgUUID string
+		}
 		// Update holds details about calls to the Update method.
 		Update []struct {
 			// Tx is the tx argument value.
@@ -128,6 +141,7 @@ type ArtifactRepositoryMock struct {
 	lockDelete              sync.RWMutex
 	lockExists              sync.RWMutex
 	lockGetByHandle         sync.RWMutex
+	lockGetByUUID           sync.RWMutex
 	lockUpdate              sync.RWMutex
 	lockUpdateCatalogStatus sync.RWMutex
 }
@@ -313,6 +327,42 @@ func (mock *ArtifactRepositoryMock) GetByHandleCalls() []struct {
 	mock.lockGetByHandle.RLock()
 	calls = mock.calls.GetByHandle
 	mock.lockGetByHandle.RUnlock()
+	return calls
+}
+
+// GetByUUID calls GetByUUIDFunc.
+func (mock *ArtifactRepositoryMock) GetByUUID(artifactUUID string, orgUUID string) (*models.Artifact, error) {
+	if mock.GetByUUIDFunc == nil {
+		panic("ArtifactRepositoryMock.GetByUUIDFunc: method is nil but ArtifactRepository.GetByUUID was just called")
+	}
+	callInfo := struct {
+		ArtifactUUID string
+		OrgUUID      string
+	}{
+		ArtifactUUID: artifactUUID,
+		OrgUUID:      orgUUID,
+	}
+	mock.lockGetByUUID.Lock()
+	mock.calls.GetByUUID = append(mock.calls.GetByUUID, callInfo)
+	mock.lockGetByUUID.Unlock()
+	return mock.GetByUUIDFunc(artifactUUID, orgUUID)
+}
+
+// GetByUUIDCalls gets all the calls that were made to GetByUUID.
+// Check the length with:
+//
+//	len(mockedArtifactRepository.GetByUUIDCalls())
+func (mock *ArtifactRepositoryMock) GetByUUIDCalls() []struct {
+	ArtifactUUID string
+	OrgUUID      string
+} {
+	var calls []struct {
+		ArtifactUUID string
+		OrgUUID      string
+	}
+	mock.lockGetByUUID.RLock()
+	calls = mock.calls.GetByUUID
+	mock.lockGetByUUID.RUnlock()
 	return calls
 }
 

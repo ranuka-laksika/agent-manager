@@ -138,8 +138,8 @@ func (s *scopeService) BindingCounts(ctx context.Context, orgName string) (map[s
 			return nil, fmt.Errorf("failed to list MCP proxies for scope binding counts: %w", err)
 		}
 		for _, proxy := range proxies {
-			for _, env := range proxy.Configuration.Environments {
-				for _, binding := range env.ToolScopeBindings {
+			for _, endpoint := range proxy.Endpoints {
+				for _, binding := range endpoint.Configuration.ToolScopeBindings {
 					for _, scopeName := range binding.Scopes {
 						counts[scopeName]++
 					}

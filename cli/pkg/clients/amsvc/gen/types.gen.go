@@ -134,19 +134,25 @@ func (e BatchTimeSeriesResponseGranularity) Valid() bool {
 
 // Defines values for BuildDetailsResponseStatus.
 const (
-	BuildDetailsResponseStatusBuildCompleted  BuildDetailsResponseStatus = "BuildCompleted"
-	BuildDetailsResponseStatusBuildInProgress BuildDetailsResponseStatus = "BuildInProgress"
-	BuildDetailsResponseStatusBuildTriggered  BuildDetailsResponseStatus = "BuildTriggered"
+	BuildDetailsResponseStatusCompleted BuildDetailsResponseStatus = "Completed"
+	BuildDetailsResponseStatusFailed    BuildDetailsResponseStatus = "Failed"
+	BuildDetailsResponseStatusPending   BuildDetailsResponseStatus = "Pending"
+	BuildDetailsResponseStatusRunning   BuildDetailsResponseStatus = "Running"
+	BuildDetailsResponseStatusSucceeded BuildDetailsResponseStatus = "Succeeded"
 )
 
 // Valid indicates whether the value is a known member of the BuildDetailsResponseStatus enum.
 func (e BuildDetailsResponseStatus) Valid() bool {
 	switch e {
-	case BuildDetailsResponseStatusBuildCompleted:
+	case BuildDetailsResponseStatusCompleted:
 		return true
-	case BuildDetailsResponseStatusBuildInProgress:
+	case BuildDetailsResponseStatusFailed:
 		return true
-	case BuildDetailsResponseStatusBuildTriggered:
+	case BuildDetailsResponseStatusPending:
+		return true
+	case BuildDetailsResponseStatusRunning:
+		return true
+	case BuildDetailsResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -155,19 +161,25 @@ func (e BuildDetailsResponseStatus) Valid() bool {
 
 // Defines values for BuildResponseStatus.
 const (
-	BuildResponseStatusBuildCompleted  BuildResponseStatus = "BuildCompleted"
-	BuildResponseStatusBuildInProgress BuildResponseStatus = "BuildInProgress"
-	BuildResponseStatusBuildTriggered  BuildResponseStatus = "BuildTriggered"
+	BuildResponseStatusCompleted BuildResponseStatus = "Completed"
+	BuildResponseStatusFailed    BuildResponseStatus = "Failed"
+	BuildResponseStatusPending   BuildResponseStatus = "Pending"
+	BuildResponseStatusRunning   BuildResponseStatus = "Running"
+	BuildResponseStatusSucceeded BuildResponseStatus = "Succeeded"
 )
 
 // Valid indicates whether the value is a known member of the BuildResponseStatus enum.
 func (e BuildResponseStatus) Valid() bool {
 	switch e {
-	case BuildResponseStatusBuildCompleted:
+	case BuildResponseStatusCompleted:
 		return true
-	case BuildResponseStatusBuildInProgress:
+	case BuildResponseStatusFailed:
 		return true
-	case BuildResponseStatusBuildTriggered:
+	case BuildResponseStatusPending:
+		return true
+	case BuildResponseStatusRunning:
+		return true
+	case BuildResponseStatusSucceeded:
 		return true
 	default:
 		return false
@@ -798,6 +810,24 @@ func (e LogFilterRequestSortOrder) Valid() bool {
 	case LogFilterRequestSortOrderAsc:
 		return true
 	case LogFilterRequestSortOrderDesc:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MCPEndpointEnvironmentDeploymentStatus.
+const (
+	Deployed   MCPEndpointEnvironmentDeploymentStatus = "Deployed"
+	Undeployed MCPEndpointEnvironmentDeploymentStatus = "Undeployed"
+)
+
+// Valid indicates whether the value is a known member of the MCPEndpointEnvironmentDeploymentStatus enum.
+func (e MCPEndpointEnvironmentDeploymentStatus) Valid() bool {
+	switch e {
+	case Deployed:
+		return true
+	case Undeployed:
 		return true
 	default:
 		return false
@@ -1664,16 +1694,18 @@ type BuildDetailsResponse struct {
 	InputInterface *InputInterface `json:"inputInterface,omitempty"`
 
 	// Percent Build completion percentage (0-100)
-	Percent     *float32                    `json:"percent,omitempty"`
-	ProjectName string                      `json:"projectName"`
-	StartedAt   time.Time                   `json:"startedAt"`
-	Status      *BuildDetailsResponseStatus `json:"status,omitempty"`
+	Percent     *float32  `json:"percent,omitempty"`
+	ProjectName string    `json:"projectName"`
+	StartedAt   time.Time `json:"startedAt"`
+
+	// Status Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
+	Status *BuildDetailsResponseStatus `json:"status,omitempty"`
 
 	// Steps Array of build steps with their status
 	Steps *[]BuildStep `json:"steps,omitempty"`
 }
 
-// BuildDetailsResponseStatus defines model for BuildDetailsResponse.Status.
+// BuildDetailsResponseStatus Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
 type BuildDetailsResponseStatus string
 
 // BuildParameters Parameters used for the build
@@ -1710,15 +1742,17 @@ type BuildResponse struct {
 	BuildName string  `json:"buildName"`
 
 	// BuildParameters Parameters used for the build
-	BuildParameters BuildParameters      `json:"buildParameters"`
-	EndedAt         *time.Time           `json:"endedAt,omitempty"`
-	ImageId         *string              `json:"imageId,omitempty"`
-	ProjectName     string               `json:"projectName"`
-	StartedAt       time.Time            `json:"startedAt"`
-	Status          *BuildResponseStatus `json:"status,omitempty"`
+	BuildParameters BuildParameters `json:"buildParameters"`
+	EndedAt         *time.Time      `json:"endedAt,omitempty"`
+	ImageId         *string         `json:"imageId,omitempty"`
+	ProjectName     string          `json:"projectName"`
+	StartedAt       time.Time       `json:"startedAt"`
+
+	// Status Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
+	Status *BuildResponseStatus `json:"status,omitempty"`
 }
 
-// BuildResponseStatus defines model for BuildResponse.Status.
+// BuildResponseStatus Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
 type BuildResponseStatus string
 
 // BuildStep defines model for BuildStep.
@@ -3668,18 +3702,17 @@ type MCPConfigRequest struct {
 	ProxyName string `json:"proxyName"`
 }
 
-// MCPEnvironmentConfig Per-environment blueprint block of an MCP proxy, keyed by environment UUID.
-type MCPEnvironmentConfig struct {
-	ArtifactUuid     *openapi_types.UUID   `json:"artifactUuid,omitempty"`
-	Capabilities     *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	DeploymentStatus *string               `json:"deploymentStatus,omitempty"`
-	Policies         *[]MCPPolicy          `json:"policies,omitempty"`
+// MCPEndpointEnvironment One endpoint→environment binding.
+type MCPEndpointEnvironment struct {
+	// DeploymentStatus Per-environment deployment status.
+	DeploymentStatus *MCPEndpointEnvironmentDeploymentStatus `json:"deploymentStatus,omitempty"`
 
-	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
-	Security          *SecurityConfig        `json:"security,omitempty"`
-	ToolScopeBindings *[]MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
-	Upstream          *UpstreamEndpoint      `json:"upstream,omitempty"`
+	// EnvironmentUuid Target environment UUID.
+	EnvironmentUuid openapi_types.UUID `json:"environmentUuid"`
 }
+
+// MCPEndpointEnvironmentDeploymentStatus Per-environment deployment status.
+type MCPEndpointEnvironmentDeploymentStatus string
 
 // MCPPolicy defines model for MCPPolicy.
 type MCPPolicy struct {
@@ -3719,6 +3752,26 @@ type MCPProxyCapabilities struct {
 	Prompts   *[]map[string]interface{} `json:"prompts,omitempty"`
 	Resources *[]map[string]interface{} `json:"resources,omitempty"`
 	Tools     *[]map[string]interface{} `json:"tools,omitempty"`
+}
+
+// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, security, and tool-scope bindings, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
+type MCPProxyEndpoint struct {
+	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
+
+	// Environments Environments this endpoint is deployed to.
+	Environments *[]MCPEndpointEnvironment `json:"environments,omitempty"`
+
+	// Id Endpoint handle, unique within the parent proxy
+	Id string `json:"id"`
+
+	// Name Human-readable endpoint name
+	Name     *string      `json:"name,omitempty"`
+	Policies *[]MCPPolicy `json:"policies,omitempty"`
+
+	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
+	Security          *SecurityConfig        `json:"security,omitempty"`
+	ToolScopeBindings *[]MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
+	Upstream          UpstreamConfig         `json:"upstream"`
 }
 
 // MCPProxyListItem defines model for MCPProxyListItem.
@@ -3763,16 +3816,14 @@ type MCPProxyListResponse struct {
 
 // MCPProxyRequest defines model for MCPProxyRequest.
 type MCPProxyRequest struct {
-	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
-
 	// Context MCP proxy context path
 	Context *string `json:"context,omitempty"`
 
 	// Description Description of the MCP proxy
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment configuration blocks keyed by environment UUID
-	Environments *map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	// Endpoints Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint. At least one endpoint is required.
+	Endpoints *[]MCPProxyEndpoint `json:"endpoints,omitempty"`
 
 	// Gateways Gateway UUIDs to deploy the MCP proxy to after creation
 	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
@@ -3789,13 +3840,6 @@ type MCPProxyRequest struct {
 	// Name Human-readable name of the MCP proxy
 	Name string `json:"name"`
 
-	// Policies Policies applied to the MCP proxy
-	Policies *[]MCPPolicy `json:"policies,omitempty"`
-
-	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
-	Security *SecurityConfig `json:"security,omitempty"`
-	Upstream UpstreamConfig  `json:"upstream"`
-
 	// Version Version of the MCP proxy
 	Version string `json:"version"`
 
@@ -3805,8 +3849,6 @@ type MCPProxyRequest struct {
 
 // MCPProxyResponse defines model for MCPProxyResponse.
 type MCPProxyResponse struct {
-	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
-
 	// Context MCP proxy context path
 	Context *string `json:"context,omitempty"`
 
@@ -3819,8 +3861,8 @@ type MCPProxyResponse struct {
 	// Description Description of the MCP proxy
 	Description *string `json:"description,omitempty"`
 
-	// Environments Per-environment configuration blocks keyed by environment UUID
-	Environments *map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	// Endpoints Deployable endpoint definitions of the MCP proxy. Each endpoint reports its per-environment deployment status.
+	Endpoints *[]MCPProxyEndpoint `json:"endpoints,omitempty"`
 
 	// Gateways Gateway UUIDs associated with the MCP proxy
 	Gateways *[]openapi_types.UUID `json:"gateways,omitempty"`
@@ -3837,15 +3879,8 @@ type MCPProxyResponse struct {
 	// Name Human-readable name of the MCP proxy
 	Name string `json:"name"`
 
-	// Policies Policies applied to the MCP proxy
-	Policies *[]MCPPolicy `json:"policies,omitempty"`
-
-	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
-	Security *SecurityConfig `json:"security,omitempty"`
-
 	// UpdatedAt Timestamp when the resource was last updated
-	UpdatedAt *time.Time     `json:"updatedAt,omitempty"`
-	Upstream  UpstreamConfig `json:"upstream"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
 
 	// Version Version of the MCP proxy
 	Version string `json:"version"`

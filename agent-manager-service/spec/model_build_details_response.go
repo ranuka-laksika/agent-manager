@@ -20,13 +20,14 @@ var _ MappedNullable = &BuildDetailsResponse{}
 
 // BuildDetailsResponse struct for BuildDetailsResponse
 type BuildDetailsResponse struct {
-	BuildId         *string         `json:"buildId,omitempty"`
-	BuildName       string          `json:"buildName"`
-	ProjectName     string          `json:"projectName"`
-	AgentName       string          `json:"agentName"`
-	StartedAt       time.Time       `json:"startedAt"`
-	EndedAt         *time.Time      `json:"endedAt,omitempty"`
-	ImageId         *string         `json:"imageId,omitempty"`
+	BuildId     *string    `json:"buildId,omitempty"`
+	BuildName   string     `json:"buildName"`
+	ProjectName string     `json:"projectName"`
+	AgentName   string     `json:"agentName"`
+	StartedAt   time.Time  `json:"startedAt"`
+	EndedAt     *time.Time `json:"endedAt,omitempty"`
+	ImageId     *string    `json:"imageId,omitempty"`
+	// Overall build status, derived from the underlying workflow phase. Succeeded means the image was built and pushed; Completed additionally means the workload CR was updated. Per-step progress is in `steps`.
 	Status          *string         `json:"status,omitempty"`
 	BuildParameters BuildParameters `json:"buildParameters"`
 	// Build completion percentage (0-100)

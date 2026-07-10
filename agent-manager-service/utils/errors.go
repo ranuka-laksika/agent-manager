@@ -146,6 +146,7 @@ var (
 	ErrMCPProxyNotFound            = errors.New("MCP proxy not found")
 	ErrMCPProxyExists              = errors.New("MCP proxy already exists")
 	ErrMCPProxyHasMappings         = errors.New("cannot delete MCP proxy: it has associated MCP proxy mappings. Please delete all mappings before deleting the proxy")
+	ErrMCPEnvAlreadyBound          = errors.New("environment is already assigned to another endpoint in this MCP proxy")
 	ErrInvalidURL                  = errors.New("invalid URL")
 	ErrURLUnreachable              = errors.New("URL unreachable")
 	ErrMCPServerUnauthorized       = errors.New("MCP server unauthorized")

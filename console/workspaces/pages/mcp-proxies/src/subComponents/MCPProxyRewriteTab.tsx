@@ -38,7 +38,7 @@ import {
 import { ChevronDown, ChevronUp } from "@wso2/oxygen-ui-icons-react";
 import { useMCPPoliciesCatalog } from "@agent-management-platform/api-client";
 import type {
-  MCPEnvironmentConfig,
+  MCPEndpointConfig,
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
@@ -113,7 +113,7 @@ function getBackendId(
 }
 
 function buildDefaultsFromCapabilities(
-  config: MCPEnvironmentConfig | undefined,
+  config: MCPEndpointConfig | undefined,
 ): { state: RewriteState; meta: ItemMeta[] } {
   const state: RewriteState = { tool: {}, resource: {}, prompt: {} };
   const meta: ItemMeta[] = [];
@@ -330,17 +330,17 @@ function buildPolicyParams(
 }
 
 export type MCPProxyRewriteTabProps = {
-  config: MCPEnvironmentConfig | undefined;
-  selectedEnvironmentId: string;
+  config: MCPEndpointConfig | undefined;
+  selectedEndpointId: string;
   orgName: string | undefined;
   isLoading?: boolean;
-  onUpdate: (fields: Partial<MCPEnvironmentConfig>) => Promise<MCPProxy>;
+  onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
 };
 
 export function MCPProxyRewriteTab({
   config,
-  selectedEnvironmentId,
+  selectedEndpointId,
   orgName,
   isLoading = false,
   onUpdate,
@@ -375,7 +375,7 @@ export function MCPProxyRewriteTab({
   );
 
   useEffect(() => {
-    if (!config || !selectedEnvironmentId) return;
+    if (!config || !selectedEndpointId) return;
     const { state: defaults, meta: defaultsMeta } =
       buildDefaultsFromCapabilities(config);
     const existing = config.policies?.find(
@@ -397,7 +397,7 @@ export function MCPProxyRewriteTab({
       const first = defaultsMeta[0];
       return first ? `${first.kind}::${first.backendId}` : null;
     });
-  }, [config, selectedEnvironmentId]);
+  }, [config, selectedEndpointId]);
 
   const selected = useMemo(() => {
     if (!selectedKey) return null;

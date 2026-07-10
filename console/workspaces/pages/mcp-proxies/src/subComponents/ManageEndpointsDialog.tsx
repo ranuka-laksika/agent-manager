@@ -34,10 +34,7 @@ import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { useSnackBar } from "@agent-management-platform/views";
 import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
 import { EndpointRow } from "./EndpointRow";
-import {
-  buildEnvironmentsMap,
-  reconstructEndpointsFromEnvironments,
-} from "./mcpEndpoints";
+import { draftToEndpoint, endpointToDraft } from "./mcpEndpoints";
 
 interface ManageEndpointsDialogProps {
   open: boolean;
@@ -62,18 +59,17 @@ export function ManageEndpointsDialog({
   const [editingId, setEditingId] = useState<string | null>(null);
   const endpointIdRef = useRef(1);
 
-  // Seed the working list from the proxy's stored per-environment blocks each time
-  // the dialog is opened, grouping blocks that share an upstream into one endpoint.
+  // Seed the working list from the proxy's native endpoints each time the dialog is
+  // opened. The `endpointIdRef` counter only labels endpoints added in this session; a
+  // draft seeded from a backend endpoint keeps its handle as its id.
   useEffect(() => {
     if (!open) return;
-    const reconstructed = reconstructEndpointsFromEnvironments(
-      proxy.environments ?? {},
-    );
-    setEndpoints(reconstructed);
-    endpointIdRef.current = reconstructed.length + 1;
+    const seeded = (proxy.endpoints ?? []).map(endpointToDraft);
+    setEndpoints(seeded);
+    endpointIdRef.current = seeded.length + 1;
     setAddOpen(false);
     setEditingId(null);
-  }, [open, proxy.environments]);
+  }, [open, proxy.endpoints]);
 
   const environmentLabels = useMemo(() => {
     const labels = new Map<string, string>();
@@ -135,13 +131,19 @@ export function ManageEndpointsDialog({
 
   const handleSave = useCallback(async () => {
     try {
-      const nextEnvironments = buildEnvironmentsMap(
-        endpoints,
-        proxy.environments ?? {},
+      // Match each draft back to its source endpoint by handle so an edited endpoint
+      // keeps its policies, security and tool-scope bindings; drafts added this session
+      // have no match and get freshly derived handles + default security.
+      const existingByHandle = new Map(
+        (proxy.endpoints ?? []).map((endpoint) => [endpoint.id, endpoint]),
+      );
+      const usedHandles = new Set<string>();
+      const nextEndpoints = endpoints.map((draft, index) =>
+        draftToEndpoint(draft, index, existingByHandle.get(draft.id), usedHandles),
       );
       await updateMCPProxy.mutateAsync({
         params: { orgName: orgId, proxyId: proxy.id },
-        body: { ...proxy, environments: nextEnvironments },
+        body: { ...proxy, endpoints: nextEndpoints },
       });
       pushSnackBar({
         message: "Endpoints updated successfully.",

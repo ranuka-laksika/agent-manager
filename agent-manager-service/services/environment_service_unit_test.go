@@ -758,6 +758,9 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 					{UUID: "u2", Name: "staging", DisplayName: "Staging", IsProduction: false},
 				}, nil
 			},
+			ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+				return []*models.OrganizationResponse{{Namespace: org}}, nil
+			},
 		}
 		prober := &clientmocks.ThunderProberMock{
 			ProbeFunc: func(_ context.Context, _, _ string) bool { return false },
@@ -781,6 +784,9 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 					{UUID: "u1", Name: ""},
 				}, nil
 			},
+			ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+				return []*models.OrganizationResponse{{Namespace: org}}, nil
+			},
 		}
 		svc := newEnvService(&repomocks.GatewayRepositoryMock{}, oc)
 
@@ -798,6 +804,9 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 					{UUID: "u1", Name: "dev", DisplayName: "Dev", IsProduction: false},
 					{UUID: "u2", Name: "staging", DisplayName: "Staging", IsProduction: true},
 				}, nil
+			},
+			ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+				return []*models.OrganizationResponse{{Namespace: org}}, nil
 			},
 		}
 		prober := &clientmocks.ThunderProberMock{

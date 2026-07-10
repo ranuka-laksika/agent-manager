@@ -30,7 +30,8 @@ type MCPProxy struct {
 	Status        string         `gorm:"column:status" json:"status"`
 	Configuration MCPProxyConfig `gorm:"column:configuration;type:jsonb;serializer:json" json:"configuration"`
 
-	Artifact *Artifact `gorm:"foreignKey:UUID;references:UUID" json:"artifact,omitempty"`
+	Artifact  *Artifact          `gorm:"foreignKey:UUID;references:UUID" json:"artifact,omitempty"`
+	Endpoints []MCPProxyEndpoint `gorm:"foreignKey:MCPProxyUUID;references:UUID;constraint:OnDelete:CASCADE" json:"endpoints,omitempty"`
 
 	OrganizationName string    `gorm:"-" json:"organizationName,omitempty"`
 	ID               string    `gorm:"-" json:"id,omitempty"`
@@ -65,13 +66,13 @@ func (MCPProxyMapping) TableName() string {
 
 // MCPProxyConfig represents the MCP proxy configuration stored in JSON.
 //
-// The config carries two shapes. The source org-level MCPProxy is a blueprint: it
-// populates Environments (keyed by environment UUID) and leaves the flat root-level
-// Upstream/Policies/Capabilities/Security empty — it deploys nothing. An agent-scoped
+// The config carries two shapes. On the parent org-level MCPProxy it holds shared
+// metadata only (Name/Version/Context/Vhost/SpecVersion) — per-endpoint deployable
+// config lives on the endpoint rows (MCPProxyEndpoint.Configuration). An agent-scoped
 // MCPProxyMapping is an actual gateway-deployable entity: it populates the flat
-// root-level fields (flattened from the selected environment's blueprint block by
-// buildAgentMCPConfigProxy) and leaves Environments empty. The deployment YAML builder
-// reads only the flat root-level fields.
+// root-level fields (flattened from the bound endpoint's config by
+// buildAgentMCPConfigProxy). The deployment YAML builder reads only the flat
+// root-level fields.
 type MCPProxyConfig struct {
 	Name         string                `json:"name,omitempty"`
 	Version      string                `json:"version,omitempty"`
@@ -83,10 +84,50 @@ type MCPProxyConfig struct {
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
 	// ToolScopeBindings is the flat root-level copy populated only on flattened
-	// per-environment deployable artifacts (mirrors the Security duality); on a
-	// source MCPProxy the bindings live per-environment in Environments.
-	ToolScopeBindings []MCPToolScopeBinding           `json:"toolScopeBindings,omitempty"`
-	Environments      map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	// per-endpoint deployable artifacts (mirrors the Security duality); on a source
+	// MCPProxy the bindings live per-endpoint in MCPProxyEndpoint.Configuration.
+	ToolScopeBindings []MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
+}
+
+// MCPProxyEndpoint is the deployable proxy definition. One endpoint can be deployed
+// to 1..N environments through MCPProxyEndpointEnvironment. Within a parent proxy an
+// endpoint handle is unique (uq_mcp_endpoint_handle) and an environment maps to at
+// most one endpoint (uq_proxy_env_single on the join table).
+type MCPProxyEndpoint struct {
+	UUID          uuid.UUID         `gorm:"column:uuid;primaryKey" json:"uuid"`
+	MCPProxyUUID  uuid.UUID         `gorm:"column:mcp_proxy_uuid" json:"mcpProxyUuid"`
+	Handle        string            `gorm:"column:handle" json:"handle"`
+	Name          string            `gorm:"column:name" json:"name,omitempty"`
+	Status        string            `gorm:"column:status" json:"status"`
+	Configuration MCPEndpointConfig `gorm:"column:configuration;type:jsonb;serializer:json" json:"configuration"`
+	CreatedAt     time.Time         `gorm:"column:created_at" json:"createdAt,omitempty"`
+	UpdatedAt     time.Time         `gorm:"column:updated_at" json:"updatedAt,omitempty"`
+
+	Environments []MCPProxyEndpointEnvironment `gorm:"foreignKey:EndpointUUID;references:UUID;constraint:OnDelete:CASCADE" json:"environments,omitempty"`
+}
+
+// TableName returns the table name for the MCPProxyEndpoint model.
+func (MCPProxyEndpoint) TableName() string {
+	return "mcp_proxy_endpoints"
+}
+
+// MCPProxyEndpointEnvironment maps one endpoint to one environment and holds the
+// stable gateway artifact identity (ArtifactUUID) and deployment status for that
+// (endpoint, environment) deployment. MCPProxyUUID is denormalized from the endpoint
+// so the DB can enforce uq_proxy_env_single (one endpoint per environment per proxy).
+type MCPProxyEndpointEnvironment struct {
+	ID              uint      `gorm:"column:id;primaryKey;autoIncrement" json:"id,omitempty"`
+	MCPProxyUUID    uuid.UUID `gorm:"column:mcp_proxy_uuid" json:"mcpProxyUuid"`
+	EndpointUUID    uuid.UUID `gorm:"column:endpoint_uuid" json:"endpointUuid"`
+	EnvironmentUUID uuid.UUID `gorm:"column:environment_uuid" json:"environmentUuid"`
+	ArtifactUUID    uuid.UUID `gorm:"column:artifact_uuid" json:"artifactUuid"`
+	Status          string    `gorm:"column:status" json:"status"`
+	CreatedAt       time.Time `gorm:"column:created_at" json:"createdAt,omitempty"`
+}
+
+// TableName returns the table name for the MCPProxyEndpointEnvironment model.
+func (MCPProxyEndpointEnvironment) TableName() string {
+	return "mcp_proxy_endpoint_environments"
 }
 
 // MCPToolScopeBinding binds catalog scopes to one MCP tool in one environment.
@@ -96,33 +137,21 @@ type MCPToolScopeBinding struct {
 	Scopes []string `json:"scopes"`
 }
 
-// MCPEnvironmentConfig is one per-environment blueprint block on a source MCPProxy,
-// stored in MCPProxyConfig.Environments keyed by environment UUID. Upstream holds the
-// single backend endpoint (URL + auth) for that environment.
-//
-// ArtifactUUID is the stable identity of the single gateway artifact this environment
-// deploys. The MCP proxy owns and deploys exactly one artifact per configured
-// environment (to that environment's gateway); it is generated when the block is first
-// stored and preserved across updates. Agent MCP configurations do not deploy their own
-// artifacts — they reference this shared per-environment artifact: its context becomes
-// the injected proxy URL, and per-agent inbound API keys are minted against it (as the
-// gateway-facing apiID) so the gateway validates them against the shared deployment.
-type MCPEnvironmentConfig struct {
-	ArtifactUUID *uuid.UUID            `json:"artifactUuid,omitempty"`
+// MCPEndpointConfig is the deployable configuration stored on one endpoint's
+// configuration JSONB. Upstream holds the single backend endpoint (URL + auth) the
+// endpoint proxies. The stable gateway artifact identity for a given (endpoint,
+// environment) deployment no longer lives here — it is on the join row
+// (MCPProxyEndpointEnvironment.ArtifactUUID). Agent MCP configurations do not deploy
+// their own artifacts; they reference the endpoint's per-environment artifact.
+type MCPEndpointConfig struct {
 	Upstream     *UpstreamEndpoint     `json:"upstream,omitempty"`
 	Policies     []MCPPolicy           `json:"policies,omitempty"`
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
 
-	// ToolScopeBindings binds catalog scopes to this environment's MCP tools.
+	// ToolScopeBindings binds catalog scopes to this endpoint's MCP tools.
 	// Only meaningful when Security selects the Agent Identity variant.
 	ToolScopeBindings []MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
-
-	// DeploymentStatus is a response-only indicator of whether this environment's single
-	// gateway artifact is currently deployed ("Deployed") or not ("Undeployed"). It is
-	// computed on read and never persisted (buildMCPEnvironmentsForStorage rebuilds blocks
-	// without it).
-	DeploymentStatus string `json:"deploymentStatus,omitempty"`
 }
 
 // MCP proxy per-environment deployment status values reported on read.
@@ -149,23 +178,40 @@ type MCPProxyCapabilities struct {
 
 // MCPProxyDTO is the request/response body for an MCP proxy.
 type MCPProxyDTO struct {
-	Capabilities   *MCPProxyCapabilities           `json:"capabilities,omitempty"`
-	Context        *string                         `json:"context,omitempty"`
-	CreatedAt      *time.Time                      `json:"createdAt,omitempty"`
-	CreatedBy      *string                         `json:"createdBy,omitempty"`
-	Description    *string                         `json:"description,omitempty"`
-	Gateways       []string                        `json:"gateways,omitempty"`
-	ID             string                          `json:"id"`
-	InCatalog      bool                            `json:"inCatalog"`
-	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
-	Name           string                          `json:"name"`
-	Policies       *[]MCPPolicy                    `json:"policies,omitempty"`
-	Security       *SecurityConfig                 `json:"security,omitempty"`
-	Upstream       UpstreamConfig                  `json:"upstream"`
-	Environments   map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
-	UpdatedAt      *time.Time                      `json:"updatedAt,omitempty"`
-	Version        string                          `json:"version"`
-	Vhost          *string                         `json:"vhost,omitempty"`
+	Context        *string               `json:"context,omitempty"`
+	CreatedAt      *time.Time            `json:"createdAt,omitempty"`
+	CreatedBy      *string               `json:"createdBy,omitempty"`
+	Description    *string               `json:"description,omitempty"`
+	Gateways       []string              `json:"gateways,omitempty"`
+	ID             string                `json:"id"`
+	InCatalog      bool                  `json:"inCatalog"`
+	McpSpecVersion *string               `json:"mcpSpecVersion,omitempty"`
+	Name           string                `json:"name"`
+	Endpoints      []MCPProxyEndpointDTO `json:"endpoints,omitempty"`
+	UpdatedAt      *time.Time            `json:"updatedAt,omitempty"`
+	Version        string                `json:"version"`
+	Vhost          *string               `json:"vhost,omitempty"`
+}
+
+// MCPProxyEndpointDTO is one endpoint in an MCP proxy request/response body. On write,
+// Environments carries target environment UUIDs (DeploymentStatus ignored). On read,
+// each entry reports the (endpoint, environment) deployment status.
+type MCPProxyEndpointDTO struct {
+	ID                string                      `json:"id"`
+	Name              string                      `json:"name,omitempty"`
+	Upstream          UpstreamConfig              `json:"upstream"`
+	Policies          *[]MCPPolicy                `json:"policies,omitempty"`
+	Capabilities      *MCPProxyCapabilities       `json:"capabilities,omitempty"`
+	Security          *SecurityConfig             `json:"security,omitempty"`
+	ToolScopeBindings []MCPToolScopeBinding       `json:"toolScopeBindings,omitempty"`
+	Environments      []MCPEndpointEnvironmentDTO `json:"environments,omitempty"`
+}
+
+// MCPEndpointEnvironmentDTO is one endpoint→environment binding. EnvironmentUUID is
+// the target environment; DeploymentStatus is response-only (Deployed/Undeployed).
+type MCPEndpointEnvironmentDTO struct {
+	EnvironmentUUID  string `json:"environmentUuid"`
+	DeploymentStatus string `json:"deploymentStatus,omitempty"`
 }
 
 // MCPPolicyAvailabilityResponse lists MCP policies reported by active gateways.

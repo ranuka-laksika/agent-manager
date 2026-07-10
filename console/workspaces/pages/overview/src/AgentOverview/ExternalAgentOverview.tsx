@@ -58,7 +58,7 @@ export const ExternalAgentOverview = () => {
   const envGatewayVhost = envGatewayList?.gateways?.[0]?.vhost;
   const agentInstrumentationUrl = envGatewayVhost
     ? `${envGatewayVhost.replace(/\/$/, "")}/otel`
-    : (globalConfig.instrumentationUrl || "http://localhost:22893/otel");
+    : (globalConfig.instrumentationUrl || "http://default-default.gateway.localhost:19080/otel");
 
   const handleSetupAgent = (environmentId: string) => {
     setSelectedEnvironmentId(environmentId);

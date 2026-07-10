@@ -88,6 +88,10 @@ spec:
     # ("api-platform-<org>-<env>") + the in-cluster Service suffix, and backendPort
     # is the gateway runtime listener port. Both are platform-wide constants —
     # the agent-manager-service no longer injects them per-environment.
+    #
+    # The gateway runtime Service lives in the per-org-env namespace
+    # ("<org>-<env>", matching apiGateway.namespace set by add-environment.sh).
+    # Static DNS host — no ReferenceGrant needed.
     - template:
         apiVersion: gateway.kgateway.dev/v1alpha1
         kind: Backend
@@ -98,7 +102,7 @@ spec:
           type: Static
           static:
             hosts:
-              - host: "api-platform-${metadata.componentNamespace}-${metadata.environmentName}-gateway-gateway-runtime.openchoreo-data-plane"
+              - host: "api-platform-${metadata.componentNamespace}-${metadata.environmentName}-gateway-gateway-runtime.${metadata.componentNamespace}-${metadata.environmentName}"
                 port: 22893
 
     # Create RestApi resource (discovered by gateway via apiSelector scope: LabelSelector).

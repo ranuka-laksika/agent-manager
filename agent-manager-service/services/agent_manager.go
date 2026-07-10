@@ -85,6 +85,7 @@ type agentManagerService struct {
 	aiApplicationService      *AIApplicationService
 	gatewayRepo               repositories.GatewayRepository
 	agentThunderProvisioning  AgentThunderProvisioningService
+	monitorManagerService     MonitorManagerService
 	agentIdentityInjection    AgentIdentityInjectionService
 	logger                    *slog.Logger
 }
@@ -103,6 +104,7 @@ func NewAgentManagerService(
 	aiApplicationService *AIApplicationService,
 	gatewayRepo repositories.GatewayRepository,
 	agentThunderProvisioning AgentThunderProvisioningService,
+	monitorManagerService MonitorManagerService,
 	agentIdentityInjection AgentIdentityInjectionService,
 	logger *slog.Logger,
 ) AgentManagerService {
@@ -117,6 +119,7 @@ func NewAgentManagerService(
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
 		agentThunderProvisioning:  agentThunderProvisioning,
+		monitorManagerService:     monitorManagerService,
 		agentIdentityInjection:    agentIdentityInjection,
 		artifactRepo:              artifactRepo,
 		aiApplicationService:      aiApplicationService,
@@ -2001,7 +2004,7 @@ func (s *agentManagerService) GenerateName(ctx context.Context, ouID string, pay
 			return "", fmt.Errorf("failed to check env name availability: %w", err)
 		}
 		// Name is taken, generate unique name with suffix
-		uniqueName, err := s.generateUniqueEnvName(ctx, org.Name, candidateName)
+		uniqueName, err := s.generateUniqueEnvName(ctx, ouID, org.Name, candidateName)
 		if err != nil {
 			s.logger.Error("Failed to generate unique env name", "baseName", candidateName, "ouID", org.Name, "error", err)
 			return "", fmt.Errorf("failed to generate unique env name: %w", err)
@@ -2041,10 +2044,10 @@ func (s *agentManagerService) generateUniqueProjectName(ctx context.Context, ouI
 }
 
 // generateUniqueEnvName creates a unique name by appending a random suffix
-func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, baseName string) (string, error) {
+func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, orgName string, baseName string) (string, error) {
 	// Bound the base so the resulting "<base>-XX" stays within the per-org env-name
 	// limit (which keeps the gateway runtime Service name ≤ 63 chars).
-	maxBaseLen := utils.MaxEnvNameLength(ouID) - utils.RandomSuffixLength - 1 // 1 for hyphen
+	maxBaseLen := utils.MaxEnvNameLength(orgName) - utils.RandomSuffixLength - 1 // 1 for hyphen
 	if maxBaseLen < 1 {
 		maxBaseLen = 1
 	}
@@ -2186,6 +2189,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 			if s.agentThunderProvisioning != nil {
 				go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
 			}
+			s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
 			return nil
 		}
 		s.logger.Error("Failed to delete oc agent", "agentName", agentName, "error", err)
@@ -2210,8 +2214,19 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 	// Cleanup env-scoped API artifact record.
 	s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
 
+	// Cleanup monitors owned by this agent so they are not orphaned after deletion.
+	s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
+
 	s.logger.Debug("Agent deleted from OpenChoreo successfully", "ouID", ouID, "agentName", agentName)
 	return nil
+}
+
+// cleanupAgentMonitors removes all monitors owned by an agent. Best-effort: orphaned
+// monitors are logged but do not fail the delete, matching the other post-delete cleanups.
+func (s *agentManagerService) cleanupAgentMonitors(ctx context.Context, ouID, projectName, agentName string) {
+	if err := s.monitorManagerService.DeleteMonitorsByAgent(context.WithoutCancel(ctx), ouID, projectName, agentName); err != nil {
+		s.logger.Warn("Failed to delete monitors during agent deletion", "agentName", agentName, "error", err)
+	}
 }
 
 func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName string) {

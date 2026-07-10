@@ -28,7 +28,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
-// testMCPEnvUUID is a valid environment UUID used as the Environments map key.
+// testMCPEnvUUID is a valid environment UUID used as an endpoint's target environment.
 const testMCPEnvUUID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
 // identityEnabledSecurity returns a SecurityConfig selecting the Agent Identity variant.
@@ -36,6 +36,22 @@ func identityEnabledSecurity() *models.SecurityConfig {
 	return &models.SecurityConfig{
 		Enabled:  boolPtr(true),
 		Identity: &models.IdentitySecurity{Enabled: boolPtr(true)},
+	}
+}
+
+// endpointWith builds a single-environment endpoint DTO targeting testMCPEnvUUID with the
+// given upstream URL, security, and tool-scope bindings.
+func endpointWith(url string, security *models.SecurityConfig, bindings []models.MCPToolScopeBinding) models.MCPProxyEndpointDTO {
+	var upstream models.UpstreamConfig
+	if url != "" {
+		upstream.Main = &models.UpstreamEndpoint{URL: url}
+	}
+	return models.MCPProxyEndpointDTO{
+		ID:                "primary",
+		Upstream:          upstream,
+		Security:          security,
+		ToolScopeBindings: bindings,
+		Environments:      []models.MCPEndpointEnvironmentDTO{{EnvironmentUUID: testMCPEnvUUID}},
 	}
 }
 
@@ -62,85 +78,86 @@ func TestDefaultMCPProxySecurity_IdentityVariantSkipsAPIKeyDefaults(t *testing.T
 	assert.True(t, isBoolTrue(out.Identity.Enabled))
 }
 
-func TestValidateMCPEnvironments_RejectsBothVariantsEnabled(t *testing.T) {
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Upstream: &models.UpstreamEndpoint{URL: "https://93.184.216.34"},
-			Security: &models.SecurityConfig{
-				Enabled:  boolPtr(true),
-				APIKey:   &models.APIKeySecurity{Enabled: boolPtr(true)},
-				Identity: &models.IdentitySecurity{Enabled: boolPtr(true)},
-			},
-		},
+func TestValidateMCPEndpoints_RejectsBothVariantsEnabled(t *testing.T) {
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", &models.SecurityConfig{
+			Enabled:  boolPtr(true),
+			APIKey:   &models.APIKeySecurity{Enabled: boolPtr(true)},
+			Identity: &models.IdentitySecurity{Enabled: boolPtr(true)},
+		}, nil),
 	}
-	err := validateMCPEnvironments(context.Background(), envs)
+	err := validateMCPEndpoints(context.Background(), endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
 }
 
-func TestValidateMCPEnvironments_RejectsBindingWithNoScopes(t *testing.T) {
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Upstream: &models.UpstreamEndpoint{URL: "https://93.184.216.34"},
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "list_repos", Scopes: nil},
-			},
-		},
+func TestValidateMCPEndpoints_RejectsBindingWithNoScopes(t *testing.T) {
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "list_repos", Scopes: nil},
+		}),
 	}
-	err := validateMCPEnvironments(context.Background(), envs)
+	err := validateMCPEndpoints(context.Background(), endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
 }
 
-func TestValidateMCPEnvironments_RejectsDuplicateToolBinding(t *testing.T) {
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Upstream: &models.UpstreamEndpoint{URL: "https://93.184.216.34"},
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "search", Scopes: []string{"a:read"}},
-				{Tool: "search", Scopes: []string{"a:admin"}},
-			},
-		},
+func TestValidateMCPEndpoints_RejectsDuplicateToolBinding(t *testing.T) {
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "search", Scopes: []string{"a:read"}},
+			{Tool: "search", Scopes: []string{"a:admin"}},
+		}),
 	}
-	err := validateMCPEnvironments(context.Background(), envs)
+	err := validateMCPEndpoints(context.Background(), endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
 }
 
-func TestValidateMCPEnvironmentSecurity_UnknownBindingScope(t *testing.T) {
+func TestValidateMCPEndpoints_RejectsDuplicateEnvironmentAcrossEndpoints(t *testing.T) {
+	first := endpointWith("https://93.184.216.34", nil, nil)
+	first.ID = "primary"
+	second := endpointWith("https://93.184.216.35", nil, nil)
+	second.ID = "secondary"
+	err := validateMCPEndpoints(context.Background(), []models.MCPProxyEndpointDTO{first, second})
+	assert.ErrorIs(t, err, utils.ErrMCPEnvAlreadyBound)
+}
+
+func TestValidateMCPEndpointSecurity_UnknownBindingScope(t *testing.T) {
 	scopeRepo := &repomocks.ScopeRepositoryMock{
 		ListFunc: func(_ context.Context, orgName string) ([]models.Scope, error) {
 			return []models.Scope{{OrgName: orgName, Name: "repo:read.all"}}, nil
 		},
 	}
 	svc := &MCPProxyService{scopeRepo: scopeRepo}
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "create_issue", Scopes: []string{"repo:write.all"}},
-			},
-		},
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "create_issue", Scopes: []string{"repo:write.all"}},
+		}),
 	}
-	err := svc.validateMCPEnvironmentSecurity(context.Background(), "org1", envs)
+	err := svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
 	assert.Contains(t, err.Error(), "repo:write.all")
 }
 
-func TestValidateMCPEnvironmentSecurity_KnownScopesPass(t *testing.T) {
+func TestValidateMCPEndpointSecurity_KnownScopesPass(t *testing.T) {
 	scopeRepo := &repomocks.ScopeRepositoryMock{
 		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
 			return []models.Scope{{Name: "repo:read.all"}}, nil
 		},
 	}
-	svc := &MCPProxyService{scopeRepo: scopeRepo}
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-			},
+	gwRepo := &repomocks.GatewayRepositoryMock{
+		ListWithFiltersFunc: func(_ repositories.GatewayFilterOptions) ([]*models.Gateway, error) {
+			return []*models.Gateway{gatewayWithPolicyManifest("mcp-auth", "v1", "mcp-authz", "v1")}, nil
 		},
 	}
-	assert.NoError(t, svc.validateMCPEnvironmentSecurity(context.Background(), "org1", envs))
+	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+		}),
+	}
+	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
 }
 
-func TestValidateMCPEnvironmentSecurity_IdentityNeedsGatewayPolicies(t *testing.T) {
+func TestValidateMCPEndpointSecurity_IdentityNeedsGatewayPolicies(t *testing.T) {
 	scopeRepo := &repomocks.ScopeRepositoryMock{
 		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
 			return []models.Scope{{Name: "repo:read.all"}}, nil
@@ -153,19 +170,16 @@ func TestValidateMCPEnvironmentSecurity_IdentityNeedsGatewayPolicies(t *testing.
 		},
 	}
 	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Security: identityEnabledSecurity(),
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-			},
-		},
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+		}),
 	}
-	err := svc.validateMCPEnvironmentSecurity(context.Background(), "org1", envs)
+	err := svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
 }
 
-func TestValidateMCPEnvironmentSecurity_IdentityAcceptedWithGatewayPolicies(t *testing.T) {
+func TestValidateMCPEndpointSecurity_IdentityAcceptedWithGatewayPolicies(t *testing.T) {
 	scopeRepo := &repomocks.ScopeRepositoryMock{
 		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
 			return []models.Scope{{Name: "repo:read.all"}}, nil
@@ -177,18 +191,15 @@ func TestValidateMCPEnvironmentSecurity_IdentityAcceptedWithGatewayPolicies(t *t
 		},
 	}
 	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Security: identityEnabledSecurity(),
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-			},
-		},
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+		}),
 	}
-	assert.NoError(t, svc.validateMCPEnvironmentSecurity(context.Background(), "org1", envs))
+	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
 }
 
-func TestValidateMCPEnvironmentSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.T) {
+func TestValidateMCPEndpointSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.T) {
 	scopeRepo := &repomocks.ScopeRepositoryMock{
 		ListFunc: func(_ context.Context, _ string) ([]models.Scope, error) {
 			return []models.Scope{{Name: "repo:read.all"}}, nil
@@ -202,13 +213,10 @@ func TestValidateMCPEnvironmentSecurity_IdentityAllowedWhenNoGatewayYet(t *testi
 		},
 	}
 	svc := &MCPProxyService{scopeRepo: scopeRepo, gatewayRepo: gwRepo}
-	envs := map[string]models.MCPEnvironmentConfig{
-		testMCPEnvUUID: {
-			Security: identityEnabledSecurity(),
-			ToolScopeBindings: []models.MCPToolScopeBinding{
-				{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-			},
-		},
+	endpoints := []models.MCPProxyEndpointDTO{
+		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
+			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
+		}),
 	}
-	assert.NoError(t, svc.validateMCPEnvironmentSecurity(context.Background(), "org1", envs))
+	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
 }

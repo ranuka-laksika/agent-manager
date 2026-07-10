@@ -132,6 +132,12 @@ func (e *monitorExecutor) ExecuteMonitorRun(ctx context.Context, params ExecuteM
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve LLM proxy config: %w", err)
 	}
+	ocClient := ocClientFromContext(ctx, e.ocClient)
+	// Resolve the OpenChoreo namespace name for this org.
+	namespace, err := ResolveNamespace(ctx, ocClient)
+	if err != nil {
+		return nil, err
+	}
 
 	// Build WorkflowRun request (this also resolves custom evaluator types from DB).
 	workflowRunReq, err := e.buildWorkflowRunRequest(
@@ -143,15 +149,13 @@ func (e *monitorExecutor) ExecuteMonitorRun(ctx context.Context, params ExecuteM
 		llmProxySecretPath,
 		llmApiBase,
 		templateHandle,
+		namespace,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build WorkflowRun request: %w", err)
 	}
 
 	// Create WorkflowRun via OpenChoreo API.
-	// The scheduler injects an org-scoped OC client into context before calling here;
-	// user-request paths leave the context as-is and fall back to the system client.
-	ocClient := ocClientFromContext(ctx, e.ocClient)
 	workflowRunResp, err := ocClient.CreateWorkflowRun(ctx, params.OUID, *workflowRunReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WorkflowRun: %w", err)
@@ -283,6 +287,7 @@ func (e *monitorExecutor) buildWorkflowRunRequest(
 	llmProxySecretPath string,
 	llmApiBase string,
 	templateHandle string,
+	namespace string,
 ) (*client.CreateWorkflowRunRequest, error) {
 	evaluatorsJSON, hasLLMJudge, err := e.serializeEvaluators(monitor.OUID, evaluators, templateHandle)
 	if err != nil {
@@ -312,7 +317,7 @@ func (e *monitorExecutor) buildWorkflowRunRequest(
 				"name":        monitor.Name,
 				"displayName": monitor.DisplayName,
 			},
-			"organization": monitor.OUID,
+			"organization": namespace,
 			"project":      monitor.ProjectName,
 			"agent": map[string]interface{}{
 				"id":   monitor.AgentID,

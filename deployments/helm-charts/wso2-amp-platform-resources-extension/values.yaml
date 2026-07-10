@@ -125,6 +125,16 @@ environment:
     #   host: am-gateway.localhost
     #   port: 443
 
+# API Platform Gateway vhost used to build kgateway-routed URLs, e.g. the OTEL
+# trace endpoint injected into agents: http://<env>-<org>.<host>:<port>/otel.
+# Routing by hostname through kgateway keeps these URLs independent of the
+# namespace the api-platform gateway runtime is deployed in. The host must be
+# resolvable from inside the cluster (local k3d setups install a CoreDNS
+# rewrite for *.gateway.localhost).
+apiPlatformGatewayVhost:
+  host: gateway.localhost
+  port: 19080
+
 # Deployment Pipeline configuration
 deploymentPipeline:
   # Name of the default deployment pipeline

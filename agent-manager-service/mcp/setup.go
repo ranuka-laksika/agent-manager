@@ -19,6 +19,7 @@ package mcp
 import (
 	"net/http"
 
+	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	traceobserversvc "github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 
 	"github.com/wso2/agent-manager/agent-manager-service/mcp/handlers"
@@ -33,6 +34,7 @@ type Dependencies struct {
 	AgentManagerService      services.AgentManagerService
 	AgentTokenManagerService services.AgentTokenManagerService
 	TraceObserverSvcClient   traceobserversvc.TraceObserverSvcClient
+	OpenChoreoClient         occlient.OpenChoreoClient
 }
 
 // RegisterRoute builds the MCP HTTP handler, wraps it with the standard middleware chain,
@@ -44,7 +46,7 @@ func RegisterRoute(mux *http.ServeMux, deps Dependencies, authMiddleware func(ht
 		AgentToolset:         handlers.NewAgentHandler(deps.AgentManagerService, deps.AgentTokenManagerService),
 		BuildToolset:         handlers.NewBuildHandler(deps.AgentManagerService),
 		DeploymentToolset:    handlers.NewDeploymentHandler(deps.AgentManagerService),
-		ObservabilityToolset: handlers.NewObservabilityHandler(deps.AgentManagerService, deps.TraceObserverSvcClient),
+		ObservabilityToolset: handlers.NewObservabilityHandler(deps.AgentManagerService, deps.TraceObserverSvcClient, deps.OpenChoreoClient),
 	}
 
 	handler := NewHTTPServer(toolsets)

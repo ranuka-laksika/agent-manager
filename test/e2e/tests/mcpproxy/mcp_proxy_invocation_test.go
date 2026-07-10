@@ -94,12 +94,13 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 				Name:    "E2E MCP Inv Proxy " + suffix,
 				Version: "v1.0",
 				Context: &ctx,
-				// The api-key security policy lives on the DefaultEnv blueprint block; the
-				// proxy deploys that block's artifact to the env's gateway, and per-agent
-				// inbound keys are minted against it.
-				Environments: map[string]framework.MCPEnvironmentConfig{
-					envUUID: {
-						Upstream: &framework.UpstreamEndpoint{URL: &upstreamURL},
+				// The api-key security policy lives on the endpoint; the proxy deploys the
+				// endpoint's artifact to the env's gateway, and per-agent inbound keys are
+				// minted against it.
+				Endpoints: []framework.MCPProxyEndpoint{
+					{
+						ID:       "primary",
+						Upstream: framework.UpstreamConfig{Main: &framework.UpstreamEndpoint{URL: &upstreamURL}},
 						Security: &framework.SecurityConfig{
 							Enabled: true,
 							APIKey: &framework.SecurityAPIKey{
@@ -107,6 +108,9 @@ var _ = Describe("MCP Proxy with External Agent and Policy Enforcement", Label("
 								Key:     "X-API-Key",
 								In:      "header",
 							},
+						},
+						Environments: []framework.MCPEndpointEnvironment{
+							{EnvironmentUUID: envUUID},
 						},
 					},
 				},

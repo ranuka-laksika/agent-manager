@@ -860,9 +860,12 @@ func getStringPtr(s string) *string {
 }
 
 // configEnvAPIKeyParams collects the common path parameters for the per-config
-// MCP API key handlers and validates the config ID.
-func (c *agentConfigurationController) configEnvAPIKeyParams(w http.ResponseWriter, r *http.Request) (orgName, projName, agentName, envName string, configUUID uuid.UUID, ok bool) {
-	orgName = r.PathValue(utils.PathParamOrgName)
+// MCP API key handlers and validates the config ID. The org is taken from the
+// JWT-resolved OUID in the request context (via OUIDFromRequest), not the raw
+// {orgName} path handle — the config repository is keyed by ou_id (a UUID), so
+// passing the path handle would never match and every call would 404.
+func (c *agentConfigurationController) configEnvAPIKeyParams(w http.ResponseWriter, r *http.Request) (ouID, projName, agentName, envName string, configUUID uuid.UUID, ok bool) {
+	ouID = middleware.OUIDFromRequest(r)
 	projName = r.PathValue(utils.PathParamProjName)
 	agentName = r.PathValue(utils.PathParamAgentName)
 	envName = r.PathValue("envName")
@@ -872,7 +875,7 @@ func (c *agentConfigurationController) configEnvAPIKeyParams(w http.ResponseWrit
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid configuration ID")
 		return "", "", "", "", uuid.Nil, false
 	}
-	return orgName, projName, agentName, envName, parsed, true
+	return ouID, projName, agentName, envName, parsed, true
 }
 
 // writeConfigAPIKeyError maps the shared per-config API key service errors to HTTP
@@ -915,12 +918,12 @@ func (c *agentConfigurationController) ListMCPConfigAPIKeys(w http.ResponseWrite
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
 
-	response, err := c.agentConfigService.ListMCPConfigAPIKeys(ctx, orgName, projName, agentName, configUUID, envName)
+	response, err := c.agentConfigService.ListMCPConfigAPIKeys(ctx, ouID, projName, agentName, configUUID, envName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -938,7 +941,7 @@ func (c *agentConfigurationController) CreateMCPConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
@@ -953,7 +956,7 @@ func (c *agentConfigurationController) CreateMCPConfigAPIKey(w http.ResponseWrit
 		return
 	}
 
-	response, err := c.agentConfigService.CreateMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
+	response, err := c.agentConfigService.CreateMCPConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
 		Name:        name,
 		DisplayName: displayName,
 		ExpiresAt:   specReq.ExpiresAt,
@@ -970,7 +973,7 @@ func (c *agentConfigurationController) RotateMCPConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
@@ -984,7 +987,7 @@ func (c *agentConfigurationController) RotateMCPConfigAPIKey(w http.ResponseWrit
 		return
 	}
 
-	response, err := c.agentConfigService.RotateMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
+	response, err := c.agentConfigService.RotateMCPConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
 		DisplayName: specReq.DisplayName,
 		ExpiresAt:   specReq.ExpiresAt,
 	})
@@ -1000,13 +1003,13 @@ func (c *agentConfigurationController) RevokeMCPConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
 	keyName := r.PathValue("keyName")
 
-	if err := c.agentConfigService.RevokeMCPConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
+	if err := c.agentConfigService.RevokeMCPConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, keyName); err != nil {
 		c.writeConfigAPIKeyError(w, log, "RevokeMCPConfigAPIKey", err)
 		return
 	}
@@ -1018,12 +1021,12 @@ func (c *agentConfigurationController) ListLLMConfigAPIKeys(w http.ResponseWrite
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
 
-	response, err := c.agentConfigService.ListLLMConfigAPIKeys(ctx, orgName, projName, agentName, configUUID, envName)
+	response, err := c.agentConfigService.ListLLMConfigAPIKeys(ctx, ouID, projName, agentName, configUUID, envName)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentConfigNotFound) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Configuration not found")
@@ -1041,7 +1044,7 @@ func (c *agentConfigurationController) CreateLLMConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
@@ -1056,7 +1059,7 @@ func (c *agentConfigurationController) CreateLLMConfigAPIKey(w http.ResponseWrit
 		return
 	}
 
-	response, err := c.agentConfigService.CreateLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
+	response, err := c.agentConfigService.CreateLLMConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, &models.CreateAPIKeyRequest{
 		Name:        name,
 		DisplayName: displayName,
 		ExpiresAt:   specReq.ExpiresAt,
@@ -1073,7 +1076,7 @@ func (c *agentConfigurationController) RotateLLMConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
@@ -1087,7 +1090,7 @@ func (c *agentConfigurationController) RotateLLMConfigAPIKey(w http.ResponseWrit
 		return
 	}
 
-	response, err := c.agentConfigService.RotateLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
+	response, err := c.agentConfigService.RotateLLMConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, keyName, &models.RotateAPIKeyRequest{
 		DisplayName: specReq.DisplayName,
 		ExpiresAt:   specReq.ExpiresAt,
 	})
@@ -1103,13 +1106,13 @@ func (c *agentConfigurationController) RevokeLLMConfigAPIKey(w http.ResponseWrit
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
+	ouID, projName, agentName, envName, configUUID, ok := c.configEnvAPIKeyParams(w, r)
 	if !ok {
 		return
 	}
 	keyName := r.PathValue("keyName")
 
-	if err := c.agentConfigService.RevokeLLMConfigAPIKey(ctx, orgName, projName, agentName, configUUID, envName, keyName); err != nil {
+	if err := c.agentConfigService.RevokeLLMConfigAPIKey(ctx, ouID, projName, agentName, configUUID, envName, keyName); err != nil {
 		c.writeConfigAPIKeyError(w, log, "RevokeLLMConfigAPIKey", err)
 		return
 	}

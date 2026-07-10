@@ -16,8 +16,8 @@
  */
 
 import type {
-  MCPEnvironmentConfig,
   MCPProxyCapabilities,
+  MCPProxyEndpoint,
   MCPProxyPolicy,
   MCPServerInfoFetchResponse,
   UpstreamAuth,
@@ -92,40 +92,24 @@ export function capabilitiesToFetchedInfo(
 }
 
 /**
- * Groups the per-environment blueprint blocks back into logical endpoints. Blocks
- * sharing the same upstream URL and auth header describe a single endpoint serving
- * several environments — the inverse of how the creation form expands one endpoint
- * into one block per environment. Auth values are never returned by the API, so the
- * reconstructed draft carries an empty `authValue` (treated as "keep existing").
+ * Converts a native backend endpoint into the form's editable draft (1:1). The draft's
+ * client `id` carries the endpoint handle so the save path can preserve the endpoint's
+ * identity. Auth values are never returned by the API, so the draft carries an empty
+ * `authValue` (treated as "keep existing"). Its environment list is the flat set of bound
+ * environment UUIDs.
  */
-export function reconstructEndpointsFromEnvironments(
-  environments: Record<string, MCPEnvironmentConfig>,
-): EndpointDraft[] {
-  const groups = new Map<string, EndpointDraft>();
-  let nextId = 1;
-
-  for (const [envId, config] of Object.entries(environments ?? {})) {
-    const url = config.upstream?.url ?? "";
-    const authHeader = config.upstream?.auth?.header ?? "";
-    const key = `${url}\0${authHeader}`;
-
-    const existing = groups.get(key);
-    if (existing) {
-      existing.environments.push(envId);
-      continue;
-    }
-
-    groups.set(key, {
-      id: String(nextId++),
-      url,
-      authHeader,
-      authValue: "",
-      environments: [envId],
-      fetchedInfo: capabilitiesToFetchedInfo(config.capabilities),
-    });
-  }
-
-  return Array.from(groups.values());
+export function endpointToDraft(endpoint: MCPProxyEndpoint): EndpointDraft {
+  return {
+    id: endpoint.id,
+    name: endpoint.name ?? "",
+    url: endpoint.upstream?.main?.url ?? "",
+    authHeader: endpoint.upstream?.main?.auth?.header ?? "",
+    authValue: "",
+    environments: (endpoint.environments ?? []).map(
+      (env) => env.environmentUuid,
+    ),
+    fetchedInfo: capabilitiesToFetchedInfo(endpoint.capabilities),
+  };
 }
 
 function buildUpstreamAuth(endpoint: EndpointDraft): UpstreamAuth | undefined {
@@ -242,44 +226,94 @@ function pruneAclPolicy(
 }
 
 /**
- * Rebuilds the proxy's per-environment blueprint map from the edited endpoint list.
- * For an environment that already had a block, everything is preserved except the
- * upstream URL/auth and the capabilities (which follow the endpoint's fetched info),
- * with Rewrite/ACL entries pruned to the surviving capabilities. Environments no
- * longer served by any endpoint are dropped, leaving them unconfigured.
+ * Derives an endpoint handle (id) from its name, falling back to the URL host and finally
+ * a positional `endpoint-N`. The result is slugified to the `[a-z0-9-]` handle charset.
+ *
+ * When `usedHandles` is supplied, the derived handle is de-duplicated against it (two new
+ * endpoints sharing a name or URL host would otherwise collide, which the backend rejects
+ * via UNIQUE(mcp_proxy_uuid, handle)): a numeric suffix is appended until unique, and the
+ * chosen handle is added to the set so subsequent calls see it.
  */
-export function buildEnvironmentsMap(
-  endpoints: EndpointDraft[],
-  existing: Record<string, MCPEnvironmentConfig>,
-): Record<string, MCPEnvironmentConfig> {
-  const result: Record<string, MCPEnvironmentConfig> = {};
+export function deriveEndpointHandle(
+  draft: Pick<EndpointDraft, "name" | "url">,
+  index: number,
+  usedHandles?: Set<string>,
+): string {
+  const base =
+    slugify(draft.name ?? "") ||
+    slugify(hostFromUrl(draft.url)) ||
+    `endpoint-${index + 1}`;
 
-  for (const endpoint of endpoints) {
-    const auth = buildUpstreamAuth(endpoint);
-    const capabilities: MCPProxyCapabilities = {
-      tools: endpoint.fetchedInfo.tools,
-      resources: endpoint.fetchedInfo.resources,
-      prompts: endpoint.fetchedInfo.prompts,
-    };
+  if (!usedHandles) return base;
 
-    for (const envId of endpoint.environments) {
-      const prev = existing[envId];
-      if (prev) {
-        result[envId] = {
-          ...prev,
-          upstream: { ...prev.upstream, url: endpoint.url, auth },
-          capabilities,
-          policies: prunePoliciesForCapabilities(prev.policies, capabilities),
-        };
-      } else {
-        result[envId] = {
-          upstream: { url: endpoint.url, auth },
-          capabilities,
-          security: DEFAULT_ENDPOINT_SECURITY,
-        };
-      }
-    }
+  let handle = base;
+  let suffix = 2;
+  while (usedHandles.has(handle)) {
+    handle = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  usedHandles.add(handle);
+  return handle;
+}
+
+/**
+ * Converts an edited draft into a native backend endpoint (1:1). When an `existing`
+ * endpoint is supplied (edit path), its policies, security and tool-scope bindings are
+ * preserved — policies pruned to the endpoint's surviving capabilities — and its handle is
+ * reused. Capabilities follow the draft's fetched info. The endpoint's environment
+ * bindings are the draft's flat env-UUID list; `deploymentStatus` is response-only and
+ * never sent.
+ */
+export function draftToEndpoint(
+  draft: EndpointDraft,
+  index: number,
+  existing?: MCPProxyEndpoint,
+  usedHandles?: Set<string>,
+): MCPProxyEndpoint {
+  const auth = buildUpstreamAuth(draft);
+  const capabilities: MCPProxyCapabilities = {
+    tools: draft.fetchedInfo.tools,
+    resources: draft.fetchedInfo.resources,
+    prompts: draft.fetchedInfo.prompts,
+  };
+  const name = (draft.name ?? "").trim();
+
+  // An edited endpoint keeps its handle; register it so freshly-derived handles for
+  // new endpoints in the same batch don't collide with it.
+  let id: string;
+  if (existing?.id !== undefined) {
+    id = existing.id;
+    usedHandles?.add(id);
+  } else {
+    id = deriveEndpointHandle(draft, index, usedHandles);
   }
 
-  return result;
+  return {
+    id,
+    name: name || undefined,
+    upstream: { ...existing?.upstream, main: { url: draft.url, auth } },
+    capabilities,
+    policies: prunePoliciesForCapabilities(existing?.policies, capabilities),
+    security: existing?.security ?? DEFAULT_ENDPOINT_SECURITY,
+    toolScopeBindings: existing?.toolScopeBindings,
+    environments: draft.environments.map((environmentUuid) => ({
+      environmentUuid,
+    })),
+  };
+}
+
+function slugify(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
 }
