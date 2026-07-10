@@ -490,6 +490,12 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	// scopes is a full replacement of the role's permissions, not a delta: the
+	// reconcile below removes any existing permission not present here. Because
+	// AgentIdentityRoleRequest.Scopes is a non-pointer slice, an omitted "scopes"
+	// field is indistinguishable from an explicit [] — both clear all scopes. A
+	// metadata-only PUT must therefore echo back the role's current scopes to keep
+	// them; sending {"description": "..."} alone strips every permission.
 	scopes := body.Scopes
 
 	client, ok := c.envClient(w, r)
