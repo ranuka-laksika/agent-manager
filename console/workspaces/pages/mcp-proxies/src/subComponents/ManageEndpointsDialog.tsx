@@ -22,16 +22,13 @@ import {
   Box,
   Button,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
+  Form,
   Stack,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Plus } from "@wso2/oxygen-ui-icons-react";
-import { useSnackBar } from "@agent-management-platform/views";
+import { Plus, Settings } from "@wso2/oxygen-ui-icons-react";
+import { DrawerContent, DrawerHeader, DrawerWrapper, useSnackBar } from "@agent-management-platform/views";
 import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
 import { EndpointRow } from "./EndpointRow";
 import { draftToEndpoint, endpointToDraft } from "./mcpEndpoints";
@@ -169,94 +166,100 @@ export function ManageEndpointsDialog({
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
-        <DialogTitle>Manage Endpoints</DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <Typography variant="body2" color="text.secondary">
-              Endpoints map backend MCP servers to environments. Editing an
-              endpoint updates the upstream URL, authentication, and
-              capabilities for the environments it serves. Environments left
-              without an endpoint become unconfigured.
-            </Typography>
-
-            {endpoints.length > 0 ? (
-              <Stack spacing={1.5}>
-                {endpoints.map((endpoint) => (
-                  <EndpointRow
-                    key={endpoint.id}
-                    endpoint={endpoint}
-                    environmentLabels={environmentLabels}
-                    onEdit={() => setEditingId(endpoint.id)}
-                    onRemove={() => handleRemoveEndpoint(endpoint.id)}
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <Box
-                sx={{
-                  border: "1px dashed",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  px: 2,
-                  py: 3,
-                  textAlign: "center",
-                }}
-              >
+      <DrawerWrapper open={open} onClose={onClose} >
+        <DrawerHeader icon={<Settings size={24} />} title="Manage Endpoints" onClose={onClose} />
+        <DrawerContent>
+          <Stack spacing={3}>
+            <Form.Section>
+              <Form.Header>Endpoints</Form.Header>
+              <Form.Stack spacing={2}>
                 <Typography variant="body2" color="text.secondary">
-                  No endpoints configured yet.
+                  Endpoints map backend MCP servers to environments. Editing an
+                  endpoint updates the upstream URL, authentication, and
+                  capabilities for the environments it serves. Environments left
+                  without an endpoint become unconfigured.
                 </Typography>
-              </Box>
-            )}
 
-            <Box>
-              <Tooltip
-                title={
-                  noEnvironmentsLeft
-                    ? "All environments already have an endpoint."
-                    : ""
-                }
-                disableHoverListener={!noEnvironmentsLeft}
-              >
-                <span>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Plus size={16} />}
-                    onClick={() => setAddOpen(true)}
-                    disabled={noEnvironmentsLeft || environments.length === 0}
+                {endpoints.length > 0 ? (
+                  <Stack spacing={1.5}>
+                    {endpoints.map((endpoint) => (
+                      <EndpointRow
+                        key={endpoint.id}
+                        endpoint={endpoint}
+                        environmentLabels={environmentLabels}
+                        onEdit={() => setEditingId(endpoint.id)}
+                        onRemove={() => handleRemoveEndpoint(endpoint.id)}
+                      />
+                    ))}
+                  </Stack>
+                ) : (
+                  <Box
+                    sx={{
+                      border: "1px dashed",
+                      borderColor: "divider",
+                      borderRadius: 1,
+                      px: 2,
+                      py: 3,
+                      textAlign: "center",
+                    }}
                   >
-                    Add Endpoint
-                  </Button>
-                </span>
-              </Tooltip>
-            </Box>
+                    <Typography variant="body2" color="text.secondary">
+                      No endpoints configured yet.
+                    </Typography>
+                  </Box>
+                )}
 
-            {environments.length > 0 ? (
-              <Typography variant="caption" color="text.secondary">
-                {usedEnvIds.size} of {environments.length} environments have an
-                endpoint.
-              </Typography>
-            ) : null}
+                <Box>
+                  <Tooltip
+                    title={
+                      noEnvironmentsLeft
+                        ? "All environments already have an endpoint."
+                        : ""
+                    }
+                    disableHoverListener={!noEnvironmentsLeft}
+                  >
+                    <span>
+                      <Button
+                        variant="outlined"
+                        startIcon={<Plus size={16} />}
+                        onClick={() => setAddOpen(true)}
+                        disabled={noEnvironmentsLeft || environments.length === 0}
+                      >
+                        Add Endpoint
+                      </Button>
+                    </span>
+                  </Tooltip>
+                </Box>
+
+                {environments.length > 0 ? (
+                  <Typography variant="caption" color="text.secondary">
+                    {usedEnvIds.size} of {environments.length} environments have an
+                    endpoint.
+                  </Typography>
+                ) : null}
+              </Form.Stack>
+            </Form.Section>
+
+            <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
+              <Button variant="outlined" onClick={onClose} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={() => void handleSave()}
+                disabled={isSaving}
+                startIcon={
+                  isSaving ? (
+                    <CircularProgress size={16} color="inherit" />
+                  ) : undefined
+                }
+              >
+                {isSaving ? "Saving" : "Save Changes"}
+              </Button>
+            </Box>
           </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button variant="outlined" onClick={onClose} disabled={isSaving}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={() => void handleSave()}
-            disabled={isSaving}
-            startIcon={
-              isSaving ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : undefined
-            }
-          >
-            {isSaving ? "Saving" : "Save Changes"}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        </DrawerContent>
+      </DrawerWrapper>
 
       <AddEndpointDialog
         open={addOpen || editingId !== null}

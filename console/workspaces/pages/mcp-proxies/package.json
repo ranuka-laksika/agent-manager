@@ -38,7 +38,8 @@
     "@agent-management-platform/views": "workspace:*",
     "@agent-management-platform/api-client": "workspace:*",
     "@agent-management-platform/types": "workspace:*",
-    "@agent-management-platform/shared-component": "workspace:*"
+    "@agent-management-platform/shared-component": "workspace:*",
+    "zod": "4.3.6"
   },
   "devDependencies": {
     "@types/node": "24.6.0",

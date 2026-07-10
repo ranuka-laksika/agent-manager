@@ -44,7 +44,7 @@ export type AuthenticationType = "apiKey" | "identity" | "";
 const AUTHENTICATION_TYPE_LABELS: Record<AuthenticationType, string> = {
   "": "None",
   apiKey: "API Key",
-  identity: "Agent Identity",
+  identity: "OAuth",
 };
 
 // Display label for an AuthenticationType, shared by the Security tab's method
@@ -64,10 +64,9 @@ export function isAPIKeySecurityEnabled(
   );
 }
 
-// Shared by the Security and Access Control tabs: Access Control swaps its
-// allow/deny view for a per-tool scope-binding table once Agent Identity
-// security is the active auth method for the endpoint.
-export function isIdentitySecurityEnabled(
+// Used by resolveAuthenticationType below to derive the Security tab's
+// active auth method from the endpoint's security config.
+function isIdentitySecurityEnabled(
   config: MCPEndpointConfig | undefined,
 ): boolean {
   return (
@@ -99,6 +98,45 @@ export function getCapabilityId(
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+// Reads one capability-kind section (e.g. "tools") off an ACL policy's params —
+// the single source of truth for the allow/deny + exceptions shape, shared by
+// isToolBlockedByAcl below and MCPProxyAccessControlTab's parseExistingAclPolicy.
+export function parseAclSection(
+  params: Record<string, unknown> | undefined,
+  sectionKey: string,
+): { mode: "allow" | "deny" | null; exceptions: string[] } {
+  const section = params?.[sectionKey] as Record<string, unknown> | undefined;
+  if (!section) return { mode: null, exceptions: [] };
+
+  const rawMode = String(section.mode ?? "").toLowerCase();
+  const mode = rawMode === "allow" || rawMode === "deny" ? rawMode : null;
+  const exceptions = Array.isArray(section.exceptions)
+    ? (section.exceptions as unknown[])
+        .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+        .map((entry) => entry.trim())
+    : [];
+
+  return { mode, exceptions };
+}
+
+// Whether a tool is currently blocked by the Access Control tab's ACL policy
+// (allow-all-except-exceptions, or deny-all-except-exceptions) — used by the
+// Security tab to flag RBAC scope bindings on tools that ACL has shut off.
+export function isToolBlockedByAcl(
+  config: MCPEndpointConfig | undefined,
+  toolIdentifier: string,
+): boolean {
+  const policy = config?.policies?.find((p) => p.name === ACL_POLICY_NAME);
+  const { mode, exceptions } = parseAclSection(
+    policy?.params as Record<string, unknown> | undefined,
+    "tools",
+  );
+  if (!mode) return false;
+
+  const isException = exceptions.includes(toolIdentifier);
+  return mode === "deny" ? !isException : isException;
 }
 
 function collectCapabilityIds(

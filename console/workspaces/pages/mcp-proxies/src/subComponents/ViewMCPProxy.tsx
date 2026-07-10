@@ -27,43 +27,44 @@ import {
   useListEnvironments,
   useUpdateMCPProxy,
 } from "@agent-management-platform/api-client";
-import type {
-  MCPEndpointConfig,
-  MCPProxyEndpoint,
+import {
+  absoluteRouteMap,
+  type MCPEndpointConfig,
+  type MCPProxy,
+  type MCPProxyEndpoint,
 } from "@agent-management-platform/types";
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
   Chip,
-  Collapse,
   Divider,
   FormControl,
+  Grid,
   IconButton,
   MenuItem,
-  PageContent,
   Select,
   Skeleton,
   Stack,
   Tab,
   Tabs,
-  TextField,
+  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
 import {
   AlertTriangle,
   Clock,
+  Copy,
   Edit,
   Settings,
 } from "@wso2/oxygen-ui-icons-react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { generatePath, useParams, useSearchParams } from "react-router-dom";
 import {
   formatRelativeTime,
-  getAvatarInitials,
   normalizeVersion,
 } from "@agent-management-platform/shared-component";
+import { PageLayout } from "@agent-management-platform/views";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
 import { MCPProxyAccessControlTab } from "./MCPProxyAccessControlTab";
 import { MCPProxyConnectionTab } from "./MCPProxyConnectionTab";
@@ -71,7 +72,9 @@ import { MCPProxyOverviewTab } from "./MCPProxyOverviewTab";
 import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
 import { MCPProxyRewriteTab } from "./MCPProxyRewriteTab";
 import { MCPProxySecurityTab } from "./MCPProxySecurityTab";
+import { EditMCPProxyDrawer } from "./EditMCPProxyDrawer";
 import { ManageEndpointsDialog } from "./ManageEndpointsDialog";
+import { useCopyWithFeedback } from "./useCopyWithFeedback";
 
 const TABS = [
   "Overview",
@@ -135,23 +138,10 @@ export function ViewMCPProxy() {
     [setSearchParams],
   );
 
-  const [isEditingDetails, setIsEditingDetails] = useState(false);
   const [manageEndpointsOpen, setManageEndpointsOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [version, setVersion] = useState("");
-  const [context, setContext] = useState("");
-  const [description, setDescription] = useState("");
-  const [baselineDetails, setBaselineDetails] = useState({
-    context: "",
-    description: "",
-    id: "",
-    name: "",
-    version: "",
-  });
-  const [saveStatus, setSaveStatus] = useState<{
-    message: string;
-    severity: "error";
-  } | null>(null);
+  const [editDrawerOpen, setEditDrawerOpen] = useState(false);
+  const handleCopy = useCopyWithFeedback();
+
   const {
     data: proxy,
     isLoading,
@@ -197,10 +187,7 @@ export function ViewMCPProxy() {
 
   // The selected endpoint's flat config, consumed by every config tab. Environment
   // bindings and per-env deployment status are surfaced separately as chips.
-  const selectedConfig = useMemo<MCPEndpointConfig | undefined>(
-    () => selectedEndpoint,
-    [selectedEndpoint],
-  );
+  const selectedConfig: MCPEndpointConfig | undefined = selectedEndpoint;
 
   // Chips describing each environment the selected endpoint is bound to, with its
   // per-environment deployment status.
@@ -239,422 +226,248 @@ export function ViewMCPProxy() {
   );
 
   const displayName = proxy?.name ?? proxy?.id ?? proxyId ?? "MCP Proxy";
-  const hasUnsavedChanges =
-    name !== baselineDetails.name ||
-    version !== baselineDetails.version ||
-    context !== baselineDetails.context ||
-    description !== baselineDetails.description;
-  const canSave = name.trim().length > 0 && version.trim().length > 0;
-
-  useEffect(() => {
-    const nextProxyId = proxy?.id ?? "";
-    const isProxyChanged = nextProxyId !== baselineDetails.id;
-
-    if (!isProxyChanged && isEditingDetails) {
-      return;
-    }
-
-    const nextDetails = {
-      context: proxy?.context ?? "",
-      description: proxy?.description ?? "",
-      id: nextProxyId,
-      name: proxy?.name ?? "",
-      version: proxy?.version ?? "",
-    };
-    setName(nextDetails.name);
-    setVersion(nextDetails.version);
-    setContext(nextDetails.context);
-    setDescription(nextDetails.description);
-    setBaselineDetails(nextDetails);
-    setIsEditingDetails(false);
-  }, [
-    baselineDetails.id,
-    isEditingDetails,
-    proxy?.id,
-    proxy?.name,
-    proxy?.version,
-    proxy?.context,
-    proxy?.description,
-  ]);
-
-  const resetDraft = () => {
-    setName(baselineDetails.name);
-    setVersion(baselineDetails.version);
-    setContext(baselineDetails.context);
-    setDescription(baselineDetails.description);
-    setIsEditingDetails(false);
-    setSaveStatus(null);
-  };
-
-  const handleSave = async () => {
-    if (!orgId || !proxy?.id) return;
-
-    try {
-      const updated = await updateMCPProxy.mutateAsync({
-        params: { orgName: orgId, proxyId: proxy.id },
-        body: {
-          ...proxy,
-          context: optionalString(context),
-          description: optionalString(description),
-          name: name.trim(),
-          version: version.trim(),
-        },
-      });
-      const nextDetails = {
-        context: updated.context ?? "",
-        description: updated.description ?? "",
-        id: updated.id ?? "",
-        name: updated.name ?? "",
-        version: updated.version ?? "",
-      };
-      setName(nextDetails.name);
-      setVersion(nextDetails.version);
-      setContext(nextDetails.context);
-      setDescription(nextDetails.description);
-      setBaselineDetails(nextDetails);
-      setIsEditingDetails(false);
-      setSaveStatus(null);
-    } catch {
-      setSaveStatus({
-        message: "Failed to update MCP proxy details.",
-        severity: "error",
-      });
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <PageContent fullWidth>
-        <Stack spacing={4}>
-          <Skeleton variant="rounded" height={168} />
-          <Skeleton variant="rounded" height={360} />
-          <Skeleton variant="rounded" height={96} />
-        </Stack>
-      </PageContent>
-    );
-  }
-
-  if (error) {
-    return (
-      <PageContent fullWidth>
-        <Alert severity="error" icon={<AlertTriangle size={18} />}>
-          {error instanceof Error
-            ? error.message
-            : "Failed to load MCP proxy. Please try again."}
-        </Alert>
-      </PageContent>
-    );
-  }
-
   const hasEndpoints = endpoints.length > 0;
+  const backHref = generatePath(
+    absoluteRouteMap.children.org.children.mcpProxies.path,
+    { orgId: orgId ?? "" },
+  );
 
   return (
-    <PageContent fullWidth>
-      <Stack spacing={4}>
-        <Card variant="outlined" sx={{ p: 3 }}>
-          <Stack
-            direction={{ xs: "column", md: "row" }}
-            spacing={3}
-            justifyContent="space-between"
-          >
-            <Stack direction="row" spacing={3} alignItems="flex-start">
-              <Avatar
-                sx={{
-                  bgcolor: "primary.main",
-                  color: "primary.contrastText",
-                  fontSize: 28,
-                  fontWeight: 700,
-                  height: 88,
-                  width: 88,
-                }}
-              >
-                {getAvatarInitials(displayName, { fallback: "MP" })}
-              </Avatar>
-              <Stack spacing={1}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  {isEditingDetails ? (
-                    <TextField
-                      label="Name"
-                      size="small"
-                      value={name}
-                      onChange={(event) => setName(event.target.value)}
-                      error={name.trim().length === 0}
-                      helperText={
-                        name.trim().length === 0
-                          ? "Name is required."
-                          : undefined
-                      }
-                      sx={{ minWidth: { xs: "100%", sm: 320 } }}
-                    />
-                  ) : (
-                    <Typography variant="h4" fontWeight={500}>
-                      {displayName}
+    <>
+      <PageLayout
+        title={displayName}
+        backHref={backHref}
+        backLabel="Back to MCP Proxies"
+        isLoading={isLoading}
+        titleTail={
+          proxy?.version ? (
+            <Chip
+              label={normalizeVersion(proxy.version)}
+              size="small"
+              variant="outlined"
+              sx={{ ml: 1 }}
+            />
+          ) : undefined
+        }
+        description={proxy ? <MCPProxyDescription proxy={proxy} /> : undefined}
+        actions={
+          proxy ? (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<Edit size={16} />}
+              onClick={() => setEditDrawerOpen(true)}
+            >
+              Edit Details
+            </Button>
+          ) : undefined
+        }
+      >
+        {isLoading && (
+          <Stack spacing={3}>
+            <Skeleton variant="rounded" height={56} />
+            <Skeleton variant="rounded" height={360} />
+          </Stack>
+        )}
+
+        {error ? (
+          <Alert severity="error" icon={<AlertTriangle size={18} />}>
+            {error instanceof Error
+              ? error.message
+              : "Failed to load MCP proxy. Please try again."}
+          </Alert>
+        ) : null}
+
+        {proxy && !error && (
+          <Stack spacing={4}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Stack spacing={0.5}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      Context
                     </Typography>
-                  )}
-                  {isEditingDetails ? (
-                    <TextField
-                      label="Version"
-                      size="small"
-                      value={version}
-                      onChange={(event) => setVersion(event.target.value)}
-                      error={version.trim().length === 0}
-                      helperText={
-                        version.trim().length === 0
-                          ? "Version is required."
-                          : undefined
-                      }
-                      sx={{ minWidth: 160 }}
-                    />
-                  ) : proxy?.version ? (
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          fontFamily: "monospace",
+                          wordBreak: "break-all",
+                          flex: 1,
+                        }}
+                      >
+                        {proxy.context || "—"}
+                      </Typography>
+                      {proxy.context && (
+                        <Tooltip title="Copy Context">
+                          <IconButton
+                            size="small"
+                            aria-label="Copy Context"
+                            onClick={() =>
+                              handleCopy(proxy.context as string, "Context")
+                            }
+                          >
+                            <Copy size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </Stack>
+                </Card>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
+                  <Stack spacing={0.5}>
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 500 }}
+                    >
+                      In Catalog
+                    </Typography>
                     <Chip
-                      label={normalizeVersion(proxy.version)}
+                      label={proxy.inCatalog ? "Yes" : "No"}
                       size="small"
+                      color={proxy.inCatalog ? "success" : "default"}
                       variant="outlined"
-                    />
-                  ) : null}
-                  <IconButton
-                    size="small"
-                    onClick={() => setIsEditingDetails(true)}
-                    disabled={updateMCPProxy.isPending}
-                    aria-label="Edit MCP proxy details"
-                  >
-                    <Edit size={18} />
-                  </IconButton>
-                </Stack>
-                {isEditingDetails ? (
-                  <Stack spacing={1.5} sx={{ maxWidth: 560 }}>
-                    <TextField
-                      label="Context"
-                      size="small"
-                      value={context}
-                      onChange={(event) => setContext(event.target.value)}
-                      placeholder="/default/my-mcp-proxy"
-                    />
-                    <TextField
-                      label="Description"
-                      size="small"
-                      multiline
-                      minRows={3}
-                      value={description}
-                      onChange={(event) => setDescription(event.target.value)}
+                      sx={{ width: "fit-content" }}
                     />
                   </Stack>
-                ) : (
-                  <>
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Typography variant="body2" color="text.secondary">
-                        Context :
-                      </Typography>
-                      <Typography variant="body2">
-                        {proxy?.context ?? "-"}
-                      </Typography>
-                    </Stack>
-                    <Typography variant="body2" color="text.secondary">
-                      {proxy?.description || "No description provided."}
-                    </Typography>
-                  </>
-                )}
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="body2" color="text.secondary">
-                    Last updated :
-                  </Typography>
-                  <Clock size={16} />
-                  <Typography variant="body2">
-                    {formatRelativeTime(proxy?.updatedAt)}
-                  </Typography>
-                </Stack>
-              </Stack>
-            </Stack>
-          </Stack>
-        </Card>
-
-        <Stack
-          direction="row"
-          spacing={2}
-          alignItems="center"
-          justifyContent="space-between"
-        >
-          {hasEndpoints ? (
+                </Card>
+              </Grid>
+            </Grid>
+            <Divider />
             <Stack
               direction="row"
-              spacing={2}
+              spacing={1}
               alignItems="center"
+              justifyContent="flex-end"
               flexWrap="wrap"
               useFlexGap
             >
-              <Typography variant="body2" color="text.secondary">
-                Endpoint
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 260 }}>
-                <Select
-                  value={selectedEndpointId}
-                  onChange={(event) =>
-                    setSelectedEndpointId(event.target.value as string)
-                  }
-                >
-                  {endpointOptions.map((option) => (
-                    <MenuItem key={option.id} value={option.id}>
-                      {option.label}
-                    </MenuItem>
+              {hasEndpoints && (
+                <FormControl size="small" sx={{ minWidth: 260 }}>
+                  <Select
+                    value={selectedEndpointId}
+                    onChange={(event) =>
+                      setSelectedEndpointId(event.target.value as string)
+                    }
+                    renderValue={(value) => {
+                      const option = endpointOptions.find(
+                        (o) => o.id === value,
+                      );
+                      return `${option?.label ?? value} Endpoint`;
+                    }}
+                  >
+                    {endpointOptions.map((option) => (
+                      <MenuItem key={option.id} value={option.id}>
+                        {option.label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              )}
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<Settings size={16} />}
+                onClick={() => setManageEndpointsOpen(true)}
+              >
+                Manage Endpoints
+              </Button>
+            </Stack>
+
+            {hasEndpoints ? (
+              <Card variant="outlined">
+                <Tabs value={tabIndex} onChange={handleTabChange}>
+                  {TABS.map((tab) => (
+                    <Tab key={tab} label={tab} />
                   ))}
-                </Select>
-              </FormControl>
-              {selectedEnvChips.length > 0 ? (
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
-                  useFlexGap
-                >
-                  {selectedEnvChips.map((chip) => (
-                    <Chip
-                      key={chip.id}
-                      label={
-                        chip.status ? `${chip.label} · ${chip.status}` : chip.label
-                      }
-                      size="small"
-                      variant="outlined"
-                      color={chip.status === "Deployed" ? "success" : "default"}
+                </Tabs>
+                <Divider />
+                <Box sx={{ p: 3 }}>
+                  {tabIndex === 0 && (
+                    <MCPProxyOverviewTab
+                      proxy={proxy}
+                      config={selectedConfig}
+                      envChips={selectedEnvChips}
+                      isLoading={isLoading}
                     />
-                  ))}
-                </Stack>
-              ) : null}
-            </Stack>
-          ) : (
-            <span />
-          )}
-          <Button
-            variant="outlined"
-            startIcon={<Settings size={16} />}
-            onClick={() => setManageEndpointsOpen(true)}
-          >
-            Manage Endpoints
-          </Button>
-        </Stack>
-
-        {hasEndpoints ? (
-          <Card variant="outlined">
-            <Tabs value={tabIndex} onChange={handleTabChange}>
-              {TABS.map((tab) => (
-                <Tab key={tab} label={tab} />
-              ))}
-            </Tabs>
-            <Divider />
-            <Box sx={{ p: 3 }}>
-              {tabIndex === 0 && (
-                <MCPProxyOverviewTab
-                  proxy={proxy}
-                  config={selectedConfig}
-                  environments={selectedEndpoint?.environments}
-                  isLoading={isLoading}
-                />
-              )}
-              {tabIndex === 1 && (
-                <MCPCapabilitiesView
-                  tools={selectedConfig?.capabilities?.tools}
-                  resources={selectedConfig?.capabilities?.resources}
-                  prompts={selectedConfig?.capabilities?.prompts}
-                  sectionTitleVariant="h6"
-                />
-              )}
-              {tabIndex === 2 && (
-                <MCPProxyConnectionTab
-                  config={selectedConfig}
-                  selectedEndpointId={selectedEndpointId}
-                  isLoading={isLoading}
-                  onUpdate={updateSelectedEndpointConfig}
-                  isUpdating={updateMCPProxy.isPending}
-                />
-              )}
-              {tabIndex === 3 && (
-                <MCPProxyAccessControlTab
-                  config={selectedConfig}
-                  selectedEndpointId={selectedEndpointId}
-                  orgName={orgId}
-                  isLoading={isLoading}
-                  onUpdate={updateSelectedEndpointConfig}
-                  isUpdating={updateMCPProxy.isPending}
-                />
-              )}
-              {tabIndex === 4 && (
-                <MCPProxySecurityTab
-                  config={selectedConfig}
-                  selectedEndpointId={selectedEndpointId}
-                  isLoading={isLoading}
-                  onUpdate={updateSelectedEndpointConfig}
-                  isUpdating={updateMCPProxy.isPending}
-                />
-              )}
-              {tabIndex === 5 && (
-                <MCPProxyRewriteTab
-                  config={selectedConfig}
-                  selectedEndpointId={selectedEndpointId}
-                  orgName={orgId}
-                  isLoading={isLoading}
-                  onUpdate={updateSelectedEndpointConfig}
-                  isUpdating={updateMCPProxy.isPending}
-                />
-              )}
-              {tabIndex === 6 && (
-                <MCPProxyPoliciesTab
-                  config={selectedConfig}
-                  selectedEndpointId={selectedEndpointId}
-                  orgName={orgId}
-                  onUpdate={updateSelectedEndpointConfig}
-                  isUpdating={updateMCPProxy.isPending}
-                />
-              )}
-            </Box>
-          </Card>
-        ) : (
-          <Card variant="outlined" sx={{ p: 3 }}>
-            <Alert severity="info">
-              This MCP proxy has no endpoints configured.
-            </Alert>
-          </Card>
+                  )}
+                  {tabIndex === 1 && (
+                    <MCPCapabilitiesView
+                      tools={selectedConfig?.capabilities?.tools}
+                      resources={selectedConfig?.capabilities?.resources}
+                      prompts={selectedConfig?.capabilities?.prompts}
+                      sectionTitleVariant="h6"
+                    />
+                  )}
+                  {tabIndex === 2 && (
+                    <MCPProxyConnectionTab
+                      config={selectedConfig}
+                      selectedEndpointId={selectedEndpointId}
+                      isLoading={isLoading}
+                      onUpdate={updateSelectedEndpointConfig}
+                      isUpdating={updateMCPProxy.isPending}
+                    />
+                  )}
+                  {tabIndex === 3 && (
+                    <MCPProxyAccessControlTab
+                      config={selectedConfig}
+                      selectedEndpointId={selectedEndpointId}
+                      orgName={orgId}
+                      isLoading={isLoading}
+                      onUpdate={updateSelectedEndpointConfig}
+                      isUpdating={updateMCPProxy.isPending}
+                    />
+                  )}
+                  {tabIndex === 4 && (
+                    <MCPProxySecurityTab
+                      config={selectedConfig}
+                      selectedEndpointId={selectedEndpointId}
+                      orgName={orgId}
+                      isLoading={isLoading}
+                      onUpdate={updateSelectedEndpointConfig}
+                      isUpdating={updateMCPProxy.isPending}
+                    />
+                  )}
+                  {tabIndex === 5 && (
+                    <MCPProxyRewriteTab
+                      config={selectedConfig}
+                      selectedEndpointId={selectedEndpointId}
+                      orgName={orgId}
+                      isLoading={isLoading}
+                      onUpdate={updateSelectedEndpointConfig}
+                      isUpdating={updateMCPProxy.isPending}
+                    />
+                  )}
+                  {tabIndex === 6 && (
+                    <MCPProxyPoliciesTab
+                      config={selectedConfig}
+                      selectedEndpointId={selectedEndpointId}
+                      orgName={orgId}
+                      onUpdate={updateSelectedEndpointConfig}
+                      isUpdating={updateMCPProxy.isPending}
+                    />
+                  )}
+                </Box>
+              </Card>
+            ) : (
+              <Card variant="outlined" sx={{ p: 3 }}>
+                <Alert severity="info">
+                  This MCP proxy has no endpoints configured.
+                </Alert>
+              </Card>
+            )}
+          </Stack>
         )}
+      </PageLayout>
 
-        {hasUnsavedChanges ? (
-          <Card variant="outlined" sx={{ p: 2 }}>
-            <Stack spacing={1.5}>
-              <Collapse in={!!saveStatus} timeout={300}>
-                {saveStatus && (
-                  <Alert
-                    severity={saveStatus.severity}
-                    onClose={() => setSaveStatus(null)}
-                  >
-                    {saveStatus.message}
-                  </Alert>
-                )}
-              </Collapse>
-              <Stack direction="row" justifyContent="space-between" spacing={1}>
-                <Typography variant="body2" color="warning.main" fontWeight={600}>
-                  You have unsaved changes.
-                </Typography>
-                <Stack direction="row" justifyContent="flex-end" spacing={1}>
-                  <Button
-                    variant="outlined"
-                    disabled={updateMCPProxy.isPending}
-                    onClick={resetDraft}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="contained"
-                    disabled={!canSave || updateMCPProxy.isPending}
-                    onClick={handleSave}
-                  >
-                    {updateMCPProxy.isPending ? "Saving..." : "Save"}
-                  </Button>
-                </Stack>
-              </Stack>
-            </Stack>
-          </Card>
-        ) : null}
-      </Stack>
-
-      {proxy ? (
+      {proxy && (
         <ManageEndpointsDialog
           open={manageEndpointsOpen}
           orgId={orgId ?? ""}
@@ -662,14 +475,38 @@ export function ViewMCPProxy() {
           environments={environments}
           onClose={() => setManageEndpointsOpen(false)}
         />
-      ) : null}
-    </PageContent>
+      )}
+      {proxy && orgId && (
+        <EditMCPProxyDrawer
+          open={editDrawerOpen}
+          onClose={() => setEditDrawerOpen(false)}
+          proxy={proxy}
+          orgId={orgId}
+        />
+      )}
+    </>
   );
 }
 
-function optionalString(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
+function MCPProxyDescription({ proxy }: { proxy: MCPProxy }) {
+  return (
+    <Stack spacing={0.75}>
+      <Typography variant="body2" color="text.secondary">
+        {proxy.description || "No description provided."}
+      </Typography>
+      {!proxy.description && (
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" color="text.secondary">
+            Last updated:
+          </Typography>
+          <Clock size={16} />
+          <Typography variant="body2">
+            {formatRelativeTime(proxy.updatedAt)}
+          </Typography>
+        </Stack>
+      )}
+    </Stack>
+  );
 }
 
 export default ViewMCPProxy;

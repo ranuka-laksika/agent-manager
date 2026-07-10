@@ -17,27 +17,38 @@
 
 import type {
   MCPEndpointConfig,
-  MCPEndpointEnvironment,
   MCPProxy,
 } from "@agent-management-platform/types";
-import { Card, Chip, Grid, Skeleton, Stack, Typography } from "@wso2/oxygen-ui";
+import { Card, Chip, Grid, IconButton, Skeleton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
+import { Copy } from "@wso2/oxygen-ui-icons-react";
 import { ACL_POLICY_NAME } from "../constants";
 import { getAuthenticationTypeLabel, resolveAuthenticationType } from "./mcpEndpoints";
+import { useCopyWithFeedback } from "./useCopyWithFeedback";
+
+// One chip per environment the selected endpoint is bound to, with its deployment
+// status — the same shape ViewMCPProxy already derives for the chips shown next to
+// the endpoint selector, reused here instead of re-deriving a separate summary.
+export type MCPProxyEnvironmentChip = {
+  id: string;
+  label: string;
+  status?: "Deployed" | "Undeployed";
+};
 
 export type MCPProxyOverviewTabProps = {
   proxy: MCPProxy | null | undefined;
   config: MCPEndpointConfig | undefined;
-  // Environment bindings of the selected endpoint, used to summarise its deployment.
-  environments?: MCPEndpointEnvironment[];
+  envChips?: MCPProxyEnvironmentChip[];
   isLoading?: boolean;
 };
 
 export function MCPProxyOverviewTab({
   proxy,
   config,
-  environments = [],
+  envChips = [],
   isLoading = false,
 }: MCPProxyOverviewTabProps) {
+  const handleCopy = useCopyWithFeedback();
+
   if (isLoading) {
     return (
       <Stack spacing={2}>
@@ -65,21 +76,6 @@ export function MCPProxyOverviewTab({
     (policy) => policy.name === ACL_POLICY_NAME,
   );
 
-  // Per-environment deployment summary for the selected endpoint. The backend computes
-  // each binding's status from its gateway artifact's deployment records.
-  const deployedCount = environments.filter(
-    (env) => env.deploymentStatus === "Deployed",
-  ).length;
-  const isDeployed = environments.length > 0 && deployedCount === environments.length;
-  const deploymentLabel =
-    environments.length === 0
-      ? "No environments"
-      : deployedCount === environments.length
-        ? "Deployed"
-        : deployedCount === 0
-          ? "Undeployed"
-          : `Deployed in ${deployedCount} of ${environments.length}`;
-
   // Auth Type reflects the proxy's inbound security (the Security tab) — which
   // method clients must authenticate with — not the upstream auth used to reach
   // the backend.
@@ -87,28 +83,12 @@ export function MCPProxyOverviewTab({
     resolveAuthenticationType(config),
   );
 
+  const upstreamUrl = config?.upstream?.main?.url;
+
   return (
     <Stack spacing={3}>
       <Grid container spacing={2}>
-        {proxy.context && (
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-              <Stack spacing={0.5}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 500 }}
-                >
-                  Context
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                  {proxy.context}
-                </Typography>
-              </Stack>
-            </Card>
-          </Grid>
-        )}
-        {config?.upstream?.main?.url && (
+        {upstreamUrl && (
           <Grid size={{ xs: 12, sm: 6, md: 4 }}>
             <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
               <Stack spacing={0.5}>
@@ -119,12 +99,23 @@ export function MCPProxyOverviewTab({
                 >
                   Upstream URL
                 </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ fontFamily: "monospace", wordBreak: "break-all" }}
-                >
-                  {config.upstream.main.url}
-                </Typography>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontFamily: "monospace", wordBreak: "break-all", flex: 1 }}
+                  >
+                    {upstreamUrl}
+                  </Typography>
+                  <Tooltip title="Copy Upstream URL">
+                    <IconButton
+                      size="small"
+                      aria-label="Copy Upstream URL"
+                      onClick={() => handleCopy(upstreamUrl, "Upstream URL")}
+                    >
+                      <Copy size={14} />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
               </Stack>
             </Card>
           </Grid>
@@ -173,33 +164,23 @@ export function MCPProxyOverviewTab({
               >
                 Deployment
               </Typography>
-              <Chip
-                label={deploymentLabel}
-                size="small"
-                variant="outlined"
-                color={isDeployed ? "success" : "default"}
-                sx={{ width: "fit-content" }}
-              />
-            </Stack>
-          </Card>
-        </Grid>
-        <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-          <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-            <Stack spacing={0.5}>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 500 }}
-              >
-                In Catalog
-              </Typography>
-              <Chip
-                label={proxy.inCatalog ? "Yes" : "No"}
-                size="small"
-                color={proxy.inCatalog ? "success" : "default"}
-                variant="outlined"
-                sx={{ width: "fit-content" }}
-              />
+              {envChips.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No environments
+                </Typography>
+              ) : (
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {envChips.map((chip) => (
+                    <Chip
+                      key={chip.id}
+                      label={chip.status ? `${chip.label} · ${chip.status}` : chip.label}
+                      size="small"
+                      variant="outlined"
+                      color={chip.status === "Deployed" ? "success" : "default"}
+                    />
+                  ))}
+                </Stack>
+              )}
             </Stack>
           </Card>
         </Grid>
@@ -207,5 +188,3 @@ export function MCPProxyOverviewTab({
     </Stack>
   );
 }
-
-export default MCPProxyOverviewTab;

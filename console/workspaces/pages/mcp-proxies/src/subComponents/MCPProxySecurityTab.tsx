@@ -15,29 +15,53 @@
  * under the License.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCreateScope,
+  useListScopes,
+} from "@agent-management-platform/api-client";
 import type {
   APIKeyLocation,
   MCPEndpointConfig,
   MCPProxy,
+  MCPToolScopeBinding,
+  ScopeResponse,
 } from "@agent-management-platform/types";
 import {
   Alert,
+  Autocomplete,
   Button,
+  Chip,
+  CircularProgress,
   Collapse,
+  createFilterOptions,
   FormControl,
   FormLabel,
   Grid,
+  IconButton,
+  ListingTable,
   MenuItem,
   Select,
   Skeleton,
   Stack,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
 import {
+  HelpCircle,
+  Plus,
+  ShieldAlert,
+  Trash,
+  Wrench,
+} from "@wso2/oxygen-ui-icons-react";
+import {
   type AuthenticationType,
   getAuthenticationTypeLabel,
+  getCapabilityId,
+  isToolBlockedByAcl,
   resolveAuthenticationType,
 } from "./mcpEndpoints";
 
@@ -52,9 +76,38 @@ const AUTHENTICATION_TYPE_OPTIONS: AuthenticationType[] = [
   "identity",
 ];
 
+// A scope option in the per-tool scope Autocomplete. The synthetic "isNew"
+// entry stands in for "create this scope and add it" — it never reaches
+// row.scopes, so `id` only needs to be present to satisfy ScopeResponse.
+type ScopeOption = ScopeResponse & { isNew?: boolean };
+
+const NEW_SCOPE_OPTION_ID = "__new_scope__";
+const filterScopeOptions = createFilterOptions<ScopeOption>();
+
+// Under Agent Identity security, access can be wide open ("allowAll", the
+// default — any caller with a valid token can invoke any tool) or gated
+// per-tool by catalog scopes ("rbac"). There's no dedicated field for this on
+// MCPEndpointConfig — it's derived from whether toolScopeBindings is empty.
+type IdentityAccessMode = "allowAll" | "rbac";
+
+const ALLOW_ALL_TOOLTIP =
+  "Allow all lets any caller with a valid Agent Identity token invoke every tool.";
+const RBAC_TOOLTIP =
+  "Use RBAC gates each tool by the catalog scopes assigned to it — callers must present a token carrying every required scope.";
+
+// A local editable row for the identity-security tool-scope-binding table.
+// Keyed by a local id (not the tool name) since the same tool can appear in
+// more than one binding.
+type ToolScopeRow = {
+  id: number;
+  tool: string;
+  scopes: ScopeResponse[];
+};
+
 export type MCPProxySecurityTabProps = {
   config: MCPEndpointConfig | undefined;
   selectedEndpointId: string;
+  orgName: string | undefined;
   isLoading?: boolean;
   onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
@@ -63,6 +116,7 @@ export type MCPProxySecurityTabProps = {
 export function MCPProxySecurityTab({
   config,
   selectedEndpointId,
+  orgName,
   isLoading = false,
   onUpdate,
   isUpdating,
@@ -77,7 +131,7 @@ export function MCPProxySecurityTab({
   } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ keyValue?: string }>({});
 
-  const isDirty = useMemo(() => {
+  const authIsDirty = useMemo(() => {
     if (!config) return false;
     const savedType = resolveAuthenticationType(config);
     const savedKey = config.security?.apiKey?.key ?? "";
@@ -93,22 +147,198 @@ export function MCPProxySecurityTab({
     const nextType = resolveAuthenticationType(config);
     setAuthenticationType(nextType);
     setKeyValue(
-      config.security?.apiKey?.key ?? (nextType === "apiKey" ? "X-API-Key" : ""),
+      config.security?.apiKey?.key ??
+        (nextType === "apiKey" ? "X-API-Key" : ""),
     );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
   }, [config, selectedEndpointId]);
+
+  // --- Agent Identity: per-tool scope-binding (RBAC) state ---
+
+  const toolEntries = useMemo(() => {
+    const identifiers: string[] = [];
+    for (const raw of config?.capabilities?.tools ?? []) {
+      const identifier = getCapabilityId("tool", raw);
+      if (identifier) identifiers.push(identifier);
+    }
+    return identifiers;
+  }, [config?.capabilities?.tools]);
+
+  // Computed once per tool list / ACL policy change rather than per row and per
+  // dropdown option on every render — isToolBlockedByAcl re-parses the ACL
+  // policy's params each call, and every row's Select renders one option per tool.
+  const blockedToolIds = useMemo(
+    () =>
+      new Set(
+        toolEntries.filter((identifier) =>
+          isToolBlockedByAcl(config, identifier),
+        ),
+      ),
+    [toolEntries, config],
+  );
+
+  const { data: scopesData } = useListScopes(
+    { orgName },
+    { enabled: authenticationType === "identity" },
+  );
+  const catalogScopes: ScopeResponse[] = useMemo(
+    () => scopesData?.scopes ?? [],
+    [scopesData],
+  );
+  const createScope = useCreateScope();
+
+  // Read via a ref inside the seed effect below rather than depending on
+  // catalogScopes directly — the catalog refetches whenever a scope is
+  // created inline (see handleToolScopeRowScopesChange), and re-seeding on
+  // every refetch would blow away rows/edits the user hasn't saved yet.
+  const catalogScopesRef = useRef<ScopeResponse[]>([]);
+  useEffect(() => {
+    catalogScopesRef.current = catalogScopes;
+  }, [catalogScopes]);
+
+  // One row per binding, not one row per tool: the same tool can be bound
+  // more than once, so rows are keyed by a local id rather than the tool
+  // name. Starts empty — rows only come from saved bindings or "Add Tool",
+  // never auto-populated from the environment's discovered tools.
+  const [toolScopeRows, setToolScopeRows] = useState<ToolScopeRow[]>([]);
+  const lastSavedToolScopeRowsRef = useRef<ToolScopeRow[]>([]);
+  const nextRowIdRef = useRef(0);
+  const [identityMode, setIdentityMode] =
+    useState<IdentityAccessMode>("allowAll");
+  const lastSavedIdentityModeRef = useRef<IdentityAccessMode>("allowAll");
+  const [toolScopesError, setToolScopesError] = useState<string | undefined>();
+  // Tracks which row is currently creating a new catalog scope inline, so its
+  // Autocomplete alone shows a loading spinner while the create request is in flight.
+  const [creatingScopeRowId, setCreatingScopeRowId] = useState<number | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!selectedEndpointId) return;
+    // Bindings for scopes no longer in the catalog still display (by name)
+    // rather than silently dropping, so a removed/renamed scope stays visible
+    // until the binding itself is edited.
+    const rows: ToolScopeRow[] = (config?.toolScopeBindings ?? []).map(
+      (binding) => ({
+        id: nextRowIdRef.current++,
+        tool: binding.tool,
+        scopes: binding.scopes.map(
+          (name) =>
+            catalogScopesRef.current.find((s) => s.name === name) ?? {
+              id: name,
+              name,
+            },
+        ),
+      }),
+    );
+    const derivedMode: IdentityAccessMode =
+      rows.length > 0 ? "rbac" : "allowAll";
+    setToolScopeRows(rows);
+    lastSavedToolScopeRowsRef.current = rows;
+    setIdentityMode(derivedMode);
+    lastSavedIdentityModeRef.current = derivedMode;
+    setToolScopesError(undefined);
+  }, [config, selectedEndpointId]);
+
+  const serializeToolScopeRows = (rows: ToolScopeRow[]) =>
+    JSON.stringify(
+      rows.map((row) => ({
+        tool: row.tool,
+        scopes: [...row.scopes.map((s) => s.name)].sort(),
+      })),
+    );
+
+  const toolScopesDirty = useMemo(() => {
+    if (identityMode !== lastSavedIdentityModeRef.current) return true;
+    if (identityMode === "allowAll") return false;
+    return (
+      serializeToolScopeRows(toolScopeRows) !==
+      serializeToolScopeRows(lastSavedToolScopeRowsRef.current)
+    );
+  }, [identityMode, toolScopeRows]);
+
+  const handleAddToolScopeRow = useCallback(() => {
+    setToolScopeRows((prev) => [
+      ...prev,
+      { id: nextRowIdRef.current++, tool: "", scopes: [] },
+    ]);
+  }, []);
+
+  const handleRemoveToolScopeRow = useCallback((rowId: number) => {
+    setToolScopeRows((prev) => prev.filter((row) => row.id !== rowId));
+  }, []);
+
+  const handleToolScopeRowToolChange = useCallback(
+    (rowId: number, tool: string) => {
+      setToolScopeRows((prev) =>
+        prev.map((row) => (row.id === rowId ? { ...row, tool } : row)),
+      );
+    },
+    [],
+  );
+
+  const setRowScopes = useCallback((rowId: number, scopes: ScopeResponse[]) => {
+    setToolScopeRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, scopes } : row)),
+    );
+  }, []);
+
+  // Selecting the synthetic "+ Add Scope" option creates it in the catalog
+  // first, then adds the real scope to the row once creation succeeds — the
+  // placeholder never lands in row.scopes, so a failed create just leaves the
+  // row as it was (the error itself surfaces via useCreateScope's snackbar).
+  const handleToolScopeRowScopesChange = useCallback(
+    (rowId: number, options: ScopeOption[]) => {
+      const newOption = options.find((option) => option.isNew);
+      if (!newOption) {
+        setRowScopes(rowId, options);
+        return;
+      }
+      const committed = options.filter((option) => option !== newOption);
+      setRowScopes(rowId, committed);
+      setCreatingScopeRowId(rowId);
+      void createScope
+        .mutateAsync({ params: { orgName }, body: { name: newOption.name } })
+        .then((created) => {
+          setToolScopeRows((prev) =>
+            prev.map((row) =>
+              row.id === rowId
+                ? { ...row, scopes: [...row.scopes, created] }
+                : row,
+            ),
+          );
+        })
+        .catch(() => {
+          // Error already shown via useCreateScope's snackbar; nothing to roll back
+          // since the placeholder was never committed to row.scopes.
+        })
+        .finally(() => {
+          setCreatingScopeRowId((current) =>
+            current === rowId ? null : current,
+          );
+        });
+    },
+    [orgName, createScope, setRowScopes],
+  );
+
+  const isDirty = authIsDirty || toolScopesDirty;
 
   const handleDiscard = useCallback(() => {
     if (!config) return;
     const nextType = resolveAuthenticationType(config);
     setAuthenticationType(nextType);
     setKeyValue(
-      config.security?.apiKey?.key ?? (nextType === "apiKey" ? "X-API-Key" : ""),
+      config.security?.apiKey?.key ??
+        (nextType === "apiKey" ? "X-API-Key" : ""),
     );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
     setStatus(null);
+
+    setToolScopeRows(lastSavedToolScopeRowsRef.current);
+    setIdentityMode(lastSavedIdentityModeRef.current);
+    setToolScopesError(undefined);
   }, [config]);
 
   const handleSave = useCallback(async () => {
@@ -122,8 +352,31 @@ export function MCPProxySecurityTab({
     }
     setFieldErrors({});
 
-    const nextKey = keyValue.trim();
-    const nextIn = keyIn;
+    if (
+      authenticationType === "identity" &&
+      identityMode === "rbac" &&
+      toolScopeRows.some((row) => !row.tool || row.scopes.length === 0)
+    ) {
+      setToolScopesError(
+        "Every row needs a tool and at least one scope before saving.",
+      );
+      return;
+    }
+    setToolScopesError(undefined);
+
+    // Scope bindings only apply under Agent Identity security — switching to
+    // API Key (or no) authentication clears them rather than resending
+    // whatever was last mirrored locally from identityMode/toolScopeRows.
+    const savedIdentityMode: IdentityAccessMode =
+      authenticationType === "identity" ? identityMode : "allowAll";
+    const savedToolScopeRows =
+      savedIdentityMode === "rbac" ? toolScopeRows : [];
+    const nextBindings: MCPToolScopeBinding[] = savedToolScopeRows.map(
+      (row) => ({
+        tool: row.tool,
+        scopes: row.scopes.map((s) => s.name),
+      }),
+    );
 
     try {
       await onUpdate({
@@ -131,15 +384,17 @@ export function MCPProxySecurityTab({
           enabled: config.security?.enabled ?? true,
           apiKey: {
             enabled: authenticationType === "apiKey",
-            key: authenticationType === "apiKey" ? nextKey : "",
-            in: nextIn,
+            key: authenticationType === "apiKey" ? keyValue.trim() : "",
+            in: keyIn,
           },
           identity: {
             enabled: authenticationType === "identity",
           },
         },
+        toolScopeBindings: nextBindings,
       });
-      setFieldErrors({});
+      lastSavedToolScopeRowsRef.current = savedToolScopeRows;
+      lastSavedIdentityModeRef.current = savedIdentityMode;
       setStatus({
         message: "Updated security settings.",
         severity: "success",
@@ -150,9 +405,18 @@ export function MCPProxySecurityTab({
         severity: "error",
       });
     }
-  }, [config, authenticationType, keyValue, keyIn, onUpdate]);
+  }, [
+    config,
+    authenticationType,
+    keyValue,
+    keyIn,
+    identityMode,
+    toolScopeRows,
+    onUpdate,
+  ]);
 
   const isDisabled = isLoading || !config;
+  const noToolsForRbac = !isLoading && config && toolEntries.length === 0;
 
   if (isLoading) {
     return (
@@ -203,10 +467,266 @@ export function MCPProxySecurityTab({
       </Grid>
 
       {authenticationType === "identity" && (
-        <Alert severity="info">
-          Scopes for individual tools can be configured in the Access Control
-          tab.
-        </Alert>
+        <Stack spacing={2}>
+          <Stack direction="row" alignItems="center" spacing={1.5}>
+            <Typography variant="body1">Mode</Typography>
+            <ToggleButtonGroup
+              size="small"
+              value={identityMode}
+              exclusive
+              disabled={isDisabled}
+              onChange={(_e, value: IdentityAccessMode | null) =>
+                value && setIdentityMode(value)
+              }
+            >
+              <ToggleButton
+                color="primary"
+                value="allowAll"
+                sx={{ textTransform: "none" }}
+              >
+                Allow All
+                <Tooltip arrow title={ALLOW_ALL_TOOLTIP}>
+                  <IconButton size="small">
+                    <HelpCircle size={16} />
+                  </IconButton>
+                </Tooltip>
+              </ToggleButton>
+              <ToggleButton
+                color="primary"
+                value="rbac"
+                sx={{ textTransform: "none" }}
+              >
+                RBAC
+                <Tooltip arrow title={RBAC_TOOLTIP}>
+                  <IconButton size="small">
+                    <HelpCircle size={16} />
+                  </IconButton>
+                </Tooltip>
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Stack>
+
+          {identityMode === "allowAll" && (
+            <Alert severity="warning">
+              Any caller with a valid Agent Identity token can invoke every
+              tool.
+            </Alert>
+          )}
+
+          {identityMode === "rbac" &&
+            (noToolsForRbac ? (
+              <Stack
+                alignItems="center"
+                justifyContent="center"
+                spacing={1}
+                sx={{ minHeight: 200, textAlign: "center" }}
+              >
+                <Typography variant="subtitle1" fontWeight={600}>
+                  No Tools Available
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  This MCP proxy has no tools. Scope bindings require at least
+                  one tool.
+                </Typography>
+              </Stack>
+            ) : (
+              <ListingTable.Container>
+                <ListingTable.Toolbar
+                  actions={
+                    <Button
+                      variant="outlined"
+                      startIcon={<Plus size={16} />}
+                      onClick={handleAddToolScopeRow}
+                    >
+                      Add Tool
+                    </Button>
+                  }
+                />
+                {toolScopeRows.length === 0 ? (
+                  <ListingTable.EmptyState
+                    illustration={<Wrench size={64} />}
+                    title="No tool scope bindings yet"
+                    description='Click "Add Tool" to gate a tool with catalog scopes.'
+                  />
+                ) : (
+                  <ListingTable density="compact">
+                    <ListingTable.Head>
+                      <ListingTable.Row>
+                        <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
+                        <ListingTable.Cell>Scopes</ListingTable.Cell>
+                        <ListingTable.Cell align="center" width="60px" />
+                      </ListingTable.Row>
+                    </ListingTable.Head>
+                    <ListingTable.Body>
+                      {toolScopeRows.map((row) => (
+                        <ListingTable.Row key={row.id}>
+                          <ListingTable.Cell>
+                            <Select
+                              size="small"
+                              displayEmpty
+                              fullWidth
+                              value={row.tool}
+                              onChange={(e) =>
+                                handleToolScopeRowToolChange(
+                                  row.id,
+                                  e.target.value as string,
+                                )
+                              }
+                              renderValue={(value) => {
+                                const identifier = value as string;
+                                if (!identifier) return "Select a tool";
+                                return (
+                                  <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    sx={{ width: "100%" }}
+                                    spacing={1}
+                                  >
+                                    <span>{identifier}</span>
+                                    {blockedToolIds.has(identifier) && (
+                                      <Tooltip title="Blocked by Access Control">
+                                        <ShieldAlert size={14} />
+                                      </Tooltip>
+                                    )}
+                                  </Stack>
+                                );
+                              }}
+                              sx={{ minWidth: 200 }}
+                            >
+                              {toolEntries.map((identifier) => (
+                                <MenuItem key={identifier} value={identifier}>
+                                  <Stack
+                                    direction="row"
+                                    alignItems="center"
+                                    spacing={1}
+                                    sx={{ width: "100%" }}
+                                  >
+                                    <span>{identifier}</span>
+                                    {blockedToolIds.has(identifier) && (
+                                      <Tooltip title="Blocked by Access Control">
+                                        <ShieldAlert size={14} />
+                                      </Tooltip>
+                                    )}
+                                  </Stack>
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </ListingTable.Cell>
+                          <ListingTable.Cell>
+                            <Autocomplete
+                              multiple
+                              size="small"
+                              disableCloseOnSelect
+                              options={catalogScopes}
+                              value={row.scopes}
+                              loading={creatingScopeRowId === row.id}
+                              disabled={creatingScopeRowId === row.id}
+                              onChange={(_e, value) =>
+                                handleToolScopeRowScopesChange(
+                                  row.id,
+                                  value as ScopeOption[],
+                                )
+                              }
+                              filterOptions={(options, params) => {
+                                const filtered = filterScopeOptions(
+                                  options as ScopeOption[],
+                                  params,
+                                );
+                                const inputValue = params.inputValue.trim();
+                                const exists = options.some(
+                                  (option) => option.name === inputValue,
+                                );
+                                if (inputValue.length > 0 && !exists) {
+                                  filtered.push({
+                                    id: NEW_SCOPE_OPTION_ID,
+                                    name: inputValue,
+                                    isNew: true,
+                                  });
+                                }
+                                return filtered;
+                              }}
+                              getOptionLabel={(option) =>
+                                (option as ScopeOption).name
+                              }
+                              isOptionEqualToValue={(option, value) =>
+                                (option as ScopeOption).name ===
+                                (value as ScopeOption).name
+                              }
+                              renderOption={(props, option) => {
+                                const scopeOption = option as ScopeOption;
+                                return (
+                                  <li {...props} key={scopeOption.id}>
+                                    {scopeOption.isNew
+                                      ? `+ Add Scope "${scopeOption.name}"`
+                                      : scopeOption.name}
+                                  </li>
+                                );
+                              }}
+                              renderTags={(value, getTagProps) =>
+                                value.map((option, index) => (
+                                  <Chip
+                                    {...getTagProps({ index })}
+                                    key={option.name}
+                                    label={option.name}
+                                    size="small"
+                                  />
+                                ))
+                              }
+                              renderInput={(params) => (
+                                <TextField
+                                  {...params}
+                                  placeholder="Add scopes..."
+                                  slotProps={{
+                                    input: {
+                                      ...params.InputProps,
+                                      endAdornment: (
+                                        <>
+                                          {creatingScopeRowId === row.id ? (
+                                            <CircularProgress
+                                              color="inherit"
+                                              size={16}
+                                            />
+                                          ) : null}
+                                          {params.InputProps.endAdornment}
+                                        </>
+                                      ),
+                                    },
+                                  }}
+                                />
+                              )}
+                              noOptionsText="No scopes in the catalog"
+                              sx={{ minWidth: 280 }}
+                            />
+                          </ListingTable.Cell>
+                          <ListingTable.Cell align="center">
+                            <Tooltip title="Remove binding">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleRemoveToolScopeRow(row.id)}
+                              >
+                                <Trash size={16} />
+                              </IconButton>
+                            </Tooltip>
+                          </ListingTable.Cell>
+                        </ListingTable.Row>
+                      ))}
+                    </ListingTable.Body>
+                  </ListingTable>
+                )}
+              </ListingTable.Container>
+            ))}
+          <Collapse in={!!toolScopesError} timeout={300}>
+            {toolScopesError && (
+              <Alert
+                severity="error"
+                onClose={() => setToolScopesError(undefined)}
+                sx={{ width: "100%", maxWidth: 480 }}
+              >
+                {toolScopesError}
+              </Alert>
+            )}
+          </Collapse>
+        </Stack>
       )}
 
       {authenticationType === "apiKey" && (
@@ -288,5 +808,3 @@ export function MCPProxySecurityTab({
     </Stack>
   );
 }
-
-export default MCPProxySecurityTab;
