@@ -32,6 +32,17 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
+// stubInfraManager overrides only ListOrgEnvironments; any other call panics
+// via the nil embedded interface, which is exactly what a unit test wants.
+type stubInfraManager struct {
+	InfraResourceManager
+	listOrgEnvs func(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error)
+}
+
+func (s stubInfraManager) ListOrgEnvironments(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
+	return s.listOrgEnvs(ctx, ouID)
+}
+
 // scopeTestProxy builds an endpoint-era proxy: capabilities live on the endpoint's
 // MCPEndpointConfig (migration 032), not on the parent proxy config.
 func scopeTestProxy(handle string, tools ...string) *models.MCPProxy {
@@ -128,4 +139,67 @@ func TestMCPProxyScopeDelete_MissingIsNotFound(t *testing.T) {
 	svc := newScopeSvcForTest(scopeRepo, scopeTestProxy("gh-proxy"))
 	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
 	assert.ErrorIs(t, err, utils.ErrScopeNotFound)
+}
+
+func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {
+	envUUID := uuid.MustParse("3fa85f64-5717-4562-b3fc-2c963f66afa6")
+	artifactDeployed, artifactUndeployed := uuid.New(), uuid.New()
+	on := true
+	identityEndpoint := func(artifact uuid.UUID, enabled bool) models.MCPProxyEndpoint {
+		ep := models.MCPProxyEndpoint{
+			UUID:   uuid.New(),
+			Handle: "primary",
+			Environments: []models.MCPProxyEndpointEnvironment{
+				{EnvironmentUUID: envUUID, ArtifactUUID: artifact},
+			},
+		}
+		if enabled {
+			ep.Configuration = models.MCPEndpointConfig{
+				Security: &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}},
+			}
+		}
+		return ep
+	}
+	deployed := &models.MCPProxy{
+		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "gh-proxy", Name: "GitHub"},
+		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(artifactDeployed, true)},
+	}
+	off := &models.MCPProxy{
+		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "plain", Name: "Plain"},
+		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(uuid.New(), false)},
+	}
+	undeployed := &models.MCPProxy{
+		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "idle", Name: "Idle"},
+		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(artifactUndeployed, true)},
+	}
+
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		ListFunc: func(ctx context.Context, orgUUID string, limit, offset int) ([]*models.MCPProxy, error) {
+			if offset > 0 {
+				return nil, nil
+			}
+			return []*models.MCPProxy{deployed, off, undeployed}, nil
+		},
+	}
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		ListByProxyUUIDsFunc: func(ctx context.Context, ids []uuid.UUID) ([]models.MCPProxyScope, error) {
+			assert.Equal(t, []uuid.UUID{deployed.UUID}, ids)
+			return []models.MCPProxyScope{{MCPProxyUUID: deployed.UUID, Action: "read", Description: "d"}}, nil
+		},
+	}
+	deploymentRepo := &repomocks.DeploymentRepositoryMock{
+		GetDeployedGatewaysByProviderFunc: func(artifactUUID uuid.UUID, orgUUID string) ([]string, error) {
+			if artifactUUID == artifactDeployed {
+				return []string{"gw-1"}, nil
+			}
+			return nil, nil
+		},
+	}
+	infra := stubInfraManager{listOrgEnvs: func(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
+		return []*models.EnvironmentResponse{{Name: "dev", UUID: envUUID.String()}}, nil
+	}}
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, deploymentRepo, infra, nil, nil, slog.Default())
+	entries, err := svc.ListEnvironmentScopes(context.Background(), "org-uuid", "dev")
+	assert.NoError(t, err)
+	assert.Equal(t, []models.EnvironmentScopeEntry{{Scope: "gh-proxy:read", Description: "d", MCPProxyID: "gh-proxy", MCPProxyName: "GitHub"}}, entries)
 }

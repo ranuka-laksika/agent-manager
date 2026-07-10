@@ -1379,6 +1379,21 @@ type AgentIdentityRoleRequest struct {
 	Scopes *[]string `json:"scopes,omitempty"`
 }
 
+// AgentIdentityScopeEntry defines model for AgentIdentityScopeEntry.
+type AgentIdentityScopeEntry struct {
+	Description *string `json:"description,omitempty"`
+
+	// McpProxyId Handle of the owning MCP proxy.
+	McpProxyId   string  `json:"mcpProxyId"`
+	McpProxyName *string `json:"mcpProxyName,omitempty"`
+	Scope        string  `json:"scope"`
+}
+
+// AgentIdentityScopeListResponse defines model for AgentIdentityScopeListResponse.
+type AgentIdentityScopeListResponse struct {
+	Scopes []AgentIdentityScopeEntry `json:"scopes"`
+}
+
 // AgentKindConfigSchemaItem defines model for AgentKindConfigSchemaItem.
 type AgentKindConfigSchemaItem struct {
 	// DefaultValue Default value if not provided by the user

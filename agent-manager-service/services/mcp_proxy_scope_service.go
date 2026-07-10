@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
@@ -268,9 +269,90 @@ func (s *mcpProxyScopeService) List(ctx context.Context, ouID, proxyHandle strin
 }
 
 func (s *mcpProxyScopeService) ListEnvironmentScopes(ctx context.Context, ouID, envName string) ([]models.EnvironmentScopeEntry, error) {
-	_ = ctx
-	_ = ouID
-	_ = envName
-	// Task 6 implements the env-filtered scope aggregate.
-	return []models.EnvironmentScopeEntry{}, nil
+	envs, err := s.infraManager.ListOrgEnvironments(ctx, ouID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list org environments: %w", err)
+	}
+
+	var envUUID uuid.UUID
+	found := false
+	for _, env := range envs {
+		if env.Name == envName {
+			envUUID = uuid.MustParse(env.UUID)
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("%w: %s", utils.ErrEnvironmentNotFound, envName)
+	}
+
+	const pageSize = 100
+	proxyByUUID := map[uuid.UUID]*models.MCPProxy{}
+	var ordered []uuid.UUID
+	for offset := 0; ; offset += pageSize {
+		proxies, err := s.proxyRepo.List(ctx, ouID, pageSize, offset)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list mcp proxies: %w", err)
+		}
+		if len(proxies) == 0 {
+			break
+		}
+
+		for _, proxy := range proxies {
+			endpoint, ee := resolveMCPEndpointForEnv(proxy, envUUID.String())
+			if endpoint == nil {
+				continue
+			}
+			if endpoint.Configuration.Security == nil || !isBoolTrue(endpoint.Configuration.Security.Enabled) ||
+				endpoint.Configuration.Security.Identity == nil || !isBoolTrue(endpoint.Configuration.Security.Identity.Enabled) {
+				continue
+			}
+			if ee.ArtifactUUID == uuid.Nil {
+				continue
+			}
+			gateways, err := s.deploymentRepo.GetDeployedGatewaysByProvider(ee.ArtifactUUID, ouID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to check deployed gateways for artifact %s: %w", ee.ArtifactUUID, err)
+			}
+			if len(gateways) == 0 {
+				continue
+			}
+			if _, ok := proxyByUUID[proxy.UUID]; !ok {
+				proxyByUUID[proxy.UUID] = proxy
+				ordered = append(ordered, proxy.UUID)
+			}
+		}
+
+		if len(proxies) < pageSize {
+			break
+		}
+	}
+
+	if len(ordered) == 0 {
+		return []models.EnvironmentScopeEntry{}, nil
+	}
+
+	scopes, err := s.scopeRepo.ListByProxyUUIDs(ctx, ordered)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list mcp proxy scopes: %w", err)
+	}
+
+	entries := make([]models.EnvironmentScopeEntry, 0, len(scopes))
+	for _, sc := range scopes {
+		proxy, ok := proxyByUUID[sc.MCPProxyUUID]
+		if !ok {
+			continue
+		}
+		handle := proxyHandleOf(proxy)
+		entries = append(entries, models.EnvironmentScopeEntry{
+			Scope:        sc.ScopeString(handle),
+			Description:  sc.Description,
+			MCPProxyID:   handle,
+			MCPProxyName: proxy.Artifact.Name,
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Scope < entries[j].Scope })
+	return entries, nil
 }

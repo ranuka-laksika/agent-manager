@@ -10576,6 +10576,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/environments/{envName}/agent-identities/scopes:
+    get:
+      summary: List grantable agent-identity scopes for an environment
+      description: Aggregates scopes from MCP proxies that are deployed to this environment with identity security enabled. Read-only; powers role building.
+      operationId: listAgentIdentityScopes
+      tags: [AgentIdentities]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: envName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Grantable scopes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityScopeListResponse"
+        "404":
+          description: Environment not found
+
 components:
   parameters:
     AgentIdentityOrgName:
@@ -10812,6 +10839,28 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AgentIdentityAgentResponse"
+    AgentIdentityScopeEntry:
+      type: object
+      required: [scope, mcpProxyId]
+      properties:
+        scope:
+          type: string
+          example: "gh-proxy:read"
+        description:
+          type: string
+        mcpProxyId:
+          type: string
+          description: Handle of the owning MCP proxy.
+        mcpProxyName:
+          type: string
+    AgentIdentityScopeListResponse:
+      type: object
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentIdentityScopeEntry"
     ConfigResponse:
       type: object
       required:

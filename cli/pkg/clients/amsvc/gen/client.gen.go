@@ -252,6 +252,9 @@ type ClientInterface interface {
 
 	RemoveAgentIdentityRoleAssignees(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentIdentityScopes request
+	ListAgentIdentityScopes(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEnvironmentIdentityProviders request
 	ListEnvironmentIdentityProviders(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -1584,6 +1587,18 @@ func (c *Client) RemoveAgentIdentityRoleAssigneesWithBody(ctx context.Context, o
 
 func (c *Client) RemoveAgentIdentityRoleAssignees(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRemoveAgentIdentityRoleAssigneesRequest(c.Server, orgName, envName, roleID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAgentIdentityScopes(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentIdentityScopesRequest(c.Server, orgName, envName)
 	if err != nil {
 		return nil, err
 	}
@@ -6695,6 +6710,47 @@ func NewRemoveAgentIdentityRoleAssigneesRequestWithBody(server string, orgName A
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentIdentityScopesRequest generates requests for ListAgentIdentityScopes
+func NewListAgentIdentityScopesRequest(server string, orgName string, envName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/environments/%s/agent-identities/scopes", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -16729,6 +16785,9 @@ type ClientWithResponsesInterface interface {
 
 	RemoveAgentIdentityRoleAssigneesWithResponse(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*RemoveAgentIdentityRoleAssigneesResp, error)
 
+	// ListAgentIdentityScopesWithResponse request
+	ListAgentIdentityScopesWithResponse(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*ListAgentIdentityScopesResp, error)
+
 	// ListEnvironmentIdentityProvidersWithResponse request
 	ListEnvironmentIdentityProvidersWithResponse(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*ListEnvironmentIdentityProvidersResp, error)
 
@@ -18424,6 +18483,28 @@ func (r RemoveAgentIdentityRoleAssigneesResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RemoveAgentIdentityRoleAssigneesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAgentIdentityScopesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentIdentityScopeListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentIdentityScopesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentIdentityScopesResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -23188,6 +23269,15 @@ func (c *ClientWithResponses) RemoveAgentIdentityRoleAssigneesWithResponse(ctx c
 	return ParseRemoveAgentIdentityRoleAssigneesResp(rsp)
 }
 
+// ListAgentIdentityScopesWithResponse request returning *ListAgentIdentityScopesResp
+func (c *ClientWithResponses) ListAgentIdentityScopesWithResponse(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*ListAgentIdentityScopesResp, error) {
+	rsp, err := c.ListAgentIdentityScopes(ctx, orgName, envName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentIdentityScopesResp(rsp)
+}
+
 // ListEnvironmentIdentityProvidersWithResponse request returning *ListEnvironmentIdentityProvidersResp
 func (c *ClientWithResponses) ListEnvironmentIdentityProvidersWithResponse(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*ListEnvironmentIdentityProvidersResp, error) {
 	rsp, err := c.ListEnvironmentIdentityProviders(ctx, orgName, environmentId, reqEditors...)
@@ -27032,6 +27122,32 @@ func ParseRemoveAgentIdentityRoleAssigneesResp(rsp *http.Response) (*RemoveAgent
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentIdentityScopesResp parses an HTTP response from a ListAgentIdentityScopesWithResponse call
+func ParseListAgentIdentityScopesResp(rsp *http.Response) (*ListAgentIdentityScopesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentIdentityScopesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentIdentityScopeListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 

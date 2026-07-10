@@ -27,4 +27,5 @@ func registerMCPProxyScopeRoutes(rr *middleware.RouteRegistrar, ctrl controllers
 	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/mcp-proxies/{proxyId}/scopes", rbac.ScopeCreate, ctrl.CreateMCPProxyScope)
 	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeUpdate, ctrl.UpdateMCPProxyScope)
 	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeDelete, ctrl.DeleteMCPProxyScope)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/scopes", rbac.AgentIdentityRead, ctrl.ListAgentIdentityScopes)
 }
