@@ -65,35 +65,19 @@ Prefix the cluster creation command in Step 1 with `K3D_FIX_DNS=0`.
 
 ### Required Ports
 
-The following host ports must be free before installation:
-
-**Agent Manager**
-
-| Port | Purpose |
-|------|---------|
-| 3000 | Console UI |
-| 9000 | API |
-| 9243 | Internal API |
-| 9098 | Traces Observer |
-| 8084 | AI Gateway (HTTP) |
-| 8243 | AI Gateway (HTTPS) |
-
-**OpenChoreo**
+The following host ports must be free before installation. The Agent Manager services do not need host ports of their own: the Console and API are served through the Control Plane gateway (8080), the Traces Observer through the Observability Plane gateway (11080), and trace ingestion through the Data Plane gateway (19080).
 
 | Port | Purpose |
 |------|---------|
 | 6550 | Kubernetes API |
-| 8080 | Control Plane (HTTP) |
-| 8443 | Control Plane (HTTPS) |
-| 19080 | Data Plane Gateway (HTTP) |
+| 8080 | Control Plane Gateway (HTTP) — Console, API, Thunder, OpenChoreo API, external AI gateway control plane |
+| 8443 | Control Plane Gateway (HTTPS) |
+| 19080 | Data Plane Gateway (HTTP) — deployed agents, OTLP `/otel` ingest |
 | 19443 | Data Plane Gateway (HTTPS) |
 | 10082 | Container Registry (Workflow Plane) |
-| 11080 | Observer API |
+| 11080 | Observability Plane Gateway (HTTP) — Traces Observer, Observer API |
 | 11082 | OpenSearch API |
 | 11085 | OpenSearch HTTPS |
-| 21893 | OTel Collector |
-| 22893 | Observability Gateway (HTTP) |
-| 22894 | Observability Gateway (HTTPS) |
 
 ---
 
@@ -256,14 +240,18 @@ export THUNDER_NS="amp-thunder"
 export OPENCHOREO_INTERNAL_URL="http://openchoreo-api.openchoreo-control-plane.svc.cluster.local:8080"
 export THUNDER_PUBLIC_URL="http://thunder.amp.localhost:8080"
 export THUNDER_INTERNAL_URL="http://amp-thunder-extension-service.${THUNDER_NS}.svc.cluster.local:8090"
-export CONSOLE_PUBLIC_URL="http://localhost:3000"
-export API_PUBLIC_URL="http://localhost:9000"
-export OBS_API_PUBLIC_URL="http://localhost:9098"
-export INSTRUMENTATION_URL="http://localhost:22893/otel"
+export CONSOLE_PUBLIC_URL="http://console.amp.localhost:8080"
+export API_PUBLIC_URL="http://api.amp.localhost:8080"
+export OBS_API_PUBLIC_URL="http://traces.amp.localhost:11080"
+# Bare hostnames (no scheme/port) — used as the HTTPRoute hostnames on the plane gateways
+export CONSOLE_PUBLIC_HOST="console.amp.localhost"
+export API_PUBLIC_HOST="api.amp.localhost"
+export OBS_API_PUBLIC_HOST="traces.amp.localhost"
+export INSTRUMENTATION_URL="http://default-default.gateway.localhost:19080/otel"
 ```
 
 :::info
-In k3d, Thunder is accessed via the kgateway on port 8080 using the hostname `thunder.amp.localhost`. This matches the Thunder chart defaults and the Control Plane / Observability Plane OIDC configuration. No port-forwarding is needed.
+In k3d, every management endpoint is accessed through a plane gateway using a hostname: Thunder, the Console, and the API via the Control Plane kgateway on port 8080 (`thunder.amp.localhost`, `console.amp.localhost`, `api.amp.localhost`), and the Traces Observer via the Observability Plane kgateway on port 11080 (`traces.amp.localhost`). These match the chart defaults and the Control Plane / Observability Plane OIDC configuration. No port-forwarding is needed; `*.localhost` names resolve to the loopback address in browsers and curl.
 :::
 
 ### Step 6: Install Thunder Extension (Identity Provider)
@@ -671,19 +659,20 @@ helm list -A | grep -E 'openchoreo|amp|gateway'
 
 | Service | URL |
 |---------|-----|
-| **Agent Manager Console** | [http://localhost:3000](http://localhost:3000) |
-| **Agent Manager API** | [http://localhost:9000](http://localhost:9000) |
-| **API Platform Gateway (HTTP)** | http://localhost:22893/otel |
-| **API Platform Gateway (HTTPS)** | https://localhost:22894/otel |
+| **Agent Manager Console** | [http://console.amp.localhost:8080](http://console.amp.localhost:8080) |
+| **Agent Manager API** | [http://api.amp.localhost:8080](http://api.amp.localhost:8080) |
+| **Traces Observer** | [http://traces.amp.localhost:11080](http://traces.amp.localhost:11080) |
+| **OTLP trace ingest (HTTP)** | http://default-default.gateway.localhost:19080/otel |
+| **OTLP trace ingest (HTTPS)** | https://default-default.gateway.localhost:19443/otel |
 
 **Default credentials:** `admin` / `admin`
 
 ### Self-Signed Certificate for OTEL HTTPS
 
-If your OTEL exporters encounter certificate errors on the HTTPS endpoint:
+If your OTEL exporters encounter certificate errors on the HTTPS ingest endpoint (the Data Plane gateway serves a self-signed certificate by default):
 
 ```bash
-kubectl get secret api-platform-default-default-gateway-controller-tls \
+kubectl get secret gateway-tls \
   -n openchoreo-data-plane \
   -o jsonpath='{.data.ca\.crt}' | base64 --decode > ca.crt
 

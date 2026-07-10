@@ -28,7 +28,7 @@ amctl login [flags]
 
 ```bash
 # Interactive browser login against a local install
-amctl login --url http://localhost:9000
+amctl login --url http://api.amp.localhost:8080
 
 # Name the instance so it can be switched to later
 amctl login --url https://amp.dev.example.com --name dev
@@ -44,7 +44,7 @@ amctl login \
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `--url` | string | _required_ | Agent Manager instance URL (for example `http://localhost:9000`). |
+| `--url` | string | _required_ | Agent Manager instance URL (for example `http://api.amp.localhost:8080`). |
 | `--name` | string | `default` | Local name for the instance. Use to distinguish multiple instances. |
 | `--client-id` | string | `amctl` | OAuth client ID. Defaults to `amctl` for the interactive browser flow. |
 | `--client-secret` | string | (none) | OAuth client secret. When set, uses the client-credentials grant instead of the browser flow. |

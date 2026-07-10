@@ -633,7 +633,7 @@ main() {
     --set "configuration.consent.database.type=sqlite"
     --set "configuration.cache.disabled=false"
     # CORS: allow the platform Thunder origin so its console can reach env-Thunder APIs.
-    --set "configuration.cors.allowedOrigins={http://localhost:3000,${pt_issuer}}"
+    --set "configuration.cors.allowedOrigins={http://localhost:3000,http://console.amp.localhost:8080,${pt_issuer}}"
     --set "persistence.enabled=true"
     --set "persistence.size=${persistence_size}"
     # Native ThunderID superadmin (distinct from the AMP product's own admin user on

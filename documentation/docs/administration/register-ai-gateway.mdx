@@ -18,11 +18,17 @@ Before registering a gateway, ensure you have:
   - **Virtual Machine**: cURL, unzip, and a Docker-compatible container runtime (Docker Desktop, Rancher Desktop, Colima, or Docker Engine + Compose plugin)
   - **Kubernetes**: cURL, unzip, Kubernetes 1.32+, Helm 3.18+
 
+:::note
+
+The setup commands rendered by this page are pre-configured with the gateway control-plane URL for your installation, so no extra networking setup is needed here. Gateways deployed inside the Agent Manager cluster connect via cluster DNS; external gateways connect through the OpenChoreo control-plane gateway. If you installed Agent Manager on your own Kubernetes cluster, register a public hostname for the endpoint first — see the *External AI gateways* note in the [installation guide](../getting-started/on-your-environment.mdx).
+
+:::
+
 ---
 
 ## Step 1: Navigate to AI Gateways
 
-1. Log in to the WSO2 Agent Manager Console (`http://localhost:3000`).
+1. Log in to the WSO2 Agent Manager Console (`http://console.amp.localhost:8080`).
 2. Go to Organization level by closing the projects section from the top navigation
 3. In the left sidebar, click **AI Gateways** under the **INFRASTRUCTURE** section.
 

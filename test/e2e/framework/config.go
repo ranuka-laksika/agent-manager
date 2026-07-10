@@ -40,8 +40,8 @@ type Config struct {
 // matching the quick-start install.sh deployment.
 func LoadConfig() *Config {
 	return &Config{
-		AMPBaseURL:       envOrDefault("AMP_API_BASE_URL", "http://localhost:9000"),
-		TracesBaseURL:    envOrDefault("TRACES_OBSERVER_BASE_URL", "http://localhost:9098"),
+		AMPBaseURL:       envOrDefault("AMP_API_BASE_URL", "http://api.amp.localhost:8080"),
+		TracesBaseURL:    envOrDefault("TRACES_OBSERVER_BASE_URL", "http://traces.amp.localhost:11080"),
 		IDPTokenURL:      envOrDefault("IDP_TOKEN_URL", "http://thunder.amp.localhost:8080/oauth2/token"),
 		IDPClientID:      envOrDefault("IDP_CLIENT_ID", "amp-api-client"),
 		IDPClientSecret:  envOrDefault("IDP_CLIENT_SECRET", "amp-api-client-secret"),

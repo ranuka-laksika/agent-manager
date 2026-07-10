@@ -31,6 +31,14 @@ postgresql:
         memory: 512Mi
         cpu: 500m
 
+# OpenChoreo ingress configuration — routes the Console and Agent Manager API
+# through the OpenChoreo control-plane kgateway (gateway-default) so they do
+# not need their own LoadBalancer services.
+ocIngress:
+  enabled: true
+  gatewayName: gateway-default
+  gatewayNamespace: openchoreo-control-plane
+
 # Agent Manager Service Configuration
 agentManagerService:
   enabled: true
@@ -41,16 +49,44 @@ agentManagerService:
     tag: "0.0.0-dev"
     pullPolicy: IfNotPresent
 
+  # Reachable externally via the control-plane gateway (see ocIngress);
+  # set type to LoadBalancer to restore a dedicated external endpoint.
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 9000
     targetPort: 8080
     annotations: {}
 
+  # Internal gateway-management (xDS) endpoint. In-cluster AI gateways reach
+  # it via cluster DNS; set type to LoadBalancer only when external gateways
+  # must connect from outside the cluster.
   gatewayMgtService:
-    type: LoadBalancer
+    type: ClusterIP
     port: 9243
     targetPort: 9243
+
+  # Hostname the API is served on via the OpenChoreo control-plane gateway
+  # (see the top-level ocIngress block)
+  ocIngress:
+    hostname: api.amp.localhost
+    # Gateway request timeout for API routes; /mcp streams are exempt (no timeout)
+    requestTimeout: 60s
+    # Exposes the gateway-management (xDS/WebSocket) endpoint through the
+    # control-plane gateway so external AI gateways connect without a
+    # dedicated LoadBalancer. The WebSocket stays healthy behind the gateway
+    # because the server pings every connection every 20s.
+    gatewayMgmt:
+      enabled: true
+      # Hostnames external gateways use. host.docker.internal serves gateways
+      # started via the console's Docker quick start on the same machine.
+      hostnames:
+        - cp.amp.localhost
+        - host.docker.internal
+      # ConfigMap holding the CA (key ca.crt) that validates the endpoint's
+      # TLS certificate on the gateway->service hop. Published automatically
+      # by the tls-certs job; set this when certificates.certificatesSecret
+      # supplies your own certificate.
+      caConfigMapName: ""
 
   # Internal server configuration
   internalServer:
@@ -158,7 +194,8 @@ agentManagerService:
 
     # Externally reachable base URL of this service.
     # Used as the `resource` identifier in RFC 9728 protected resource metadata.
-    serverPublicURL: "http://localhost:9000"
+    # Routed through the OpenChoreo control-plane gateway (see ocIngress).
+    serverPublicURL: "http://api.amp.localhost:8080"
 
     # Comma-separated list of OAuth 2.0 authorization server URLs advertised
     # in RFC 9728 protected resource metadata. Each entry must be an absolute
@@ -286,10 +323,17 @@ console:
     tag: "0.0.0-dev"
     pullPolicy: Always
 
+  # Reachable externally via the control-plane gateway (see ocIngress);
+  # set type to LoadBalancer to restore a dedicated external endpoint.
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 3000
     targetPort: 3000
+
+  # Hostname the Console is served on via the OpenChoreo control-plane gateway
+  # (see the top-level ocIngress block)
+  ocIngress:
+    hostname: console.amp.localhost
 
   resources:
     requests:
@@ -317,8 +361,8 @@ console:
       clientId: "amp-console-client"
       baseUrl: "http://thunder.amp.localhost:8080"
       scopes: "openid profile email amp:llm-proxy:deploy amp:mcp-server:create amp:org:invite-member amp:role:delete amp:monitor:read amp:agent:deploy-production amp:git-secret:delete amp:llm-provider:delete amp:mcp-server:configure-guardrail amp:agent:promote amp:deployment-pipeline:create amp:deployment-pipeline:read amp:deployment-pipeline:update amp:deployment-pipeline:delete amp:gateway:delete amp:group:delete amp:llm-proxy:update amp:monitor:score-read amp:llm-provider-template:update amp:agent:build amp:agent:rollback amp:agent:token-manage amp:evaluator:read amp:llm-provider-template:read amp:monitor:create amp:agent:suspend amp:gateway:token-manage amp:git-secret:read amp:mcp-server:connect amp:mcp-server:api-key-manage amp:mcp-server:read amp:observability:project-dashboard amp:group:create amp:observability:org-dashboard amp:org:remove-member amp:agent:deploy-non-production amp:group:read amp:llm-provider-template:create amp:project:delete amp:agent:create amp:evaluator:create amp:llm-provider:read amp:org:modify-settings amp:catalog:read amp:environment:update amp:group:update amp:llm-proxy:delete amp:project:read amp:data-plane:read amp:agent:read amp:environment:read amp:llm-provider:configure-guardrail amp:observability:guardrail-metric amp:org:assign-role amp:project:update amp:mcp-server:delete amp:environment:delete amp:evaluator:update amp:git-secret:create amp:monitor:execute amp:llm-provider:api-key-manage amp:gateway:read amp:agent:update amp:llm-provider-template:delete amp:monitor:delete amp:org:view amp:llm-provider:create amp:mcp-server:update amp:org:manage-idp amp:role:read amp:role:update amp:agent:delete amp:gateway:create amp:llm-provider:deploy amp:llm-proxy:api-key-manage amp:monitor:update amp:org:manage-service-account amp:role:create amp:evaluator:delete amp:llm-provider:connect amp:llm-provider:update amp:llm-proxy:read amp:monitor:score-publish amp:observability:infra-metric amp:project:create amp:repository:read amp:gateway:update amp:environment:create amp:llm-proxy:create amp:agent:api-key-manage amp:agent-kind:read amp:agent-kind:create amp:agent-kind:update amp:agent-kind:delete amp:profile:read amp:profile:update-attributes amp:scope:create amp:scope:read amp:scope:update amp:scope:delete amp:agent-identity:read amp:agent-identity:create amp:agent-identity:update amp:agent-identity:delete"
-      signInRedirectURL: "http://localhost:3000/login"
-      signOutRedirectURL: "http://localhost:3000/login"
+      signInRedirectURL: "http://console.amp.localhost:8080/login"
+      signOutRedirectURL: "http://console.amp.localhost:8080/login"
       existingSecret: ""
       validateIDToken: "false"
       clockTolerance: 300
@@ -329,12 +373,16 @@ console:
     rbacEnabled: "true"
 
     # Backend API URLs (will be auto-configured if empty)
-    apiBaseUrl: "http://localhost:9000"
+    # Routed through the OpenChoreo control-plane gateway (see ocIngress).
+    apiBaseUrl: "http://api.amp.localhost:8080"
     # Traces Observer Service URL — browser calls this directly for trace data.
-    # Should point to the amp-traces-observer LoadBalancer or ingress URL.
-    obsApiBaseUrl: "http://localhost:9098"
-    # Gateway control plane URL for gateway setup commands (default: http://localhost:9243)
-    gatewayControlPlaneUrl: "host.docker.internal:9243"
+    # Routed through the OpenChoreo observability-plane gateway.
+    obsApiBaseUrl: "http://traces.amp.localhost:11080"
+    # Gateway control plane URL rendered into external-gateway setup commands.
+    # Routed through the OpenChoreo control-plane gateway (see
+    # agentManagerService.ocIngress.gatewayMgmt); host.docker.internal lets a
+    # gateway container on the same machine reach it.
+    gatewayControlPlaneUrl: "http://host.docker.internal:8080"
     # Gateway version for setup commands (default: v1.0.0)
     gatewayVersion: "v1.0.0"
     # Agent Manager release version — pins the deployment-script git tag (amp/vX.Y.Z).
@@ -473,52 +521,6 @@ jwtSigning:
   existingSecret: ""
 
 # Ingress Configuration
-ingress:
-  enabled: false
-  className: "nginx"
-  annotations:
-    nginx.ingress.kubernetes.io/use-regex: "true"
-    nginx.ingress.kubernetes.io/enable-cors: "true"
-    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-  hosts:
-  - host: amp.local
-    http:
-      paths:
-      - path: /v1/traces
-        pathType: Prefix
-        backend:
-          service:
-            name: data-prepper-external
-            port:
-              number: 21893
-
-      - path: /api/trace
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-traces-observer-external
-            port:
-              number: 9098
-
-      - path: /api/v1
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-api
-            port:
-              number: 8080
-
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: amp-console
-            port:
-              number: 3000
-  tls: []
-
 # ServiceAccount Configuration
 serviceAccount:
   create: true

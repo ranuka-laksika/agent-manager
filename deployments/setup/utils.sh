@@ -13,8 +13,6 @@ check_required_ports() {
         "6550:Kubernetes API"
         "8080:Control Plane HTTP"
         "8443:Control Plane HTTPS"
-        "22893:API Platform Gateway HTTP"
-        "22894:API Platform Gateway HTTPS"
         "19080:Data Plane HTTP"
         "19443:Data Plane HTTPS"
         "10081:Argo Workflows UI"

@@ -117,23 +117,20 @@ check_port_available() {
 
 # Check all required ports are available
 check_required_ports() {
-    # Required ports for k3d cluster (host:container mapping)
-    # 3000  - AMP Console UI
-    # 8080  - kgateway HTTP (Thunder auth + OpenChoreo API routing)
-    # 8443  - kgateway HTTPS
-    # 9000  - AMP API service
-    # 9098  - AMP Traces Observer
-    # 9243  - AMP Internal API endpoint
+    # Required ports for k3d cluster (host:container mapping).
+    # AMP Console/API ride the control-plane gateway (8080) and the Traces
+    # Observer rides the observability-plane gateway (11080); OTLP ingest
+    # rides the data-plane gateway (19080) — none need their own host port.
+    # 8080  - Control Plane Gateway HTTP (Console, API, Thunder auth, OpenChoreo API,
+    #         external AI gateway control plane)
+    # 8443  - Control Plane Gateway HTTPS
     # 10082 - Container Registry (Workflow Plane)
-    # 11080 - Observer API (Observability Plane)
+    # 11080 - Observability Plane Gateway HTTP (Traces Observer, Observer API)
     # 11082 - OpenSearch API
     # 11085 - OpenSearch HTTPS
-    # 19080 - Data Plane Gateway HTTP (agent workloads)
+    # 19080 - Data Plane Gateway HTTP (agent workloads, OTLP /otel)
     # 19443 - Data Plane Gateway HTTPS
-    # 21893 - OTel Collector
-    # 22893 - API Platform Gateway HTTP
-    # 22894 - API Platform Gateway HTTPS
-    local required_ports=(3000 8080 8443 9000 9098 9243 10082 11080 11082 11085 19080 19443 21893 22893 22894)
+    local required_ports=(8080 8443 10082 11080 11082 11085 19080 19443)
     local ports_in_use=()
 
     for port in "${required_ports[@]}"; do
@@ -1641,7 +1638,7 @@ log_info "Cluster: ${CLUSTER_CONTEXT}"
 # with a reverse proxy (e.g. the VM installer) set SHOW_LOCALHOST_URLS=false and
 # print their own reachable URLs instead.
 if [[ "${SHOW_LOCALHOST_URLS:-true}" == "true" ]]; then
-  log_info "Agent Management Platform Console: http://localhost:3000"
+  log_info "Agent Management Platform Console: http://console.amp.localhost:8080"
   log_info "Observability Gateway (for traces): http://default-default.gateway.localhost:19080/otel"
 fi
 
