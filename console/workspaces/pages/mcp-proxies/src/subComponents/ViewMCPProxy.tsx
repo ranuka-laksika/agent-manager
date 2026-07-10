@@ -66,7 +66,7 @@ import {
 } from "@agent-management-platform/shared-component";
 import { PageLayout } from "@agent-management-platform/views";
 import { MCPCapabilitiesView } from "../components/MCPCapabilitiesView";
-import { MCPProxyAccessControlTab } from "./MCPProxyAccessControlTab";
+import { MCPProxyManageToolsTab } from "./MCPProxyManageToolsTab";
 import { MCPProxyConnectionTab } from "./MCPProxyConnectionTab";
 import { MCPProxyOverviewTab } from "./MCPProxyOverviewTab";
 import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
@@ -80,7 +80,7 @@ const TABS = [
   "Overview",
   "Capabilities",
   "Connection",
-  "Access Control",
+  "Manage Tools",
   "Security",
   "Rewrite",
   "Policies",
@@ -93,7 +93,7 @@ const TAB_SLUGS = [
   "overview",
   "capabilities",
   "connection",
-  "access-control",
+  "manage-tools",
   "security",
   "rewrite",
   "policies",
@@ -416,7 +416,7 @@ export function ViewMCPProxy() {
                     />
                   )}
                   {tabIndex === 3 && (
-                    <MCPProxyAccessControlTab
+                    <MCPProxyManageToolsTab
                       config={selectedConfig}
                       selectedEndpointId={selectedEndpointId}
                       orgName={orgId}

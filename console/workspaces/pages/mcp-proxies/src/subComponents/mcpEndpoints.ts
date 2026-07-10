@@ -87,7 +87,7 @@ export function resolveAuthenticationType(
 }
 
 // Backend identifier of a capability entry, matching the resolution used by the
-// Rewrite / Access Control tabs (resources key on uri, tools/prompts on name).
+// Rewrite / Manage Tools tabs (resources key on uri, tools/prompts on name).
 export function getCapabilityId(
   kind: CapabilityKind,
   raw: Record<string, unknown> | undefined,
@@ -102,7 +102,7 @@ export function getCapabilityId(
 
 // Reads one capability-kind section (e.g. "tools") off an ACL policy's params —
 // the single source of truth for the allow/deny + exceptions shape, shared by
-// isToolBlockedByAcl below and MCPProxyAccessControlTab's parseExistingAclPolicy.
+// isToolBlockedByAcl below and MCPProxyManageToolsTab's parseExistingAclPolicy.
 export function parseAclSection(
   params: Record<string, unknown> | undefined,
   sectionKey: string,
@@ -121,7 +121,7 @@ export function parseAclSection(
   return { mode, exceptions };
 }
 
-// Whether a tool is currently blocked by the Access Control tab's ACL policy
+// Whether a tool is currently blocked by the Manage Tools tab's ACL policy
 // (allow-all-except-exceptions, or deny-all-except-exceptions) — used by the
 // Security tab to flag RBAC scope bindings on tools that ACL has shut off.
 export function isToolBlockedByAcl(
@@ -211,7 +211,7 @@ function buildUpstreamAuth(endpoint: EndpointDraft): UpstreamAuth | undefined {
 }
 
 /**
- * Removes Rewrite and Access Control policy entries that reference tools, resources
+ * Removes Rewrite and Manage Tools policy entries that reference tools, resources
  * or prompts absent from `capabilities`. Other policy entries and policies are left
  * untouched. Returns `undefined` when no policies remain.
  */

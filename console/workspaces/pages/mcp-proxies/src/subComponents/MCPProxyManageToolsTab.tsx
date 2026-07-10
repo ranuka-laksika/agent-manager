@@ -132,7 +132,7 @@ function buildAclPolicyParams(
   return params;
 }
 
-export type MCPProxyAccessControlTabProps = {
+export type MCPProxyManageToolsTabProps = {
   config: MCPEndpointConfig | undefined;
   selectedEndpointId: string;
   orgName: string | undefined;
@@ -141,14 +141,14 @@ export type MCPProxyAccessControlTabProps = {
   isUpdating: boolean;
 };
 
-export function MCPProxyAccessControlTab({
+export function MCPProxyManageToolsTab({
   config,
   selectedEndpointId,
   orgName,
   isLoading = false,
   onUpdate,
   isUpdating,
-}: MCPProxyAccessControlTabProps) {
+}: MCPProxyManageToolsTabProps) {
   const lastSavedRef = useRef<{
     mode: AccessControlMode;
     exceptionKeys: string[];

@@ -72,7 +72,7 @@ export function MCPProxyOverviewTab({
     return null;
   }
 
-  const accessControlConfigured = config?.policies?.some(
+  const manageToolsConfigured = config?.policies?.some(
     (policy) => policy.name === ACL_POLICY_NAME,
   );
 
@@ -142,13 +142,13 @@ export function MCPProxyOverviewTab({
                 color="text.secondary"
                 sx={{ fontWeight: 500 }}
               >
-                Access Control
+                Manage Tools
               </Typography>
               <Chip
-                label={accessControlConfigured ? "Configured" : "Allow all"}
+                label={manageToolsConfigured ? "Configured" : "Allow all"}
                 size="small"
                 variant="outlined"
-                color={accessControlConfigured ? "success" : "default"}
+                color={manageToolsConfigured ? "success" : "default"}
                 sx={{ width: "fit-content" }}
               />
             </Stack>

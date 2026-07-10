@@ -584,7 +584,7 @@ export function MCPProxySecurityTab({
                                   >
                                     <span>{identifier}</span>
                                     {blockedToolIds.has(identifier) && (
-                                      <Tooltip title="Blocked by Access Control">
+                                      <Tooltip title="Blocked by Manage Tools">
                                         <ShieldAlert size={14} />
                                       </Tooltip>
                                     )}
@@ -603,7 +603,7 @@ export function MCPProxySecurityTab({
                                   >
                                     <span>{identifier}</span>
                                     {blockedToolIds.has(identifier) && (
-                                      <Tooltip title="Blocked by Access Control">
+                                      <Tooltip title="Blocked by Manage Tools">
                                         <ShieldAlert size={14} />
                                       </Tooltip>
                                     )}
