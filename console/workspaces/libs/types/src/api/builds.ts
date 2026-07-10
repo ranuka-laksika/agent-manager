@@ -83,10 +83,24 @@ export interface BuildStep {
   finishedAt?: string; // ISO date-time
 }
 
+export interface BuildInputInterfaceSchema {
+  path?: string;
+  content?: string; // Inline schema content (e.g., OpenAPI definition); response-only
+}
+
+export interface BuildInputInterface {
+  type: string;
+  port?: number;
+  basePath?: string;
+  visibility?: string[];
+  schema?: BuildInputInterfaceSchema;
+}
+
 export interface BuildDetailsResponse extends BuildResponse {
   percent?: number; // 0-100
   steps?: BuildStep[];
   durationSeconds?: number;
+  inputInterface?: BuildInputInterface;
 }
 
 // Path/Query helpers
