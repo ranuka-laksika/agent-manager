@@ -554,7 +554,10 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID 
 // cleanupProxyResourceServers best-effort tears down the proxy's per-environment Thunder
 // resource servers and strips their scope strings from every role, after the proxy row
 // (and its cascaded scope rows) has already been deleted. Same endpoints->join-rows walk
-// and env-UUID->name map as cleanupDeletedScope; never fails the caller.
+// and env-UUID->name map as cleanupDeletedScope; never fails the caller. Does not gate on
+// the endpoint's identity-security flag — see cleanupDeletedScope for why: RS ensure at
+// role-write time doesn't check it either, so skipping cleanup here leaks the RS whenever
+// security was disabled.
 func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, scopes []models.MCPProxyScope) {
 	handle := proxyHandleOf(proxy)
 	scopeStrs := make([]string, len(scopes))
@@ -574,9 +577,6 @@ func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID,
 
 	for i := range proxy.Endpoints {
 		endpoint := &proxy.Endpoints[i]
-		if !mcpIdentityEnabled(endpoint.Configuration.Security) {
-			continue
-		}
 		for j := range endpoint.Environments {
 			name, ok := envName[endpoint.Environments[j].EnvironmentUUID.String()]
 			if !ok {

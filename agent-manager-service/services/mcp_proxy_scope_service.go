@@ -273,8 +273,12 @@ func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyH
 }
 
 // cleanupDeletedScope best-effort removes the deleted scope's Thunder action and
-// strips the dangling permission string from every role, in each environment the
-// proxy has identity security enabled in. Never returns an error — failures log.
+// strips the dangling permission string from every role, in every environment the
+// proxy is deployed to. Never returns an error — failures log. Does not gate on
+// the endpoint's identity-security flag: a role can reference (and Thunder-ensure)
+// a proxy's resource server regardless of that flag (agent_identity_controller.go
+// resolveScopeGroups performs no such check), so cleanup must attempt the same
+// unconditionally or it leaks the resource server whenever security was disabled.
 func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, action string) {
 	handle := proxyHandleOf(proxy)
 	scopeStr := handle + ":" + action
@@ -291,9 +295,6 @@ func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, or
 
 	for i := range proxy.Endpoints {
 		endpoint := &proxy.Endpoints[i]
-		if !mcpIdentityEnabled(endpoint.Configuration.Security) {
-			continue
-		}
 		for j := range endpoint.Environments {
 			name, ok := envName[endpoint.Environments[j].EnvironmentUUID.String()]
 			if !ok {
