@@ -38,6 +38,7 @@ import {
   Button,
   Card,
   Chip,
+  Collapse,
   Divider,
   FormControl,
   IconButton,
@@ -147,6 +148,10 @@ export function ViewMCPProxy() {
     name: "",
     version: "",
   });
+  const [saveStatus, setSaveStatus] = useState<{
+    message: string;
+    severity: "error";
+  } | null>(null);
   const {
     data: proxy,
     isLoading,
@@ -278,34 +283,43 @@ export function ViewMCPProxy() {
     setContext(baselineDetails.context);
     setDescription(baselineDetails.description);
     setIsEditingDetails(false);
+    setSaveStatus(null);
   };
 
   const handleSave = async () => {
     if (!orgId || !proxy?.id) return;
 
-    const updated = await updateMCPProxy.mutateAsync({
-      params: { orgName: orgId, proxyId: proxy.id },
-      body: {
-        ...proxy,
-        context: optionalString(context),
-        description: optionalString(description),
-        name: name.trim(),
-        version: version.trim(),
-      },
-    });
-    const nextDetails = {
-      context: updated.context ?? "",
-      description: updated.description ?? "",
-      id: updated.id ?? "",
-      name: updated.name ?? "",
-      version: updated.version ?? "",
-    };
-    setName(nextDetails.name);
-    setVersion(nextDetails.version);
-    setContext(nextDetails.context);
-    setDescription(nextDetails.description);
-    setBaselineDetails(nextDetails);
-    setIsEditingDetails(false);
+    try {
+      const updated = await updateMCPProxy.mutateAsync({
+        params: { orgName: orgId, proxyId: proxy.id },
+        body: {
+          ...proxy,
+          context: optionalString(context),
+          description: optionalString(description),
+          name: name.trim(),
+          version: version.trim(),
+        },
+      });
+      const nextDetails = {
+        context: updated.context ?? "",
+        description: updated.description ?? "",
+        id: updated.id ?? "",
+        name: updated.name ?? "",
+        version: updated.version ?? "",
+      };
+      setName(nextDetails.name);
+      setVersion(nextDetails.version);
+      setContext(nextDetails.context);
+      setDescription(nextDetails.description);
+      setBaselineDetails(nextDetails);
+      setIsEditingDetails(false);
+      setSaveStatus(null);
+    } catch {
+      setSaveStatus({
+        message: "Failed to update MCP proxy details.",
+        severity: "error",
+      });
+    }
   };
 
   if (isLoading) {
@@ -603,25 +617,37 @@ export function ViewMCPProxy() {
 
         {hasUnsavedChanges ? (
           <Card variant="outlined" sx={{ p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" spacing={1}>
-              <Typography variant="body2" color="warning.main" fontWeight={600}>
-                You have unsaved changes.
-              </Typography>
-              <Stack direction="row" justifyContent="flex-end" spacing={1}>
-                <Button
-                  variant="outlined"
-                  disabled={updateMCPProxy.isPending}
-                  onClick={resetDraft}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="contained"
-                  disabled={!canSave || updateMCPProxy.isPending}
-                  onClick={handleSave}
-                >
-                  {updateMCPProxy.isPending ? "Saving..." : "Save"}
-                </Button>
+            <Stack spacing={1.5}>
+              <Collapse in={!!saveStatus} timeout={300}>
+                {saveStatus && (
+                  <Alert
+                    severity={saveStatus.severity}
+                    onClose={() => setSaveStatus(null)}
+                  >
+                    {saveStatus.message}
+                  </Alert>
+                )}
+              </Collapse>
+              <Stack direction="row" justifyContent="space-between" spacing={1}>
+                <Typography variant="body2" color="warning.main" fontWeight={600}>
+                  You have unsaved changes.
+                </Typography>
+                <Stack direction="row" justifyContent="flex-end" spacing={1}>
+                  <Button
+                    variant="outlined"
+                    disabled={updateMCPProxy.isPending}
+                    onClick={resetDraft}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    disabled={!canSave || updateMCPProxy.isPending}
+                    onClick={handleSave}
+                  >
+                    {updateMCPProxy.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </Stack>
               </Stack>
             </Stack>
           </Card>

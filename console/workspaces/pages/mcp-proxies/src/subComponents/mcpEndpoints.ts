@@ -39,6 +39,31 @@ export const DEFAULT_ENDPOINT_SECURITY = {
   },
 };
 
+export type AuthenticationType = "apiKey" | "identity" | "";
+
+const AUTHENTICATION_TYPE_LABELS: Record<AuthenticationType, string> = {
+  "": "None",
+  apiKey: "API Key",
+  identity: "Agent Identity",
+};
+
+// Display label for an AuthenticationType, shared by the Security tab's method
+// selector and the Overview tab's Auth Type summary so both stay in sync.
+export function getAuthenticationTypeLabel(type: AuthenticationType): string {
+  return AUTHENTICATION_TYPE_LABELS[type];
+}
+
+export function isAPIKeySecurityEnabled(
+  config: MCPEndpointConfig | undefined,
+): boolean {
+  const apiKeyConfig = config?.security?.apiKey;
+  return (
+    config?.security?.enabled !== false &&
+    !!apiKeyConfig &&
+    apiKeyConfig.enabled !== false
+  );
+}
+
 // Shared by the Security and Access Control tabs: Access Control swaps its
 // allow/deny view for a per-tool scope-binding table once Agent Identity
 // security is the active auth method for the endpoint.
@@ -49,6 +74,17 @@ export function isIdentitySecurityEnabled(
     config?.security?.enabled !== false &&
     config?.security?.identity?.enabled === true
   );
+}
+
+// Derives which authentication method is active from the endpoint's security
+// config, the same way both the Security tab (method selector) and the
+// Overview tab (Auth Type summary) need to.
+export function resolveAuthenticationType(
+  config: MCPEndpointConfig | undefined,
+): AuthenticationType {
+  if (isAPIKeySecurityEnabled(config)) return "apiKey";
+  if (isIdentitySecurityEnabled(config)) return "identity";
+  return "";
 }
 
 // Backend identifier of a capability entry, matching the resolution used by the

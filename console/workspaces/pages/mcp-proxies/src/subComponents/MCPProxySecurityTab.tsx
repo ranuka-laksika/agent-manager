@@ -35,31 +35,22 @@ import {
   TextField,
   Typography,
 } from "@wso2/oxygen-ui";
-import { isIdentitySecurityEnabled } from "./mcpEndpoints";
-
-type AuthenticationType = "apiKey" | "identity" | "";
+import {
+  type AuthenticationType,
+  getAuthenticationTypeLabel,
+  resolveAuthenticationType,
+} from "./mcpEndpoints";
 
 const KEY_LOCATION_OPTIONS: { value: APIKeyLocation; label: string }[] = [
   { value: "header", label: "header" },
   { value: "query", label: "query" },
 ];
 
-function isAPIKeySecurityEnabled(config: MCPEndpointConfig): boolean {
-  const apiKeyConfig = config.security?.apiKey;
-  return (
-    config.security?.enabled !== false &&
-    !!apiKeyConfig &&
-    apiKeyConfig.enabled !== false
-  );
-}
-
-function resolveAuthenticationType(
-  config: MCPEndpointConfig,
-): AuthenticationType {
-  if (isAPIKeySecurityEnabled(config)) return "apiKey";
-  if (isIdentitySecurityEnabled(config)) return "identity";
-  return "";
-}
+const AUTHENTICATION_TYPE_OPTIONS: AuthenticationType[] = [
+  "",
+  "apiKey",
+  "identity",
+];
 
 export type MCPProxySecurityTabProps = {
   config: MCPEndpointConfig | undefined;
@@ -193,6 +184,7 @@ export function MCPProxySecurityTab({
             <FormLabel>Authentication Method</FormLabel>
             <Select
               size="small"
+              displayEmpty
               value={authenticationType || ""}
               onChange={(e) =>
                 setAuthenticationType(
@@ -200,9 +192,11 @@ export function MCPProxySecurityTab({
                 )
               }
             >
-              <MenuItem value="">None</MenuItem>
-              <MenuItem value="apiKey">apiKey</MenuItem>
-              <MenuItem value="identity">identity</MenuItem>
+              {AUTHENTICATION_TYPE_OPTIONS.map((type) => (
+                <MenuItem key={type || "none"} value={type}>
+                  {getAuthenticationTypeLabel(type)}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Grid>

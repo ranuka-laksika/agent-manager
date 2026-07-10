@@ -22,6 +22,7 @@ import type {
 } from "@agent-management-platform/types";
 import { Card, Chip, Grid, Skeleton, Stack, Typography } from "@wso2/oxygen-ui";
 import { ACL_POLICY_NAME } from "../constants";
+import { getAuthenticationTypeLabel, resolveAuthenticationType } from "./mcpEndpoints";
 
 export type MCPProxyOverviewTabProps = {
   proxy: MCPProxy | null | undefined;
@@ -79,12 +80,12 @@ export function MCPProxyOverviewTab({
           ? "Undeployed"
           : `Deployed in ${deployedCount} of ${environments.length}`;
 
-  // Auth Type reflects the proxy's inbound security (the Security tab), i.e. whether
-  // clients must present an API key — not the upstream auth used to reach the backend.
-  const apiKeySecurityEnabled =
-    config?.security?.enabled !== false &&
-    !!config?.security?.apiKey &&
-    config.security.apiKey.enabled !== false;
+  // Auth Type reflects the proxy's inbound security (the Security tab) — which
+  // method clients must authenticate with — not the upstream auth used to reach
+  // the backend.
+  const authTypeLabel = getAuthenticationTypeLabel(
+    resolveAuthenticationType(config),
+  );
 
   return (
     <Stack spacing={3}>
@@ -138,9 +139,7 @@ export function MCPProxyOverviewTab({
               >
                 Auth Type
               </Typography>
-              <Typography variant="body2">
-                {apiKeySecurityEnabled ? "API Key" : "None"}
-              </Typography>
+              <Typography variant="body2">{authTypeLabel}</Typography>
             </Stack>
           </Card>
         </Grid>

@@ -39,6 +39,7 @@ import {
   Autocomplete,
   Button,
   Chip,
+  CircularProgress,
   Collapse,
   createFilterOptions,
   IconButton,
@@ -314,6 +315,11 @@ export function MCPProxyAccessControlTab({
   const [identityMode, setIdentityMode] = useState<IdentityAccessMode>("allowAll");
   const lastSavedIdentityModeRef = useRef<IdentityAccessMode>("allowAll");
   const [toolScopesError, setToolScopesError] = useState<string | undefined>();
+  // Tracks which row is currently creating a new catalog scope inline, so its
+  // Autocomplete alone shows a loading spinner while the create request is in flight.
+  const [creatingScopeRowId, setCreatingScopeRowId] = useState<number | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!selectedEndpointId) return;
@@ -397,6 +403,7 @@ export function MCPProxyAccessControlTab({
       }
       const committed = options.filter((option) => option !== newOption);
       setRowScopes(rowId, committed);
+      setCreatingScopeRowId(rowId);
       void createScope
         .mutateAsync({ params: { orgName }, body: { name: newOption.name } })
         .then((created) => {
@@ -411,6 +418,9 @@ export function MCPProxyAccessControlTab({
         .catch(() => {
           // Error already shown via useCreateScope's snackbar; nothing to roll back
           // since the placeholder was never committed to row.scopes.
+        })
+        .finally(() => {
+          setCreatingScopeRowId((current) => (current === rowId ? null : current));
         });
     },
     [orgName, createScope, setRowScopes],
@@ -566,7 +576,7 @@ export function MCPProxyAccessControlTab({
               </Tooltip>
             </ToggleButton>
             <ToggleButton color="primary" value="rbac" sx={{ textTransform: "none" }}>
-              Use RBAC
+              RBAC
               <Tooltip arrow title={RBAC_TOOLTIP}>
                 <IconButton size="small">
                   <HelpCircle size={16} />
@@ -622,7 +632,7 @@ export function MCPProxyAccessControlTab({
             <ListingTable>
               <ListingTable.Head>
                 <ListingTable.Row>
-                  <ListingTable.Cell>Tool</ListingTable.Cell>
+                  <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
                   <ListingTable.Cell>Scopes</ListingTable.Cell>
                   <ListingTable.Cell align="center" width="60px" />
                 </ListingTable.Row>
@@ -659,6 +669,8 @@ export function MCPProxyAccessControlTab({
                         disableCloseOnSelect
                         options={catalogScopes}
                         value={row.scopes}
+                        loading={creatingScopeRowId === row.id}
+                        disabled={creatingScopeRowId === row.id}
                         onChange={(_e, value) =>
                           handleToolScopeRowScopesChange(
                             row.id,
@@ -709,7 +721,26 @@ export function MCPProxyAccessControlTab({
                           ))
                         }
                         renderInput={(params) => (
-                          <TextField {...params} placeholder="Add scopes..." />
+                          <TextField
+                            {...params}
+                            placeholder="Add scopes..."
+                            slotProps={{
+                              input: {
+                                ...params.InputProps,
+                                endAdornment: (
+                                  <>
+                                    {creatingScopeRowId === row.id ? (
+                                      <CircularProgress
+                                        color="inherit"
+                                        size={16}
+                                      />
+                                    ) : null}
+                                    {params.InputProps.endAdornment}
+                                  </>
+                                ),
+                              },
+                            }}
+                          />
                         )}
                         noOptionsText="No scopes in the catalog"
                         sx={{ minWidth: 280 }}
