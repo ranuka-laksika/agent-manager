@@ -18,6 +18,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -26,6 +27,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"gorm.io/gorm"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories/repomocks"
@@ -80,7 +83,50 @@ func newScopeSvcForTest(scopeRepo repositories.MCPProxyScopeRepository, proxy *m
 			return nil, gorm.ErrRecordNotFound
 		},
 	}
-	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, nil, nil, slog.Default())
+	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, nil, noopRedeployer{}, slog.Default())
+}
+
+// newScopeSvcForTestWithRedeployer is newScopeSvcForTest with an injectable
+// MCPProxyRedeployer, for tests asserting on re-emission behavior.
+func newScopeSvcForTestWithRedeployer(scopeRepo repositories.MCPProxyScopeRepository, proxy *models.MCPProxy, redeployer MCPProxyRedeployer) MCPProxyScopeService {
+	if mock, ok := scopeRepo.(*repomocks.MCPProxyScopeRepositoryMock); ok && mock.GetFunc == nil {
+		mock.GetFunc = func(_ context.Context, _ uuid.UUID, _ string) (*models.MCPProxyScope, error) {
+			return nil, gorm.ErrRecordNotFound
+		}
+	}
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		GetByHandleFunc: func(ctx context.Context, handle, orgUUID string) (*models.MCPProxy, error) {
+			if proxy != nil && proxy.Artifact.Handle == handle {
+				return proxy, nil
+			}
+			return nil, gorm.ErrRecordNotFound
+		},
+	}
+	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, nil, redeployer, slog.Default())
+}
+
+// noopRedeployer is the default MCPProxyRedeployer stub for tests that don't
+// exercise re-emission behavior directly.
+type noopRedeployer struct{}
+
+func (noopRedeployer) RedeployMCPProxy(context.Context, *models.MCPProxy, string) error { return nil }
+
+// redeployCall records one RedeployMCPProxy invocation for assertions.
+type redeployCall struct {
+	proxy *models.MCPProxy
+	ouID  string
+}
+
+// recordingRedeployer records every RedeployMCPProxy call and returns err (nil
+// by default) so tests can assert re-emission happened and inspect failures.
+type recordingRedeployer struct {
+	calls []redeployCall
+	err   error
+}
+
+func (r *recordingRedeployer) RedeployMCPProxy(_ context.Context, proxy *models.MCPProxy, ouID string) error {
+	r.calls = append(r.calls, redeployCall{proxy: proxy, ouID: ouID})
+	return r.err
 }
 
 func TestMCPProxyScopeCreate_ValidatesAction(t *testing.T) {
@@ -139,6 +185,183 @@ func TestMCPProxyScopeDelete_MissingIsNotFound(t *testing.T) {
 	svc := newScopeSvcForTest(scopeRepo, scopeTestProxy("gh-proxy"))
 	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
 	assert.ErrorIs(t, err, utils.ErrScopeNotFound)
+}
+
+func TestMCPProxyScopeCreate_TriggersReEmit(t *testing.T) {
+	proxy := scopeTestProxy("gh-proxy", "list_repos")
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		CreateFunc: func(ctx context.Context, s *models.MCPProxyScope) error { return nil },
+	}
+	redeployer := &recordingRedeployer{}
+	svc := newScopeSvcForTestWithRedeployer(scopeRepo, proxy, redeployer)
+
+	_, err := svc.Create(context.Background(), "org-uuid", "org", "gh-proxy",
+		models.MCPProxyScopeInput{Action: "read", Tools: []string{"list_repos"}})
+
+	assert.NoError(t, err)
+	if assert.Len(t, redeployer.calls, 1) {
+		assert.Same(t, proxy, redeployer.calls[0].proxy)
+		assert.Equal(t, "org-uuid", redeployer.calls[0].ouID)
+	}
+}
+
+func TestMCPProxyScopeCreate_ReEmitFailureIsReturned(t *testing.T) {
+	proxy := scopeTestProxy("gh-proxy", "list_repos")
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		CreateFunc: func(ctx context.Context, s *models.MCPProxyScope) error { return nil },
+	}
+	redeployer := &recordingRedeployer{err: errors.New("deploy boom")}
+	svc := newScopeSvcForTestWithRedeployer(scopeRepo, proxy, redeployer)
+
+	_, err := svc.Create(context.Background(), "org-uuid", "org", "gh-proxy",
+		models.MCPProxyScopeInput{Action: "read", Tools: []string{"list_repos"}})
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "deploy boom")
+}
+
+func TestMCPProxyScopeUpdate_TriggersReEmit(t *testing.T) {
+	proxy := scopeTestProxy("gh-proxy", "list_repos")
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		GetFunc: func(_ context.Context, _ uuid.UUID, action string) (*models.MCPProxyScope, error) {
+			return &models.MCPProxyScope{Action: action, Tools: []string{"list_repos"}}, nil
+		},
+		UpdateFunc: func(ctx context.Context, s *models.MCPProxyScope) error { return nil },
+	}
+	redeployer := &recordingRedeployer{}
+	svc := newScopeSvcForTestWithRedeployer(scopeRepo, proxy, redeployer)
+
+	desc := "updated"
+	_, err := svc.Update(context.Background(), "org-uuid", "org", "gh-proxy", "read",
+		models.MCPProxyScopeUpdateInput{Description: &desc})
+
+	assert.NoError(t, err)
+	assert.Len(t, redeployer.calls, 1)
+}
+
+// identityEnabledEndpoint builds an endpoint with identity security enabled or
+// disabled, bound to one environment.
+func identityEnabledEndpoint(handle string, envUUID, artifactUUID uuid.UUID, enabled bool) models.MCPProxyEndpoint {
+	ep := models.MCPProxyEndpoint{
+		UUID:   uuid.New(),
+		Handle: handle,
+		Environments: []models.MCPProxyEndpointEnvironment{
+			{EnvironmentUUID: envUUID, ArtifactUUID: artifactUUID},
+		},
+	}
+	if enabled {
+		on := true
+		ep.Configuration = models.MCPEndpointConfig{
+			Security: &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}},
+		}
+	}
+	return ep
+}
+
+func TestMCPProxyScopeDelete_CleansThunderBestEffort(t *testing.T) {
+	envA, envB := uuid.New(), uuid.New()
+	proxy := &models.MCPProxy{
+		UUID:     uuid.New(),
+		Artifact: &models.Artifact{Handle: "gh-proxy"},
+		Endpoints: []models.MCPProxyEndpoint{
+			identityEnabledEndpoint("a", envA, uuid.New(), true),
+			identityEnabledEndpoint("b", envB, uuid.New(), false),
+		},
+	}
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		DeleteFunc: func(ctx context.Context, proxyUUID uuid.UUID, action string) error { return nil },
+	}
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		GetByHandleFunc: func(ctx context.Context, handle, orgUUID string) (*models.MCPProxy, error) { return proxy, nil },
+	}
+	infra := stubInfraManager{listOrgEnvs: func(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
+		return []*models.EnvironmentResponse{
+			{Name: "env-a", UUID: envA.String()},
+			{Name: "env-b", UUID: envB.String()},
+		}, nil
+	}}
+
+	type removedPermission struct {
+		roleID string
+		req    thundersvc.RolePermissionRequest
+	}
+	var removed []removedPermission
+	envAClient := &clientmocks.EnvIdentityClientMock{
+		DeleteProxyResourceServerActionFunc: func(ctx context.Context, proxyHandle, action string) (string, error) {
+			assert.Equal(t, "gh-proxy", proxyHandle)
+			assert.Equal(t, "read", action)
+			return "rs-1", nil
+		},
+		ListRolesFunc: func(ctx context.Context, ouID string, offset, limit int) ([]thundersvc.ThunderRole, int, error) {
+			assert.Equal(t, "", ouID, "role sweep must list every role in the env-Thunder, not filter by a platform OU")
+			if offset > 0 {
+				return nil, 1, nil
+			}
+			return []thundersvc.ThunderRole{
+				{ID: "role-1", Permissions: []thundersvc.RolePermissionRequest{
+					{ResourceServerID: "rs-1", Permissions: []string{"gh-proxy:read", "gh-proxy:write"}},
+				}},
+			}, 1, nil
+		},
+		RemoveRolePermissionsFunc: func(ctx context.Context, roleID string, req thundersvc.RolePermissionRequest) error {
+			removed = append(removed, removedPermission{roleID: roleID, req: req})
+			return nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(ctx context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
+			if envName == "env-a" {
+				return envAClient, nil
+			}
+			t.Fatalf("env %q has identity disabled and must not be resolved", envName)
+			return nil, nil
+		},
+	}
+	redeployer := &recordingRedeployer{}
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, infra, resolver, redeployer, slog.Default())
+
+	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
+
+	assert.NoError(t, err)
+	if assert.Len(t, removed, 1) {
+		assert.Equal(t, "role-1", removed[0].roleID)
+		assert.Equal(t, thundersvc.RolePermissionRequest{
+			ResourceServerID: "rs-1", Permissions: []string{"gh-proxy:read"},
+		}, removed[0].req)
+	}
+	assert.Len(t, redeployer.calls, 1)
+}
+
+func TestMCPProxyScopeDelete_BestEffortSurvivesResolverError(t *testing.T) {
+	envA := uuid.New()
+	proxy := &models.MCPProxy{
+		UUID:     uuid.New(),
+		Artifact: &models.Artifact{Handle: "gh-proxy"},
+		Endpoints: []models.MCPProxyEndpoint{
+			identityEnabledEndpoint("a", envA, uuid.New(), true),
+		},
+	}
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		DeleteFunc: func(ctx context.Context, proxyUUID uuid.UUID, action string) error { return nil },
+	}
+	proxyRepo := &repomocks.MCPProxyRepositoryMock{
+		GetByHandleFunc: func(ctx context.Context, handle, orgUUID string) (*models.MCPProxy, error) { return proxy, nil },
+	}
+	infra := stubInfraManager{listOrgEnvs: func(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
+		return []*models.EnvironmentResponse{{Name: "env-a", UUID: envA.String()}}, nil
+	}}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(ctx context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
+			return nil, errors.New("env-thunder unreachable")
+		},
+	}
+	redeployer := &recordingRedeployer{}
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, infra, resolver, redeployer, slog.Default())
+
+	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
+
+	assert.NoError(t, err, "Thunder cleanup is best-effort and must never fail the delete")
+	assert.Len(t, redeployer.calls, 1, "redeploy must still run after a best-effort cleanup failure")
 }
 
 func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {

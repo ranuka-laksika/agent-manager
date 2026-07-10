@@ -272,6 +272,13 @@ func (s *MCPProxyService) deployMCPProxyEndpoints(ctx context.Context, proxy *mo
 	return errors.Join(errs...)
 }
 
+// RedeployMCPProxy re-emits the proxy's gateway artifacts for every bound
+// (endpoint, environment). Scope mutations call this to pick up updated
+// mcp-authz policies without duplicating the deploy path.
+func (s *MCPProxyService) RedeployMCPProxy(ctx context.Context, proxy *models.MCPProxy, ouID string) error {
+	return s.deployMCPProxyEndpoints(ctx, proxy, ouID)
+}
+
 // deleteMCPProxyEnvironmentArtifacts broadcast-deletes the given per-environment gateway
 // artifacts and removes their artifacts rows (cascading to deployments / deployment_status
 // via the FK). Used when environments are removed from a proxy and when the proxy itself
@@ -547,8 +554,7 @@ func appendMCPAPIKeyAuthPolicy(policies []models.MCPPolicy, security *models.Sec
 // and mcp-authz (per-tool requiredScopes enforcement). Tools with no covering scope
 // get no rule — gateway default-permit means authenticated-only.
 func appendMCPIdentityAuthPolicies(policies []models.MCPPolicy, security *models.SecurityConfig, proxyHandle string, scopes []models.MCPProxyScope) []models.MCPPolicy {
-	if security == nil || !isBoolTrue(security.Enabled) ||
-		security.Identity == nil || !isBoolTrue(security.Identity.Enabled) {
+	if !mcpIdentityEnabled(security) {
 		return policies
 	}
 
@@ -600,6 +606,14 @@ func appendMCPIdentityAuthPolicies(policies []models.MCPPolicy, security *models
 		out = append(out, models.MCPPolicy{Name: mcpAuthzPolicyName, Version: mcpAuthzPolicyVersion, Params: map[string]interface{}{"tools": toolRules}})
 	}
 	return out
+}
+
+// mcpIdentityEnabled reports whether identity security is enabled for the given
+// endpoint security config. Shared by gateway emission and Thunder scope
+// cleanup so the identity gate can't drift between the two.
+func mcpIdentityEnabled(security *models.SecurityConfig) bool {
+	return security != nil && isBoolTrue(security.Enabled) &&
+		security.Identity != nil && isBoolTrue(security.Identity.Enabled)
 }
 
 func normalizeMCPPoliciesForDeployment(policies []models.MCPPolicy) []models.MCPPolicy {

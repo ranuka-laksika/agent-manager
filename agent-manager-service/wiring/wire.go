@@ -92,6 +92,9 @@ var serviceProviderSet = wire.NewSet(
 	services.NewLLMProxyDeploymentService,
 	services.NewMCPProxyService,
 	services.NewMCPProxyScopeService,
+	// MCPProxyScopeService only needs the narrow redeploy surface; bind it to
+	// the concrete service so scope mutations can re-emit gateway policies.
+	wire.Bind(new(services.MCPProxyRedeployer), new(*services.MCPProxyService)),
 	services.NewGatewayInternalAPIService,
 	services.NewMonitorScoresService,
 	services.NewCatalogService,

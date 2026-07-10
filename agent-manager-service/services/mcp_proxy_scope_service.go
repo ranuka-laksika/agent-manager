@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -45,13 +46,21 @@ type MCPProxyScopeService interface {
 	ListEnvironmentScopes(ctx context.Context, ouID, envName string) ([]models.EnvironmentScopeEntry, error)
 }
 
+// MCPProxyRedeployer is the narrow MCPProxyService surface scope mutations
+// need in order to re-emit gateway policies after a DB write. *MCPProxyService
+// satisfies it structurally (bound to it via wire.Bind in wiring/wire.go);
+// tests substitute a recording double.
+type MCPProxyRedeployer interface {
+	RedeployMCPProxy(ctx context.Context, proxy *models.MCPProxy, ouID string) error
+}
+
 type mcpProxyScopeService struct {
 	scopeRepo      repositories.MCPProxyScopeRepository
 	proxyRepo      repositories.MCPProxyRepository
 	deploymentRepo repositories.DeploymentRepository
 	infraManager   InfraResourceManager
 	resolver       thundersvc.EnvThunderResolver
-	proxySvc       *MCPProxyService
+	proxySvc       MCPProxyRedeployer
 	logger         *slog.Logger
 }
 
@@ -62,7 +71,7 @@ func NewMCPProxyScopeService(
 	deploymentRepo repositories.DeploymentRepository,
 	infraManager InfraResourceManager,
 	resolver thundersvc.EnvThunderResolver,
-	proxySvc *MCPProxyService,
+	proxySvc MCPProxyRedeployer,
 	logger *slog.Logger,
 ) MCPProxyScopeService {
 	return &mcpProxyScopeService{
@@ -147,7 +156,7 @@ func validateScopeTools(tools []string, union map[string]struct{}) ([]string, er
 }
 
 func (s *mcpProxyScopeService) Create(ctx context.Context, ouID, orgName, proxyHandle string, in models.MCPProxyScopeInput) (*models.MCPProxyScopeResult, error) {
-	_ = orgName // Task 11 wires Thunder cleanup + re-emit
+	_ = orgName // unused: Create never talks to env-Thunder (only Delete's cleanup does)
 
 	if !mcpScopeActionRe.MatchString(in.Action) {
 		return nil, fmt.Errorf("%w: action must match ^[A-Za-z0-9._\\-]{1,100}$", utils.ErrInvalidInput)
@@ -187,6 +196,10 @@ func (s *mcpProxyScopeService) Create(ctx context.Context, ouID, orgName, proxyH
 		return nil, fmt.Errorf("failed to create mcp proxy scope: %w", err)
 	}
 
+	if err := s.proxySvc.RedeployMCPProxy(ctx, proxy, ouID); err != nil {
+		return nil, fmt.Errorf("scope created but gateway re-emission failed (retry by redeploying the proxy): %w", err)
+	}
+
 	return &models.MCPProxyScopeResult{
 		ProxyHandle: proxyHandleOf(proxy),
 		Scope:       *scope,
@@ -194,7 +207,7 @@ func (s *mcpProxyScopeService) Create(ctx context.Context, ouID, orgName, proxyH
 }
 
 func (s *mcpProxyScopeService) Update(ctx context.Context, ouID, orgName, proxyHandle, action string, in models.MCPProxyScopeUpdateInput) (*models.MCPProxyScopeResult, error) {
-	_ = orgName // Task 11 wires Thunder cleanup + re-emit
+	_ = orgName // unused: Update never talks to env-Thunder (only Delete's cleanup does)
 
 	proxy, err := s.resolveProxy(ctx, ouID, proxyHandle)
 	if err != nil {
@@ -228,6 +241,10 @@ func (s *mcpProxyScopeService) Update(ctx context.Context, ouID, orgName, proxyH
 		return nil, fmt.Errorf("failed to update mcp proxy scope: %w", err)
 	}
 
+	if err := s.proxySvc.RedeployMCPProxy(ctx, proxy, ouID); err != nil {
+		return nil, fmt.Errorf("scope updated but gateway re-emission failed (retry by redeploying the proxy): %w", err)
+	}
+
 	return &models.MCPProxyScopeResult{
 		ProxyHandle: proxyHandleOf(proxy),
 		Scope:       *existing,
@@ -235,8 +252,6 @@ func (s *mcpProxyScopeService) Update(ctx context.Context, ouID, orgName, proxyH
 }
 
 func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyHandle, action string) error {
-	_ = orgName // Task 11 wires Thunder cleanup + re-emit
-
 	proxy, err := s.resolveProxy(ctx, ouID, proxyHandle)
 	if err != nil {
 		return err
@@ -248,7 +263,88 @@ func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyH
 		}
 		return fmt.Errorf("failed to delete mcp proxy scope: %w", err)
 	}
+
+	s.cleanupDeletedScope(ctx, ouID, orgName, proxy, action)
+
+	if err := s.proxySvc.RedeployMCPProxy(ctx, proxy, ouID); err != nil {
+		return fmt.Errorf("scope deleted but gateway re-emission failed (retry by redeploying the proxy): %w", err)
+	}
 	return nil
+}
+
+// cleanupDeletedScope best-effort removes the deleted scope's Thunder action and
+// strips the dangling permission string from every role, in each environment the
+// proxy has identity security enabled in. Never returns an error — failures log.
+func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, action string) {
+	handle := proxyHandleOf(proxy)
+	scopeStr := handle + ":" + action
+
+	envs, err := s.infraManager.ListOrgEnvironments(ctx, ouID)
+	if err != nil {
+		s.logger.Warn("scope cleanup: listing environments failed", "scope", scopeStr, "error", err)
+		return
+	}
+	envName := make(map[string]string, len(envs)) // env UUID -> name (resolver keys on names)
+	for _, env := range envs {
+		envName[env.UUID] = env.Name
+	}
+
+	for i := range proxy.Endpoints {
+		endpoint := &proxy.Endpoints[i]
+		if !mcpIdentityEnabled(endpoint.Configuration.Security) {
+			continue
+		}
+		for j := range endpoint.Environments {
+			name, ok := envName[endpoint.Environments[j].EnvironmentUUID.String()]
+			if !ok {
+				continue // environment no longer exists — nothing to clean
+			}
+			client, err := s.resolver.ResolveIdentity(ctx, orgName, name)
+			if err != nil {
+				s.logger.Warn("scope cleanup: env-Thunder unavailable", "env", name, "scope", scopeStr, "error", err)
+				continue
+			}
+			rsID, err := client.DeleteProxyResourceServerAction(ctx, handle, action)
+			if err != nil {
+				s.logger.Warn("scope cleanup: action delete failed", "env", name, "scope", scopeStr, "error", err)
+				continue
+			}
+			if rsID == "" {
+				continue // RS never projected into this env — nothing to sweep
+			}
+			s.sweepRolePermission(ctx, client, name, rsID, scopeStr)
+		}
+	}
+}
+
+// sweepRolePermission strips scopeStr from every role carrying it under rsID.
+// ListRoles("") pages all roles WITH permissions populated, so filtering is
+// in-memory (same pattern as GetGroupRoles, identity_client.go).
+func (s *mcpProxyScopeService) sweepRolePermission(ctx context.Context, client thundersvc.EnvIdentityClient, envName, rsID, scopeStr string) {
+	const pageSize = 50
+	for offset := 0; ; {
+		roles, total, err := client.ListRoles(ctx, "", offset, pageSize)
+		if err != nil {
+			s.logger.Warn("scope cleanup: role sweep aborted", "env", envName, "scope", scopeStr, "error", err)
+			return
+		}
+		for _, role := range roles {
+			for _, grp := range role.Permissions {
+				if grp.ResourceServerID != rsID || !slices.Contains(grp.Permissions, scopeStr) {
+					continue
+				}
+				if err := client.RemoveRolePermissions(ctx, role.ID, thundersvc.RolePermissionRequest{
+					ResourceServerID: rsID, Permissions: []string{scopeStr},
+				}); err != nil {
+					s.logger.Warn("scope cleanup: permission strip failed", "env", envName, "role", role.ID, "scope", scopeStr, "error", err)
+				}
+			}
+		}
+		offset += len(roles)
+		if offset >= total || len(roles) == 0 {
+			return
+		}
+	}
 }
 
 func (s *mcpProxyScopeService) List(ctx context.Context, ouID, proxyHandle string) (*models.MCPProxyScopesResult, error) {
@@ -304,8 +400,7 @@ func (s *mcpProxyScopeService) ListEnvironmentScopes(ctx context.Context, ouID, 
 			if endpoint == nil {
 				continue
 			}
-			if endpoint.Configuration.Security == nil || !isBoolTrue(endpoint.Configuration.Security.Enabled) ||
-				endpoint.Configuration.Security.Identity == nil || !isBoolTrue(endpoint.Configuration.Security.Identity.Enabled) {
+			if !mcpIdentityEnabled(endpoint.Configuration.Security) {
 				continue
 			}
 			if ee.ArtifactUUID == uuid.Nil {
