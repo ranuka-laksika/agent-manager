@@ -15169,31 +15169,13 @@ components:
         pagination:
           $ref: "#/components/schemas/PaginationInfo"
 
-    MCPToolScopeBinding:
-      type: object
-      required:
-        - tool
-        - scopes
-      properties:
-        tool:
-          type: string
-          description: Name of the MCP tool the scopes gate
-          example: list_repos
-        scopes:
-          type: array
-          description: Catalog scope names required to call the tool
-          items:
-            type: string
-          example:
-            - repo:read.all
-
     MCPProxyEndpoint:
       type: object
       description: >-
         One deployable endpoint of an MCP proxy. An endpoint carries the upstream
-        (URL + auth), policies, capabilities, security, and tool-scope bindings,
-        and is deployed to one or more environments. Within a proxy an endpoint's
-        id is unique and an environment maps to at most one endpoint.
+        (URL + auth), policies, capabilities, and security, and is deployed to one
+        or more environments. Within a proxy an endpoint's id is unique and an
+        environment maps to at most one endpoint.
       required:
         - id
         - upstream
@@ -15215,10 +15197,6 @@ components:
           $ref: "#/components/schemas/MCPProxyCapabilities"
         security:
           $ref: "#/components/schemas/SecurityConfig"
-        toolScopeBindings:
-          type: array
-          items:
-            $ref: "#/components/schemas/MCPToolScopeBinding"
         environments:
           type: array
           description: Environments this endpoint is deployed to.

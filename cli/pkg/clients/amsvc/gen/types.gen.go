@@ -3772,7 +3772,7 @@ type MCPProxyCapabilities struct {
 	Tools     *[]map[string]interface{} `json:"tools,omitempty"`
 }
 
-// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, security, and tool-scope bindings, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
+// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, and security, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
 type MCPProxyEndpoint struct {
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 
@@ -3787,9 +3787,8 @@ type MCPProxyEndpoint struct {
 	Policies *[]MCPPolicy `json:"policies,omitempty"`
 
 	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
-	Security          *SecurityConfig        `json:"security,omitempty"`
-	ToolScopeBindings *[]MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
-	Upstream          UpstreamConfig         `json:"upstream"`
+	Security *SecurityConfig `json:"security,omitempty"`
+	Upstream UpstreamConfig  `json:"upstream"`
 }
 
 // MCPProxyListItem defines model for MCPProxyListItem.
@@ -3959,15 +3958,6 @@ type MCPServerInfoFetchResponse struct {
 	// ServerInfo MCP server metadata returned by initialize
 	ServerInfo *map[string]interface{}   `json:"serverInfo,omitempty"`
 	Tools      *[]map[string]interface{} `json:"tools,omitempty"`
-}
-
-// MCPToolScopeBinding defines model for MCPToolScopeBinding.
-type MCPToolScopeBinding struct {
-	// Scopes Catalog scope names required to call the tool
-	Scopes []string `json:"scopes"`
-
-	// Tool Name of the MCP tool the scopes gate
-	Tool string `json:"tool"`
 }
 
 // MetricDataPoint A single metric data point with timestamp and value

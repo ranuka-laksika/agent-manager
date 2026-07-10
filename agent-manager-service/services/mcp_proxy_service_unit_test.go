@@ -41,18 +41,17 @@ func identityEnabledSecurity() *models.SecurityConfig {
 }
 
 // endpointWith builds a single-environment endpoint DTO targeting testMCPEnvUUID with the
-// given upstream URL, security, and tool-scope bindings.
-func endpointWith(url string, security *models.SecurityConfig, bindings []models.MCPToolScopeBinding) models.MCPProxyEndpointDTO {
+// given upstream URL and security.
+func endpointWith(url string, security *models.SecurityConfig) models.MCPProxyEndpointDTO {
 	var upstream models.UpstreamConfig
 	if url != "" {
 		upstream.Main = &models.UpstreamEndpoint{URL: url}
 	}
 	return models.MCPProxyEndpointDTO{
-		ID:                "primary",
-		Upstream:          upstream,
-		Security:          security,
-		ToolScopeBindings: bindings,
-		Environments:      []models.MCPEndpointEnvironmentDTO{{EnvironmentUUID: testMCPEnvUUID}},
+		ID:           "primary",
+		Upstream:     upstream,
+		Security:     security,
+		Environments: []models.MCPEndpointEnvironmentDTO{{EnvironmentUUID: testMCPEnvUUID}},
 	}
 }
 
@@ -95,27 +94,6 @@ func TestValidateMCPEndpoints_RejectsBothVariantsEnabled(t *testing.T) {
 			Enabled:  boolPtr(true),
 			APIKey:   &models.APIKeySecurity{Enabled: boolPtr(true)},
 			Identity: &models.IdentitySecurity{Enabled: boolPtr(true)},
-		}, nil),
-	}
-	err := validateMCPEndpoints(context.Background(), endpoints)
-	assert.ErrorIs(t, err, utils.ErrInvalidInput)
-}
-
-func TestValidateMCPEndpoints_RejectsBindingWithNoScopes(t *testing.T) {
-	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "list_repos", Scopes: nil},
-		}),
-	}
-	err := validateMCPEndpoints(context.Background(), endpoints)
-	assert.ErrorIs(t, err, utils.ErrInvalidInput)
-}
-
-func TestValidateMCPEndpoints_RejectsDuplicateToolBinding(t *testing.T) {
-	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "search", Scopes: []string{"a:read"}},
-			{Tool: "search", Scopes: []string{"a:admin"}},
 		}),
 	}
 	err := validateMCPEndpoints(context.Background(), endpoints)
@@ -123,9 +101,9 @@ func TestValidateMCPEndpoints_RejectsDuplicateToolBinding(t *testing.T) {
 }
 
 func TestValidateMCPEndpoints_RejectsDuplicateEnvironmentAcrossEndpoints(t *testing.T) {
-	first := endpointWith("https://93.184.216.34", nil, nil)
+	first := endpointWith("https://93.184.216.34", nil)
 	first.ID = "primary"
-	second := endpointWith("https://93.184.216.35", nil, nil)
+	second := endpointWith("https://93.184.216.35", nil)
 	second.ID = "secondary"
 	err := validateMCPEndpoints(context.Background(), []models.MCPProxyEndpointDTO{first, second})
 	assert.ErrorIs(t, err, utils.ErrMCPEnvAlreadyBound)
@@ -140,9 +118,7 @@ func TestValidateMCPEndpointSecurity_IdentityNeedsGatewayPolicies(t *testing.T) 
 	}
 	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-		}),
+		endpointWith("https://93.184.216.34", identityEnabledSecurity()),
 	}
 	err := svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints)
 	assert.ErrorIs(t, err, utils.ErrInvalidInput)
@@ -156,9 +132,7 @@ func TestValidateMCPEndpointSecurity_IdentityAcceptedWithGatewayPolicies(t *test
 	}
 	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-		}),
+		endpointWith("https://93.184.216.34", identityEnabledSecurity()),
 	}
 	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
 }
@@ -173,9 +147,7 @@ func TestValidateMCPEndpointSecurity_IdentityAllowedWhenNoGatewayYet(t *testing.
 	}
 	svc := &MCPProxyService{gatewayRepo: gwRepo}
 	endpoints := []models.MCPProxyEndpointDTO{
-		endpointWith("https://93.184.216.34", identityEnabledSecurity(), []models.MCPToolScopeBinding{
-			{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-		}),
+		endpointWith("https://93.184.216.34", identityEnabledSecurity()),
 	}
 	assert.NoError(t, svc.validateMCPEndpointSecurity(context.Background(), "org1", endpoints))
 }

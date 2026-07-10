@@ -8,6 +8,9 @@ package wiring
 
 import (
 	"fmt"
+	"log/slog"
+	"time"
+
 	"github.com/google/wire"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
@@ -25,8 +28,6 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/websocket"
 	"gorm.io/gorm"
-	"log/slog"
-	"time"
 )
 
 // Injectors from wire.go:
@@ -84,7 +85,8 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	}
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v)
+	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
 	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
@@ -157,7 +159,6 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	gitSecretService := services.NewGitSecretService(openChoreoClient)
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
 	identityController := controllers.NewIdentityController(identityClient)
-	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
 	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
 	if err != nil {
 		return nil, err
@@ -260,7 +261,8 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	}
 	gatewayEventsService := services.NewGatewayEventsService(eventHub)
 	apiKeyRepository := ProvideAPIKeyRepository(db)
-	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v)
+	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
+	mcpProxyService := services.NewMCPProxyService(db, mcpProxyRepository, mcpProxyEndpointRepository, deploymentRepository, gatewayRepository, envAgentMCPMappingRepository, gatewayEventsService, apiKeyRepository, logger, v, mcpProxyScopeRepository)
 	llmProxyDeploymentService := services.NewLLMProxyDeploymentService(deploymentRepository, llmProxyRepository, llmProviderRepository, gatewayRepository, gatewayEventsService)
 	llmProxyAPIKeyService := services.NewLLMProxyAPIKeyService(llmProxyRepository, gatewayRepository, gatewayEventsService, apiKeyRepository, openChoreoClient)
 	infraResourceManager := services.NewInfraResourceManager(openChoreoClient, logger)
@@ -343,7 +345,6 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	gitSecretService := services.NewGitSecretService(openChoreoClient)
 	gitSecretController := controllers.NewGitSecretController(gitSecretService)
 	identityController := controllers.NewIdentityController(identityClient)
-	mcpProxyScopeRepository := repositories.NewMCPProxyScopeRepository(db)
 	mcpProxyScopeService := services.NewMCPProxyScopeService(mcpProxyScopeRepository, mcpProxyRepository, deploymentRepository, infraResourceManager, envThunderResolver, mcpProxyService, logger)
 	mcpProxyScopeController := controllers.NewMCPProxyScopeController(mcpProxyScopeService)
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, agentThunderClientRepository, mcpProxyRepository, mcpProxyScopeRepository)

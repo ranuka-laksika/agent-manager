@@ -70,6 +70,7 @@ type MCPProxyService struct {
 	gatewayRepo          repositories.GatewayRepository
 	envMCPMappingRepo    repositories.EnvAgentMCPMappingRepository
 	artifactRepo         repositories.ArtifactRepository
+	mcpProxyScopeRepo    repositories.MCPProxyScopeRepository
 	gatewayEventsService *GatewayEventsService
 	apiKeyBroadcaster    apiKeyBroadcaster
 	client               *http.Client
@@ -89,6 +90,7 @@ func NewMCPProxyService(
 	apiKeyRepo repositories.APIKeyRepository,
 	logger *slog.Logger,
 	encryptionKey []byte,
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
 ) *MCPProxyService {
 	return &MCPProxyService{
 		db:                   db,
@@ -98,6 +100,7 @@ func NewMCPProxyService(
 		gatewayRepo:          gatewayRepo,
 		envMCPMappingRepo:    envMCPMappingRepo,
 		artifactRepo:         repositories.NewArtifactRepo(db),
+		mcpProxyScopeRepo:    mcpProxyScopeRepo,
 		gatewayEventsService: gatewayEventsService,
 		apiKeyBroadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
@@ -743,19 +746,6 @@ func copyMCPPolicies(policies []models.MCPPolicy) []models.MCPPolicy {
 	return out
 }
 
-func copyMCPToolScopeBindings(bindings []models.MCPToolScopeBinding) []models.MCPToolScopeBinding {
-	if len(bindings) == 0 {
-		return nil
-	}
-	out := make([]models.MCPToolScopeBinding, 0, len(bindings))
-	for _, b := range bindings {
-		scopes := make([]string, len(b.Scopes))
-		copy(scopes, b.Scopes)
-		out = append(out, models.MCPToolScopeBinding{Tool: b.Tool, Scopes: scopes})
-	}
-	return out
-}
-
 func copyMCPCapabilities(capabilities *models.MCPProxyCapabilities) *models.MCPProxyCapabilities {
 	if capabilities == nil {
 		return nil
@@ -788,12 +778,11 @@ func buildMCPEndpointDTOsForResponse(endpoints []models.MCPProxyEndpoint) []mode
 	for _, endpoint := range endpoints {
 		cfg := endpoint.Configuration
 		dto := models.MCPProxyEndpointDTO{
-			ID:                endpoint.Handle,
-			Name:              endpoint.Name,
-			Upstream:          models.UpstreamConfig{Main: sanitizeMCPUpstreamEndpointForResponse(cfg.Upstream)},
-			Capabilities:      copyMCPCapabilities(cfg.Capabilities),
-			Security:          cfg.Security,
-			ToolScopeBindings: copyMCPToolScopeBindings(cfg.ToolScopeBindings),
+			ID:           endpoint.Handle,
+			Name:         endpoint.Name,
+			Upstream:     models.UpstreamConfig{Main: sanitizeMCPUpstreamEndpointForResponse(cfg.Upstream)},
+			Capabilities: copyMCPCapabilities(cfg.Capabilities),
+			Security:     cfg.Security,
 		}
 		if policies := copyMCPPolicies(cfg.Policies); policies != nil {
 			dto.Policies = &policies
@@ -963,35 +952,14 @@ func validateMCPEndpoints(ctx context.Context, endpoints []models.MCPProxyEndpoi
 		}
 		seenHandles[handle] = struct{}{}
 
-		// Structural security checks first (no network I/O): apiKey and identity are
-		// mutually exclusive, and every tool binding must name a tool with >=1 scope.
-		identityOn := false
+		// Structural security check (no network I/O): apiKey and identity are mutually
+		// exclusive.
 		if sec := endpoint.Security; sec != nil && isBoolTrue(sec.Enabled) {
 			apiKeyOn := sec.APIKey != nil && isBoolTrue(sec.APIKey.Enabled)
-			identityOn = sec.Identity != nil && isBoolTrue(sec.Identity.Enabled)
+			identityOn := sec.Identity != nil && isBoolTrue(sec.Identity.Enabled)
 			if apiKeyOn && identityOn {
 				return fmt.Errorf("%w: endpoint %q: apiKey and identity security are mutually exclusive", utils.ErrInvalidInput, handle)
 			}
-		}
-		if len(endpoint.ToolScopeBindings) > 0 && !identityOn {
-			return fmt.Errorf("%w: endpoint %q: toolScopeBindings require identity security to be enabled", utils.ErrInvalidInput, handle)
-		}
-		seenTools := make(map[string]struct{}, len(endpoint.ToolScopeBindings))
-		for _, b := range endpoint.ToolScopeBindings {
-			tool := strings.TrimSpace(b.Tool)
-			if tool == "" {
-				return fmt.Errorf("%w: endpoint %q has a tool binding with an empty tool name", utils.ErrInvalidInput, handle)
-			}
-			if len(b.Scopes) == 0 {
-				return fmt.Errorf("%w: endpoint %q: tool %q binding has no scopes", utils.ErrInvalidInput, handle, b.Tool)
-			}
-			// A tool→scopes mapping is conceptually a map: two bindings for the same
-			// tool produce ambiguous mcp-authz rules, so reject duplicates outright
-			// rather than let the gateway combine them in an order we do not control.
-			if _, dup := seenTools[tool]; dup {
-				return fmt.Errorf("%w: endpoint %q has duplicate tool binding %q", utils.ErrInvalidInput, handle, tool)
-			}
-			seenTools[tool] = struct{}{}
 		}
 
 		if endpoint.Upstream.Main == nil || strings.TrimSpace(endpoint.Upstream.Main.URL) == "" {
@@ -1126,10 +1094,9 @@ func (s *MCPProxyService) buildMCPEndpointsForStorage(incoming []models.MCPProxy
 	for _, incomingEndpoint := range incoming {
 		handle := strings.TrimSpace(incomingEndpoint.ID)
 		config := models.MCPEndpointConfig{
-			Policies:          copyMCPPolicies(policiesFromPtr(incomingEndpoint.Policies)),
-			Capabilities:      copyMCPCapabilities(incomingEndpoint.Capabilities),
-			Security:          defaultMCPProxySecurity(incomingEndpoint.Security),
-			ToolScopeBindings: copyMCPToolScopeBindings(incomingEndpoint.ToolScopeBindings),
+			Policies:     copyMCPPolicies(policiesFromPtr(incomingEndpoint.Policies)),
+			Capabilities: copyMCPCapabilities(incomingEndpoint.Capabilities),
+			Security:     defaultMCPProxySecurity(incomingEndpoint.Security),
 		}
 		if incomingEndpoint.Upstream.Main != nil {
 			endpoint := *incomingEndpoint.Upstream.Main
