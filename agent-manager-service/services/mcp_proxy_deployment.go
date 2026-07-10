@@ -550,8 +550,10 @@ func appendMCPAPIKeyAuthPolicy(policies []models.MCPPolicy, security *models.Sec
 
 // appendMCPIdentityAuthPolicies emits the Agent Identity gateway policies for a
 // flattened per-environment artifact: mcp-auth (JWT validation against the
-// ThunderKeyManager key manager; requiredScopes is metadata advertisement only)
-// and mcp-authz (per-tool requiredScopes enforcement). Tools with no covering scope
+// ThunderKeyManager key manager) and mcp-authz (per-tool requiredScopes
+// enforcement). mcp-auth must NOT carry requiredScopes: it forwards its params
+// verbatim to jwt-auth, which enforces every listed scope (all-of), so a scope
+// union there 401s any token holding only a subset. Tools with no covering scope
 // get no rule — gateway default-permit means authenticated-only.
 func appendMCPIdentityAuthPolicies(policies []models.MCPPolicy, security *models.SecurityConfig, proxyHandle string, scopes []models.MCPProxyScope) []models.MCPPolicy {
 	if !mcpIdentityEnabled(security) {
@@ -567,10 +569,8 @@ func appendMCPIdentityAuthPolicies(policies []models.MCPPolicy, security *models
 	// *describes* all-of semantics; the shipped code is any-of. Re-verify on any
 	// gateway policy version bump.
 	toolScopes := map[string][]string{}
-	scopeSet := map[string]struct{}{}
 	for _, sc := range scopes {
 		str := sc.ScopeString(proxyHandle)
-		scopeSet[str] = struct{}{}
 		for _, tool := range sc.Tools {
 			toolScopes[tool] = append(toolScopes[tool], str)
 		}
@@ -589,14 +589,6 @@ func appendMCPIdentityAuthPolicies(policies []models.MCPPolicy, security *models
 
 	authParams := map[string]interface{}{
 		"issuers": []interface{}{mcpIdentityIssuerKeyManager},
-	}
-	if len(scopeSet) > 0 {
-		union := make([]string, 0, len(scopeSet))
-		for sc := range scopeSet {
-			union = append(union, sc)
-		}
-		sort.Strings(union)
-		authParams["requiredScopes"] = union
 	}
 
 	out := make([]models.MCPPolicy, 0, len(policies)+2)

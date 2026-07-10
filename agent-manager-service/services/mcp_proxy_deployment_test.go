@@ -668,8 +668,8 @@ func TestNormalizeMCPUpstreamURLForDeployment(t *testing.T) {
 }
 
 // TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules covers the Agent Identity
-// policy emission: mcp-auth (pinned issuer + sorted scope union) plus one mcp-authz rule
-// per tool, inverted from the proxy's scope->tools rows.
+// policy emission: mcp-auth (pinned issuer, no requiredScopes — jwt-auth would enforce
+// all of them) plus one mcp-authz rule per tool, inverted from the proxy's scope->tools rows.
 func TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules(t *testing.T) {
 	on := true
 	sec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}}
@@ -683,7 +683,7 @@ func TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules(t *testing.T)
 	auth := out[0]
 	assert.Equal(t, "mcp-auth", auth.Name)
 	assert.Equal(t, []interface{}{"ThunderKeyManager"}, auth.Params["issuers"])
-	assert.Equal(t, []string{"gh-proxy:admin", "gh-proxy:read"}, auth.Params["requiredScopes"])
+	assert.NotContains(t, auth.Params, "requiredScopes")
 
 	authz := out[1]
 	assert.Equal(t, "mcp-authz", authz.Name)
