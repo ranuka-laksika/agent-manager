@@ -62,7 +62,7 @@ kubectl version --client && helm version
 
 You need sufficient privileges to:
 - Create namespaces, deploy Helm charts
-- Create LoadBalancer services
+- Create LoadBalancer services (only the OpenChoreo plane gateways need them — the Agent Manager services are ClusterIP and are served through those gateways)
 - Manage cert-manager Issuers and Certificates
 - Create CRDs and ClusterRoles
 
@@ -96,21 +96,50 @@ export THUNDER_PUBLIC_URL="http://localhost:8090"
 export THUNDER_INTERNAL_URL="http://amp-thunder-extension-service.${THUNDER_NS}.svc.cluster.local:8090"
 ```
 
-**Console URLs** — Set to how the browser will reach the console and API:
+**Console URLs** — Set to how the browser will reach the console, API, and traces observer. These services are ClusterIP and are served through the OpenChoreo plane gateways: the console and API through the control-plane gateway, the traces observer through the observability-plane gateway. The `*_PUBLIC_HOST` values (bare hostname, no scheme or port) become the HTTPRoute hostnames on those gateways, so each hostname's DNS must point at the corresponding gateway LoadBalancer.
+
+With your own domain (recommended — hostnames are known before installation):
 
 ```bash
-# Port-forwarding (default for dev):
-export CONSOLE_PUBLIC_URL="http://localhost:3000"
-export API_PUBLIC_URL="http://localhost:9000"
-export OBS_API_PUBLIC_URL="http://localhost:9098"
-export INSTRUMENTATION_URL="http://localhost:22893/otel"
-
-# Public deployment example:
-#   export CONSOLE_PUBLIC_URL="https://console.yourdomain.com"
-#   export API_PUBLIC_URL="https://api.yourdomain.com"
-#   export OBS_API_PUBLIC_URL="https://obs.yourdomain.com"
-#   export INSTRUMENTATION_URL="https://otel.yourdomain.com/otel"
+export CONSOLE_PUBLIC_HOST="console.yourdomain.com"   # DNS → control-plane gateway LB
+export API_PUBLIC_HOST="api-amp.yourdomain.com"       # DNS → control-plane gateway LB
+export OBS_API_PUBLIC_HOST="traces.yourdomain.com"    # DNS → observability-plane gateway LB
+export CONSOLE_PUBLIC_URL="https://${CONSOLE_PUBLIC_HOST}"
+export API_PUBLIC_URL="https://${API_PUBLIC_HOST}"
+export OBS_API_PUBLIC_URL="https://${OBS_API_PUBLIC_HOST}"
+# OTLP trace ingest rides the data-plane gateway (see the instrumentation note below)
+export INSTRUMENTATION_URL="https://gateway.yourdomain.com/otel"
 ```
+
+Without your own domain, reuse the nip.io base domains derived from the gateway LoadBalancer IPs in Phase 1 (`CP_BASE_DOMAIN` in Step 5, `OBS_LB_IP` in Step 8) — run these exports after those steps:
+
+```bash
+export CONSOLE_PUBLIC_HOST="console.${CP_BASE_DOMAIN}"
+export API_PUBLIC_HOST="api-amp.${CP_BASE_DOMAIN}"
+export OBS_API_PUBLIC_HOST="traces.${OBS_LB_IP//./-}.nip.io"
+export CONSOLE_PUBLIC_URL="https://${CONSOLE_PUBLIC_HOST}"
+export API_PUBLIC_URL="https://${API_PUBLIC_HOST}"
+export OBS_API_PUBLIC_URL="https://${OBS_API_PUBLIC_HOST}"
+export INSTRUMENTATION_URL="http://default-default.gateway.localhost:19080/otel"  # in-cluster agents; see note
+```
+
+:::warning Console hostname must be known when Thunder installs
+
+Thunder registers the console's OAuth redirect URI at install time (Step 4) and does not update it on `helm upgrade`. `CONSOLE_PUBLIC_URL` must therefore be set before installing Thunder. With the nip.io flow that means provisioning the control-plane gateway first (run the Step 5 placeholder install, derive `CP_BASE_DOMAIN`, then return to Step 4) — or reinstalling the Thunder chart after the domain is known, as described in the warning in Step 4.
+
+:::
+
+:::info OTLP trace ingest
+
+`INSTRUMENTATION_URL` is the trace-export endpoint shown to agent developers; the traffic rides the data-plane gateway's `/otel` route. Agents running inside the cluster can use the default route hostname `http://default-default.gateway.localhost:19080/otel` (resolvable in-cluster). For agents running outside the cluster, install the API Platform Gateway extension with a public hostname whose DNS points at the data-plane gateway LoadBalancer — `--set gateway.vhost=https://<host>` and `--set gateway.hostname=<host>` — and use `https://<host>/otel`.
+
+:::
+
+:::info External AI gateways
+
+AI gateways running outside this cluster also connect through the control-plane gateway. Pick a hostname (for example `cp.yourdomain.com`), point its DNS at the control-plane gateway LoadBalancer, and pass `--set "agentManagerService.ocIngress.gatewayMgmt.hostnames={cp.yourdomain.com}"` and `--set console.config.gatewayControlPlaneUrl=https://cp.yourdomain.com` to the Agent Manager install in Phase 2. See [Register an AI Gateway](../administration/register-ai-gateway.mdx).
+
+:::
 
 ---
 
@@ -303,6 +332,8 @@ helm install amp-thunder-extension \
   --set thunder.configuration.jwt.issuer="${THUNDER_PUBLIC_URL}" \
   --set thunder.configuration.gateClient.hostname="localhost" \
   --set thunder.configuration.gateClient.port=8090 \
+  --set "thunder.configuration.cors.allowedOrigins={${CONSOLE_PUBLIC_URL}}" \
+  --set "thunder.bootstrap.ampConsoleClient.redirectUris={${CONSOLE_PUBLIC_URL}/login}" \
   --timeout 1800s
 
 kubectl wait --for=condition=Available \
@@ -311,7 +342,7 @@ kubectl wait --for=condition=Available \
 ```
 
 :::warning
-Thunder persists its configuration (including the issuer URL) in a database on first boot. If you need to change `THUNDER_PUBLIC_URL` after installation, you must **uninstall the chart, delete its PVC, and reinstall** — a `helm upgrade` alone will not change the issuer in issued tokens.
+Thunder persists its configuration (including the issuer URL and the console client's OAuth redirect URIs) in a database on first boot. If you need to change `THUNDER_PUBLIC_URL` or `CONSOLE_PUBLIC_URL` after installation, you must **uninstall the chart, delete its PVC, and reinstall** — a `helm upgrade` alone will not change the issuer in issued tokens or the registered redirect URIs.
 :::
 
 :::tip Verify
@@ -949,40 +980,24 @@ kubectl get pods -n amp-thunder
 helm list -A | grep -E 'openchoreo|amp|gateway'
 ```
 
-### Via LoadBalancer
+### Via the Plane Gateways
+
+Everything is hostname-routed through the three plane gateway LoadBalancers:
 
 | Service | URL |
 |---------|-----|
+| **Agent Manager Console** | `https://${CONSOLE_PUBLIC_HOST}` |
+| **Agent Manager API** | `https://${API_PUBLIC_HOST}` |
+| **Traces Observer** | `https://${OBS_API_PUBLIC_HOST}` |
 | **OpenChoreo API** | `https://api.${CP_BASE_DOMAIN}` |
 
-### Via Port Forwarding (Agent Manager)
+Thunder is reached via port-forwarding for OAuth login (matching the default `THUNDER_PUBLIC_URL`):
 
 ```bash
-# Agent Manager Console
-kubectl port-forward -n wso2-amp svc/amp-console 3000:3000 &
-
-# Agent Manager API
-kubectl port-forward -n wso2-amp svc/amp-api 9000:9000 &
-
-# Thunder (required for OAuth login)
 kubectl port-forward -n amp-thunder svc/amp-thunder-extension-service 8090:8090 &
-
-# Traces Observer
-kubectl port-forward -n openchoreo-observability-plane svc/amp-traces-observer 9098:9098 &
-
-# API Platform Gateway (HTTP)
-kubectl port-forward -n openchoreo-data-plane svc/api-platform-default-default-gateway-gateway-runtime 22893:22893 &
 ```
 
-After port forwarding:
-
-| Service | URL |
-|---------|-----|
-| **Agent Manager Console** | [http://localhost:3000](http://localhost:3000) |
-| **Agent Manager API** | [http://localhost:9000](http://localhost:9000) |
-| **Thunder** | http://localhost:8090 |
-| **Traces Observer** | http://localhost:9098 |
-| **API Platform Gateway** | http://localhost:22893/otel |
+Port-forwarding also remains available as a fallback for reaching any individual service directly (all Agent Manager services are ClusterIP), e.g. `kubectl port-forward -n wso2-amp svc/amp-console 3000:3000`.
 
 **Default credentials:** `admin` / `admin`
 

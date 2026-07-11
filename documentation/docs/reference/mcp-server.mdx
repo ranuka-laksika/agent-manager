@@ -71,10 +71,10 @@ The MCP server URL follows the public URL of the `agent-manager-service`:
 <server-public-url>/mcp
 ```
 
-For a stock local installation (Quick Start, docker-compose, or k3d via the bundled Helm chart), the service binds to `localhost:9000`, so the MCP server URL is:
+For a stock local installation (Quick Start, docker-compose, or k3d via the bundled Helm chart), the API is served through the OpenChoreo control-plane gateway at `api.amp.localhost:8080`, so the MCP server URL is:
 
 ```
-http://localhost:9000/mcp
+http://api.amp.localhost:8080/mcp
 ```
 
 If you have changed `serverPublicURL` (Helm) or `SERVER_PUBLIC_URL` (docker-compose), substitute that value.
@@ -93,14 +93,14 @@ The `am-mcp` client is provisioned automatically by the `wso2-amp-thunder-extens
 
 ## Configuring AI Assistants
 
-The examples below assume the default local URL `http://localhost:9000/mcp`. Replace it with your deployment's value if different.
+The examples below assume the default local URL `http://api.amp.localhost:8080/mcp`. Replace it with your deployment's value if different.
 
 ### Claude Code
 
 Register the MCP server with Claude Code using the `am-mcp` client and the pinned callback port:
 
 ```bash
-claude mcp add --transport http agent-manager http://localhost:9000/mcp \
+claude mcp add --transport http agent-manager http://api.amp.localhost:8080/mcp \
   --client-id am-mcp \
   --callback-port 33418
 ```
@@ -129,7 +129,7 @@ command = "npx"
 args = [
   "-y",
   "mcp-remote@latest",
-  "http://localhost:9000/mcp",
+  "http://api.amp.localhost:8080/mcp",
   "--client-id", "am-mcp",
   "--callback-port", "33418",
 ]

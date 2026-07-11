@@ -264,8 +264,12 @@ func convertToInputInterface(input *models.InputInterface) *spec.InputInterface 
 	}
 
 	if input.Schema != nil {
-		result.Schema = &spec.InputInterfaceSchema{
-			Path: input.Schema.Path,
+		result.Schema = &spec.InputInterfaceSchema{}
+		if input.Schema.Path != "" {
+			result.Schema.Path = &input.Schema.Path
+		}
+		if input.Schema.Content != "" {
+			result.Schema.Content = &input.Schema.Content
 		}
 	}
 	if input.BasePath != "" {

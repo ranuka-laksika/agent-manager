@@ -20,16 +20,17 @@ var _ MappedNullable = &InputInterfaceSchema{}
 // InputInterfaceSchema struct for InputInterfaceSchema
 type InputInterfaceSchema struct {
 	// Path to OpenAPI schema file
-	Path string `json:"path"`
+	Path *string `json:"path,omitempty"`
+	// Inline schema content (e.g., OpenAPI definition); response-only
+	Content *string `json:"content,omitempty"`
 }
 
 // NewInputInterfaceSchema instantiates a new InputInterfaceSchema object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewInputInterfaceSchema(path string) *InputInterfaceSchema {
+func NewInputInterfaceSchema() *InputInterfaceSchema {
 	this := InputInterfaceSchema{}
-	this.Path = path
 	return &this
 }
 
@@ -41,28 +42,68 @@ func NewInputInterfaceSchemaWithDefaults() *InputInterfaceSchema {
 	return &this
 }
 
-// GetPath returns the Path field value
+// GetPath returns the Path field value if set, zero value otherwise.
 func (o *InputInterfaceSchema) GetPath() string {
-	if o == nil {
+	if o == nil || IsNil(o.Path) {
 		var ret string
 		return ret
 	}
-
-	return o.Path
+	return *o.Path
 }
 
-// GetPathOk returns a tuple with the Path field value
+// GetPathOk returns a tuple with the Path field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *InputInterfaceSchema) GetPathOk() (*string, bool) {
-	if o == nil {
+	if o == nil || IsNil(o.Path) {
 		return nil, false
 	}
-	return &o.Path, true
+	return o.Path, true
 }
 
-// SetPath sets field value
+// HasPath returns a boolean if a field has been set.
+func (o *InputInterfaceSchema) HasPath() bool {
+	if o != nil && !IsNil(o.Path) {
+		return true
+	}
+
+	return false
+}
+
+// SetPath gets a reference to the given string and assigns it to the Path field.
 func (o *InputInterfaceSchema) SetPath(v string) {
-	o.Path = v
+	o.Path = &v
+}
+
+// GetContent returns the Content field value if set, zero value otherwise.
+func (o *InputInterfaceSchema) GetContent() string {
+	if o == nil || IsNil(o.Content) {
+		var ret string
+		return ret
+	}
+	return *o.Content
+}
+
+// GetContentOk returns a tuple with the Content field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *InputInterfaceSchema) GetContentOk() (*string, bool) {
+	if o == nil || IsNil(o.Content) {
+		return nil, false
+	}
+	return o.Content, true
+}
+
+// HasContent returns a boolean if a field has been set.
+func (o *InputInterfaceSchema) HasContent() bool {
+	if o != nil && !IsNil(o.Content) {
+		return true
+	}
+
+	return false
+}
+
+// SetContent gets a reference to the given string and assigns it to the Content field.
+func (o *InputInterfaceSchema) SetContent(v string) {
+	o.Content = &v
 }
 
 func (o InputInterfaceSchema) MarshalJSON() ([]byte, error) {
@@ -75,7 +116,12 @@ func (o InputInterfaceSchema) MarshalJSON() ([]byte, error) {
 
 func (o InputInterfaceSchema) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["path"] = o.Path
+	if !IsNil(o.Path) {
+		toSerialize["path"] = o.Path
+	}
+	if !IsNil(o.Content) {
+		toSerialize["content"] = o.Content
+	}
 	return toSerialize, nil
 }
 

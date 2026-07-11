@@ -7,36 +7,10 @@ servers: 1
 agents: 0
 kubeAPI:
   hostPort: "6550"
-# Single cluster mode exposes all plane port ranges for consistency with multi-cluster setup
+# Single cluster mode exposes all plane port ranges for consistency with multi-cluster setup.
+# AMP services (Console, API, Traces Observer) ride the plane gateways below —
+# they have no host ports of their own.
 ports:
-  # AMP Console UI (NodePort service on port 3000)
-  - port: 3000:3000
-    nodeFilters:
-      - loadbalancer
-  # AMP API (LoadBalancer service on port 9000)
-  - port: 9000:9000
-    nodeFilters:
-      - loadbalancer
-  # AMP Internal API Endpoint (LoadBalancer service on port 9243)
-  - port: 9243:9243
-    nodeFilters:
-      - loadbalancer
-  # AMP Traces Observer (NodePort service on port 9098)
-  - port: 9098:9098
-    nodeFilters:
-      - loadbalancer
-  # OTel Collector (NodePort service on port 21893)
-  - port: 21893:21893
-    nodeFilters:
-      - loadbalancer
-  # API Platform Gateway HTTP (LoadBalancer service on port 22893)
-  - port: 22893:22893
-    nodeFilters:
-      - loadbalancer
-  # API Platform Gateway HTTPS (LoadBalancer service on port 22894)
-  - port: 22894:22894
-    nodeFilters:
-      - loadbalancer
   # Control Plane uses port range 8xxx
   # HTTP traffic to OpenChoreo UI and API (Kgateway LoadBalancer)
   - port: 8080:8080

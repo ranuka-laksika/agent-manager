@@ -15,8 +15,17 @@ tracesObserver:
   resourceRequests:
     memory: 128Mi
     cpu: 250m
+  # Reachable externally via the observability-plane gateway (see ocIngress);
+  # set type to LoadBalancer to restore a dedicated external endpoint.
   service:
-    type: LoadBalancer
+    type: ClusterIP
+  # Exposes the Traces Observer through the observability-plane kgateway
+  # (gateway-default) so it does not need its own LoadBalancer service.
+  ocIngress:
+    enabled: true
+    gatewayName: gateway-default
+    hostname: traces.amp.localhost
+    requestTimeout: 60s
   # Observer Service connection — the upstream service that provides trace data.
   observer:
     baseUrl: "http://observer.openchoreo-observability-plane.svc.cluster.local:8080"
@@ -35,3 +44,13 @@ tracesObserver:
     jwksUrl: "http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/jwks"
     issuer: "http://thunder.amp.localhost:8080"
     audience: "amp"
+
+# OpenTelemetry collector extras
+otelCollector:
+  # Optional dedicated external Service for direct OTLP/HTTP pushes to the
+  # collector. Disabled by default: shipped clients send traces through the
+  # data-plane gateway's /otel route.
+  externalService:
+    enabled: false
+    type: LoadBalancer
+    port: 21893

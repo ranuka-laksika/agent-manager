@@ -9,7 +9,7 @@ sidebar_position: 3
 This guide installs `amctl`, logs into a running Agent Manager instance, and verifies the setup.
 
 :::info Prerequisites
-You need a reachable Agent Manager instance before logging in. Follow the [Quick Start](./quick-start.mdx) or [On k3d](./on-k3d.mdx) guide first if you have not installed one. The local install exposes the Agent Manager API at `http://localhost:9000`.
+You need a reachable Agent Manager instance before logging in. Follow the [Quick Start](./quick-start.mdx) or [On k3d](./on-k3d.mdx) guide first if you have not installed one. The local install exposes the Agent Manager API at `http://api.amp.localhost:8080`.
 :::
 
 ## Step 1: Install amctl
@@ -66,10 +66,10 @@ amctl version
 
 ## Step 2: Log in to Agent Manager
 
-Run `amctl login` with the URL of your Agent Manager API. For a local install this is `http://localhost:9000`.
+Run `amctl login` with the URL of your Agent Manager API. For a local install this is `http://api.amp.localhost:8080`.
 
 ```bash
-amctl login --url http://localhost:9000
+amctl login --url http://api.amp.localhost:8080
 ```
 
 `amctl` opens a browser window for sign-in. Enter the default Agent Manager credentials:
@@ -85,7 +85,7 @@ Once authentication completes, the CLI prints a success message and stores the s
 Use `--name` if you log into more than one Agent Manager (for example a local cluster and a shared dev cluster). The name distinguishes the saved instance.
 
 ```bash
-amctl login --url http://localhost:9000 --name local
+amctl login --url http://api.amp.localhost:8080 --name local
 ```
 :::
 
@@ -95,7 +95,7 @@ For CI or scripts, use the OAuth client-credentials grant by passing both `--cli
 
 ```bash
 amctl login \
-  --url http://localhost:9000 \
+  --url http://api.amp.localhost:8080 \
   --client-id <client-id> \
   --client-secret <client-secret>
 ```
@@ -130,7 +130,7 @@ amctl agent list
 The Agent Manager API is not reachable at the URL you passed. For a k3d-based install, check that the port-forward or ingress is up:
 
 ```bash
-curl http://localhost:9000/api/v1/healthz
+curl http://api.amp.localhost:8080/api/v1/healthz
 ```
 
 ### Browser does not open
