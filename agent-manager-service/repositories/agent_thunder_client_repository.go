@@ -96,6 +96,14 @@ type AgentThunderClientRepository interface {
 
 	// DeleteByIDs removes exactly the given binding rows. No-op if ids is empty.
 	DeleteByIDs(ctx context.Context, ids []uuid.UUID) error
+
+	// FindRecentlyCompletedInternal returns up to limit COMPLETED internal
+	// bindings created at/after createdAfter that still hold a valid secret —
+	// the candidates the injection reconciler sweeps. Bounded on the existing
+	// created_at column (no schema change): it only covers the initial build
+	// race, since steady-state sync is owned by the deploy/promote/rotation/
+	// MCP-change paths (see identityInjectionReconcileWindow).
+	FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error)
 }
 
 // AgentThunderAttemptUpdate carries the fields written after one provisioning
@@ -282,4 +290,18 @@ func (r *AgentThunderClientRepo) DeleteByIDs(ctx context.Context, ids []uuid.UUI
 		return fmt.Errorf("delete agent thunder clients by ids: %w", err)
 	}
 	return nil
+}
+
+func (r *AgentThunderClientRepo) FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error) {
+	var rows []models.AgentThunderClient
+	if err := r.db.WithContext(ctx).Where(
+		"status = ? AND provisioning_type = ? AND secret_ref_path != '' AND created_at >= ?",
+		models.AgentThunderStatusCompleted, models.AgentProvisioningTypeInternal, createdAfter,
+	).
+		Order("created_at").
+		Limit(limit).
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("find recently completed internal agent thunder clients: %w", err)
+	}
+	return rows, nil
 }

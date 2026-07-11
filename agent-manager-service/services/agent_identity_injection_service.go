@@ -23,8 +23,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
@@ -85,17 +89,6 @@ func withReleaseBindingRetry(fn func() error) error {
 // LLM/MCP/user secrets, so the two families can never collide.
 const agentIdentitySecretRefSuffix = "agent-identity"
 
-// placeholderAgentIdentityScopes is the fixed scope list injected into every
-// internal agent until the resource-permission phase lands (see the TODO on
-// resolveAgentIdentityScopes below). "amp:mcp:invoke" is just today's one
-// concrete example — MCP is the first resource type Thunder-side permissions
-// are being built for, not the only one this mechanism is meant to cover.
-// Requesting a scope the AgentID is not authorized for is safe: Thunder
-// filters requested scopes down to what the agent's role assignments
-// actually grant, so an unauthorized placeholder scope is simply absent from
-// the issued token.
-var placeholderAgentIdentityScopes = []string{"amp:mcp:invoke"}
-
 // AgentIdentityEnvVarKeys returns the set of env var names owned by AgentID
 // credential injection. Callers that rewrite an agent's env vars from user
 // input use this to filter user-echoed copies (the console reads
@@ -135,9 +128,21 @@ type AgentIdentityInjectionService interface {
 	// workload for one environment (ReleaseBinding merge + pod rollout).
 	// No-op when EnvVarsForEnvironment returns nothing, and when the agent is
 	// not deployed in that environment yet (the deploy flow injects at deploy
-	// time). Used by the post-provisioning hook so an agent deployed BEFORE
-	// its AgentID finished provisioning still receives the credential.
+	// time). Used by the live-refresh hooks (MCP config / proxy scope changes)
+	// and, via ReconcileForEnvironment, by the injection reconciler.
 	InjectForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) error
+
+	// ReconcileForEnvironment idempotently brings the agent's live workload in
+	// line with its desired AgentID env vars, writing ONLY when they are
+	// missing or the scope list drifted — so it never causes a needless pod
+	// rollout (mirrors the LLM/MCP paths, which also skip an unchanged
+	// ReleaseBinding update). Reads the current env vars back via
+	// GetComponentConfigurations to decide. Safe to run every reconciler tick:
+	// this is what lands credentials on a brand-new git agent whose
+	// ReleaseBinding doesn't exist yet when provisioning completes, the moment
+	// its first build creates the workload. No-op for external/unprovisioned/
+	// revoked bindings and for not-yet-deployed environments.
+	ReconcileForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) error
 
 	// RefreshAfterRotation re-asserts the SecretReference CR with a fresh
 	// rotated-at annotation (forcing OpenChoreo to re-read the rotated value
@@ -164,10 +169,12 @@ type AgentIdentityInjectionService interface {
 }
 
 type agentIdentityInjectionService struct {
-	repo            repositories.AgentThunderClientRepository
-	ocClient        client.OpenChoreoClient
-	refreshInterval string
-	logger          *slog.Logger
+	repo                 repositories.AgentThunderClientRepository
+	agentConfigRepo      repositories.AgentConfigurationRepository
+	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository
+	ocClient             client.OpenChoreoClient
+	refreshInterval      string
+	logger               *slog.Logger
 	// now is injectable for tests; defaults to time.Now.
 	now func() time.Time
 }
@@ -177,16 +184,20 @@ type agentIdentityInjectionService struct {
 // secretmanagersvc uses, e.g. "1h").
 func NewAgentIdentityInjectionService(
 	repo repositories.AgentThunderClientRepository,
+	agentConfigRepo repositories.AgentConfigurationRepository,
+	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository,
 	ocClient client.OpenChoreoClient,
 	refreshInterval string,
 	logger *slog.Logger,
 ) AgentIdentityInjectionService {
 	return &agentIdentityInjectionService{
-		repo:            repo,
-		ocClient:        ocClient,
-		refreshInterval: refreshInterval,
-		logger:          logger,
-		now:             time.Now,
+		repo:                 repo,
+		agentConfigRepo:      agentConfigRepo,
+		mcpProxyEndpointRepo: mcpProxyEndpointRepo,
+		ocClient:             ocClient,
+		refreshInterval:      refreshInterval,
+		logger:               logger,
+		now:                  time.Now,
 	}
 }
 
@@ -255,39 +266,86 @@ func sanitizeIdentityRefSegment(s string) string {
 	return strings.Trim(result.String(), "-")
 }
 
-// resolveAgentIdentityScopes returns the FULL set of OAuth2 scopes the agent
-// should request when minting a token — the union across every resource
-// type the platform defines Thunder permissions for, not just one.
+// resolveAgentIdentityScopes returns the full set of OAuth2 scopes the agent
+// should request when minting a token: the union of every catalog scope
+// bound (via MCPToolScopeBinding) to a tool on any MCP proxy this agent is
+// configured to use in this environment — sourced entirely from AMS's own
+// DB, no Thunder role/group lookups. Requesting a scope the AgentID isn't
+// actually authorized for is safe: Thunder filters requested scopes down to
+// what the agent's role assignments actually grant at token-mint time, so
+// this is a "what might I need" list, not the enforcement point.
 //
-// TODO(agentid-resource-scopes): owned separately, comes after the
-// resource-permission phase (starting with MCP, then LLM providers, APIs,
-// and others using the identical mechanism). In Thunder's model, a
-// permission is a scope string ("{resourceServerHandle}:{resource}:{action}")
-// defined under a Resource Server; MCP proxies, LLM providers, and APIs each
-// become their own Resource Server as their permission model lands. Scopes
-// are bundled into Roles, and Roles are assigned to the agent's AgentID
-// either directly or via Group membership — never scoped to a single
-// resource type. The real implementation must:
-//  1. Look up every Role assigned to this agent's Thunder identity (directly
-//     assigned, and via any Group it belongs to) in this environment's
-//     Thunder.
-//  2. Collect every permission (scope string) each of those Roles bundles,
-//     regardless of which Resource Server (MCP, LLM, API, ...) it belongs
-//     to — the aggregation must NOT be filtered to one resource type.
-//  3. Return the deduplicated union as a space-joined scope string.
-//
-// This method is intentionally a receiver method (not a free function) so
-// that dependency — whatever Thunder client/cache is needed to do the
-// role/group lookup above — has a natural home as a field on
-// agentIdentityInjectionService, the same way ocClient/repo already do,
-// without needing to change this method's signature or any call site.
-//
-// Until that lands, every internal agent requests the same placeholder
-// regardless of what it's actually entitled to — see
-// placeholderAgentIdentityScopes for why that's safe (Thunder filters
-// unauthorized requested scopes rather than erroring).
-func (s *agentIdentityInjectionService) resolveAgentIdentityScopes(_ context.Context, _, _, _, _ string) []string {
-	return placeholderAgentIdentityScopes
+// Fails closed: any lookup error (environment resolution, agent config load)
+// logs a warning and returns nil (no scopes) rather than a stale or
+// over-broad set. A transient DB/OpenChoreo blip costing an agent temporary
+// MCP access is safe; silently keeping the wrong scopes is not.
+func (s *agentIdentityInjectionService) resolveAgentIdentityScopes(ctx context.Context, binding *models.AgentThunderClient) []string {
+	config, err := s.agentConfigRepo.GetByAgentID(ctx, binding.AgentName, binding.OUID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil // agent has no configuration yet — nothing to request
+		}
+		s.logger.Warn("resolve agent identity scopes: load agent configuration failed",
+			"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+		return nil
+	}
+	if len(config.EnvMCPMappings) == 0 {
+		return nil // no MCP bindings at all — skip resolving the environment UUID entirely
+	}
+
+	env, err := s.ocClient.GetEnvironment(ctx, binding.OUID, binding.EnvironmentName)
+	if err != nil {
+		s.logger.Warn("resolve agent identity scopes: resolve environment failed",
+			"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+		return nil
+	}
+
+	envUUID, err := uuid.Parse(env.UUID)
+	if err != nil {
+		s.logger.Warn("resolve agent identity scopes: invalid environment id",
+			"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+		return nil
+	}
+
+	scopeSet := map[string]struct{}{}
+	for _, mapping := range config.EnvMCPMappings {
+		if mapping.EnvironmentUUID.String() != env.UUID {
+			continue
+		}
+		// A proxy's per-environment tool-scope bindings live on the endpoint
+		// deployed to this environment (MCPProxyEndpoint.Configuration), reached
+		// via the endpoint<->environment join row — not on the proxy itself.
+		ee, err := s.mcpProxyEndpointRepo.GetEndpointEnvByProxyAndEnv(ctx, mapping.MCPProxyUUID, envUUID)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				s.logger.Warn("resolve agent identity scopes: resolve proxy endpoint for environment failed",
+					"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+			}
+			continue
+		}
+		endpoint, err := s.mcpProxyEndpointRepo.GetEndpoint(ctx, ee.EndpointUUID)
+		if err != nil {
+			s.logger.Warn("resolve agent identity scopes: load proxy endpoint failed",
+				"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+			continue
+		}
+		for _, toolBinding := range endpoint.Configuration.ToolScopeBindings {
+			for _, scope := range toolBinding.Scopes {
+				if scope != "" {
+					scopeSet[scope] = struct{}{}
+				}
+			}
+		}
+	}
+	if len(scopeSet) == 0 {
+		return nil
+	}
+	scopes := make([]string, 0, len(scopeSet))
+	for scope := range scopeSet {
+		scopes = append(scopes, scope)
+	}
+	sort.Strings(scopes)
+	return scopes
 }
 
 // injectableBinding returns the binding when it is in an injectable state, or
@@ -356,8 +414,15 @@ func (s *agentIdentityInjectionService) ensureSecretReference(ctx context.Contex
 // token endpoint uses the cluster-internal env-Thunder URL — pods run inside
 // the cluster, matching the convention that internal agents reach platform
 // services via in-cluster addresses (see buildProxyURL).
+//
+// The URL is built from ThunderOrgNamespace(), NOT binding.OUID: env-Thunder
+// is addressed by the org's namespace/handle (e.g. "default"), and binding.OUID
+// is the OU UUID from the JWT — passing it here would target a K8s Service
+// that doesn't exist. See ThunderOrgNamespace's doc comment for why this is a
+// config-pinned value shared with agentThunderProvisioningService, not an
+// independent lookup.
 func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, binding *models.AgentThunderClient, secretRefName string) []client.EnvVar {
-	scopes := s.resolveAgentIdentityScopes(ctx, binding.OUID, binding.ProjectName, binding.AgentName, binding.EnvironmentName)
+	scopes := s.resolveAgentIdentityScopes(ctx, binding)
 	return []client.EnvVar{
 		{Key: client.EnvVarAgentIdentityClientID, Value: binding.ThunderClientID},
 		{
@@ -369,7 +434,7 @@ func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, bindin
 				},
 			},
 		},
-		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(binding.OUID, binding.EnvironmentName)},
+		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), binding.EnvironmentName)},
 		{Key: client.EnvVarAgentIdentityScopes, Value: strings.Join(scopes, " ")},
 	}
 }
@@ -410,6 +475,60 @@ func (s *agentIdentityInjectionService) InjectForEnvironment(ctx context.Context
 	}
 	s.logger.Info("Injected agent identity env vars", "agentName", agentName, "envName", envName)
 	return nil
+}
+
+func (s *agentIdentityInjectionService) ReconcileForEnvironment(ctx context.Context, ouID, projectName, agentName, envName string) error {
+	desired, err := s.EnvVarsForEnvironment(ctx, ouID, projectName, agentName, envName)
+	if err != nil {
+		return err
+	}
+	if len(desired) == 0 {
+		// External/unprovisioned/revoked — nothing this service should inject.
+		return nil
+	}
+
+	current, err := s.ocClient.GetComponentConfigurations(ctx, ouID, projectName, agentName, envName)
+	if err != nil {
+		return fmt.Errorf("read current agent env vars for identity reconcile: %w", err)
+	}
+	if identityEnvVarsInSync(desired, current) {
+		// Live workload already carries the identity vars with the current
+		// scope list — writing would only stamp a needless pod rollout.
+		return nil
+	}
+
+	// Something is missing or stale (most commonly: the workload just came up
+	// from a first build that finished after provisioning, so it has none of
+	// the identity vars yet). InjectForEnvironment writes them and rolls the
+	// pod; it still safely no-ops if the ReleaseBinding does not exist yet.
+	return s.InjectForEnvironment(ctx, ouID, projectName, agentName, envName)
+}
+
+// identityEnvVarsInSync reports whether the live env vars already carry every
+// AgentID key AND the scope list already matches desired. Client ID / secret
+// ref / token endpoint are stable for a given (agent, environment) once set
+// (rotation re-asserts them through RefreshAfterRotation, a separate path), so
+// their mere presence is enough; the scope list is the value that legitimately
+// changes over time, so it is compared exactly. Absent the workload entirely
+// (nothing read back), this returns false so the caller attempts an inject —
+// which itself no-ops when there is no ReleaseBinding to write to.
+func identityEnvVarsInSync(desired []client.EnvVar, current []models.EnvVars) bool {
+	currentByKey := make(map[string]models.EnvVars, len(current))
+	for _, ev := range current {
+		currentByKey[ev.Key] = ev
+	}
+	for _, want := range desired {
+		got, ok := currentByKey[want.Key]
+		if !ok {
+			return false
+		}
+		// The scope list is the only identity var whose value changes in place;
+		// compare it exactly so scope edits re-inject.
+		if want.Key == client.EnvVarAgentIdentityScopes && got.Value != want.Value {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *agentIdentityInjectionService) RefreshAfterRotation(ctx context.Context, ouID, projectName, agentName, envName string) error {

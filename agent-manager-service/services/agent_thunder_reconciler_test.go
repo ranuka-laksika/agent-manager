@@ -256,7 +256,8 @@ func TestAgentThunderReconciler_RunCycle_ConcurrencyIsCapped(t *testing.T) {
 // AgentThunderProvisioningService — only AttemptProvision is exercised by the
 // reconciler, so that is the only method given a real implementation.
 type fakeProvisioningService struct {
-	attemptFunc func(ctx context.Context, binding models.AgentThunderClient)
+	attemptFunc                    func(ctx context.Context, binding models.AgentThunderClient)
+	reconcileWorkloadInjectionFunc func(ctx context.Context, binding models.AgentThunderClient)
 }
 
 func (f *fakeProvisioningService) ProvisionForAgent(context.Context, string, string, string, models.AgentProvisioningType, []string, string) {
@@ -282,6 +283,14 @@ func (f *fakeProvisioningService) RevokeSecret(context.Context, string, string, 
 	return "", nil
 }
 func (f *fakeProvisioningService) DeleteAllBindings(context.Context, string, string, string) {}
+func (f *fakeProvisioningService) SetWorkloadInjector(AgentIdentityInjectionService)         {}
+
+func (f *fakeProvisioningService) ReconcileWorkloadInjection(ctx context.Context, binding models.AgentThunderClient) {
+	if f.reconcileWorkloadInjectionFunc != nil {
+		f.reconcileWorkloadInjectionFunc(ctx, binding)
+	}
+}
+
 func (f *fakeProvisioningService) GetIdentityViews(context.Context, string, string, string) ([]models.AgentIdentityEnvironmentView, error) {
 	return nil, nil
 }

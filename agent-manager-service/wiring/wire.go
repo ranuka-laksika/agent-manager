@@ -513,11 +513,13 @@ func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, er
 // the same re-sync cadence as every other injected secret.
 func ProvideAgentIdentityInjectionService(
 	repo repositories.AgentThunderClientRepository,
+	agentConfigRepo repositories.AgentConfigurationRepository,
+	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository,
 	ocClient occlient.OpenChoreoClient,
 	cfg config.Config,
 	logger *slog.Logger,
 ) services.AgentIdentityInjectionService {
-	return services.NewAgentIdentityInjectionService(repo, ocClient, cfg.SecretManager.RefreshInterval, logger)
+	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyEndpointRepo, ocClient, cfg.SecretManager.RefreshInterval, logger)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

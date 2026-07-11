@@ -1600,11 +1600,12 @@ func TestKeyedMutex_EvictionSafeUnderConcurrentReacquire(t *testing.T) {
 // service-unit-test conventions). A nil func field panics when called, so
 // tests can prove a path is never reached, mirroring moq semantics.
 type agentIdentityInjectorStub struct {
-	EnvVarsForEnvironmentFunc func(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error)
-	InjectForEnvironmentFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) error
-	RefreshAfterRotationFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) error
-	RemoveForEnvironmentFunc  func(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error
-	CleanupForEnvironmentFunc func(ctx context.Context, orgName, agentName, envName string) error
+	EnvVarsForEnvironmentFunc   func(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error)
+	InjectForEnvironmentFunc    func(ctx context.Context, orgName, projectName, agentName, envName string) error
+	ReconcileForEnvironmentFunc func(ctx context.Context, orgName, projectName, agentName, envName string) error
+	RefreshAfterRotationFunc    func(ctx context.Context, orgName, projectName, agentName, envName string) error
+	RemoveForEnvironmentFunc    func(ctx context.Context, orgName, projectName, agentName, envName string, includeWorkloadLevel bool) error
+	CleanupForEnvironmentFunc   func(ctx context.Context, orgName, agentName, envName string) error
 }
 
 func (s *agentIdentityInjectorStub) EnvVarsForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) ([]client.EnvVar, error) {
@@ -1619,6 +1620,13 @@ func (s *agentIdentityInjectorStub) InjectForEnvironment(ctx context.Context, or
 		panic("unexpected call to InjectForEnvironment")
 	}
 	return s.InjectForEnvironmentFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *agentIdentityInjectorStub) ReconcileForEnvironment(ctx context.Context, orgName, projectName, agentName, envName string) error {
+	if s.ReconcileForEnvironmentFunc == nil {
+		panic("unexpected call to ReconcileForEnvironment")
+	}
+	return s.ReconcileForEnvironmentFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func (s *agentIdentityInjectorStub) RefreshAfterRotation(ctx context.Context, orgName, projectName, agentName, envName string) error {
@@ -1673,10 +1681,10 @@ func TestAttemptProvision_Success_InternalAgent_InjectsWorkloadCredentials(t *te
 	var recorded repositories.AgentThunderAttemptUpdate
 	repo, resolver, store := successfulProvisionMocks(&recorded)
 
-	injectedCalls := 0
+	reconciledCalls := 0
 	injector := &agentIdentityInjectorStub{
-		InjectForEnvironmentFunc: func(_ context.Context, orgName, projectName, agentName, envName string) error {
-			injectedCalls++
+		ReconcileForEnvironmentFunc: func(_ context.Context, orgName, projectName, agentName, envName string) error {
+			reconciledCalls++
 			assert.Equal(t, "acme", orgName)
 			assert.Equal(t, "proj1", projectName)
 			assert.Equal(t, "my-agent", agentName)
@@ -1692,7 +1700,7 @@ func TestAttemptProvision_Success_InternalAgent_InjectsWorkloadCredentials(t *te
 	})
 
 	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status)
-	assert.Equal(t, 1, injectedCalls, "successful internal provisioning must inject workload credentials exactly once")
+	assert.Equal(t, 1, reconciledCalls, "successful internal provisioning must reconcile the workload's identity credentials exactly once")
 }
 
 func TestAttemptProvision_Success_ExternalAgent_SkipsWorkloadInjection(t *testing.T) {
@@ -1716,8 +1724,8 @@ func TestAttemptProvision_InjectorFailure_DoesNotAffectCompletion(t *testing.T) 
 	repo, resolver, store := successfulProvisionMocks(&recorded)
 
 	injector := &agentIdentityInjectorStub{
-		InjectForEnvironmentFunc: func(_ context.Context, _, _, _, _ string) error {
-			return errors.New("workload injection failed")
+		ReconcileForEnvironmentFunc: func(_ context.Context, _, _, _, _ string) error {
+			return errors.New("workload reconcile failed")
 		},
 	}
 	svc := newTestProvisioningServiceWithInjector(repo, resolver, store, injector)
@@ -1728,7 +1736,7 @@ func TestAttemptProvision_InjectorFailure_DoesNotAffectCompletion(t *testing.T) 
 	})
 
 	assert.Equal(t, models.AgentThunderStatusCompleted, recorded.Status,
-		"injection is best-effort — a failed injection must never un-complete the binding")
+		"workload reconcile is best-effort — a failure must never un-complete the binding")
 	require.NotNil(t, recorded.ThunderAgentID)
 	assert.Equal(t, "thunder-agent-1", *recorded.ThunderAgentID)
 }

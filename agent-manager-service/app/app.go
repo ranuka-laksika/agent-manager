@@ -115,6 +115,16 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 		os.Exit(1)
 	}
 
+	// Backfill the real AgentIdentityInjectionService into agentThunderProvisioning
+	// now that it exists (agentThunderProvisioning is built above, before
+	// InitializeAppParams constructs the OpenChoreo client this service depends
+	// on). Must happen before the reconciler and HTTP server start below — see
+	// AgentThunderProvisioningService.SetWorkloadInjector's doc comment for why
+	// that ordering makes this race-free.
+	if agentThunderProvisioning != nil {
+		agentThunderProvisioning.SetWorkloadInjector(dependencies.AgentIdentityInjectionService)
+	}
+
 	// Start monitor scheduler with background context
 	schedulerCtx, schedulerCancel := context.WithCancel(context.Background())
 	if err := dependencies.MonitorScheduler.Start(schedulerCtx); err != nil {

@@ -158,4 +158,31 @@ func (s *agentThunderReconcilerService) runCycle(ctx context.Context) {
 		}(binding)
 	}
 	wg.Wait()
+
+	s.runIdentityInjectionReconcile(ctx)
+}
+
+// identityInjectionReconcileWindow bounds how far back the injection sweep
+// looks. It only bridges the gap between provisioning completing (seconds
+// after create) and a brand-new git agent's first build creating its
+// ReleaseBinding (minutes later); steady-state sync is owned by the deploy,
+// promote, rotation, and MCP-config-change paths, so the window is finite.
+const identityInjectionReconcileWindow = 2 * time.Hour
+
+// runIdentityInjectionReconcile reconciles recently-completed internal agents'
+// live workloads with their desired AgentID env vars, writing only when vars
+// are missing or scopes drifted (see ReconcileForEnvironment) so re-running
+// each tick never causes a needless pod rollout. Runs outside the advisory
+// lock; concurrent instances converge on the same desired state, so the worst
+// case is a duplicate content-identical write.
+func (s *agentThunderReconcilerService) runIdentityInjectionReconcile(ctx context.Context) {
+	createdAfter := time.Now().Add(-identityInjectionReconcileWindow)
+	recent, err := s.repo.FindRecentlyCompletedInternal(ctx, createdAfter, reconcilerBatchSize)
+	if err != nil {
+		s.logger.Error("Failed to query recently completed internal agent thunder bindings", "error", err)
+		return
+	}
+	for _, binding := range recent {
+		s.provisioning.ReconcileWorkloadInjection(ctx, binding)
+	}
 }

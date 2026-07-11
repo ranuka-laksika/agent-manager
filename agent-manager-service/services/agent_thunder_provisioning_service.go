@@ -129,25 +129,62 @@ type AgentThunderProvisioningService interface {
 	// never does. Internal agents are rejected with utils.ErrInvalidInput;
 	// they have no claim state, and use GetCredentials instead.
 	ClaimSecret(ctx context.Context, ouID, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
+
+	// SetWorkloadInjector backfills the workloadInjector once the real
+	// AgentIdentityInjectionService exists (this service is constructed before
+	// the OpenChoreo client — see NewOpenBaoAgentThunderProvisioning). app.Run
+	// calls it exactly once, before the reconciler or HTTP server start, so
+	// every later AttemptProvision observes the field already set with no
+	// concurrent read/write. No-op when injector is nil.
+	SetWorkloadInjector(injector AgentIdentityInjectionService)
+
+	// ReconcileWorkloadInjection idempotently reconciles the binding's live
+	// workload with its desired AgentID env vars (writing only when missing or
+	// stale — see AgentIdentityInjectionService.ReconcileForEnvironment).
+	// Called both right after provisioning completes and from the reconciler's
+	// periodic sweep, so a brand-new git agent — whose ReleaseBinding does not
+	// exist until its first build finishes minutes later — still gets its
+	// credentials the moment the workload appears. Best-effort: internal
+	// agents only, errors logged and never returned.
+	ReconcileWorkloadInjection(ctx context.Context, binding models.AgentThunderClient)
 }
 
 type agentThunderProvisioningService struct {
 	repo        repositories.AgentThunderClientRepository
 	envResolver thundersvc.EnvThunderResolver
 	secretStore thundersvc.AgentSecretStore
-	// workloadInjector pushes a freshly-provisioned internal agent's credential
-	// into its live workload (Gateway Binding). Optional (nil skips injection):
-	// the deploy flow independently injects at deploy time, so this hook only
-	// covers agents that were deployed BEFORE provisioning completed.
+	// workloadInjector pushes an internal agent's credential into its live
+	// workload (Gateway Binding). Optional (nil skips injection). Used by the
+	// post-provisioning reconcile hook and the reconciler's periodic sweep to
+	// cover agents whose workload comes up independently of DeployAgent.
 	workloadInjector AgentIdentityInjectionService
 	logger           *slog.Logger
 	bindingLocks     keyedMutex
 }
 
 // resolveNamespace resolves the OpenChoreo namespace (organization) name for
-// an OU
+// an OU. See ThunderOrgNamespace for why this is config-pinned rather than
+// resolved dynamically, and why agentIdentityInjectionService must use the
+// exact same function.
 func (s *agentThunderProvisioningService) resolveNamespace(_ string) string {
-	return config.GetConfig().OpenChoreo.DefaultNamespace
+	return ThunderOrgNamespace()
+}
+
+func (s *agentThunderProvisioningService) SetWorkloadInjector(injector AgentIdentityInjectionService) {
+	if injector == nil {
+		return
+	}
+	s.workloadInjector = injector
+}
+
+func (s *agentThunderProvisioningService) ReconcileWorkloadInjection(ctx context.Context, binding models.AgentThunderClient) {
+	if s.workloadInjector == nil || binding.ProvisioningType != models.AgentProvisioningTypeInternal {
+		return
+	}
+	if err := s.workloadInjector.ReconcileForEnvironment(ctx, binding.OUID, binding.ProjectName, binding.AgentName, binding.EnvironmentName); err != nil {
+		s.logger.Warn("Failed to reconcile agent identity credentials into workload",
+			"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
+	}
 }
 
 // NewOpenBaoAgentThunderProvisioning returns the deployment factory that builds
@@ -156,19 +193,13 @@ func (s *agentThunderProvisioningService) resolveNamespace(_ string) string {
 // which provisions AgentIDs against per-environment Thunder via OpenBao; panics
 // on a missing/invalid OPENBAO_* config so startup fails fast.
 //
-// workloadInjector is deliberately nil here: this factory runs in app.Run
-// before the OpenChoreo client exists (that's built inside wiring.InitializeAppParams,
-// which this factory's result feeds INTO — see app/app.go), so there is nothing
-// to construct a real AgentIdentityInjectionService with at this point. This
-// narrows exactly two secondary, best-effort code paths inside this specific
-// service instance: the post-provisioning-completion inject hook in
-// AttemptProvision (for an agent deployed before its identity finished
-// provisioning) and the SecretReference cleanup in DeleteAllBindings. Every
-// primary credential-injection path — deploy, promote, regenerate, revoke,
-// config updates — is unaffected: those run through AgentManagerService's own
-// AgentIdentityInjectionService, wired independently via wire
-// (ProvideAgentIdentityInjectionService in serviceProviderSet), not through
-// this provisioning service's internal field.
+// workloadInjector starts nil: this factory runs before the OpenChoreo client
+// exists (built inside wiring.InitializeAppParams, which this feeds into), so
+// there is nothing to build the injector from yet. app.Run backfills it via
+// SetWorkloadInjector right after InitializeAppParams returns. Without that, an
+// agent whose workload comes up outside AgentManagerService.DeployAgent (a
+// git/build-pipeline agent, or a kind-sourced one) would never get its AgentID
+// env vars — neither path calls InjectForEnvironment itself.
 func NewOpenBaoAgentThunderProvisioning(cfg config.Config) func(db *gorm.DB) AgentThunderProvisioningService {
 	return func(db *gorm.DB) AgentThunderProvisioningService {
 		envResolver, err := thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
@@ -426,13 +457,12 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 	// Gateway Binding: push the credential into the live workload for internal
 	// agents that were already deployed before this attempt completed. Purely
 	// best-effort — the binding is COMPLETED either way, and the deploy flow
-	// re-derives these env vars on every (re)deploy regardless.
-	if s.workloadInjector != nil && binding.ProvisioningType == models.AgentProvisioningTypeInternal {
-		if err := s.workloadInjector.InjectForEnvironment(ctx, binding.OUID, binding.ProjectName, binding.AgentName, binding.EnvironmentName); err != nil {
-			s.logger.Warn("Failed to inject agent identity credentials into workload after provisioning",
-				"agentName", binding.AgentName, "envName", binding.EnvironmentName, "error", err)
-		}
-	}
+	// re-derives these env vars on every (re)deploy regardless. For a
+	// brand-new git agent whose first build has not yet created a
+	// ReleaseBinding (minutes away), this reconcile no-ops now and the
+	// reconciler's periodic sweep lands the credentials once the workload
+	// appears — see ReconcileWorkloadInjection.
+	s.ReconcileWorkloadInjection(ctx, binding)
 }
 
 // recordFailure retries cause up to maxProvisionAttempts times before marking

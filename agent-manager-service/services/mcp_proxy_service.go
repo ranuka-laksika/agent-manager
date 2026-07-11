@@ -57,19 +57,22 @@ const (
 
 // MCPProxyService handles MCP proxy operations.
 type MCPProxyService struct {
-	db                   *gorm.DB
-	repo                 repositories.MCPProxyRepository
-	endpointRepo         repositories.MCPProxyEndpointRepository
-	deploymentRepo       repositories.DeploymentRepository
-	gatewayRepo          repositories.GatewayRepository
-	envMCPMappingRepo    repositories.EnvAgentMCPMappingRepository
-	artifactRepo         repositories.ArtifactRepository
-	scopeRepo            repositories.ScopeRepository
-	gatewayEventsService *GatewayEventsService
-	apiKeyBroadcaster    apiKeyBroadcaster
-	client               *http.Client
-	logger               *slog.Logger
-	encryptionKey        []byte
+	db                     *gorm.DB
+	repo                   repositories.MCPProxyRepository
+	endpointRepo           repositories.MCPProxyEndpointRepository
+	deploymentRepo         repositories.DeploymentRepository
+	gatewayRepo            repositories.GatewayRepository
+	envMCPMappingRepo      repositories.EnvAgentMCPMappingRepository
+	agentConfigRepo        repositories.AgentConfigurationRepository
+	artifactRepo           repositories.ArtifactRepository
+	scopeRepo              repositories.ScopeRepository
+	gatewayEventsService   *GatewayEventsService
+	apiKeyBroadcaster      apiKeyBroadcaster
+	infraResourceManager   InfraResourceManager
+	agentIdentityInjection AgentIdentityInjectionService
+	client                 *http.Client
+	logger                 *slog.Logger
+	encryptionKey          []byte
 }
 
 // NewMCPProxyService creates a new MCP proxy service.
@@ -80,9 +83,12 @@ func NewMCPProxyService(
 	deploymentRepo repositories.DeploymentRepository,
 	gatewayRepo repositories.GatewayRepository,
 	envMCPMappingRepo repositories.EnvAgentMCPMappingRepository,
+	agentConfigRepo repositories.AgentConfigurationRepository,
 	gatewayEventsService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
 	scopeRepo repositories.ScopeRepository,
+	infraResourceManager InfraResourceManager,
+	agentIdentityInjection AgentIdentityInjectionService,
 	logger *slog.Logger,
 	encryptionKey []byte,
 ) *MCPProxyService {
@@ -93,6 +99,7 @@ func NewMCPProxyService(
 		deploymentRepo:       deploymentRepo,
 		gatewayRepo:          gatewayRepo,
 		envMCPMappingRepo:    envMCPMappingRepo,
+		agentConfigRepo:      agentConfigRepo,
 		artifactRepo:         repositories.NewArtifactRepo(db),
 		scopeRepo:            scopeRepo,
 		gatewayEventsService: gatewayEventsService,
@@ -101,9 +108,11 @@ func NewMCPProxyService(
 			gatewayService: gatewayEventsService,
 			apiKeyRepo:     apiKeyRepo,
 		},
-		client:        ssrf.NewClient(mcpRequestTimeout),
-		logger:        logger,
-		encryptionKey: encryptionKey,
+		infraResourceManager:   infraResourceManager,
+		agentIdentityInjection: agentIdentityInjection,
+		client:                 ssrf.NewClient(mcpRequestTimeout),
+		logger:                 logger,
+		encryptionKey:          encryptionKey,
 	}
 }
 
@@ -467,10 +476,58 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 		}
 	}
 
-	// The proxy owns and (re)deploys the per-(endpoint,env) gateway artifacts above.
-	// Agents that reference this proxy read its endpoint at their own deploy time via the
-	// stored DB mapping, so nothing needs to be pushed to already-deployed agents here.
+	// The org-level proxy owns and (re)deploys the per-environment gateway artifacts above;
+	// agents that reference this proxy read its endpoint at their own deploy time via the
+	// stored DB mapping. But a ToolScopeBindings edit here changes what scopes an already
+	// -running agent's AgentID token should carry — best-effort refresh every agent bound
+	// to this proxy so their next-minted token reflects the change immediately instead of
+	// waiting for their next deploy/promote.
+	s.refreshAgentsBoundToProxy(ctx, updated, orgUUID)
+
 	return convertModelMCPProxyToSpec(updated), nil
+}
+
+// refreshAgentsBoundToProxy re-injects AgentID credentials (recomputing the scope list)
+// for every agent bound to proxyUUID, across every environment they're deployed to. Purely
+// best-effort: this runs after the proxy update already succeeded, so a failure here must
+// never surface as an error from Update — it's logged and the corresponding agent simply
+// picks up the change on its next deploy/promote/rotation instead.
+func (s *MCPProxyService) refreshAgentsBoundToProxy(ctx context.Context, proxy *models.MCPProxy, orgUUID string) {
+	mappings, err := s.envMCPMappingRepo.ListByMCPProxy(ctx, proxy.UUID)
+	if err != nil {
+		s.logger.Warn("Failed to list agent bindings for scope refresh", "proxyUUID", proxy.UUID, "error", err)
+		return
+	}
+	if len(mappings) == 0 {
+		return
+	}
+
+	envs, err := s.infraResourceManager.ListOrgEnvironments(ctx, orgUUID)
+	if err != nil {
+		s.logger.Warn("Failed to list environments for scope refresh", "proxyUUID", proxy.UUID, "error", err)
+		return
+	}
+	uuidToEnvName := make(map[string]string, len(envs))
+	for _, e := range envs {
+		uuidToEnvName[e.UUID] = e.Name
+	}
+
+	for _, mapping := range mappings {
+		envName := uuidToEnvName[mapping.EnvironmentUUID.String()]
+		if envName == "" {
+			continue // environment since deleted — nothing to refresh
+		}
+		config, err := s.agentConfigRepo.GetByUUID(ctx, mapping.ConfigUUID, orgUUID)
+		if err != nil {
+			s.logger.Warn("Failed to resolve agent configuration for scope refresh",
+				"proxyUUID", proxy.UUID, "configUUID", mapping.ConfigUUID, "error", err)
+			continue
+		}
+		if err := s.agentIdentityInjection.InjectForEnvironment(ctx, orgUUID, config.ProjectName, config.AgentID, envName); err != nil {
+			s.logger.Warn("Failed to refresh agent identity credentials after MCP proxy change",
+				"agentName", config.AgentID, "envName", envName, "error", err)
+		}
+	}
 }
 
 // Delete removes an MCP proxy by handle. MCP proxy mappings are deployable artifacts
