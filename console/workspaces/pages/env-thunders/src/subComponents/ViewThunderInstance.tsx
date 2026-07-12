@@ -153,6 +153,7 @@ export const ViewThunderInstance: React.FC = () => {
         title={displayName}
         backHref={backHref}
         backLabel="Back to Identity Providers"
+        description={`The system identity provider used to manage agents, users, roles, and groups for the ${envName} environment.`}
         disableIcon
         isLoading={isLoading}
         titleTail={

@@ -16,7 +16,18 @@
  * under the License.
  */
 
-import { Card, CardContent, Grid, IconButton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
+import {
+  Card,
+  FormControl,
+  FormLabel,
+  Grid,
+  IconButton,
+  InputAdornment,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@wso2/oxygen-ui";
 import { Copy } from "@wso2/oxygen-ui-icons-react";
 import type { ThunderInstanceResponse } from "@agent-management-platform/types";
 
@@ -46,7 +57,7 @@ function InfoCard({
   );
 }
 
-function EndpointCard({
+function EndpointField({
   label,
   value,
   onCopy,
@@ -56,28 +67,35 @@ function EndpointCard({
   onCopy: (v: string, l: string) => void;
 }) {
   return (
-    <Card variant="outlined" sx={{ height: "100%" }}>
-      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-        <Stack spacing={0.5}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
-            {label}
-          </Typography>
-          <Stack direction="row" alignItems="center" spacing={1}>
-            <Typography
-              variant="body2"
-              sx={{ fontFamily: "monospace", wordBreak: "break-all", flex: 1, fontSize: "0.8rem" }}
-            >
-              {value}
-            </Typography>
-            <Tooltip title={`Copy ${label}`}>
-              <IconButton size="small" onClick={() => onCopy(value, label)} sx={{ flexShrink: 0 }}>
-                <Copy size={14} />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Stack>
-      </CardContent>
-    </Card>
+    <FormControl fullWidth>
+      <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 500, mb: 0.5 }}>
+        {label}
+      </FormLabel>
+      <TextField
+        value={value}
+        size="small"
+        fullWidth
+        slotProps={{
+          input: {
+            readOnly: true,
+            sx: { fontFamily: "monospace", fontSize: "0.8125rem" },
+            endAdornment: (
+              <InputAdornment position="end">
+                <Tooltip title={`Copy ${label}`}>
+                  <IconButton
+                    size="small"
+                    aria-label={`Copy ${label}`}
+                    onClick={() => onCopy(value, label)}
+                  >
+                    <Copy size={14} />
+                  </IconButton>
+                </Tooltip>
+              </InputAdornment>
+            ),
+          },
+        }}
+      />
+    </FormControl>
   );
 }
 
@@ -89,24 +107,6 @@ export type ThunderInstanceOverviewTabProps = {
 export function ThunderInstanceOverviewTab({ instance, onCopy }: ThunderInstanceOverviewTabProps) {
   return (
     <Stack spacing={3}>
-      {/* OAuth2 Endpoints */}
-      <Stack spacing={1.5}>
-        <Typography variant="subtitle2" fontWeight={600}>
-          OAuth2 Endpoints
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <EndpointCard label="Token Endpoint" value={instance.tokenUrl} onCopy={onCopy} />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <EndpointCard label="JWKS Endpoint" value={instance.jwksUrl} onCopy={onCopy} />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <EndpointCard label="Issuer URL" value={instance.issuerUrl} onCopy={onCopy} />
-          </Grid>
-        </Grid>
-      </Stack>
-
       {/* Infrastructure */}
       <Stack spacing={1.5}>
         <Typography variant="subtitle2" fontWeight={600}>
@@ -120,6 +120,18 @@ export function ThunderInstanceOverviewTab({ instance, onCopy }: ThunderInstance
             <InfoCard label="Environment" value={instance.envName} monospace />
           </Grid>
         </Grid>
+      </Stack>
+
+      {/* OAuth2 Endpoints */}
+      <Stack spacing={1.5}>
+        <Typography variant="subtitle2" fontWeight={600}>
+          OAuth2 Endpoints
+        </Typography>
+        <Stack spacing={2}>
+          <EndpointField label="Token Endpoint" value={instance.tokenUrl} onCopy={onCopy} />
+          <EndpointField label="JWKS Endpoint" value={instance.jwksUrl} onCopy={onCopy} />
+          <EndpointField label="Issuer URL" value={instance.issuerUrl} onCopy={onCopy} />
+        </Stack>
       </Stack>
     </Stack>
   );
