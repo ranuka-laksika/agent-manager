@@ -3088,6 +3088,9 @@ importers:
       '@wso2/oxygen-ui-icons-react':
         specifier: 0.11.0
         version: 0.11.0(react@19.1.1)
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
       react-dom:
         specifier: 19.1.1
         version: 19.1.1(react@19.1.1)
@@ -3107,6 +3110,9 @@ importers:
       '@eslint/js':
         specifier: 9.36.0
         version: 9.36.0
+      '@types/lodash':
+        specifier: 4.17.13
+        version: 4.17.13
       '@types/node':
         specifier: 24.6.0
         version: 24.6.0

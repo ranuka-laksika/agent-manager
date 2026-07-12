@@ -25,7 +25,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { Edit, Lock, Trash2 } from "@wso2/oxygen-ui-icons-react";
-import type { EndpointDraft } from "./AddEndpointDialog";
+import type { EndpointDraft } from "./EndpointFormFields";
 
 interface EndpointRowProps {
   endpoint: EndpointDraft;
@@ -67,6 +67,14 @@ export function EndpointRow({
             alignItems="center"
             flexWrap="wrap"
           >
+            <Typography
+              variant="subtitle2"
+              fontWeight={600}
+              color={endpoint.name ? "text.primary" : "text.secondary"}
+              sx={endpoint.name ? undefined : { fontStyle: "italic" }}
+            >
+              {endpoint.name || "Unnamed endpoint"}
+            </Typography>
             {endpoint.environments.map((envId) => (
               <Chip
                 key={envId}

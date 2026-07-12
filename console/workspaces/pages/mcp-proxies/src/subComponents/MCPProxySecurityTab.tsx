@@ -156,7 +156,8 @@ export function MCPProxySecurityTab({
           isToolBlockedByAcl(config, identifier),
         ),
       ),
-    [toolEntries, config],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only reads config.policies
+    [toolEntries, config?.policies],
   );
 
   const { data: scopesData } = useListScopes(

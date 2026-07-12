@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateMCPProxy,
@@ -26,7 +26,6 @@ import {
   type MCPProxy,
 } from "@agent-management-platform/types";
 import {
-  Box,
   Button,
   CircularProgress,
   Form,
@@ -34,12 +33,10 @@ import {
   FormLabel,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Plus } from "@wso2/oxygen-ui-icons-react";
-import { AddEndpointDialog, type EndpointDraft } from "./AddEndpointDialog";
-import { EndpointRow } from "./EndpointRow";
+import { type EndpointDraft } from "./EndpointFormFields";
+import { EndpointsEditorSection } from "./EndpointsEditorSection";
 import { draftToEndpoint } from "./mcpEndpoints";
 import { MCP_SPEC_VERSION } from "../constants";
 
@@ -60,31 +57,8 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
   const [proxyDescription, setProxyDescription] = useState("");
   const [proxyContext, setProxyContext] = useState("");
   const [endpoints, setEndpoints] = useState<EndpointDraft[]>([]);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const endpointIdRef = useRef(1);
-
-  // Map of environment UUID -> display label, for rendering endpoint chips.
-  const environmentLabels = useMemo(() => {
-    const labels = new Map<string, string>();
-    environments.forEach((env) => {
-      if (env.id) labels.set(env.id, env.displayName || env.name);
-    });
-    return labels;
-  }, [environments]);
-
-  // Environment UUIDs already claimed by an endpoint (one env maps to one endpoint).
-  const usedEnvIds = useMemo(() => {
-    const used = new Set<string>();
-    endpoints.forEach((endpoint) => {
-      endpoint.environments.forEach((envId) => used.add(envId));
-    });
-    return used;
-  }, [endpoints]);
-
-  const availableEnvironments = useMemo(
-    () => environments.filter((env) => !!env.id && !usedEnvIds.has(env.id)),
-    [environments, usedEnvIds],
-  );
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const isCreating = createMCPProxy.isPending;
 
@@ -99,14 +73,10 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
     [proxyContext, proxyName],
   );
 
-  const handleAddEndpoint = useCallback(
+  // Convenience: seed the proxy name/version/context from the first fetched
+  // server when the user hasn't typed them yet. They remain fully editable.
+  const handleEndpointAdded = useCallback(
     (draft: Omit<EndpointDraft, "id">) => {
-      const id = String(endpointIdRef.current);
-      endpointIdRef.current += 1;
-      setEndpoints((current) => [...current, { ...draft, id }]);
-
-      // Convenience: seed the proxy name/version/context from the first fetched
-      // server when the user hasn't typed them yet. They remain fully editable.
       if (!proxyName && draft.serverName) {
         setProxyName(draft.serverName);
         if (!proxyContext) setProxyContext(`/default/${draft.serverName}`);
@@ -114,14 +84,9 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
       if (!proxyVersion && draft.serverVersion) {
         setProxyVersion(draft.serverVersion);
       }
-      setDialogOpen(false);
     },
     [proxyContext, proxyName, proxyVersion],
   );
-
-  const handleRemoveEndpoint = useCallback((id: string) => {
-    setEndpoints((current) => current.filter((endpoint) => endpoint.id !== id));
-  }, []);
 
   const handleCreate = useCallback(async () => {
     if (!orgId || endpoints.length === 0) return;
@@ -169,127 +134,80 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
     endpoints.length > 0 &&
     !isCreating;
 
-  const noEnvironmentsLeft =
-    environments.length > 0 && availableEnvironments.length === 0;
-
   return (
-    <>
-      <Stack spacing={3} sx={{ maxWidth: 920 }}>
-        <Form.Section>
-          <Form.Stack spacing={2}>
-            <Form.Stack
-              direction={{ xs: "column", md: "row" }}
-              spacing={2}
-              useFlexGap
-            >
-              <FormControl sx={{ flex: 1 }}>
-                <FormLabel required>Name</FormLabel>
-                <TextField
-                  fullWidth
-                  value={proxyName}
-                  onChange={(event) => handleNameChange(event.target.value)}
-                />
-              </FormControl>
-              <FormControl sx={{ width: { xs: "100%", md: 300 } }}>
-                <FormLabel required>Version</FormLabel>
-                <TextField
-                  fullWidth
-                  value={proxyVersion}
-                  onChange={(event) => setProxyVersion(event.target.value)}
-                />
-              </FormControl>
-            </Form.Stack>
-
-            <FormControl fullWidth>
-              <FormLabel>Description</FormLabel>
+    <Stack spacing={3} sx={{ maxWidth: 920 }}>
+      <Form.Section>
+        <Form.Stack spacing={2}>
+          <Form.Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={2}
+            useFlexGap
+          >
+            <FormControl sx={{ flex: 1 }}>
+              <FormLabel required>Name</FormLabel>
               <TextField
                 fullWidth
-                multiline
-                minRows={3}
-                value={proxyDescription}
-                onChange={(event) => setProxyDescription(event.target.value)}
-                placeholder="Primary MCP Proxy"
+                value={proxyName}
+                onChange={(event) => handleNameChange(event.target.value)}
               />
             </FormControl>
-
-            <FormControl fullWidth>
-              <FormLabel>Context</FormLabel>
+            <FormControl sx={{ width: { xs: "100%", md: 300 } }}>
+              <FormLabel required>Version</FormLabel>
               <TextField
                 fullWidth
-                value={proxyContext}
-                onChange={(event) => setProxyContext(event.target.value)}
+                value={proxyVersion}
+                onChange={(event) => setProxyVersion(event.target.value)}
               />
             </FormControl>
           </Form.Stack>
-        </Form.Section>
 
-        <Form.Section>
-          <Form.Header>Endpoints</Form.Header>
-          <Form.Stack spacing={2}>
-            <Typography variant="body2" color="text.secondary">
-              Add a backend endpoint and assign it to one or more environments.
-              Environments without an endpoint are simply left unconfigured.
-            </Typography>
+          <FormControl fullWidth>
+            <FormLabel>Description</FormLabel>
+            <TextField
+              fullWidth
+              multiline
+              minRows={3}
+              value={proxyDescription}
+              onChange={(event) => setProxyDescription(event.target.value)}
+              placeholder="Primary MCP Proxy"
+            />
+          </FormControl>
 
-            {endpoints.length > 0 ? (
-              <Stack spacing={1.5}>
-                {endpoints.map((endpoint) => (
-                  <EndpointRow
-                    key={endpoint.id}
-                    endpoint={endpoint}
-                    environmentLabels={environmentLabels}
-                    onRemove={() => handleRemoveEndpoint(endpoint.id)}
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <Box
-                sx={{
-                  border: "1px dashed",
-                  borderColor: "divider",
-                  borderRadius: 1,
-                  px: 2,
-                  py: 3,
-                  textAlign: "center",
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">
-                  No endpoints added yet.
-                </Typography>
-              </Box>
-            )}
+          <FormControl fullWidth>
+            <FormLabel>Context</FormLabel>
+            <TextField
+              fullWidth
+              value={proxyContext}
+              onChange={(event) => setProxyContext(event.target.value)}
+            />
+          </FormControl>
+        </Form.Stack>
+      </Form.Section>
 
-            <Box>
-              <Tooltip
-                title={
-                  noEnvironmentsLeft
-                    ? "All environments already have an endpoint."
-                    : ""
-                }
-                disableHoverListener={!noEnvironmentsLeft}
-              >
-                <span>
-                  <Button
-                    variant="outlined"
-                    startIcon={<Plus size={16} />}
-                    onClick={() => setDialogOpen(true)}
-                    disabled={noEnvironmentsLeft || environments.length === 0}
-                  >
-                    Add Endpoint
-                  </Button>
-                </span>
-              </Tooltip>
-            </Box>
+      <Form.Section>
+        <Form.Header>Endpoints</Form.Header>
+        <Form.Stack spacing={2}>
+          <Typography variant="body2" color="text.secondary">
+            Add a backend endpoint and assign it to one or more environments.
+            Environments without an endpoint are simply left unconfigured.
+          </Typography>
 
-            {environments.length > 0 ? (
-              <Typography variant="caption" color="text.secondary">
-                {usedEnvIds.size} of {environments.length} environments have an
-                endpoint.
-              </Typography>
-            ) : null}
-          </Form.Stack>
-        </Form.Section>
+          <EndpointsEditorSection
+            orgId={orgId ?? ""}
+            environments={environments}
+            endpoints={endpoints}
+            onEndpointsChange={setEndpoints}
+            addOpen={addOpen}
+            onAddOpenChange={setAddOpen}
+            editingId={editingId}
+            onEditingIdChange={setEditingId}
+            emptyStateText="No endpoints added yet."
+            onEndpointAdded={handleEndpointAdded}
+          />
+        </Form.Stack>
+      </Form.Section>
 
+      {addOpen || editingId !== null ? null : (
         <Stack direction="row" spacing={1}>
           <Button variant="outlined" onClick={onCancel}>
             Cancel
@@ -307,16 +225,8 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
             {isCreating ? "Creating" : "Create"}
           </Button>
         </Stack>
-      </Stack>
-
-      <AddEndpointDialog
-        open={dialogOpen}
-        orgId={orgId ?? ""}
-        availableEnvironments={availableEnvironments}
-        onClose={() => setDialogOpen(false)}
-        onAdd={handleAddEndpoint}
-      />
-    </>
+      )}
+    </Stack>
   );
 }
 

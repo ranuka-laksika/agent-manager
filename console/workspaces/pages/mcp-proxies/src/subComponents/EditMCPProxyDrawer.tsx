@@ -35,8 +35,11 @@ import {
   useFormValidation,
 } from "@agent-management-platform/views";
 import { useUpdateMCPProxy } from "@agent-management-platform/api-client";
-import type { MCPProxy } from "@agent-management-platform/types";
+import type { Environment, MCPProxy } from "@agent-management-platform/types";
 import { z } from "zod";
+import { type EndpointDraft } from "./EndpointFormFields";
+import { EndpointsEditorSection } from "./EndpointsEditorSection";
+import { draftToEndpoint, endpointToDraft } from "./mcpEndpoints";
 
 interface EditMCPProxyFormValues {
   name: string;
@@ -57,6 +60,7 @@ interface EditMCPProxyDrawerProps {
   onClose: () => void;
   proxy: MCPProxy;
   orgId: string;
+  environments: Environment[];
 }
 
 export function EditMCPProxyDrawer({
@@ -64,6 +68,7 @@ export function EditMCPProxyDrawer({
   onClose,
   proxy,
   orgId,
+  environments,
 }: EditMCPProxyDrawerProps) {
   const [formData, setFormData] = useState<EditMCPProxyFormValues>({
     name: proxy.name,
@@ -82,17 +87,27 @@ export function EditMCPProxyDrawer({
     reset: resetMutation,
   } = useUpdateMCPProxy();
 
+  // --- Endpoints section state ---
+  const [endpoints, setEndpoints] = useState<EndpointDraft[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
   useEffect(() => {
-    if (open) {
-      setFormData({
-        name: proxy.name,
-        version: proxy.version,
-        context: proxy.context ?? "",
-        description: proxy.description ?? "",
-      });
-      clearErrors();
-      resetMutation();
-    }
+    if (!open) return;
+    setFormData({
+      name: proxy.name,
+      version: proxy.version,
+      context: proxy.context ?? "",
+      description: proxy.description ?? "",
+    });
+    clearErrors();
+    resetMutation();
+
+    // Seed the working list from the proxy's native endpoints each time the drawer is
+    // opened. A draft seeded from a backend endpoint keeps its handle as its id.
+    setEndpoints((proxy.endpoints ?? []).map(endpointToDraft));
+    setAddOpen(false);
+    setEditingId(null);
   }, [proxy, open, clearErrors, resetMutation]);
 
   const handleFieldChange = useCallback(
@@ -109,6 +124,22 @@ export function EditMCPProxyDrawer({
       e.preventDefault();
       if (!validateForm(formData)) return;
 
+      // Match each draft back to its source endpoint by handle so an edited endpoint
+      // keeps its policies, security and tool-scope bindings; drafts added this session
+      // have no match and get freshly derived handles + default security.
+      const existingByHandle = new Map(
+        (proxy.endpoints ?? []).map((endpoint) => [endpoint.id, endpoint]),
+      );
+      const usedHandles = new Set<string>();
+      const nextEndpoints = endpoints.map((draft, index) =>
+        draftToEndpoint(
+          draft,
+          index,
+          existingByHandle.get(draft.id),
+          usedHandles,
+        ),
+      );
+
       try {
         await updateMCPProxy({
           params: { orgName: orgId, proxyId: proxy.id },
@@ -118,6 +149,7 @@ export function EditMCPProxyDrawer({
             version: formData.version.trim(),
             context: formData.context?.trim() || undefined,
             description: formData.description?.trim() || undefined,
+            endpoints: nextEndpoints,
           },
         });
         onClose();
@@ -125,7 +157,7 @@ export function EditMCPProxyDrawer({
         // Error is surfaced via updateError below.
       }
     },
-    [formData, validateForm, updateMCPProxy, orgId, proxy, onClose],
+    [formData, validateForm, endpoints, updateMCPProxy, orgId, proxy, onClose],
   );
 
   const errorMessage = useMemo(() => {
@@ -134,12 +166,18 @@ export function EditMCPProxyDrawer({
   }, [updateError]);
 
   const isValid =
-    !errors.name && !errors.version && formData.name.trim().length > 0
-    && formData.version.trim().length > 0;
+    !errors.name &&
+    !errors.version &&
+    formData.name.trim().length > 0 &&
+    formData.version.trim().length > 0;
 
   return (
     <DrawerWrapper open={open} onClose={onClose}>
-      <DrawerHeader icon={<Edit size={24} />} title="Edit MCP Proxy" onClose={onClose} />
+      <DrawerHeader
+        icon={<Edit size={24} />}
+        title="Edit MCP Proxy"
+        onClose={onClose}
+      />
       <DrawerContent>
         <form onSubmit={handleSubmit}>
           <Stack spacing={3}>
@@ -170,7 +208,9 @@ export function EditMCPProxyDrawer({
                     fullWidth
                     size="small"
                     value={formData.version}
-                    onChange={(e) => handleFieldChange("version", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange("version", e.target.value)
+                    }
                     error={Boolean(errors.version)}
                     helperText={errors.version}
                     disabled={isPending}
@@ -183,7 +223,9 @@ export function EditMCPProxyDrawer({
                     size="small"
                     placeholder="/default/my-mcp-proxy"
                     value={formData.context}
-                    onChange={(e) => handleFieldChange("context", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange("context", e.target.value)
+                    }
                     error={Boolean(errors.context)}
                     helperText={errors.context}
                     disabled={isPending}
@@ -197,7 +239,9 @@ export function EditMCPProxyDrawer({
                     multiline
                     minRows={3}
                     value={formData.description}
-                    onChange={(e) => handleFieldChange("description", e.target.value)}
+                    onChange={(e) =>
+                      handleFieldChange("description", e.target.value)
+                    }
                     error={Boolean(errors.description)}
                     helperText={errors.description}
                     disabled={isPending}
@@ -206,14 +250,50 @@ export function EditMCPProxyDrawer({
               </Form.Stack>
             </Form.Section>
 
-            <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
-              <Button variant="outlined" color="inherit" onClick={onClose} disabled={isPending}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="contained" color="primary" disabled={!isValid || isPending}>
-                {isPending ? "Saving..." : "Save"}
-              </Button>
-            </Box>
+            <Form.Section>
+              <Form.Header>Endpoints</Form.Header>
+              <Form.Stack spacing={2}>
+                <Typography variant="body2" color="text.secondary">
+                  Endpoints map backend MCP servers to environments. Editing an
+                  endpoint updates the upstream URL, authentication, and
+                  capabilities for the environments it serves. Environments left
+                  without an endpoint become unconfigured.
+                </Typography>
+
+                <EndpointsEditorSection
+                  orgId={orgId}
+                  environments={environments}
+                  endpoints={endpoints}
+                  onEndpointsChange={setEndpoints}
+                  addOpen={addOpen}
+                  onAddOpenChange={setAddOpen}
+                  editingId={editingId}
+                  onEditingIdChange={setEditingId}
+                  emptyStateText="No endpoints configured yet."
+                />
+              </Form.Stack>
+            </Form.Section>
+
+            {addOpen || editingId !== null ? null : (
+              <Box display="flex" justifyContent="flex-end" gap={1} mt={2}>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={onClose}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  disabled={!isValid || isPending}
+                >
+                  {isPending ? "Saving..." : "Save"}
+                </Button>
+              </Box>
+            )}
           </Stack>
         </form>
       </DrawerContent>

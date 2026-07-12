@@ -52,13 +52,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import {
-  AlertTriangle,
-  Clock,
-  Copy,
-  Edit,
-  Settings,
-} from "@wso2/oxygen-ui-icons-react";
+import { AlertTriangle, Clock, Copy, Edit } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useParams, useSearchParams } from "react-router-dom";
 import {
   formatRelativeTime,
@@ -73,7 +67,6 @@ import { MCPProxyPoliciesTab } from "./MCPProxyPoliciesTab";
 import { MCPProxyRewriteTab } from "./MCPProxyRewriteTab";
 import { MCPProxySecurityTab } from "./MCPProxySecurityTab";
 import { EditMCPProxyDrawer } from "./EditMCPProxyDrawer";
-import { ManageEndpointsDialog } from "./ManageEndpointsDialog";
 import { useCopyWithFeedback } from "./useCopyWithFeedback";
 
 const TABS = [
@@ -138,7 +131,6 @@ export function ViewMCPProxy() {
     [setSearchParams],
   );
 
-  const [manageEndpointsOpen, setManageEndpointsOpen] = useState(false);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const handleCopy = useCopyWithFeedback();
 
@@ -258,7 +250,7 @@ export function ViewMCPProxy() {
               startIcon={<Edit size={16} />}
               onClick={() => setEditDrawerOpen(true)}
             >
-              Edit Details
+              Edit MCP Proxy
             </Button>
           ) : undefined
         }
@@ -341,15 +333,15 @@ export function ViewMCPProxy() {
               </Grid>
             </Grid>
             <Divider />
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              justifyContent="flex-end"
-              flexWrap="wrap"
-              useFlexGap
-            >
-              {hasEndpoints && (
+            {hasEndpoints && (
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                justifyContent="flex-end"
+                flexWrap="wrap"
+                useFlexGap
+              >
                 <FormControl size="small" sx={{ minWidth: 260 }}>
                   <Select
                     value={selectedEndpointId}
@@ -370,16 +362,8 @@ export function ViewMCPProxy() {
                     ))}
                   </Select>
                 </FormControl>
-              )}
-              <Button
-                variant="outlined"
-                size="small"
-                startIcon={<Settings size={16} />}
-                onClick={() => setManageEndpointsOpen(true)}
-              >
-                Manage Endpoints
-              </Button>
-            </Stack>
+              </Stack>
+            )}
 
             {hasEndpoints ? (
               <Card variant="outlined">
@@ -459,7 +443,8 @@ export function ViewMCPProxy() {
             ) : (
               <Card variant="outlined" sx={{ p: 3 }}>
                 <Alert severity="info">
-                  This MCP proxy has no endpoints configured.
+                  This MCP proxy has no endpoints configured. Use &quot;Edit MCP
+                  Proxy&quot; above to add one.
                 </Alert>
               </Card>
             )}
@@ -467,21 +452,13 @@ export function ViewMCPProxy() {
         )}
       </PageLayout>
 
-      {proxy && (
-        <ManageEndpointsDialog
-          open={manageEndpointsOpen}
-          orgId={orgId ?? ""}
-          proxy={proxy}
-          environments={environments}
-          onClose={() => setManageEndpointsOpen(false)}
-        />
-      )}
       {proxy && orgId && (
         <EditMCPProxyDrawer
           open={editDrawerOpen}
           onClose={() => setEditDrawerOpen(false)}
           proxy={proxy}
           orgId={orgId}
+          environments={environments}
         />
       )}
     </>

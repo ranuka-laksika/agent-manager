@@ -23,7 +23,7 @@ import type {
   MCPServerInfoFetchResponse,
   UpstreamAuth,
 } from "@agent-management-platform/types";
-import type { EndpointDraft } from "./AddEndpointDialog";
+import type { EndpointDraft } from "./EndpointFormFields";
 import { ACL_POLICY_NAME, REWRITE_POLICY_NAME } from "../constants";
 
 export type CapabilityKind = "tool" | "resource" | "prompt";
