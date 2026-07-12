@@ -31,7 +31,6 @@ import {
   Skeleton,
   Stack,
   Switch,
-  TextField,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
@@ -42,6 +41,7 @@ import type {
   MCPProxy,
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
+import { TextInput } from "@agent-management-platform/views";
 import { REWRITE_POLICY_NAME } from "../constants";
 import type { CapabilityKind } from "./mcpEndpoints";
 
@@ -822,7 +822,7 @@ function RewriteFieldsForm({
 
       {meta.kind === "tool" && (
         <>
-          <TextField
+          <TextInput
             label="Name"
             size="small"
             fullWidth
@@ -831,7 +831,7 @@ function RewriteFieldsForm({
               onChangeTool(meta.backendId, { name: e.target.value })
             }
           />
-          <TextField
+          <TextInput
             label="Description"
             size="small"
             fullWidth
@@ -842,7 +842,7 @@ function RewriteFieldsForm({
               onChangeTool(meta.backendId, { description: e.target.value })
             }
           />
-          <TextField
+          <TextInput
             label="Input Schema"
             size="small"
             fullWidth
@@ -871,7 +871,7 @@ function RewriteFieldsForm({
             </Button>
             <Collapse in={advancedOpen}>
               <Stack spacing={2} sx={{ mt: 2 }}>
-                <TextField
+                <TextInput
                   label="Output Schema"
                   size="small"
                   fullWidth
@@ -887,7 +887,7 @@ function RewriteFieldsForm({
                     "& .MuiInputBase-input": { fontFamily: "monospace" },
                   }}
                 />
-                <TextField
+                <TextInput
                   label="Target"
                   size="small"
                   fullWidth
@@ -908,7 +908,7 @@ function RewriteFieldsForm({
 
       {meta.kind === "resource" && (
         <>
-          <TextField
+          <TextInput
             label="URI"
             size="small"
             fullWidth
@@ -918,7 +918,7 @@ function RewriteFieldsForm({
             }
             sx={{ "& .MuiInputBase-input": { fontFamily: "monospace" } }}
           />
-          <TextField
+          <TextInput
             label="Description"
             size="small"
             fullWidth
@@ -946,7 +946,7 @@ function RewriteFieldsForm({
             </Button>
             <Collapse in={advancedOpen}>
               <Stack spacing={2} sx={{ mt: 2 }}>
-                <TextField
+                <TextInput
                   label="Target"
                   size="small"
                   fullWidth
@@ -969,7 +969,7 @@ function RewriteFieldsForm({
 
       {meta.kind === "prompt" && (
         <>
-          <TextField
+          <TextInput
             label="Name"
             size="small"
             fullWidth
@@ -978,7 +978,7 @@ function RewriteFieldsForm({
               onChangePrompt(meta.backendId, { name: e.target.value })
             }
           />
-          <TextField
+          <TextInput
             label="Description"
             size="small"
             fullWidth
@@ -1006,7 +1006,7 @@ function RewriteFieldsForm({
             </Button>
             <Collapse in={advancedOpen}>
               <Stack spacing={2} sx={{ mt: 2 }}>
-                <TextField
+                <TextInput
                   label="Target"
                   size="small"
                   fullWidth

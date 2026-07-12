@@ -19,10 +19,27 @@ import type {
   MCPEndpointConfig,
   MCPProxy,
 } from "@agent-management-platform/types";
-import { Card, Chip, Grid, IconButton, Skeleton, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
+import {
+  Card,
+  Chip,
+  FormControl,
+  FormLabel,
+  Grid,
+  IconButton,
+  InputAdornment,
+  Skeleton,
+  Stack,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@wso2/oxygen-ui";
 import { Copy } from "@wso2/oxygen-ui-icons-react";
-import { ACL_POLICY_NAME } from "../constants";
-import { getAuthenticationTypeLabel, resolveAuthenticationType } from "./mcpEndpoints";
+import {
+  getAuthenticationTypeLabel,
+  getCapabilityId,
+  isToolBlockedByAcl,
+  resolveAuthenticationType,
+} from "./mcpEndpoints";
 import { useCopyWithFeedback } from "./useCopyWithFeedback";
 
 // One chip per environment the selected endpoint is bound to, with its deployment
@@ -72,9 +89,13 @@ export function MCPProxyOverviewTab({
     return null;
   }
 
-  const manageToolsConfigured = config?.policies?.some(
-    (policy) => policy.name === ACL_POLICY_NAME,
-  );
+  const toolCapabilities = config?.capabilities?.tools ?? [];
+  const totalToolsCount = toolCapabilities.length;
+  const disabledToolsCount = toolCapabilities.filter((raw) => {
+    const id = getCapabilityId("tool", raw);
+    return id ? isToolBlockedByAcl(config, id) : false;
+  }).length;
+  const allowedToolsCount = totalToolsCount - disabledToolsCount;
 
   // Auth Type reflects the proxy's inbound security (the Security tab) — which
   // method clients must authenticate with — not the upstream auth used to reach
@@ -88,38 +109,6 @@ export function MCPProxyOverviewTab({
   return (
     <Stack spacing={3}>
       <Grid container spacing={2}>
-        {upstreamUrl && (
-          <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-            <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
-              <Stack spacing={0.5}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  sx={{ fontWeight: 500 }}
-                >
-                  Upstream URL
-                </Typography>
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <Typography
-                    variant="body2"
-                    sx={{ fontFamily: "monospace", wordBreak: "break-all", flex: 1 }}
-                  >
-                    {upstreamUrl}
-                  </Typography>
-                  <Tooltip title="Copy Upstream URL">
-                    <IconButton
-                      size="small"
-                      aria-label="Copy Upstream URL"
-                      onClick={() => handleCopy(upstreamUrl, "Upstream URL")}
-                    >
-                      <Copy size={14} />
-                    </IconButton>
-                  </Tooltip>
-                </Stack>
-              </Stack>
-            </Card>
-          </Grid>
-        )}
         <Grid size={{ xs: 12, sm: 6, md: 4 }}>
           <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
             <Stack spacing={0.5}>
@@ -144,13 +133,15 @@ export function MCPProxyOverviewTab({
               >
                 Manage Tools
               </Typography>
-              <Chip
-                label={manageToolsConfigured ? "Configured" : "Allow all"}
-                size="small"
-                variant="outlined"
-                color={manageToolsConfigured ? "success" : "default"}
-                sx={{ width: "fit-content" }}
-              />
+              {totalToolsCount > 0 ? (
+                <Typography variant="body2">
+                  {allowedToolsCount} allowed · {disabledToolsCount} disabled
+                </Typography>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No tools
+                </Typography>
+              )}
             </Stack>
           </Card>
         </Grid>
@@ -185,6 +176,37 @@ export function MCPProxyOverviewTab({
           </Card>
         </Grid>
       </Grid>
+      {upstreamUrl && (
+        <FormControl fullWidth>
+          <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 500, mb: 0.5 }}>
+            Upstream URL
+          </FormLabel>
+          <TextField
+            value={upstreamUrl}
+            size="small"
+            fullWidth
+            slotProps={{
+              input: {
+                readOnly: true,
+                sx: { fontFamily: "monospace", fontSize: "0.8125rem" },
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Tooltip title="Copy Upstream URL">
+                      <IconButton
+                        size="small"
+                        aria-label="Copy Upstream URL"
+                        onClick={() => handleCopy(upstreamUrl, "Upstream URL")}
+                      >
+                        <Copy size={14} />
+                      </IconButton>
+                    </Tooltip>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </FormControl>
+      )}
     </Stack>
   );
 }

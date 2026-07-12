@@ -273,7 +273,7 @@ export function ViewMCPProxy() {
         {proxy && !error && (
           <Stack spacing={4}>
             <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Typography
@@ -283,13 +283,12 @@ export function ViewMCPProxy() {
                     >
                       Context
                     </Typography>
-                    <Stack direction="row" alignItems="center" spacing={1}>
+                    <Stack direction="row" alignItems="center" spacing={0.5}>
                       <Typography
                         variant="body2"
                         sx={{
                           fontFamily: "monospace",
                           wordBreak: "break-all",
-                          flex: 1,
                         }}
                       >
                         {proxy.context || "—"}
@@ -311,7 +310,8 @@ export function ViewMCPProxy() {
                   </Stack>
                 </Card>
               </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <Card variant="outlined" sx={{ p: 2, height: "100%" }}>
                   <Stack spacing={0.5}>
                     <Typography
@@ -319,20 +319,19 @@ export function ViewMCPProxy() {
                       color="text.secondary"
                       sx={{ fontWeight: 500 }}
                     >
-                      In Catalog
+                      MCP Spec Version
                     </Typography>
-                    <Chip
-                      label={proxy.inCatalog ? "Yes" : "No"}
-                      size="small"
-                      color={proxy.inCatalog ? "success" : "default"}
-                      variant="outlined"
-                      sx={{ width: "fit-content" }}
-                    />
+                    <Typography
+                      variant="body2"
+                      sx={{ fontFamily: "monospace" }}
+                    >
+                      {proxy.mcpSpecVersion || "—"}
+                    </Typography>
                   </Stack>
                 </Card>
               </Grid>
             </Grid>
-            <Divider />
+
             {hasEndpoints && (
               <Stack
                 direction="row"
@@ -367,11 +366,32 @@ export function ViewMCPProxy() {
 
             {hasEndpoints ? (
               <Card variant="outlined">
-                <Tabs value={tabIndex} onChange={handleTabChange}>
-                  {TABS.map((tab) => (
-                    <Tab key={tab} label={tab} />
-                  ))}
-                </Tabs>
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  sx={{ pr: 2 }}
+                >
+                  <Tabs value={tabIndex} onChange={handleTabChange}>
+                    {TABS.map((tab) => (
+                      <Tab key={tab} label={tab} />
+                    ))}
+                  </Tabs>
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    sx={{ whiteSpace: "nowrap" }}
+                  >
+                    Showing{" "}
+                    <Typography
+                      component="span"
+                      variant="caption"
+                      sx={{ fontWeight: 600 }}
+                    >
+                      {selectedEndpoint?.name || selectedEndpoint?.id}
+                    </Typography>
+                  </Typography>
+                </Stack>
                 <Divider />
                 <Box sx={{ p: 3 }}>
                   {tabIndex === 0 && (
