@@ -43,8 +43,7 @@ import type {
   MCPProxyPolicy,
 } from "@agent-management-platform/types";
 import { REWRITE_POLICY_NAME } from "../constants";
-
-type CapabilityKind = "tool" | "resource" | "prompt";
+import type { CapabilityKind } from "./mcpEndpoints";
 
 const KIND_LABEL: Record<CapabilityKind, string> = {
   tool: "Tool",

@@ -58,7 +58,7 @@ interface EnvironmentSection {
   instance: ThunderInstanceResponse;
 }
 
-const PROVIDER_NAME = "Thunder";
+const PROVIDER_NAME = "ThunderID";
 
 const monoEllipsisSx = {
   fontFamily: "monospace",

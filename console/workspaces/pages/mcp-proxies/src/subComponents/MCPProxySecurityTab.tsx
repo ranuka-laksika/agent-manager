@@ -45,18 +45,10 @@ import {
   Skeleton,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import {
-  HelpCircle,
-  Plus,
-  ShieldAlert,
-  Trash,
-  Wrench,
-} from "@wso2/oxygen-ui-icons-react";
+import { Info, Plus, Trash, Wrench } from "@wso2/oxygen-ui-icons-react";
 import {
   type AuthenticationType,
   getAuthenticationTypeLabel,
@@ -83,17 +75,6 @@ type ScopeOption = ScopeResponse & { isNew?: boolean };
 
 const NEW_SCOPE_OPTION_ID = "__new_scope__";
 const filterScopeOptions = createFilterOptions<ScopeOption>();
-
-// Under Agent Identity security, access can be wide open ("allowAll", the
-// default — any caller with a valid token can invoke any tool) or gated
-// per-tool by catalog scopes ("rbac"). There's no dedicated field for this on
-// MCPEndpointConfig — it's derived from whether toolScopeBindings is empty.
-type IdentityAccessMode = "allowAll" | "rbac";
-
-const ALLOW_ALL_TOOLTIP =
-  "Allow all lets any caller with a valid Agent Identity token invoke every tool.";
-const RBAC_TOOLTIP =
-  "Use RBAC gates each tool by the catalog scopes assigned to it — callers must present a token carrying every required scope.";
 
 // A local editable row for the identity-security tool-scope-binding table.
 // Keyed by a local id (not the tool name) since the same tool can appear in
@@ -148,7 +129,7 @@ export function MCPProxySecurityTab({
     setAuthenticationType(nextType);
     setKeyValue(
       config.security?.apiKey?.key ??
-        (nextType === "apiKey" ? "X-API-Key" : ""),
+      (nextType === "apiKey" ? "X-API-Key" : ""),
     );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
@@ -204,9 +185,6 @@ export function MCPProxySecurityTab({
   const [toolScopeRows, setToolScopeRows] = useState<ToolScopeRow[]>([]);
   const lastSavedToolScopeRowsRef = useRef<ToolScopeRow[]>([]);
   const nextRowIdRef = useRef(0);
-  const [identityMode, setIdentityMode] =
-    useState<IdentityAccessMode>("allowAll");
-  const lastSavedIdentityModeRef = useRef<IdentityAccessMode>("allowAll");
   const [toolScopesError, setToolScopesError] = useState<string | undefined>();
   // Tracks which row is currently creating a new catalog scope inline, so its
   // Autocomplete alone shows a loading spinner while the create request is in flight.
@@ -232,12 +210,8 @@ export function MCPProxySecurityTab({
         ),
       }),
     );
-    const derivedMode: IdentityAccessMode =
-      rows.length > 0 ? "rbac" : "allowAll";
     setToolScopeRows(rows);
     lastSavedToolScopeRowsRef.current = rows;
-    setIdentityMode(derivedMode);
-    lastSavedIdentityModeRef.current = derivedMode;
     setToolScopesError(undefined);
   }, [config, selectedEndpointId]);
 
@@ -250,13 +224,11 @@ export function MCPProxySecurityTab({
     );
 
   const toolScopesDirty = useMemo(() => {
-    if (identityMode !== lastSavedIdentityModeRef.current) return true;
-    if (identityMode === "allowAll") return false;
     return (
       serializeToolScopeRows(toolScopeRows) !==
       serializeToolScopeRows(lastSavedToolScopeRowsRef.current)
     );
-  }, [identityMode, toolScopeRows]);
+  }, [toolScopeRows]);
 
   const handleAddToolScopeRow = useCallback(() => {
     setToolScopeRows((prev) => [
@@ -330,14 +302,13 @@ export function MCPProxySecurityTab({
     setAuthenticationType(nextType);
     setKeyValue(
       config.security?.apiKey?.key ??
-        (nextType === "apiKey" ? "X-API-Key" : ""),
+      (nextType === "apiKey" ? "X-API-Key" : ""),
     );
     setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
     setFieldErrors({});
     setStatus(null);
 
     setToolScopeRows(lastSavedToolScopeRowsRef.current);
-    setIdentityMode(lastSavedIdentityModeRef.current);
     setToolScopesError(undefined);
   }, [config]);
 
@@ -354,7 +325,6 @@ export function MCPProxySecurityTab({
 
     if (
       authenticationType === "identity" &&
-      identityMode === "rbac" &&
       toolScopeRows.some((row) => !row.tool || row.scopes.length === 0)
     ) {
       setToolScopesError(
@@ -366,11 +336,9 @@ export function MCPProxySecurityTab({
 
     // Scope bindings only apply under Agent Identity security — switching to
     // API Key (or no) authentication clears them rather than resending
-    // whatever was last mirrored locally from identityMode/toolScopeRows.
-    const savedIdentityMode: IdentityAccessMode =
-      authenticationType === "identity" ? identityMode : "allowAll";
+    // whatever was last mirrored locally in toolScopeRows.
     const savedToolScopeRows =
-      savedIdentityMode === "rbac" ? toolScopeRows : [];
+      authenticationType === "identity" ? toolScopeRows : [];
     const nextBindings: MCPToolScopeBinding[] = savedToolScopeRows.map(
       (row) => ({
         tool: row.tool,
@@ -394,7 +362,6 @@ export function MCPProxySecurityTab({
         toolScopeBindings: nextBindings,
       });
       lastSavedToolScopeRowsRef.current = savedToolScopeRows;
-      lastSavedIdentityModeRef.current = savedIdentityMode;
       setStatus({
         message: "Updated security settings.",
         severity: "success",
@@ -405,15 +372,7 @@ export function MCPProxySecurityTab({
         severity: "error",
       });
     }
-  }, [
-    config,
-    authenticationType,
-    keyValue,
-    keyIn,
-    identityMode,
-    toolScopeRows,
-    onUpdate,
-  ]);
+  }, [config, authenticationType, keyValue, keyIn, toolScopeRows, onUpdate]);
 
   const isDisabled = isLoading || !config;
   const noToolsForRbac = !isLoading && config && toolEntries.length === 0;
@@ -445,7 +404,7 @@ export function MCPProxySecurityTab({
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 5 }}>
           <FormControl fullWidth disabled={isDisabled}>
-            <FormLabel>Authentication Method</FormLabel>
+            <FormLabel>Method</FormLabel>
             <Select
               size="small"
               displayEmpty
@@ -468,253 +427,223 @@ export function MCPProxySecurityTab({
 
       {authenticationType === "identity" && (
         <Stack spacing={2}>
-          <Stack direction="row" alignItems="center" spacing={1.5}>
-            <Typography variant="body1">Mode</Typography>
-            <ToggleButtonGroup
-              size="small"
-              value={identityMode}
-              exclusive
-              disabled={isDisabled}
-              onChange={(_e, value: IdentityAccessMode | null) =>
-                value && setIdentityMode(value)
-              }
-            >
-              <ToggleButton
-                color="primary"
-                value="allowAll"
-                sx={{ textTransform: "none" }}
-              >
-                Allow All
-                <Tooltip arrow title={ALLOW_ALL_TOOLTIP}>
-                  <IconButton size="small">
-                    <HelpCircle size={16} />
-                  </IconButton>
-                </Tooltip>
-              </ToggleButton>
-              <ToggleButton
-                color="primary"
-                value="rbac"
-                sx={{ textTransform: "none" }}
-              >
-                RBAC
-                <Tooltip arrow title={RBAC_TOOLTIP}>
-                  <IconButton size="small">
-                    <HelpCircle size={16} />
-                  </IconButton>
-                </Tooltip>
-              </ToggleButton>
-            </ToggleButtonGroup>
+          <Stack spacing={0.5}>
+            <Typography variant="h6">Authorization</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Restrict access to individual tools by assigning catalog
+              scopes. Callers need a token that includes every scope
+              required by a tool to invoke it.
+            </Typography>
           </Stack>
 
-          {identityMode === "allowAll" && (
-            <Alert severity="warning">
-              Any caller with a valid Agent Identity token can invoke every
-              tool.
-            </Alert>
-          )}
-
-          {identityMode === "rbac" &&
-            (noToolsForRbac ? (
-              <Stack
-                alignItems="center"
-                justifyContent="center"
-                spacing={1}
-                sx={{ minHeight: 200, textAlign: "center" }}
-              >
-                <Typography variant="subtitle1" fontWeight={600}>
-                  No Tools Available
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  This MCP proxy has no tools. Scope bindings require at least
-                  one tool.
-                </Typography>
-              </Stack>
-            ) : (
-              <ListingTable.Container>
-                <ListingTable.Toolbar
-                  actions={
-                    <Button
-                      variant="outlined"
-                      startIcon={<Plus size={16} />}
-                      onClick={handleAddToolScopeRow}
-                    >
-                      Add Tool
-                    </Button>
-                  }
+          {noToolsForRbac ? (
+            <Stack
+              alignItems="center"
+              justifyContent="center"
+              spacing={1}
+              sx={{ minHeight: 200, textAlign: "center" }}
+            >
+              <Typography variant="subtitle1" fontWeight={600}>
+                No Tools Available
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                This MCP proxy has no tools. Scope bindings require at least one
+                tool.
+              </Typography>
+            </Stack>
+          ) : (
+            <ListingTable.Container>
+              <ListingTable.Toolbar
+                actions={
+                  <Button
+                    variant="outlined"
+                    startIcon={<Plus size={16} />}
+                    onClick={handleAddToolScopeRow}
+                  >
+                    Add Tool
+                  </Button>
+                }
+              />
+              {toolScopeRows.length === 0 ? (
+                <ListingTable.EmptyState
+                  illustration={<Wrench size={64} />}
+                  title="No tool scope bindings yet"
+                  description='Click "Add Tool" to gate a tool with scopes.'
                 />
-                {toolScopeRows.length === 0 ? (
-                  <ListingTable.EmptyState
-                    illustration={<Wrench size={64} />}
-                    title="No tool scope bindings yet"
-                    description='Click "Add Tool" to gate a tool with catalog scopes.'
-                  />
-                ) : (
-                  <ListingTable density="compact">
-                    <ListingTable.Head>
-                      <ListingTable.Row>
-                        <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
-                        <ListingTable.Cell>Scopes</ListingTable.Cell>
-                        <ListingTable.Cell align="center" width="60px" />
-                      </ListingTable.Row>
-                    </ListingTable.Head>
-                    <ListingTable.Body>
-                      {toolScopeRows.map((row) => (
-                        <ListingTable.Row key={row.id}>
-                          <ListingTable.Cell>
-                            <Select
-                              size="small"
-                              displayEmpty
-                              fullWidth
-                              value={row.tool}
-                              onChange={(e) =>
-                                handleToolScopeRowToolChange(
-                                  row.id,
-                                  e.target.value as string,
-                                )
+              ) : (
+                <ListingTable density="compact">
+                  <ListingTable.Head>
+                    <ListingTable.Row>
+                      <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
+                      <ListingTable.Cell>Scopes</ListingTable.Cell>
+                      <ListingTable.Cell align="center" width="60px" />
+                    </ListingTable.Row>
+                  </ListingTable.Head>
+                  <ListingTable.Body>
+                    {toolScopeRows.map((row) => (
+                      <ListingTable.Row key={row.id}>
+                        <ListingTable.Cell>
+                          <Select
+                            size="small"
+                            displayEmpty
+                            fullWidth
+                            value={row.tool}
+                            onChange={(e) =>
+                              handleToolScopeRowToolChange(
+                                row.id,
+                                e.target.value as string,
+                              )
+                            }
+                            renderValue={(value) => {
+                              const identifier = value as string;
+                              if (!identifier) return "Select a tool";
+                              return (
+                                <Stack
+                                  direction="row"
+                                  alignItems="center"
+                                  sx={{ width: "100%" }}
+                                  spacing={1}
+                                >
+                                  <span>{identifier}</span>
+                                  {blockedToolIds.has(identifier) && (
+                                    <Tooltip title="Blocked by Manage Tools">
+                                      <Stack color="warning.main" direction="row" alignItems="center">
+                                        <Info size={14} />
+                                      </Stack>
+                                    </Tooltip>
+                                  )}
+                                </Stack>
+                              );
+                            }}
+                            sx={{ minWidth: 200 }}
+                          >
+                            {toolEntries.map((identifier) => (
+                              <MenuItem key={identifier} value={identifier}>
+                                <Stack
+                                  direction="row"
+                                  alignItems="center"
+                                  spacing={1}
+                                  sx={{ width: "100%" }}
+                                >
+                                  <Typography component="span" variant="body2" noWrap>
+                                    {identifier}
+                                  </Typography>
+                                  {blockedToolIds.has(identifier) && (
+                                    <Tooltip title="Blocked by Manage Tools">
+                                      <Stack color="warning.main" direction="row" alignItems="center">
+                                        <Info size={14} />
+                                      </Stack>
+                                    </Tooltip>
+                                  )}
+
+                                </Stack>
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </ListingTable.Cell>
+                        <ListingTable.Cell>
+                          <Autocomplete
+                            multiple
+                            size="small"
+                            disableCloseOnSelect
+                            options={catalogScopes}
+                            value={row.scopes}
+                            loading={creatingScopeRowId === row.id}
+                            disabled={creatingScopeRowId === row.id}
+                            onChange={(_e, value) =>
+                              handleToolScopeRowScopesChange(
+                                row.id,
+                                value as ScopeOption[],
+                              )
+                            }
+                            filterOptions={(options, params) => {
+                              const filtered = filterScopeOptions(
+                                options as ScopeOption[],
+                                params,
+                              );
+                              const inputValue = params.inputValue.trim();
+                              const exists = options.some(
+                                (option) => option.name === inputValue,
+                              );
+                              if (inputValue.length > 0 && !exists) {
+                                filtered.push({
+                                  id: NEW_SCOPE_OPTION_ID,
+                                  name: inputValue,
+                                  isNew: true,
+                                });
                               }
-                              renderValue={(value) => {
-                                const identifier = value as string;
-                                if (!identifier) return "Select a tool";
-                                return (
-                                  <Stack
-                                    direction="row"
-                                    alignItems="center"
-                                    sx={{ width: "100%" }}
-                                    spacing={1}
-                                  >
-                                    <span>{identifier}</span>
-                                    {blockedToolIds.has(identifier) && (
-                                      <Tooltip title="Blocked by Manage Tools">
-                                        <ShieldAlert size={14} />
-                                      </Tooltip>
-                                    )}
-                                  </Stack>
-                                );
-                              }}
-                              sx={{ minWidth: 200 }}
-                            >
-                              {toolEntries.map((identifier) => (
-                                <MenuItem key={identifier} value={identifier}>
-                                  <Stack
-                                    direction="row"
-                                    alignItems="center"
-                                    spacing={1}
-                                    sx={{ width: "100%" }}
-                                  >
-                                    <span>{identifier}</span>
-                                    {blockedToolIds.has(identifier) && (
-                                      <Tooltip title="Blocked by Manage Tools">
-                                        <ShieldAlert size={14} />
-                                      </Tooltip>
-                                    )}
-                                  </Stack>
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </ListingTable.Cell>
-                          <ListingTable.Cell>
-                            <Autocomplete
-                              multiple
-                              size="small"
-                              disableCloseOnSelect
-                              options={catalogScopes}
-                              value={row.scopes}
-                              loading={creatingScopeRowId === row.id}
-                              disabled={creatingScopeRowId === row.id}
-                              onChange={(_e, value) =>
-                                handleToolScopeRowScopesChange(
-                                  row.id,
-                                  value as ScopeOption[],
-                                )
-                              }
-                              filterOptions={(options, params) => {
-                                const filtered = filterScopeOptions(
-                                  options as ScopeOption[],
-                                  params,
-                                );
-                                const inputValue = params.inputValue.trim();
-                                const exists = options.some(
-                                  (option) => option.name === inputValue,
-                                );
-                                if (inputValue.length > 0 && !exists) {
-                                  filtered.push({
-                                    id: NEW_SCOPE_OPTION_ID,
-                                    name: inputValue,
-                                    isNew: true,
-                                  });
-                                }
-                                return filtered;
-                              }}
-                              getOptionLabel={(option) =>
-                                (option as ScopeOption).name
-                              }
-                              isOptionEqualToValue={(option, value) =>
-                                (option as ScopeOption).name ===
-                                (value as ScopeOption).name
-                              }
-                              renderOption={(props, option) => {
-                                const scopeOption = option as ScopeOption;
-                                return (
-                                  <li {...props} key={scopeOption.id}>
-                                    {scopeOption.isNew
-                                      ? `+ Add Scope "${scopeOption.name}"`
-                                      : scopeOption.name}
-                                  </li>
-                                );
-                              }}
-                              renderTags={(value, getTagProps) =>
-                                value.map((option, index) => (
-                                  <Chip
-                                    {...getTagProps({ index })}
-                                    key={option.name}
-                                    label={option.name}
-                                    size="small"
-                                  />
-                                ))
-                              }
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  placeholder="Add scopes..."
-                                  slotProps={{
-                                    input: {
-                                      ...params.InputProps,
-                                      endAdornment: (
-                                        <>
-                                          {creatingScopeRowId === row.id ? (
-                                            <CircularProgress
-                                              color="inherit"
-                                              size={16}
-                                            />
-                                          ) : null}
-                                          {params.InputProps.endAdornment}
-                                        </>
-                                      ),
-                                    },
-                                  }}
+                              return filtered;
+                            }}
+                            getOptionLabel={(option) =>
+                              (option as ScopeOption).name
+                            }
+                            isOptionEqualToValue={(option, value) =>
+                              (option as ScopeOption).name ===
+                              (value as ScopeOption).name
+                            }
+                            renderOption={(props, option) => {
+                              const scopeOption = option as ScopeOption;
+                              return (
+                                <li {...props} key={scopeOption.id}>
+                                  {scopeOption.isNew
+                                    ? `+ Add Scope "${scopeOption.name}"`
+                                    : scopeOption.name}
+                                </li>
+                              );
+                            }}
+                            renderTags={(value, getTagProps) =>
+                              value.map((option, index) => (
+                                <Chip
+                                  {...getTagProps({ index })}
+                                  key={option.name}
+                                  label={option.name}
+                                  size="small"
                                 />
-                              )}
-                              noOptionsText="No scopes in the catalog"
-                              sx={{ minWidth: 280 }}
-                            />
-                          </ListingTable.Cell>
-                          <ListingTable.Cell align="center">
-                            <Tooltip title="Remove binding">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleRemoveToolScopeRow(row.id)}
-                              >
-                                <Trash size={16} />
-                              </IconButton>
-                            </Tooltip>
-                          </ListingTable.Cell>
-                        </ListingTable.Row>
-                      ))}
-                    </ListingTable.Body>
-                  </ListingTable>
-                )}
-              </ListingTable.Container>
-            ))}
+                              ))
+                            }
+                            renderInput={(params) => (
+                              <TextField
+                                {...params}
+                                placeholder="Add scopes..."
+                                slotProps={{
+                                  input: {
+                                    ...params.InputProps,
+                                    endAdornment: (
+                                      <>
+                                        {creatingScopeRowId === row.id ? (
+                                          <CircularProgress
+                                            color="inherit"
+                                            size={16}
+                                          />
+                                        ) : null}
+                                        {params.InputProps.endAdornment}
+                                      </>
+                                    ),
+                                  },
+                                }}
+                              />
+                            )}
+                            noOptionsText="No scopes in the catalog"
+                            sx={{ minWidth: 280 }}
+                          />
+                        </ListingTable.Cell>
+                        <ListingTable.Cell align="center">
+                          <Tooltip title="Remove binding">
+                            <IconButton
+                              size="small"
+                              onClick={() => handleRemoveToolScopeRow(row.id)}
+                            >
+                              <Trash size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        </ListingTable.Cell>
+                      </ListingTable.Row>
+                    ))}
+                  </ListingTable.Body>
+                </ListingTable>
+              )}
+            </ListingTable.Container>
+          )}
           <Collapse in={!!toolScopesError} timeout={300}>
             {toolScopesError && (
               <Alert

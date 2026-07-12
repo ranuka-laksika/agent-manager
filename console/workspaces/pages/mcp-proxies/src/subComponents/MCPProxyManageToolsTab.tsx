@@ -30,9 +30,12 @@ import type {
 } from "@agent-management-platform/types";
 import { Alert, Stack, Typography } from "@wso2/oxygen-ui";
 import { ACL_POLICY_NAME } from "../constants";
-import { getCapabilityId } from "./mcpEndpoints";
-
-type CapabilityKind = "tool" | "resource" | "prompt";
+import {
+  CAPABILITY_SECTION_KEY,
+  type CapabilityKind,
+  getCapabilityId,
+  parseAclSection,
+} from "./mcpEndpoints";
 
 const KIND_CHIP_LABEL: Record<CapabilityKind, string> = {
   tool: "Tool",
@@ -57,38 +60,26 @@ type ParsedAcl = {
   exceptionKeys: string[];
 };
 
+// Reads the ACL policy via the shared parseAclSection (the single source of
+// truth for the mode/exceptions shape, also used by mcpEndpoints.ts's
+// isToolBlockedByAcl) and folds its per-kind sections into one mode + a flat
+// list of exception keys for the AccessControlPanel.
 function parseExistingAclPolicy(
   policy: MCPProxyPolicy | undefined,
 ): ParsedAcl {
-  if (!policy?.params) {
-    return { mode: "allow", exceptionKeys: [] };
-  }
-  const params = policy.params as Record<string, unknown>;
-  const sections: CapabilityKind[] = ["tool", "resource", "prompt"];
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
+  const params = policy?.params as Record<string, unknown> | undefined;
+  const kinds: CapabilityKind[] = ["tool", "resource", "prompt"];
   let resolvedMode: AccessControlMode | null = null;
   const exceptionKeys: string[] = [];
-  for (const kind of sections) {
-    const section = params[sectionKey[kind]] as
-      | Record<string, unknown>
-      | undefined;
-    if (!section) continue;
-    const rawMode = String(section.mode ?? "").toLowerCase();
-    if (resolvedMode === null && (rawMode === "allow" || rawMode === "deny")) {
-      resolvedMode = rawMode;
+  for (const kind of kinds) {
+    const { mode, exceptions } = parseAclSection(
+      params,
+      CAPABILITY_SECTION_KEY[kind],
+    );
+    if (resolvedMode === null && mode) {
+      resolvedMode = mode;
     }
-    const exceptions = section.exceptions;
-    if (Array.isArray(exceptions)) {
-      for (const entry of exceptions) {
-        if (typeof entry === "string" && entry.trim()) {
-          exceptionKeys.push(makeItemKey(kind, entry.trim()));
-        }
-      }
-    }
+    exceptions.forEach((entry) => exceptionKeys.push(makeItemKey(kind, entry)));
   }
   return {
     mode: resolvedMode ?? "allow",
@@ -101,11 +92,6 @@ function buildAclPolicyParams(
   exceptionKeys: string[],
   hasCapabilities: Record<CapabilityKind, boolean>,
 ): Record<string, unknown> {
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
   const exceptionsByKind: Record<CapabilityKind, string[]> = {
     tool: [],
     resource: [],
@@ -124,7 +110,7 @@ function buildAclPolicyParams(
   const params: Record<string, unknown> = {};
   (["tool", "resource", "prompt"] as CapabilityKind[]).forEach((kind) => {
     if (!hasCapabilities[kind]) return;
-    params[sectionKey[kind]] = {
+    params[CAPABILITY_SECTION_KEY[kind]] = {
       mode,
       exceptions: exceptionsByKind[kind],
     };

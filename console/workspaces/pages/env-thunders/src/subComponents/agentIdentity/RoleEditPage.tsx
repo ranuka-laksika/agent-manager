@@ -309,7 +309,7 @@ export const RoleEditPage: React.FC = () => {
               <Typography variant="body2" color="text.secondary">
                 {isPermissionsReadOnly
                   ? "Permissions for predefined roles cannot be modified."
-                  : "Search and select catalog scopes to assign to this role."}
+                  : "Search and select scopes to assign to this role."}
               </Typography>
 
               <Box sx={{ mt: 1 }}>

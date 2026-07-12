@@ -26,7 +26,16 @@ import type {
 import type { EndpointDraft } from "./AddEndpointDialog";
 import { ACL_POLICY_NAME, REWRITE_POLICY_NAME } from "../constants";
 
-type CapabilityKind = "tool" | "resource" | "prompt";
+export type CapabilityKind = "tool" | "resource" | "prompt";
+
+// Policy-params section key for each capability kind (the ACL and Rewrite
+// policies both key their per-kind config off these names) — shared so every
+// reader/writer of those policies' params agrees on the same section names.
+export const CAPABILITY_SECTION_KEY: Record<CapabilityKind, string> = {
+  tool: "tools",
+  resource: "resources",
+  prompt: "prompts",
+};
 
 // Default security applied to freshly configured environment blocks — mirrors the
 // blueprint created by the MCP proxy creation form.
@@ -226,20 +235,15 @@ export function prunePoliciesForCapabilities(
     resource: collectCapabilityIds("resource", capabilities?.resources),
     prompt: collectCapabilityIds("prompt", capabilities?.prompts),
   };
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
   const kinds: CapabilityKind[] = ["tool", "resource", "prompt"];
 
   const next: MCPProxyPolicy[] = [];
   for (const policy of policies) {
     if (policy.name === REWRITE_POLICY_NAME) {
-      const pruned = pruneRewritePolicy(policy, validIds, sectionKey, kinds);
+      const pruned = pruneRewritePolicy(policy, validIds, CAPABILITY_SECTION_KEY, kinds);
       if (pruned) next.push(pruned);
     } else if (policy.name === ACL_POLICY_NAME) {
-      const pruned = pruneAclPolicy(policy, validIds, sectionKey, kinds);
+      const pruned = pruneAclPolicy(policy, validIds, CAPABILITY_SECTION_KEY, kinds);
       if (pruned) next.push(pruned);
     } else {
       next.push(policy);
