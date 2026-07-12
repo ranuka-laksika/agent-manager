@@ -47,7 +47,6 @@ import { copyToClipboard } from "@agent-management-platform/shared-component";
 import { useSnackBar } from "@agent-management-platform/views";
 
 interface EnvironmentSection {
-  key: string;
   title: string;
   instance: ThunderInstanceResponse;
 }
@@ -110,7 +109,6 @@ export function ThunderInstancesTable() {
       const instance = instancesByEnv.get(env.name);
       if (instance) {
         grouped.push({
-          key: env.name,
           title: env.displayName || env.name,
           instance,
         });
@@ -119,7 +117,6 @@ export function ThunderInstancesTable() {
     for (const instance of instances) {
       if (!knownEnvs.has(instance.envName)) {
         grouped.push({
-          key: instance.envName,
           title: instance.displayName || instance.envName,
           instance,
         });
@@ -244,9 +241,9 @@ export function ThunderInstancesTable() {
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {sections.map(({ key, title, instance }) => (
+                {sections.map(({ title, instance }) => (
                   <ListingTable.Row
-                    key={key}
+                    key={instance.envName}
                     variant="card"
                     hover
                     clickable

@@ -16,20 +16,10 @@
  * under the License.
  */
 
-import {
-  Card,
-  FormControl,
-  FormLabel,
-  Grid,
-  IconButton,
-  InputAdornment,
-  Stack,
-  TextField,
-  Tooltip,
-  Typography,
-} from "@wso2/oxygen-ui";
+import { Card, Grid, IconButton, InputAdornment, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
 import { Copy } from "@wso2/oxygen-ui-icons-react";
 import type { ThunderInstanceResponse } from "@agent-management-platform/types";
+import { TextInput } from "@agent-management-platform/views";
 
 function InfoCard({
   label,
@@ -67,35 +57,31 @@ function EndpointField({
   onCopy: (v: string, l: string) => void;
 }) {
   return (
-    <FormControl fullWidth>
-      <FormLabel sx={{ fontSize: "0.75rem", fontWeight: 500, mb: 0.5 }}>
-        {label}
-      </FormLabel>
-      <TextField
-        value={value}
-        size="small"
-        fullWidth
-        slotProps={{
-          input: {
-            readOnly: true,
-            sx: { fontFamily: "monospace", fontSize: "0.8125rem" },
-            endAdornment: (
-              <InputAdornment position="end">
-                <Tooltip title={`Copy ${label}`}>
-                  <IconButton
-                    size="small"
-                    aria-label={`Copy ${label}`}
-                    onClick={() => onCopy(value, label)}
-                  >
-                    <Copy size={14} />
-                  </IconButton>
-                </Tooltip>
-              </InputAdornment>
-            ),
-          },
-        }}
-      />
-    </FormControl>
+    <TextInput
+      label={label}
+      value={value}
+      size="small"
+      fullWidth
+      slotProps={{
+        input: {
+          readOnly: true,
+          sx: { fontFamily: "monospace", fontSize: "0.8125rem" },
+          endAdornment: (
+            <InputAdornment position="end">
+              <Tooltip title={`Copy ${label}`}>
+                <IconButton
+                  size="small"
+                  aria-label={`Copy ${label}`}
+                  onClick={() => onCopy(value, label)}
+                >
+                  <Copy size={14} />
+                </IconButton>
+              </Tooltip>
+            </InputAdornment>
+          ),
+        },
+      }}
+    />
   );
 }
 
