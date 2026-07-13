@@ -782,10 +782,19 @@ main() {
     ca_bundle="${mozilla_bundle}
 ${ca_pem}"
 
-    # Store the combined bundle as a ConfigMap.
+    # Store the combined bundle as a ConfigMap. Pass the bundle through a temp
+    # file with --from-file rather than --from-literal: the Mozilla CA bundle is
+    # ~230KB, which exceeds the Linux per-argument limit (MAX_ARG_STRLEN, 128KB)
+    # and makes kubectl exit with "Argument list too long" before it emits any
+    # YAML, so the piped `kubectl apply` then fails with "no objects passed to
+    # apply". (macOS has a larger limit, so this only bites on Linux/CI.)
+    local ca_bundle_file
+    ca_bundle_file="$(mktemp)"
+    printf '%s' "$ca_bundle" >"$ca_bundle_file"
     kubectl create configmap "$ca_cm_name" -n "$ns" \
-      --from-literal=ca-bundle.crt="${ca_bundle}" \
+      --from-file=ca-bundle.crt="$ca_bundle_file" \
       --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    rm -f "$ca_bundle_file"
     echo "🔐 Combined CA bundle (Mozilla + platform Thunder CA) stored in ${ns}/${ca_cm_name}"
   fi
   fi # SKIP_CA_BUNDLE_TRUST

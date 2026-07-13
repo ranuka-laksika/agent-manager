@@ -93,6 +93,10 @@ var serviceProviderSet = wire.NewSet(
 	services.NewAgentAPIKeyService,
 	services.NewLLMProxyDeploymentService,
 	services.NewMCPProxyService,
+	services.NewMCPProxyScopeService,
+	// MCPProxyScopeService only needs the narrow redeploy surface; bind it to
+	// the concrete service so scope mutations can re-emit gateway policies.
+	wire.Bind(new(services.MCPProxyRedeployer), new(*services.MCPProxyService)),
 	services.NewGatewayInternalAPIService,
 	services.NewMonitorScoresService,
 	services.NewCatalogService,
@@ -101,7 +105,6 @@ var serviceProviderSet = wire.NewSet(
 	services.NewLLMTemplateStore,
 	services.NewGitSecretService,
 	services.NewAIApplicationService,
-	services.NewScopeService,
 )
 
 var instrumentationProviderSet = wire.NewSet(
@@ -136,7 +139,7 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentConfigurationController,
 	controllers.NewGitSecretController,
 	controllers.NewIdentityController,
-	controllers.NewScopeController,
+	controllers.NewMCPProxyScopeController,
 	controllers.NewAgentIdentityController,
 )
 
@@ -350,7 +353,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
-	repositories.NewScopeRepository,
+	repositories.NewMCPProxyScopeRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
@@ -509,12 +512,12 @@ func ProvideEnvThunderResolver(secretMgmtClient secretmanagersvc.SecretManagemen
 func ProvideAgentIdentityInjectionService(
 	repo repositories.AgentThunderClientRepository,
 	agentConfigRepo repositories.AgentConfigurationRepository,
-	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository,
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
 	ocClient occlient.OpenChoreoClient,
 	cfg config.Config,
 	logger *slog.Logger,
 ) services.AgentIdentityInjectionService {
-	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyEndpointRepo, ocClient, cfg.SecretManager.RefreshInterval, logger)
+	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyScopeRepo, ocClient, cfg.SecretManager.RefreshInterval, logger)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

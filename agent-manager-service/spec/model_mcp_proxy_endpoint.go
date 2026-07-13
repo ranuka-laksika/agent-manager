@@ -17,17 +17,16 @@ import (
 // checks if the MCPProxyEndpoint type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &MCPProxyEndpoint{}
 
-// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, security, and tool-scope bindings, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
+// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, and security, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
 type MCPProxyEndpoint struct {
 	// Endpoint handle, unique within the parent proxy
 	Id string `json:"id"`
 	// Human-readable endpoint name
-	Name              *string               `json:"name,omitempty"`
-	Upstream          UpstreamConfig        `json:"upstream"`
-	Policies          []MCPPolicy           `json:"policies,omitempty"`
-	Capabilities      *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Security          *SecurityConfig       `json:"security,omitempty"`
-	ToolScopeBindings []MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
+	Name         *string               `json:"name,omitempty"`
+	Upstream     UpstreamConfig        `json:"upstream"`
+	Policies     []MCPPolicy           `json:"policies,omitempty"`
+	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
+	Security     *SecurityConfig       `json:"security,omitempty"`
 	// Environments this endpoint is deployed to.
 	Environments []MCPEndpointEnvironment `json:"environments,omitempty"`
 }
@@ -227,38 +226,6 @@ func (o *MCPProxyEndpoint) SetSecurity(v SecurityConfig) {
 	o.Security = &v
 }
 
-// GetToolScopeBindings returns the ToolScopeBindings field value if set, zero value otherwise.
-func (o *MCPProxyEndpoint) GetToolScopeBindings() []MCPToolScopeBinding {
-	if o == nil || IsNil(o.ToolScopeBindings) {
-		var ret []MCPToolScopeBinding
-		return ret
-	}
-	return o.ToolScopeBindings
-}
-
-// GetToolScopeBindingsOk returns a tuple with the ToolScopeBindings field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *MCPProxyEndpoint) GetToolScopeBindingsOk() ([]MCPToolScopeBinding, bool) {
-	if o == nil || IsNil(o.ToolScopeBindings) {
-		return nil, false
-	}
-	return o.ToolScopeBindings, true
-}
-
-// HasToolScopeBindings returns a boolean if a field has been set.
-func (o *MCPProxyEndpoint) HasToolScopeBindings() bool {
-	if o != nil && !IsNil(o.ToolScopeBindings) {
-		return true
-	}
-
-	return false
-}
-
-// SetToolScopeBindings gets a reference to the given []MCPToolScopeBinding and assigns it to the ToolScopeBindings field.
-func (o *MCPProxyEndpoint) SetToolScopeBindings(v []MCPToolScopeBinding) {
-	o.ToolScopeBindings = v
-}
-
 // GetEnvironments returns the Environments field value if set, zero value otherwise.
 func (o *MCPProxyEndpoint) GetEnvironments() []MCPEndpointEnvironment {
 	if o == nil || IsNil(o.Environments) {
@@ -314,9 +281,6 @@ func (o MCPProxyEndpoint) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Security) {
 		toSerialize["security"] = o.Security
-	}
-	if !IsNil(o.ToolScopeBindings) {
-		toSerialize["toolScopeBindings"] = o.ToolScopeBindings
 	}
 	if !IsNil(o.Environments) {
 		toSerialize["environments"] = o.Environments

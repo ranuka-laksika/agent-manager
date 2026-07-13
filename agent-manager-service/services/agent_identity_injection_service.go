@@ -183,12 +183,12 @@ type AgentIdentityInjectionService interface {
 }
 
 type agentIdentityInjectionService struct {
-	repo                 repositories.AgentThunderClientRepository
-	agentConfigRepo      repositories.AgentConfigurationRepository
-	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository
-	ocClient             client.OpenChoreoClient
-	refreshInterval      string
-	logger               *slog.Logger
+	repo              repositories.AgentThunderClientRepository
+	agentConfigRepo   repositories.AgentConfigurationRepository
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository
+	ocClient          client.OpenChoreoClient
+	refreshInterval   string
+	logger            *slog.Logger
 	// now is injectable for tests; defaults to time.Now.
 	now func() time.Time
 }
@@ -199,30 +199,31 @@ type agentIdentityInjectionService struct {
 func NewAgentIdentityInjectionService(
 	repo repositories.AgentThunderClientRepository,
 	agentConfigRepo repositories.AgentConfigurationRepository,
-	mcpProxyEndpointRepo repositories.MCPProxyEndpointRepository,
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
 	ocClient client.OpenChoreoClient,
 	refreshInterval string,
 	logger *slog.Logger,
 ) AgentIdentityInjectionService {
 	return &agentIdentityInjectionService{
-		repo:                 repo,
-		agentConfigRepo:      agentConfigRepo,
-		mcpProxyEndpointRepo: mcpProxyEndpointRepo,
-		ocClient:             ocClient,
-		refreshInterval:      refreshInterval,
-		logger:               logger,
-		now:                  time.Now,
+		repo:              repo,
+		agentConfigRepo:   agentConfigRepo,
+		mcpProxyScopeRepo: mcpProxyScopeRepo,
+		ocClient:          ocClient,
+		refreshInterval:   refreshInterval,
+		logger:            logger,
+		now:               time.Now,
 	}
 }
 
 // resolveAgentIdentityScopes returns the full set of OAuth2 scopes the agent
-// should request when minting a token: the union of every catalog scope
-// bound (via MCPToolScopeBinding) to a tool on any MCP proxy this agent is
-// configured to use in this environment — sourced entirely from AMS's own
-// DB, no Thunder role/group lookups. Requesting a scope the AgentID isn't
-// actually authorized for is safe: Thunder filters requested scopes down to
-// what the agent's role assignments actually grant at token-mint time, so
-// this is a "what might I need" list, not the enforcement point.
+// should request when minting a token: the union of every scope defined on
+// any MCP proxy this agent is bound to in this environment (see
+// models.MCPProxyScope — a proxy-level action string, not tied to a specific
+// environment) — sourced entirely from AMS's own DB, no Thunder role/group
+// lookups. Requesting a scope the AgentID isn't actually authorized for is
+// safe: Thunder filters requested scopes down to what the agent's role
+// assignments actually grant at token-mint time, so this is a "what might I
+// need" list, not the enforcement point.
 //
 // Returns an error on a genuine lookup failure (DB/OpenChoreo) instead of
 // silently falling back to no scopes: every caller of this service already
@@ -254,37 +255,37 @@ func (s *agentIdentityInjectionService) resolveAgentIdentityScopes(ctx context.C
 		return nil, fmt.Errorf("resolve agent identity scopes: resolve environment: %w", err)
 	}
 
-	envUUID, err := uuid.Parse(env.UUID)
+	// Proxy handles are needed to build each scope row's token string (see
+	// models.MCPProxyScope.ScopeString) — read from the mapping's own
+	// preloaded proxy (AgentConfigurationRepository.GetByAgentID preloads
+	// EnvMCPMappings.MCPProxy.Artifact) rather than a second lookup.
+	handleByProxy := map[uuid.UUID]string{}
+	for _, mapping := range config.EnvMCPMappings {
+		if mapping.EnvironmentUUID.String() != env.UUID || mapping.MCPProxy == nil {
+			continue
+		}
+		handleByProxy[mapping.MCPProxyUUID] = proxyHandleOf(mapping.MCPProxy)
+	}
+	if len(handleByProxy) == 0 {
+		return nil, nil
+	}
+
+	proxyUUIDs := make([]uuid.UUID, 0, len(handleByProxy))
+	for id := range handleByProxy {
+		proxyUUIDs = append(proxyUUIDs, id)
+	}
+	scopeRows, err := s.mcpProxyScopeRepo.ListByProxyUUIDs(ctx, proxyUUIDs)
 	if err != nil {
-		return nil, fmt.Errorf("resolve agent identity scopes: invalid environment id %q: %w", env.UUID, err)
+		return nil, fmt.Errorf("resolve agent identity scopes: list mcp proxy scopes: %w", err)
 	}
 
 	scopeSet := map[string]struct{}{}
-	for _, mapping := range config.EnvMCPMappings {
-		if mapping.EnvironmentUUID.String() != env.UUID {
+	for _, sc := range scopeRows {
+		handle := handleByProxy[sc.MCPProxyUUID]
+		if handle == "" {
 			continue
 		}
-		// A proxy's per-environment tool-scope bindings live on the endpoint
-		// deployed to this environment (MCPProxyEndpoint.Configuration), reached
-		// via the endpoint<->environment join row — not on the proxy itself.
-		ee, err := s.mcpProxyEndpointRepo.GetEndpointEnvByProxyAndEnv(ctx, mapping.MCPProxyUUID, envUUID)
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				continue // this proxy has no endpoint deployed to this environment
-			}
-			return nil, fmt.Errorf("resolve agent identity scopes: resolve proxy endpoint for environment: %w", err)
-		}
-		endpoint, err := s.mcpProxyEndpointRepo.GetEndpoint(ctx, ee.EndpointUUID)
-		if err != nil {
-			return nil, fmt.Errorf("resolve agent identity scopes: load proxy endpoint: %w", err)
-		}
-		for _, toolBinding := range endpoint.Configuration.ToolScopeBindings {
-			for _, scope := range toolBinding.Scopes {
-				if scope != "" {
-					scopeSet[scope] = struct{}{}
-				}
-			}
-		}
+		scopeSet[sc.ScopeString(handle)] = struct{}{}
 	}
 	if len(scopeSet) == 0 {
 		return nil, nil

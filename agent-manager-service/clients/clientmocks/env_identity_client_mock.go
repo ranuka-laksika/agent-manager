@@ -40,14 +40,20 @@ import (
 //			DeleteGroupFunc: func(ctx context.Context, groupID string) error {
 //				panic("mock out the DeleteGroup method")
 //			},
+//			DeleteProxyResourceServerFunc: func(ctx context.Context, proxyHandle string) error {
+//				panic("mock out the DeleteProxyResourceServer method")
+//			},
+//			DeleteProxyResourceServerActionFunc: func(ctx context.Context, proxyHandle string, action string) (string, error) {
+//				panic("mock out the DeleteProxyResourceServerAction method")
+//			},
 //			DeleteRoleFunc: func(ctx context.Context, roleID string) error {
 //				panic("mock out the DeleteRole method")
 //			},
 //			DeleteUserFunc: func(ctx context.Context, userID string) error {
 //				panic("mock out the DeleteUser method")
 //			},
-//			EnsureScopeResourceServerFunc: func(ctx context.Context, scopes []string) (string, error) {
-//				panic("mock out the EnsureScopeResourceServer method")
+//			EnsureProxyResourceServerFunc: func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error) {
+//				panic("mock out the EnsureProxyResourceServer method")
 //			},
 //			GetDefaultOUIDFunc: func(ctx context.Context) (string, error) {
 //				panic("mock out the GetDefaultOUID method")
@@ -158,14 +164,20 @@ type EnvIdentityClientMock struct {
 	// DeleteGroupFunc mocks the DeleteGroup method.
 	DeleteGroupFunc func(ctx context.Context, groupID string) error
 
+	// DeleteProxyResourceServerFunc mocks the DeleteProxyResourceServer method.
+	DeleteProxyResourceServerFunc func(ctx context.Context, proxyHandle string) error
+
+	// DeleteProxyResourceServerActionFunc mocks the DeleteProxyResourceServerAction method.
+	DeleteProxyResourceServerActionFunc func(ctx context.Context, proxyHandle string, action string) (string, error)
+
 	// DeleteRoleFunc mocks the DeleteRole method.
 	DeleteRoleFunc func(ctx context.Context, roleID string) error
 
 	// DeleteUserFunc mocks the DeleteUser method.
 	DeleteUserFunc func(ctx context.Context, userID string) error
 
-	// EnsureScopeResourceServerFunc mocks the EnsureScopeResourceServer method.
-	EnsureScopeResourceServerFunc func(ctx context.Context, scopes []string) (string, error)
+	// EnsureProxyResourceServerFunc mocks the EnsureProxyResourceServer method.
+	EnsureProxyResourceServerFunc func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error)
 
 	// GetDefaultOUIDFunc mocks the GetDefaultOUID method.
 	GetDefaultOUIDFunc func(ctx context.Context) (string, error)
@@ -311,6 +323,22 @@ type EnvIdentityClientMock struct {
 			// GroupID is the groupID argument value.
 			GroupID string
 		}
+		// DeleteProxyResourceServer holds details about calls to the DeleteProxyResourceServer method.
+		DeleteProxyResourceServer []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ProxyHandle is the proxyHandle argument value.
+			ProxyHandle string
+		}
+		// DeleteProxyResourceServerAction holds details about calls to the DeleteProxyResourceServerAction method.
+		DeleteProxyResourceServerAction []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// ProxyHandle is the proxyHandle argument value.
+			ProxyHandle string
+			// Action is the action argument value.
+			Action string
+		}
 		// DeleteRole holds details about calls to the DeleteRole method.
 		DeleteRole []struct {
 			// Ctx is the ctx argument value.
@@ -325,12 +353,16 @@ type EnvIdentityClientMock struct {
 			// UserID is the userID argument value.
 			UserID string
 		}
-		// EnsureScopeResourceServer holds details about calls to the EnsureScopeResourceServer method.
-		EnsureScopeResourceServer []struct {
+		// EnsureProxyResourceServer holds details about calls to the EnsureProxyResourceServer method.
+		EnsureProxyResourceServer []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Scopes is the scopes argument value.
-			Scopes []string
+			// ProxyHandle is the proxyHandle argument value.
+			ProxyHandle string
+			// DisplayName is the displayName argument value.
+			DisplayName string
+			// Actions is the actions argument value.
+			Actions []string
 		}
 		// GetDefaultOUID holds details about calls to the GetDefaultOUID method.
 		GetDefaultOUID []struct {
@@ -557,43 +589,45 @@ type EnvIdentityClientMock struct {
 			Req thundersvc.UpdateUserRequest
 		}
 	}
-	lockAddGroupMemberEntries     sync.RWMutex
-	lockAddGroupMembers           sync.RWMutex
-	lockAddRoleAssignees          sync.RWMutex
-	lockAddRolePermissions        sync.RWMutex
-	lockCreateGroup               sync.RWMutex
-	lockCreateRole                sync.RWMutex
-	lockCreateUser                sync.RWMutex
-	lockDeleteGroup               sync.RWMutex
-	lockDeleteRole                sync.RWMutex
-	lockDeleteUser                sync.RWMutex
-	lockEnsureScopeResourceServer sync.RWMutex
-	lockGetDefaultOUID            sync.RWMutex
-	lockGetGroup                  sync.RWMutex
-	lockGetGroupMembers           sync.RWMutex
-	lockGetGroupRoles             sync.RWMutex
-	lockGetOUIDByHandle           sync.RWMutex
-	lockGetRole                   sync.RWMutex
-	lockGetRoleAssignments        sync.RWMutex
-	lockGetUser                   sync.RWMutex
-	lockGetUserGroups             sync.RWMutex
-	lockGetUserRoles              sync.RWMutex
-	lockInviteUser                sync.RWMutex
-	lockListAMPPermissions        sync.RWMutex
-	lockListChildOUs              sync.RWMutex
-	lockListGroupMemberEntries    sync.RWMutex
-	lockListGroups                sync.RWMutex
-	lockListGroupsByOUId          sync.RWMutex
-	lockListRoles                 sync.RWMutex
-	lockListUsers                 sync.RWMutex
-	lockListUsersByOUId           sync.RWMutex
-	lockRemoveGroupMemberEntries  sync.RWMutex
-	lockRemoveGroupMembers        sync.RWMutex
-	lockRemoveRoleAssignees       sync.RWMutex
-	lockRemoveRolePermissions     sync.RWMutex
-	lockUpdateGroup               sync.RWMutex
-	lockUpdateRole                sync.RWMutex
-	lockUpdateUser                sync.RWMutex
+	lockAddGroupMemberEntries           sync.RWMutex
+	lockAddGroupMembers                 sync.RWMutex
+	lockAddRoleAssignees                sync.RWMutex
+	lockAddRolePermissions              sync.RWMutex
+	lockCreateGroup                     sync.RWMutex
+	lockCreateRole                      sync.RWMutex
+	lockCreateUser                      sync.RWMutex
+	lockDeleteGroup                     sync.RWMutex
+	lockDeleteProxyResourceServer       sync.RWMutex
+	lockDeleteProxyResourceServerAction sync.RWMutex
+	lockDeleteRole                      sync.RWMutex
+	lockDeleteUser                      sync.RWMutex
+	lockEnsureProxyResourceServer       sync.RWMutex
+	lockGetDefaultOUID                  sync.RWMutex
+	lockGetGroup                        sync.RWMutex
+	lockGetGroupMembers                 sync.RWMutex
+	lockGetGroupRoles                   sync.RWMutex
+	lockGetOUIDByHandle                 sync.RWMutex
+	lockGetRole                         sync.RWMutex
+	lockGetRoleAssignments              sync.RWMutex
+	lockGetUser                         sync.RWMutex
+	lockGetUserGroups                   sync.RWMutex
+	lockGetUserRoles                    sync.RWMutex
+	lockInviteUser                      sync.RWMutex
+	lockListAMPPermissions              sync.RWMutex
+	lockListChildOUs                    sync.RWMutex
+	lockListGroupMemberEntries          sync.RWMutex
+	lockListGroups                      sync.RWMutex
+	lockListGroupsByOUId                sync.RWMutex
+	lockListRoles                       sync.RWMutex
+	lockListUsers                       sync.RWMutex
+	lockListUsersByOUId                 sync.RWMutex
+	lockRemoveGroupMemberEntries        sync.RWMutex
+	lockRemoveGroupMembers              sync.RWMutex
+	lockRemoveRoleAssignees             sync.RWMutex
+	lockRemoveRolePermissions           sync.RWMutex
+	lockUpdateGroup                     sync.RWMutex
+	lockUpdateRole                      sync.RWMutex
+	lockUpdateUser                      sync.RWMutex
 }
 
 // AddGroupMemberEntries calls AddGroupMemberEntriesFunc.
@@ -900,6 +934,82 @@ func (mock *EnvIdentityClientMock) DeleteGroupCalls() []struct {
 	return calls
 }
 
+// DeleteProxyResourceServer calls DeleteProxyResourceServerFunc.
+func (mock *EnvIdentityClientMock) DeleteProxyResourceServer(ctx context.Context, proxyHandle string) error {
+	if mock.DeleteProxyResourceServerFunc == nil {
+		panic("EnvIdentityClientMock.DeleteProxyResourceServerFunc: method is nil but EnvIdentityClient.DeleteProxyResourceServer was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		ProxyHandle string
+	}{
+		Ctx:         ctx,
+		ProxyHandle: proxyHandle,
+	}
+	mock.lockDeleteProxyResourceServer.Lock()
+	mock.calls.DeleteProxyResourceServer = append(mock.calls.DeleteProxyResourceServer, callInfo)
+	mock.lockDeleteProxyResourceServer.Unlock()
+	return mock.DeleteProxyResourceServerFunc(ctx, proxyHandle)
+}
+
+// DeleteProxyResourceServerCalls gets all the calls that were made to DeleteProxyResourceServer.
+// Check the length with:
+//
+//	len(mockedEnvIdentityClient.DeleteProxyResourceServerCalls())
+func (mock *EnvIdentityClientMock) DeleteProxyResourceServerCalls() []struct {
+	Ctx         context.Context
+	ProxyHandle string
+} {
+	var calls []struct {
+		Ctx         context.Context
+		ProxyHandle string
+	}
+	mock.lockDeleteProxyResourceServer.RLock()
+	calls = mock.calls.DeleteProxyResourceServer
+	mock.lockDeleteProxyResourceServer.RUnlock()
+	return calls
+}
+
+// DeleteProxyResourceServerAction calls DeleteProxyResourceServerActionFunc.
+func (mock *EnvIdentityClientMock) DeleteProxyResourceServerAction(ctx context.Context, proxyHandle string, action string) (string, error) {
+	if mock.DeleteProxyResourceServerActionFunc == nil {
+		panic("EnvIdentityClientMock.DeleteProxyResourceServerActionFunc: method is nil but EnvIdentityClient.DeleteProxyResourceServerAction was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		ProxyHandle string
+		Action      string
+	}{
+		Ctx:         ctx,
+		ProxyHandle: proxyHandle,
+		Action:      action,
+	}
+	mock.lockDeleteProxyResourceServerAction.Lock()
+	mock.calls.DeleteProxyResourceServerAction = append(mock.calls.DeleteProxyResourceServerAction, callInfo)
+	mock.lockDeleteProxyResourceServerAction.Unlock()
+	return mock.DeleteProxyResourceServerActionFunc(ctx, proxyHandle, action)
+}
+
+// DeleteProxyResourceServerActionCalls gets all the calls that were made to DeleteProxyResourceServerAction.
+// Check the length with:
+//
+//	len(mockedEnvIdentityClient.DeleteProxyResourceServerActionCalls())
+func (mock *EnvIdentityClientMock) DeleteProxyResourceServerActionCalls() []struct {
+	Ctx         context.Context
+	ProxyHandle string
+	Action      string
+} {
+	var calls []struct {
+		Ctx         context.Context
+		ProxyHandle string
+		Action      string
+	}
+	mock.lockDeleteProxyResourceServerAction.RLock()
+	calls = mock.calls.DeleteProxyResourceServerAction
+	mock.lockDeleteProxyResourceServerAction.RUnlock()
+	return calls
+}
+
 // DeleteRole calls DeleteRoleFunc.
 func (mock *EnvIdentityClientMock) DeleteRole(ctx context.Context, roleID string) error {
 	if mock.DeleteRoleFunc == nil {
@@ -972,39 +1082,47 @@ func (mock *EnvIdentityClientMock) DeleteUserCalls() []struct {
 	return calls
 }
 
-// EnsureScopeResourceServer calls EnsureScopeResourceServerFunc.
-func (mock *EnvIdentityClientMock) EnsureScopeResourceServer(ctx context.Context, scopes []string) (string, error) {
-	if mock.EnsureScopeResourceServerFunc == nil {
-		panic("EnvIdentityClientMock.EnsureScopeResourceServerFunc: method is nil but EnvIdentityClient.EnsureScopeResourceServer was just called")
+// EnsureProxyResourceServer calls EnsureProxyResourceServerFunc.
+func (mock *EnvIdentityClientMock) EnsureProxyResourceServer(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error) {
+	if mock.EnsureProxyResourceServerFunc == nil {
+		panic("EnvIdentityClientMock.EnsureProxyResourceServerFunc: method is nil but EnvIdentityClient.EnsureProxyResourceServer was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		Scopes []string
+		Ctx         context.Context
+		ProxyHandle string
+		DisplayName string
+		Actions     []string
 	}{
-		Ctx:    ctx,
-		Scopes: scopes,
+		Ctx:         ctx,
+		ProxyHandle: proxyHandle,
+		DisplayName: displayName,
+		Actions:     actions,
 	}
-	mock.lockEnsureScopeResourceServer.Lock()
-	mock.calls.EnsureScopeResourceServer = append(mock.calls.EnsureScopeResourceServer, callInfo)
-	mock.lockEnsureScopeResourceServer.Unlock()
-	return mock.EnsureScopeResourceServerFunc(ctx, scopes)
+	mock.lockEnsureProxyResourceServer.Lock()
+	mock.calls.EnsureProxyResourceServer = append(mock.calls.EnsureProxyResourceServer, callInfo)
+	mock.lockEnsureProxyResourceServer.Unlock()
+	return mock.EnsureProxyResourceServerFunc(ctx, proxyHandle, displayName, actions)
 }
 
-// EnsureScopeResourceServerCalls gets all the calls that were made to EnsureScopeResourceServer.
+// EnsureProxyResourceServerCalls gets all the calls that were made to EnsureProxyResourceServer.
 // Check the length with:
 //
-//	len(mockedEnvIdentityClient.EnsureScopeResourceServerCalls())
-func (mock *EnvIdentityClientMock) EnsureScopeResourceServerCalls() []struct {
-	Ctx    context.Context
-	Scopes []string
+//	len(mockedEnvIdentityClient.EnsureProxyResourceServerCalls())
+func (mock *EnvIdentityClientMock) EnsureProxyResourceServerCalls() []struct {
+	Ctx         context.Context
+	ProxyHandle string
+	DisplayName string
+	Actions     []string
 } {
 	var calls []struct {
-		Ctx    context.Context
-		Scopes []string
+		Ctx         context.Context
+		ProxyHandle string
+		DisplayName string
+		Actions     []string
 	}
-	mock.lockEnsureScopeResourceServer.RLock()
-	calls = mock.calls.EnsureScopeResourceServer
-	mock.lockEnsureScopeResourceServer.RUnlock()
+	mock.lockEnsureProxyResourceServer.RLock()
+	calls = mock.calls.EnsureProxyResourceServer
+	mock.lockEnsureProxyResourceServer.RUnlock()
 	return calls
 }
 

@@ -252,6 +252,9 @@ type ClientInterface interface {
 
 	RemoveAgentIdentityRoleAssignees(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAgentIdentityScopes request
+	ListAgentIdentityScopes(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListEnvironmentIdentityProviders request
 	ListEnvironmentIdentityProviders(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -521,6 +524,22 @@ type ClientInterface interface {
 	UpdateMCPProxyWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	UpdateMCPProxy(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListMCPProxyScopes request
+	ListMCPProxyScopes(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// CreateMCPProxyScopeWithBody request with any body
+	CreateMCPProxyScopeWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	CreateMCPProxyScope(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteMCPProxyScope request
+	DeleteMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// UpdateMCPProxyScopeWithBody request with any body
+	UpdateMCPProxyScopeWithBody(ctx context.Context, orgName string, proxyId string, scopeAction string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	UpdateMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string, body UpdateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ListProjects request
 	ListProjects(ctx context.Context, orgName string, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -837,22 +856,6 @@ type ClientInterface interface {
 	RotateLLMProxyAPIKeyWithBody(ctx context.Context, orgName string, projName string, id string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	RotateLLMProxyAPIKey(ctx context.Context, orgName string, projName string, id string, keyName string, body RotateLLMProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// ListScopes request
-	ListScopes(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// CreateScopeWithBody request with any body
-	CreateScopeWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	CreateScope(ctx context.Context, orgName string, body CreateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// DeleteScope request
-	DeleteScope(ctx context.Context, orgName string, scopeName string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// UpdateScopeWithBody request with any body
-	UpdateScopeWithBody(ctx context.Context, orgName string, scopeName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	UpdateScope(ctx context.Context, orgName string, scopeName string, body UpdateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetNameByDisplayNameWithBody request with any body
 	GetNameByDisplayNameWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1568,6 +1571,18 @@ func (c *Client) RemoveAgentIdentityRoleAssigneesWithBody(ctx context.Context, o
 
 func (c *Client) RemoveAgentIdentityRoleAssignees(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRemoveAgentIdentityRoleAssigneesRequest(c.Server, orgName, envName, roleID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAgentIdentityScopes(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAgentIdentityScopesRequest(c.Server, orgName, envName)
 	if err != nil {
 		return nil, err
 	}
@@ -2744,6 +2759,78 @@ func (c *Client) UpdateMCPProxyWithBody(ctx context.Context, orgName string, pro
 
 func (c *Client) UpdateMCPProxy(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewUpdateMCPProxyRequest(c.Server, orgName, proxyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListMCPProxyScopes(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListMCPProxyScopesRequest(c.Server, orgName, proxyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxyScopeWithBody(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyScopeRequestWithBody(c.Server, orgName, proxyId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) CreateMCPProxyScope(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewCreateMCPProxyScopeRequest(c.Server, orgName, proxyId, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteMCPProxyScopeRequest(c.Server, orgName, proxyId, scopeAction)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMCPProxyScopeWithBody(ctx context.Context, orgName string, proxyId string, scopeAction string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMCPProxyScopeRequestWithBody(c.Server, orgName, proxyId, scopeAction, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) UpdateMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string, body UpdateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewUpdateMCPProxyScopeRequest(c.Server, orgName, proxyId, scopeAction, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4136,78 +4223,6 @@ func (c *Client) RotateLLMProxyAPIKeyWithBody(ctx context.Context, orgName strin
 
 func (c *Client) RotateLLMProxyAPIKey(ctx context.Context, orgName string, projName string, id string, keyName string, body RotateLLMProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewRotateLLMProxyAPIKeyRequest(c.Server, orgName, projName, id, keyName, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) ListScopes(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListScopesRequest(c.Server, orgName)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateScopeWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateScopeRequestWithBody(c.Server, orgName, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) CreateScope(ctx context.Context, orgName string, body CreateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateScopeRequest(c.Server, orgName, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) DeleteScope(ctx context.Context, orgName string, scopeName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewDeleteScopeRequest(c.Server, orgName, scopeName)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateScopeWithBody(ctx context.Context, orgName string, scopeName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateScopeRequestWithBody(c.Server, orgName, scopeName, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) UpdateScope(ctx context.Context, orgName string, scopeName string, body UpdateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewUpdateScopeRequest(c.Server, orgName, scopeName, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6607,6 +6622,47 @@ func NewRemoveAgentIdentityRoleAssigneesRequestWithBody(server string, orgName A
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAgentIdentityScopesRequest generates requests for ListAgentIdentityScopes
+func NewListAgentIdentityScopesRequest(server string, orgName string, envName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "envName", envName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/environments/%s/agent-identities/scopes", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -10353,6 +10409,210 @@ func NewUpdateMCPProxyRequestWithBody(server string, orgName string, proxyId str
 	}
 
 	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListMCPProxyScopesRequest generates requests for ListMCPProxyScopes
+func NewListMCPProxyScopesRequest(server string, orgName string, proxyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/scopes", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewCreateMCPProxyScopeRequest calls the generic CreateMCPProxyScope builder with application/json body
+func NewCreateMCPProxyScopeRequest(server string, orgName string, proxyId string, body CreateMCPProxyScopeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewCreateMCPProxyScopeRequestWithBody(server, orgName, proxyId, "application/json", bodyReader)
+}
+
+// NewCreateMCPProxyScopeRequestWithBody generates requests for CreateMCPProxyScope with any type of body
+func NewCreateMCPProxyScopeRequestWithBody(server string, orgName string, proxyId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/scopes", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteMCPProxyScopeRequest generates requests for DeleteMCPProxyScope
+func NewDeleteMCPProxyScopeRequest(server string, orgName string, proxyId string, scopeAction string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "scopeAction", scopeAction, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/scopes/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewUpdateMCPProxyScopeRequest calls the generic UpdateMCPProxyScope builder with application/json body
+func NewUpdateMCPProxyScopeRequest(server string, orgName string, proxyId string, scopeAction string, body UpdateMCPProxyScopeJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewUpdateMCPProxyScopeRequestWithBody(server, orgName, proxyId, scopeAction, "application/json", bodyReader)
+}
+
+// NewUpdateMCPProxyScopeRequestWithBody generates requests for UpdateMCPProxyScope with any type of body
+func NewUpdateMCPProxyScopeRequestWithBody(server string, orgName string, proxyId string, scopeAction string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "proxyId", proxyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "scopeAction", scopeAction, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/mcp-proxies/%s/scopes/%s", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -15853,182 +16113,6 @@ func NewRotateLLMProxyAPIKeyRequestWithBody(server string, orgName string, projN
 	return req, nil
 }
 
-// NewListScopesRequest generates requests for ListScopes
-func NewListScopesRequest(server string, orgName string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scopes", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewCreateScopeRequest calls the generic CreateScope builder with application/json body
-func NewCreateScopeRequest(server string, orgName string, body CreateScopeJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewCreateScopeRequestWithBody(server, orgName, "application/json", bodyReader)
-}
-
-// NewCreateScopeRequestWithBody generates requests for CreateScope with any type of body
-func NewCreateScopeRequestWithBody(server string, orgName string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scopes", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewDeleteScopeRequest generates requests for DeleteScope
-func NewDeleteScopeRequest(server string, orgName string, scopeName string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "scopeName", scopeName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scopes/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewUpdateScopeRequest calls the generic UpdateScope builder with application/json body
-func NewUpdateScopeRequest(server string, orgName string, scopeName string, body UpdateScopeJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewUpdateScopeRequestWithBody(server, orgName, scopeName, "application/json", bodyReader)
-}
-
-// NewUpdateScopeRequestWithBody generates requests for UpdateScope with any type of body
-func NewUpdateScopeRequestWithBody(server string, orgName string, scopeName string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "scopeName", scopeName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/scopes/%s", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("PUT", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewGetNameByDisplayNameRequest calls the generic GetNameByDisplayName builder with application/json body
 func NewGetNameByDisplayNameRequest(server string, orgName string, body GetNameByDisplayNameJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -16437,6 +16521,9 @@ type ClientWithResponsesInterface interface {
 
 	RemoveAgentIdentityRoleAssigneesWithResponse(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, roleID AgentIdentityRoleID, body RemoveAgentIdentityRoleAssigneesJSONRequestBody, reqEditors ...RequestEditorFn) (*RemoveAgentIdentityRoleAssigneesResp, error)
 
+	// ListAgentIdentityScopesWithResponse request
+	ListAgentIdentityScopesWithResponse(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*ListAgentIdentityScopesResp, error)
+
 	// ListEnvironmentIdentityProvidersWithResponse request
 	ListEnvironmentIdentityProvidersWithResponse(ctx context.Context, orgName string, environmentId string, reqEditors ...RequestEditorFn) (*ListEnvironmentIdentityProvidersResp, error)
 
@@ -16706,6 +16793,22 @@ type ClientWithResponsesInterface interface {
 	UpdateMCPProxyWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error)
 
 	UpdateMCPProxyWithResponse(ctx context.Context, orgName string, proxyId string, body UpdateMCPProxyJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMCPProxyResp, error)
+
+	// ListMCPProxyScopesWithResponse request
+	ListMCPProxyScopesWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*ListMCPProxyScopesResp, error)
+
+	// CreateMCPProxyScopeWithBodyWithResponse request with any body
+	CreateMCPProxyScopeWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyScopeResp, error)
+
+	CreateMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyScopeResp, error)
+
+	// DeleteMCPProxyScopeWithResponse request
+	DeleteMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, reqEditors ...RequestEditorFn) (*DeleteMCPProxyScopeResp, error)
+
+	// UpdateMCPProxyScopeWithBodyWithResponse request with any body
+	UpdateMCPProxyScopeWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMCPProxyScopeResp, error)
+
+	UpdateMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, body UpdateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMCPProxyScopeResp, error)
 
 	// ListProjectsWithResponse request
 	ListProjectsWithResponse(ctx context.Context, orgName string, params *ListProjectsParams, reqEditors ...RequestEditorFn) (*ListProjectsResp, error)
@@ -17022,22 +17125,6 @@ type ClientWithResponsesInterface interface {
 	RotateLLMProxyAPIKeyWithBodyWithResponse(ctx context.Context, orgName string, projName string, id string, keyName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateLLMProxyAPIKeyResp, error)
 
 	RotateLLMProxyAPIKeyWithResponse(ctx context.Context, orgName string, projName string, id string, keyName string, body RotateLLMProxyAPIKeyJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateLLMProxyAPIKeyResp, error)
-
-	// ListScopesWithResponse request
-	ListScopesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListScopesResp, error)
-
-	// CreateScopeWithBodyWithResponse request with any body
-	CreateScopeWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScopeResp, error)
-
-	CreateScopeWithResponse(ctx context.Context, orgName string, body CreateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScopeResp, error)
-
-	// DeleteScopeWithResponse request
-	DeleteScopeWithResponse(ctx context.Context, orgName string, scopeName string, reqEditors ...RequestEditorFn) (*DeleteScopeResp, error)
-
-	// UpdateScopeWithBodyWithResponse request with any body
-	UpdateScopeWithBodyWithResponse(ctx context.Context, orgName string, scopeName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateScopeResp, error)
-
-	UpdateScopeWithResponse(ctx context.Context, orgName string, scopeName string, body UpdateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateScopeResp, error)
 
 	// GetNameByDisplayNameWithBodyWithResponse request with any body
 	GetNameByDisplayNameWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*GetNameByDisplayNameResp, error)
@@ -18116,6 +18203,28 @@ func (r RemoveAgentIdentityRoleAssigneesResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r RemoveAgentIdentityRoleAssigneesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAgentIdentityScopesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *AgentIdentityScopeListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAgentIdentityScopesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAgentIdentityScopesResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19995,6 +20104,93 @@ func (r UpdateMCPProxyResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r UpdateMCPProxyResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListMCPProxyScopesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPProxyScopeListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListMCPProxyScopesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListMCPProxyScopesResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type CreateMCPProxyScopeResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON201      *MCPProxyScopeResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r CreateMCPProxyScopeResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r CreateMCPProxyScopeResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteMCPProxyScopeResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteMCPProxyScopeResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteMCPProxyScopeResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type UpdateMCPProxyScopeResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *MCPProxyScopeResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r UpdateMCPProxyScopeResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r UpdateMCPProxyScopeResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -22104,103 +22300,6 @@ func (r RotateLLMProxyAPIKeyResp) StatusCode() int {
 	return 0
 }
 
-type ListScopesResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *ScopeListResponse
-	JSON401      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r ListScopesResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r ListScopesResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type CreateScopeResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON201      *ScopeResponse
-	JSON400      *ErrorResponse
-	JSON409      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r CreateScopeResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r CreateScopeResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type DeleteScopeResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON404      *ErrorResponse
-	JSON409      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r DeleteScopeResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r DeleteScopeResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type UpdateScopeResp struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *ScopeResponse
-	JSON404      *ErrorResponse
-	JSON500      *ErrorResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r UpdateScopeResp) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r UpdateScopeResp) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type GetNameByDisplayNameResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -22791,6 +22890,15 @@ func (c *ClientWithResponses) RemoveAgentIdentityRoleAssigneesWithResponse(ctx c
 		return nil, err
 	}
 	return ParseRemoveAgentIdentityRoleAssigneesResp(rsp)
+}
+
+// ListAgentIdentityScopesWithResponse request returning *ListAgentIdentityScopesResp
+func (c *ClientWithResponses) ListAgentIdentityScopesWithResponse(ctx context.Context, orgName string, envName string, reqEditors ...RequestEditorFn) (*ListAgentIdentityScopesResp, error) {
+	rsp, err := c.ListAgentIdentityScopes(ctx, orgName, envName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAgentIdentityScopesResp(rsp)
 }
 
 // ListEnvironmentIdentityProvidersWithResponse request returning *ListEnvironmentIdentityProvidersResp
@@ -23649,6 +23757,58 @@ func (c *ClientWithResponses) UpdateMCPProxyWithResponse(ctx context.Context, or
 		return nil, err
 	}
 	return ParseUpdateMCPProxyResp(rsp)
+}
+
+// ListMCPProxyScopesWithResponse request returning *ListMCPProxyScopesResp
+func (c *ClientWithResponses) ListMCPProxyScopesWithResponse(ctx context.Context, orgName string, proxyId string, reqEditors ...RequestEditorFn) (*ListMCPProxyScopesResp, error) {
+	rsp, err := c.ListMCPProxyScopes(ctx, orgName, proxyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListMCPProxyScopesResp(rsp)
+}
+
+// CreateMCPProxyScopeWithBodyWithResponse request with arbitrary body returning *CreateMCPProxyScopeResp
+func (c *ClientWithResponses) CreateMCPProxyScopeWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateMCPProxyScopeResp, error) {
+	rsp, err := c.CreateMCPProxyScopeWithBody(ctx, orgName, proxyId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyScopeResp(rsp)
+}
+
+func (c *ClientWithResponses) CreateMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, body CreateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateMCPProxyScopeResp, error) {
+	rsp, err := c.CreateMCPProxyScope(ctx, orgName, proxyId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseCreateMCPProxyScopeResp(rsp)
+}
+
+// DeleteMCPProxyScopeWithResponse request returning *DeleteMCPProxyScopeResp
+func (c *ClientWithResponses) DeleteMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, reqEditors ...RequestEditorFn) (*DeleteMCPProxyScopeResp, error) {
+	rsp, err := c.DeleteMCPProxyScope(ctx, orgName, proxyId, scopeAction, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteMCPProxyScopeResp(rsp)
+}
+
+// UpdateMCPProxyScopeWithBodyWithResponse request with arbitrary body returning *UpdateMCPProxyScopeResp
+func (c *ClientWithResponses) UpdateMCPProxyScopeWithBodyWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateMCPProxyScopeResp, error) {
+	rsp, err := c.UpdateMCPProxyScopeWithBody(ctx, orgName, proxyId, scopeAction, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMCPProxyScopeResp(rsp)
+}
+
+func (c *ClientWithResponses) UpdateMCPProxyScopeWithResponse(ctx context.Context, orgName string, proxyId string, scopeAction string, body UpdateMCPProxyScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateMCPProxyScopeResp, error) {
+	rsp, err := c.UpdateMCPProxyScope(ctx, orgName, proxyId, scopeAction, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseUpdateMCPProxyScopeResp(rsp)
 }
 
 // ListProjectsWithResponse request returning *ListProjectsResp
@@ -24661,58 +24821,6 @@ func (c *ClientWithResponses) RotateLLMProxyAPIKeyWithResponse(ctx context.Conte
 		return nil, err
 	}
 	return ParseRotateLLMProxyAPIKeyResp(rsp)
-}
-
-// ListScopesWithResponse request returning *ListScopesResp
-func (c *ClientWithResponses) ListScopesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListScopesResp, error) {
-	rsp, err := c.ListScopes(ctx, orgName, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseListScopesResp(rsp)
-}
-
-// CreateScopeWithBodyWithResponse request with arbitrary body returning *CreateScopeResp
-func (c *ClientWithResponses) CreateScopeWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateScopeResp, error) {
-	rsp, err := c.CreateScopeWithBody(ctx, orgName, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateScopeResp(rsp)
-}
-
-func (c *ClientWithResponses) CreateScopeWithResponse(ctx context.Context, orgName string, body CreateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateScopeResp, error) {
-	rsp, err := c.CreateScope(ctx, orgName, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseCreateScopeResp(rsp)
-}
-
-// DeleteScopeWithResponse request returning *DeleteScopeResp
-func (c *ClientWithResponses) DeleteScopeWithResponse(ctx context.Context, orgName string, scopeName string, reqEditors ...RequestEditorFn) (*DeleteScopeResp, error) {
-	rsp, err := c.DeleteScope(ctx, orgName, scopeName, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseDeleteScopeResp(rsp)
-}
-
-// UpdateScopeWithBodyWithResponse request with arbitrary body returning *UpdateScopeResp
-func (c *ClientWithResponses) UpdateScopeWithBodyWithResponse(ctx context.Context, orgName string, scopeName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*UpdateScopeResp, error) {
-	rsp, err := c.UpdateScopeWithBody(ctx, orgName, scopeName, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateScopeResp(rsp)
-}
-
-func (c *ClientWithResponses) UpdateScopeWithResponse(ctx context.Context, orgName string, scopeName string, body UpdateScopeJSONRequestBody, reqEditors ...RequestEditorFn) (*UpdateScopeResp, error) {
-	rsp, err := c.UpdateScope(ctx, orgName, scopeName, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseUpdateScopeResp(rsp)
 }
 
 // GetNameByDisplayNameWithBodyWithResponse request with arbitrary body returning *GetNameByDisplayNameResp
@@ -26585,6 +26693,32 @@ func ParseRemoveAgentIdentityRoleAssigneesResp(rsp *http.Response) (*RemoveAgent
 			return nil, err
 		}
 		response.JSON503 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAgentIdentityScopesResp parses an HTTP response from a ListAgentIdentityScopesWithResponse call
+func ParseListAgentIdentityScopesResp(rsp *http.Response) (*ListAgentIdentityScopesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAgentIdentityScopesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentIdentityScopeListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
@@ -30242,6 +30376,100 @@ func ParseUpdateMCPProxyResp(rsp *http.Response) (*UpdateMCPProxyResp, error) {
 			return nil, err
 		}
 		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListMCPProxyScopesResp parses an HTTP response from a ListMCPProxyScopesWithResponse call
+func ParseListMCPProxyScopesResp(rsp *http.Response) (*ListMCPProxyScopesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListMCPProxyScopesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPProxyScopeListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseCreateMCPProxyScopeResp parses an HTTP response from a CreateMCPProxyScopeWithResponse call
+func ParseCreateMCPProxyScopeResp(rsp *http.Response) (*CreateMCPProxyScopeResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &CreateMCPProxyScopeResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest MCPProxyScopeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteMCPProxyScopeResp parses an HTTP response from a DeleteMCPProxyScopeWithResponse call
+func ParseDeleteMCPProxyScopeResp(rsp *http.Response) (*DeleteMCPProxyScopeResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteMCPProxyScopeResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseUpdateMCPProxyScopeResp parses an HTTP response from a UpdateMCPProxyScopeWithResponse call
+func ParseUpdateMCPProxyScopeResp(rsp *http.Response) (*UpdateMCPProxyScopeResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &UpdateMCPProxyScopeResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest MCPProxyScopeResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	}
 
@@ -34211,173 +34439,6 @@ func ParseRotateLLMProxyAPIKeyResp(rsp *http.Response) (*RotateLLMProxyAPIKeyRes
 			return nil, err
 		}
 		response.JSON503 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseListScopesResp parses an HTTP response from a ListScopesWithResponse call
-func ParseListScopesResp(rsp *http.Response) (*ListScopesResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &ListScopesResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ScopeListResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseCreateScopeResp parses an HTTP response from a CreateScopeWithResponse call
-func ParseCreateScopeResp(rsp *http.Response) (*CreateScopeResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &CreateScopeResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest ScopeResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseDeleteScopeResp parses an HTTP response from a DeleteScopeWithResponse call
-func ParseDeleteScopeResp(rsp *http.Response) (*DeleteScopeResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &DeleteScopeResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON409 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseUpdateScopeResp parses an HTTP response from a UpdateScopeWithResponse call
-func ParseUpdateScopeResp(rsp *http.Response) (*UpdateScopeResp, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &UpdateScopeResp{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ScopeResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON404 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
-		var dest ErrorResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON500 = &dest
 
 	}
 

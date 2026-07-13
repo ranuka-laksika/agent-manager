@@ -86,15 +86,23 @@ install_control_plane() {
     fi
 
     # v0.45 puts the client name in 'client_id' (was 'sub'), so the built-in service-account
-    # bindings keyed on 'sub' stop matching and return 403. Switch them to 'client_id';
+    # bindings keyed on 'sub' stop matching and return 403. Switch them to 'client_id'.
+    # Use server-side apply with field-manager=helm (like the configmap patch above) instead of
+    # `kubectl patch`, which claims ownership under a `kubectl-patch` field manager and causes
+    # 'conflict with "kubectl-patch"' errors on the next `helm upgrade --install`.
     echo "🔧 Migrating service-account ClusterAuthzRoleBindings: claim sub → client_id..."
     for binding in $(kubectl get clusterauthzrolebindings.openchoreo.dev \
         -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
         claim=$(kubectl get clusterauthzrolebinding.openchoreo.dev "$binding" \
             -o jsonpath='{.spec.entitlement.claim}' 2>/dev/null)
         if [ "$claim" = "sub" ]; then
-            if kubectl patch clusterauthzrolebinding.openchoreo.dev "$binding" \
-                --type=merge -p '{"spec":{"entitlement":{"claim":"client_id"}}}' >/dev/null 2>&1; then
+            patched_binding_yaml=$(kubectl get clusterauthzrolebinding.openchoreo.dev "$binding" -o yaml \
+                | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+            if ! echo "$patched_binding_yaml" | grep -q "claim: client_id"; then
+                echo "❌ Failed to patch ClusterAuthzRoleBinding '${binding}' entitlement claim to client_id"
+                return 1
+            fi
+            if echo "$patched_binding_yaml" | kubectl apply --server-side --field-manager=helm --force-conflicts -f - >/dev/null 2>&1; then
                 echo "   ✓ migrated ${binding}"
             else
                 echo "❌ Failed to migrate ClusterAuthzRoleBinding '${binding}' to client_id"

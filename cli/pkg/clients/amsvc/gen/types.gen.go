@@ -1375,8 +1375,23 @@ type AgentIdentityRoleRequest struct {
 	Description *string `json:"description,omitempty"`
 	Name        string  `json:"name"`
 
-	// Scopes Catalog scope names carried as the role's permissions
+	// Scopes Scope strings ("<proxy-handle>:<action>") carried as the role's permissions. On update this is a full replacement of the role's scopes: omit the field to leave existing scopes untouched, or send an explicit empty array to clear them all.
 	Scopes *[]string `json:"scopes,omitempty"`
+}
+
+// AgentIdentityScopeEntry defines model for AgentIdentityScopeEntry.
+type AgentIdentityScopeEntry struct {
+	Description *string `json:"description,omitempty"`
+
+	// McpProxyId Handle of the owning MCP proxy.
+	McpProxyId   string  `json:"mcpProxyId"`
+	McpProxyName *string `json:"mcpProxyName,omitempty"`
+	Scope        string  `json:"scope"`
+}
+
+// AgentIdentityScopeListResponse defines model for AgentIdentityScopeListResponse.
+type AgentIdentityScopeListResponse struct {
+	Scopes []AgentIdentityScopeEntry `json:"scopes"`
 }
 
 // AgentKindConfigSchemaItem defines model for AgentKindConfigSchemaItem.
@@ -3757,7 +3772,7 @@ type MCPProxyCapabilities struct {
 	Tools     *[]map[string]interface{} `json:"tools,omitempty"`
 }
 
-// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, security, and tool-scope bindings, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
+// MCPProxyEndpoint One deployable endpoint of an MCP proxy. An endpoint carries the upstream (URL + auth), policies, capabilities, and security, and is deployed to one or more environments. Within a proxy an endpoint's id is unique and an environment maps to at most one endpoint.
 type MCPProxyEndpoint struct {
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 
@@ -3772,9 +3787,8 @@ type MCPProxyEndpoint struct {
 	Policies *[]MCPPolicy `json:"policies,omitempty"`
 
 	// Security Security configuration. Exactly one variant is active: apiKey or identity (both omitted / enabled=false means no security).
-	Security          *SecurityConfig        `json:"security,omitempty"`
-	ToolScopeBindings *[]MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
-	Upstream          UpstreamConfig         `json:"upstream"`
+	Security *SecurityConfig `json:"security,omitempty"`
+	Upstream UpstreamConfig  `json:"upstream"`
 }
 
 // MCPProxyListItem defines model for MCPProxyListItem.
@@ -3892,6 +3906,39 @@ type MCPProxyResponse struct {
 	Vhost *string `json:"vhost,omitempty"`
 }
 
+// MCPProxyScopeListResponse defines model for MCPProxyScopeListResponse.
+type MCPProxyScopeListResponse struct {
+	Scopes []MCPProxyScopeResponse `json:"scopes"`
+}
+
+// MCPProxyScopeRequest defines model for MCPProxyScopeRequest.
+type MCPProxyScopeRequest struct {
+	// Action Action name on the proxy's resource server; the token scope is "<proxy-handle>:<action>".
+	Action      string  `json:"action"`
+	Description *string `json:"description,omitempty"`
+
+	// Tools MCP tool names this scope authorizes.
+	Tools []string `json:"tools"`
+}
+
+// MCPProxyScopeResponse defines model for MCPProxyScopeResponse.
+type MCPProxyScopeResponse struct {
+	Action      string     `json:"action"`
+	CreatedAt   *time.Time `json:"createdAt,omitempty"`
+	Description *string    `json:"description,omitempty"`
+
+	// Scope Derived token scope string ("<proxy-handle>:<action>").
+	Scope     string     `json:"scope"`
+	Tools     []string   `json:"tools"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+}
+
+// MCPProxyScopeUpdateRequest defines model for MCPProxyScopeUpdateRequest.
+type MCPProxyScopeUpdateRequest struct {
+	Description *string   `json:"description,omitempty"`
+	Tools       *[]string `json:"tools,omitempty"`
+}
+
 // MCPServerInfoFetchRequest defines model for MCPServerInfoFetchRequest.
 type MCPServerInfoFetchRequest struct {
 	Auth *UpstreamAuth `json:"auth,omitempty"`
@@ -3911,15 +3958,6 @@ type MCPServerInfoFetchResponse struct {
 	// ServerInfo MCP server metadata returned by initialize
 	ServerInfo *map[string]interface{}   `json:"serverInfo,omitempty"`
 	Tools      *[]map[string]interface{} `json:"tools,omitempty"`
-}
-
-// MCPToolScopeBinding defines model for MCPToolScopeBinding.
-type MCPToolScopeBinding struct {
-	// Scopes Catalog scope names required to call the tool
-	Scopes []string `json:"scopes"`
-
-	// Tool Name of the MCP tool the scopes gate
-	Tool string `json:"tool"`
 }
 
 // MetricDataPoint A single metric data point with timestamp and value
@@ -4632,37 +4670,6 @@ type RouteException struct {
 
 	// Path Route path pattern
 	Path string `json:"path"`
-}
-
-// ScopeListResponse defines model for ScopeListResponse.
-type ScopeListResponse struct {
-	Scopes []ScopeResponse `json:"scopes"`
-}
-
-// ScopeRequest defines model for ScopeRequest.
-type ScopeRequest struct {
-	// Description Human-readable description of the scope
-	Description *string `json:"description,omitempty"`
-
-	// Name Scope name (org-global, resource-agnostic)
-	Name string `json:"name"`
-}
-
-// ScopeResponse defines model for ScopeResponse.
-type ScopeResponse struct {
-	// BindingCount Number of MCP proxy environment tool bindings referencing this scope
-	BindingCount *int                `json:"bindingCount,omitempty"`
-	CreatedAt    *time.Time          `json:"createdAt,omitempty"`
-	Description  *string             `json:"description,omitempty"`
-	Id           *openapi_types.UUID `json:"id,omitempty"`
-	Name         string              `json:"name"`
-	UpdatedAt    *time.Time          `json:"updatedAt,omitempty"`
-}
-
-// ScopeUpdateRequest defines model for ScopeUpdateRequest.
-type ScopeUpdateRequest struct {
-	// Description Human-readable description of the scope
-	Description *string `json:"description,omitempty"`
 }
 
 // ScoreLabelGroup defines model for ScoreLabelGroup.
@@ -5801,6 +5808,12 @@ type FetchMCPProxyServerInfoJSONRequestBody = MCPServerInfoFetchRequest
 // UpdateMCPProxyJSONRequestBody defines body for UpdateMCPProxy for application/json ContentType.
 type UpdateMCPProxyJSONRequestBody = MCPProxyRequest
 
+// CreateMCPProxyScopeJSONRequestBody defines body for CreateMCPProxyScope for application/json ContentType.
+type CreateMCPProxyScopeJSONRequestBody = MCPProxyScopeRequest
+
+// UpdateMCPProxyScopeJSONRequestBody defines body for UpdateMCPProxyScope for application/json ContentType.
+type UpdateMCPProxyScopeJSONRequestBody = MCPProxyScopeUpdateRequest
+
 // CreateProjectJSONRequestBody defines body for CreateProject for application/json ContentType.
 type CreateProjectJSONRequestBody = CreateProjectRequest
 
@@ -5896,12 +5909,6 @@ type CreateLLMProxyAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 
 // RotateLLMProxyAPIKeyJSONRequestBody defines body for RotateLLMProxyAPIKey for application/json ContentType.
 type RotateLLMProxyAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
-
-// CreateScopeJSONRequestBody defines body for CreateScope for application/json ContentType.
-type CreateScopeJSONRequestBody = ScopeRequest
-
-// UpdateScopeJSONRequestBody defines body for UpdateScope for application/json ContentType.
-type UpdateScopeJSONRequestBody = ScopeUpdateRequest
 
 // GetNameByDisplayNameJSONRequestBody defines body for GetNameByDisplayName for application/json ContentType.
 type GetNameByDisplayNameJSONRequestBody = ResourceNameRequest

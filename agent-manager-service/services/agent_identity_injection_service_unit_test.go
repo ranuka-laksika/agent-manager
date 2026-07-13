@@ -101,19 +101,19 @@ func noMCPConfigRepo() *repomocks.AgentConfigurationRepositoryMock {
 	}
 }
 
-// noMCPProxyEndpointRepo returns an MCPProxyEndpointRepository mock with every
+// noMCPProxyScopeRepo returns an MCPProxyScopeRepository mock with every
 // method left unset — any unexpected call panics (moq's default), which is
 // exactly right for tests whose scope resolution short-circuits before ever
 // needing it (e.g. no agent configuration).
-func noMCPProxyEndpointRepo() *repomocks.MCPProxyEndpointRepositoryMock {
-	return &repomocks.MCPProxyEndpointRepositoryMock{}
+func noMCPProxyScopeRepo() *repomocks.MCPProxyScopeRepositoryMock {
+	return &repomocks.MCPProxyScopeRepositoryMock{}
 }
 
 func newTestIdentityInjectionService(
 	repo *repomocks.AgentThunderClientRepositoryMock,
 	oc *clientmocks.OpenChoreoClientMock,
 ) AgentIdentityInjectionService {
-	return NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), oc, "1h", discardLogger())
+	return NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyScopeRepo(), oc, "1h", discardLogger())
 }
 
 func TestAgentIdentityInjection_EnvVarsForEnvironment_CreatesSecretReferenceAndBuildsVars(t *testing.T) {
@@ -164,33 +164,35 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_CreatesSecretReferenceAndB
 }
 
 // mcpProxyBinding is one EnvAgentMCPMapping's worth of fixture data: a proxy
-// deployed to an environment via an endpoint carrying the given tool-scope
-// bindings — the real chain resolveAgentIdentityScopes now walks (proxy ->
-// endpoint-environment join -> endpoint -> its own ToolScopeBindings), not a
-// map read directly off the proxy.
+// bound to an environment, carrying the given scope actions — the real chain
+// resolveAgentIdentityScopes now walks (proxy -> its own MCPProxyScope rows),
+// not a per-environment tool binding.
 type mcpProxyBinding struct {
-	envUUID  string
-	bindings []models.MCPToolScopeBinding
+	envUUID      string
+	proxyHandle  string
+	scopeActions []string
 }
 
 // mcpBoundAgentConfigRepo returns an AgentConfigurationRepository mock whose
-// GetByAgentID returns a config with one EnvAgentMCPMapping per given binding,
-// plus the MCPProxyEndpointRepository mock that resolves each mapping's
-// (proxy, environment) to a distinct endpoint carrying its ToolScopeBindings —
-// together, what resolveAgentIdentityScopes needs to aggregate scopes.
-func mcpBoundAgentConfigRepo(bindings ...mcpProxyBinding) (*repomocks.AgentConfigurationRepositoryMock, *repomocks.MCPProxyEndpointRepositoryMock) {
-	type key struct{ proxy, env uuid.UUID }
-	endpointByKey := map[key]uuid.UUID{}
-	configByEndpoint := map[uuid.UUID]models.MCPEndpointConfig{}
+// GetByAgentID returns a config with one EnvAgentMCPMapping (preloaded
+// MCPProxy included, matching GetByAgentID's real preload chain) per given
+// binding, plus the MCPProxyScopeRepository mock that returns each proxy's
+// scope rows — together, what resolveAgentIdentityScopes needs to aggregate
+// scope strings.
+func mcpBoundAgentConfigRepo(bindings ...mcpProxyBinding) (*repomocks.AgentConfigurationRepositoryMock, *repomocks.MCPProxyScopeRepositoryMock) {
 	mappings := make([]models.EnvAgentMCPMapping, 0, len(bindings))
+	scopesByProxy := map[uuid.UUID][]models.MCPProxyScope{}
 
 	for _, b := range bindings {
 		proxyUUID := uuid.New()
 		envUUID := uuid.MustParse(b.envUUID)
-		endpointUUID := uuid.New()
-		mappings = append(mappings, models.EnvAgentMCPMapping{EnvironmentUUID: envUUID, MCPProxyUUID: proxyUUID})
-		endpointByKey[key{proxyUUID, envUUID}] = endpointUUID
-		configByEndpoint[endpointUUID] = models.MCPEndpointConfig{ToolScopeBindings: b.bindings}
+		proxy := &models.MCPProxy{UUID: proxyUUID, Artifact: &models.Artifact{Handle: b.proxyHandle}}
+		mappings = append(mappings, models.EnvAgentMCPMapping{EnvironmentUUID: envUUID, MCPProxyUUID: proxyUUID, MCPProxy: proxy})
+		scopes := make([]models.MCPProxyScope, 0, len(b.scopeActions))
+		for _, action := range b.scopeActions {
+			scopes = append(scopes, models.MCPProxyScope{MCPProxyUUID: proxyUUID, Action: action})
+		}
+		scopesByProxy[proxyUUID] = scopes
 	}
 
 	configRepo := &repomocks.AgentConfigurationRepositoryMock{
@@ -198,28 +200,21 @@ func mcpBoundAgentConfigRepo(bindings ...mcpProxyBinding) (*repomocks.AgentConfi
 			return &models.AgentConfiguration{EnvMCPMappings: mappings}, nil
 		},
 	}
-	endpointRepo := &repomocks.MCPProxyEndpointRepositoryMock{
-		GetEndpointEnvByProxyAndEnvFunc: func(_ context.Context, proxyUUID, envUUID uuid.UUID) (*models.MCPProxyEndpointEnvironment, error) {
-			endpointUUID, ok := endpointByKey[key{proxyUUID, envUUID}]
-			if !ok {
-				return nil, gorm.ErrRecordNotFound
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		ListByProxyUUIDsFunc: func(_ context.Context, proxyUUIDs []uuid.UUID) ([]models.MCPProxyScope, error) {
+			out := make([]models.MCPProxyScope, 0, len(proxyUUIDs))
+			for _, id := range proxyUUIDs {
+				out = append(out, scopesByProxy[id]...)
 			}
-			return &models.MCPProxyEndpointEnvironment{EndpointUUID: endpointUUID}, nil
-		},
-		GetEndpointFunc: func(_ context.Context, endpointUUID uuid.UUID) (*models.MCPProxyEndpoint, error) {
-			cfg, ok := configByEndpoint[endpointUUID]
-			if !ok {
-				return nil, gorm.ErrRecordNotFound
-			}
-			return &models.MCPProxyEndpoint{UUID: endpointUUID, Configuration: cfg}, nil
+			return out, nil
 		},
 	}
-	return configRepo, endpointRepo
+	return configRepo, scopeRepo
 }
 
 func TestResolveAgentIdentityScopes_NoAgentConfiguration_ReturnsEmpty(t *testing.T) {
 	repo := identityRepoReturning(completedInternalBinding(), nil)
-	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
+	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyScopeRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
@@ -229,11 +224,10 @@ func TestResolveAgentIdentityScopes_NoAgentConfiguration_ReturnsEmpty(t *testing
 
 func TestResolveAgentIdentityScopes_SingleProxySingleTool_ReturnsItsScopes(t *testing.T) {
 	envUUID := "11111111-1111-1111-1111-111111111111"
-	configRepo, endpointRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
-		envUUID: envUUID,
-		bindings: []models.MCPToolScopeBinding{
-			{Tool: "search_tickets", Scopes: []string{"amp:mcp:tickets:read"}},
-		},
+	configRepo, scopeRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
+		envUUID:      envUUID,
+		proxyHandle:  "tickets",
+		scopeActions: []string{"read"},
 	})
 	oc := &clientmocks.OpenChoreoClientMock{
 		GetEnvironmentFunc: func(_ context.Context, _, _ string) (*models.EnvironmentResponse, error) {
@@ -241,30 +235,26 @@ func TestResolveAgentIdentityScopes_SingleProxySingleTool_ReturnsItsScopes(t *te
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		configRepo, endpointRepo, oc, "1h", discardLogger())
+		configRepo, scopeRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
 	require.NoError(t, err)
-	assert.Equal(t, []string{"amp:mcp:tickets:read"}, scopes)
+	assert.Equal(t, []string{"tickets:read"}, scopes)
 }
 
-func TestResolveAgentIdentityScopes_MultipleProxiesAndTools_DedupsUnion(t *testing.T) {
+func TestResolveAgentIdentityScopes_MultipleProxies_ReturnsSortedUnion(t *testing.T) {
 	envUUID := "22222222-2222-2222-2222-222222222222"
-	configRepo, endpointRepo := mcpBoundAgentConfigRepo(
+	configRepo, scopeRepo := mcpBoundAgentConfigRepo(
 		mcpProxyBinding{
-			envUUID: envUUID,
-			bindings: []models.MCPToolScopeBinding{
-				{Tool: "search_tickets", Scopes: []string{"amp:mcp:tickets:read", "amp:mcp:tickets:write"}},
-			},
+			envUUID:      envUUID,
+			proxyHandle:  "tickets",
+			scopeActions: []string{"read", "write"},
 		},
 		mcpProxyBinding{
-			envUUID: envUUID,
-			bindings: []models.MCPToolScopeBinding{
-				{Tool: "create_incident", Scopes: []string{"amp:mcp:incidents:write"}},
-				// Same scope as the other proxy's tool — must appear only once in the result.
-				{Tool: "list_incidents", Scopes: []string{"amp:mcp:tickets:read"}},
-			},
+			envUUID:      envUUID,
+			proxyHandle:  "incidents",
+			scopeActions: []string{"write"},
 		},
 	)
 	oc := &clientmocks.OpenChoreoClientMock{
@@ -273,38 +263,39 @@ func TestResolveAgentIdentityScopes_MultipleProxiesAndTools_DedupsUnion(t *testi
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		configRepo, endpointRepo, oc, "1h", discardLogger())
+		configRepo, scopeRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
 	require.NoError(t, err)
-	assert.Equal(t, []string{"amp:mcp:incidents:write", "amp:mcp:tickets:read", "amp:mcp:tickets:write"}, scopes,
-		"must be the deduplicated, sorted union across every bound proxy's tools")
+	assert.Equal(t, []string{"incidents:write", "tickets:read", "tickets:write"}, scopes,
+		"must be the sorted union of every bound proxy's own scopes")
 }
 
 func TestResolveAgentIdentityScopes_MappingForDifferentEnvironment_Ignored(t *testing.T) {
 	boundEnvUUID := "33333333-3333-3333-3333-333333333333"
 	otherEnvUUID := "44444444-4444-4444-4444-444444444444"
-	// The proxy has an endpoint deployed to otherEnvUUID, but the agent's own
-	// mapping is bound to boundEnvUUID (matches the binding's environment) —
-	// simulating a proxy that isn't (or is no longer) configured for the
-	// environment this agent is actually deployed to. The join lookup for
-	// (proxy, boundEnvUUID) must find nothing, even though the proxy DOES
-	// have an endpoint deployed to some other environment.
+	// The mapping is bound to otherEnvUUID, but the binding's own environment
+	// is boundEnvUUID — simulating a proxy configured for a different
+	// environment than the one this agent is actually deployed to. The
+	// environment-UUID filter must skip this mapping entirely, so its scopes
+	// are never even looked up.
 	proxyUUID := uuid.New()
 	configRepo := &repomocks.AgentConfigurationRepositoryMock{
 		GetByAgentIDFunc: func(_ context.Context, _, _ string) (*models.AgentConfiguration, error) {
 			return &models.AgentConfiguration{EnvMCPMappings: []models.EnvAgentMCPMapping{
-				{EnvironmentUUID: uuid.MustParse(boundEnvUUID), MCPProxyUUID: proxyUUID},
+				{
+					EnvironmentUUID: uuid.MustParse(otherEnvUUID),
+					MCPProxyUUID:    proxyUUID,
+					MCPProxy:        &models.MCPProxy{UUID: proxyUUID, Artifact: &models.Artifact{Handle: "tickets"}},
+				},
 			}}, nil
 		},
 	}
-	endpointRepo := &repomocks.MCPProxyEndpointRepositoryMock{
-		GetEndpointEnvByProxyAndEnvFunc: func(_ context.Context, gotProxy, gotEnv uuid.UUID) (*models.MCPProxyEndpointEnvironment, error) {
-			if gotProxy == proxyUUID && gotEnv.String() == otherEnvUUID {
-				return &models.MCPProxyEndpointEnvironment{EndpointUUID: uuid.New()}, nil
-			}
-			return nil, gorm.ErrRecordNotFound
+	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
+		ListByProxyUUIDsFunc: func(context.Context, []uuid.UUID) ([]models.MCPProxyScope, error) {
+			t.Fatal("must not look up scopes for a mapping bound to a different environment")
+			return nil, nil
 		},
 	}
 	oc := &clientmocks.OpenChoreoClientMock{
@@ -313,7 +304,7 @@ func TestResolveAgentIdentityScopes_MappingForDifferentEnvironment_Ignored(t *te
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		configRepo, endpointRepo, oc, "1h", discardLogger())
+		configRepo, scopeRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
@@ -336,7 +327,7 @@ func TestResolveAgentIdentityScopes_AgentConfigLoadError_PropagatesError(t *test
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		failingRepo, noMCPProxyEndpointRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
+		failingRepo, noMCPProxyScopeRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
@@ -346,11 +337,10 @@ func TestResolveAgentIdentityScopes_AgentConfigLoadError_PropagatesError(t *test
 
 func TestResolveAgentIdentityScopes_EnvironmentResolveError_PropagatesError(t *testing.T) {
 	envUUID := "55555555-5555-5555-5555-555555555555"
-	configRepo, endpointRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
-		envUUID: envUUID,
-		bindings: []models.MCPToolScopeBinding{
-			{Tool: "search_tickets", Scopes: []string{"amp:mcp:tickets:read"}},
-		},
+	configRepo, scopeRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
+		envUUID:      envUUID,
+		proxyHandle:  "tickets",
+		scopeActions: []string{"read"},
 	})
 	oc := &clientmocks.OpenChoreoClientMock{
 		GetEnvironmentFunc: func(_ context.Context, _, _ string) (*models.EnvironmentResponse, error) {
@@ -358,7 +348,7 @@ func TestResolveAgentIdentityScopes_EnvironmentResolveError_PropagatesError(t *t
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		configRepo, endpointRepo, oc, "1h", discardLogger())
+		configRepo, scopeRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
 	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
@@ -633,11 +623,10 @@ func TestAgentIdentityInjection_ReconcileForEnvironment_MissingVars_Injects(t *t
 
 func TestAgentIdentityInjection_ReconcileForEnvironment_ScopeDrift_Reinjects(t *testing.T) {
 	envUUID := "44444444-4444-4444-4444-444444444444"
-	configRepo, endpointRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
-		envUUID: envUUID,
-		bindings: []models.MCPToolScopeBinding{
-			{Tool: "search_tickets", Scopes: []string{"amp:mcp:tickets:read"}},
-		},
+	configRepo, scopeRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
+		envUUID:      envUUID,
+		proxyHandle:  "tickets",
+		scopeActions: []string{"read"},
 	})
 	var injectedScopes string
 	oc := &clientmocks.OpenChoreoClientMock{
@@ -652,7 +641,7 @@ func TestAgentIdentityInjection_ReconcileForEnvironment_ScopeDrift_Reinjects(t *
 		},
 		GetComponentConfigurationsFunc: func(_ context.Context, _, _, _, _ string) ([]models.EnvVars, error) {
 			// All four keys present, but the live scopes are stale (empty) vs the
-			// now-desired "amp:mcp:tickets:read".
+			// now-desired "tickets:read".
 			refName := testIdentitySecretRefName()
 			return []models.EnvVars{
 				{Key: client.EnvVarAgentIdentityClientID, Value: "client-abc"},
@@ -671,10 +660,10 @@ func TestAgentIdentityInjection_ReconcileForEnvironment_ScopeDrift_Reinjects(t *
 		},
 	}
 	svc := NewAgentIdentityInjectionService(identityRepoReturning(completedInternalBinding(), nil),
-		configRepo, endpointRepo, oc, "1h", discardLogger())
+		configRepo, scopeRepo, oc, "1h", discardLogger())
 
 	require.NoError(t, svc.ReconcileForEnvironment(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv))
-	assert.Equal(t, "amp:mcp:tickets:read", injectedScopes, "a drifted scope list must be re-injected with the current scopes")
+	assert.Equal(t, "tickets:read", injectedScopes, "a drifted scope list must be re-injected with the current scopes")
 }
 
 func TestAgentIdentityInjection_ReconcileForEnvironment_NothingToInject_NoReadOrWrite(t *testing.T) {
@@ -728,7 +717,7 @@ func TestAgentIdentityInjection_RefreshAfterRotation_StampsAnnotationAndRollsPod
 		},
 	}
 
-	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), oc, "1h", discardLogger())
+	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyScopeRepo(), oc, "1h", discardLogger())
 	impl, ok := svc.(*agentIdentityInjectionService)
 	require.True(t, ok)
 	impl.now = func() time.Time { return fixedNow }
@@ -766,7 +755,7 @@ func TestAgentIdentityInjection_RefreshAfterRotation_AlwaysUpdatesEvenWhenDataAl
 		},
 		UpdateReleaseBindingEnvVarsFunc: func(context.Context, string, string, string, string, []client.EnvVar) error { return nil },
 	}
-	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), oc, "1h", discardLogger())
+	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyScopeRepo(), oc, "1h", discardLogger())
 
 	require.NoError(t, svc.RefreshAfterRotation(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv))
 	assert.True(t, updated, "rotation must always update the SecretReference, even when its data sources already match")
@@ -924,7 +913,7 @@ func TestAgentIdentityInjection_RefreshAfterRotation_TwoRotationsInSameSecondPro
 	// into an identical annotation value.
 	sameSecond := time.Date(2026, 7, 8, 10, 30, 0, 0, time.UTC)
 	callNum := 0
-	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), oc, "1h", discardLogger())
+	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyScopeRepo(), oc, "1h", discardLogger())
 	impl, ok := svc.(*agentIdentityInjectionService)
 	require.True(t, ok)
 	impl.now = func() time.Time {

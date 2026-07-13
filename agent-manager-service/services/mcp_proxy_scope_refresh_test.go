@@ -49,7 +49,7 @@ func TestRefreshAgentsBoundToProxy_NoMappings_NoOp(t *testing.T) {
 				return nil, nil
 			},
 		},
-		infraResourceManager: &infraResourceManagerStubForScopeRefresh{
+		infraManager: &infraResourceManagerStubForScopeRefresh{
 			ListOrgEnvironmentsFunc: func(context.Context, string) ([]*models.EnvironmentResponse, error) {
 				t.Fatal("must not resolve environments when no agents are bound to the proxy")
 				return nil, nil
@@ -84,7 +84,7 @@ func TestRefreshAgentsBoundToProxy_RefreshesEveryBoundAgent(t *testing.T) {
 				}, nil
 			},
 		},
-		infraResourceManager: &infraResourceManagerStubForScopeRefresh{
+		infraManager: &infraResourceManagerStubForScopeRefresh{
 			ListOrgEnvironmentsFunc: func(_ context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
 				assert.Equal(t, "acme", ouID)
 				return []*models.EnvironmentResponse{
@@ -141,7 +141,7 @@ func TestRefreshAgentsBoundToProxy_SkipsMappingWhenEnvironmentDeleted(t *testing
 				}, nil
 			},
 		},
-		infraResourceManager: &infraResourceManagerStubForScopeRefresh{
+		infraManager: &infraResourceManagerStubForScopeRefresh{
 			ListOrgEnvironmentsFunc: func(context.Context, string) ([]*models.EnvironmentResponse, error) {
 				return []*models.EnvironmentResponse{}, nil // staleEnvUUID no longer exists
 			},
@@ -179,7 +179,7 @@ func TestRefreshAgentsBoundToProxy_ContinuesAfterOneAgentFails(t *testing.T) {
 				}, nil
 			},
 		},
-		infraResourceManager: &infraResourceManagerStubForScopeRefresh{
+		infraManager: &infraResourceManagerStubForScopeRefresh{
 			ListOrgEnvironmentsFunc: func(context.Context, string) ([]*models.EnvironmentResponse, error) {
 				return []*models.EnvironmentResponse{{UUID: envUUID.String(), Name: "dev"}}, nil
 			},
