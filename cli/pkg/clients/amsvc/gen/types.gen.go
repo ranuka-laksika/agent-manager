@@ -348,6 +348,24 @@ func (e CreateCustomEvaluatorRequestType) Valid() bool {
 	}
 }
 
+// Defines values for CreateEnvironmentRequestIsolationTier.
+const (
+	CreateEnvironmentRequestIsolationTierGvisor CreateEnvironmentRequestIsolationTier = "gvisor"
+	CreateEnvironmentRequestIsolationTierKata   CreateEnvironmentRequestIsolationTier = "kata"
+)
+
+// Valid indicates whether the value is a known member of the CreateEnvironmentRequestIsolationTier enum.
+func (e CreateEnvironmentRequestIsolationTier) Valid() bool {
+	switch e {
+	case CreateEnvironmentRequestIsolationTierGvisor:
+		return true
+	case CreateEnvironmentRequestIsolationTierKata:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateGitSecretRequestType.
 const (
 	CreateGitSecretRequestTypeBasic CreateGitSecretRequestType = "basic"
@@ -549,6 +567,24 @@ func (e ExtractionIdentifierLocation) Valid() bool {
 	case ExtractionIdentifierLocationPayload:
 		return true
 	case ExtractionIdentifierLocationQueryParam:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GatewayEnvironmentResponseIsolationTier.
+const (
+	GatewayEnvironmentResponseIsolationTierGvisor GatewayEnvironmentResponseIsolationTier = "gvisor"
+	GatewayEnvironmentResponseIsolationTierKata   GatewayEnvironmentResponseIsolationTier = "kata"
+)
+
+// Valid indicates whether the value is a known member of the GatewayEnvironmentResponseIsolationTier enum.
+func (e GatewayEnvironmentResponseIsolationTier) Valid() bool {
+	switch e {
+	case GatewayEnvironmentResponseIsolationTierGvisor:
+		return true
+	case GatewayEnvironmentResponseIsolationTierKata:
 		return true
 	default:
 		return false
@@ -2181,12 +2217,15 @@ type CreateEnvironmentRequest struct {
 	// IsProduction Whether this is a production environment
 	IsProduction *bool `json:"isProduction,omitempty"`
 
-	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); empty/absent uses the default runc runtime.
-	IsolationTier *string `json:"isolationTier,omitempty"`
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *CreateEnvironmentRequestIsolationTier `json:"isolationTier,omitempty"`
 
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 }
+
+// CreateEnvironmentRequestIsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+type CreateEnvironmentRequestIsolationTier string
 
 // CreateGatewayRequest defines model for CreateGatewayRequest.
 type CreateGatewayRequest struct {
@@ -2895,8 +2934,8 @@ type GatewayEnvironmentResponse struct {
 	// IsProduction Whether this is a production environment
 	IsProduction bool `json:"isProduction"`
 
-	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); empty/absent uses the default runc runtime.
-	IsolationTier *string `json:"isolationTier,omitempty"`
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *GatewayEnvironmentResponseIsolationTier `json:"isolationTier,omitempty"`
 
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
@@ -2904,6 +2943,9 @@ type GatewayEnvironmentResponse struct {
 	// UpdatedAt Timestamp when the environment was last updated
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// GatewayEnvironmentResponseIsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+type GatewayEnvironmentResponseIsolationTier string
 
 // GatewayListResponse defines model for GatewayListResponse.
 type GatewayListResponse struct {
