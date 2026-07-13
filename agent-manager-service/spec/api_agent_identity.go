@@ -1192,6 +1192,175 @@ func (a *AgentIdentityAPIService) GetAgentCredentialsExecute(r ApiGetAgentCreden
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
+type ApiGetAgentGroupsRequest struct {
+	ctx         context.Context
+	ApiService  *AgentIdentityAPIService
+	orgName     string
+	projName    string
+	agentName   string
+	environment *string
+}
+
+// Environment name to read the agent&#39;s groups for
+func (r ApiGetAgentGroupsRequest) Environment(environment string) ApiGetAgentGroupsRequest {
+	r.environment = &environment
+	return r
+}
+
+func (r ApiGetAgentGroupsRequest) Execute() (map[string]interface{}, *http.Response, error) {
+	return r.ApiService.GetAgentGroupsExecute(r)
+}
+
+/*
+GetAgentGroups List the groups an agent's AgentID belongs to in one environment
+
+Returns the Thunder groups the agent's AgentID is a member of in the
+given environment. `environment` is required — an agent's AgentID
+(and its group memberships) is per-environment, so there is no single
+answer across every environment it is deployed to.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name
+	@param projName Project name
+	@param agentName Agent name
+	@return ApiGetAgentGroupsRequest
+*/
+func (a *AgentIdentityAPIService) GetAgentGroups(ctx context.Context, orgName string, projName string, agentName string) ApiGetAgentGroupsRequest {
+	return ApiGetAgentGroupsRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		projName:   projName,
+		agentName:  agentName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return map[string]interface{}
+func (a *AgentIdentityAPIService) GetAgentGroupsExecute(r ApiGetAgentGroupsRequest) (map[string]interface{}, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue map[string]interface{}
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AgentIdentityAPIService.GetAgentGroups")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/groups"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.environment == nil {
+		return localVarReturnValue, nil, reportError("environment is required and must be specified")
+	}
+
+	parameterAddToHeaderOrQuery(localVarQueryParams, "environment", r.environment, "")
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
 type ApiGetAgentIdentityRequest struct {
 	ctx         context.Context
 	ApiService  *AgentIdentityAPIService
@@ -1970,6 +2139,176 @@ func (a *AgentIdentityAPIService) GetAgentIdentityRoleAssignmentsExecute(r ApiGe
 			error: localVarHTTPResponse.Status,
 		}
 		if localVarHTTPResponse.StatusCode == 503 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	if err != nil {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: err.Error(),
+		}
+		return localVarReturnValue, localVarHTTPResponse, newErr
+	}
+
+	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiGetAgentRolesRequest struct {
+	ctx         context.Context
+	ApiService  *AgentIdentityAPIService
+	orgName     string
+	projName    string
+	agentName   string
+	environment *string
+}
+
+// Environment name to read the agent&#39;s roles for
+func (r ApiGetAgentRolesRequest) Environment(environment string) ApiGetAgentRolesRequest {
+	r.environment = &environment
+	return r
+}
+
+func (r ApiGetAgentRolesRequest) Execute() (map[string]interface{}, *http.Response, error) {
+	return r.ApiService.GetAgentRolesExecute(r)
+}
+
+/*
+GetAgentRoles List the roles assigned to an agent's AgentID in one environment
+
+Returns the Thunder roles assigned to the agent's AgentID (directly,
+via role assignment) in the given environment. `environment` is
+required — an agent's AgentID (and its role assignments) is
+per-environment, so there is no single answer across every
+environment it is deployed to.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name
+	@param projName Project name
+	@param agentName Agent name
+	@return ApiGetAgentRolesRequest
+*/
+func (a *AgentIdentityAPIService) GetAgentRoles(ctx context.Context, orgName string, projName string, agentName string) ApiGetAgentRolesRequest {
+	return ApiGetAgentRolesRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		projName:   projName,
+		agentName:  agentName,
+	}
+}
+
+// Execute executes the request
+//
+//	@return map[string]interface{}
+func (a *AgentIdentityAPIService) GetAgentRolesExecute(r ApiGetAgentRolesRequest) (map[string]interface{}, *http.Response, error) {
+	var (
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue map[string]interface{}
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AgentIdentityAPIService.GetAgentRoles")
+	if err != nil {
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/projects/{projName}/agents/{agentName}/roles"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"projName"+"}", url.PathEscape(parameterValueToString(r.projName, "projName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"agentName"+"}", url.PathEscape(parameterValueToString(r.agentName, "agentName")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if r.environment == nil {
+		return localVarReturnValue, nil, reportError("environment is required and must be specified")
+	}
+
+	parameterAddToHeaderOrQuery(localVarQueryParams, "environment", r.environment, "")
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return localVarReturnValue, nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarReturnValue, localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 404 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarReturnValue, localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarReturnValue, localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
 			var v ErrorResponse
 			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 			if err != nil {

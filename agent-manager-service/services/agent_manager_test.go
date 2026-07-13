@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -39,8 +40,10 @@ import (
 // this stub never call them.
 type stubAgentThunderProvisioning struct {
 	AgentThunderProvisioningService
-	RegenerateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
-	ClaimFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
+	RegenerateFunc     func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
+	ClaimFunc          func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
+	GetAgentRolesFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error)
+	GetAgentGroupsFunc func(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error)
 }
 
 func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
@@ -49,6 +52,14 @@ func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, org
 
 func (s *stubAgentThunderProvisioning) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
 	return s.ClaimFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) GetAgentRoles(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error) {
+	return s.GetAgentRolesFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) GetAgentGroups(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error) {
+	return s.GetAgentGroupsFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
@@ -399,4 +410,98 @@ func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
 	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
 
 	require.ErrorIs(t, err, boom)
+}
+
+func pipelineWithEnv(envName string) *models.DeploymentPipelineResponse {
+	return &models.DeploymentPipelineResponse{
+		PromotionPaths: []models.PromotionPath{
+			{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: envName}}},
+		},
+	}
+}
+
+func TestGetAgentRoles_EnvironmentInPipeline_DelegatesToProvisioning(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	wantRoles := []thundersvc.ThunderRole{{ID: "role-1", Name: "reader"}}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentRolesFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderRole, error) {
+			return wantRoles, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	roles, err := s.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.NoError(t, err)
+	assert.Equal(t, wantRoles, roles)
+}
+
+// TestGetAgentRoles_EnvironmentNotInPipeline_Errors guards the same visibility
+// rule GetAgentIdentity applies: a project only ever sees bindings for
+// environments in its own deployment pipeline, even though AgentIDs are
+// provisioned across every org-level environment.
+func TestGetAgentRoles_EnvironmentNotInPipeline_Errors(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentRolesFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderRole, error) {
+			t.Fatal("must not reach the provisioning layer for an environment outside the project's pipeline")
+			return nil, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "prod")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrEnvironmentNotFound)
+}
+
+func TestGetAgentGroups_EnvironmentInPipeline_DelegatesToProvisioning(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	wantGroups := []thundersvc.ThunderGroup{{ID: "group-1", Name: "operators"}}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentGroupsFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderGroup, error) {
+			return wantGroups, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	groups, err := s.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.NoError(t, err)
+	assert.Equal(t, wantGroups, groups)
+}
+
+// TestGetAgentGroups_EnvironmentNotInPipeline_Errors is the groups counterpart
+// to TestGetAgentRoles_EnvironmentNotInPipeline_Errors.
+func TestGetAgentGroups_EnvironmentNotInPipeline_Errors(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentGroupsFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderGroup, error) {
+			t.Fatal("must not reach the provisioning layer for an environment outside the project's pipeline")
+			return nil, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "prod")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrEnvironmentNotFound)
 }

@@ -64,6 +64,8 @@ type AgentController interface {
 	RevokeAgentIdentitySecret(w http.ResponseWriter, r *http.Request)
 	ProvisionAgentIdentity(w http.ResponseWriter, r *http.Request)
 	GetAgentCredentials(w http.ResponseWriter, r *http.Request)
+	GetAgentRoles(w http.ResponseWriter, r *http.Request)
+	GetAgentGroups(w http.ResponseWriter, r *http.Request)
 }
 
 type agentController struct {
@@ -1268,4 +1270,82 @@ func (c *agentController) GetAgentCredentials(w http.ResponseWriter, r *http.Req
 
 	log.Info("GetAgentCredentials: completed", "orgName", orgName, "agentName", agentName, "envID", envID)
 	utils.WriteSuccessResponse(w, http.StatusOK, resp)
+}
+
+// GetAgentRoles handles
+// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/roles?environment={envID}
+//
+// Returns the Thunder roles assigned to the agent's AgentID in one
+// environment. An agent's AgentID (and its role assignments) is per
+// environment, so `environment` is required — there is no single answer
+// across every environment the agent is deployed to.
+func (c *agentController) GetAgentRoles(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
+	projName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	envID := r.URL.Query().Get("environment")
+	if envID == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "environment query parameter is required")
+		return
+	}
+
+	log.Info("GetAgentRoles: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
+
+	roles, err := c.agentService.GetAgentRoles(ctx, ouID, projName, agentName, envID)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
+			log.Warn("GetAgentRoles: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Agent identity not yet provisioned for this environment")
+			return
+		}
+		log.Error("GetAgentRoles: failed to get agent roles", "orgName", orgName, "agentName", agentName, "envID", envID, "error", err)
+		handleCommonErrors(w, err, "Failed to get agent roles")
+		return
+	}
+
+	log.Info("GetAgentRoles: completed", "orgName", orgName, "agentName", agentName, "envID", envID)
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles})
+}
+
+// GetAgentGroups handles
+// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/groups?environment={envID}
+//
+// Returns the Thunder groups the agent's AgentID belongs to in one
+// environment. An agent's AgentID (and its group memberships) is per
+// environment, so `environment` is required — there is no single answer
+// across every environment the agent is deployed to.
+func (c *agentController) GetAgentGroups(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
+	projName := r.PathValue(utils.PathParamProjName)
+	agentName := r.PathValue(utils.PathParamAgentName)
+	envID := r.URL.Query().Get("environment")
+	if envID == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "environment query parameter is required")
+		return
+	}
+
+	log.Info("GetAgentGroups: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
+
+	groups, err := c.agentService.GetAgentGroups(ctx, ouID, projName, agentName, envID)
+	if err != nil {
+		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
+			log.Warn("GetAgentGroups: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Agent identity not yet provisioned for this environment")
+			return
+		}
+		log.Error("GetAgentGroups: failed to get agent groups", "orgName", orgName, "agentName", agentName, "envID", envID, "error", err)
+		handleCommonErrors(w, err, "Failed to get agent groups")
+		return
+	}
+
+	log.Info("GetAgentGroups: completed", "orgName", orgName, "agentName", agentName, "envID", envID)
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"groups": groups})
 }

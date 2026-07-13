@@ -42,6 +42,16 @@ type IdentityClient interface {
 	GetUserRoles(ctx context.Context, userID string) ([]ThunderRole, error)
 	InviteUser(ctx context.Context, email string, ouID string) (string, error)
 
+	// Agents (identity, not the AMP agent resource)
+	// GetAgentRoles returns the roles assigned to an agent identity, by
+	// fanning out over every role and checking its assignees — Thunder has no
+	// reverse-lookup endpoint for this (mirrors GetUserRoles/GetGroupRoles).
+	GetAgentRoles(ctx context.Context, agentID string) ([]ThunderRole, error)
+	// GetAgentGroups returns the groups an agent identity belongs to, by
+	// fanning out over every group in ouID and checking its members —
+	// Thunder has no reverse-lookup endpoint for this.
+	GetAgentGroups(ctx context.Context, ouID, agentID string) ([]ThunderGroup, error)
+
 	// Groups
 	ListGroups(ctx context.Context, ouID string, offset, limit int) ([]ThunderGroup, int, error)
 	ListGroupsByOUId(ctx context.Context, ouID string, offset, limit int) ([]ThunderGroup, int, error)
@@ -482,14 +492,20 @@ func (c *thunderClient) listRoleAssignmentEntries(ctx context.Context, roleID st
 	return resp.Assignments, nil
 }
 
-func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]ThunderRole, error) {
+// rolesForAssignee returns every role that has an assignment entry matching
+// assigneeType/assigneeID (e.g. "group"/groupID, "user"/userID, "agent"/
+// agentID). Thunder has no reverse-lookup endpoint for "roles assigned to
+// this assignee", so this pages through every role in the instance and
+// checks its assignment entries client-side. Shared by GetGroupRoles,
+// GetUserRoles, and GetAgentRoles.
+func (c *thunderClient) rolesForAssignee(ctx context.Context, assigneeType, assigneeID string) ([]ThunderRole, error) {
 	const pageSize = 50
 	var allRoles []ThunderRole
 	offset := 0
 	for {
 		page, total, err := c.ListRoles(ctx, "", offset, pageSize)
 		if err != nil {
-			return nil, fmt.Errorf("thunder get group roles (list): %w", err)
+			return nil, fmt.Errorf("thunder get %s roles (list): %w", assigneeType, err)
 		}
 		allRoles = append(allRoles, page...)
 		offset += len(page)
@@ -498,52 +514,83 @@ func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]Th
 		}
 	}
 
-	var groupRoles []ThunderRole
+	var assigneeRoles []ThunderRole
 	for _, role := range allRoles {
 		entries, err := c.listRoleAssignmentEntries(ctx, role.ID)
 		if err != nil {
-			return nil, fmt.Errorf("thunder get group roles (assignments for role %s): %w", role.ID, err)
+			return nil, fmt.Errorf("thunder get %s roles (assignments for role %s): %w", assigneeType, role.ID, err)
 		}
 		for _, e := range entries {
-			if e.Type == "group" && e.ID == groupID {
-				groupRoles = append(groupRoles, role)
+			if e.Type == assigneeType && e.ID == assigneeID {
+				assigneeRoles = append(assigneeRoles, role)
 				break
 			}
 		}
 	}
-	return groupRoles, nil
+	return assigneeRoles, nil
+}
+
+func (c *thunderClient) GetGroupRoles(ctx context.Context, groupID string) ([]ThunderRole, error) {
+	return c.rolesForAssignee(ctx, "group", groupID)
 }
 
 func (c *thunderClient) GetUserRoles(ctx context.Context, userID string) ([]ThunderRole, error) {
+	return c.rolesForAssignee(ctx, "user", userID)
+}
+
+// GetAgentRoles returns the roles assigned to an agent identity. Same
+// fan-out-and-filter approach as GetUserRoles/GetGroupRoles, since Thunder has
+// no reverse-lookup endpoint for "roles assigned to this assignee".
+func (c *thunderClient) GetAgentRoles(ctx context.Context, agentID string) ([]ThunderRole, error) {
+	return c.rolesForAssignee(ctx, "agent", agentID)
+}
+
+// GetAgentGroups returns the groups an agent identity belongs to, by fanning
+// out over every group in ouID and checking its member entries — Thunder has
+// no reverse-lookup endpoint for "groups this assignee belongs to".
+func (c *thunderClient) GetAgentGroups(ctx context.Context, ouID, agentID string) ([]ThunderGroup, error) {
 	const pageSize = 50
-	var allRoles []ThunderRole
+	var allGroups []ThunderGroup
 	offset := 0
 	for {
-		page, total, err := c.ListRoles(ctx, "", offset, pageSize)
+		page, total, err := c.ListGroupsByOUId(ctx, ouID, offset, pageSize)
 		if err != nil {
-			return nil, fmt.Errorf("thunder get user roles (list): %w", err)
+			return nil, fmt.Errorf("thunder get agent groups (list): %w", err)
 		}
-		allRoles = append(allRoles, page...)
+		allGroups = append(allGroups, page...)
 		offset += len(page)
 		if offset >= total || len(page) == 0 {
 			break
 		}
 	}
 
-	var userRoles []ThunderRole
-	for _, role := range allRoles {
-		entries, err := c.listRoleAssignmentEntries(ctx, role.ID)
-		if err != nil {
-			return nil, fmt.Errorf("thunder get user roles (assignments for role %s): %w", role.ID, err)
-		}
-		for _, e := range entries {
-			if e.Type == "user" && e.ID == userID {
-				userRoles = append(userRoles, role)
+	var agentGroups []ThunderGroup
+	for _, group := range allGroups {
+		const memberPageSize = 100
+		memberOffset := 0
+		for {
+			members, total, err := c.ListGroupMemberEntries(ctx, group.ID, memberOffset, memberPageSize)
+			if err != nil {
+				return nil, fmt.Errorf("thunder get agent groups (members for group %s): %w", group.ID, err)
+			}
+			matched := false
+			for _, m := range members {
+				if m.Type == "agent" && m.ID == agentID {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				agentGroups = append(agentGroups, group)
+				break
+			}
+			memberOffset += len(members)
+			if memberOffset >= total || len(members) == 0 {
 				break
 			}
 		}
 	}
-	return userRoles, nil
+	return agentGroups, nil
 }
 
 // --- Roles ---
