@@ -53,6 +53,10 @@ Like gVisor, Kata uses a **dedicated node** labeled `kata=true` and tainted `kat
 
 Provision a KVM-capable Linux node matching the requirements above and join it to your cluster using your platform's standard mechanism. Leave it empty.
 
+:::tip Taint the node as early as possible
+If your platform lets you set taints at node-pool creation, apply `kata=true:NoSchedule` there. An untainted node starts accepting regular platform pods immediately, and you will have to drain them all off before installing the runtime (the containerd reconfiguration restarts every pod on the node). If the node has already picked up workloads, `kubectl cordon` + `kubectl drain --ignore-daemonsets --delete-emptydir-data` it first.
+:::
+
 ### Step 2: Run the installer from a machine with kubectl access
 
 Unlike the gVisor installer (which runs on the node), the Kata installer runs from **any machine with kubectl access** and does everything through the Kubernetes API:
@@ -80,6 +84,41 @@ kubectl -n kube-system rollout status daemonset/kata-deploy
 kubectl get node <node-name> --show-labels   # kata=true
 ```
 :::
+
+<details>
+<summary>RKE2 nodes (bundled containerd)</summary>
+
+Upstream kata-deploy assumes a standalone containerd at `/etc/containerd/config.toml`, which RKE2 nodes do not have. Two extra steps are needed on each RKE2 Kata node:
+
+**1. Before running the installer**, create an empty stub so the kata-deploy pod gets past its pre-flight check (it crash-loops with `cp: can't stat '/etc/containerd/config.toml'` otherwise):
+
+```bash
+sudo mkdir -p /etc/containerd && sudo touch /etc/containerd/config.toml
+```
+
+**2. After kata-deploy has installed the binaries into `/opt/kata`** (the node gets the `katacontainers.io/kata-runtime=true` label on success), wire the runtime through RKE2's containerd template — kata-deploy wrote its config to the stub, which RKE2 never reads:
+
+```bash
+sudo mkdir -p /usr/local/bin
+sudo ln -sf /opt/kata/bin/containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-qemu-v2
+sudo tee /var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl > /dev/null <<'EOF'
+{{ template "base" . }}
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu]
+  runtime_type = "io.containerd.kata-qemu.v2"
+  privileged_without_host_devices = true
+  pod_annotations = ["io.katacontainers.*"]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu.options]
+    ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
+EOF
+sudo systemctl restart rke2-agent
+```
+
+:::warning Rewrite, never append
+The template must contain `{{ template "base" . }}` exactly once. If the file already exists (e.g. it also carries a gVisor or build-related block), merge the runtime sections into one file and rewrite it wholesale; appending a duplicate template line produces an invalid containerd config and the node's kubelet will not come back after the restart — recovery then requires SSH/console access, `kubectl` cannot reach the node.
+:::
+
+</details>
 
 ### Local development
 

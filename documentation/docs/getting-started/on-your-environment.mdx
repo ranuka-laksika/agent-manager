@@ -42,6 +42,7 @@ This setup is for **development and exploration**. For production deployments, s
 | RAM per node | 8 GB |
 | LoadBalancer support | Required |
 | Default StorageClass | Required |
+| Node kernel (build nodes) | Linux **6.3+** for user-namespaced agent builds (idmapped-mount support). On older kernels (Ubuntu 22.04's 5.15, Amazon Linux 2's 5.10) set `buildWorkflows.userNamespaces=false` on the Platform Resources chart — see [Troubleshooting](#build-pods-fail-with-mount_attr_idmap--idmap-mounts-errors) |
 
 ### Supported Providers
 
@@ -465,6 +466,29 @@ kubectl wait --for=condition=Available \
 `skip_tls_verify: true` disables JWKS TLS certificate validation. This is required here because the self-signed CA is not yet trusted by the Control Plane. For production, use CA-signed certificates and set `skip_tls_verify: false` (or remove the override entirely).
 :::
 
+#### Patch the service-account entitlement claim (required with Thunder ≥ 0.45)
+
+Thunder 0.45+ puts the client name in the `client_id` claim (its `sub` is an opaque UUID), but OpenChoreo 1.1.1 extracts service-account entitlements from `sub`, and the chart does not expose the setting. Without this patch, every service-to-service call is **silently unauthorized** — the API returns `200` with empty lists and `403`s while all pods look healthy, and the gateway bootstrap later fails with `Environment 'default' not found`.
+
+```bash
+patched_yaml=$(kubectl get configmap openchoreo-api-config -n openchoreo-control-plane -o yaml   | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+echo "$patched_yaml" | kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+
+kubectl rollout restart deployment/openchoreo-api -n openchoreo-control-plane
+kubectl rollout status deployment/openchoreo-api -n openchoreo-control-plane --timeout=120s
+
+for binding in $(kubectl get clusterauthzrolebindings.openchoreo.dev -o jsonpath='{.items[*].metadata.name}'); do
+  claim=$(kubectl get clusterauthzrolebinding.openchoreo.dev "$binding" -o jsonpath='{.spec.entitlement.claim}')
+  if [ "$claim" = "sub" ]; then
+    kubectl patch clusterauthzrolebinding.openchoreo.dev "$binding" --type=merge       -p '{"spec":{"entitlement":{"claim":"client_id"}}}'
+  fi
+done
+```
+
+:::note
+Re-apply this patch after any `helm upgrade` of the Control Plane chart — the upgrade reverts both the ConfigMap and the bindings. The same patch is needed a second time for the Observability Plane's `observer-auth-config` in Step 8.
+:::
+
 <details>
 <summary>What the configuration does</summary>
 
@@ -788,6 +812,15 @@ kubectl wait --for=condition=Available \
 for sts in $(kubectl get statefulset -n openchoreo-observability-plane -o name 2>/dev/null); do
   kubectl rollout status "${sts}" -n openchoreo-observability-plane --timeout=900s
 done
+```
+
+With Thunder ≥ 0.45, apply the same entitlement-claim patch from Step 5 to the observer (without it, build-log queries return `403 Access denied`):
+
+```bash
+patched_yaml=$(kubectl get configmap observer-auth-config -n openchoreo-observability-plane -o yaml   | sed -E "s/claim:[[:space:]]*['\"]?sub['\"]?/claim: client_id/g")
+echo "$patched_yaml" | kubectl apply --server-side --field-manager=helm --force-conflicts -f -
+kubectl rollout restart deployment/observer -n openchoreo-observability-plane
+kubectl rollout status deployment/observer -n openchoreo-observability-plane --timeout=120s
 ```
 
 Install observability modules (logs, metrics, tracing):
@@ -1172,6 +1205,53 @@ kubectl get pods -n openchoreo-observability-plane -l app=opensearch
 kubectl run -it --rm debug --image=curlimages/curl --restart=Never -- \
   curl -v http://opensearch.openchoreo-observability-plane.svc.cluster.local:9200
 ```
+
+</details>
+
+<details id="build-pods-fail-with-mount_attr_idmap--idmap-mounts-errors">
+<summary>Build pods fail with MOUNT_ATTR_IDMAP / idmap mounts errors</summary>
+
+If every agent build fails at pod-sandbox creation with events like:
+
+```
+failed to create containerd container: snapshotter "overlayfs" doesn't support
+idmap mounts on this host, configure `slow_chown` to allow a slower and expensive fallback
+```
+
+or
+
+```
+OCI runtime create failed: ... failed to set MOUNT_ATTR_IDMAP on
+/var/lib/kubelet/pods/.../volumes/kubernetes.io~projected/...: invalid argument
+(maybe the filesystem used doesn't support idmap mounts on this kernel?)
+```
+
+the build pods are requesting a Linux **user namespace** (`hostUsers: false` — the build's root is unprivileged on the node), which requires idmapped-mount support for every filesystem the pod mounts. tmpfs (used by projected service-account token volumes) only gained that support in **Linux 6.3** — see the [Kubernetes user namespaces documentation](https://kubernetes.io/docs/concepts/workloads/pods/user-namespaces/). Common node images below that line: Ubuntu 22.04 (kernel 5.15) and Amazon Linux 2 (kernel 5.10). Older Kubernetes versions silently ignored `hostUsers`, so the same manifests may have "worked" on an older cluster without ever using the feature.
+
+Two fixes:
+
+1. **Preferred:** use build nodes with kernel ≥ 6.3 (Ubuntu 24.04, Amazon Linux 2023, recent COS releases).
+2. **Otherwise:** run builds without user namespaces by setting the Platform Resources chart value:
+
+```bash
+helm upgrade amp-platform-resources \
+  oci://${HELM_CHART_REGISTRY}/wso2-amp-platform-resources-extension \
+  --version ${VERSION} \
+  --namespace ${DEFAULT_NS} \
+  --reuse-values \
+  --set buildWorkflows.userNamespaces=false
+```
+
+Note that containerd's `slow_chown` option alone is **not** sufficient — it only covers the overlayfs snapshotter, and the build then fails on the tmpfs/projected-volume mount instead.
+
+</details>
+
+<details>
+<summary>Agent deploys fail with "Secret does not exist" after an OpenBao restart</summary>
+
+This guide installs OpenBao in **dev mode** (in-memory storage). Any restart of the `openbao-0` pod — including node drains and reboots — wipes every secret it holds. Already-running agents keep working (their secrets were injected at startup), but any **new** deployment or environment promotion fails with ExternalSecrets stuck in `SecretSyncedError` / `Secret does not exist`.
+
+Fix: re-save the affected agent's environment variables in the console (agent configuration → environment variables → re-enter and save). The values are rewritten to OpenBao and the ExternalSecret syncs within its refresh interval. For production, configure OpenBao with persistent storage.
 
 </details>
 

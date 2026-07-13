@@ -46,6 +46,14 @@ Agent Manager builds agent images for **amd64**, and gVisor cannot emulate a for
 
 Provision a new Linux node matching the requirements above and join it to your cluster using your platform's standard mechanism (node pool / node group / `kubeadm join` / k3s agent). Leave it empty — do not schedule workloads on it yet.
 
+:::tip Taint the node as early as possible
+If your platform lets you set taints at node-pool creation, apply `gvisor=true:NoSchedule` there. An untainted node starts accepting regular platform pods immediately, and you will have to drain them all off before installing the runtime (a runtime install restarts containerd, which restarts every pod on the node). If the node has already picked up workloads, `kubectl cordon` + `kubectl drain --ignore-daemonsets --delete-emptydir-data` it before Step 2.
+:::
+
+:::info Managed gVisor on GKE
+Google Kubernetes Engine offers gVisor as a built-in option (**GKE Sandbox**): create the node pool with `--sandbox type=gvisor` and skip Step 2 entirely — GKE registers the `gvisor` RuntimeClass for you. Continue from Step 3 (label, taint, Fluent Bit toleration).
+:::
+
 ### Step 2: Install runsc on the node
 
 Run the installer **on the node** as root. It downloads the `runsc` binary and containerd shim, registers the `runsc` runtime in containerd, and restarts containerd (only containerd restarts — the kubelet is unaffected):
@@ -56,6 +64,29 @@ curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/amp/v0.0.0-dev/d
 ```
 
 The script is idempotent — safe to re-run.
+
+<details>
+<summary>RKE2 nodes (bundled containerd)</summary>
+
+RKE2 bundles its own containerd — there is no standalone `containerd` systemd service for the installer to configure or restart, so the standard installer's containerd wiring does not apply. After the installer has placed the binaries (or after downloading `runsc` and `containerd-shim-runsc-v1` into `/usr/local/bin` yourself), register the runtime through RKE2's containerd template instead:
+
+```bash
+sudo tee /var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl > /dev/null <<'EOF'
+{{ template "base" . }}
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+EOF
+sudo systemctl restart rke2-agent
+```
+
+:::warning Rewrite, never append
+The template must contain `{{ template "base" . }}` exactly once. If the file already exists, merge your runtime block into it and rewrite the whole file (`tee`/`cat >`); appending a second copy of the template line produces an invalid containerd config, and the node's kubelet will not come back after the restart. Recovery then requires SSH/console access to the node — `kubectl` cannot reach it.
+:::
+
+The same pattern applies to k3s nodes at `/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl` (restart `k3s-agent`), which the local-development script below handles automatically.
+
+</details>
 
 ### Step 3: Register the node for the gVisor tier
 
