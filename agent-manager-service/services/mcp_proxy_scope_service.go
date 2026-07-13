@@ -55,33 +55,30 @@ type MCPProxyRedeployer interface {
 }
 
 type mcpProxyScopeService struct {
-	scopeRepo      repositories.MCPProxyScopeRepository
-	proxyRepo      repositories.MCPProxyRepository
-	deploymentRepo repositories.DeploymentRepository
-	infraManager   InfraResourceManager
-	resolver       thundersvc.EnvThunderResolver
-	proxySvc       MCPProxyRedeployer
-	logger         *slog.Logger
+	scopeRepo    repositories.MCPProxyScopeRepository
+	proxyRepo    repositories.MCPProxyRepository
+	infraManager InfraResourceManager
+	resolver     thundersvc.EnvThunderResolver
+	proxySvc     MCPProxyRedeployer
+	logger       *slog.Logger
 }
 
 // NewMCPProxyScopeService creates a new per-proxy MCP scope service.
 func NewMCPProxyScopeService(
 	scopeRepo repositories.MCPProxyScopeRepository,
 	proxyRepo repositories.MCPProxyRepository,
-	deploymentRepo repositories.DeploymentRepository,
 	infraManager InfraResourceManager,
 	resolver thundersvc.EnvThunderResolver,
 	proxySvc MCPProxyRedeployer,
 	logger *slog.Logger,
 ) MCPProxyScopeService {
 	return &mcpProxyScopeService{
-		scopeRepo:      scopeRepo,
-		proxyRepo:      proxyRepo,
-		deploymentRepo: deploymentRepo,
-		infraManager:   infraManager,
-		resolver:       resolver,
-		proxySvc:       proxySvc,
-		logger:         logger,
+		scopeRepo:    scopeRepo,
+		proxyRepo:    proxyRepo,
+		infraManager: infraManager,
+		resolver:     resolver,
+		proxySvc:     proxySvc,
+		logger:       logger,
 	}
 }
 
@@ -414,13 +411,6 @@ func (s *mcpProxyScopeService) ListEnvironmentScopes(ctx context.Context, ouID, 
 				continue
 			}
 			if ee.ArtifactUUID == uuid.Nil {
-				continue
-			}
-			gateways, err := s.deploymentRepo.GetDeployedGatewaysByProvider(ee.ArtifactUUID, ouID)
-			if err != nil {
-				return nil, fmt.Errorf("failed to check deployed gateways for artifact %s: %w", ee.ArtifactUUID, err)
-			}
-			if len(gateways) == 0 {
 				continue
 			}
 			if _, ok := proxyByUUID[proxy.UUID]; !ok {
