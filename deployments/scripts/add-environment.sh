@@ -246,6 +246,19 @@ if [ "$ENV_HTTP_CODE" = "201" ]; then
     echo "✅ Environment '${ENV_NAME}' created"
 elif [ "$ENV_HTTP_CODE" = "409" ]; then
     echo "ℹ️  Environment '${ENV_NAME}' already exists, continuing..."
+    # The create request is the only place the API accepts isolationTier, so a
+    # re-run against an existing environment (e.g. after a partial first run)
+    # would otherwise silently drop it. The Environment CR annotation is the
+    # source of truth, so apply it directly instead.
+    if [ -n "${ISOLATION_TIER}" ]; then
+        if kubectl annotate environment "${ENV_NAME}" -n "${ORG_NAME}" \
+            "openchoreo.dev/isolation-tier=${ISOLATION_TIER}" --overwrite > /dev/null 2>&1; then
+            echo "✅ Isolation tier '${ISOLATION_TIER}' applied to existing environment"
+        else
+            echo "⚠️  Could not set isolation tier on the existing environment. Apply it manually:"
+            echo "    kubectl annotate environment ${ENV_NAME} -n ${ORG_NAME} openchoreo.dev/isolation-tier=${ISOLATION_TIER} --overwrite"
+        fi
+    fi
 else
     echo "❌ Failed to create environment (HTTP ${ENV_HTTP_CODE})"
     echo "   Response: ${ENV_BODY}"
@@ -320,6 +333,13 @@ fi
 # --- Step 3: Helm install the gateway ---
 echo ""
 echo "🌐 Installing API Platform Gateway for '${ENV_NAME}'..."
+
+# Ensure the gateway namespace exists and carries the label the sandbox
+# NetworkPolicy (agent-api ComponentType) matches for agent telemetry egress.
+# Without it, agents in this environment cannot reach the gateway's /otel
+# endpoint when the gateway runs outside openchoreo-data-plane.
+kubectl create namespace "${GATEWAY_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl label namespace "${GATEWAY_NAMESPACE}" "amp.wso2.com/api-platform-gateway=true" --overwrite > /dev/null
 
 # Release name must match the gateway runtime service lookup expected by
 # the kgateway routes (api-platform-<org>-<env> derives from _helpers.tpl

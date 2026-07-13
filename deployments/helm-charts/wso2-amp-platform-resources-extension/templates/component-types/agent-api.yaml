@@ -196,6 +196,14 @@ spec:
                   - namespaceSelector:
                       matchLabels:
                         kubernetes.io/metadata.name: openchoreo-data-plane
+              # API Platform gateways may live outside openchoreo-data-plane
+              # (per-org-environment namespaces). Agent telemetry egress to the
+              # gateway runtime needs this rule; add-environment.sh stamps the
+              # label on the gateway namespace at install time.
+              - to:
+                  - namespaceSelector:
+                      matchLabels:
+                        amp.wso2.com/api-platform-gateway: "true"
               - ports:
                   - port: 443
                     protocol: TCP
