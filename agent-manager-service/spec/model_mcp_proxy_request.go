@@ -32,12 +32,9 @@ type MCPProxyRequest struct {
 	// Virtual host assigned to the MCP proxy
 	Vhost *string `json:"vhost,omitempty"`
 	// MCP specification version implemented by the upstream server
-	McpSpecVersion *string        `json:"mcpSpecVersion,omitempty"`
-	Upstream       UpstreamConfig `json:"upstream"`
-	// Policies applied to the MCP proxy
-	Policies     []MCPPolicy           `json:"policies,omitempty"`
-	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Security     *SecurityConfig       `json:"security,omitempty"`
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+	// Deployable endpoint definitions of the MCP proxy. Each endpoint is deployed to one or more environments; within a proxy an environment maps to at most one endpoint. At least one endpoint is required.
+	Endpoints []MCPProxyEndpoint `json:"endpoints,omitempty"`
 	// Whether the MCP proxy is available in the catalog
 	InCatalog *bool `json:"inCatalog,omitempty"`
 	// Gateway UUIDs to deploy the MCP proxy to after creation
@@ -48,12 +45,11 @@ type MCPProxyRequest struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewMCPProxyRequest(id string, name string, version string, upstream UpstreamConfig) *MCPProxyRequest {
+func NewMCPProxyRequest(id string, name string, version string) *MCPProxyRequest {
 	this := MCPProxyRequest{}
 	this.Id = id
 	this.Name = name
 	this.Version = version
-	this.Upstream = upstream
 	return &this
 }
 
@@ -265,124 +261,36 @@ func (o *MCPProxyRequest) SetMcpSpecVersion(v string) {
 	o.McpSpecVersion = &v
 }
 
-// GetUpstream returns the Upstream field value
-func (o *MCPProxyRequest) GetUpstream() UpstreamConfig {
-	if o == nil {
-		var ret UpstreamConfig
+// GetEndpoints returns the Endpoints field value if set, zero value otherwise.
+func (o *MCPProxyRequest) GetEndpoints() []MCPProxyEndpoint {
+	if o == nil || IsNil(o.Endpoints) {
+		var ret []MCPProxyEndpoint
 		return ret
 	}
-
-	return o.Upstream
+	return o.Endpoints
 }
 
-// GetUpstreamOk returns a tuple with the Upstream field value
+// GetEndpointsOk returns a tuple with the Endpoints field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *MCPProxyRequest) GetUpstreamOk() (*UpstreamConfig, bool) {
-	if o == nil {
+func (o *MCPProxyRequest) GetEndpointsOk() ([]MCPProxyEndpoint, bool) {
+	if o == nil || IsNil(o.Endpoints) {
 		return nil, false
 	}
-	return &o.Upstream, true
+	return o.Endpoints, true
 }
 
-// SetUpstream sets field value
-func (o *MCPProxyRequest) SetUpstream(v UpstreamConfig) {
-	o.Upstream = v
-}
-
-// GetPolicies returns the Policies field value if set, zero value otherwise.
-func (o *MCPProxyRequest) GetPolicies() []MCPPolicy {
-	if o == nil || IsNil(o.Policies) {
-		var ret []MCPPolicy
-		return ret
-	}
-	return o.Policies
-}
-
-// GetPoliciesOk returns a tuple with the Policies field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *MCPProxyRequest) GetPoliciesOk() ([]MCPPolicy, bool) {
-	if o == nil || IsNil(o.Policies) {
-		return nil, false
-	}
-	return o.Policies, true
-}
-
-// HasPolicies returns a boolean if a field has been set.
-func (o *MCPProxyRequest) HasPolicies() bool {
-	if o != nil && !IsNil(o.Policies) {
+// HasEndpoints returns a boolean if a field has been set.
+func (o *MCPProxyRequest) HasEndpoints() bool {
+	if o != nil && !IsNil(o.Endpoints) {
 		return true
 	}
 
 	return false
 }
 
-// SetPolicies gets a reference to the given []MCPPolicy and assigns it to the Policies field.
-func (o *MCPProxyRequest) SetPolicies(v []MCPPolicy) {
-	o.Policies = v
-}
-
-// GetCapabilities returns the Capabilities field value if set, zero value otherwise.
-func (o *MCPProxyRequest) GetCapabilities() MCPProxyCapabilities {
-	if o == nil || IsNil(o.Capabilities) {
-		var ret MCPProxyCapabilities
-		return ret
-	}
-	return *o.Capabilities
-}
-
-// GetCapabilitiesOk returns a tuple with the Capabilities field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *MCPProxyRequest) GetCapabilitiesOk() (*MCPProxyCapabilities, bool) {
-	if o == nil || IsNil(o.Capabilities) {
-		return nil, false
-	}
-	return o.Capabilities, true
-}
-
-// HasCapabilities returns a boolean if a field has been set.
-func (o *MCPProxyRequest) HasCapabilities() bool {
-	if o != nil && !IsNil(o.Capabilities) {
-		return true
-	}
-
-	return false
-}
-
-// SetCapabilities gets a reference to the given MCPProxyCapabilities and assigns it to the Capabilities field.
-func (o *MCPProxyRequest) SetCapabilities(v MCPProxyCapabilities) {
-	o.Capabilities = &v
-}
-
-// GetSecurity returns the Security field value if set, zero value otherwise.
-func (o *MCPProxyRequest) GetSecurity() SecurityConfig {
-	if o == nil || IsNil(o.Security) {
-		var ret SecurityConfig
-		return ret
-	}
-	return *o.Security
-}
-
-// GetSecurityOk returns a tuple with the Security field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *MCPProxyRequest) GetSecurityOk() (*SecurityConfig, bool) {
-	if o == nil || IsNil(o.Security) {
-		return nil, false
-	}
-	return o.Security, true
-}
-
-// HasSecurity returns a boolean if a field has been set.
-func (o *MCPProxyRequest) HasSecurity() bool {
-	if o != nil && !IsNil(o.Security) {
-		return true
-	}
-
-	return false
-}
-
-// SetSecurity gets a reference to the given SecurityConfig and assigns it to the Security field.
-func (o *MCPProxyRequest) SetSecurity(v SecurityConfig) {
-	o.Security = &v
+// SetEndpoints gets a reference to the given []MCPProxyEndpoint and assigns it to the Endpoints field.
+func (o *MCPProxyRequest) SetEndpoints(v []MCPProxyEndpoint) {
+	o.Endpoints = v
 }
 
 // GetInCatalog returns the InCatalog field value if set, zero value otherwise.
@@ -474,15 +382,8 @@ func (o MCPProxyRequest) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.McpSpecVersion) {
 		toSerialize["mcpSpecVersion"] = o.McpSpecVersion
 	}
-	toSerialize["upstream"] = o.Upstream
-	if !IsNil(o.Policies) {
-		toSerialize["policies"] = o.Policies
-	}
-	if !IsNil(o.Capabilities) {
-		toSerialize["capabilities"] = o.Capabilities
-	}
-	if !IsNil(o.Security) {
-		toSerialize["security"] = o.Security
+	if !IsNil(o.Endpoints) {
+		toSerialize["endpoints"] = o.Endpoints
 	}
 	if !IsNil(o.InCatalog) {
 		toSerialize["inCatalog"] = o.InCatalog

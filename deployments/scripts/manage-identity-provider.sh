@@ -38,7 +38,7 @@ set -euo pipefail
 #   - ACTION (upsert|delete, default: upsert)
 #   - IDP_SKIP_TLS_VERIFY (default: false)
 #   - ORG_NAME (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
 
 # --- Required inputs ---
@@ -87,9 +87,10 @@ esac
 
 # --- Configuration (can be overridden via env vars) ---
 ORG_NAME="${ORG_NAME:-default}"
-AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
+AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://api.amp.localhost:8080}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+# Must match the per-org-env namespace add-environment.sh installs into.
+GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"
 
 # Release name must match the gateway runtime release (api-platform-<org>-<env>),
 # truncated to Helm's 53-char limit. DO NOT duplicate the org segment.

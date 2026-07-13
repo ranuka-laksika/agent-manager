@@ -1,4 +1,8 @@
 {{- if and .Values.agentManagerService.enabled .Values.tlsCertsGeneration.enabled (not .Values.agentManagerService.certificates.certificatesSecret) }}
+{{- /* Same resolution as the BackendTLSPolicy in oc-ingress.yaml so an
+       operator override of caConfigMapName keeps both sides in sync. */}}
+{{- $gwMgmt := (.Values.agentManagerService.ocIngress).gatewayMgmt | default dict }}
+{{- $gwMgmtCaName := $gwMgmt.caConfigMapName | default (printf "%s-gateway-mgmt-ca" (include "agent-management-platform.agentManagerService.fullname" .)) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -55,9 +59,24 @@ spec:
               # Install openssl and kubectl
               apk add --no-cache openssl kubectl
 
+              # Publish the certificate as a ConfigMap so the control-plane
+              # gateway's BackendTLSPolicy can validate the gateway-management
+              # endpoint (self-signed cert acts as its own CA). Idempotent so
+              # upgrades of existing installs gain the ConfigMap too.
+              publish_ca_configmap() {
+                kubectl get secret {{ include "agent-management-platform.tlsCertsSecretName" . }} \
+                  -n {{ .Release.Namespace }} -o jsonpath='{.data.cert\.pem}' | base64 -d > /tmp/ca.crt
+                kubectl create configmap {{ $gwMgmtCaName }} \
+                  --from-file=ca.crt=/tmp/ca.crt -n {{ .Release.Namespace }} \
+                  --dry-run=client -o yaml | kubectl apply -f -
+                rm -f /tmp/ca.crt
+                echo "✓ Gateway-management CA ConfigMap published"
+              }
+
               # Check if secret already exists
               if kubectl get secret {{ include "agent-management-platform.tlsCertsSecretName" . }} -n {{ .Release.Namespace }} 2>/dev/null; then
                 echo "TLS certificates secret already exists, skipping generation"
+                publish_ca_configmap
                 exit 0
               fi
 
@@ -102,6 +121,8 @@ spec:
                 -n {{ .Release.Namespace }}
 
               echo "✓ TLS certificates secret created: {{ include "agent-management-platform.tlsCertsSecretName" . }}"
+
+              publish_ca_configmap
 
               # Clean up sensitive files from memory
               rm -f /tmp/key.pem /tmp/cert.pem

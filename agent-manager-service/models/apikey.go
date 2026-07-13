@@ -34,9 +34,10 @@ const (
 	APIKeyPurposeUserManaged    = 1
 	APIKeyPurposeTest           = 2
 	APIKeyPurposeConsoleManaged = 3
-	// APIKeyTestKeyName is the fixed name used for the single test
-	// key per agent. Subsequent IssueTestAPIKey calls rotate this row.
-	APIKeyTestKeyName = "console-test"
+	// APIKeyTestKeyPrefix is the name prefix for per-user console test keys.
+	// Each user gets their own row (prefix + truncated SHA-256 of their JWT sub),
+	// so concurrent sessions across users don't invalidate each other's keys.
+	APIKeyTestKeyPrefix = "console-test-"
 )
 
 // StoredAPIKey represents an API key persisted in the database for gateway bulk-sync
@@ -94,6 +95,12 @@ type IssueTestAPIKeyResponse struct {
 	KeyID     string `json:"keyId,omitempty"`
 	APIKey    string `json:"apiKey,omitempty"`
 	ExpiresAt string `json:"expiresAt"`
+
+	// GatewayConnected reports whether every gateway serving the agent's
+	// environment had a live websocket connection when the key was issued.
+	// When false, the key is stored but only becomes usable after the gateway
+	// reconnects and syncs.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // APIKeyInfo is a masked, read-only view of a stored API key for listing.
@@ -162,6 +169,12 @@ type CreateAPIKeyResponse struct {
 
 	// APIKey is the generated API key value (returned only once)
 	APIKey string `json:"apiKey,omitempty"`
+
+	// GatewayConnected reports whether every target gateway had a live
+	// websocket connection to the control plane when the key was written.
+	// When false, the key is stored but only becomes usable after the gateway
+	// reconnects and syncs. Nil when the issuing path does not check.
+	GatewayConnected *bool `json:"gatewayConnected,omitempty"`
 }
 
 // APIKeyCreatedEvent represents the event payload for "apikey.created" event type

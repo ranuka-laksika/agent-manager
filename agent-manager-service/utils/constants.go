@@ -75,6 +75,8 @@ const (
 	PathParamRoleID       = "roleID"
 	PathParamKindName     = "kindName"
 	PathParamVersionTag   = "versionTag"
+	PathParamScopeName    = "scopeName"
+	PathParamScopeAction  = "scopeAction"
 )
 
 // Pagination constants

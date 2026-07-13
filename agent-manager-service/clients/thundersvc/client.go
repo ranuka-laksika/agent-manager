@@ -84,6 +84,8 @@ type thunderClient struct {
 	cachedToken string
 	tokenExpiry time.Time
 	tokenSfg    singleflight.Group // deduplicates concurrent token fetches
+
+	ensureResourceServerMu sync.Mutex // serializes resource-server check-then-create paths (scope + proxy)
 }
 
 const httpClientTimeout = 30 * time.Second

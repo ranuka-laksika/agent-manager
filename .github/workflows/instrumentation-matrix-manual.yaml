@@ -261,9 +261,13 @@ jobs:
           echo "=== data-plane cluster-agent logs (sends deploy acks) ==="
           kubectl logs -n openchoreo-data-plane deploy/cluster-agent-dataplane --tail=100 2>/dev/null
           echo "=== gateway controller logs ==="
-          kubectl get pods -n openchoreo-data-plane --no-headers 2>/dev/null \
-            | awk '/gateway-controller/{print $1}' \
-            | while read -r p; do echo "----- $p -----"; kubectl logs -n openchoreo-data-plane "$p" --tail=80 2>/dev/null; done
+          # Gateway stacks live in per-org-env namespaces ("<org>-<env>", e.g.
+          # default-default); also sweep openchoreo-data-plane for legacy installs.
+          for gwns in default-default openchoreo-data-plane; do
+            kubectl get pods -n "$gwns" --no-headers 2>/dev/null \
+              | awk '/gateway-controller/{print $1}' \
+              | while read -r p; do echo "----- $gwns/$p -----"; kubectl logs -n "$gwns" "$p" --tail=80 2>/dev/null; done
+          done
           echo "=== recent events ==="
           kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -80
       - uses: actions/upload-artifact@v7

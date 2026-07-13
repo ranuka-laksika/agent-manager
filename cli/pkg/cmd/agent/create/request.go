@@ -188,7 +188,7 @@ func buildInterface(opts *CreateOptions) *amsvc.InputInterface {
 	}
 	if opts.OpenAPISpec != "" {
 		spec := ensureLeadingSlash(opts.OpenAPISpec)
-		iface.Schema = &amsvc.InputInterfaceSchema{Path: spec}
+		iface.Schema = &amsvc.InputInterfaceSchema{Path: &spec}
 	}
 	return iface
 }

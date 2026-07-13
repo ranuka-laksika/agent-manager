@@ -111,6 +111,22 @@ const (
 	MCPServerAPIKeyManage       Permission = "mcp-server:api-key-manage"
 )
 
+// Scope catalog permissions
+const (
+	ScopeCreate Permission = "scope:create"
+	ScopeRead   Permission = "scope:read"
+	ScopeUpdate Permission = "scope:update"
+	ScopeDelete Permission = "scope:delete"
+)
+
+// Agent identity (env-Thunder agent groups/roles) permissions
+const (
+	AgentIdentityRead   Permission = "agent-identity:read"
+	AgentIdentityCreate Permission = "agent-identity:create"
+	AgentIdentityUpdate Permission = "agent-identity:update"
+	AgentIdentityDelete Permission = "agent-identity:delete"
+)
+
 // LLM proxy permissions
 const (
 	LLMProxyCreate       Permission = "llm-proxy:create"

@@ -122,6 +122,8 @@ func (r *MCPProxyRepo) GetByUUID(ctx context.Context, proxyUUID, orgUUID string)
 	var proxy models.MCPProxy
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
+		Preload("Endpoints").
+		Preload("Endpoints.Environments").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
 		Where("mcp_proxies.uuid = ? AND a.ou_id = ? AND a.kind = ?", proxyUUID, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
@@ -139,6 +141,8 @@ func (r *MCPProxyRepo) GetByHandle(ctx context.Context, handle, orgUUID string) 
 	var proxy models.MCPProxy
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
+		Preload("Endpoints").
+		Preload("Endpoints.Environments").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
 		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
@@ -158,8 +162,10 @@ func (r *MCPProxyRepo) GetByHandle(ctx context.Context, handle, orgUUID string) 
 func (r *MCPProxyRepo) GetByHandleForUpdate(ctx context.Context, tx *gorm.DB, handle, orgUUID string) (*models.MCPProxy, error) {
 	var proxy models.MCPProxy
 	err := tx.WithContext(ctx).
-		Clauses(clause.Locking{Strength: "UPDATE"}).
+		Clauses(clause.Locking{Strength: "UPDATE", Table: clause.Table{Name: "mcp_proxies"}}).
 		Preload("Artifact").
+		Preload("Endpoints").
+		Preload("Endpoints.Environments").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
 		Where("a.handle = ? AND a.ou_id = ? AND a.kind = ?", handle, orgUUID, models.KindMCPProxy).
 		First(&proxy).Error
@@ -174,6 +180,8 @@ func (r *MCPProxyRepo) List(ctx context.Context, orgUUID string, limit, offset i
 	var proxies []*models.MCPProxy
 	err := r.db.WithContext(ctx).
 		Preload("Artifact").
+		Preload("Endpoints").
+		Preload("Endpoints.Environments").
 		Joins("JOIN artifacts a ON mcp_proxies.uuid = a.uuid").
 		Where("a.ou_id = ? AND a.kind = ?", orgUUID, models.KindMCPProxy).
 		Order("a.created_at DESC").

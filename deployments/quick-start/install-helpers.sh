@@ -157,7 +157,7 @@ install_agent_management_platform() {
     # Install Helm chart
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${AMP_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
-        --set console.config.instrumentationUrl="http://localhost:22893/otel" \
+        --set console.config.instrumentationUrl="http://default-default.gateway.localhost:19080/otel" \
         "${AMP_HELM_ARGS[@]}" >"${helm_log}" 2>&1; then
         echo "Helm installation log (last 50 lines):"
         tail -50 "${helm_log}" 2>/dev/null || cat "${helm_log}" 2>/dev/null || echo "Log file not available"
@@ -250,22 +250,32 @@ install_observability_extension() {
 # so the script pins its own validated ThunderID version — the agent-manager
 # release VERSION has no bearing on which ThunderID release env-Thunder runs.
 install_default_env_thunder() {
-    local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
-    local tmp_script
-    tmp_script="$(mktemp)"
+    # Prefer the copy bundled next to the installer (DEPLOYMENTS_DIR is set by
+    # install.sh). Fetching it from raw.githubusercontent.com is a fallback for
+    # standalone use; GitHub rate-limits unauthenticated per-IP requests (429),
+    # so avoid the network whenever the bundled script is present.
+    local bundled_script="${DEPLOYMENTS_DIR:-}/scripts/add-environment-thunder.sh"
+    local script_path tmp_script=""
 
-    if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
-        echo "Failed to download add-environment-thunder.sh from ${script_url}"
-        rm -f "${tmp_script}"
-        return 1
+    if [[ -n "${DEPLOYMENTS_DIR:-}" && -f "${bundled_script}" ]]; then
+        script_path="${bundled_script}"
+    else
+        local script_url="https://raw.githubusercontent.com/wso2/agent-manager/amp/v${VERSION}/deployments/scripts/add-environment-thunder.sh"
+        tmp_script="$(mktemp)"
+        if ! curl -fsSL --connect-timeout 30 "${script_url}" -o "${tmp_script}" 2>/dev/null; then
+            echo "Failed to download add-environment-thunder.sh from ${script_url}"
+            rm -f "${tmp_script}"
+            return 1
+        fi
+        script_path="${tmp_script}"
     fi
 
     ENV_NAME=default \
         DISPLAY_NAME="Default" \
         ORG_NAME=default \
-        bash "${tmp_script}"
+        bash "${script_path}"
     local status=$?
-    rm -f "${tmp_script}"
+    [[ -n "${tmp_script}" ]] && rm -f "${tmp_script}"
     return $status
 }
 
@@ -384,6 +394,9 @@ install_gateway_extension() {
     local release_name="api-platform-default-default"
     local gateway_vhost="http://default-default.gateway.localhost:19080"
     local idp_skip_tls_verify="${IDP_SKIP_TLS_VERIFY:-true}"
+    # Per-org-env namespace isolation: the default env's gateway stack lives in
+    # its own "<org>-<env>" namespace, mirroring add-environment.sh.
+    local gateway_namespace="default-default"
 
     # Wire the gateway's ThunderKeyManager to the default environment's own Thunder
     # instance when it exists, mirroring the THUNDER_PROVISIONED logic in
@@ -406,16 +419,20 @@ install_gateway_extension() {
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].issuer=${thunder_issuer_url}"
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.uri=${thunder_jwks}"
             --set "apiGateway.config.policyConfigurations.jwtauth_v1.keymanagers[1].jwks.remote.skipTlsVerify=${idp_skip_tls_verify}"
-            --set "bootstrap.identityProviders[0].name=${thunder_release}"
+            # Name must match keymanagers[].name, which is always "ThunderKeyManager" (set above).
+            --set "bootstrap.identityProviders[0].name=ThunderKeyManager"
             --set "bootstrap.identityProviders[0].issuer=${thunder_issuer_url}"
             --set "bootstrap.identityProviders[0].jwksUri=${thunder_jwks}"
             --set "bootstrap.identityProviders[0].skipTlsVerify=${idp_skip_tls_verify}"
         )
     fi
 
-    # Install Helm chart
-    if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${DATA_PLANE_NS}" "${TIMEOUT_AMP_INSTALL}" \
+    # Install Helm chart. apiGateway.namespace drives where the chart renders
+    # the APIGateway CR, config, RestApis, kgateway backendRef and token secret
+    # — it must match the release namespace.
+    if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${gateway_namespace}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
+        --set apiGateway.namespace="${gateway_namespace}" \
         --set agentManager.orgName=default \
         --set gateway.environment=default \
         --set gateway.vhost="${gateway_vhost}" \
@@ -427,7 +444,7 @@ install_gateway_extension() {
     # Wait for the bootstrap job to complete (the Helm hook runs asynchronously)
     log_info "Waiting for gateway bootstrap job to complete..."
     if ! kubectl wait --for=condition=complete "job/${release_name}-bootstrap" \
-        -n "${DATA_PLANE_NS}" --timeout=300s 2>/dev/null; then
+        -n "${gateway_namespace}" --timeout=300s 2>/dev/null; then
         log_error "Gateway bootstrap job did not complete within 300s"
         return 1
     fi

@@ -71,6 +71,8 @@ type AppParams struct {
 	AgentConfigurationController     controllers.AgentConfigurationController
 	GitSecretController              controllers.GitSecretController
 	IdentityController               controllers.IdentityController
+	MCPProxyScopeController          controllers.MCPProxyScopeController
+	AgentIdentityController          controllers.AgentIdentityController
 	MonitorScheduler                 services.MonitorSchedulerService
 	AgentThunderReconciler           services.AgentThunderReconcilerService
 

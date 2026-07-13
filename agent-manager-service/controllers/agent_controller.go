@@ -1030,11 +1030,12 @@ func (c *agentController) GetAgentIdentity(w http.ResponseWriter, r *http.Reques
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	environment := r.URL.Query().Get("environment")
 
-	views, err := c.agentService.GetAgentIdentity(ctx, orgName, projName, agentName)
+	views, err := c.agentService.GetAgentIdentity(ctx, ouID, projName, agentName)
 	if err != nil {
 		log.Error("GetAgentIdentity: failed to get agent identity", "orgName", orgName, "agentName", agentName, "error", err)
 		handleCommonErrors(w, err, "Failed to get agent identity")
@@ -1069,6 +1070,7 @@ func (c *agentController) ClaimAgentIdentitySecret(w http.ResponseWriter, r *htt
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	envID := r.URL.Query().Get("environment")
@@ -1079,7 +1081,7 @@ func (c *agentController) ClaimAgentIdentitySecret(w http.ResponseWriter, r *htt
 
 	log.Info("ClaimAgentIdentitySecret: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
 
-	resp, err := c.agentService.ClaimAgentIdentitySecret(ctx, orgName, projName, agentName, envID)
+	resp, err := c.agentService.ClaimAgentIdentitySecret(ctx, ouID, projName, agentName, envID)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
 			log.Warn("ClaimAgentIdentitySecret: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
@@ -1113,6 +1115,7 @@ func (c *agentController) RegenerateAgentIdentitySecret(w http.ResponseWriter, r
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 
@@ -1130,7 +1133,7 @@ func (c *agentController) RegenerateAgentIdentitySecret(w http.ResponseWriter, r
 
 	log.Info("RegenerateAgentIdentitySecret: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
 
-	resp, err := c.agentService.RegenerateAgentIdentitySecret(ctx, orgName, projName, agentName, envID)
+	resp, err := c.agentService.RegenerateAgentIdentitySecret(ctx, ouID, projName, agentName, envID)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
 			log.Warn("RegenerateAgentIdentitySecret: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
@@ -1156,6 +1159,7 @@ func (c *agentController) RevokeAgentIdentitySecret(w http.ResponseWriter, r *ht
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	envID := r.URL.Query().Get("environment")
@@ -1166,7 +1170,7 @@ func (c *agentController) RevokeAgentIdentitySecret(w http.ResponseWriter, r *ht
 
 	log.Info("RevokeAgentIdentitySecret: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
 
-	resp, err := c.agentService.RevokeAgentIdentitySecret(ctx, orgName, projName, agentName, envID)
+	resp, err := c.agentService.RevokeAgentIdentitySecret(ctx, ouID, projName, agentName, envID)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
 			log.Warn("RevokeAgentIdentitySecret: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
@@ -1196,6 +1200,7 @@ func (c *agentController) ProvisionAgentIdentity(w http.ResponseWriter, r *http.
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	envID := r.URL.Query().Get("environment")
@@ -1206,7 +1211,7 @@ func (c *agentController) ProvisionAgentIdentity(w http.ResponseWriter, r *http.
 
 	log.Info("ProvisionAgentIdentity: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
 
-	view, alreadyExisted, err := c.agentService.ProvisionAgentIdentity(ctx, orgName, projName, agentName, envID)
+	view, alreadyExisted, err := c.agentService.ProvisionAgentIdentity(ctx, ouID, projName, agentName, envID)
 	if err != nil {
 		log.Error("ProvisionAgentIdentity: failed to provision agent identity", "orgName", orgName, "agentName", agentName, "envID", envID, "error", err)
 		handleCommonErrors(w, err, "Failed to provision agent identity")
@@ -1233,6 +1238,7 @@ func (c *agentController) GetAgentCredentials(w http.ResponseWriter, r *http.Req
 	log := logger.GetLogger(ctx)
 
 	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	projName := r.PathValue(utils.PathParamProjName)
 	agentName := r.PathValue(utils.PathParamAgentName)
 	envID := r.URL.Query().Get("environment")
@@ -1243,7 +1249,7 @@ func (c *agentController) GetAgentCredentials(w http.ResponseWriter, r *http.Req
 
 	log.Info("GetAgentCredentials: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
 
-	resp, err := c.agentService.GetAgentCredentials(ctx, orgName, projName, agentName, envID)
+	resp, err := c.agentService.GetAgentCredentials(ctx, ouID, projName, agentName, envID)
 	if err != nil {
 		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
 			log.Warn("GetAgentCredentials: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)

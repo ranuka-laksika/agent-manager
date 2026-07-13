@@ -19,7 +19,7 @@ import type { ListQuery, OrgPathParams } from "./common";
 import type {
   SecurityConfig,
   UpstreamAuth,
-  UpstreamEndpoint,
+  UpstreamConfig,
 } from "./llm-providers";
 
 export interface MCPProxyCapabilities {
@@ -47,26 +47,54 @@ export interface MCPPolicyAvailabilityResponse {
 }
 
 /**
- * MCPEnvironmentConfig is one per-environment blueprint block on an org-level MCP proxy,
- * stored in MCPProxy.environments keyed by environment UUID. upstream holds the single
- * backend endpoint (URL + auth) for that environment.
+ * MCPToolScopeBinding gates an MCP tool behind one or more catalog scopes: a caller must
+ * hold every listed scope to invoke the named tool.
  */
-export interface MCPEnvironmentConfig {
-  upstream?: UpstreamEndpoint;
-  policies?: MCPProxyPolicy[];
-  capabilities?: MCPProxyCapabilities;
-  security?: SecurityConfig;
-  /**
-   * Response-only indicator of whether this environment's single gateway artifact is
-   * currently deployed ("Deployed") or not ("Undeployed"). Computed on read; never sent.
-   */
-  deploymentStatus?: string;
+export interface MCPToolScopeBinding {
+  tool: string;
+  scopes: string[];
 }
 
 /**
- * MCPProxy is an org-level blueprint. Name/version/context/vhost/mcpSpecVersion are shared
- * across environments; per-environment upstream, policies, capabilities and security live in
- * environments, keyed by environment UUID. The blueprint deploys nothing to any gateway.
+ * MCPEndpointConfig is the deployable configuration of a single MCP proxy endpoint:
+ * upstream (URL + auth), policies, capabilities, security and tool-scope bindings. It is
+ * the flat config carried on each MCPProxyEndpoint. Environment binding and per-environment
+ * deployment status live on MCPEndpointEnvironment, not here.
+ */
+export interface MCPEndpointConfig {
+  upstream?: UpstreamConfig;
+  policies?: MCPProxyPolicy[];
+  capabilities?: MCPProxyCapabilities;
+  security?: SecurityConfig;
+  toolScopeBindings?: MCPToolScopeBinding[];
+}
+
+/**
+ * MCPEndpointEnvironment is one endpoint→environment binding. deploymentStatus is
+ * response-only: it reports whether this environment's gateway artifact is currently
+ * deployed ("Deployed") or not ("Undeployed"). Computed on read; never sent.
+ */
+export interface MCPEndpointEnvironment {
+  environmentUuid: string;
+  deploymentStatus?: "Deployed" | "Undeployed";
+}
+
+/**
+ * MCPProxyEndpoint is one deployable endpoint of an MCP proxy. Its id is unique within the
+ * parent proxy. The endpoint's flat config (upstream/policies/capabilities/security/
+ * toolScopeBindings) applies to every environment it is bound to via environments; within a
+ * proxy an environment maps to at most one endpoint.
+ */
+export interface MCPProxyEndpoint extends MCPEndpointConfig {
+  id: string;
+  name?: string;
+  environments: MCPEndpointEnvironment[];
+}
+
+/**
+ * MCPProxy is an org-level grouping. Name/version/context/vhost/mcpSpecVersion are shared
+ * metadata; the deployable config lives on each endpoint in endpoints. The proxy itself
+ * deploys nothing to any gateway.
  */
 export interface MCPProxy {
   id: string;
@@ -78,7 +106,7 @@ export interface MCPProxy {
   context?: string;
   vhost?: string;
   mcpSpecVersion?: string;
-  environments: Record<string, MCPEnvironmentConfig>;
+  endpoints: MCPProxyEndpoint[];
   createdAt?: string;
   updatedAt?: string;
 }

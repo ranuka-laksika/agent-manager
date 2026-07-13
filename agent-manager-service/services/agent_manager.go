@@ -85,6 +85,7 @@ type agentManagerService struct {
 	aiApplicationService      *AIApplicationService
 	gatewayRepo               repositories.GatewayRepository
 	agentThunderProvisioning  AgentThunderProvisioningService
+	monitorManagerService     MonitorManagerService
 	logger                    *slog.Logger
 }
 
@@ -102,6 +103,7 @@ func NewAgentManagerService(
 	aiApplicationService *AIApplicationService,
 	gatewayRepo repositories.GatewayRepository,
 	agentThunderProvisioning AgentThunderProvisioningService,
+	monitorManagerService MonitorManagerService,
 	logger *slog.Logger,
 ) AgentManagerService {
 	return &agentManagerService{
@@ -115,6 +117,7 @@ func NewAgentManagerService(
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
 		agentThunderProvisioning:  agentThunderProvisioning,
+		monitorManagerService:     monitorManagerService,
 		artifactRepo:              artifactRepo,
 		aiApplicationService:      aiApplicationService,
 		gatewayRepo:               gatewayRepo,
@@ -319,7 +322,7 @@ func mapInputInterface(specInterface *spec.InputInterface) *client.InputInterfac
 		config.BasePath = *specInterface.BasePath
 	}
 	if specInterface.Schema != nil {
-		config.SchemaPath = specInterface.Schema.Path
+		config.SchemaPath = utils.StrPointerAsStr(specInterface.Schema.Path, "")
 	}
 
 	return config
@@ -1003,7 +1006,7 @@ func (s *agentManagerService) CreateAgent(ctx context.Context, ouID string, proj
 				BasePath: &basePath,
 			}
 			if sourceComponent.InputInterface.Schema != nil && sourceComponent.InputInterface.Schema.Path != "" {
-				req.InputInterface.Schema = &spec.InputInterfaceSchema{Path: sourceComponent.InputInterface.Schema.Path}
+				req.InputInterface.Schema = &spec.InputInterfaceSchema{Path: &sourceComponent.InputInterface.Schema.Path}
 			}
 		}
 		imageID = kindVersion.ImageId
@@ -1291,26 +1294,29 @@ func (s *agentManagerService) createComponentAgent(ctx context.Context, ouID, pr
 	// environments when displaying bindings). Runs after every step above has
 	// succeeded, so a Thunder hiccup never rolls back an otherwise-successful
 	// agent creation; the write-ahead + retry reconciler make it durable
-	// without needing a place in the rollback chain above.
-	if envs, envErr := s.ocClient.ListEnvironments(ctx, ouID); envErr != nil {
-		s.logger.Warn("Failed to list org environments for agent thunder provisioning", "agentName", req.Name, "error", envErr)
-	} else if len(envs) > 0 {
-		envNames := make([]string, 0, len(envs))
-		for _, e := range envs {
-			envNames = append(envNames, e.Name)
+	// without needing a place in the rollback chain above. Skipped when this
+	// deployment injects no provisioning implementation.
+	if s.agentThunderProvisioning != nil {
+		if envs, envErr := s.ocClient.ListEnvironments(ctx, ouID); envErr != nil {
+			s.logger.Warn("Failed to list org environments for agent thunder provisioning", "agentName", req.Name, "error", envErr)
+		} else if len(envs) > 0 {
+			envNames := make([]string, 0, len(envs))
+			for _, e := range envs {
+				envNames = append(envNames, e.Name)
+			}
+			ownership := models.AgentProvisioningType(req.Provisioning.Type)
+			// requestedBy is captured now, synchronously, because the retry reconciler
+			// may not attempt some of these bindings until minutes or hours later, long
+			// after this request's own caller identity would otherwise be gone. It is
+			// AMS's own audit record only — never sent to Thunder (see
+			// models.AgentThunderClient.RequestedBy for why Thunder's own "owner" field
+			// cannot carry this).
+			var requestedBy string
+			if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+				requestedBy = callerClaims.Sub
+			}
+			s.agentThunderProvisioning.ProvisionForAgent(ctx, ouID, projectName, req.Name, ownership, envNames, requestedBy)
 		}
-		ownership := models.AgentProvisioningType(req.Provisioning.Type)
-		// requestedBy is captured now, synchronously, because the retry reconciler
-		// may not attempt some of these bindings until minutes or hours later, long
-		// after this request's own caller identity would otherwise be gone. It is
-		// AMS's own audit record only — never sent to Thunder (see
-		// models.AgentThunderClient.RequestedBy for why Thunder's own "owner" field
-		// cannot carry this).
-		var requestedBy string
-		if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
-			requestedBy = callerClaims.Sub
-		}
-		s.agentThunderProvisioning.ProvisionForAgent(ctx, ouID, projectName, req.Name, ownership, envNames, requestedBy)
 	}
 
 	s.logger.Info("Agent created successfully", "agentName", req.Name, "ouID", ouID, "projectName", projectName, "provisioningType", req.Provisioning.Type)
@@ -1995,7 +2001,7 @@ func (s *agentManagerService) GenerateName(ctx context.Context, ouID string, pay
 			return "", fmt.Errorf("failed to check env name availability: %w", err)
 		}
 		// Name is taken, generate unique name with suffix
-		uniqueName, err := s.generateUniqueEnvName(ctx, org.Name, candidateName)
+		uniqueName, err := s.generateUniqueEnvName(ctx, ouID, org.Name, candidateName)
 		if err != nil {
 			s.logger.Error("Failed to generate unique env name", "baseName", candidateName, "ouID", org.Name, "error", err)
 			return "", fmt.Errorf("failed to generate unique env name: %w", err)
@@ -2035,10 +2041,10 @@ func (s *agentManagerService) generateUniqueProjectName(ctx context.Context, ouI
 }
 
 // generateUniqueEnvName creates a unique name by appending a random suffix
-func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, baseName string) (string, error) {
+func (s *agentManagerService) generateUniqueEnvName(ctx context.Context, ouID string, orgName string, baseName string) (string, error) {
 	// Bound the base so the resulting "<base>-XX" stays within the per-org env-name
 	// limit (which keeps the gateway runtime Service name ≤ 63 chars).
-	maxBaseLen := utils.MaxEnvNameLength(ouID) - utils.RandomSuffixLength - 1 // 1 for hyphen
+	maxBaseLen := utils.MaxEnvNameLength(orgName) - utils.RandomSuffixLength - 1 // 1 for hyphen
 	if maxBaseLen < 1 {
 		maxBaseLen = 1
 	}
@@ -2177,7 +2183,10 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 				s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 			}
 			s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
-			go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
+			if s.agentThunderProvisioning != nil {
+				go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
+			}
+			s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
 			return nil
 		}
 		s.logger.Error("Failed to delete oc agent", "agentName", agentName, "error", err)
@@ -2189,7 +2198,9 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 	// is not cancelled when the HTTP handler returns, while still inheriting any values
 	// (trace IDs, logger) from the request context.
 	go s.deleteAgentLLMConfigurations(context.WithoutCancel(ctx), ouID, projectName, agentName, isExternalAgent)
-	go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
+	if s.agentThunderProvisioning != nil {
+		go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
+	}
 
 	// Cleanup agent configs from database
 	if configErr := s.agentConfigRepo.DeleteAllByAgent(ouID, projectName, agentName); configErr != nil {
@@ -2200,8 +2211,19 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 	// Cleanup env-scoped API artifact record.
 	s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
 
+	// Cleanup monitors owned by this agent so they are not orphaned after deletion.
+	s.cleanupAgentMonitors(ctx, ouID, projectName, agentName)
+
 	s.logger.Debug("Agent deleted from OpenChoreo successfully", "ouID", ouID, "agentName", agentName)
 	return nil
+}
+
+// cleanupAgentMonitors removes all monitors owned by an agent. Best-effort: orphaned
+// monitors are logged but do not fail the delete, matching the other post-delete cleanups.
+func (s *agentManagerService) cleanupAgentMonitors(ctx context.Context, ouID, projectName, agentName string) {
+	if err := s.monitorManagerService.DeleteMonitorsByAgent(context.WithoutCancel(ctx), ouID, projectName, agentName); err != nil {
+		s.logger.Warn("Failed to delete monitors during agent deletion", "agentName", agentName, "error", err)
+	}
 }
 
 func (s *agentManagerService) deleteAgentAPIArtifact(ctx context.Context, ouID, projectName, agentName string) {
@@ -3034,6 +3056,10 @@ func allPipelineEnvironmentNames(promotionPaths []models.PromotionPath) map[stri
 // it never returns or destroys a secret. Use ClaimAgentIdentitySecret to
 // actually retrieve an unclaimed External agent's secret.
 func (s *agentManagerService) GetAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
+	// No provisioning implementation: no identities to report.
+	if s.agentThunderProvisioning == nil {
+		return []models.AgentIdentityEnvironmentView{}, nil
+	}
 	views, err := s.agentThunderProvisioning.GetIdentityViews(ctx, ouID, projectName, agentName)
 	if err != nil {
 		return nil, err
@@ -3061,6 +3087,9 @@ func (s *agentManagerService) GetAgentIdentity(ctx context.Context, ouID string,
 // destroys the stored secret. Internal agents are rejected; use
 // GetAgentCredentials instead.
 func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error) {
+	if s.agentThunderProvisioning == nil {
+		return nil, utils.ErrAgentIdentityNotProvisioned
+	}
 	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent for identity secret claim", "agentName", agentName, "error", err)
@@ -3094,6 +3123,9 @@ func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, ouID
 // included so the caller can tell which kind of agent this is without a
 // separate lookup.
 func (s *agentManagerService) RegenerateAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error) {
+	if s.agentThunderProvisioning == nil {
+		return nil, utils.ErrAgentIdentityNotProvisioned
+	}
 	ownership, clientID, newSecret, err := s.agentThunderProvisioning.RegenerateSecret(ctx, ouID, projectName, agentName, environmentName)
 	if err != nil {
 		return nil, err
@@ -3112,6 +3144,9 @@ func (s *agentManagerService) RegenerateAgentIdentitySecret(ctx context.Context,
 // It never returns a usable secret — an explicit regenerate is required
 // afterward to restore access.
 func (s *agentManagerService) RevokeAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error) {
+	if s.agentThunderProvisioning == nil {
+		return models.AgentRevokeSecretResponse{}, utils.ErrAgentIdentityNotProvisioned
+	}
 	clientID, err := s.agentThunderProvisioning.RevokeSecret(ctx, ouID, projectName, agentName, environmentName)
 	if err != nil {
 		return models.AgentRevokeSecretResponse{}, err
@@ -3136,6 +3171,9 @@ func (s *agentManagerService) RevokeAgentIdentitySecret(ctx context.Context, ouI
 // new happened, here's the current state) and 202 (provisioning was just
 // kicked off in the background).
 func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentIdentityEnvironmentView, bool, error) {
+	if s.agentThunderProvisioning == nil {
+		return models.AgentIdentityEnvironmentView{}, false, utils.ErrAgentIdentityNotProvisioned
+	}
 	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent for identity provisioning", "agentName", agentName, "error", err)
@@ -3188,6 +3226,9 @@ func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, ouID s
 // one-time claim, or RegenerateAgentIdentitySecret), and letting them use this
 // endpoint too would defeat the point of that one-time claim design.
 func (s *agentManagerService) GetAgentCredentials(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error) {
+	if s.agentThunderProvisioning == nil {
+		return models.AgentCredentialsResponse{}, utils.ErrAgentIdentityNotProvisioned
+	}
 	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent for credential retrieval", "agentName", agentName, "error", err)
@@ -3464,14 +3505,16 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 	// created, so its binding could be missing entirely — best-effort and
 	// non-blocking, exactly like provisioning at agent-creation time, so a
 	// Thunder hiccup never rolls back an otherwise-successful promotion.
-	var requestedBy string
-	if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
-		requestedBy = callerClaims.Sub
-	}
-	if _, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
-		ctx, ouID, projectName, agentName, req.TargetEnvironment, models.AgentProvisioningTypeInternal, requestedBy,
-	); err != nil {
-		s.logger.Warn("Failed to ensure AgentID for promoted agent's target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
+	if s.agentThunderProvisioning != nil {
+		var requestedBy string
+		if callerClaims := jwtassertion.GetTokenClaims(ctx); callerClaims != nil {
+			requestedBy = callerClaims.Sub
+		}
+		if _, err := s.agentThunderProvisioning.ProvisionForEnvironmentIfMissing(
+			ctx, ouID, projectName, agentName, req.TargetEnvironment, models.AgentProvisioningTypeInternal, requestedBy,
+		); err != nil {
+			s.logger.Warn("Failed to ensure AgentID for promoted agent's target environment", "agentName", agentName, "environment", req.TargetEnvironment, "error", err)
+		}
 	}
 
 	s.logger.Info("Agent promoted successfully", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment)

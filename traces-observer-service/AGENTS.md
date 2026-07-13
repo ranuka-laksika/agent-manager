@@ -63,6 +63,7 @@ make mock-traces  # generate OTLP traces via telemetrygen (for local testing)
 | `IDP_TOKEN_URL` | `cfg.Observer.TokenURL` | Observer OAuth2 token endpoint |
 | `IDP_CLIENT_ID` | `cfg.Observer.ClientID` | Observer OAuth2 client id |
 | `IDP_CLIENT_SECRET` | `cfg.Observer.ClientSecret` | Observer OAuth2 client secret |
+| `OBSERVER_DEFAULT_NAMESPACE` | `cfg.Observer.DefaultNamespace` | namespace all trace queries are scoped to (default `default`) |
 | `KEY_MANAGER_JWKS_URL` | `cfg.Auth.JWKSUrl` | JWKS endpoint for JWT validation |
 | `KEY_MANAGER_ISSUER` | `cfg.Auth.Issuer` (list) | accepted token issuers (comma-separated) |
 | `KEY_MANAGER_AUDIENCE` | `cfg.Auth.Audience` (list) | accepted audiences (comma-separated) |

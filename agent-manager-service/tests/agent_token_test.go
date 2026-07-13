@@ -72,6 +72,9 @@ func createMockOpenChoreoClientForToken(agentName string, componentUid string, e
 				Name: orgName,
 			}, nil
 		},
+		ListOrganizationsFunc: func(_ context.Context) ([]*models.OrganizationResponse, error) {
+			return []*models.OrganizationResponse{{Namespace: "default"}}, nil
+		},
 	}
 }
 

@@ -33,7 +33,7 @@ set -euo pipefail
 #     When set, CHART_VERSION is ignored and the local chart is used directly.
 #   - IS_PRODUCTION (default: false)
 #   - ORG_NAME (default: default), DATAPLANE_REF (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - ENV_INGRESS_HOST (default: am-gateway.localhost): agent-facing gateway host.
 #   - ENV_INGRESS_HTTPS_HOST (default: unset): on TLS deployments, advertises an
 #     https listener variant. Set ENV_INGRESS_HTTPS_HOST=$ENV_INGRESS_HOST for
@@ -95,9 +95,15 @@ if [ "${#ENV_NAME}" -gt "$MAX_ENV_NAME_LEN" ]; then
     exit 1
 fi
 DATAPLANE_REF="${DATAPLANE_REF:-default}"
-AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
+AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://api.amp.localhost:8080}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+# Per-org-env namespace isolation: each environment's gateway stack (APIGateway
+# CR, runtime, RestApis, token secret) lives in its own "<org>-<env>" namespace.
+# The kgateway ingress (gateway-default) stays in openchoreo-data-plane; the
+# chart wires the cross-namespace route + ReferenceGrant automatically.
+# The <org>-<env> name stays well under the 63-char namespace limit because the
+# MAX_ENV_NAME_LEN check above already bounds org+env for the Service name.
+GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"
 IDP_SKIP_TLS_VERIFY="${IDP_SKIP_TLS_VERIFY:-true}"
 case "$IDP_SKIP_TLS_VERIFY" in
     true|false) ;;
@@ -358,6 +364,11 @@ HELM_ARGS=(
     upgrade --install "${RELEASE_NAME}"
     "${CHART_REF}"
     --namespace "${GATEWAY_NAMESPACE}"
+    --create-namespace
+    # apiGateway.namespace drives where the chart renders the APIGateway CR,
+    # config, RestApis, kgateway backendRef and token secret — --namespace alone
+    # only places the Helm release. Both must point at the same namespace.
+    --set apiGateway.namespace="${GATEWAY_NAMESPACE}"
     --set agentManager.orgName="${ORG_NAME}"
     --set gateway.environment="${ENV_NAME}"
     --set gateway.displayName="${DISPLAY_NAME} API Platform Gateway"

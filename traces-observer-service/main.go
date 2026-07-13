@@ -94,7 +94,7 @@ func main() {
 		cfg.Observer.ClientID,
 		cfg.Observer.ClientSecret,
 	)
-	observerClient := observer.NewClient(cfg.Observer.BaseURL, authProvider)
+	observerClient := observer.NewClient(cfg.Observer.BaseURL, authProvider, cfg.Observer.DefaultNamespace)
 	controller := controllers.NewTracingController(observerClient)
 	handler := handlers.NewHandler(controller)
 

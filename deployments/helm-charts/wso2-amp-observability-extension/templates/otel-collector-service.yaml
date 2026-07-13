@@ -1,3 +1,7 @@
+{{- if .Values.otelCollector.externalService.enabled }}
+# Optional external endpoint for direct OTLP/HTTP pushes to the collector.
+# Disabled by default: shipped clients send traces through the data-plane
+# gateway's /otel route instead.
 apiVersion: v1
 kind: Service
 metadata:
@@ -7,11 +11,12 @@ metadata:
     app.kubernetes.io/name: otel-collector
     app.kubernetes.io/instance: {{ .Release.Name }}
 spec:
-  type: LoadBalancer
+  type: {{ .Values.otelCollector.externalService.type }}
   selector:
     app.kubernetes.io/name: opentelemetry-collector
   ports:
     - name: otlp-http
-      port: 21893
+      port: {{ .Values.otelCollector.externalService.port }}
       targetPort: 4318
       protocol: TCP
+{{- end }}

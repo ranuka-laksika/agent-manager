@@ -24,6 +24,7 @@ import (
 	ocauth "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/auth"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc/providers/openbao"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
+	"github.com/wso2/agent-manager/agent-manager-service/services"
 )
 
 func main() {
@@ -45,8 +46,12 @@ func main() {
 	// Open-source: OpenBao secret management
 	secretProvider := openbao.NewProvider()
 
+	// Open-source: OpenBao-backed AgentID provisioning
+	agentThunderProvisioning := services.NewOpenBaoAgentThunderProvisioning(*cfg)
+
 	app.Run(authProvider, secretProvider, app.Options{
-		Server:  *serverFlag,
-		Migrate: *migrateFlag,
+		Server:                   *serverFlag,
+		Migrate:                  *migrateFlag,
+		AgentThunderProvisioning: agentThunderProvisioning,
 	})
 }

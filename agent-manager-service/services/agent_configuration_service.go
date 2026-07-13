@@ -350,33 +350,27 @@ func mcpProxyAPIKeyHeaderName(proxy *models.MCPProxy, envID string) string {
 	return header
 }
 
-// mcpProxySecurityForEnv returns the security config from the source proxy's blueprint
-// block for the given environment, or nil when there is no block for that environment.
+// mcpProxySecurityForEnv returns the security config from the endpoint bound to the given
+// environment, or nil when the proxy has no endpoint bound to that environment.
 func mcpProxySecurityForEnv(proxy *models.MCPProxy, envID string) *models.SecurityConfig {
-	if proxy == nil {
+	endpoint, _ := resolveMCPEndpointForEnv(proxy, envID)
+	if endpoint == nil {
 		return nil
 	}
-	envCfg := findMCPEnvironmentConfig(proxy.Configuration.Environments, envID)
-	if envCfg == nil {
-		return nil
-	}
-	return envCfg.Security
+	return endpoint.Configuration.Security
 }
 
 // mcpProxyEnvArtifactUUID returns the stable per-environment gateway artifact UUID for the
-// given environment from the source proxy's blueprint, or uuid.Nil when the proxy has no
-// block for that environment. This UUID is the gateway-facing apiID that per-agent inbound
-// API keys are minted against, so the gateway validates them against the single shared
-// artifact the proxy deployed for that environment.
+// given environment from the endpoint→environment binding, or uuid.Nil when the proxy has
+// no endpoint bound to that environment. This UUID is the gateway-facing apiID that
+// per-agent inbound API keys are minted against, so the gateway validates them against the
+// single shared artifact the endpoint deployed for that environment.
 func mcpProxyEnvArtifactUUID(proxy *models.MCPProxy, envID string) uuid.UUID {
-	if proxy == nil {
+	_, ee := resolveMCPEndpointForEnv(proxy, envID)
+	if ee == nil {
 		return uuid.Nil
 	}
-	env := findMCPEnvironmentConfig(proxy.Configuration.Environments, envID)
-	if env == nil || env.ArtifactUUID == nil {
-		return uuid.Nil
-	}
-	return *env.ArtifactUUID
+	return ee.ArtifactUUID
 }
 
 // resolveMCPMappingAPIID resolves the shared per-environment artifact UUID that a mapping's
@@ -1293,10 +1287,11 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 		}
 
 		// The proxy is selected for the agent regardless of environment, but it is only
-		// deployable when the proxy has a configured environment block, that block owns a
-		// shared gateway artifact, and the environment has an active gateway. For any
+		// deployable when the proxy has an endpoint bound to the environment, that binding
+		// owns a shared gateway artifact, and the environment has an active gateway. For any
 		// other environment, create no mapping/deployment and inject empty env vars.
-		configured := findMCPEnvironmentConfig(sourceProxy.Configuration.Environments, env.UUID) != nil
+		endpoint, _ := resolveMCPEndpointForEnv(sourceProxy, env.UUID)
+		configured := endpoint != nil
 		sharedArtifactUUID := mcpProxyEnvArtifactUUID(sourceProxy, env.UUID)
 		var gateway *models.Gateway
 		if configured && sharedArtifactUUID == uuid.Nil {
@@ -2224,11 +2219,11 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		handle := mcpMappingProxyName(projectName, agentName, existingConfig.Name, envName)
 		artifactName := handle
 		sourceVersion := mcpProxyArtifactVersion(sourceProxy)
-		// An environment is deployable only if the proxy is configured for it, the proxy
-		// environment owns a shared gateway artifact, and it has an active gateway.
-		// Otherwise the mapping is torn down / never created and the env vars are
-		// injected empty.
-		configured := findMCPEnvironmentConfig(sourceProxy.Configuration.Environments, env.UUID) != nil
+		// An environment is deployable only if the proxy has an endpoint bound to it, the
+		// binding owns a shared gateway artifact, and it has an active gateway. Otherwise
+		// the mapping is torn down / never created and the env vars are injected empty.
+		endpoint, _ := resolveMCPEndpointForEnv(sourceProxy, env.UUID)
+		configured := endpoint != nil
 		sharedArtifactUUID := mcpProxyEnvArtifactUUID(sourceProxy, env.UUID)
 		deployable := false
 		if configured && sharedArtifactUUID == uuid.Nil {
@@ -4295,23 +4290,25 @@ func buildAgentMCPConfigProxy(
 		version = source.Configuration.Version
 	}
 
-	// The source proxy is a per-environment blueprint. Flatten the block for this
-	// mapping's environment into the flat, single-environment config that the deployment
-	// YAML builder consumes. If the blueprint has no block for this environment the
-	// upstream stays empty and deployment fails clearly ("upstream URL is required").
-	envCfg := findMCPEnvironmentConfig(source.Configuration.Environments, mapping.EnvironmentUUID.String())
+	// The source proxy groups one or more endpoints; each endpoint is bound to at most
+	// one environment (uq_proxy_env_single). Flatten the endpoint bound to this mapping's
+	// environment into the flat, single-environment config that the deployment YAML
+	// builder consumes. If no endpoint is bound to this environment the upstream stays
+	// empty and deployment fails clearly ("upstream URL is required").
+	endpoint, _ := resolveMCPEndpointForEnv(source, mapping.EnvironmentUUID.String())
 	var upstream models.UpstreamConfig
 	var policies []models.MCPPolicy
 	var capabilities *models.MCPProxyCapabilities
 	var security *models.SecurityConfig
-	if envCfg != nil {
-		if envCfg.Upstream != nil {
-			endpoint := *envCfg.Upstream
-			upstream.Main = &endpoint
+	if endpoint != nil {
+		cfg := endpoint.Configuration
+		if cfg.Upstream != nil {
+			upstreamEndpoint := *cfg.Upstream
+			upstream.Main = &upstreamEndpoint
 		}
-		policies = envCfg.Policies
-		capabilities = envCfg.Capabilities
-		security = envCfg.Security
+		policies = cfg.Policies
+		capabilities = cfg.Capabilities
+		security = cfg.Security
 	}
 
 	return &models.MCPProxy{
@@ -4337,17 +4334,29 @@ func buildAgentMCPConfigProxy(
 	}
 }
 
-// findMCPEnvironmentConfig returns the blueprint block configuring the given environment
-// UUID, or nil when the source proxy has no block for that environment.
-func findMCPEnvironmentConfig(environments map[string]models.MCPEnvironmentConfig, envID string) *models.MCPEnvironmentConfig {
+// resolveMCPEndpointForEnv finds the endpoint bound to the given environment on a
+// preloaded source proxy, returning that endpoint and its environment-binding join row.
+// The uq_proxy_env_single constraint guarantees at most one endpoint per environment, so
+// the first match is the only match. Returns (nil, nil) when the proxy has no endpoint
+// bound to that environment (or the proxy / its Endpoints graph was not preloaded).
+func resolveMCPEndpointForEnv(proxy *models.MCPProxy, envID string) (*models.MCPProxyEndpoint, *models.MCPProxyEndpointEnvironment) {
+	if proxy == nil {
+		return nil, nil
+	}
 	envID = strings.TrimSpace(envID)
 	if envID == "" {
-		return nil
+		return nil, nil
 	}
-	if env, ok := environments[envID]; ok {
-		return &env
+	for i := range proxy.Endpoints {
+		endpoint := &proxy.Endpoints[i]
+		for j := range endpoint.Environments {
+			ee := &endpoint.Environments[j]
+			if ee.EnvironmentUUID.String() == envID {
+				return endpoint, ee
+			}
+		}
 	}
-	return nil
+	return nil, nil
 }
 
 func buildMCPProxyMapping(sourceProxyUUID uuid.UUID, deployedProxy *models.MCPProxy) *models.MCPProxyMapping {
@@ -4445,10 +4454,9 @@ func (s *agentConfigurationService) CleanupEnvironmentMCPArtifacts(ctx context.C
 		}
 	}
 
-	// (b) Org-level MCP proxy blueprints — strip the env block.
-	if s.mcpProxyRepo != nil {
+	// (b) Org-level MCP proxies — remove the vanished environment's endpoint bindings.
+	if s.mcpProxyRepo != nil && s.mcpProxyService != nil {
 		const pageSize = 100
-		envKey := envUUID.String()
 		for offset := 0; ; offset += pageSize {
 			proxies, listErr := s.mcpProxyRepo.List(ctx, ouID, pageSize, offset)
 			if listErr != nil {
@@ -4459,22 +4467,8 @@ func (s *agentConfigurationService) CleanupEnvironmentMCPArtifacts(ctx context.C
 				if proxy == nil {
 					continue
 				}
-				envBlock, ok := proxy.Configuration.Environments[envKey]
-				if !ok {
-					continue
-				}
-				// Tear down the single gateway artifact this proxy deployed for the vanished
-				// environment before stripping the block from the blueprint.
-				if s.mcpProxyService != nil && envBlock.ArtifactUUID != nil && *envBlock.ArtifactUUID != uuid.Nil {
-					if err := s.mcpProxyService.deleteMCPProxyEnvironmentArtifacts(ctx, []uuid.UUID{*envBlock.ArtifactUUID}, ouID); err != nil {
-						errs = append(errs, fmt.Errorf("delete env %s artifact for proxy %s: %w", envKey, proxy.UUID, err))
-					}
-				}
-				delete(proxy.Configuration.Environments, envKey)
-				if err := s.db.Transaction(func(tx *gorm.DB) error {
-					return s.mcpProxyRepo.Update(ctx, tx, proxy, ouID)
-				}); err != nil {
-					errs = append(errs, fmt.Errorf("strip env %s from proxy %s: %w", envKey, proxy.UUID, err))
+				if err := s.mcpProxyService.RemoveEnvironmentFromEndpoints(ctx, proxy, envUUID, ouID); err != nil {
+					errs = append(errs, fmt.Errorf("remove env %s from proxy %s: %w", envUUID, proxy.UUID, err))
 				}
 			}
 			if len(proxies) < pageSize {

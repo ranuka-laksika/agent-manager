@@ -69,7 +69,7 @@ ACME_EMAIL=ops@mycompany.com       # ACME contact (recommended)
 # --- upstream mode (TLS terminated by a cloud LB / proxy in front of the VM) ---
 # The LB must forward each hostname to the VM and set X-Forwarded-Proto: https.
 # UPSTREAM_LISTEN_PORT=80          # plain-HTTP port the LB forwards to (default 80).
-#   Must not be a loopback-bound cluster port (3000/8080/9000/9098/9243/19080/22893);
+#   Must not be a loopback-bound cluster port (8080/11080/19080);
 #   80 is safe.
 # Restrict the listen port to the LB at the firewall, and set the LB's source CIDRs
 # below so only it can set X-Forwarded-* (default 0.0.0.0/0 trusts any source). Use a

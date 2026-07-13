@@ -20,7 +20,7 @@ set -euo pipefail
 #   - AGENT_MANAGER_TOKEN: bearer token authorized to delete environments
 # Optional:
 #   - ORG_NAME (default: default)
-#   - AGENT_MANAGER_URL (default: http://localhost:9000)
+#   - AGENT_MANAGER_URL (default: http://api.amp.localhost:8080)
 #   - GATEWAY_NAMESPACE (default: openchoreo-data-plane)
 #   - DEPROVISION_THUNDER (default: true) — set to false to skip Thunder removal
 #   - THUNDER_SCRIPT_URL — override the URL of remove-environment-thunder.sh
@@ -36,9 +36,10 @@ fi
 
 # --- Configuration ---
 ORG_NAME="${ORG_NAME:-default}"
-AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://localhost:9000}"
+AGENT_MANAGER_URL="${AGENT_MANAGER_URL:-http://api.amp.localhost:8080}"
 AGENT_MANAGER_API_URL="${AGENT_MANAGER_API_URL:-${AGENT_MANAGER_URL}/api/v1}"
-GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-openchoreo-data-plane}"
+# Must match the per-org-env namespace add-environment.sh installs into.
+GATEWAY_NAMESPACE="${GATEWAY_NAMESPACE:-${ORG_NAME}-${ENV_NAME}}"
 
 # Release name MUST match what add-environment.sh installs. Single org segment.
 RELEASE_NAME="api-platform-${ORG_NAME}-${ENV_NAME}"
@@ -128,6 +129,19 @@ if kubectl wait --for=delete "apigateway/${GATEWAY_NAME}" -n "${GATEWAY_NAMESPAC
     echo "✅ Gateway resources cleaned up"
 else
     echo "⚠️  Timed out or failed waiting for apigateway/${GATEWAY_NAME} to delete; continuing..."
+fi
+
+# --- Step 4: Delete the per-env gateway namespace ---
+# Only when it follows the "<org>-<env>" isolation convention — never delete a
+# shared namespace (e.g. a legacy install with GATEWAY_NAMESPACE=openchoreo-data-plane).
+if [ "${GATEWAY_NAMESPACE}" = "${ORG_NAME}-${ENV_NAME}" ]; then
+    echo ""
+    echo "🧹 Deleting gateway namespace '${GATEWAY_NAMESPACE}'..."
+    if kubectl delete namespace "${GATEWAY_NAMESPACE}" --timeout=120s 2>/dev/null; then
+        echo "✅ Namespace deleted"
+    else
+        echo "ℹ️  Namespace '${GATEWAY_NAMESPACE}' not found or already deleting, skipping..."
+    fi
 fi
 
 echo ""

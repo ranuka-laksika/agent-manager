@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"gopkg.in/yaml.v3"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -52,7 +53,7 @@ func TestGenerateMCPProxyDeploymentYAML_Basic(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -113,7 +114,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithContextAndVhost(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -150,7 +151,7 @@ func TestGenerateMCPProxyDeploymentYAML_StripsMCPSuffix(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -190,7 +191,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithSecurityAPIKey(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -253,7 +254,7 @@ func TestGenerateMCPProxyDeploymentYAML_SecurityValidation(t *testing.T) {
 				},
 			}
 
-			_, err := service.generateMCPProxyDeploymentYAML(proxy)
+			_, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 			if tt.expectErr {
 				if err == nil {
 					t.Fatal("expected an error, got nil")
@@ -293,7 +294,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithBackendAuth(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -353,7 +354,7 @@ func TestGenerateMCPProxyDeploymentYAML_PrefersArtifactIdentity(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -393,7 +394,7 @@ func TestGenerateMCPProxyDeploymentYAML_PolicyVersionNormalized(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -442,7 +443,7 @@ func TestGenerateMCPProxyDeploymentYAML_MissingUpstreamURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &MCPProxyService{}
-			_, err := service.generateMCPProxyDeploymentYAML(tt.proxy)
+			_, err := service.generateMCPProxyDeploymentYAML(tt.proxy, "x", nil)
 			if err == nil {
 				t.Fatal("expected an error for missing upstream URL, got nil")
 			}
@@ -666,13 +667,66 @@ func TestNormalizeMCPUpstreamURLForDeployment(t *testing.T) {
 	}
 }
 
+// TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules covers the Agent Identity
+// policy emission: mcp-auth (pinned issuer, no requiredScopes — jwt-auth would enforce
+// all of them) plus one mcp-authz rule per tool, inverted from the proxy's scope->tools rows.
+func TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules(t *testing.T) {
+	on := true
+	sec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}}
+	scopes := []models.MCPProxyScope{
+		{Action: "read", Tools: []string{"get_repo", "list_repos"}},
+		{Action: "admin", Tools: []string{"delete_repo", "get_repo"}},
+	}
+	out := appendMCPIdentityAuthPolicies(nil, sec, "gh-proxy", scopes)
+	assert.Len(t, out, 2)
+
+	auth := out[0]
+	assert.Equal(t, "mcp-auth", auth.Name)
+	assert.Equal(t, []interface{}{"ThunderKeyManager"}, auth.Params["issuers"])
+	assert.NotContains(t, auth.Params, "requiredScopes")
+
+	authz := out[1]
+	assert.Equal(t, "mcp-authz", authz.Name)
+	rules := authz.Params["tools"].([]map[string]interface{})
+	assert.Equal(t, []map[string]interface{}{
+		{"name": "delete_repo", "requiredScopes": []string{"gh-proxy:admin"}},
+		{"name": "get_repo", "requiredScopes": []string{"gh-proxy:admin", "gh-proxy:read"}},
+		{"name": "list_repos", "requiredScopes": []string{"gh-proxy:read"}},
+	}, rules)
+}
+
+func TestAppendMCPIdentityAuthPolicies_NoScopesEmitsAuthOnly(t *testing.T) {
+	on := true
+	sec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}}
+	out := appendMCPIdentityAuthPolicies(nil, sec, "gh-proxy", nil)
+	assert.Len(t, out, 1)
+	assert.Equal(t, "mcp-auth", out[0].Name)
+	_, hasScopes := out[0].Params["requiredScopes"]
+	assert.False(t, hasScopes)
+}
+
+func TestAppendMCPIdentityAuthPolicies_IdentityOffEmitsNothing(t *testing.T) {
+	scopes := []models.MCPProxyScope{{Action: "read", Tools: []string{"get_repo"}}}
+
+	assert.Empty(t, appendMCPIdentityAuthPolicies(nil, nil, "gh-proxy", scopes))
+
+	on := true
+	apiKeySec := &models.SecurityConfig{Enabled: &on, APIKey: &models.APIKeySecurity{Enabled: &on}}
+	assert.Empty(t, appendMCPIdentityAuthPolicies(nil, apiKeySec, "gh-proxy", scopes))
+
+	existing := []models.MCPPolicy{{Name: "log-message", Version: "v1"}}
+	disabledIdentitySec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: boolPtr(false)}}
+	assert.Equal(t, existing, appendMCPIdentityAuthPolicies(existing, disabledIdentitySec, "gh-proxy", scopes))
+}
+
 func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T) {
 	const proxyHandle = "shared-mcp-proxy"
+	const endpointHandle = "primary"
 	envID1 := "12345678-0000-0000-0000-000000000001"
 	envID2 := "12345678-ffff-ffff-ffff-ffffffffffff"
 
-	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, envID1)
-	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, envID2)
+	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, endpointHandle, envID1)
+	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, endpointHandle, envID2)
 
 	if handle1 == handle2 {
 		t.Fatalf("expected distinct handles for environments with the same first 8 UUID characters")
@@ -682,5 +736,17 @@ func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T)
 	}
 	if !strings.HasSuffix(handle2, "-12345678ffffffffffffffffffffffff") {
 		t.Fatalf("expected full compacted UUID suffix, got %q", handle2)
+	}
+}
+
+func TestMCPProxyEnvArtifactHandleDistinguishesEndpoints(t *testing.T) {
+	const proxyHandle = "shared-mcp-proxy"
+	envID := "12345678-0000-0000-0000-000000000001"
+
+	handle1 := mcpProxyEnvArtifactHandle(proxyHandle, "primary", envID)
+	handle2 := mcpProxyEnvArtifactHandle(proxyHandle, "secondary", envID)
+
+	if handle1 == handle2 {
+		t.Fatalf("expected distinct handles for different endpoints in the same environment")
 	}
 }

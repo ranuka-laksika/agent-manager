@@ -57,8 +57,8 @@ validate_config() {
       if [[ -n "${UPSTREAM_LISTEN_PORT:-}" ]]; then
         if [[ "$UPSTREAM_LISTEN_PORT" =~ ^[0-9]+$ ]] && (( UPSTREAM_LISTEN_PORT >= 1 && UPSTREAM_LISTEN_PORT <= 65535 )); then
           case "$UPSTREAM_LISTEN_PORT" in
-            3000|8080|9000|9098|9243|19080|22893)
-              CONFIG_ERRORS+=("UPSTREAM_LISTEN_PORT=${UPSTREAM_LISTEN_PORT} collides with a loopback-bound cluster port (3000/8080/9000/9098/9243/19080/22893); pick another, e.g. 80") ;;
+            8080|11080|19080)
+              CONFIG_ERRORS+=("UPSTREAM_LISTEN_PORT=${UPSTREAM_LISTEN_PORT} collides with a loopback-bound cluster port (8080/11080/19080); pick another, e.g. 80") ;;
           esac
         else
           CONFIG_ERRORS+=("UPSTREAM_LISTEN_PORT must be a port number 1-65535 (got '${UPSTREAM_LISTEN_PORT}')")
@@ -177,6 +177,10 @@ _public_ip() {
     ip="$(echo "$ip" | tr -d '[:space:]')"
     [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] && { echo "$ip"; return; }
   done
+  # Must succeed even when every endpoint is unreachable (egress-restricted VMs):
+  # the caller assigns the output under `set -e`, so a non-zero status here would
+  # abort the whole install instead of just skipping the public-IP DNS candidate.
+  return 0
 }
 
 # validate_dns <ip> [more_ips...] — confirm derived hosts resolve to one of the given

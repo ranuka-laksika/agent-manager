@@ -59,8 +59,10 @@ var clientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
+	// EnvThunderResolver is wired for AgentIdentityController's passthrough
+	// endpoints. The OpenBao-backed AgentSecretStore is not wired here; AgentID
+	// provisioning is injected via app.Options.AgentThunderProvisioning.
 	ProvideEnvThunderResolver,
-	ProvideAgentSecretStore,
 )
 
 var serviceProviderSet = wire.NewSet(
@@ -74,7 +76,8 @@ var serviceProviderSet = wire.NewSet(
 	services.NewMonitorManagerService,
 	ProvideThunderConfig,
 	services.NewMonitorSchedulerService,
-	services.NewAgentThunderProvisioningService,
+	// Provisioning service is injected (see InitializeAppParams); only the
+	// reconciler that consumes it is wired here.
 	services.NewAgentThunderReconcilerService,
 	services.NewEvaluatorManagerService,
 	services.NewEnvironmentService,
@@ -88,6 +91,10 @@ var serviceProviderSet = wire.NewSet(
 	services.NewAgentAPIKeyService,
 	services.NewLLMProxyDeploymentService,
 	services.NewMCPProxyService,
+	services.NewMCPProxyScopeService,
+	// MCPProxyScopeService only needs the narrow redeploy surface; bind it to
+	// the concrete service so scope mutations can re-emit gateway policies.
+	wire.Bind(new(services.MCPProxyRedeployer), new(*services.MCPProxyService)),
 	services.NewGatewayInternalAPIService,
 	services.NewMonitorScoresService,
 	services.NewCatalogService,
@@ -130,6 +137,8 @@ var controllerProviderSet = wire.NewSet(
 	controllers.NewAgentConfigurationController,
 	controllers.NewGitSecretController,
 	controllers.NewIdentityController,
+	controllers.NewMCPProxyScopeController,
+	controllers.NewAgentIdentityController,
 )
 
 var testClientProviderSet = wire.NewSet(
@@ -143,6 +152,12 @@ var testClientProviderSet = wire.NewSet(
 	thundersvc.NewProber,
 	ProvideEnvThunderResolver,
 	ProvideAgentSecretStore,
+)
+
+// thunderProvisioningTestSet builds the OpenBao-backed provisioning service for
+// the test wiring only; production injects it via InitializeAppParams.
+var thunderProvisioningTestSet = wire.NewSet(
+	services.NewAgentThunderProvisioningService,
 )
 
 // ProvideLogger provides the configured slog.Logger instance
@@ -320,6 +335,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideLLMProviderRepository,
 	ProvideLLMProxyRepository,
 	ProvideMCPProxyRepository,
+	repositories.NewMCPProxyEndpointRepository,
 	ProvideDeploymentRepository,
 	ProvideArtifactRepository,
 	ProvideScoreRepository,
@@ -336,14 +352,22 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
+	repositories.NewMCPProxyScopeRepository,
 )
 
 var websocketProviderSet = wire.NewSet(
 	ProvideEventHub,
 	ProvideWebSocketManager,
+	ProvideGatewayConnectionChecker,
 	services.NewGatewayEventsService,
 	ProvideDeploymentAckHandler,
 )
+
+// ProvideGatewayConnectionChecker exposes the websocket manager through the
+// narrow connectivity interface consumed by services.
+func ProvideGatewayConnectionChecker(m *websocket.Manager) services.GatewayConnectionChecker {
+	return m
+}
 
 // Test client providers
 func ProvideTestOpenChoreoClient(testClients TestClients) occlient.OpenChoreoClient {
@@ -499,8 +523,9 @@ func ProvideOrgResolver(client thundersvc.IdentityClient) middleware.OrgResolver
 	return middleware.NewOrgResolver(client)
 }
 
-// InitializeAppParams wires up all application dependencies
-func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier) (*AppParams, error) {
+// InitializeAppParams wires up all application dependencies. agentThunderProvisioning
+// is the deployment-injected AgentID provisioning implementation (nil to disable).
+func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Provider, gatewayApplier services.GatewayConfigApplier, agentThunderProvisioning services.AgentThunderProvisioningService) (*AppParams, error) {
 	wire.Build(
 		configProviderSet,
 		clientProviderSet,
@@ -527,6 +552,7 @@ func InitializeTestAppParamsWithClientMocks(
 ) (*AppParams, error) {
 	wire.Build(
 		testClientProviderSet,
+		thunderProvisioningTestSet,
 		loggerProviderSet,
 		repositoryProviderSet,
 		websocketProviderSet,

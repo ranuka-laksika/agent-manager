@@ -158,7 +158,7 @@ var _ = Describe("amctl widget CRUD", Label("cli", "widget"), Ordered, func() {
 
 `framework.LoadConfig()` reads the usual environment variables:
 
-- `AMP_API_BASE_URL` (default `http://localhost:9000`)
+- `AMP_API_BASE_URL` (default `http://api.amp.localhost:8080`)
 - `IDP_TOKEN_URL`, `IDP_CLIENT_ID`, `IDP_CLIENT_SECRET`
 - `DEFAULT_ORG`, `DEFAULT_PROJECT`, `DEFAULT_ENV`
 - `AMCTL_BIN` — optional pre-built CLI binary for CLI specs

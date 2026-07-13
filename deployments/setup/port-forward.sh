@@ -6,21 +6,18 @@ source "$SCRIPT_DIR/env.sh"
 
 # Parse flags
 PLATFORM=false
-GATEWAY=false
 BACKGROUND=false
 
 for arg in "$@"; do
     case "$arg" in
         --platform)   PLATFORM=true ;;
-        --gateway)    GATEWAY=true ;;
         --background) BACKGROUND=true ;;
     esac
 done
 
 # Default: all services if no group specified
-if ! $PLATFORM && ! $GATEWAY; then
+if ! $PLATFORM; then
     PLATFORM=true
-    GATEWAY=true
 fi
 
 # Check prerequisites
@@ -80,17 +77,6 @@ if $PLATFORM; then
     start_forward "OpenChoreo API (8195)"            -n openchoreo-control-plane svc/openchoreo-api 8195:8080
 fi
 
-if $GATEWAY; then
-    echo "🌐 Gateway:"
-    GW_SVC="api-platform-default-default-gateway-gateway-runtime"
-    if kubectl get svc "$GW_SVC" -n openchoreo-data-plane &>/dev/null; then
-        start_forward "API Platform Gateway HTTP (22893)"  -n openchoreo-data-plane "svc/$GW_SVC" 22893:22893
-        start_forward "API Platform Gateway HTTPS (22894)" -n openchoreo-data-plane "svc/$GW_SVC" 22894:22894
-    else
-        echo "   ⚠️  Gateway not deployed yet — skipping (22893/22894)"
-    fi
-fi
-
 echo ""
 echo "✅ Active endpoints:"
 if $PLATFORM; then
@@ -99,10 +85,6 @@ if $PLATFORM; then
     echo "   OpenSearch:               http://localhost:9200"
     echo "   Traces Observer:          http://localhost:9098"
     echo "   OpenBao:     http://localhost:8200"
-fi
-if $GATEWAY; then
-    echo "   API Platform Gateway:     http://localhost:22893"
-    echo "   API Platform Gateway TLS: https://localhost:22894"
 fi
 
 echo ""

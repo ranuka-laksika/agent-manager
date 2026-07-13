@@ -119,7 +119,8 @@ type InputInterface struct {
 
 // InputInterfaceSchema represents schema configuration
 type InputInterfaceSchema struct {
-	Path string `json:"path,omitempty"`
+	Path    string `json:"path,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
 // BuildDetails represents detailed build information

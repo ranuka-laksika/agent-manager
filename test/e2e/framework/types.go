@@ -628,46 +628,55 @@ type MCPProxyCapabilities struct {
 	Resources []map[string]any `json:"resources,omitempty"`
 }
 
-// MCPEnvironmentConfig is one per-environment blueprint block on an MCP proxy, keyed by
-// environment UUID in the proxy's Environments map. Each block carries the single upstream
-// endpoint (plus policies/capabilities/security) for that environment; the proxy deploys
-// exactly one gateway artifact per configured environment. DeploymentStatus is response-only
-// ("Deployed"/"Undeployed") and computed on read.
-type MCPEnvironmentConfig struct {
-	Upstream         *UpstreamEndpoint     `json:"upstream,omitempty"`
-	Policies         []MCPPolicy           `json:"policies,omitempty"`
-	Capabilities     *MCPProxyCapabilities `json:"capabilities,omitempty"`
-	Security         *SecurityConfig       `json:"security,omitempty"`
-	DeploymentStatus string                `json:"deploymentStatus,omitempty"`
+// MCPEndpointEnvironment is one endpoint→environment binding on an MCP proxy. On write only
+// EnvironmentUUID is honoured (the endpoint is deployed to that env); on read DeploymentStatus
+// reports the per-environment status ("Deployed"/"Undeployed"). Within one proxy an environment
+// maps to at most one endpoint.
+type MCPEndpointEnvironment struct {
+	EnvironmentUUID  string `json:"environmentUuid"`
+	DeploymentStatus string `json:"deploymentStatus,omitempty"`
+}
+
+// MCPProxyEndpoint is one deployable endpoint of an MCP proxy. It carries the upstream
+// (URL + auth under Upstream.Main), policies, capabilities, security, and tool-scope bindings,
+// and is deployed to one or more environments. ID is unique within the parent proxy.
+type MCPProxyEndpoint struct {
+	ID           string                   `json:"id"`
+	Name         string                   `json:"name,omitempty"`
+	Upstream     UpstreamConfig           `json:"upstream"`
+	Policies     []MCPPolicy              `json:"policies,omitempty"`
+	Capabilities *MCPProxyCapabilities    `json:"capabilities,omitempty"`
+	Security     *SecurityConfig          `json:"security,omitempty"`
+	Environments []MCPEndpointEnvironment `json:"environments,omitempty"`
 }
 
 type CreateMCPProxyRequest struct {
-	ID             string                          `json:"id"`
-	Name           string                          `json:"name"`
-	Version        string                          `json:"version"`
-	Description    *string                         `json:"description,omitempty"`
-	Context        *string                         `json:"context,omitempty"`
-	Vhost          *string                         `json:"vhost,omitempty"`
-	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
-	// Environments maps an environment UUID to its per-environment blueprint block. The
-	// proxy deploys one gateway artifact per configured environment on create/update.
-	Environments map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Version        string  `json:"version"`
+	Description    *string `json:"description,omitempty"`
+	Context        *string `json:"context,omitempty"`
+	Vhost          *string `json:"vhost,omitempty"`
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+	// Endpoints are the deployable endpoint definitions. Each endpoint is deployed to the
+	// environments listed in its Environments block on create/update.
+	Endpoints []MCPProxyEndpoint `json:"endpoints,omitempty"`
 }
 
 type MCPProxyResponse struct {
-	ID             string                          `json:"id"`
-	Name           string                          `json:"name"`
-	Version        string                          `json:"version"`
-	Description    *string                         `json:"description,omitempty"`
-	Context        *string                         `json:"context,omitempty"`
-	Vhost          *string                         `json:"vhost,omitempty"`
-	McpSpecVersion *string                         `json:"mcpSpecVersion,omitempty"`
-	InCatalog      bool                            `json:"inCatalog"`
-	// Gateways aggregates the gateways across all per-environment artifacts currently deployed.
-	Gateways     []string                        `json:"gateways,omitempty"`
-	Environments map[string]MCPEnvironmentConfig `json:"environments,omitempty"`
-	CreatedBy    *string                         `json:"createdBy,omitempty"`
-	CreatedAt    *time.Time                      `json:"createdAt,omitempty"`
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Version        string  `json:"version"`
+	Description    *string `json:"description,omitempty"`
+	Context        *string `json:"context,omitempty"`
+	Vhost          *string `json:"vhost,omitempty"`
+	McpSpecVersion *string `json:"mcpSpecVersion,omitempty"`
+	InCatalog      bool    `json:"inCatalog"`
+	// Gateways aggregates the gateways across all per-endpoint/per-environment artifacts deployed.
+	Gateways  []string           `json:"gateways,omitempty"`
+	Endpoints []MCPProxyEndpoint `json:"endpoints,omitempty"`
+	CreatedBy *string            `json:"createdBy,omitempty"`
+	CreatedAt *time.Time         `json:"createdAt,omitempty"`
 }
 
 type MCPProxyListItem struct {

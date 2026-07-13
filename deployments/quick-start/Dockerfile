@@ -35,14 +35,30 @@ RUN adduser -D -h ${USER_HOME} -s /bin/bash wso2-amp && \
     echo "wso2-amp ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/wso2-amp && \
     chmod 0440 /etc/sudoers.d/wso2-amp
 
-COPY --chown=wso2-amp:wso2-amp .bash_profile ${USER_HOME}/.bash_profile
-COPY --chown=wso2-amp:wso2-amp .bashrc ${USER_HOME}/.bashrc
+# Build context is the repo root (see release-config.json: amp-quick-start
+# sets "context": "."), so paths below are repo-relative. This lets the image
+# bundle the deployment resources the installer applies (values/, manifests,
+# helper scripts) instead of fetching them from raw.githubusercontent.com at
+# install time — GitHub rate-limits unauthenticated per-IP requests with HTTP
+# 429, and helm/kubectl do not retry, which aborts the install.
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/.bash_profile ${USER_HOME}/.bash_profile
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/.bashrc ${USER_HOME}/.bashrc
 # Copy scripts and configs
-COPY --chown=wso2-amp:wso2-amp install.sh ${USER_HOME}/install.sh
-COPY --chown=wso2-amp:wso2-amp install-helpers.sh ${USER_HOME}/install-helpers.sh
-COPY --chown=wso2-amp:wso2-amp uninstall.sh ${USER_HOME}/uninstall.sh
-COPY --chown=wso2-amp:wso2-amp k3d-config.yaml ${USER_HOME}/k3d-config.yaml
-COPY --chown=root:root entrypoint.sh /entrypoint.sh
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/install.sh ${USER_HOME}/install.sh
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/install-helpers.sh ${USER_HOME}/install-helpers.sh
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/uninstall.sh ${USER_HOME}/uninstall.sh
+COPY --chown=wso2-amp:wso2-amp deployments/quick-start/k3d-config.yaml ${USER_HOME}/k3d-config.yaml
+COPY --chown=root:root deployments/quick-start/entrypoint.sh /entrypoint.sh
+
+# Bundle deployment resources next to the scripts (flat layout). install.sh
+# resolves these under ${SCRIPT_DIR} when the parent-relative repo layout is
+# absent (see DEPLOYMENTS_DIR in install.sh).
+COPY --chown=wso2-amp:wso2-amp deployments/single-cluster/ ${USER_HOME}/single-cluster/
+COPY --chown=wso2-amp:wso2-amp deployments/values/ ${USER_HOME}/values/
+COPY --chown=wso2-amp:wso2-amp deployments/k8s/coredns-amp-custom.yaml ${USER_HOME}/k8s/coredns-amp-custom.yaml
+# Whole scripts/ dir: add-environment-thunder.sh sources its sibling
+# thunder-naming.sh, so both (and the other env helpers) must ship together.
+COPY --chown=wso2-amp:wso2-amp deployments/scripts/ ${USER_HOME}/scripts/
 RUN chmod +x ${USER_HOME}/install.sh && \
     chmod +x /entrypoint.sh && \
     chmod +x ${USER_HOME}/install-helpers.sh && \

@@ -206,11 +206,12 @@ func (c *mcpProxyController) DeleteMCPProxy(w http.ResponseWriter, r *http.Reque
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 	ouID := middleware.OUIDFromRequest(r)
+	orgName := r.PathValue(utils.PathParamOrgName)
 	proxyID := r.PathValue(utils.PathParamProxyId)
 
 	log.Info("DeleteMCPProxy: starting", "ouID", ouID, "proxyID", proxyID)
 
-	if err := c.mcpProxyService.Delete(ctx, ouID, proxyID); err != nil {
+	if err := c.mcpProxyService.Delete(ctx, ouID, orgName, proxyID); err != nil {
 		switch {
 		case errors.Is(err, utils.ErrMCPProxyNotFound):
 			log.Warn("DeleteMCPProxy: MCP proxy not found", "ouID", ouID, "proxyID", proxyID)

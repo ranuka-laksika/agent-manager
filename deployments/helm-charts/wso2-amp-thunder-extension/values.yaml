@@ -149,6 +149,7 @@ thunder:
     cors:
       allowedOrigins:
         - "http://localhost:3000"
+        - "http://console.amp.localhost:8080"
   setup:
     enabled: true
     backoffLimit: 3
@@ -267,6 +268,14 @@ thunder:
       - "amp:repository:read"
       - "amp:profile:read"
       - "amp:profile:update-attributes"
+      - "amp:scope:create"
+      - "amp:scope:read"
+      - "amp:scope:update"
+      - "amp:scope:delete"
+      - "amp:agent-identity:read"
+      - "amp:agent-identity:create"
+      - "amp:agent-identity:update"
+      - "amp:agent-identity:delete"
     configMap:
       name: amp-thunder-bootstrap
       files:
@@ -410,6 +419,7 @@ thunder:
       logoUrl: "https://wso2.cachefly.net/wso2/sites/all/image_resources/logos/WSO2-Pulse-Orange.webp"
       redirectUris:
         - "http://localhost:3000/login"
+        - "http://console.amp.localhost:8080/login"
       grantTypes:
         - "authorization_code"
         - "refresh_token"

@@ -199,7 +199,41 @@ export function AddMCPToolConfigPanel({
             environmentVariables.length > 0 ? environmentVariables : undefined,
         },
       },
-      { onSuccess: () => onClose() },
+      {
+        onSuccess: (data) => {
+          onClose();
+          if (!orgId || !projectId || !agentId || !data?.uuid) return;
+          // Collect the one-time API key returned per env mapping so ViewMCPServer
+          // can surface it for copying — it is only present in the create response.
+          const authInfoByEnv: Record<
+            string,
+            { type: string; in: string; name: string; value?: string }
+          > = {};
+          for (const [envName, mapping] of Object.entries(
+            data.envMappings ?? {},
+          )) {
+            if (mapping.configuration?.authInfo) {
+              authInfoByEnv[envName] = mapping.configuration.authInfo;
+            }
+          }
+          // Land on the newly created configuration and open the "Connect to MCP
+          // Server" panel straight away (ViewMCPServer reads state.openEnvPanel /
+          // state.authInfoByEnv).
+          navigate(
+            generatePath(
+              absoluteRouteMap.children.org.children.projects.children.agents
+                .children.configure.children.mcpProxies.children.view.path,
+              {
+                orgId,
+                projectId,
+                agentId,
+                proxyId: encodeURIComponent(data.uuid),
+              },
+            ),
+            { state: { openEnvPanel: true, authInfoByEnv } },
+          );
+        },
+      },
     );
   }, [
     orgId,
@@ -213,6 +247,7 @@ export function AddMCPToolConfigPanel({
     suggestedConfigName,
     createConfig,
     onClose,
+    navigate,
   ]);
 
   const canSave =

@@ -33,8 +33,8 @@ import {
 import { Edit } from "@wso2/oxygen-ui-icons-react";
 import { DrawerWrapper, DrawerHeader, DrawerContent, TextInput, PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
-import { useGetAgentKind, useGetAgentKindVersion, useGetAgentEndpoints, useUpdateAgentKind } from "@agent-management-platform/api-client";
-import { SwaggerSpecViewer, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { useGetAgentKind, useGetAgentKindVersion, useGetBuild, useUpdateAgentKind } from "@agent-management-platform/api-client";
+import { SwaggerSpecViewer, parseOpenApiSpecContent, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -99,15 +99,16 @@ export const PublishVersionDetails: React.FC = () => {
     versionTag: versionId!,
   });
 
-  const { data: endpointsData, isLoading: isEndpointsLoading } = useGetAgentEndpoints(
-    { orgName: orgId!, projName: projectId!, agentName: agentId! },
-    { environment: "default" },
-  );
+  const { data: build, isLoading: isBuildLoading } = useGetBuild({
+    orgName: orgId!,
+    projName: version?.sourceProjectName,
+    agentName: version?.sourceAgentName,
+    buildName: version?.buildName,
+  });
 
-  const endpointKey = useMemo(() => Object.keys(endpointsData ?? {})[0] ?? "", [endpointsData]);
   const apiSpec = useMemo(
-    () => endpointsData?.[endpointKey]?.schema?.content as Record<string, unknown> | undefined,
-    [endpointsData, endpointKey],
+    () => parseOpenApiSpecContent(build?.inputInterface?.schema?.content),
+    [build],
   );
 
   const formattedDate = useMemo(
@@ -311,7 +312,7 @@ export const PublishVersionDetails: React.FC = () => {
               <Typography variant="subtitle1" fontWeight={600}>
                 API Specification
               </Typography>
-              {isEndpointsLoading ? (
+              {isBuildLoading ? (
                 <Skeleton variant="rounded" height={300} />
               ) : apiSpec ? (
                 <SwaggerSpecViewer
