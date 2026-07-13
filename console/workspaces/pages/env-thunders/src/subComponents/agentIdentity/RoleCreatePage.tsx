@@ -30,14 +30,15 @@ import { Plus } from "@wso2/oxygen-ui-icons-react";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
   useCreateAgentIdentityRole,
-  useListScopes,
+  useListAgentIdentityScopes,
 } from "@agent-management-platform/api-client";
 import { useFormValidation, useDirtyState } from "@agent-management-platform/views";
-import { absoluteRouteMap, type ScopeResponse } from "@agent-management-platform/types";
+import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   createAgentIdentityRoleSchema,
   type CreateAgentIdentityRoleFormValues,
 } from "./schemas";
+import type { ScopeChoice } from "./scopeChoice";
 
 export const RoleCreatePage: React.FC = () => {
   const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
@@ -47,9 +48,12 @@ export const RoleCreatePage: React.FC = () => {
     name: "",
     description: "",
   });
-  const [selectedScopes, setSelectedScopes] = useState<ScopeResponse[]>([]);
+  const [selectedScopes, setSelectedScopes] = useState<ScopeChoice[]>([]);
 
-  const { data: scopesData } = useListScopes({ orgName: orgId });
+  const { data: scopesData } = useListAgentIdentityScopes({
+    orgName: orgId,
+    envName: envName ?? "",
+  });
   const scopes = scopesData?.scopes ?? [];
 
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
@@ -93,7 +97,7 @@ export const RoleCreatePage: React.FC = () => {
         body: {
           name: formData.name.trim(),
           description: formData.description?.trim() || undefined,
-          scopes: selectedScopes.map((s) => s.name),
+          scopes: selectedScopes.map((s) => s.scope),
         },
       });
       resetDirty();
@@ -177,17 +181,17 @@ export const RoleCreatePage: React.FC = () => {
                   disableCloseOnSelect
                   options={scopes}
                   value={selectedScopes}
-                  onChange={(_e, value) => setSelectedScopes(value as ScopeResponse[])}
-                  getOptionLabel={(option) => (option as ScopeResponse).name}
+                  onChange={(_e, value) => setSelectedScopes(value as ScopeChoice[])}
+                  getOptionLabel={(option) => (option as ScopeChoice).scope}
                   isOptionEqualToValue={(option, value) =>
-                    (option as ScopeResponse).id === (value as ScopeResponse).id
+                    (option as ScopeChoice).scope === (value as ScopeChoice).scope
                   }
                   renderTags={(value, getTagProps) =>
                     value.map((option, index) => (
                       <Chip
                         {...getTagProps({ index })}
-                        key={option.id}
-                        label={option.name}
+                        key={option.scope}
+                        label={option.scope}
                         size="small"
                       />
                     ))

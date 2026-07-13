@@ -94,6 +94,19 @@ export interface AgentIdentityAgentListResponse {
   agents: AgentIdentityAgentResponse[];
 }
 
+// --- Scopes ---
+
+export interface AgentIdentityScopeEntry {
+  scope: string;
+  description?: string;
+  mcpProxyId: string;
+  mcpProxyName?: string;
+}
+
+export interface AgentIdentityScopeListResponse {
+  scopes: AgentIdentityScopeEntry[];
+}
+
 // --- Path params ---
 
 export type AgentIdentityEnvPathParams = OrgPathParams & { envName: string };

@@ -17,22 +17,22 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  useCreateScope,
-  useListScopes,
+  useCreateMCPProxyScope,
+  useDeleteMCPProxyScope,
+  useListMCPProxyScopes,
+  useUpdateMCPProxyScope,
 } from "@agent-management-platform/api-client";
 import type {
   APIKeyLocation,
   MCPEndpointConfig,
   MCPProxy,
-  MCPToolScopeBinding,
-  ScopeResponse,
+  MCPProxyScopeResponse,
 } from "@agent-management-platform/types";
 import {
   Alert,
   Autocomplete,
   Button,
   Chip,
-  CircularProgress,
   Collapse,
   createFilterOptions,
   FormControl,
@@ -69,11 +69,11 @@ const AUTHENTICATION_TYPE_OPTIONS: AuthenticationType[] = [
 ];
 
 // A scope option in the per-tool scope Autocomplete. The synthetic "isNew"
-// entry stands in for "create this scope and add it" — it never reaches
-// row.scopes, so `id` only needs to be present to satisfy ScopeResponse.
-type ScopeOption = ScopeResponse & { isNew?: boolean };
+// entry stands in for "create this scope (with this row's tool) on save" —
+// committing it just adds a pending placeholder to row.scopes; the actual
+// create/update/delete calls are reconciled against the server in handleSave.
+type ScopeOption = MCPProxyScopeResponse & { isNew?: boolean };
 
-const NEW_SCOPE_OPTION_ID = "__new_scope__";
 const filterScopeOptions = createFilterOptions<ScopeOption>();
 
 // A local editable row for the identity-security tool-scope-binding table.
@@ -82,13 +82,59 @@ const filterScopeOptions = createFilterOptions<ScopeOption>();
 type ToolScopeRow = {
   id: number;
   tool: string;
-  scopes: ScopeResponse[];
+  scopes: MCPProxyScopeResponse[];
 };
+
+type ScopeReconciliation = {
+  creates: { action: string; tools: string[] }[];
+  updates: { action: string; tools: string[] }[];
+  deletes: string[];
+};
+
+// Diffs the desired (action -> tools) mapping built from the current rows
+// against the last-fetched scope list, producing the minimal set of
+// create/update/delete operations needed to bring the server in sync.
+function computeScopeReconciliation(
+  rows: ToolScopeRow[],
+  catalogScopes: MCPProxyScopeResponse[],
+): ScopeReconciliation {
+  const desired = new Map<string, Set<string>>();
+  for (const row of rows) {
+    if (!row.tool) continue;
+    for (const scope of row.scopes) {
+      const tools = desired.get(scope.action) ?? new Set<string>();
+      tools.add(row.tool);
+      desired.set(scope.action, tools);
+    }
+  }
+  const original = new Map(catalogScopes.map((s) => [s.action, new Set(s.tools)]));
+  const setsEqual = (a: Set<string>, b: Set<string>) =>
+    a.size === b.size && [...a].every((v) => b.has(v));
+
+  const creates: { action: string; tools: string[] }[] = [];
+  const updates: { action: string; tools: string[] }[] = [];
+  const deletes: string[] = [];
+
+  for (const [action, tools] of desired) {
+    const originalTools = original.get(action);
+    if (!originalTools) {
+      creates.push({ action, tools: [...tools] });
+    } else if (!setsEqual(originalTools, tools)) {
+      updates.push({ action, tools: [...tools] });
+    }
+  }
+  for (const action of original.keys()) {
+    if (!desired.has(action)) deletes.push(action);
+  }
+
+  return { creates, updates, deletes };
+}
 
 export type MCPProxySecurityTabProps = {
   config: MCPEndpointConfig | undefined;
   selectedEndpointId: string;
   orgName: string | undefined;
+  proxyId: string | undefined;
   isLoading?: boolean;
   onUpdate: (fields: Partial<MCPEndpointConfig>) => Promise<MCPProxy>;
   isUpdating: boolean;
@@ -98,6 +144,7 @@ export function MCPProxySecurityTab({
   config,
   selectedEndpointId,
   orgName,
+  proxyId,
   isLoading = false,
   onUpdate,
   isUpdating,
@@ -170,67 +217,32 @@ export function MCPProxySecurityTab({
     [toolEntries, config?.policies],
   );
 
-  const { data: scopesData } = useListScopes(
-    { orgName },
-    { enabled: authenticationType === "identity" },
+  const { data: scopesData } = useListMCPProxyScopes(
+    { orgName: orgName ?? "", proxyId: proxyId ?? "" },
+    { enabled: authenticationType === "identity" && !!proxyId },
   );
-  const catalogScopes: ScopeResponse[] = useMemo(
+  const catalogScopes: MCPProxyScopeResponse[] = useMemo(
     () => scopesData?.scopes ?? [],
     [scopesData],
   );
-  const createScope = useCreateScope();
-
-  // Read via a ref inside the seed effect below rather than depending on
-  // catalogScopes directly — the catalog refetches whenever a scope is
-  // created inline (see handleToolScopeRowScopesChange), and re-seeding on
-  // every refetch would blow away rows/edits the user hasn't saved yet.
-  const catalogScopesRef = useRef<ScopeResponse[]>([]);
-  useEffect(() => {
-    catalogScopesRef.current = catalogScopes;
-  }, [catalogScopes]);
+  const createMCPProxyScope = useCreateMCPProxyScope();
+  const updateMCPProxyScope = useUpdateMCPProxyScope();
+  const deleteMCPProxyScope = useDeleteMCPProxyScope();
 
   // One row per binding, not one row per tool: the same tool can be bound
   // more than once, so rows are keyed by a local id rather than the tool
-  // name. Starts empty — rows only come from saved bindings or "Add Tool",
-  // never auto-populated from the environment's discovered tools.
+  // name. Starts empty — rows only come from the fetched scope list or
+  // "Add Tool", never auto-populated from the environment's discovered tools.
   const [toolScopeRows, setToolScopeRows] = useState<ToolScopeRow[]>([]);
   const lastSavedToolScopeRowsRef = useRef<ToolScopeRow[]>([]);
   const nextRowIdRef = useRef(0);
   const [toolScopesError, setToolScopesError] = useState<string | undefined>();
-  // Tracks which row is currently creating a new catalog scope inline, so its
-  // Autocomplete alone shows a loading spinner while the create request is in flight.
-  const [creatingScopeRowId, setCreatingScopeRowId] = useState<number | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (!selectedEndpointId) return;
-    // Bindings for scopes no longer in the catalog still display (by name)
-    // rather than silently dropping, so a removed/renamed scope stays visible
-    // until the binding itself is edited.
-    const rows: ToolScopeRow[] = (config?.toolScopeBindings ?? []).map(
-      (binding) => ({
-        id: nextRowIdRef.current++,
-        tool: binding.tool,
-        scopes: binding.scopes.map(
-          (name) =>
-            catalogScopesRef.current.find((s) => s.name === name) ?? {
-              id: name,
-              name,
-            },
-        ),
-      }),
-    );
-    setToolScopeRows(rows);
-    lastSavedToolScopeRowsRef.current = rows;
-    setToolScopesError(undefined);
-  }, [config, selectedEndpointId]);
 
   const serializeToolScopeRows = (rows: ToolScopeRow[]) =>
     JSON.stringify(
       rows.map((row) => ({
         tool: row.tool,
-        scopes: [...row.scopes.map((s) => s.name)].sort(),
+        scopes: [...row.scopes.map((s) => s.action)].sort(),
       })),
     );
 
@@ -240,6 +252,53 @@ export function MCPProxySecurityTab({
       serializeToolScopeRows(lastSavedToolScopeRowsRef.current)
     );
   }, [toolScopeRows]);
+
+  // Rows are a view derived from the scope list, not a separately-stored
+  // binding: each scope now owns its own tools list directly, so a row is
+  // built per distinct tool referenced by any scope.
+  const buildRowsFromScopes = (scopes: MCPProxyScopeResponse[]): ToolScopeRow[] => {
+    const toolToScopes = new Map<string, MCPProxyScopeResponse[]>();
+    for (const scope of scopes) {
+      for (const tool of scope.tools) {
+        const scopesForTool = toolToScopes.get(tool) ?? [];
+        scopesForTool.push(scope);
+        toolToScopes.set(tool, scopesForTool);
+      }
+    }
+    return Array.from(toolToScopes.entries()).map(([tool, rowScopes]) => ({
+      id: nextRowIdRef.current++,
+      tool,
+      scopes: rowScopes,
+    }));
+  };
+
+  // Switching endpoint tabs discards unsaved row edits, consistent with the
+  // auth-fields effect above — even though scopes are shared across every
+  // endpoint of the proxy, this tab's Save/Discard state is still per endpoint.
+  // Reads catalogScopes without depending on it — the effect below owns
+  // reseeding on scope-list changes, so this one only reacts to the tab switch.
+  useEffect(() => {
+    if (!selectedEndpointId) return;
+    const rows = buildRowsFromScopes(catalogScopes);
+    setToolScopeRows(rows);
+    lastSavedToolScopeRowsRef.current = rows;
+    setToolScopesError(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogScopes changes are handled by the effect below
+  }, [selectedEndpointId]);
+
+  // Reseed when the scope list refetches (e.g. right after Save invalidates
+  // the query), but only while there are no unsaved edits — otherwise this
+  // would clobber in-progress changes on a stray background refetch. Doesn't
+  // depend on selectedEndpointId — the effect above already handles tab
+  // switches, and scopes are proxy-level so switching tabs alone never
+  // changes catalogScopes.
+  useEffect(() => {
+    if (!selectedEndpointId || toolScopesDirty) return;
+    const rows = buildRowsFromScopes(catalogScopes);
+    setToolScopeRows(rows);
+    lastSavedToolScopeRowsRef.current = rows;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toolScopesDirty is a guard, not a trigger
+  }, [catalogScopes]);
 
   const handleAddToolScopeRow = useCallback(() => {
     setToolScopeRows((prev) => [
@@ -261,48 +320,21 @@ export function MCPProxySecurityTab({
     [],
   );
 
-  const setRowScopes = useCallback((rowId: number, scopes: ScopeResponse[]) => {
+  const setRowScopes = useCallback((rowId: number, scopes: MCPProxyScopeResponse[]) => {
     setToolScopeRows((prev) =>
       prev.map((row) => (row.id === rowId ? { ...row, scopes } : row)),
     );
   }, []);
 
-  // Selecting the synthetic "+ Add Scope" option creates it in the catalog
-  // first, then adds the real scope to the row once creation succeeds — the
-  // placeholder never lands in row.scopes, so a failed create just leaves the
-  // row as it was (the error itself surfaces via useCreateScope's snackbar).
+  // Selecting the synthetic "+ Add Scope" option just commits a pending
+  // placeholder to the row — it isn't created on the server until Save,
+  // when the final set of tools across every row referencing this action is
+  // known (see handleSave's reconciliation against the fetched scope list).
   const handleToolScopeRowScopesChange = useCallback(
     (rowId: number, options: ScopeOption[]) => {
-      const newOption = options.find((option) => option.isNew);
-      if (!newOption) {
-        setRowScopes(rowId, options);
-        return;
-      }
-      const committed = options.filter((option) => option !== newOption);
-      setRowScopes(rowId, committed);
-      setCreatingScopeRowId(rowId);
-      void createScope
-        .mutateAsync({ params: { orgName }, body: { name: newOption.name } })
-        .then((created) => {
-          setToolScopeRows((prev) =>
-            prev.map((row) =>
-              row.id === rowId
-                ? { ...row, scopes: [...row.scopes, created] }
-                : row,
-            ),
-          );
-        })
-        .catch(() => {
-          // Error already shown via useCreateScope's snackbar; nothing to roll back
-          // since the placeholder was never committed to row.scopes.
-        })
-        .finally(() => {
-          setCreatingScopeRowId((current) =>
-            current === rowId ? null : current,
-          );
-        });
+      setRowScopes(rowId, options);
     },
-    [orgName, createScope, setRowScopes],
+    [setRowScopes],
   );
 
   const isDirty = authIsDirty || toolScopesDirty;
@@ -345,18 +377,6 @@ export function MCPProxySecurityTab({
     }
     setToolScopesError(undefined);
 
-    // Scope bindings only apply under Agent Identity security — switching to
-    // API Key (or no) authentication clears them rather than resending
-    // whatever was last mirrored locally in toolScopeRows.
-    const savedToolScopeRows =
-      authenticationType === "identity" ? toolScopeRows : [];
-    const nextBindings: MCPToolScopeBinding[] = savedToolScopeRows.map(
-      (row) => ({
-        tool: row.tool,
-        scopes: row.scopes.map((s) => s.name),
-      }),
-    );
-
     try {
       await onUpdate({
         security: {
@@ -370,10 +390,38 @@ export function MCPProxySecurityTab({
             enabled: authenticationType === "identity",
           },
         },
-        toolScopeBindings: nextBindings,
       });
-      lastSavedToolScopeRowsRef.current = savedToolScopeRows;
-      setToolScopeRows(savedToolScopeRows);
+
+      // Scopes belong to the proxy, not this endpoint's auth mode, and are
+      // saved via their own REST calls rather than bundled into the security
+      // payload above.
+      if (authenticationType === "identity" && toolScopesDirty && orgName && proxyId) {
+        const { creates, updates, deletes } = computeScopeReconciliation(
+          toolScopeRows,
+          catalogScopes,
+        );
+
+        await Promise.all([
+          ...creates.map((c) =>
+            createMCPProxyScope.mutateAsync({
+              params: { orgName, proxyId },
+              body: { action: c.action, tools: c.tools },
+            }),
+          ),
+          ...updates.map((u) =>
+            updateMCPProxyScope.mutateAsync({
+              params: { orgName, proxyId, scopeAction: u.action },
+              body: { tools: u.tools },
+            }),
+          ),
+          ...deletes.map((action) =>
+            deleteMCPProxyScope.mutateAsync({ orgName, proxyId, scopeAction: action }),
+          ),
+        ]);
+
+        lastSavedToolScopeRowsRef.current = toolScopeRows;
+      }
+
       lastSavedAuthRef.current = {
         type: authenticationType,
         key: authenticationType === "apiKey" ? keyValue.trim() : "",
@@ -389,7 +437,21 @@ export function MCPProxySecurityTab({
         severity: "error",
       });
     }
-  }, [config, authenticationType, keyValue, keyIn, toolScopeRows, onUpdate]);
+  }, [
+    config,
+    authenticationType,
+    keyValue,
+    keyIn,
+    toolScopeRows,
+    toolScopesDirty,
+    catalogScopes,
+    orgName,
+    proxyId,
+    onUpdate,
+    createMCPProxyScope,
+    updateMCPProxyScope,
+    deleteMCPProxyScope,
+  ]);
 
   const isDisabled = isLoading || !config;
   const noToolsForRbac = !isLoading && config && toolEntries.length === 0;
@@ -565,8 +627,6 @@ export function MCPProxySecurityTab({
                             disableCloseOnSelect
                             options={catalogScopes}
                             value={row.scopes}
-                            loading={creatingScopeRowId === row.id}
-                            disabled={creatingScopeRowId === row.id}
                             onChange={(_e, value) =>
                               handleToolScopeRowScopesChange(
                                 row.id,
@@ -580,31 +640,32 @@ export function MCPProxySecurityTab({
                               );
                               const inputValue = params.inputValue.trim();
                               const exists = options.some(
-                                (option) => option.name === inputValue,
+                                (option) => option.action === inputValue,
                               );
                               if (inputValue.length > 0 && !exists) {
                                 filtered.push({
-                                  id: NEW_SCOPE_OPTION_ID,
-                                  name: inputValue,
+                                  action: inputValue,
+                                  scope: inputValue,
+                                  tools: [],
                                   isNew: true,
                                 });
                               }
                               return filtered;
                             }}
                             getOptionLabel={(option) =>
-                              (option as ScopeOption).name
+                              (option as ScopeOption).action
                             }
                             isOptionEqualToValue={(option, value) =>
-                              (option as ScopeOption).name ===
-                              (value as ScopeOption).name
+                              (option as ScopeOption).action ===
+                              (value as ScopeOption).action
                             }
                             renderOption={(props, option) => {
                               const scopeOption = option as ScopeOption;
                               return (
-                                <li {...props} key={scopeOption.id}>
+                                <li {...props} key={scopeOption.action}>
                                   {scopeOption.isNew
-                                    ? `+ Add Scope "${scopeOption.name}"`
-                                    : scopeOption.name}
+                                    ? `+ Add Scope "${scopeOption.action}"`
+                                    : scopeOption.action}
                                 </li>
                               );
                             }}
@@ -612,33 +673,14 @@ export function MCPProxySecurityTab({
                               value.map((option, index) => (
                                 <Chip
                                   {...getTagProps({ index })}
-                                  key={option.name}
-                                  label={option.name}
+                                  key={option.action}
+                                  label={option.action}
                                   size="small"
                                 />
                               ))
                             }
                             renderInput={(params) => (
-                              <TextField
-                                {...params}
-                                placeholder="Add scopes..."
-                                slotProps={{
-                                  input: {
-                                    ...params.InputProps,
-                                    endAdornment: (
-                                      <>
-                                        {creatingScopeRowId === row.id ? (
-                                          <CircularProgress
-                                            color="inherit"
-                                            size={16}
-                                          />
-                                        ) : null}
-                                        {params.InputProps.endAdornment}
-                                      </>
-                                    ),
-                                  },
-                                }}
-                              />
+                              <TextField {...params} placeholder="Add scopes..." />
                             )}
                             noOptionsText="No scopes in the catalog"
                             sx={{ minWidth: 280 }}

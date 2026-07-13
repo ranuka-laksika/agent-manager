@@ -36,6 +36,7 @@ import {
   addAgentIdentityRoleAssignees,
   removeAgentIdentityRoleAssignees,
   listAgentIdentityAgents,
+  listAgentIdentityScopes,
 } from "../apis";
 import type {
   ThunderGroup,
@@ -50,6 +51,7 @@ import type {
   AgentIdentityAssignmentsRequest,
   AgentIdentityRoleAssignmentsResponse,
   AgentIdentityAgentListResponse,
+  AgentIdentityScopeListResponse,
   AgentIdentityEnvPathParams,
   AgentIdentityGroupPathParams,
   AgentIdentityRolePathParams,
@@ -283,6 +285,17 @@ export function useListAgentIdentityAgents(params: AgentIdentityEnvPathParams) {
   return useApiQuery<AgentIdentityAgentListResponse>({
     queryKey: ['agent-identity-agents', params],
     queryFn: () => listAgentIdentityAgents(params, getToken),
+    enabled: !!params.orgName && !!params.envName,
+  });
+}
+
+// --- Scopes ---
+
+export function useListAgentIdentityScopes(params: AgentIdentityEnvPathParams) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentIdentityScopeListResponse>({
+    queryKey: ['agent-identity-scopes', params],
+    queryFn: () => listAgentIdentityScopes(params, getToken),
     enabled: !!params.orgName && !!params.envName,
   });
 }

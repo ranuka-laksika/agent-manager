@@ -386,7 +386,6 @@ export function draftToEndpoint(
     capabilities,
     policies: prunePoliciesForCapabilities(existing?.policies, capabilities),
     security: existing?.security ?? DEFAULT_ENDPOINT_SECURITY,
-    toolScopeBindings: existing?.toolScopeBindings,
     environments: draft.environments.map((environmentUuid) => ({
       environmentUuid,
     })),

@@ -18,36 +18,35 @@
 
 import type { OrgPathParams } from './common';
 
-// Org-global, resource-agnostic scope catalog used as role permissions for
-// agent identities.
+// Per-MCP-proxy scope catalog. Each scope is an action on the proxy's resource
+// server and directly owns the list of tools it authorizes; the token scope
+// string ("scope") is derived as "<proxy-handle>:<action>".
 
-export interface ScopeResponse {
-  id: string;
-  name: string;
+export interface MCPProxyScopeRequest {
+  action: string;
   description?: string;
+  tools: string[];
+}
+
+export interface MCPProxyScopeUpdateRequest {
+  description?: string;
+  tools?: string[];
+}
+
+export interface MCPProxyScopeResponse {
+  action: string;
+  scope: string;
+  description?: string;
+  tools: string[];
   createdAt?: string;
   updatedAt?: string;
-  // Number of MCP proxy environment tool bindings referencing this scope
-  bindingCount?: number;
 }
 
-export interface ScopeListResponse {
-  scopes: ScopeResponse[];
-}
-
-export interface ScopeRequest {
-  name: string;
-  description?: string;
-}
-
-export interface ScopeUpdateRequest {
-  description?: string;
+export interface MCPProxyScopeListResponse {
+  scopes: MCPProxyScopeResponse[];
 }
 
 // --- Path params ---
 
-export type ListScopesPathParams = OrgPathParams;
-export type CreateScopePathParams = OrgPathParams;
-export type ScopePathParams = OrgPathParams & { scopeName: string | undefined };
-export type UpdateScopePathParams = ScopePathParams;
-export type DeleteScopePathParams = ScopePathParams;
+export type MCPProxyScopesPathParams = OrgPathParams & { proxyId: string };
+export type MCPProxyScopePathParams = MCPProxyScopesPathParams & { scopeAction: string };

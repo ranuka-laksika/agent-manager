@@ -30,6 +30,7 @@ import type {
   AgentIdentityAssignmentsRequest,
   AgentIdentityRoleAssignmentsResponse,
   AgentIdentityAgentListResponse,
+  AgentIdentityScopeListResponse,
   AgentIdentityEnvPathParams,
   AgentIdentityGroupPathParams,
   AgentIdentityRolePathParams,
@@ -280,6 +281,19 @@ export async function listAgentIdentityAgents(
   const { orgName = "default", envName } = params;
   const token = getToken ? await getToken() : undefined;
   const res = await httpGET(`${envBase(orgName, envName)}/agents`, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// --- Scopes ---
+
+export async function listAgentIdentityScopes(
+  params: AgentIdentityEnvPathParams,
+  getToken?: () => Promise<string>,
+): Promise<AgentIdentityScopeListResponse> {
+  const { orgName = "default", envName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(`${envBase(orgName, envName)}/scopes`, { token });
   if (!res.ok) throw await res.json();
   return res.json();
 }

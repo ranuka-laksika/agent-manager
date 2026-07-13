@@ -424,6 +424,7 @@ export function ViewMCPProxy() {
                       config={selectedConfig}
                       selectedEndpointId={selectedEndpointId}
                       orgName={orgId}
+                      proxyId={routeProxyId}
                       isLoading={isLoading}
                       onUpdate={updateSelectedEndpointConfig}
                       isUpdating={updateMCPProxy.isPending}

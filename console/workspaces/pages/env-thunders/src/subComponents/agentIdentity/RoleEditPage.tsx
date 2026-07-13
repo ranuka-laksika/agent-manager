@@ -43,12 +43,11 @@ import {
   useAddAgentIdentityRoleAssignees,
   useRemoveAgentIdentityRoleAssignees,
   useUpdateAgentIdentityRole,
-  useListScopes,
+  useListAgentIdentityScopes,
 } from "@agent-management-platform/api-client";
 import {
   absoluteRouteMap,
   type AgentIdentityAgentResponse,
-  type ScopeResponse,
   type ThunderGroup,
 } from "@agent-management-platform/types";
 import {
@@ -58,6 +57,7 @@ import {
 } from "@agent-management-platform/shared-component";
 import { useAgentLookup } from "./useAgentLookup";
 import { useAssignmentDelta } from "./useAssignmentDelta";
+import type { ScopeChoice } from "./scopeChoice";
 
 type ActiveTab = "permissions" | "agents" | "groups";
 
@@ -93,7 +93,10 @@ export const RoleEditPage: React.FC = () => {
     { orgName: orgId, envName: envName ?? "" },
     { offset: 0, limit: GROUPS_PAGE_SIZE },
   );
-  const { data: scopesData, isLoading: isLoadingScopes } = useListScopes({ orgName: orgId });
+  const { data: scopesData, isLoading: isLoadingScopes } = useListAgentIdentityScopes({
+    orgName: orgId,
+    envName: envName ?? "",
+  });
 
   const { mutateAsync: addAssignees } = useAddAgentIdentityRoleAssignees();
   const { mutateAsync: removeAssignees } = useRemoveAgentIdentityRoleAssignees();
@@ -102,7 +105,7 @@ export const RoleEditPage: React.FC = () => {
   // --- Derived server state ---
   const { agents, displayName } = useAgentLookup(agentsData?.agents ?? []);
   const allGroups: ThunderGroup[] = useMemo(() => groupsData?.groups ?? [], [groupsData]);
-  const catalogScopes: ScopeResponse[] = useMemo(() => scopesData?.scopes ?? [], [scopesData]);
+  const catalogScopes: ScopeChoice[] = useMemo(() => scopesData?.scopes ?? [], [scopesData]);
 
   const initialAgentIds: string[] = useMemo(
     () => (assignmentsData?.users ?? []).map((u) => u.id),
@@ -128,17 +131,18 @@ export const RoleEditPage: React.FC = () => {
   const groupDelta = useAssignmentDelta<ThunderGroup>(initialGroupIds, (g) => g.id);
 
   // --- Permissions tab: full selected-state approach ---
-  const [selectedScopes, setSelectedScopes] = useState<ScopeResponse[]>([]);
+  const [selectedScopes, setSelectedScopes] = useState<ScopeChoice[]>([]);
   const hasEditedScopes = useRef(false);
 
   useEffect(() => {
     if (!hasEditedScopes.current && catalogScopes.length > 0) {
-      const catalogByName = new Map(catalogScopes.map((s) => [s.name, s]));
-      // A scope assigned to this role may no longer be in the catalog (deleted
-      // or renamed) — keep it as a placeholder so it isn't silently dropped
-      // (and dirtied) on load, and stays in the payload if the role is saved.
+      const catalogByScope = new Map(catalogScopes.map((s) => [s.scope, s]));
+      // A scope assigned to this role may no longer be in the environment's
+      // aggregate (its owning proxy may no longer be deployed here) — keep it
+      // as a placeholder so it isn't silently dropped (and dirtied) on load,
+      // and stays in the payload if the role is saved.
       setSelectedScopes(
-        initialScopeNames.map((name) => catalogByName.get(name) ?? { id: name, name }),
+        initialScopeNames.map((name) => catalogByScope.get(name) ?? { scope: name }),
       );
     }
   }, [initialScopeNames, catalogScopes]);
@@ -172,7 +176,7 @@ export const RoleEditPage: React.FC = () => {
   );
 
   const selectedScopeNames = useMemo(
-    () => new Set(selectedScopes.map((s) => s.name)),
+    () => new Set(selectedScopes.map((s) => s.scope)),
     [selectedScopes],
   );
 
@@ -182,14 +186,14 @@ export const RoleEditPage: React.FC = () => {
   const handleRemoveGroup = groupDelta.handleRemove;
 
   // --- Permissions handlers ---
-  const handleScopesChange = (_e: React.SyntheticEvent, newValue: ScopeResponse[]) => {
+  const handleScopesChange = (_e: React.SyntheticEvent, newValue: ScopeChoice[]) => {
     hasEditedScopes.current = true;
     setSelectedScopes(newValue);
   };
 
-  const handleRemoveScope = (name: string) => {
+  const handleRemoveScope = (scope: string) => {
     hasEditedScopes.current = true;
-    setSelectedScopes((prev) => prev.filter((s) => s.name !== name));
+    setSelectedScopes((prev) => prev.filter((s) => s.scope !== scope));
   };
 
   // --- Save ---
@@ -243,7 +247,7 @@ export const RoleEditPage: React.FC = () => {
               body: {
                 name: roleData.name,
                 description: roleData.description,
-                scopes: selectedScopes.map((s) => s.name),
+                scopes: selectedScopes.map((s) => s.scope),
               },
             })
           : null,
@@ -267,7 +271,7 @@ export const RoleEditPage: React.FC = () => {
     const initial = new Set(initialScopeNames);
     return (
       initial.size !== selectedScopes.length ||
-      selectedScopes.some((s) => !initial.has(s.name))
+      selectedScopes.some((s) => !initial.has(s.scope))
     );
   }, [isPermissionsReadOnly, initialScopeNames, selectedScopes]);
 
@@ -327,20 +331,20 @@ export const RoleEditPage: React.FC = () => {
                       options={catalogScopes}
                       value={selectedScopes}
                       onChange={handleScopesChange}
-                      getOptionLabel={(option) => (option as ScopeResponse).name}
+                      getOptionLabel={(option) => (option as ScopeChoice).scope}
                       isOptionEqualToValue={(option, value) =>
-                        (option as ScopeResponse).id === (value as ScopeResponse).id
+                        (option as ScopeChoice).scope === (value as ScopeChoice).scope
                       }
                       renderTags={() => null}
                       renderOption={(props, option) => (
-                        <li {...props} key={(option as ScopeResponse).id}>
+                        <li {...props} key={(option as ScopeChoice).scope}>
                           <Box>
                             <Typography variant="body2">
-                              {(option as ScopeResponse).name}
+                              {(option as ScopeChoice).scope}
                             </Typography>
-                            {(option as ScopeResponse).description && (
+                            {(option as ScopeChoice).description && (
                               <Typography variant="caption" color="text.secondary">
-                                {(option as ScopeResponse).description}
+                                {(option as ScopeChoice).description}
                               </Typography>
                             )}
                           </Box>
@@ -362,15 +366,15 @@ export const RoleEditPage: React.FC = () => {
                 ) : (
                   <Stack direction="row" flexWrap="wrap" gap={1}>
                     {catalogScopes
-                      .filter((s) => selectedScopeNames.has(s.name))
+                      .filter((s) => selectedScopeNames.has(s.scope))
                       .map((s) => (
                         <Chip
-                          key={s.id}
-                          label={s.name}
+                          key={s.scope}
+                          label={s.scope}
                           size="small"
                           onDelete={
                             !isPermissionsReadOnly
-                              ? () => handleRemoveScope(s.name)
+                              ? () => handleRemoveScope(s.scope)
                               : undefined
                           }
                         />
