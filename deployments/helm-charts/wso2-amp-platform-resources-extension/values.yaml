@@ -92,6 +92,18 @@ global:
 kubectl:
   image: bitnamilegacy/kubectl:1.32.4
 
+# Build workflow pod hardening
+buildWorkflows:
+  # Run build pods inside a Linux user namespace (hostUsers: false) so the
+  # build's root user is unprivileged on the node. This requires idmapped-mount
+  # support for every filesystem the pod mounts (overlayfs AND tmpfs/projected
+  # volumes) — in practice Linux kernel >= 6.3 (e.g. Ubuntu 24.04, Amazon Linux
+  # 2023, recent COS). On older kernels (e.g. Ubuntu 22.04's 5.15, Amazon Linux
+  # 2's 5.10) every build pod fails at sandbox creation with
+  # "failed to set MOUNT_ATTR_IDMAP ... invalid argument" — set this to false
+  # on such nodes to run builds without user namespaces.
+  userNamespaces: true
+
 # Environment configuration
 environment:
   # Name of the default environment
