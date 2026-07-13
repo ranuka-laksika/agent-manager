@@ -18,6 +18,7 @@
 
 import { type AgentPathParams, type Build, type Configurations, type ListQuery, type OrgProjPathParams, type PaginationMeta, type RepositoryConfig } from './common';
 import type { EnvProviderConfiguration, EnvironmentVariableConfig } from './agent-model-configs';
+import type { ThunderGroup, ThunderRole } from './identities';
 
 export interface ModelConfigRequest {
   providerName: string;
@@ -136,6 +137,27 @@ export type GenerateAgentTokenPathParams = AgentPathParams;
 
 export interface GenerateAgentTokenQuery {
   environment?: string;
+}
+
+// --- Agent identity: roles/groups (read-only) ---
+
+export type GetAgentRolesPathParams = AgentPathParams;
+export type GetAgentGroupsPathParams = AgentPathParams;
+
+export interface GetAgentRolesQuery {
+  environment: string;
+}
+
+export interface GetAgentGroupsQuery {
+  environment: string;
+}
+
+export interface AgentRolesResponse {
+  roles: ThunderRole[];
+}
+
+export interface AgentGroupsResponse {
+  groups: ThunderGroup[];
 }
 
 

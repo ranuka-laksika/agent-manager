@@ -27,7 +27,13 @@ export const generatedRouteMap =  {
                 "agents": {
                   "path": "/org/:orgId/thunder-instances/view/:envName/agents",
                   "wildPath": "/org/:orgId/thunder-instances/view/:envName/agents/*",
-                  "children": {}
+                  "children": {
+                    "detail": {
+                      "path": "/org/:orgId/thunder-instances/view/:envName/agents/:projectName/:agentName",
+                      "wildPath": "/org/:orgId/thunder-instances/view/:envName/agents/:projectName/:agentName/*",
+                      "children": {}
+                    }
+                  }
                 },
                 "groups": {
                   "path": "/org/:orgId/thunder-instances/view/:envName/groups",

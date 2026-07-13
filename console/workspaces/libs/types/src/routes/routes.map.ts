@@ -46,7 +46,13 @@ export const rootRouteMap: AppRoute = {
                                 agents: {
                                     path: 'agents',
                                     index: true,
-                                    children: {},
+                                    children: {
+                                        detail: {
+                                            path: ':projectName/:agentName',
+                                            index: true,
+                                            children: {},
+                                        },
+                                    },
                                 },
                                 groups: {
                                     path: 'groups',

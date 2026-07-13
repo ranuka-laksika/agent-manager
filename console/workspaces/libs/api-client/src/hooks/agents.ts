@@ -17,7 +17,7 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent, updateAgentBuildParameters } from "../apis";
+import { createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent, updateAgentBuildParameters, getAgentRoles, getAgentGroups } from "../apis";
 import type {
   AgentListResponse,
   AgentResponse,
@@ -35,6 +35,12 @@ import type {
   GenerateAgentTokenQuery,
   TokenRequest,
   TokenResponse,
+  GetAgentRolesPathParams,
+  GetAgentRolesQuery,
+  AgentRolesResponse,
+  GetAgentGroupsPathParams,
+  GetAgentGroupsQuery,
+  AgentGroupsResponse,
 } from "@agent-management-platform/types";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
@@ -134,5 +140,25 @@ export function useGenerateAgentToken(
     queryKey: ['agent-token', params.agentName, params.projName, params.orgName, body?.expires_in, query?.environment],
     queryFn: () => generateAgentToken(params, body, query, getToken),
     enabled: enabled
+  });
+}
+
+// --- Agent identity: roles/groups (read-only) ---
+
+export function useGetAgentRoles(params: GetAgentRolesPathParams, query: GetAgentRolesQuery) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentRolesResponse>({
+    queryKey: ['agent-roles', params, query],
+    queryFn: () => getAgentRoles(params, query, getToken),
+    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+  });
+}
+
+export function useGetAgentGroups(params: GetAgentGroupsPathParams, query: GetAgentGroupsQuery) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentGroupsResponse>({
+    queryKey: ['agent-groups', params, query],
+    queryFn: () => getAgentGroups(params, query, getToken),
+    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
   });
 }

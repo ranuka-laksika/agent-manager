@@ -26,9 +26,9 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import { AlertTriangle, Search, Users } from "@wso2/oxygen-ui-icons-react";
-import { useParams } from "react-router-dom";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListAgentIdentityAgents } from "@agent-management-platform/api-client";
-import type { AgentIdentityAgentResponse } from "@agent-management-platform/types";
+import { absoluteRouteMap, type AgentIdentityAgentResponse } from "@agent-management-platform/types";
 
 const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
 const MONO_SX = { fontFamily: "monospace" } as const;
@@ -50,6 +50,7 @@ const matchesQuery = (agent: AgentIdentityAgentResponse, query: string) =>
 
 export const AgentsTab: React.FC = () => {
   const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
 
   const { data, isLoading, error } = useListAgentIdentityAgents({
@@ -58,6 +59,18 @@ export const AgentsTab: React.FC = () => {
   });
 
   const agents = useMemo(() => data?.agents ?? [], [data]);
+
+  const agentsNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.agents;
+  const agentDetailPath = (agent: AgentIdentityAgentResponse) =>
+    orgId && envName
+      ? generatePath(agentsNode.children.detail.path, {
+          orgId,
+          envName,
+          projectName: agent.projectName,
+          agentName: agent.agentName,
+        })
+      : "#";
 
   const filteredAgents = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -115,7 +128,13 @@ export const AgentsTab: React.FC = () => {
                 ))}
               {!isLoading &&
                 filteredAgents.map((agent) => (
-                  <ListingTable.Row key={`${agent.projectName}/${agent.agentName}`} variant="table">
+                  <ListingTable.Row
+                    key={`${agent.projectName}/${agent.agentName}`}
+                    variant="table"
+                    hover
+                    clickable
+                    onClick={() => navigate(agentDetailPath(agent))}
+                  >
                     <ListingTable.Cell>
                       <ListingTable.CellIcon
                         icon={

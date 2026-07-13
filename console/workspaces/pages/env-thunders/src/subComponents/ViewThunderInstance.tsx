@@ -57,6 +57,7 @@ import { copyToClipboard } from "@agent-management-platform/shared-component";
 import { PageLayout, useSnackBar } from "@agent-management-platform/views";
 import { ThunderInstanceOverviewTab } from "./ThunderInstanceOverviewTab";
 import { AgentsTab } from "./agentIdentity/AgentsTab";
+import { AgentDetailPage } from "./agentIdentity/AgentDetailPage";
 import { GroupsPage } from "./agentIdentity/GroupsPage";
 import { GroupCreatePage } from "./agentIdentity/GroupCreatePage";
 import { GroupEditPage } from "./agentIdentity/GroupEditPage";
@@ -238,6 +239,7 @@ export const ViewThunderInstance: React.FC = () => {
                   element={<ThunderInstanceOverviewTab instance={instance} onCopy={handleCopy} />}
                 />
                 <Route path="agents" element={<AgentsTab />} />
+                <Route path="agents/:projectName/:agentName" element={<AgentDetailPage />} />
                 <Route path="groups" element={<GroupsPage />} />
                 <Route path="groups/create" element={<GroupCreatePage />} />
                 <Route path="groups/:groupId" element={<GroupEditPage />} />

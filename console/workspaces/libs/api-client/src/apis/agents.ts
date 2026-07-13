@@ -35,6 +35,12 @@ import type {
   GenerateAgentTokenQuery,
   TokenRequest,
   TokenResponse,
+  GetAgentRolesPathParams,
+  GetAgentRolesQuery,
+  AgentRolesResponse,
+  GetAgentGroupsPathParams,
+  GetAgentGroupsQuery,
+  AgentGroupsResponse,
 } from "@agent-management-platform/types";
 
 export async function listAgents(
@@ -191,6 +197,40 @@ export async function generateAgentToken(
     `/agents/${encodeURIComponent(agentName)}/token`;
   
   const res = await httpPOST(url, body || {}, { searchParams: search, token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// --- Agent identity: roles/groups (read-only) ---
+
+export async function getAgentRoles(
+  params: GetAgentRolesPathParams,
+  query: GetAgentRolesQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentRolesResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const url =
+    `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}` +
+    `/projects/${encodeURIComponent(projName)}` +
+    `/agents/${encodeURIComponent(agentName ?? "")}/roles`;
+  const res = await httpGET(url, { searchParams: { environment: query.environment }, token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function getAgentGroups(
+  params: GetAgentGroupsPathParams,
+  query: GetAgentGroupsQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentGroupsResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const url =
+    `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}` +
+    `/projects/${encodeURIComponent(projName)}` +
+    `/agents/${encodeURIComponent(agentName ?? "")}/groups`;
+  const res = await httpGET(url, { searchParams: { environment: query.environment }, token });
   if (!res.ok) throw await res.json();
   return res.json();
 }
