@@ -145,11 +145,13 @@ export function EndpointFormFields({
     setFetchedInfo(null);
   }, []);
 
-  const performFetch = useCallback(async () => {
-    // Guards against a debounced call landing while a previous fetch for this form
-    // is still in flight (e.g. a slow request outlasting the debounce window).
-    if (fetchServerInfo.isPending) return;
+  // Identifies the latest performFetch call whose network request should be allowed
+  // to update state. A slow request can still be in flight when the debounced URL/auth
+  // change fires the next one; without this, whichever resolves last wins, which isn't
+  // necessarily the latest input.
+  const fetchGenerationRef = useRef(0);
 
+  const performFetch = useCallback(async () => {
     const urlValidationError = validateEndpointUrl(trimmedUrl, {
       requiredMessage: "Enter a valid MCP Proxy endpoint URL.",
       invalidMessage: "Enter a valid MCP Proxy endpoint URL.",
@@ -186,13 +188,18 @@ export function EndpointFormFields({
         ? { url: trimmedUrl, auth: { type: "api-key" as const, header, value } }
         : { url: trimmedUrl };
 
+    const generation = ++fetchGenerationRef.current;
     try {
       const result = await fetchServerInfo.mutateAsync({
         params: { orgName: orgId },
         body,
       });
+      // A newer fetch was started while this one was in flight — its result (or
+      // the newer one still pending) takes precedence, so drop this stale one.
+      if (generation !== fetchGenerationRef.current) return;
       setFetchedInfo(result);
     } catch (err: unknown) {
+      if (generation !== fetchGenerationRef.current) return;
       setFetchedInfo(null);
       if (
         typeof err === "object" &&

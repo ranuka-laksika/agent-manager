@@ -112,27 +112,37 @@ export function MCPProxySecurityTab({
   } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ keyValue?: string }>({});
 
+  // Tracks what was last confirmed persisted (seeded from config, refreshed on
+  // save) rather than re-deriving "saved" straight from the config prop on
+  // every render — config only reflects a save once its background refetch
+  // lands, which would otherwise leave authIsDirty true for a beat after a
+  // successful save.
+  const lastSavedAuthRef = useRef<{
+    type: AuthenticationType;
+    key: string;
+    in: APIKeyLocation;
+  }>({ type: "apiKey", key: "", in: "header" });
+
   const authIsDirty = useMemo(() => {
     if (!config) return false;
-    const savedType = resolveAuthenticationType(config);
-    const savedKey = config.security?.apiKey?.key ?? "";
-    const savedIn = (config.security?.apiKey?.in as APIKeyLocation) ?? "header";
-    if (authenticationType !== savedType) return true;
-    if (keyValue.trim() !== savedKey) return true;
-    if (keyIn !== savedIn) return true;
+    const saved = lastSavedAuthRef.current;
+    if (authenticationType !== saved.type) return true;
+    if (keyValue.trim() !== saved.key) return true;
+    if (keyIn !== saved.in) return true;
     return false;
   }, [config, authenticationType, keyValue, keyIn]);
 
   useEffect(() => {
     if (!config || !selectedEndpointId) return;
     const nextType = resolveAuthenticationType(config);
+    const nextKey =
+      config.security?.apiKey?.key ?? (nextType === "apiKey" ? "X-API-Key" : "");
+    const nextIn = (config.security?.apiKey?.in as APIKeyLocation) ?? "header";
     setAuthenticationType(nextType);
-    setKeyValue(
-      config.security?.apiKey?.key ??
-      (nextType === "apiKey" ? "X-API-Key" : ""),
-    );
-    setKeyIn((config.security?.apiKey?.in as APIKeyLocation) ?? "header");
+    setKeyValue(nextKey);
+    setKeyIn(nextIn);
     setFieldErrors({});
+    lastSavedAuthRef.current = { type: nextType, key: nextKey, in: nextIn };
   }, [config, selectedEndpointId]);
 
   // --- Agent Identity: per-tool scope-binding (RBAC) state ---
@@ -363,6 +373,12 @@ export function MCPProxySecurityTab({
         toolScopeBindings: nextBindings,
       });
       lastSavedToolScopeRowsRef.current = savedToolScopeRows;
+      setToolScopeRows(savedToolScopeRows);
+      lastSavedAuthRef.current = {
+        type: authenticationType,
+        key: authenticationType === "apiKey" ? keyValue.trim() : "",
+        in: keyIn,
+      };
       setStatus({
         message: "Updated security settings.",
         severity: "success",

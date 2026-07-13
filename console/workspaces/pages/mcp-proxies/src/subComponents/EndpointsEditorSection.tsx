@@ -15,12 +15,24 @@
  * under the License.
  */
 
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo } from "react";
 import { Box, Button, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
 import { Plus } from "@wso2/oxygen-ui-icons-react";
 import type { Environment } from "@agent-management-platform/types";
 import { EndpointFormFields, type EndpointDraft } from "./EndpointFormFields";
 import { EndpointRow } from "./EndpointRow";
+
+// Backend endpoint ids are handles derived from a user-chosen display name
+// (lowercased, alphanumeric + hyphen — see GenerateHandle server-side), so a
+// simple counter like "1" can collide with a real endpoint's id. A UUID can't
+// collide in practice, keeping new drafts from being mistaken for — and
+// merged with — an existing endpoint's saved config on submit.
+function createDraftEndpointId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 export interface EndpointsEditorSectionProps {
   orgId: string;
@@ -54,8 +66,6 @@ export function EndpointsEditorSection({
   emptyStateText,
   onEndpointAdded,
 }: EndpointsEditorSectionProps) {
-  const endpointIdRef = useRef(1);
-
   const environmentLabels = useMemo(() => {
     const labels = new Map<string, string>();
     environments.forEach((env) => {
@@ -93,9 +103,7 @@ export function EndpointsEditorSection({
 
   const handleAddEndpoint = useCallback(
     (draft: Omit<EndpointDraft, "id">) => {
-      const id = String(endpointIdRef.current);
-      endpointIdRef.current += 1;
-      onEndpointsChange([...endpoints, { ...draft, id }]);
+      onEndpointsChange([...endpoints, { ...draft, id: createDraftEndpointId() }]);
       onEndpointAdded?.(draft);
       onAddOpenChange(false);
     },

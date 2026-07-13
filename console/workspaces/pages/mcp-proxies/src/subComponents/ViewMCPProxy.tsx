@@ -69,27 +69,17 @@ import { MCPProxySecurityTab } from "./MCPProxySecurityTab";
 import { EditMCPProxyDrawer } from "./EditMCPProxyDrawer";
 import { useCopyWithFeedback } from "./useCopyWithFeedback";
 
-const TABS = [
-  "Overview",
-  "Capabilities",
-  "Connection",
-  "Manage Tools",
-  "Security",
-  "Rewrite",
-  "Policies",
-] as const;
-
-// URL-safe stand-ins for each tab, index-aligned with TABS, so the selected
-// tab (and environment, below) are shareable/deep-linkable and survive a
-// page reload instead of resetting to Overview/first-environment.
-const TAB_SLUGS = [
-  "overview",
-  "capabilities",
-  "connection",
-  "manage-tools",
-  "security",
-  "rewrite",
-  "policies",
+// slug is a URL-safe stand-in for each tab, so the selected tab (and
+// environment, below) are shareable/deep-linkable and survive a page reload
+// instead of resetting to Overview/first-environment.
+const TAB_DEFS = [
+  { label: "Overview", slug: "overview" },
+  { label: "Capabilities", slug: "capabilities" },
+  { label: "Connection", slug: "connection" },
+  { label: "Manage Tools", slug: "manage-tools" },
+  { label: "Security", slug: "security" },
+  { label: "Rewrite", slug: "rewrite" },
+  { label: "Policies", slug: "policies" },
 ] as const;
 
 export function ViewMCPProxy() {
@@ -99,7 +89,7 @@ export function ViewMCPProxy() {
 
   const tabSlug = searchParams.get("tab");
   const tabIndex = tabSlug
-    ? Math.max(0, TAB_SLUGS.indexOf(tabSlug as (typeof TAB_SLUGS)[number]))
+    ? Math.max(0, TAB_DEFS.findIndex((tab) => tab.slug === tabSlug))
     : 0;
   const selectedEndpointId = searchParams.get("endpoint") ?? "";
 
@@ -122,7 +112,7 @@ export function ViewMCPProxy() {
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
-          next.set("tab", TAB_SLUGS[value]);
+          next.set("tab", TAB_DEFS[value].slug);
           return next;
         },
         { replace: true },
@@ -373,8 +363,8 @@ export function ViewMCPProxy() {
                   sx={{ pr: 2 }}
                 >
                   <Tabs value={tabIndex} onChange={handleTabChange}>
-                    {TABS.map((tab) => (
-                      <Tab key={tab} label={tab} />
+                    {TAB_DEFS.map((tab) => (
+                      <Tab key={tab.slug} label={tab.label} />
                     ))}
                   </Tabs>
                   <Typography

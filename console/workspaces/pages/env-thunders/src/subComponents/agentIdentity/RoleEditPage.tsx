@@ -133,8 +133,13 @@ export const RoleEditPage: React.FC = () => {
 
   useEffect(() => {
     if (!hasEditedScopes.current && catalogScopes.length > 0) {
-      const nameSet = new Set(initialScopeNames);
-      setSelectedScopes(catalogScopes.filter((s) => nameSet.has(s.name)));
+      const catalogByName = new Map(catalogScopes.map((s) => [s.name, s]));
+      // A scope assigned to this role may no longer be in the catalog (deleted
+      // or renamed) — keep it as a placeholder so it isn't silently dropped
+      // (and dirtied) on load, and stays in the payload if the role is saved.
+      setSelectedScopes(
+        initialScopeNames.map((name) => catalogByName.get(name) ?? { id: name, name }),
+      );
     }
   }, [initialScopeNames, catalogScopes]);
 

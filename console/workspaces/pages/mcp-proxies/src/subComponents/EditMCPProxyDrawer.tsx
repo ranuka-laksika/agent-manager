@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Box,
@@ -92,8 +92,16 @@ export function EditMCPProxyDrawer({
   const [addOpen, setAddOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  const wasOpenRef = useRef(false);
+
   useEffect(() => {
-    if (!open) return;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    // Only (re)seed on the closed→open transition — proxy can change while the
+    // drawer is already open (e.g. a background refetch), and reseeding then
+    // would clobber whatever the user is mid-editing.
+    if (!justOpened) return;
+
     setFormData({
       name: proxy.name,
       version: proxy.version,

@@ -16,7 +16,7 @@
  * under the License.
  */
 
-import { httpDELETE, httpGET, httpPOST, httpPUT, SERVICE_BASE } from "../utils";
+import { encodeRequired, httpDELETE, httpGET, httpPOST, httpPUT, SERVICE_BASE } from "../utils";
 import type {
   ScopeListResponse,
   ScopeResponse,
@@ -69,10 +69,9 @@ export async function updateScope(
   getToken?: () => Promise<string>,
 ): Promise<ScopeResponse> {
   const { orgName = "default", scopeName } = params;
+  const scope = encodeRequired(scopeName, "scopeName");
   const token = getToken ? await getToken() : undefined;
-  const res = await httpPUT(
-    `${orgBase(orgName)}/${encodeURIComponent(scopeName ?? "")}`, body, { token },
-  );
+  const res = await httpPUT(`${orgBase(orgName)}/${scope}`, body, { token });
   if (!res.ok) throw await res.json();
   return res.json();
 }
@@ -86,9 +85,8 @@ export async function deleteScope(
   getToken?: () => Promise<string>,
 ): Promise<void> {
   const { orgName = "default", scopeName } = params;
+  const scope = encodeRequired(scopeName, "scopeName");
   const token = getToken ? await getToken() : undefined;
-  const res = await httpDELETE(
-    `${orgBase(orgName)}/${encodeURIComponent(scopeName ?? "")}`, { token },
-  );
+  const res = await httpDELETE(`${orgBase(orgName)}/${scope}`, { token });
   if (!res.ok && res.status !== 204) throw await res.json();
 }
