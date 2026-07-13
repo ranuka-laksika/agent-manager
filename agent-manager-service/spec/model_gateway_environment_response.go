@@ -28,7 +28,7 @@ type GatewayEnvironmentResponse struct {
 	DisplayName string `json:"displayName"`
 	// Optional description of the environment
 	Description *string `json:"description,omitempty"`
-	// Pod runtime isolation tier for agents. Use \"gvisor\" for runsc kernel isolation or \"kata\" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); empty/absent uses the default runc runtime.
+	// Pod runtime isolation tier for agents. Use \"gvisor\" for runsc kernel isolation or \"kata\" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
 	IsolationTier *string `json:"isolationTier,omitempty"`
 	// Reference to the dataplane
 	DataplaneRef string `json:"dataplaneRef"`
