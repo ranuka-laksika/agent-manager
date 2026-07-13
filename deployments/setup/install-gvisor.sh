@@ -73,11 +73,21 @@ if command -v runsc &>/dev/null && runsc --version &>/dev/null 2>&1; then
 else
     echo "📥 Downloading gVisor binaries (${GVISOR_ARCH})..."
     BASE="https://storage.googleapis.com/gvisor/releases/release/latest/${GVISOR_ARCH}"
-    curl -fsSL --retry 3 "${BASE}/runsc" -o /tmp/runsc
-    curl -fsSL --retry 3 "${BASE}/containerd-shim-runsc-v1" -o /tmp/containerd-shim-runsc-v1
-    chmod +x /tmp/runsc /tmp/containerd-shim-runsc-v1
-    mv /tmp/runsc /usr/local/bin/runsc
-    mv /tmp/containerd-shim-runsc-v1 /usr/local/bin/containerd-shim-runsc-v1
+    # Download into a private temp dir (not predictable /tmp paths) and remove it on exit.
+    GVISOR_TMP="$(mktemp -d)"
+    trap 'rm -rf "${GVISOR_TMP}"' EXIT
+    for bin in runsc containerd-shim-runsc-v1; do
+        curl -fsSL --retry 3 "${BASE}/${bin}" -o "${GVISOR_TMP}/${bin}"
+        # gVisor publishes a .sha512 alongside each binary; verify before trusting it.
+        curl -fsSL --retry 3 "${BASE}/${bin}.sha512" -o "${GVISOR_TMP}/${bin}.sha512"
+    done
+    ( cd "${GVISOR_TMP}" && sha512sum -c runsc.sha512 containerd-shim-runsc-v1.sha512 ) || {
+        echo "❌ gVisor binary checksum verification failed — aborting."
+        exit 1
+    }
+    chmod +x "${GVISOR_TMP}/runsc" "${GVISOR_TMP}/containerd-shim-runsc-v1"
+    mv "${GVISOR_TMP}/runsc" /usr/local/bin/runsc
+    mv "${GVISOR_TMP}/containerd-shim-runsc-v1" /usr/local/bin/containerd-shim-runsc-v1
     echo "   ✅ runsc $(runsc --version 2>&1 | head -1) installed"
 fi
 

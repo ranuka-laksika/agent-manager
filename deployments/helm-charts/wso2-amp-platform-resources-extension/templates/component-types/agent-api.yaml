@@ -197,13 +197,19 @@ spec:
                       matchLabels:
                         kubernetes.io/metadata.name: openchoreo-data-plane
               # API Platform gateways may live outside openchoreo-data-plane
-              # (per-org-environment namespaces). Agent telemetry egress to the
-              # gateway runtime needs this rule; add-environment.sh stamps the
-              # label on the gateway namespace at install time.
+              # (per-org-environment namespaces). Agents send OTEL traces to the
+              # gateway runtime's telemetry port; this rule allows that egress to
+              # gateway namespaces (add-environment.sh stamps the label at install
+              # time), scoped to the telemetry port only.
               - to:
                   - namespaceSelector:
                       matchLabels:
                         amp.wso2.com/api-platform-gateway: "true"
+                ports:
+                  # API Platform gateway runtime telemetry (OTEL) port — matches the
+                  # AMP_OTEL_ENDPOINT the env-injection trait sets on agent pods.
+                  - port: 22893
+                    protocol: TCP
               - ports:
                   - port: 443
                     protocol: TCP

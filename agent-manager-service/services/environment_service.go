@@ -69,6 +69,16 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, ouID string,
 		s.logger.Warn("No dataplaneRef provided", "name", req.Name, "ouID", ouID)
 	}
 
+	// Reject unsupported isolation tiers up front. An unknown value would otherwise be
+	// persisted verbatim on the Environment CR and silently fall back to runc at render
+	// time (runtimeClassForIsolationTier returns "" for anything unrecognised), hiding the
+	// typo from the user until they notice their agents are not actually isolated.
+	switch req.IsolationTier {
+	case "", "gvisor", "kata":
+	default:
+		return nil, fmt.Errorf("%w: unsupported isolation tier %q (allowed: gvisor, kata)", utils.ErrInvalidInput, req.IsolationTier)
+	}
+
 	ocReq := occlient.CreateEnvironmentRequest{
 		Name:          req.Name,
 		DisplayName:   req.DisplayName,

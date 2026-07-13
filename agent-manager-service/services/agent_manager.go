@@ -4141,9 +4141,15 @@ func (s *agentManagerService) GetAgentDeployments(ctx context.Context, ouID stri
 	// creates a release binding when a build completes, WITHOUT the backend's deploy-time config
 	// write — so an agent in a gVisor/Kata environment first comes up on the default runtime. The
 	// deploy-status poll is the natural point to detect that the binding now exists and correct it.
-	// Best-effort and idempotent: it never fails the read, is a no-op for all-runc setups, and
-	// converges in a single write per binding.
-	s.reconcileIsolationRuntimeClass(ctx, ouID, agentName, deployments)
+	// Only platform-hosted API agents carry a SandboxTemplate (and thus a runtimeClassName);
+	// external agents have no pod to reconcile, so skip the work — and its per-environment API
+	// calls — entirely for them. Best-effort and idempotent: it never fails the read, is a no-op
+	// for all-runc setups, and converges in a single write per binding.
+	if agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName); err != nil {
+		s.logger.Warn("isolation reconcile: failed to fetch agent for type gate", "agentName", agentName, "error", err)
+	} else if agent.Type.Type == string(utils.AgentTypeAPI) {
+		s.reconcileIsolationRuntimeClass(ctx, ouID, agentName, deployments)
+	}
 
 	return deployments, nil
 }

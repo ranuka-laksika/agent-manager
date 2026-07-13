@@ -77,6 +77,11 @@ fi
 
 # --- Configuration (can be overridden via env vars) ---
 ORG_NAME="${ORG_NAME:-default}"
+# Namespace the OpenChoreo Environment CRs are created in. The platform-resources
+# chart provisions them in its defaultResources namespace ("default"), which is NOT
+# necessarily the org name — keep them distinct so a non-default ORG_NAME still
+# annotates the right namespace.
+ENVIRONMENT_NAMESPACE="${ENVIRONMENT_NAMESPACE:-default}"
 
 # The APIGateway controller materializes a Service named
 # "api-platform-<org>-<env>-gateway-gateway-runtime" (24-char suffix), which
@@ -251,12 +256,12 @@ elif [ "$ENV_HTTP_CODE" = "409" ]; then
     # would otherwise silently drop it. The Environment CR annotation is the
     # source of truth, so apply it directly instead.
     if [ -n "${ISOLATION_TIER}" ]; then
-        if kubectl annotate environment "${ENV_NAME}" -n "${ORG_NAME}" \
+        if kubectl annotate environment "${ENV_NAME}" -n "${ENVIRONMENT_NAMESPACE}" \
             "openchoreo.dev/isolation-tier=${ISOLATION_TIER}" --overwrite > /dev/null 2>&1; then
             echo "✅ Isolation tier '${ISOLATION_TIER}' applied to existing environment"
         else
             echo "⚠️  Could not set isolation tier on the existing environment. Apply it manually:"
-            echo "    kubectl annotate environment ${ENV_NAME} -n ${ORG_NAME} openchoreo.dev/isolation-tier=${ISOLATION_TIER} --overwrite"
+            echo "    kubectl annotate environment ${ENV_NAME} -n ${ENVIRONMENT_NAMESPACE} openchoreo.dev/isolation-tier=${ISOLATION_TIER} --overwrite"
         fi
     fi
 else

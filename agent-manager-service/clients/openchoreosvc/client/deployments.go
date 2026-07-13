@@ -365,6 +365,12 @@ func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context,
 		for k, v := range componentTypeConfigs {
 			(*rb.Spec.ComponentTypeEnvironmentConfigs)[k] = v
 		}
+		// runtimeClassName is derived wholly from the target environment's isolation tier, so
+		// the incoming configs are authoritative: when they omit it (the env reverted to the
+		// default runc tier) the stale value must be cleared, not left behind.
+		if _, ok := componentTypeConfigs["runtimeClassName"]; !ok {
+			delete(*rb.Spec.ComponentTypeEnvironmentConfigs, "runtimeClassName")
+		}
 	})
 }
 
@@ -381,9 +387,6 @@ func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context,
 // correct, every subsequent call is a no-op — no write, no restart loop. Returns nil (no-op) when
 // desired is empty or the binding does not exist yet (build/auto-deploy not finished).
 func (c *openChoreoClient) EnsureReleaseBindingRuntimeClass(ctx context.Context, ouID, componentName, environment, desiredRuntimeClass string) error {
-	if desiredRuntimeClass == "" {
-		return nil
-	}
 	namespaceName := c.NamespaceFor(ouID)
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
 	if err != nil {
@@ -393,22 +396,34 @@ func (c *openChoreoClient) EnsureReleaseBindingRuntimeClass(ctx context.Context,
 		return nil // binding not created yet — nothing to reconcile
 	}
 
-	current := ""
-	if binding.Spec != nil && binding.Spec.ComponentTypeEnvironmentConfigs != nil {
-		if v, ok := (*binding.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"].(string); ok {
-			current = v
-		}
-	}
-	if current == desiredRuntimeClass {
-		return nil // already correct — idempotent no-op
-	}
-
 	return c.retryReleaseBindingUpdate(ctx, namespaceName, binding.Metadata.Name, func(rb *gen.ReleaseBinding) {
+		// Re-read desired-vs-current from the freshly fetched binding INSIDE the mutation
+		// closure (not from the stale outer read) so concurrent callers don't each bump
+		// restartedAt off the same pre-image and trigger redundant pod rolls.
+		if rb.Spec == nil {
+			return
+		}
+		current := ""
+		if rb.Spec.ComponentTypeEnvironmentConfigs != nil {
+			if v, ok := (*rb.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"].(string); ok {
+				current = v
+			}
+		}
+		if current == desiredRuntimeClass {
+			return // already correct — leave the binding untouched (no restartedAt bump)
+		}
 		if rb.Spec.ComponentTypeEnvironmentConfigs == nil {
 			overrides := make(map[string]interface{})
 			rb.Spec.ComponentTypeEnvironmentConfigs = &overrides
 		}
-		(*rb.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"] = desiredRuntimeClass
+		if desiredRuntimeClass == "" {
+			// Reverting to the default (runc) tier: remove the key entirely so the
+			// SandboxTemplate renders without runtimeClassName, rather than leaving a
+			// stale isolation-tier value behind.
+			delete(*rb.Spec.ComponentTypeEnvironmentConfigs, "runtimeClassName")
+		} else {
+			(*rb.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"] = desiredRuntimeClass
+		}
 		// Bump restartedAt so the SandboxTemplate re-renders and the warm pods roll onto the
 		// isolation node. Only runs on correction (current != desired), so there is no restart loop.
 		(*rb.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
