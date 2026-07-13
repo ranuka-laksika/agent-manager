@@ -33,6 +33,45 @@ import {
 
 type TabId = "roles" | "groups";
 
+type ChipItem = { id: string; name: string };
+
+// Shared shape for the two read-only tabs below: a header, description, and
+// a chip list of assignments (or an empty-state message).
+function ReadOnlyChipTab({
+  header,
+  description,
+  items,
+  emptyText,
+}: {
+  header: string;
+  description: React.ReactNode;
+  items: ChipItem[];
+  emptyText: string;
+}) {
+  return (
+    <>
+      <Form.Header>{header}</Form.Header>
+      <Typography variant="body2" color="text.secondary">
+        {description}
+      </Typography>
+
+      <Box sx={{ mt: 1 }}>
+        {items.length === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            {emptyText}
+          </Typography>
+        ) : (
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            {items.map((item) => (
+              <Chip key={item.id} label={item.name} size="small" />
+            ))}
+          </Stack>
+        )}
+      </Box>
+    </>
+  );
+}
+
 // Read-only: this page just shows the agent's effective roles/groups in this
 // environment. Assignment happens from the Roles/Groups pages, same as how
 // UserEditPage's Roles tab (settings/idp) points users there instead of
@@ -114,51 +153,31 @@ export const AgentDetailPage: React.FC = () => {
           </Tabs>
 
           {activeTab === "roles" && (
-            <>
-              <Form.Header>Assigned Roles</Form.Header>
-              <Typography variant="body2" color="text.secondary">
-                Roles assigned to this agent&apos;s identity in {envName}. To
-                modify role assignments, use the Roles page.
-              </Typography>
-
-              <Box sx={{ mt: 1 }}>
-                {roles.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    No roles assigned to this agent.
-                  </Typography>
-                ) : (
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
-                    {roles.map((role) => (
-                      <Chip key={role.id} label={role.name} size="small" />
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            </>
+            <ReadOnlyChipTab
+              header="Assigned Roles"
+              description={
+                <>
+                  Roles assigned to this agent&apos;s identity in {envName}. To
+                  modify role assignments, use the Roles page.
+                </>
+              }
+              items={roles}
+              emptyText="No roles assigned to this agent."
+            />
           )}
 
           {activeTab === "groups" && (
-            <>
-              <Form.Header>Group Memberships</Form.Header>
-              <Typography variant="body2" color="text.secondary">
-                Groups this agent&apos;s identity belongs to in {envName}. To
-                modify group memberships, use the Groups page.
-              </Typography>
-
-              <Box sx={{ mt: 1 }}>
-                {groups.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary">
-                    This agent is not a member of any groups.
-                  </Typography>
-                ) : (
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
-                    {groups.map((group) => (
-                      <Chip key={group.id} label={group.name} size="small" />
-                    ))}
-                  </Stack>
-                )}
-              </Box>
-            </>
+            <ReadOnlyChipTab
+              header="Group Memberships"
+              description={
+                <>
+                  Groups this agent&apos;s identity belongs to in {envName}. To
+                  modify group memberships, use the Groups page.
+                </>
+              }
+              items={groups}
+              emptyText="This agent is not a member of any groups."
+            />
           )}
         </Form.Section>
       </Stack>
