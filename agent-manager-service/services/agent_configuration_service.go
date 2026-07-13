@@ -4300,7 +4300,6 @@ func buildAgentMCPConfigProxy(
 	var policies []models.MCPPolicy
 	var capabilities *models.MCPProxyCapabilities
 	var security *models.SecurityConfig
-	var toolScopeBindings []models.MCPToolScopeBinding
 	if endpoint != nil {
 		cfg := endpoint.Configuration
 		if cfg.Upstream != nil {
@@ -4310,7 +4309,6 @@ func buildAgentMCPConfigProxy(
 		policies = cfg.Policies
 		capabilities = cfg.Capabilities
 		security = cfg.Security
-		toolScopeBindings = cfg.ToolScopeBindings
 	}
 
 	return &models.MCPProxy{
@@ -4318,16 +4316,15 @@ func buildAgentMCPConfigProxy(
 		Description: config.Description,
 		Status:      source.Status,
 		Configuration: models.MCPProxyConfig{
-			Name:              name,
-			Version:           version,
-			Context:           &context,
-			Vhost:             source.Configuration.Vhost,
-			SpecVersion:       source.Configuration.SpecVersion,
-			Upstream:          upstream,
-			Policies:          policies,
-			Capabilities:      capabilities,
-			Security:          security,
-			ToolScopeBindings: toolScopeBindings,
+			Name:         name,
+			Version:      version,
+			Context:      &context,
+			Vhost:        source.Configuration.Vhost,
+			SpecVersion:  source.Configuration.SpecVersion,
+			Upstream:     upstream,
+			Policies:     policies,
+			Capabilities: capabilities,
+			Security:     security,
 		},
 		OrganizationName: ouID,
 		ID:               handle,

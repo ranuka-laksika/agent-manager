@@ -75,9 +75,16 @@ type IdentityClient interface {
 
 	// Permissions catalog
 	ListAMPPermissions(ctx context.Context) ([]ThunderPermission, string, error)
-	// EnsureScopeResourceServer makes sure the amp-scopes resource server exists and
-	// that every given scope is registered as a permission under it, returning its ID.
-	EnsureScopeResourceServer(ctx context.Context, scopes []string) (string, error)
+	// EnsureProxyResourceServer makes sure the proxy's resource server exists
+	// (handle = identifier = proxyHandle, delimiter ":", type MCP) with every
+	// given action registered at the RS root, and returns the RS ID.
+	EnsureProxyResourceServer(ctx context.Context, proxyHandle, displayName string, actions []string) (string, error)
+	// DeleteProxyResourceServerAction best-effort deletes one root action.
+	// Missing RS or action is not an error. Returns the RS ID ("" if RS absent).
+	DeleteProxyResourceServerAction(ctx context.Context, proxyHandle, action string) (string, error)
+	// DeleteProxyResourceServer deletes every root action, then the RS itself
+	// (Thunder blocks RS deletion while actions exist). Missing RS is not an error.
+	DeleteProxyResourceServer(ctx context.Context, proxyHandle string) error
 
 	// Organization units
 	GetOUIDByHandle(ctx context.Context, handle string) (string, error)
@@ -877,24 +884,6 @@ func (c *thunderClient) ListAMPPermissions(ctx context.Context) ([]ThunderPermis
 	return perms, ampRSID, nil
 }
 
-const (
-	// scopeResourceServerIdentifier is the identifier of the resource server that
-	// holds the org's catalog scopes as permissions in each environment's Thunder.
-	scopeResourceServerIdentifier = "amp-scopes"
-	scopeResourceServerName       = "AMP Scopes"
-	// scopeResourceServerDelimiter is the resource-server permission delimiter. Thunder
-	// derives a resource's permission by joining ancestor handles with this delimiter;
-	// with no parent and an empty resource-server handle the derived permission equals
-	// the resource's own handle. We use "/" — which scope names never contain — so each
-	// scope can be its own resource handle and the derived permission equals the raw
-	// scope exactly (the value carried in role permissions and the agent token claim).
-	scopeResourceServerDelimiter = "/"
-	// scopeHandleMaxLen is Thunder's maximum resource-handle length. The scope catalog
-	// allows longer names, so over-long scopes are rejected with a clear error instead
-	// of letting Thunder reject the handle with an opaque 400.
-	scopeHandleMaxLen = 100
-)
-
 // findResourceServerID paginates through resource servers and returns the ID of
 // the one whose identifier matches, or "" if none match.
 func (c *thunderClient) findResourceServerID(ctx context.Context, token, identifier string) (string, error) {
@@ -922,13 +911,34 @@ func (c *thunderClient) findResourceServerID(ctx context.Context, token, identif
 	}
 }
 
-// EnsureScopeResourceServer makes sure the amp-scopes resource server exists and
-// that every given scope is registered as a permission under it, then returns the
-// resource server ID. Idempotent; called lazily before role writes.
-func (c *thunderClient) EnsureScopeResourceServer(ctx context.Context, scopes []string) (string, error) {
-	for _, scope := range scopes {
-		if len(scope) > scopeHandleMaxLen {
-			return "", fmt.Errorf("scope %q exceeds the Thunder resource handle limit of %d characters", scope, scopeHandleMaxLen)
+// --- Per-proxy resource servers ---
+
+const (
+	// proxyResourceServerDelimiter joins the resource server's handle with a root
+	// action's handle to derive that action's permission. The scope string is
+	// "<proxy-handle>:<action>", so with handle = proxyHandle the derived permission
+	// equals the scope exactly. Proxy handles are kebab-case and never contain ":".
+	proxyResourceServerDelimiter = ":"
+	// proxyResourceServerType marks the RS as MCP, enabling Thunder's MCP
+	// handle-collision guardrails.
+	proxyResourceServerType = "MCP"
+	// thunderHandleMaxLen is Thunder's per-handle cap (RS, resource, and action
+	// handles). Over-long inputs are rejected with a clear error instead of letting
+	// Thunder reject the handle with an opaque 400.
+	thunderHandleMaxLen = 100
+)
+
+// EnsureProxyResourceServer makes sure the resource server for a proxy exists
+// (identifier = handle = proxyHandle, delimiter ":", type MCP) and that every
+// given action is registered as a root action, then returns the resource server
+// ID. Idempotent; called lazily before role writes.
+func (c *thunderClient) EnsureProxyResourceServer(ctx context.Context, proxyHandle, displayName string, actions []string) (string, error) {
+	if len(proxyHandle) > thunderHandleMaxLen {
+		return "", fmt.Errorf("proxy handle %q exceeds the Thunder handle limit of %d characters", proxyHandle, thunderHandleMaxLen)
+	}
+	for _, action := range actions {
+		if len(action) > thunderHandleMaxLen {
+			return "", fmt.Errorf("action %q exceeds the Thunder handle limit of %d characters", action, thunderHandleMaxLen)
 		}
 	}
 
@@ -938,101 +948,157 @@ func (c *thunderClient) EnsureScopeResourceServer(ctx context.Context, scopes []
 	}
 
 	// Avoids a TOCTOU race where concurrent callers both create a duplicate
-	// resource server or permission; safe to scope per-client since clients
-	// are cached per org/env.
-	c.ensureScopeResourceServerMu.Lock()
-	defer c.ensureScopeResourceServerMu.Unlock()
+	// resource server or action; safe to scope per-client since clients are
+	// cached per org/env.
+	c.ensureResourceServerMu.Lock()
+	defer c.ensureResourceServerMu.Unlock()
 
-	rsID, err := c.findResourceServerID(ctx, token, scopeResourceServerIdentifier)
+	rsID, err := c.findResourceServerID(ctx, token, proxyHandle)
 	if err != nil {
 		return "", err
 	}
 	if rsID == "" {
 		ouID, err := c.getDefaultOUID(ctx, token)
 		if err != nil {
-			return "", fmt.Errorf("thunder ensure scope resource server (default ou): %w", err)
+			return "", fmt.Errorf("thunder ensure proxy resource server (default ou): %w", err)
 		}
 		body, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/resource-servers", token,
 			map[string]string{
-				"name":       scopeResourceServerName,
-				"identifier": scopeResourceServerIdentifier,
+				"name":       displayName,
+				"identifier": proxyHandle,
+				"handle":     proxyHandle,
 				"ouId":       ouID,
-				"delimiter":  scopeResourceServerDelimiter,
+				"delimiter":  proxyResourceServerDelimiter,
+				"type":       proxyResourceServerType,
 			})
 		if err != nil {
-			return "", fmt.Errorf("thunder create scope resource server: %w", err)
+			return "", fmt.Errorf("thunder create proxy resource server: %w", err)
 		}
 		var created ThunderResourceServer
 		if err := json.Unmarshal(body, &created); err != nil {
-			return "", fmt.Errorf("thunder create scope resource server decode: %w", err)
+			return "", fmt.Errorf("thunder create proxy resource server decode: %w", err)
 		}
 		rsID = created.ID
 	}
 
-	existing, err := c.listResourceServerPermissions(ctx, token, rsID)
+	existing, err := c.listProxyRootActions(ctx, token, rsID)
 	if err != nil {
 		return "", err
 	}
-	for _, scope := range scopes {
-		if scope == "" {
+	for _, action := range actions {
+		if action == "" {
 			continue
 		}
-		if _, ok := existing[scope]; ok {
+		if _, ok := existing[action]; ok {
 			continue
 		}
-		if err := c.createScopePermission(ctx, token, rsID, scope); err != nil {
+		if err := c.createProxyRootAction(ctx, token, rsID, action); err != nil {
 			return "", err
 		}
-		existing[scope] = struct{}{} // guard against duplicate scopes in the input slice
+		existing[action] = "" // guard against duplicate actions in the input slice
 	}
 	return rsID, nil
 }
 
-// listResourceServerPermissions returns the set of permission strings already
-// registered under the given resource server. Thunder derives each resource's
-// permission from its handle and returns it on the resource itself, so the set is
-// read directly from resource.Permission — no per-resource action listing is needed
-// (and reading actions would make the idempotency check re-create on every call,
-// since scopes are stored as resources with no actions).
-func (c *thunderClient) listResourceServerPermissions(ctx context.Context, token, rsID string) (map[string]struct{}, error) {
-	const resPageSize = 20
-	perms := make(map[string]struct{})
-	resOffset := 0
+// DeleteProxyResourceServerAction best-effort deletes a single root action from
+// the proxy's resource server. A missing resource server or missing action is
+// not an error. Returns the resource server ID ("" if the RS is absent).
+func (c *thunderClient) DeleteProxyResourceServerAction(ctx context.Context, proxyHandle, action string) (string, error) {
+	token, err := c.getSystemToken(ctx)
+	if err != nil {
+		return "", err
+	}
+	rsID, err := c.findResourceServerID(ctx, token, proxyHandle)
+	if err != nil {
+		return "", err
+	}
+	if rsID == "" {
+		return "", nil
+	}
+	actions, err := c.listProxyRootActions(ctx, token, rsID)
+	if err != nil {
+		return rsID, err
+	}
+	actionID, ok := actions[action]
+	if !ok {
+		return rsID, nil
+	}
+	if _, err := c.doRequest(ctx, http.MethodDelete, c.baseURL+"/resource-servers/"+rsID+"/actions/"+actionID, token, nil); err != nil && !IsNotFound(err) {
+		return rsID, fmt.Errorf("thunder delete proxy root action %q: %w", action, err)
+	}
+	return rsID, nil
+}
+
+// DeleteProxyResourceServer deletes every root action of the proxy's resource
+// server and then the resource server itself. Thunder blocks RS deletion while
+// actions exist, so actions are removed first. A missing resource server is not
+// an error.
+func (c *thunderClient) DeleteProxyResourceServer(ctx context.Context, proxyHandle string) error {
+	token, err := c.getSystemToken(ctx)
+	if err != nil {
+		return err
+	}
+	rsID, err := c.findResourceServerID(ctx, token, proxyHandle)
+	if err != nil {
+		return err
+	}
+	if rsID == "" {
+		return nil
+	}
+	actions, err := c.listProxyRootActions(ctx, token, rsID)
+	if err != nil {
+		return err
+	}
+	for action, actionID := range actions {
+		if _, err := c.doRequest(ctx, http.MethodDelete, c.baseURL+"/resource-servers/"+rsID+"/actions/"+actionID, token, nil); err != nil && !IsNotFound(err) {
+			return fmt.Errorf("thunder delete proxy root action %q: %w", action, err)
+		}
+	}
+	if _, err := c.doRequest(ctx, http.MethodDelete, c.baseURL+"/resource-servers/"+rsID, token, nil); err != nil && !IsNotFound(err) {
+		return fmt.Errorf("thunder delete proxy resource server %q: %w", proxyHandle, err)
+	}
+	return nil
+}
+
+// listProxyRootActions returns the root actions of a resource server as a map of
+// action handle to action ID, paginating through all pages.
+func (c *thunderClient) listProxyRootActions(ctx context.Context, token, rsID string) (map[string]string, error) {
+	const actPageSize = 20
+	actions := make(map[string]string)
+	offset := 0
 	for {
-		resURL := fmt.Sprintf("%s/resource-servers/%s/resources?offset=%d&limit=%d", c.baseURL, rsID, resOffset, resPageSize)
-		resBody, err := c.doRequest(ctx, http.MethodGet, resURL, token, nil)
+		url := fmt.Sprintf("%s/resource-servers/%s/actions?offset=%d&limit=%d", c.baseURL, rsID, offset, actPageSize)
+		body, err := c.doRequest(ctx, http.MethodGet, url, token, nil)
 		if err != nil {
-			return nil, fmt.Errorf("thunder list scope resources: %w", err)
+			return nil, fmt.Errorf("thunder list proxy root actions: %w", err)
 		}
-		var page thunderResourceList
-		if err := json.Unmarshal(resBody, &page); err != nil {
-			return nil, fmt.Errorf("thunder list scope resources decode: %w", err)
+		var page thunderActionList
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("thunder list proxy root actions decode: %w", err)
 		}
-		for _, res := range page.Resources {
-			if res.Permission != "" {
-				perms[res.Permission] = struct{}{}
+		for _, a := range page.Actions {
+			if a.Handle != "" {
+				actions[a.Handle] = a.ID
 			}
 		}
-		resOffset += len(page.Resources)
-		if resOffset >= page.TotalResults || len(page.Resources) == 0 {
+		offset += len(page.Actions)
+		if offset >= page.TotalResults || len(page.Actions) == 0 {
 			break
 		}
 	}
-	return perms, nil
+	return actions, nil
 }
 
-// createScopePermission registers one scope as a single resource under the scope
-// resource server. Thunder ignores any client-supplied permission and derives it
-// from handles: with the resource server's empty handle and "/" delimiter, and the
-// raw scope as the resource handle, the derived RESOURCE.PERMISSION equals the scope
-// exactly — the value that surfaces in role permissions and the agent token's scope
-// claim. No action is created; the resource alone carries the permission. Callers
-// must ensure the scope is within scopeHandleMaxLen before invoking this.
-func (c *thunderClient) createScopePermission(ctx context.Context, token, rsID, scope string) error {
-	_, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/resource-servers/"+rsID+"/resources", token,
-		map[string]string{"name": scope, "handle": scope})
+// createProxyRootAction registers one action at the resource server root. Thunder
+// derives the action's permission by joining the RS handle and the action handle
+// with the RS delimiter (":"), so with handle = proxyHandle the derived permission
+// equals the "<proxy-handle>:<action>" scope exactly. Callers must ensure the
+// action is within thunderHandleMaxLen before invoking this.
+func (c *thunderClient) createProxyRootAction(ctx context.Context, token, rsID, action string) error {
+	_, err := c.doRequest(ctx, http.MethodPost, c.baseURL+"/resource-servers/"+rsID+"/actions", token,
+		map[string]string{"name": action, "handle": action})
 	if err != nil {
-		return fmt.Errorf("thunder create scope resource %q: %w", scope, err)
+		return fmt.Errorf("thunder create proxy root action %q: %w", action, err)
 	}
 	return nil
 }

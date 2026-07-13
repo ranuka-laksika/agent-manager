@@ -26,6 +26,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -34,11 +35,17 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 	"github.com/wso2/agent-manager/agent-manager-service/utils/ssrf"
 )
+
+// mcpProxyHandleRe constrains proxy handles to kebab-case. The handle becomes the
+// Thunder resource-server handle (delimiter ":"), so it must never contain ":" and
+// must fit Thunder's 100-char handle cap; kebab is a strict subset of both.
+var mcpProxyHandleRe = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 const (
 	mcpJSONRPCVersion      = "2.0"
@@ -64,12 +71,14 @@ type MCPProxyService struct {
 	gatewayRepo          repositories.GatewayRepository
 	envMCPMappingRepo    repositories.EnvAgentMCPMappingRepository
 	artifactRepo         repositories.ArtifactRepository
-	scopeRepo            repositories.ScopeRepository
+	mcpProxyScopeRepo    repositories.MCPProxyScopeRepository
 	gatewayEventsService *GatewayEventsService
 	apiKeyBroadcaster    apiKeyBroadcaster
 	client               *http.Client
 	logger               *slog.Logger
 	encryptionKey        []byte
+	resolver             thundersvc.EnvThunderResolver
+	infraManager         InfraResourceManager
 }
 
 // NewMCPProxyService creates a new MCP proxy service.
@@ -82,9 +91,11 @@ func NewMCPProxyService(
 	envMCPMappingRepo repositories.EnvAgentMCPMappingRepository,
 	gatewayEventsService *GatewayEventsService,
 	apiKeyRepo repositories.APIKeyRepository,
-	scopeRepo repositories.ScopeRepository,
 	logger *slog.Logger,
 	encryptionKey []byte,
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
+	resolver thundersvc.EnvThunderResolver,
+	infraManager InfraResourceManager,
 ) *MCPProxyService {
 	return &MCPProxyService{
 		db:                   db,
@@ -94,7 +105,7 @@ func NewMCPProxyService(
 		gatewayRepo:          gatewayRepo,
 		envMCPMappingRepo:    envMCPMappingRepo,
 		artifactRepo:         repositories.NewArtifactRepo(db),
-		scopeRepo:            scopeRepo,
+		mcpProxyScopeRepo:    mcpProxyScopeRepo,
 		gatewayEventsService: gatewayEventsService,
 		apiKeyBroadcaster: apiKeyBroadcaster{
 			gatewayRepo:    gatewayRepo,
@@ -104,6 +115,8 @@ func NewMCPProxyService(
 		client:        ssrf.NewClient(mcpRequestTimeout),
 		logger:        logger,
 		encryptionKey: encryptionKey,
+		resolver:      resolver,
+		infraManager:  infraManager,
 	}
 }
 
@@ -123,6 +136,10 @@ func (s *MCPProxyService) Create(ctx context.Context, orgUUID, createdBy string,
 	version := strings.TrimSpace(req.Version)
 	if handle == "" || name == "" || version == "" {
 		return nil, utils.ErrInvalidInput
+	}
+
+	if len(handle) > 100 || !mcpProxyHandleRe.MatchString(handle) {
+		return nil, fmt.Errorf("%w: proxy id must be kebab-case (lowercase letters, digits, single hyphens) and at most 100 characters", utils.ErrInvalidInput)
 	}
 
 	if err := validateMCPEndpoints(ctx, req.Endpoints); err != nil {
@@ -475,7 +492,7 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 
 // Delete removes an MCP proxy by handle. MCP proxy mappings are deployable artifacts
 // derived from an MCP proxy, so the source proxy cannot be deleted while mappings exist.
-func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) error {
+func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID string) error {
 	handle := strings.TrimSpace(proxyID)
 	if handle == "" {
 		return utils.ErrInvalidInput
@@ -499,6 +516,11 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 	if len(mappings) > 0 {
 		return utils.ErrMCPProxyHasMappings
 	}
+
+	// Capture the proxy's scope rows before the row delete cascades them away
+	// (mcp_proxy_scopes FK is ON DELETE CASCADE) — the Thunder cleanup below needs
+	// every scope string to strip from role permissions.
+	scopes, _ := s.mcpProxyScopeRepo.ListByProxy(ctx, proxy.UUID)
 
 	// Tear down the per-(endpoint,env) gateway artifacts this proxy deployed before removing
 	// the proxy row. The endpoint and join rows cascade-delete with the parent proxy; here we
@@ -524,7 +546,56 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, proxyID string) e
 		return fmt.Errorf("failed to delete MCP proxy: %w", err)
 	}
 
+	s.cleanupProxyResourceServers(ctx, orgUUID, orgName, proxy, scopes)
+
 	return nil
+}
+
+// cleanupProxyResourceServers best-effort tears down the proxy's per-environment Thunder
+// resource servers and strips their scope strings from every role, after the proxy row
+// (and its cascaded scope rows) has already been deleted. Same endpoints->join-rows walk
+// and env-UUID->name map as cleanupDeletedScope; never fails the caller. Does not gate on
+// the endpoint's identity-security flag — see cleanupDeletedScope for why: RS ensure at
+// role-write time doesn't check it either, so skipping cleanup here leaks the RS whenever
+// security was disabled.
+func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, scopes []models.MCPProxyScope) {
+	handle := proxyHandleOf(proxy)
+	scopeStrs := make([]string, len(scopes))
+	for i, scope := range scopes {
+		scopeStrs[i] = scope.ScopeString(handle)
+	}
+
+	envs, err := s.infraManager.ListOrgEnvironments(ctx, ouID)
+	if err != nil {
+		s.logger.Warn("proxy delete: listing environments failed", "proxy", handle, "error", err)
+		return
+	}
+	envName := make(map[string]string, len(envs)) // env UUID -> name (resolver keys on names)
+	for _, env := range envs {
+		envName[env.UUID] = env.Name
+	}
+
+	for i := range proxy.Endpoints {
+		endpoint := &proxy.Endpoints[i]
+		for j := range endpoint.Environments {
+			name, ok := envName[endpoint.Environments[j].EnvironmentUUID.String()]
+			if !ok {
+				continue // environment no longer exists — nothing to clean
+			}
+			client, err := s.resolver.ResolveIdentity(ctx, orgName, name)
+			if err != nil {
+				s.logger.Warn("proxy delete: env-Thunder unavailable", "env", name, "proxy", handle, "error", err)
+				continue
+			}
+			if err := client.DeleteProxyResourceServer(ctx, handle); err != nil {
+				s.logger.Warn("proxy delete: resource server delete failed", "env", name, "proxy", handle, "error", err)
+				continue
+			}
+			for _, scopeStr := range scopeStrs {
+				sweepRolePermission(ctx, s.logger, client, name, scopeStr)
+			}
+		}
+	}
 }
 
 // RemoveEnvironmentFromEndpoints removes an environment's endpoint bindings from a proxy
@@ -736,19 +807,6 @@ func copyMCPPolicies(policies []models.MCPPolicy) []models.MCPPolicy {
 	return out
 }
 
-func copyMCPToolScopeBindings(bindings []models.MCPToolScopeBinding) []models.MCPToolScopeBinding {
-	if len(bindings) == 0 {
-		return nil
-	}
-	out := make([]models.MCPToolScopeBinding, 0, len(bindings))
-	for _, b := range bindings {
-		scopes := make([]string, len(b.Scopes))
-		copy(scopes, b.Scopes)
-		out = append(out, models.MCPToolScopeBinding{Tool: b.Tool, Scopes: scopes})
-	}
-	return out
-}
-
 func copyMCPCapabilities(capabilities *models.MCPProxyCapabilities) *models.MCPProxyCapabilities {
 	if capabilities == nil {
 		return nil
@@ -781,12 +839,11 @@ func buildMCPEndpointDTOsForResponse(endpoints []models.MCPProxyEndpoint) []mode
 	for _, endpoint := range endpoints {
 		cfg := endpoint.Configuration
 		dto := models.MCPProxyEndpointDTO{
-			ID:                endpoint.Handle,
-			Name:              endpoint.Name,
-			Upstream:          models.UpstreamConfig{Main: sanitizeMCPUpstreamEndpointForResponse(cfg.Upstream)},
-			Capabilities:      copyMCPCapabilities(cfg.Capabilities),
-			Security:          cfg.Security,
-			ToolScopeBindings: copyMCPToolScopeBindings(cfg.ToolScopeBindings),
+			ID:           endpoint.Handle,
+			Name:         endpoint.Name,
+			Upstream:     models.UpstreamConfig{Main: sanitizeMCPUpstreamEndpointForResponse(cfg.Upstream)},
+			Capabilities: copyMCPCapabilities(cfg.Capabilities),
+			Security:     cfg.Security,
 		}
 		if policies := copyMCPPolicies(cfg.Policies); policies != nil {
 			dto.Policies = &policies
@@ -956,35 +1013,14 @@ func validateMCPEndpoints(ctx context.Context, endpoints []models.MCPProxyEndpoi
 		}
 		seenHandles[handle] = struct{}{}
 
-		// Structural security checks first (no network I/O): apiKey and identity are
-		// mutually exclusive, and every tool binding must name a tool with >=1 scope.
-		identityOn := false
+		// Structural security check (no network I/O): apiKey and identity are mutually
+		// exclusive.
 		if sec := endpoint.Security; sec != nil && isBoolTrue(sec.Enabled) {
 			apiKeyOn := sec.APIKey != nil && isBoolTrue(sec.APIKey.Enabled)
-			identityOn = sec.Identity != nil && isBoolTrue(sec.Identity.Enabled)
+			identityOn := sec.Identity != nil && isBoolTrue(sec.Identity.Enabled)
 			if apiKeyOn && identityOn {
 				return fmt.Errorf("%w: endpoint %q: apiKey and identity security are mutually exclusive", utils.ErrInvalidInput, handle)
 			}
-		}
-		if len(endpoint.ToolScopeBindings) > 0 && !identityOn {
-			return fmt.Errorf("%w: endpoint %q: toolScopeBindings require identity security to be enabled", utils.ErrInvalidInput, handle)
-		}
-		seenTools := make(map[string]struct{}, len(endpoint.ToolScopeBindings))
-		for _, b := range endpoint.ToolScopeBindings {
-			tool := strings.TrimSpace(b.Tool)
-			if tool == "" {
-				return fmt.Errorf("%w: endpoint %q has a tool binding with an empty tool name", utils.ErrInvalidInput, handle)
-			}
-			if len(b.Scopes) == 0 {
-				return fmt.Errorf("%w: endpoint %q: tool %q binding has no scopes", utils.ErrInvalidInput, handle, b.Tool)
-			}
-			// A tool→scopes mapping is conceptually a map: two bindings for the same
-			// tool produce ambiguous mcp-authz rules, so reject duplicates outright
-			// rather than let the gateway combine them in an order we do not control.
-			if _, dup := seenTools[tool]; dup {
-				return fmt.Errorf("%w: endpoint %q has duplicate tool binding %q", utils.ErrInvalidInput, handle, tool)
-			}
-			seenTools[tool] = struct{}{}
 		}
 
 		if endpoint.Upstream.Main == nil || strings.TrimSpace(endpoint.Upstream.Main.URL) == "" {
@@ -1019,30 +1055,13 @@ func validateMCPEndpoints(ctx context.Context, endpoints []models.MCPProxyEndpoi
 	return nil
 }
 
-// validateMCPEndpointSecurity enforces the cross-resource identity-mode rules:
-// every bound scope exists in the org catalog, and an identity-mode endpoint's target
-// environments each have a gateway advertising mcp-auth v1 + mcp-authz v1 in its policy
-// manifest. Bindings to tools absent from capabilities are deliberately accepted (tool
-// lists drift; the console flags them). It performs DB reads, so call it outside a
-// transaction.
+// validateMCPEndpointSecurity enforces the cross-resource identity-mode rule: an
+// identity-mode endpoint's target environments must each have a gateway advertising
+// mcp-auth v1 + mcp-authz v1 in its policy manifest. It performs DB reads, so call
+// it outside a transaction.
 func (s *MCPProxyService) validateMCPEndpointSecurity(ctx context.Context, orgName string, endpoints []models.MCPProxyEndpointDTO) error {
-	catalog, err := s.scopeRepo.List(ctx, orgName)
-	if err != nil {
-		return fmt.Errorf("failed to load scope catalog: %w", err)
-	}
-	known := make(map[string]struct{}, len(catalog))
-	for _, sc := range catalog {
-		known[sc.Name] = struct{}{}
-	}
 	for _, endpoint := range endpoints {
 		handle := strings.TrimSpace(endpoint.ID)
-		for _, b := range endpoint.ToolScopeBindings {
-			for _, scName := range b.Scopes {
-				if _, ok := known[scName]; !ok {
-					return fmt.Errorf("%w: endpoint %q: tool %q references unknown scope %q", utils.ErrInvalidInput, handle, b.Tool, scName)
-				}
-			}
-		}
 		if endpoint.Security == nil || !isBoolTrue(endpoint.Security.Enabled) ||
 			endpoint.Security.Identity == nil || !isBoolTrue(endpoint.Security.Identity.Enabled) {
 			continue
@@ -1136,10 +1155,9 @@ func (s *MCPProxyService) buildMCPEndpointsForStorage(incoming []models.MCPProxy
 	for _, incomingEndpoint := range incoming {
 		handle := strings.TrimSpace(incomingEndpoint.ID)
 		config := models.MCPEndpointConfig{
-			Policies:          copyMCPPolicies(policiesFromPtr(incomingEndpoint.Policies)),
-			Capabilities:      copyMCPCapabilities(incomingEndpoint.Capabilities),
-			Security:          defaultMCPProxySecurity(incomingEndpoint.Security),
-			ToolScopeBindings: copyMCPToolScopeBindings(incomingEndpoint.ToolScopeBindings),
+			Policies:     copyMCPPolicies(policiesFromPtr(incomingEndpoint.Policies)),
+			Capabilities: copyMCPCapabilities(incomingEndpoint.Capabilities),
+			Security:     defaultMCPProxySecurity(incomingEndpoint.Security),
 		}
 		if incomingEndpoint.Upstream.Main != nil {
 			endpoint := *incomingEndpoint.Upstream.Main

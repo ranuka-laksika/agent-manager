@@ -52,6 +52,8 @@ type APIClient struct {
 
 	AgentBuildOptionsAPI *AgentBuildOptionsAPIService
 
+	AgentIdentitiesAPI *AgentIdentitiesAPIService
+
 	AgentIdentityAPI *AgentIdentityAPIService
 
 	AgentKindsAPI *AgentKindsAPIService
@@ -98,7 +100,7 @@ type APIClient struct {
 
 	MCPProxiesAPI *MCPProxiesAPIService
 
-	ScopesAPI *ScopesAPIService
+	MCPProxyScopesAPI *MCPProxyScopesAPIService
 }
 
 type service struct {
@@ -119,6 +121,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	// API Services
 	c.AgentAPIKeysAPI = (*AgentAPIKeysAPIService)(&c.common)
 	c.AgentBuildOptionsAPI = (*AgentBuildOptionsAPIService)(&c.common)
+	c.AgentIdentitiesAPI = (*AgentIdentitiesAPIService)(&c.common)
 	c.AgentIdentityAPI = (*AgentIdentityAPIService)(&c.common)
 	c.AgentKindsAPI = (*AgentKindsAPIService)(&c.common)
 	c.CatalogAPI = (*CatalogAPIService)(&c.common)
@@ -142,7 +145,7 @@ func NewAPIClient(cfg *Configuration) *APIClient {
 	c.LLMProxiesAPI = (*LLMProxiesAPIService)(&c.common)
 	c.MCPAPIKeysAPI = (*MCPAPIKeysAPIService)(&c.common)
 	c.MCPProxiesAPI = (*MCPProxiesAPIService)(&c.common)
-	c.ScopesAPI = (*ScopesAPIService)(&c.common)
+	c.MCPProxyScopesAPI = (*MCPProxyScopesAPIService)(&c.common)
 
 	return c
 }

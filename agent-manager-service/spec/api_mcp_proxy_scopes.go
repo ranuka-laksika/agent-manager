@@ -19,70 +19,68 @@ import (
 	"strings"
 )
 
-// ScopesAPIService ScopesAPI service
-type ScopesAPIService service
+// MCPProxyScopesAPIService MCPProxyScopesAPI service
+type MCPProxyScopesAPIService service
 
-type ApiCreateScopeRequest struct {
-	ctx          context.Context
-	ApiService   *ScopesAPIService
-	orgName      string
-	scopeRequest *ScopeRequest
+type ApiCreateMCPProxyScopeRequest struct {
+	ctx                  context.Context
+	ApiService           *MCPProxyScopesAPIService
+	orgName              string
+	proxyId              string
+	mCPProxyScopeRequest *MCPProxyScopeRequest
 }
 
-func (r ApiCreateScopeRequest) ScopeRequest(scopeRequest ScopeRequest) ApiCreateScopeRequest {
-	r.scopeRequest = &scopeRequest
+func (r ApiCreateMCPProxyScopeRequest) MCPProxyScopeRequest(mCPProxyScopeRequest MCPProxyScopeRequest) ApiCreateMCPProxyScopeRequest {
+	r.mCPProxyScopeRequest = &mCPProxyScopeRequest
 	return r
 }
 
-func (r ApiCreateScopeRequest) Execute() (*ScopeResponse, *http.Response, error) {
-	return r.ApiService.CreateScopeExecute(r)
+func (r ApiCreateMCPProxyScopeRequest) Execute() (*MCPProxyScopeResponse, *http.Response, error) {
+	return r.ApiService.CreateMCPProxyScopeExecute(r)
 }
 
 /*
-CreateScope Create scope
+CreateMCPProxyScope Create MCP proxy scope
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@return ApiCreateScopeRequest
+	@param orgName
+	@param proxyId
+	@return ApiCreateMCPProxyScopeRequest
 */
-func (a *ScopesAPIService) CreateScope(ctx context.Context, orgName string) ApiCreateScopeRequest {
-	return ApiCreateScopeRequest{
+func (a *MCPProxyScopesAPIService) CreateMCPProxyScope(ctx context.Context, orgName string, proxyId string) ApiCreateMCPProxyScopeRequest {
+	return ApiCreateMCPProxyScopeRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
+		proxyId:    proxyId,
 	}
 }
 
 // Execute executes the request
 //
-//	@return ScopeResponse
-func (a *ScopesAPIService) CreateScopeExecute(r ApiCreateScopeRequest) (*ScopeResponse, *http.Response, error) {
+//	@return MCPProxyScopeResponse
+func (a *MCPProxyScopesAPIService) CreateMCPProxyScopeExecute(r ApiCreateMCPProxyScopeRequest) (*MCPProxyScopeResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPost
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *ScopeResponse
+		localVarReturnValue *MCPProxyScopeResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ScopesAPIService.CreateScope")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPProxyScopesAPIService.CreateMCPProxyScope")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/scopes"
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/scopes"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if strlen(r.orgName) < 1 {
-		return localVarReturnValue, nil, reportError("orgName must have at least 1 elements")
-	}
-	if strlen(r.orgName) > 64 {
-		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
-	}
-	if r.scopeRequest == nil {
-		return localVarReturnValue, nil, reportError("scopeRequest is required and must be specified")
+	if r.mCPProxyScopeRequest == nil {
+		return localVarReturnValue, nil, reportError("mCPProxyScopeRequest is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -103,7 +101,7 @@ func (a *ScopesAPIService) CreateScopeExecute(r ApiCreateScopeRequest) (*ScopeRe
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.scopeRequest
+	localVarPostBody = r.mCPProxyScopeRequest
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
@@ -126,38 +124,6 @@ func (a *ScopesAPIService) CreateScopeExecute(r ApiCreateScopeRequest) (*ScopeRe
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		if localVarHTTPResponse.StatusCode == 400 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 409 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -173,62 +139,60 @@ func (a *ScopesAPIService) CreateScopeExecute(r ApiCreateScopeRequest) (*ScopeRe
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiDeleteScopeRequest struct {
-	ctx        context.Context
-	ApiService *ScopesAPIService
-	orgName    string
-	scopeName  string
+type ApiDeleteMCPProxyScopeRequest struct {
+	ctx         context.Context
+	ApiService  *MCPProxyScopesAPIService
+	orgName     string
+	proxyId     string
+	scopeAction string
 }
 
-func (r ApiDeleteScopeRequest) Execute() (*http.Response, error) {
-	return r.ApiService.DeleteScopeExecute(r)
+func (r ApiDeleteMCPProxyScopeRequest) Execute() (*http.Response, error) {
+	return r.ApiService.DeleteMCPProxyScopeExecute(r)
 }
 
 /*
-DeleteScope Delete scope
+DeleteMCPProxyScope Delete MCP proxy scope
 
-Fails with 409 while the scope is referenced by any MCP proxy environment tool binding.
+Deletes the scope. Best-effort removal of the corresponding Thunder action and role permissions, then gateway re-emission; tools the scope covered become authenticated-only unless another scope covers them.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param scopeName Scope name
-	@return ApiDeleteScopeRequest
+	@param orgName
+	@param proxyId
+	@param scopeAction
+	@return ApiDeleteMCPProxyScopeRequest
 */
-func (a *ScopesAPIService) DeleteScope(ctx context.Context, orgName string, scopeName string) ApiDeleteScopeRequest {
-	return ApiDeleteScopeRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		scopeName:  scopeName,
+func (a *MCPProxyScopesAPIService) DeleteMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string) ApiDeleteMCPProxyScopeRequest {
+	return ApiDeleteMCPProxyScopeRequest{
+		ApiService:  a,
+		ctx:         ctx,
+		orgName:     orgName,
+		proxyId:     proxyId,
+		scopeAction: scopeAction,
 	}
 }
 
 // Execute executes the request
-func (a *ScopesAPIService) DeleteScopeExecute(r ApiDeleteScopeRequest) (*http.Response, error) {
+func (a *MCPProxyScopesAPIService) DeleteMCPProxyScopeExecute(r ApiDeleteMCPProxyScopeRequest) (*http.Response, error) {
 	var (
 		localVarHTTPMethod = http.MethodDelete
 		localVarPostBody   interface{}
 		formFiles          []formFile
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ScopesAPIService.DeleteScope")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPProxyScopesAPIService.DeleteMCPProxyScope")
 	if err != nil {
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/scopes/{scopeName}"
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"scopeName"+"}", url.PathEscape(parameterValueToString(r.scopeName, "scopeName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"scopeAction"+"}", url.PathEscape(parameterValueToString(r.scopeAction, "scopeAction")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if strlen(r.orgName) < 1 {
-		return nil, reportError("orgName must have at least 1 elements")
-	}
-	if strlen(r.orgName) > 64 {
-		return nil, reportError("orgName must have less than 64 elements")
-	}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -240,7 +204,7 @@ func (a *ScopesAPIService) DeleteScopeExecute(r ApiDeleteScopeRequest) (*http.Re
 	}
 
 	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{"application/json"}
+	localVarHTTPHeaderAccepts := []string{}
 
 	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
@@ -269,99 +233,65 @@ func (a *ScopesAPIService) DeleteScopeExecute(r ApiDeleteScopeRequest) (*http.Re
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		if localVarHTTPResponse.StatusCode == 404 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 409 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
 		return localVarHTTPResponse, newErr
 	}
 
 	return localVarHTTPResponse, nil
 }
 
-type ApiListScopesRequest struct {
+type ApiListMCPProxyScopesRequest struct {
 	ctx        context.Context
-	ApiService *ScopesAPIService
+	ApiService *MCPProxyScopesAPIService
 	orgName    string
+	proxyId    string
 }
 
-func (r ApiListScopesRequest) Execute() (*ScopeListResponse, *http.Response, error) {
-	return r.ApiService.ListScopesExecute(r)
+func (r ApiListMCPProxyScopesRequest) Execute() (*MCPProxyScopeListResponse, *http.Response, error) {
+	return r.ApiService.ListMCPProxyScopesExecute(r)
 }
 
 /*
-ListScopes List scopes
+ListMCPProxyScopes List MCP proxy scopes
 
-Lists the organization's scope catalog (org-global, resource-agnostic).
+Lists the proxy's scopes. Each scope is an action on the resource server this proxy is; the token scope string is "<proxy-handle>:<action>".
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@return ApiListScopesRequest
+	@param orgName
+	@param proxyId
+	@return ApiListMCPProxyScopesRequest
 */
-func (a *ScopesAPIService) ListScopes(ctx context.Context, orgName string) ApiListScopesRequest {
-	return ApiListScopesRequest{
+func (a *MCPProxyScopesAPIService) ListMCPProxyScopes(ctx context.Context, orgName string, proxyId string) ApiListMCPProxyScopesRequest {
+	return ApiListMCPProxyScopesRequest{
 		ApiService: a,
 		ctx:        ctx,
 		orgName:    orgName,
+		proxyId:    proxyId,
 	}
 }
 
 // Execute executes the request
 //
-//	@return ScopeListResponse
-func (a *ScopesAPIService) ListScopesExecute(r ApiListScopesRequest) (*ScopeListResponse, *http.Response, error) {
+//	@return MCPProxyScopeListResponse
+func (a *MCPProxyScopesAPIService) ListMCPProxyScopesExecute(r ApiListMCPProxyScopesRequest) (*MCPProxyScopeListResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *ScopeListResponse
+		localVarReturnValue *MCPProxyScopeListResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ScopesAPIService.ListScopes")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPProxyScopesAPIService.ListMCPProxyScopes")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/scopes"
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/scopes"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if strlen(r.orgName) < 1 {
-		return localVarReturnValue, nil, reportError("orgName must have at least 1 elements")
-	}
-	if strlen(r.orgName) > 64 {
-		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
-	}
 
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
@@ -402,27 +332,6 @@ func (a *ScopesAPIService) ListScopesExecute(r ApiListScopesRequest) (*ScopeList
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		if localVarHTTPResponse.StatusCode == 401 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
@@ -438,71 +347,71 @@ func (a *ScopesAPIService) ListScopesExecute(r ApiListScopesRequest) (*ScopeList
 	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
-type ApiUpdateScopeRequest struct {
-	ctx                context.Context
-	ApiService         *ScopesAPIService
-	orgName            string
-	scopeName          string
-	scopeUpdateRequest *ScopeUpdateRequest
+type ApiUpdateMCPProxyScopeRequest struct {
+	ctx                        context.Context
+	ApiService                 *MCPProxyScopesAPIService
+	orgName                    string
+	proxyId                    string
+	scopeAction                string
+	mCPProxyScopeUpdateRequest *MCPProxyScopeUpdateRequest
 }
 
-func (r ApiUpdateScopeRequest) ScopeUpdateRequest(scopeUpdateRequest ScopeUpdateRequest) ApiUpdateScopeRequest {
-	r.scopeUpdateRequest = &scopeUpdateRequest
+func (r ApiUpdateMCPProxyScopeRequest) MCPProxyScopeUpdateRequest(mCPProxyScopeUpdateRequest MCPProxyScopeUpdateRequest) ApiUpdateMCPProxyScopeRequest {
+	r.mCPProxyScopeUpdateRequest = &mCPProxyScopeUpdateRequest
 	return r
 }
 
-func (r ApiUpdateScopeRequest) Execute() (*ScopeResponse, *http.Response, error) {
-	return r.ApiService.UpdateScopeExecute(r)
+func (r ApiUpdateMCPProxyScopeRequest) Execute() (*MCPProxyScopeResponse, *http.Response, error) {
+	return r.ApiService.UpdateMCPProxyScopeExecute(r)
 }
 
 /*
-UpdateScope Update scope description
+UpdateMCPProxyScope Update MCP proxy scope
+
+Updates description and/or tools. The action itself is immutable (rename = delete + create).
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param orgName Organization name/handle
-	@param scopeName Scope name
-	@return ApiUpdateScopeRequest
+	@param orgName
+	@param proxyId
+	@param scopeAction
+	@return ApiUpdateMCPProxyScopeRequest
 */
-func (a *ScopesAPIService) UpdateScope(ctx context.Context, orgName string, scopeName string) ApiUpdateScopeRequest {
-	return ApiUpdateScopeRequest{
-		ApiService: a,
-		ctx:        ctx,
-		orgName:    orgName,
-		scopeName:  scopeName,
+func (a *MCPProxyScopesAPIService) UpdateMCPProxyScope(ctx context.Context, orgName string, proxyId string, scopeAction string) ApiUpdateMCPProxyScopeRequest {
+	return ApiUpdateMCPProxyScopeRequest{
+		ApiService:  a,
+		ctx:         ctx,
+		orgName:     orgName,
+		proxyId:     proxyId,
+		scopeAction: scopeAction,
 	}
 }
 
 // Execute executes the request
 //
-//	@return ScopeResponse
-func (a *ScopesAPIService) UpdateScopeExecute(r ApiUpdateScopeRequest) (*ScopeResponse, *http.Response, error) {
+//	@return MCPProxyScopeResponse
+func (a *MCPProxyScopesAPIService) UpdateMCPProxyScopeExecute(r ApiUpdateMCPProxyScopeRequest) (*MCPProxyScopeResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodPut
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue *ScopeResponse
+		localVarReturnValue *MCPProxyScopeResponse
 	)
 
-	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "ScopesAPIService.UpdateScope")
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "MCPProxyScopesAPIService.UpdateMCPProxyScope")
 	if err != nil {
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/orgs/{orgName}/scopes/{scopeName}"
+	localVarPath := localBasePath + "/orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}"
 	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
-	localVarPath = strings.Replace(localVarPath, "{"+"scopeName"+"}", url.PathEscape(parameterValueToString(r.scopeName, "scopeName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"proxyId"+"}", url.PathEscape(parameterValueToString(r.proxyId, "proxyId")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"scopeAction"+"}", url.PathEscape(parameterValueToString(r.scopeAction, "scopeAction")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if strlen(r.orgName) < 1 {
-		return localVarReturnValue, nil, reportError("orgName must have at least 1 elements")
-	}
-	if strlen(r.orgName) > 64 {
-		return localVarReturnValue, nil, reportError("orgName must have less than 64 elements")
-	}
-	if r.scopeUpdateRequest == nil {
-		return localVarReturnValue, nil, reportError("scopeUpdateRequest is required and must be specified")
+	if r.mCPProxyScopeUpdateRequest == nil {
+		return localVarReturnValue, nil, reportError("mCPProxyScopeUpdateRequest is required and must be specified")
 	}
 
 	// to determine the Content-Type header
@@ -523,7 +432,7 @@ func (a *ScopesAPIService) UpdateScopeExecute(r ApiUpdateScopeRequest) (*ScopeRe
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
 	// body params
-	localVarPostBody = r.scopeUpdateRequest
+	localVarPostBody = r.mCPProxyScopeUpdateRequest
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
@@ -545,27 +454,6 @@ func (a *ScopesAPIService) UpdateScopeExecute(r ApiUpdateScopeRequest) (*ScopeRe
 		newErr := &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
-		}
-		if localVarHTTPResponse.StatusCode == 404 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
-			return localVarReturnValue, localVarHTTPResponse, newErr
-		}
-		if localVarHTTPResponse.StatusCode == 500 {
-			var v ErrorResponse
-			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
-			if err != nil {
-				newErr.error = err.Error()
-				return localVarReturnValue, localVarHTTPResponse, newErr
-			}
-			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}

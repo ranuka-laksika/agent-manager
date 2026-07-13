@@ -22,9 +22,10 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/rbac"
 )
 
-func registerScopeRoutes(rr *middleware.RouteRegistrar, ctrl controllers.ScopeController) {
-	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/scopes", rbac.ScopeRead, ctrl.ListScopes)
-	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/scopes", rbac.ScopeCreate, ctrl.CreateScope)
-	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/scopes/{scopeName}", rbac.ScopeUpdate, ctrl.UpdateScope)
-	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/scopes/{scopeName}", rbac.ScopeDelete, ctrl.DeleteScope)
+func registerMCPProxyScopeRoutes(rr *middleware.RouteRegistrar, ctrl controllers.MCPProxyScopeController) {
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/mcp-proxies/{proxyId}/scopes", rbac.ScopeRead, ctrl.ListMCPProxyScopes)
+	rr.HandleFuncWithValidationAndAuthz("POST /orgs/{orgName}/mcp-proxies/{proxyId}/scopes", rbac.ScopeCreate, ctrl.CreateMCPProxyScope)
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeUpdate, ctrl.UpdateMCPProxyScope)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}", rbac.ScopeDelete, ctrl.DeleteMCPProxyScope)
+	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/environments/{envName}/agent-identities/scopes", rbac.AgentIdentityRead, ctrl.ListAgentIdentityScopes)
 }

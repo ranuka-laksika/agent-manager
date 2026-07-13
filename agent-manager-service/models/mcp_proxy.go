@@ -83,10 +83,6 @@ type MCPProxyConfig struct {
 	Policies     []MCPPolicy           `json:"policies,omitempty"`
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
-	// ToolScopeBindings is the flat root-level copy populated only on flattened
-	// per-endpoint deployable artifacts (mirrors the Security duality); on a source
-	// MCPProxy the bindings live per-endpoint in MCPProxyEndpoint.Configuration.
-	ToolScopeBindings []MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
 }
 
 // MCPProxyEndpoint is the deployable proxy definition. One endpoint can be deployed
@@ -130,13 +126,6 @@ func (MCPProxyEndpointEnvironment) TableName() string {
 	return "mcp_proxy_endpoint_environments"
 }
 
-// MCPToolScopeBinding binds catalog scopes to one MCP tool in one environment.
-// Scope names reference the org-global scopes catalog by name.
-type MCPToolScopeBinding struct {
-	Tool   string   `json:"tool"`
-	Scopes []string `json:"scopes"`
-}
-
 // MCPEndpointConfig is the deployable configuration stored on one endpoint's
 // configuration JSONB. Upstream holds the single backend endpoint (URL + auth) the
 // endpoint proxies. The stable gateway artifact identity for a given (endpoint,
@@ -148,10 +137,6 @@ type MCPEndpointConfig struct {
 	Policies     []MCPPolicy           `json:"policies,omitempty"`
 	Capabilities *MCPProxyCapabilities `json:"capabilities,omitempty"`
 	Security     *SecurityConfig       `json:"security,omitempty"`
-
-	// ToolScopeBindings binds catalog scopes to this endpoint's MCP tools.
-	// Only meaningful when Security selects the Agent Identity variant.
-	ToolScopeBindings []MCPToolScopeBinding `json:"toolScopeBindings,omitempty"`
 }
 
 // MCP proxy per-environment deployment status values reported on read.
@@ -197,14 +182,13 @@ type MCPProxyDTO struct {
 // Environments carries target environment UUIDs (DeploymentStatus ignored). On read,
 // each entry reports the (endpoint, environment) deployment status.
 type MCPProxyEndpointDTO struct {
-	ID                string                      `json:"id"`
-	Name              string                      `json:"name,omitempty"`
-	Upstream          UpstreamConfig              `json:"upstream"`
-	Policies          *[]MCPPolicy                `json:"policies,omitempty"`
-	Capabilities      *MCPProxyCapabilities       `json:"capabilities,omitempty"`
-	Security          *SecurityConfig             `json:"security,omitempty"`
-	ToolScopeBindings []MCPToolScopeBinding       `json:"toolScopeBindings,omitempty"`
-	Environments      []MCPEndpointEnvironmentDTO `json:"environments,omitempty"`
+	ID           string                      `json:"id"`
+	Name         string                      `json:"name,omitempty"`
+	Upstream     UpstreamConfig              `json:"upstream"`
+	Policies     *[]MCPPolicy                `json:"policies,omitempty"`
+	Capabilities *MCPProxyCapabilities       `json:"capabilities,omitempty"`
+	Security     *SecurityConfig             `json:"security,omitempty"`
+	Environments []MCPEndpointEnvironmentDTO `json:"environments,omitempty"`
 }
 
 // MCPEndpointEnvironmentDTO is one endpoint→environment binding. EnvironmentUUID is

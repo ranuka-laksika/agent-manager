@@ -53,7 +53,7 @@ func TestGenerateMCPProxyDeploymentYAML_Basic(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -114,7 +114,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithContextAndVhost(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestGenerateMCPProxyDeploymentYAML_StripsMCPSuffix(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithSecurityAPIKey(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -254,7 +254,7 @@ func TestGenerateMCPProxyDeploymentYAML_SecurityValidation(t *testing.T) {
 				},
 			}
 
-			_, err := service.generateMCPProxyDeploymentYAML(proxy)
+			_, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 			if tt.expectErr {
 				if err == nil {
 					t.Fatal("expected an error, got nil")
@@ -294,7 +294,7 @@ func TestGenerateMCPProxyDeploymentYAML_WithBackendAuth(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestGenerateMCPProxyDeploymentYAML_PrefersArtifactIdentity(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -394,7 +394,7 @@ func TestGenerateMCPProxyDeploymentYAML_PolicyVersionNormalized(t *testing.T) {
 		},
 	}
 
-	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy)
+	yamlStr, err := service.generateMCPProxyDeploymentYAML(proxy, "x", nil)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -443,7 +443,7 @@ func TestGenerateMCPProxyDeploymentYAML_MissingUpstreamURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			service := &MCPProxyService{}
-			_, err := service.generateMCPProxyDeploymentYAML(tt.proxy)
+			_, err := service.generateMCPProxyDeploymentYAML(tt.proxy, "x", nil)
 			if err == nil {
 				t.Fatal("expected an error for missing upstream URL, got nil")
 			}
@@ -667,62 +667,56 @@ func TestNormalizeMCPUpstreamURLForDeployment(t *testing.T) {
 	}
 }
 
-// TestAppendMCPIdentityAuthPolicies covers the Agent Identity policy emission:
-// mcp-auth (with the pinned issuer and a sorted scope union) plus per-tool mcp-authz.
-func TestAppendMCPIdentityAuthPolicies(t *testing.T) {
-	enabled := true
-	identity := &models.SecurityConfig{Enabled: &enabled, Identity: &models.IdentitySecurity{Enabled: &enabled}}
-	bindings := []models.MCPToolScopeBinding{
-		{Tool: "list_repos", Scopes: []string{"repo:read.all"}},
-		{Tool: "create_issue", Scopes: []string{"repo:write.all", "repo:read.all"}},
+// TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules covers the Agent Identity
+// policy emission: mcp-auth (pinned issuer, no requiredScopes — jwt-auth would enforce
+// all of them) plus one mcp-authz rule per tool, inverted from the proxy's scope->tools rows.
+func TestAppendMCPIdentityAuthPolicies_InvertsScopesToPerToolRules(t *testing.T) {
+	on := true
+	sec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}}
+	scopes := []models.MCPProxyScope{
+		{Action: "read", Tools: []string{"get_repo", "list_repos"}},
+		{Action: "admin", Tools: []string{"delete_repo", "get_repo"}},
 	}
+	out := appendMCPIdentityAuthPolicies(nil, sec, "gh-proxy", scopes)
+	assert.Len(t, out, 2)
 
-	t.Run("disabled security emits nothing", func(t *testing.T) {
-		out := appendMCPIdentityAuthPolicies(nil, nil, bindings)
-		assert.Empty(t, out)
-	})
+	auth := out[0]
+	assert.Equal(t, "mcp-auth", auth.Name)
+	assert.Equal(t, []interface{}{"ThunderKeyManager"}, auth.Params["issuers"])
+	assert.NotContains(t, auth.Params, "requiredScopes")
 
-	t.Run("api-key security emits nothing", func(t *testing.T) {
-		sec := &models.SecurityConfig{Enabled: &enabled, APIKey: &models.APIKeySecurity{Enabled: &enabled}}
-		assert.Empty(t, appendMCPIdentityAuthPolicies(nil, sec, bindings))
-	})
+	authz := out[1]
+	assert.Equal(t, "mcp-authz", authz.Name)
+	rules := authz.Params["tools"].([]map[string]interface{})
+	assert.Equal(t, []map[string]interface{}{
+		{"name": "delete_repo", "requiredScopes": []string{"gh-proxy:admin"}},
+		{"name": "get_repo", "requiredScopes": []string{"gh-proxy:admin", "gh-proxy:read"}},
+		{"name": "list_repos", "requiredScopes": []string{"gh-proxy:read"}},
+	}, rules)
+}
 
-	t.Run("identity mode emits mcp-auth with sorted scope union and per-tool mcp-authz", func(t *testing.T) {
-		out := appendMCPIdentityAuthPolicies(nil, identity, bindings)
-		assert.Len(t, out, 2)
-		assert.Equal(t, "mcp-auth", out[0].Name)
-		assert.Equal(t, "v1", out[0].Version)
-		assert.Equal(t, []interface{}{"ThunderKeyManager"}, out[0].Params["issuers"])
-		assert.Equal(t, []string{"repo:read.all", "repo:write.all"}, out[0].Params["requiredScopes"])
-		assert.Equal(t, "mcp-authz", out[1].Name)
-		assert.Equal(t, "v1", out[1].Version)
-		tools := out[1].Params["tools"].([]map[string]interface{})
-		assert.Len(t, tools, 2)
-		assert.Equal(t, "list_repos", tools[0]["name"])
-		assert.Equal(t, "create_issue", tools[1]["name"])
-	})
+func TestAppendMCPIdentityAuthPolicies_NoScopesEmitsAuthOnly(t *testing.T) {
+	on := true
+	sec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: &on}}
+	out := appendMCPIdentityAuthPolicies(nil, sec, "gh-proxy", nil)
+	assert.Len(t, out, 1)
+	assert.Equal(t, "mcp-auth", out[0].Name)
+	_, hasScopes := out[0].Params["requiredScopes"]
+	assert.False(t, hasScopes)
+}
 
-	t.Run("no bindings: mcp-auth only, no requiredScopes, no mcp-authz", func(t *testing.T) {
-		out := appendMCPIdentityAuthPolicies(nil, identity, nil)
-		assert.Len(t, out, 1)
-		assert.Equal(t, "mcp-auth", out[0].Name)
-		_, hasScopes := out[0].Params["requiredScopes"]
-		assert.False(t, hasScopes)
-	})
+func TestAppendMCPIdentityAuthPolicies_IdentityOffEmitsNothing(t *testing.T) {
+	scopes := []models.MCPProxyScope{{Action: "read", Tools: []string{"get_repo"}}}
 
-	t.Run("binding with empty scopes list is skipped", func(t *testing.T) {
-		out := appendMCPIdentityAuthPolicies(nil, identity, []models.MCPToolScopeBinding{{Tool: "x", Scopes: nil}})
-		assert.Len(t, out, 1) // auth only — unbound tools stay authenticated-only
-	})
+	assert.Empty(t, appendMCPIdentityAuthPolicies(nil, nil, "gh-proxy", scopes))
 
-	t.Run("preserves and appends to existing policies", func(t *testing.T) {
-		existing := []models.MCPPolicy{{Name: "log-message", Version: "v1"}}
-		out := appendMCPIdentityAuthPolicies(existing, identity, bindings)
-		assert.Len(t, out, 3)
-		assert.Equal(t, "log-message", out[0].Name)
-		assert.Equal(t, "mcp-auth", out[1].Name)
-		assert.Equal(t, "mcp-authz", out[2].Name)
-	})
+	on := true
+	apiKeySec := &models.SecurityConfig{Enabled: &on, APIKey: &models.APIKeySecurity{Enabled: &on}}
+	assert.Empty(t, appendMCPIdentityAuthPolicies(nil, apiKeySec, "gh-proxy", scopes))
+
+	existing := []models.MCPPolicy{{Name: "log-message", Version: "v1"}}
+	disabledIdentitySec := &models.SecurityConfig{Enabled: &on, Identity: &models.IdentitySecurity{Enabled: boolPtr(false)}}
+	assert.Equal(t, existing, appendMCPIdentityAuthPolicies(existing, disabledIdentitySec, "gh-proxy", scopes))
 }
 
 func TestMCPProxyEnvArtifactHandleUsesFullCompactedEnvironmentUUID(t *testing.T) {

@@ -6153,6 +6153,130 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/mcp-proxies/{proxyId}/scopes:
+    get:
+      summary: List MCP proxy scopes
+      description: Lists the proxy's scopes. Each scope is an action on the resource server this proxy is; the token scope string is "<proxy-handle>:<action>".
+      operationId: listMCPProxyScopes
+      tags: [MCPProxyScopes]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proxyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Scope list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPProxyScopeListResponse"
+        "404":
+          description: MCP proxy not found
+    post:
+      summary: Create MCP proxy scope
+      operationId: createMCPProxyScope
+      tags: [MCPProxyScopes]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proxyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MCPProxyScopeRequest"
+      responses:
+        "201":
+          description: Scope created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPProxyScopeResponse"
+        "400":
+          description: Invalid action, tools, or unknown tool name
+        "404":
+          description: MCP proxy not found
+        "409":
+          description: A scope with this action already exists on the proxy
+  /orgs/{orgName}/mcp-proxies/{proxyId}/scopes/{scopeAction}:
+    put:
+      summary: Update MCP proxy scope
+      description: Updates description and/or tools. The action itself is immutable (rename = delete + create).
+      operationId: updateMCPProxyScope
+      tags: [MCPProxyScopes]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proxyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: scopeAction
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MCPProxyScopeUpdateRequest"
+      responses:
+        "200":
+          description: Scope updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MCPProxyScopeResponse"
+        "404":
+          description: MCP proxy or scope not found
+    delete:
+      summary: Delete MCP proxy scope
+      description: Deletes the scope. Best-effort removal of the corresponding Thunder action and role permissions, then gateway re-emission; tools the scope covered become authenticated-only unless another scope covers them.
+      operationId: deleteMCPProxyScope
+      tags: [MCPProxyScopes]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: proxyId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: scopeAction
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Scope deleted
+        "404":
+          description: MCP proxy or scope not found
+
   # ============================================
   # LLM DEPLOYMENT ENDPOINTS
   # ============================================
@@ -9757,153 +9881,6 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
-  /orgs/{orgName}/scopes:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name/handle
-        schema:
-          type: string
-          pattern: "^[a-z0-9-]+$"
-          minLength: 1
-          maxLength: 64
-    get:
-      tags:
-        - Scopes
-      summary: List scopes
-      description: Lists the organization's scope catalog (org-global, resource-agnostic).
-      operationId: listScopes
-      responses:
-        "200":
-          description: Scope list
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScopeListResponse"
-        "401":
-          description: Unauthorized - invalid or missing authentication
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    post:
-      tags:
-        - Scopes
-      summary: Create scope
-      operationId: createScope
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ScopeRequest"
-      responses:
-        "201":
-          description: Scope created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScopeResponse"
-        "400":
-          description: Invalid scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: A scope with this name already exists
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-  /orgs/{orgName}/scopes/{scopeName}:
-    parameters:
-      - name: orgName
-        in: path
-        required: true
-        description: Organization name/handle
-        schema:
-          type: string
-          pattern: "^[a-z0-9-]+$"
-          minLength: 1
-          maxLength: 64
-      - name: scopeName
-        in: path
-        required: true
-        description: Scope name
-        schema:
-          type: string
-    put:
-      tags:
-        - Scopes
-      summary: Update scope description
-      operationId: updateScope
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ScopeUpdateRequest"
-      responses:
-        "200":
-          description: Scope updated
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ScopeResponse"
-        "404":
-          description: Scope not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-    delete:
-      tags:
-        - Scopes
-      summary: Delete scope
-      description: Fails with 409 while the scope is referenced by any MCP proxy environment tool binding.
-      operationId: deleteScope
-      responses:
-        "204":
-          description: Scope deleted
-        "404":
-          description: Scope not found
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "409":
-          description: Scope is still referenced by one or more tool bindings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-        "500":
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorResponse"
-
   /orgs/{orgName}/environments/{envName}/agent-identities/groups:
     parameters:
       - $ref: "#/components/parameters/AgentIdentityOrgName"
@@ -10452,6 +10429,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/environments/{envName}/agent-identities/scopes:
+    get:
+      summary: List grantable agent-identity scopes for an environment
+      description: Aggregates scopes from MCP proxies that are deployed to this environment with identity security enabled. Read-only; powers role building.
+      operationId: listAgentIdentityScopes
+      tags: [AgentIdentities]
+      parameters:
+        - name: orgName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: envName
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Grantable scopes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgentIdentityScopeListResponse"
+        "404":
+          description: Environment not found
+
 components:
   parameters:
     AgentIdentityOrgName:
@@ -10502,56 +10506,64 @@ components:
         minimum: 1
         maximum: 100
   schemas:
-    ScopeRequest:
+    MCPProxyScopeRequest:
       type: object
-      required:
-        - name
+      required: [action, tools]
       properties:
-        name:
+        action:
           type: string
-          pattern: '^[A-Za-z0-9:._\-]{1,256}$'
-          description: Scope name (org-global, resource-agnostic)
-          example: "repo:read.all"
+          pattern: '^[A-Za-z0-9._\-]{1,100}$'
+          description: Action name on the proxy's resource server; the token scope is "<proxy-handle>:<action>".
+          example: "read"
         description:
           type: string
-          description: Human-readable description of the scope
-    ScopeUpdateRequest:
+          example: Read access to repository tools
+        tools:
+          type: array
+          minItems: 1
+          items:
+            type: string
+          description: MCP tool names this scope authorizes.
+    MCPProxyScopeUpdateRequest:
       type: object
       properties:
         description:
           type: string
-          description: Human-readable description of the scope
-    ScopeResponse:
+        tools:
+          type: array
+          minItems: 1
+          items:
+            type: string
+    MCPProxyScopeResponse:
       type: object
-      required:
-        - name
+      required: [action, scope, tools]
       properties:
-        id:
+        action:
           type: string
-          format: uuid
-        name:
+        scope:
           type: string
-          example: "repo:read.all"
+          description: Derived token scope string ("<proxy-handle>:<action>").
+          example: "gh-proxy:read"
         description:
           type: string
+        tools:
+          type: array
+          items:
+            type: string
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type: string
           format: date-time
-        bindingCount:
-          type: integer
-          description: Number of MCP proxy environment tool bindings referencing this scope
-    ScopeListResponse:
+    MCPProxyScopeListResponse:
       type: object
-      required:
-        - scopes
+      required: [scopes]
       properties:
         scopes:
           type: array
           items:
-            $ref: "#/components/schemas/ScopeResponse"
+            $ref: "#/components/schemas/MCPProxyScopeResponse"
     AgentIdentityGroupRequest:
       type: object
       required:
@@ -10584,7 +10596,11 @@ components:
           type: array
           items:
             type: string
-          description: Catalog scope names carried as the role's permissions
+          description: >-
+            Scope strings ("<proxy-handle>:<action>") carried as the role's
+            permissions. On update this is a full replacement of the role's
+            scopes: omit the field to leave existing scopes untouched, or send
+            an explicit empty array to clear them all.
     AgentIdentityAssignmentsRequest:
       type: object
       required:
@@ -10630,6 +10646,28 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AgentIdentityAgentResponse"
+    AgentIdentityScopeEntry:
+      type: object
+      required: [scope, mcpProxyId]
+      properties:
+        scope:
+          type: string
+          example: "gh-proxy:read"
+        description:
+          type: string
+        mcpProxyId:
+          type: string
+          description: Handle of the owning MCP proxy.
+        mcpProxyName:
+          type: string
+    AgentIdentityScopeListResponse:
+      type: object
+      required: [scopes]
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgentIdentityScopeEntry"
     ConfigResponse:
       type: object
       required:
@@ -14970,6 +15008,8 @@ components:
         id:
           type: string
           description: Unique handle for the MCP proxy
+          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          maxLength: 100
           example: github-mcp
         name:
           type: string
@@ -15133,31 +15173,13 @@ components:
         pagination:
           $ref: "#/components/schemas/PaginationInfo"
 
-    MCPToolScopeBinding:
-      type: object
-      required:
-        - tool
-        - scopes
-      properties:
-        tool:
-          type: string
-          description: Name of the MCP tool the scopes gate
-          example: list_repos
-        scopes:
-          type: array
-          description: Catalog scope names required to call the tool
-          items:
-            type: string
-          example:
-            - repo:read.all
-
     MCPProxyEndpoint:
       type: object
       description: >-
         One deployable endpoint of an MCP proxy. An endpoint carries the upstream
-        (URL + auth), policies, capabilities, security, and tool-scope bindings,
-        and is deployed to one or more environments. Within a proxy an endpoint's
-        id is unique and an environment maps to at most one endpoint.
+        (URL + auth), policies, capabilities, and security, and is deployed to one
+        or more environments. Within a proxy an endpoint's id is unique and an
+        environment maps to at most one endpoint.
       required:
         - id
         - upstream
@@ -15179,10 +15201,6 @@ components:
           $ref: "#/components/schemas/MCPProxyCapabilities"
         security:
           $ref: "#/components/schemas/SecurityConfig"
-        toolScopeBindings:
-          type: array
-          items:
-            $ref: "#/components/schemas/MCPToolScopeBinding"
         environments:
           type: array
           description: Environments this endpoint is deployed to.
