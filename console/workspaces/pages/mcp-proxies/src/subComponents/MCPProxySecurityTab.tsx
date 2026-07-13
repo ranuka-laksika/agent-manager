@@ -283,7 +283,7 @@ export function MCPProxySecurityTab({
     setToolScopeRows(rows);
     lastSavedToolScopeRowsRef.current = rows;
     setToolScopesError(undefined);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogScopes changes are handled by the effect below
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handled by the effect below
   }, [selectedEndpointId]);
 
   // Reseed when the scope list refetches (e.g. right after Save invalidates
@@ -297,7 +297,7 @@ export function MCPProxySecurityTab({
     const rows = buildRowsFromScopes(catalogScopes);
     setToolScopeRows(rows);
     lastSavedToolScopeRowsRef.current = rows;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- toolScopesDirty is a guard, not a trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- guard, not a trigger dep
   }, [catalogScopes]);
 
   const handleAddToolScopeRow = useCallback(() => {

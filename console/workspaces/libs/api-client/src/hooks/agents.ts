@@ -18,9 +18,10 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent, updateAgentBuildParameters,
-  getAgentRoles, getAgentGroups, getAgentIdentity, provisionAgentIdentity, regenerateAgentIdentitySecret,
-  revokeAgentIdentitySecret, getAgentCredentials, claimAgentIdentitySecret,
+  createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent,
+  updateAgentBuildParameters, getAgentRoles, getAgentGroups, getAgentIdentity,
+  provisionAgentIdentity, regenerateAgentIdentitySecret, revokeAgentIdentitySecret,
+  getAgentCredentials, claimAgentIdentitySecret,
 } from "../apis";
 import { SLOW_POLL_INTERVAL } from "../utils";
 import type {
@@ -187,7 +188,10 @@ export function useGetAgentGroups(params: GetAgentGroupsPathParams, query: GetAg
 
 // --- Agent identity: AgentID lifecycle (per environment) ---
 
-export function useGetAgentIdentity(params: GetAgentIdentityPathParams, query?: GetAgentIdentityQuery) {
+export function useGetAgentIdentity(
+  params: GetAgentIdentityPathParams,
+  query?: GetAgentIdentityQuery,
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<AgentIdentityEnvironmentView[]>({
     queryKey: ['agent-identity', params, query],
@@ -254,7 +258,10 @@ export function useRevokeAgentIdentitySecret() {
   });
 }
 
-export function useGetAgentCredentials(params: GetAgentCredentialsPathParams, query: GetAgentCredentialsQuery) {
+export function useGetAgentCredentials(
+  params: GetAgentCredentialsPathParams,
+  query: GetAgentCredentialsQuery,
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<AgentCredentialsResponse>({
     queryKey: ['agent-credentials', params, query],

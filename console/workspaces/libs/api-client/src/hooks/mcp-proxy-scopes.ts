@@ -73,7 +73,9 @@ export function useUpdateMCPProxyScope() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();
   return useApiMutation<
-    MCPProxyScopeResponse, unknown, { params: MCPProxyScopePathParams; body: MCPProxyScopeUpdateRequest }
+    MCPProxyScopeResponse,
+    unknown,
+    { params: MCPProxyScopePathParams; body: MCPProxyScopeUpdateRequest }
   >({
     action: { verb: 'update', target: 'scope' },
     mutationFn: ({ params, body }) => updateMCPProxyScope(params, body, getToken),

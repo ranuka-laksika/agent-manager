@@ -138,7 +138,7 @@ export const AgentDetailPage: React.FC = () => {
 
         {(rolesError != null || groupsError != null) && (
           <Alert severity="error">
-            Failed to load this agent's roles/groups. Please try again.
+            Failed to load this agent&apos;s roles/groups. Please try again.
           </Alert>
         )}
 
