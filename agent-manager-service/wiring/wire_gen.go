@@ -163,13 +163,10 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	identityController := controllers.NewIdentityController(identityClient)
 	scopeService := services.NewScopeService(scopeRepository, mcpProxyRepository)
 	scopeController := controllers.NewScopeController(scopeService)
-	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
-	if err != nil {
-		return nil, err
-	}
+	envThunderResolver := ProvideEnvThunderResolver(secretManagementClient)
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, scopeRepository, agentThunderClientRepository)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
-	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioning, agentThunderClientRepository, logger)
+	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioning, agentIdentityInjectionService, agentThunderClientRepository, logger)
 	traceObserverSvcClient, err := ProvideTraceObserverClient(configConfig, authProvider)
 	if err != nil {
 		return nil, err
@@ -277,15 +274,8 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentKindRepository := ProvideAgentKindRepository(db)
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
-	envThunderResolver, err := ProvideEnvThunderResolver(configConfig)
-	if err != nil {
-		return nil, err
-	}
-	agentSecretStore, err := ProvideAgentSecretStore(configConfig)
-	if err != nil {
-		return nil, err
-	}
-	agentThunderProvisioningService := services.NewAgentThunderProvisioningService(agentThunderClientRepository, envThunderResolver, agentSecretStore, agentIdentityInjectionService, logger)
+	envThunderResolver := ProvideEnvThunderResolver(secretManagementClient)
+	agentThunderProvisioningService := services.NewAgentThunderProvisioningService(agentThunderClientRepository, envThunderResolver, secretManagementClient, agentIdentityInjectionService, logger)
 	monitorRepository := ProvideMonitorRepository(db)
 	customEvaluatorRepository := ProvideCustomEvaluatorRepository(db)
 	orgPublisherCredentialRepository := ProvideOrgPublisherCredentialRepository(db)
@@ -352,7 +342,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	scopeController := controllers.NewScopeController(scopeService)
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, scopeRepository, agentThunderClientRepository)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
-	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioningService, agentThunderClientRepository, logger)
+	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioningService, agentIdentityInjectionService, agentThunderClientRepository, logger)
 	traceObserverSvcClient := ProvideTestTraceObserverClient(testClients)
 	appParams := &AppParams{
 		AuthMiddleware:                   authMiddleware,
@@ -437,7 +427,6 @@ var testClientProviderSet = wire.NewSet(
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
 	ProvideOrgResolver, thundersvc.NewProber, ProvideEnvThunderResolver,
-	ProvideAgentSecretStore,
 )
 
 // thunderProvisioningTestSet builds the OpenBao-backed provisioning service for
@@ -770,16 +759,11 @@ func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderC
 
 // ProvideEnvThunderResolver creates the resolver that maps (org, environment) to an
 // authenticated ThunderClient for that environment's Thunder instance, reading the
-// system-client secret that add-environment-thunder.sh already wrote to OpenBao.
-func ProvideEnvThunderResolver(cfg config.Config) (thundersvc.EnvThunderResolver, error) {
-	return thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
-}
-
-// ProvideAgentSecretStore creates the raw OpenBao-backed store for AgentID
-// client credentials (see agent_secret_store.go for why this bypasses the
-// SecretManagementClient/SecretReference machinery).
-func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, error) {
-	return thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+// system-client secret that add-environment-thunder.sh already wrote, via the
+// same shared secretmanagersvc.SecretManagementClient every other secret-backed
+// service in this graph uses.
+func ProvideEnvThunderResolver(secretMgmtClient secretmanagersvc.SecretManagementClient) thundersvc.EnvThunderResolver {
+	return thundersvc.NewEnvThunderResolver(secretMgmtClient)
 }
 
 // ProvideAgentIdentityInjectionService creates the Gateway Binding service that

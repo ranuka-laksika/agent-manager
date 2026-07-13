@@ -19,7 +19,6 @@ package services
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -46,8 +45,26 @@ const (
 	testIdentityProject = "proj-a"
 	testIdentityAgent   = "my-agent"
 	testIdentityEnv     = "staging"
-	testIdentityKVPath  = "agent-thunder-clients/019f4ab9-test-ou-id/proj-a/staging/my-agent"
 )
+
+// testIdentityKVPath is the deterministic KV path agentIdentitySecretLocation
+// computes for the fixed (org, project, agent, env) tuple above — computed
+// via the real function, not hardcoded, so this fixture can't silently drift
+// out of sync with what ensureSecretReference actually derives.
+func testIdentityKVPath() string {
+	kvPath, err := agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv).KVPath()
+	if err != nil {
+		panic(err) // fixed, non-empty test constants — must never fail
+	}
+	return kvPath
+}
+
+// testIdentitySecretRefName is the deterministic SecretReference CR name
+// agentIdentitySecretLocation computes for the fixed (org, project, agent,
+// env) tuple above.
+func testIdentitySecretRefName() string {
+	return agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv).SecretRefName()
+}
 
 func completedInternalBinding() *models.AgentThunderClient {
 	return &models.AgentThunderClient{
@@ -59,7 +76,7 @@ func completedInternalBinding() *models.AgentThunderClient {
 		Status:           models.AgentThunderStatusCompleted,
 		ThunderAgentID:   "thunder-agent-1",
 		ThunderClientID:  "client-abc",
-		SecretRefPath:    testIdentityKVPath,
+		SecretRefPath:    testIdentityKVPath(),
 	}
 }
 
@@ -119,9 +136,9 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_CreatesSecretReferenceAndB
 	require.NoError(t, err)
 	require.Len(t, envVars, 4)
 
-	expectedRefName := AgentIdentitySecretRefName(testIdentityAgent, testIdentityEnv)
+	expectedRefName := testIdentitySecretRefName()
 	assert.Equal(t, expectedRefName, createdReq.Name)
-	assert.Equal(t, testIdentityKVPath, createdReq.KVPath, "SecretReference must point at the EXISTING OpenBao path — no secret duplication")
+	assert.Equal(t, testIdentityKVPath(), createdReq.KVPath, "SecretReference must point at the EXISTING stored secret — no secret duplication")
 	assert.Equal(t, []string{thundersvc.AgentSecretKeyClientSecret}, createdReq.SecretKeys)
 	assert.Equal(t, testIdentityProject, createdReq.ProjectName)
 	assert.Equal(t, testIdentityAgent, createdReq.ComponentName)
@@ -205,7 +222,8 @@ func TestResolveAgentIdentityScopes_NoAgentConfiguration_ReturnsEmpty(t *testing
 	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.NoError(t, err)
 	assert.Empty(t, scopes)
 }
 
@@ -226,7 +244,8 @@ func TestResolveAgentIdentityScopes_SingleProxySingleTool_ReturnsItsScopes(t *te
 		configRepo, endpointRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.NoError(t, err)
 	assert.Equal(t, []string{"amp:mcp:tickets:read"}, scopes)
 }
 
@@ -257,7 +276,8 @@ func TestResolveAgentIdentityScopes_MultipleProxiesAndTools_DedupsUnion(t *testi
 		configRepo, endpointRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.NoError(t, err)
 	assert.Equal(t, []string{"amp:mcp:incidents:write", "amp:mcp:tickets:read", "amp:mcp:tickets:write"}, scopes,
 		"must be the deduplicated, sorted union across every bound proxy's tools")
 }
@@ -296,11 +316,20 @@ func TestResolveAgentIdentityScopes_MappingForDifferentEnvironment_Ignored(t *te
 		configRepo, endpointRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.NoError(t, err)
 	assert.Empty(t, scopes)
 }
 
-func TestResolveAgentIdentityScopes_AgentConfigLoadError_FailsClosed(t *testing.T) {
+// TestResolveAgentIdentityScopes_AgentConfigLoadError_PropagatesError guards
+// against silently falling back to an empty scope list on a transient DB
+// blip: every caller of this service already aborts on an error (deploy/
+// promote/config-update all log "...to prevent credential loss" and stop),
+// and ReconcileForEnvironment's no-needless-rollout guarantee depends on a
+// trustworthy desired scope list — an empty list on a blip would look like a
+// real scope change and cause a spurious rollout, then a second one once the
+// blip cleared.
+func TestResolveAgentIdentityScopes_AgentConfigLoadError_PropagatesError(t *testing.T) {
 	failingRepo := &repomocks.AgentConfigurationRepositoryMock{
 		GetByAgentIDFunc: func(_ context.Context, _, _ string) (*models.AgentConfiguration, error) {
 			return nil, errors.New("db unavailable")
@@ -310,11 +339,12 @@ func TestResolveAgentIdentityScopes_AgentConfigLoadError_FailsClosed(t *testing.
 		failingRepo, noMCPProxyEndpointRepo(), &clientmocks.OpenChoreoClientMock{}, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
-	assert.Empty(t, scopes, "a Thunder/DB lookup failure must fail closed to no scopes, never a stale or placeholder set")
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.Error(t, err, "a DB lookup failure must propagate, not silently fail closed to an empty scope list")
+	assert.Empty(t, scopes)
 }
 
-func TestResolveAgentIdentityScopes_EnvironmentResolveError_FailsClosed(t *testing.T) {
+func TestResolveAgentIdentityScopes_EnvironmentResolveError_PropagatesError(t *testing.T) {
 	envUUID := "55555555-5555-5555-5555-555555555555"
 	configRepo, endpointRepo := mcpBoundAgentConfigRepo(mcpProxyBinding{
 		envUUID: envUUID,
@@ -331,10 +361,15 @@ func TestResolveAgentIdentityScopes_EnvironmentResolveError_FailsClosed(t *testi
 		configRepo, endpointRepo, oc, "1h", discardLogger())
 	impl := svc.(*agentIdentityInjectionService)
 
-	scopes := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	scopes, err := impl.resolveAgentIdentityScopes(context.Background(), completedInternalBinding())
+	require.Error(t, err, "an OpenChoreo environment lookup failure must propagate, not silently fail closed to an empty scope list")
 	assert.Empty(t, scopes)
 }
 
+// TestAgentIdentityInjection_EnvVarsForEnvironment_UpdatesExistingSecretReference
+// covers an existing CR whose data sources don't yet match the desired KV
+// path/keys (GetSecretReferenceFunc here returns no Data at all) — a genuine
+// drift that must still be corrected.
 func TestAgentIdentityInjection_EnvVarsForEnvironment_UpdatesExistingSecretReference(t *testing.T) {
 	repo := identityRepoReturning(completedInternalBinding(), nil)
 
@@ -345,7 +380,7 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_UpdatesExistingSecretRefer
 		},
 		UpdateSecretReferenceFunc: func(_ context.Context, _, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
 			updated = true
-			assert.Equal(t, testIdentityKVPath, req.KVPath)
+			assert.Equal(t, testIdentityKVPath(), req.KVPath)
 			return &client.SecretReferenceInfo{Name: req.Name}, nil
 		},
 		// CreateSecretReferenceFunc deliberately nil — a Create call would panic the test.
@@ -356,6 +391,38 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_UpdatesExistingSecretRefer
 	require.NoError(t, err)
 	assert.Len(t, envVars, 4)
 	assert.True(t, updated)
+}
+
+// TestAgentIdentityInjection_EnvVarsForEnvironment_ExistingSecretReferenceAlreadyCorrect_SkipsUpdate
+// guards against needless writes: an existing CR whose data sources already
+// point at the exact desired KV path/keys must not be rewritten on every
+// single call (one per deploy/promote/config-update, and one per reconciler
+// tick per recently-completed binding) — both for the needless K8s API
+// write, and because rewriting with nil TemplateAnnotations would otherwise
+// silently clobber whatever annotation a prior rotation set.
+func TestAgentIdentityInjection_EnvVarsForEnvironment_ExistingSecretReferenceAlreadyCorrect_SkipsUpdate(t *testing.T) {
+	repo := identityRepoReturning(completedInternalBinding(), nil)
+
+	oc := &clientmocks.OpenChoreoClientMock{
+		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{
+				Name: refName,
+				Data: []client.SecretDataSourceInfo{
+					{SecretKey: thundersvc.AgentSecretKeyClientSecret, RemoteRef: client.RemoteRefInfo{Key: testIdentityKVPath()}},
+				},
+			}, nil
+		},
+		UpdateSecretReferenceFunc: func(context.Context, string, string, client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+			t.Fatal("must not update a SecretReference that already points at the desired KV path and keys")
+			return nil, nil //nolint:nilnil // unreachable — t.Fatal above halts the test
+		},
+		// CreateSecretReferenceFunc deliberately nil — a Create call would panic the test.
+	}
+	svc := newTestIdentityInjectionService(repo, oc)
+
+	envVars, err := svc.EnvVarsForEnvironment(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
+	require.NoError(t, err)
+	assert.Len(t, envVars, 4)
 }
 
 func TestAgentIdentityInjection_EnvVarsForEnvironment_CreateConflictFallsBackToUpdate(t *testing.T) {
@@ -509,7 +576,7 @@ func TestAgentIdentityInjection_InjectForEnvironment_WorkloadUpdateErrorPropagat
 // keys present, with an empty scope list (no MCP bindings). Used as the
 // "already in sync" baseline for the reconcile tests.
 func inSyncIdentityEnvVars() []models.EnvVars {
-	refName := AgentIdentitySecretRefName(testIdentityAgent, testIdentityEnv)
+	refName := testIdentitySecretRefName()
 	return []models.EnvVars{
 		{Key: "AMP_OTEL_ENDPOINT", Value: "http://otel"}, // unrelated base var, must be ignored
 		{Key: client.EnvVarAgentIdentityClientID, Value: "client-abc"},
@@ -586,7 +653,7 @@ func TestAgentIdentityInjection_ReconcileForEnvironment_ScopeDrift_Reinjects(t *
 		GetComponentConfigurationsFunc: func(_ context.Context, _, _, _, _ string) ([]models.EnvVars, error) {
 			// All four keys present, but the live scopes are stale (empty) vs the
 			// now-desired "amp:mcp:tickets:read".
-			refName := AgentIdentitySecretRefName(testIdentityAgent, testIdentityEnv)
+			refName := testIdentitySecretRefName()
 			return []models.EnvVars{
 				{Key: client.EnvVarAgentIdentityClientID, Value: "client-abc"},
 				{Key: client.EnvVarAgentIdentityClientSecret, IsSensitive: true, SecretRef: refName, SecretKey: thundersvc.AgentSecretKeyClientSecret},
@@ -673,6 +740,38 @@ func TestAgentIdentityInjection_RefreshAfterRotation_StampsAnnotationAndRollsPod
 	assert.True(t, rolled, "rotation must roll the pod so it starts with the refreshed Secret")
 }
 
+// TestAgentIdentityInjection_RefreshAfterRotation_AlwaysUpdatesEvenWhenDataAlreadyMatches
+// guards the other half of the "skip when the CR already points at the
+// desired KV path/keys" optimization: it must never apply to the rotation
+// path, since rotation's whole point is to stamp a FRESH annotation value on
+// every single call (by design, never "unchanged") to force the controller
+// to re-sync immediately.
+func TestAgentIdentityInjection_RefreshAfterRotation_AlwaysUpdatesEvenWhenDataAlreadyMatches(t *testing.T) {
+	repo := identityRepoReturning(completedInternalBinding(), nil)
+
+	updated := false
+	oc := &clientmocks.OpenChoreoClientMock{
+		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{
+				Name: refName,
+				Data: []client.SecretDataSourceInfo{
+					{SecretKey: thundersvc.AgentSecretKeyClientSecret, RemoteRef: client.RemoteRefInfo{Key: testIdentityKVPath()}},
+				},
+			}, nil
+		},
+		UpdateSecretReferenceFunc: func(_ context.Context, _, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+			updated = true
+			require.NotEmpty(t, req.TemplateAnnotations, "rotation must always carry a fresh annotation")
+			return &client.SecretReferenceInfo{Name: req.Name}, nil
+		},
+		UpdateReleaseBindingEnvVarsFunc: func(context.Context, string, string, string, string, []client.EnvVar) error { return nil },
+	}
+	svc := NewAgentIdentityInjectionService(repo, noMCPConfigRepo(), noMCPProxyEndpointRepo(), oc, "1h", discardLogger())
+
+	require.NoError(t, svc.RefreshAfterRotation(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv))
+	assert.True(t, updated, "rotation must always update the SecretReference, even when its data sources already match")
+}
+
 func TestAgentIdentityInjection_RefreshAfterRotation_NoBinding_NoOp(t *testing.T) {
 	repo := identityRepoReturning(nil, repositories.ErrAgentThunderClientNotFound)
 	svc := newTestIdentityInjectionService(repo, &clientmocks.OpenChoreoClientMock{})
@@ -709,7 +808,7 @@ func TestAgentIdentityInjection_RemoveForEnvironment_RemovesVarsAndSecretReferen
 		expectedKeys = append(expectedKeys, k)
 	}
 	assert.ElementsMatch(t, expectedKeys, removedKeys)
-	assert.Equal(t, AgentIdentitySecretRefName(testIdentityAgent, testIdentityEnv), deletedRef)
+	assert.Equal(t, testIdentitySecretRefName(), deletedRef)
 }
 
 func TestAgentIdentityInjection_RemoveForEnvironment_IncludeWorkloadLevel(t *testing.T) {
@@ -766,46 +865,43 @@ func TestAgentIdentityInjection_CleanupForEnvironment_DeletesSecretReference(t *
 	svc := newTestIdentityInjectionService(&repomocks.AgentThunderClientRepositoryMock{}, oc)
 
 	require.NoError(t, svc.CleanupForEnvironment(context.Background(), testIdentityOrg, testIdentityAgent, testIdentityEnv))
-	assert.Equal(t, AgentIdentitySecretRefName(testIdentityAgent, testIdentityEnv), deletedRef)
+	assert.Equal(t, testIdentitySecretRefName(), deletedRef)
 }
 
-func TestAgentIdentitySecretRefName_SanitizesAndTruncates(t *testing.T) {
-	assert.Equal(t, "my-agent-staging-agent-identity", AgentIdentitySecretRefName("my-agent", "staging"))
-	// Uppercase and invalid runes are sanitized.
-	assert.Equal(t, "my-agent-stag-ing-agent-identity", AgentIdentitySecretRefName("My_Agent", "Stag.ing"))
+// TestAgentIdentitySecretLocation_EntityNameIsAgentScoped guards the specific
+// property agentIdentitySecretLocation must hold: EntityName includes the
+// agent name, not just a fixed "agent-identity" marker — secretmanagersvc's
+// SecretRefName only derives the SecretReference CR name from EntityName (+
+// EnvironmentName), so two different agents in the same environment would
+// collide onto the identical CR name (one agent's credential silently
+// overwriting another's) if EntityName weren't agent-scoped. Collision
+// avoidance for very long names beyond that is secretmanagersvc's own
+// concern (SecretLocation.SecretRefName), not re-tested here.
+func TestAgentIdentitySecretLocation_EntityNameIsAgentScoped(t *testing.T) {
+	locA := agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, "agent-a", testIdentityEnv)
+	locB := agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, "agent-b", testIdentityEnv)
 
-	long1 := AgentIdentitySecretRefName(strings.Repeat("a", 60), "env-a")
-	long2 := AgentIdentitySecretRefName(strings.Repeat("a", 60), "env-b")
-	assert.LessOrEqual(t, len(long1), 63, "must respect the Kubernetes name length limit")
-	assert.NotEqual(t, "-", long1[len(long1)-1:], "must not end with a trailing hyphen after truncation")
-	assert.NotEqual(t, long1, long2, "different env names with same long agent name prefix must not collide")
+	assert.NotEqual(t, locA.SecretRefName(), locB.SecretRefName(),
+		"two different agents in the same environment must never derive the same SecretReference name")
+	assert.Contains(t, locA.EntityName, "agent-a")
 }
 
-func TestAgentIdentitySecretRefName_LongNamesDoNotCollideAfterTruncation(t *testing.T) {
-	// Two distinct agent names that are identical for the first 60 characters
-	// (only the tail differs) — plain truncation at 63 chars would produce
-	// the exact same prefix for both, silently colliding onto one
-	// SecretReference name unless the hash suffix disambiguates them.
-	agentA := strings.Repeat("a", 60) + "-team-alpha"
-	agentB := strings.Repeat("a", 60) + "-team-beta"
-	env := "production"
+// TestAgentIdentitySecretLocation_IsDeterministic guards the property both
+// agentThunderProvisioningService (storing) and agentIdentityInjectionService
+// (referencing) rely on: the same (org, project, agent, env) tuple must
+// always compute the exact same KV path and CR name, with no stored or
+// round-tripped state required to keep them in agreement.
+func TestAgentIdentitySecretLocation_IsDeterministic(t *testing.T) {
+	loc1 := agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
+	loc2 := agentIdentitySecretLocation(testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
 
-	nameA := AgentIdentitySecretRefName(agentA, env)
-	nameB := AgentIdentitySecretRefName(agentB, env)
+	kvPath1, err := loc1.KVPath()
+	require.NoError(t, err)
+	kvPath2, err := loc2.KVPath()
+	require.NoError(t, err)
 
-	assert.LessOrEqual(t, len(nameA), 63)
-	assert.LessOrEqual(t, len(nameB), 63)
-	assert.NotEqual(t, nameA, nameB,
-		"two different agent names sharing a 63-char prefix must not collide onto the same SecretReference name")
-	assert.True(t, strings.HasSuffix(nameA, "-"+agentIdentitySecretRefSuffix))
-	assert.True(t, strings.HasSuffix(nameB, "-"+agentIdentitySecretRefSuffix))
-}
-
-func TestAgentIdentitySecretRefName_TruncationIsDeterministic(t *testing.T) {
-	longAgent := strings.Repeat("x", 80)
-	first := AgentIdentitySecretRefName(longAgent, "dev")
-	second := AgentIdentitySecretRefName(longAgent, "dev")
-	assert.Equal(t, first, second, "the same (agent, env) pair must always produce the same name")
+	assert.Equal(t, kvPath1, kvPath2)
+	assert.Equal(t, loc1.SecretRefName(), loc2.SecretRefName())
 }
 
 func TestAgentIdentityInjection_RefreshAfterRotation_TwoRotationsInSameSecondProduceDistinctAnnotations(t *testing.T) {
@@ -875,7 +971,6 @@ func TestAgentIdentityInjection_InjectForEnvironment_GivesUpAfterRetriesExhauste
 	repo := identityRepoReturning(completedInternalBinding(), nil)
 
 	attempts := 0
-	persistentErr := errors.New("release binding permanently conflicted")
 	oc := &clientmocks.OpenChoreoClientMock{
 		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
 			return &client.SecretReferenceInfo{Name: refName}, nil
@@ -885,13 +980,64 @@ func TestAgentIdentityInjection_InjectForEnvironment_GivesUpAfterRetriesExhauste
 		},
 		UpdateReleaseBindingEnvVarsFunc: func(_ context.Context, _, _, _, _ string, _ []client.EnvVar) error {
 			attempts++
-			return persistentErr
+			return utils.ErrConflict
 		},
 	}
 	svc := newTestIdentityInjectionService(repo, oc)
 
 	err := svc.InjectForEnvironment(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
 	require.Error(t, err)
-	assert.ErrorIs(t, err, persistentErr)
+	assert.ErrorIs(t, err, utils.ErrConflict)
 	assert.Equal(t, releaseBindingUpdateRetries, attempts, "must give up after the bounded retry budget, not retry forever")
+}
+
+func TestAgentIdentityInjection_InjectForEnvironment_DoesNotRetryPermanentError(t *testing.T) {
+	repo := identityRepoReturning(completedInternalBinding(), nil)
+
+	attempts := 0
+	permanentErr := errors.New("release binding validation failed")
+	oc := &clientmocks.OpenChoreoClientMock{
+		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: refName}, nil
+		},
+		UpdateSecretReferenceFunc: func(_ context.Context, _, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: req.Name}, nil
+		},
+		UpdateReleaseBindingEnvVarsFunc: func(_ context.Context, _, _, _, _ string, _ []client.EnvVar) error {
+			attempts++
+			return permanentErr
+		},
+	}
+	svc := newTestIdentityInjectionService(repo, oc)
+
+	err := svc.InjectForEnvironment(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, permanentErr)
+	assert.Equal(t, 1, attempts, "a non-conflict error is permanent and must not be retried")
+}
+
+func TestAgentIdentityInjection_InjectForEnvironment_StopsRetryingOnContextCancel(t *testing.T) {
+	repo := identityRepoReturning(completedInternalBinding(), nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	attempts := 0
+	oc := &clientmocks.OpenChoreoClientMock{
+		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: refName}, nil
+		},
+		UpdateSecretReferenceFunc: func(_ context.Context, _, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: req.Name}, nil
+		},
+		UpdateReleaseBindingEnvVarsFunc: func(_ context.Context, _, _, _, _ string, _ []client.EnvVar) error {
+			attempts++
+			cancel() // simulate the caller's context being cancelled mid-retry
+			return utils.ErrConflict
+		},
+	}
+	svc := newTestIdentityInjectionService(repo, oc)
+
+	err := svc.InjectForEnvironment(ctx, testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrConflict)
+	assert.Equal(t, 1, attempts, "must stop retrying once the context is cancelled, not sleep out the full retry budget")
 }

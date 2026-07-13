@@ -21,7 +21,9 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,9 +42,14 @@ import (
 // this stub never call them.
 type stubAgentThunderProvisioning struct {
 	AgentThunderProvisioningService
-	RegenerateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
-	ClaimFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
-	RevokeFunc     func(ctx context.Context, orgName, projectName, agentName, envName string) (string, error)
+	RegenerateFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
+	ClaimFunc           func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
+	RevokeFunc          func(ctx context.Context, orgName, projectName, agentName, envName string) (string, error)
+	GetBindingStateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (*AgentThunderBindingState, error)
+}
+
+func (s *stubAgentThunderProvisioning) GetBindingState(ctx context.Context, orgName, projectName, agentName, envName string) (*AgentThunderBindingState, error) {
+	return s.GetBindingStateFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
@@ -320,6 +327,7 @@ func TestRegenerateAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T)
 	assert.Equal(t, "fresh-secret-xyz", resp.ClientSecret,
 		"an External agent must get its freshly regenerated secret back")
 	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
+	assert.Empty(t, resp.WorkloadRefreshWarning, "external agents have no workload to refresh")
 }
 
 func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testing.T) {
@@ -348,8 +356,15 @@ func TestRegenerateAgentIdentitySecret_InternalAgent_AlsoReturnsSecret(t *testin
 			"one-time-claim endpoint, withholding it here would just force a second call to see it")
 	assert.Equal(t, models.AgentRegenerateSecretStatus, resp.Status)
 	assert.Equal(t, 1, refreshed, "internal rotation must refresh the workload's injected credential")
+	assert.Empty(t, resp.WorkloadRefreshWarning, "a successful refresh must not surface a warning")
 }
 
+// TestRegenerateAgentIdentitySecret_InternalAgent_RefreshFailureDoesNotFailRotation
+// guards two things at once: a failed workload refresh must not fail the
+// request (the Thunder rotation already succeeded), AND it must not be a
+// silent failure — the pod keeps serving the now-invalidated old secret until
+// a later deploy/promote/rotation, so the caller needs a way to know that
+// happened instead of just a log line only an operator would see.
 func TestRegenerateAgentIdentitySecret_InternalAgent_RefreshFailureDoesNotFailRotation(t *testing.T) {
 	stub := &stubAgentThunderProvisioning{
 		RegenerateFunc: func(_ context.Context, _, _, _, _ string) (models.AgentProvisioningType, string, string, error) {
@@ -367,6 +382,8 @@ func TestRegenerateAgentIdentitySecret_InternalAgent_RefreshFailureDoesNotFailRo
 
 	require.NoError(t, err, "the rotation already happened in Thunder — a failed workload refresh must not fail the request")
 	assert.Equal(t, "fresh-secret-internal", resp.ClientSecret)
+	assert.NotEmpty(t, resp.WorkloadRefreshWarning,
+		"a failed workload refresh must be surfaced to the caller, not just logged")
 }
 
 func TestRevokeAgentIdentitySecret_LowestEnv_RemovesWorkloadLevelVars(t *testing.T) {
@@ -450,6 +467,87 @@ func TestRevokeAgentIdentitySecret_PipelineLookupFails_StillRevokesConservativel
 	assert.Equal(t, "client-abc", resp.ClientID)
 	require.NotNil(t, gotIncludeWorkload)
 	assert.False(t, *gotIncludeWorkload, "with an unknown pipeline, be conservative and leave workload-level vars alone")
+}
+
+// TestDeployAgent_IdentityInjectionError_AbortsDeploy guards that a failure
+// building the AgentID env vars stops the deploy entirely rather than
+// deploying without credentials: Deploy() replaces every workload env var, so
+// a deploy that proceeded here would permanently drop the agent's
+// credentials until some later operation happened to re-inject them.
+func TestDeployAgent_IdentityInjectionError_AbortsDeploy(t *testing.T) {
+	boom := errors.New("secret backend unavailable")
+	deployCalled := false
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, name string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: name}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.InternalAgent)}}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		GetComponentConfigurationsFunc: func(context.Context, string, string, string, string) ([]models.EnvVars, error) {
+			return nil, nil
+		},
+		DeployFunc: func(context.Context, string, string, string, client.DeployRequest) error {
+			deployCalled = true
+			return nil
+		},
+	}
+	injector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(context.Context, string, string, string, string) ([]client.EnvVar, error) {
+			return nil, boom
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentIdentityInjection: injector, logger: discardLogger()}
+
+	_, err := s.DeployAgent(context.Background(), "acme", "proj1", "my-agent", &spec.DeployAgentRequest{ImageId: "registry.example.com/my-agent:v1"})
+
+	require.Error(t, err, "a failure building AgentID env vars must abort the deploy, not proceed without credentials")
+	assert.False(t, deployCalled, "the OpenChoreo Deploy call must never happen once identity env vars failed to build")
+}
+
+// TestUpdateAgentConfigurations_IdentityInjectionError_AbortsUpdate guards
+// the same contract as TestDeployAgent_IdentityInjectionError_AbortsDeploy for
+// the other call site that replaces an environment's entire env var set: a
+// failure building the AgentID env vars must abort before the override
+// rewrite runs, or the rewrite would silently drop the agent's credentials.
+func TestUpdateAgentConfigurations_IdentityInjectionError_AbortsUpdate(t *testing.T) {
+	boom := errors.New("secret backend unavailable")
+	overridesReplaced := false
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, name string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: name}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.InternalAgent)}}, nil
+		},
+		GetEnvironmentFunc: func(_ context.Context, _, name string) (*models.EnvironmentResponse, error) {
+			return &models.EnvironmentResponse{Name: name}, nil
+		},
+		GetComponentConfigurationsFunc: func(context.Context, string, string, string, string) ([]models.EnvVars, error) {
+			return nil, nil
+		},
+		ReplaceReleaseBindingWorkloadOverridesFunc: func(context.Context, string, string, string, []client.EnvVar, []client.FileVar) error {
+			overridesReplaced = true
+			return nil
+		},
+	}
+	injector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(context.Context, string, string, string, string) ([]client.EnvVar, error) {
+			return nil, boom
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentIdentityInjection: injector, logger: discardLogger()}
+
+	err := s.UpdateAgentConfigurations(context.Background(), "acme", "proj1", "my-agent",
+		&spec.UpdateAgentConfigurationsRequest{EnvironmentName: "dev"})
+
+	require.Error(t, err, "a failure building AgentID env vars must abort the update, not proceed without credentials")
+	assert.False(t, overridesReplaced, "the env var override rewrite must never happen once identity env vars failed to build")
 }
 
 func TestClaimAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T) {
@@ -537,11 +635,26 @@ func (s *stubAgentConfigurationServiceForPromote) BuildSystemManagedEnvVarsFromC
 	return s.SystemVarsFunc(ctx, agentID, ouID, projectName, environmentName)
 }
 
+// shrinkPromotionIdentityPollForTest overrides the poll interval/budget
+// PromoteAgent uses when a target environment's identity isn't ready yet
+// (see pollForTargetIdentityReady), so tests exercising the hard-block path
+// don't have to wait out the real (multi-second) production budget.
+func shrinkPromotionIdentityPollForTest(t *testing.T) {
+	t.Helper()
+	origInterval, origBudget := promotionIdentityPollInterval, promotionIdentityPollBudget
+	promotionIdentityPollInterval = time.Millisecond
+	promotionIdentityPollBudget = 5 * time.Millisecond
+	t.Cleanup(func() {
+		promotionIdentityPollInterval, promotionIdentityPollBudget = origInterval, origBudget
+	})
+}
+
 // promoteAgentTestFixture builds the minimal set of mocks PromoteAgent needs
 // for a non-API-type internal agent (skips the large isAPIAgent branch
 // entirely), for a dev -> staging promotion pipeline.
 func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, tgtIdentityErr error) (*agentManagerService, *bool) {
 	t.Helper()
+	shrinkPromotionIdentityPollForTest(t)
 	promoteCalled := false
 
 	ocClient := &clientmocks.OpenChoreoClientMock{
@@ -587,7 +700,14 @@ func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, t
 		},
 	}
 
-	provisioningStub := &stubAgentThunderProvisioning{}
+	provisioningStub := &stubAgentThunderProvisioning{
+		// Default: "still provisioning" — matches the not-ready fixtures'
+		// expectation that the hard block's message says so. Tests asserting
+		// a different state (revoked, failed) override this directly.
+		GetBindingStateFunc: func(context.Context, string, string, string, string) (*AgentThunderBindingState, error) {
+			return &AgentThunderBindingState{Status: models.AgentThunderStatusPending}, nil
+		},
+	}
 	// ProvisionForEnvironmentIfMissing is called unconditionally before the
 	// readiness check — must not panic.
 	provisioningStubWithProvision := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: provisioningStub}
@@ -673,4 +793,270 @@ func TestPromoteAgent_IdentityBuildError_AbortsBeforePromoting(t *testing.T) {
 
 	require.Error(t, err)
 	assert.False(t, *promoteCalled, "a real error building identity env vars must abort before promoting, not just log a warning")
+}
+
+// TestPromoteAgent_KickOffThenRetry_SucceedsOnceTargetIdentityCompletes covers
+// promoting to an environment that was added to the pipeline AFTER the agent
+// was created, so it has no AgentID binding yet. The pre-promote kick-off
+// (ProvisionForEnvironmentIfMissing) starts provisioning, but that Thunder
+// call is asynchronous, so the FIRST attempt still hard-blocks; a RETRY of the
+// same promote call must succeed once that provisioning attempt finishes —
+// proving the pre-promote kick-off alone is sufficient to unblock a
+// new-environment promotion, with no dependency on any post-promote step.
+func TestPromoteAgent_KickOffThenRetry_SucceedsOnceTargetIdentityCompletes(t *testing.T) {
+	shrinkPromotionIdentityPollForTest(t)
+	promoteCalled := false
+	var capturedOverrides []client.EnvVar
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: orgName}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				Provisioning: models.Provisioning{Type: string(utils.InternalAgent)},
+				Type:         models.AgentType{Type: "agent-chat"},
+			}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) { return false, nil },
+		PromoteComponentFunc: func(_ context.Context, _, _, _, _, _ string, envOverrides []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+			promoteCalled = true
+			capturedOverrides = envOverrides
+			return nil
+		},
+	}
+	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
+		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+	}
+
+	// targetReady flips to true once the (simulated) async provisioning
+	// attempt kicked off by ProvisionForEnvironmentIfMissing finishes.
+	targetReady := false
+	identityInjector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, envName string) ([]client.EnvVar, error) {
+			require.Equal(t, "staging", envName)
+			if !targetReady {
+				return nil, nil
+			}
+			return []client.EnvVar{{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"}}, nil
+		},
+	}
+	provisioning := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: &stubAgentThunderProvisioning{
+		GetBindingStateFunc: func(context.Context, string, string, string, string) (*AgentThunderBindingState, error) {
+			if !targetReady {
+				return &AgentThunderBindingState{Status: models.AgentThunderStatusPending}, nil
+			}
+			return &AgentThunderBindingState{Status: models.AgentThunderStatusCompleted, HasSecret: true}, nil
+		},
+	}}
+
+	s := &agentManagerService{
+		ocClient:                  ocClient,
+		agentConfigurationService: agentConfigSvc,
+		agentIdentityInjection:    identityInjector,
+		agentThunderProvisioning:  provisioning,
+		logger:                    discardLogger(),
+	}
+
+	req := &spec.PromoteAgentRequest{SourceEnvironment: "dev", TargetEnvironment: "staging"}
+
+	// First attempt: target environment is brand new — kicks off provisioning
+	// (ProvisionForEnvironmentIfMissing), but the identity isn't ready yet.
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", req)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "not ready yet")
+	assert.False(t, promoteCalled, "must not promote while the target identity is still provisioning")
+
+	// Simulate the async provisioning attempt completing in the background.
+	targetReady = true
+
+	// Retry: the same promote call now succeeds with the target's own creds.
+	err = s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", req)
+	require.NoError(t, err)
+	assert.True(t, promoteCalled, "the retry must succeed once the target identity is ready")
+
+	found := false
+	for _, ev := range capturedOverrides {
+		if ev.Key == "AMP_AGENT_IDENTITY_CLIENT_ID" {
+			found = true
+			assert.Equal(t, "staging-client-id", ev.Value)
+		}
+	}
+	assert.True(t, found, "the promoted overrides must carry the target environment's identity once ready")
+}
+
+// TestPromoteAgent_PollSucceedsWithinBudget_PromotesOnFirstCall proves the
+// bounded poll itself (not just the two-call retry pattern) — a target
+// identity that becomes ready a couple of checks into the poll window must
+// let the SAME PromoteAgent call succeed, without the caller needing to
+// retry at all.
+func TestPromoteAgent_PollSucceedsWithinBudget_PromotesOnFirstCall(t *testing.T) {
+	shrinkPromotionIdentityPollForTest(t)
+	promoteCalled := false
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: orgName}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				Provisioning: models.Provisioning{Type: string(utils.InternalAgent)},
+				Type:         models.AgentType{Type: "agent-chat"},
+			}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) { return false, nil },
+		PromoteComponentFunc: func(_ context.Context, _, _, _, _, _ string, _ []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+			promoteCalled = true
+			return nil
+		},
+	}
+	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
+		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+	}
+
+	// checks counts every EnvVarsForEnvironment call: the first (pre-poll) one
+	// plus each poll iteration. Ready only from the 3rd check onward, so the
+	// poll loop must actually iterate more than once to succeed.
+	var checks int32
+	identityInjector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) {
+			if atomic.AddInt32(&checks, 1) < 3 {
+				return nil, nil
+			}
+			return []client.EnvVar{{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"}}, nil
+		},
+	}
+	provisioning := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: &stubAgentThunderProvisioning{}}
+
+	s := &agentManagerService{
+		ocClient:                  ocClient,
+		agentConfigurationService: agentConfigSvc,
+		agentIdentityInjection:    identityInjector,
+		agentThunderProvisioning:  provisioning,
+		logger:                    discardLogger(),
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.NoError(t, err, "the poll must let this single call succeed once the identity becomes ready within budget")
+	assert.True(t, promoteCalled)
+	assert.GreaterOrEqual(t, atomic.LoadInt32(&checks), int32(3), "the poll loop must have actually iterated, not just checked once")
+}
+
+// TestPromoteAgent_TargetCredentialRevoked_BlocksWithRegenerateMessage proves
+// the hard block's error message is state-specific: a revoked credential
+// (COMPLETED status, no stored secret) must never tell the caller to just
+// retry — retrying promotion can never fix a revoked credential, only an
+// explicit regenerate can.
+func TestPromoteAgent_TargetCredentialRevoked_BlocksWithRegenerateMessage(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, nil, nil)
+
+	stub, ok := s.agentThunderProvisioning.(*provisionForEnvIfMissingStub)
+	require.True(t, ok)
+	stub.GetBindingStateFunc = func(context.Context, string, string, string, string) (*AgentThunderBindingState, error) {
+		return &AgentThunderBindingState{Status: models.AgentThunderStatusCompleted, HasSecret: false}, nil
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "revoked")
+	assert.Contains(t, err.Error(), "regenerate")
+	assert.NotContains(t, err.Error(), "still provisioning", "a revoked credential must not tell the caller to just retry")
+	assert.False(t, *promoteCalled)
+}
+
+// TestPromoteAgent_TargetProvisioningFailed_BlocksWithReprovisionMessage
+// proves the hard block's error message is state-specific: a permanently
+// FAILED binding (retry budget exhausted) must never tell the caller to just
+// retry promotion — that will never succeed without re-provisioning.
+func TestPromoteAgent_TargetProvisioningFailed_BlocksWithReprovisionMessage(t *testing.T) {
+	s, promoteCalled := promoteAgentTestFixture(t, nil, nil)
+
+	stub, ok := s.agentThunderProvisioning.(*provisionForEnvIfMissingStub)
+	require.True(t, ok)
+	stub.GetBindingStateFunc = func(context.Context, string, string, string, string) (*AgentThunderBindingState, error) {
+		return &AgentThunderBindingState{Status: models.AgentThunderStatusFailed, LastError: "thunder unreachable"}, nil
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "permanently failed")
+	assert.Contains(t, err.Error(), "thunder unreachable")
+	assert.Contains(t, err.Error(), "re-provision")
+	assert.NotContains(t, err.Error(), "still provisioning", "a permanently failed binding must not tell the caller to just retry")
+	assert.False(t, *promoteCalled)
+}
+
+// TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes covers a
+// deployment mode where AgentID provisioning is not wired in at all
+// (app.Options.AgentThunderProvisioning is nil, so agentManagerService's
+// agentThunderProvisioning field is nil too — see app.go). PromoteAgent must
+// not dereference agentThunderProvisioning or agentIdentityInjection in that
+// mode, and must not hard-block the promotion just because no AgentID binding
+// will ever exist. Both fields are deliberately left nil (not stubs) so a
+// regression that calls either outside the disabled-provisioning guard fails
+// with a nil-pointer/nil-interface panic rather than silently passing.
+func TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes(t *testing.T) {
+	promoteCalled := false
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: orgName}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				Provisioning: models.Provisioning{Type: string(utils.InternalAgent)},
+				Type:         models.AgentType{Type: "agent-chat"}, // deliberately not agent-api
+			}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) { return false, nil },
+		PromoteComponentFunc: func(_ context.Context, _, _, _, _, _ string, _ []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+			promoteCalled = true
+			return nil
+		},
+	}
+	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
+		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+	}
+
+	s := &agentManagerService{
+		ocClient:                  ocClient,
+		agentConfigurationService: agentConfigSvc,
+		logger:                    discardLogger(),
+		// agentThunderProvisioning and agentIdentityInjection intentionally omitted (nil).
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.NoError(t, err)
+	assert.True(t, promoteCalled, "promotion must proceed normally when AgentID provisioning is disabled for this deployment")
 }

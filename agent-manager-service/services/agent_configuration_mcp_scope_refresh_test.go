@@ -25,11 +25,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRefreshTouchedMCPEnvironments_CallsInjectForEveryTouchedEnv(t *testing.T) {
+func TestRefreshTouchedMCPEnvironments_CallsReconcileForEveryTouchedEnv(t *testing.T) {
 	var called []string
 	svc := &agentConfigurationService{
 		agentIdentityInjection: &agentIdentityInjectorStub{
-			InjectForEnvironmentFunc: func(_ context.Context, orgName, projectName, agentName, envName string) error {
+			ReconcileForEnvironmentFunc: func(_ context.Context, orgName, projectName, agentName, envName string) error {
 				assert.Equal(t, "acme", orgName)
 				assert.Equal(t, "proj1", projectName)
 				assert.Equal(t, "my-agent", agentName)
@@ -50,8 +50,8 @@ func TestRefreshTouchedMCPEnvironments_CallsInjectForEveryTouchedEnv(t *testing.
 func TestRefreshTouchedMCPEnvironments_EmptySet_NoCalls(t *testing.T) {
 	svc := &agentConfigurationService{
 		agentIdentityInjection: &agentIdentityInjectorStub{
-			InjectForEnvironmentFunc: func(context.Context, string, string, string, string) error {
-				t.Fatal("InjectForEnvironment must not be called when no environments were touched")
+			ReconcileForEnvironmentFunc: func(context.Context, string, string, string, string) error {
+				t.Fatal("ReconcileForEnvironment must not be called when no environments were touched")
 				return nil
 			},
 		},
@@ -64,7 +64,7 @@ func TestRefreshTouchedMCPEnvironments_EmptySet_NoCalls(t *testing.T) {
 func TestRefreshTouchedMCPEnvironments_FailureIsSwallowed(t *testing.T) {
 	svc := &agentConfigurationService{
 		agentIdentityInjection: &agentIdentityInjectorStub{
-			InjectForEnvironmentFunc: func(context.Context, string, string, string, string) error {
+			ReconcileForEnvironmentFunc: func(context.Context, string, string, string, string) error {
 				return errors.New("release binding update failed")
 			},
 		},

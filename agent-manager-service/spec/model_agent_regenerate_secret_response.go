@@ -26,6 +26,8 @@ type AgentRegenerateSecretResponse struct {
 	// The newly generated OAuth2 client secret, sent back to both platform-hosted and external agents
 	ClientSecret string `json:"clientSecret"`
 	Status       string `json:"status"`
+	// Present only when the secret was rotated successfully but pushing it into the already-running workload failed. The workload keeps using the previous secret until its next deploy, promote, or rotation.
+	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // NewAgentRegenerateSecretResponse instantiates a new AgentRegenerateSecretResponse object
@@ -170,6 +172,38 @@ func (o *AgentRegenerateSecretResponse) SetStatus(v string) {
 	o.Status = v
 }
 
+// GetWorkloadRefreshWarning returns the WorkloadRefreshWarning field value if set, zero value otherwise.
+func (o *AgentRegenerateSecretResponse) GetWorkloadRefreshWarning() string {
+	if o == nil || IsNil(o.WorkloadRefreshWarning) {
+		var ret string
+		return ret
+	}
+	return *o.WorkloadRefreshWarning
+}
+
+// GetWorkloadRefreshWarningOk returns a tuple with the WorkloadRefreshWarning field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *AgentRegenerateSecretResponse) GetWorkloadRefreshWarningOk() (*string, bool) {
+	if o == nil || IsNil(o.WorkloadRefreshWarning) {
+		return nil, false
+	}
+	return o.WorkloadRefreshWarning, true
+}
+
+// HasWorkloadRefreshWarning returns a boolean if a field has been set.
+func (o *AgentRegenerateSecretResponse) HasWorkloadRefreshWarning() bool {
+	if o != nil && !IsNil(o.WorkloadRefreshWarning) {
+		return true
+	}
+
+	return false
+}
+
+// SetWorkloadRefreshWarning gets a reference to the given string and assigns it to the WorkloadRefreshWarning field.
+func (o *AgentRegenerateSecretResponse) SetWorkloadRefreshWarning(v string) {
+	o.WorkloadRefreshWarning = &v
+}
+
 func (o AgentRegenerateSecretResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -185,6 +219,9 @@ func (o AgentRegenerateSecretResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize["clientId"] = o.ClientId
 	toSerialize["clientSecret"] = o.ClientSecret
 	toSerialize["status"] = o.Status
+	if !IsNil(o.WorkloadRefreshWarning) {
+		toSerialize["workloadRefreshWarning"] = o.WorkloadRefreshWarning
+	}
 	return toSerialize, nil
 }
 

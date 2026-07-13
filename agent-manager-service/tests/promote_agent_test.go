@@ -173,8 +173,16 @@ func TestPromoteAgent(t *testing.T) {
 			return &models.EnvironmentResponse{UUID: uuid.New().String(), Name: environmentName}, nil
 		}
 		// The source env's workload overrides are what get cloned to the target.
+		// Also includes a source-environment AgentID client ID — simulating a
+		// stale/leaked identity value sitting in the source's own overrides —
+		// so this test can prove the clone path strips it rather than carrying
+		// it over to the target environment's pod.
+		const leakedSourceClientID = "leaked-source-client-id"
 		ocClient.GetSourceEnvWorkloadOverridesFunc = func(ctx context.Context, namespaceName, componentName, sourceEnvironment string) ([]client.EnvVar, []client.FileVar, error) {
-			return []client.EnvVar{{Key: "FROM_SOURCE", Value: "src-value"}},
+			return []client.EnvVar{
+					{Key: "FROM_SOURCE", Value: "src-value"},
+					{Key: client.EnvVarAgentIdentityClientID, Value: leakedSourceClientID},
+				},
 				[]client.FileVar{{Key: "config.yaml", MountPath: "/etc/config.yaml", Value: "k: v"}}, nil
 		}
 		var capturedEnv []client.EnvVar
@@ -205,6 +213,11 @@ func TestPromoteAgent(t *testing.T) {
 		require.Equal(t, "src-value", envVarValue(capturedEnv, "FROM_SOURCE"))
 		require.Len(t, capturedFiles, 1)
 		require.Equal(t, "config.yaml", capturedFiles[0].Key)
+		gotClientID := envVarValue(capturedEnv, client.EnvVarAgentIdentityClientID)
+		require.NotEqual(t, leakedSourceClientID, gotClientID,
+			"the clone path must strip a stale AgentID identity value carried in the source environment's own overrides, not forward it to the target")
+		require.NotEmpty(t, gotClientID,
+			"the target environment's own freshly-injected AgentID client ID must still be present after stripping the source's")
 	})
 
 	t.Run("with useConfigFromSourceEnv=false forwards the provided env overrides", func(t *testing.T) {

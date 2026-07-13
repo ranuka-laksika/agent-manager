@@ -40,7 +40,7 @@ import (
 //			FindDueFunc: func(ctx context.Context, now time.Time, limit int) ([]models.AgentThunderClient, error) {
 //				panic("mock out the FindDue method")
 //			},
-//			FindRecentlyCompletedInternalFunc: func(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error) {
+//			FindRecentlyCompletedInternalFunc: func(ctx context.Context, createdAfter time.Time, after *repositories.ReconcileCursor, limit int) ([]models.AgentThunderClient, error) {
 //				panic("mock out the FindRecentlyCompletedInternal method")
 //			},
 //			GetFunc: func(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
@@ -87,7 +87,7 @@ type AgentThunderClientRepositoryMock struct {
 	FindDueFunc func(ctx context.Context, now time.Time, limit int) ([]models.AgentThunderClient, error)
 
 	// FindRecentlyCompletedInternalFunc mocks the FindRecentlyCompletedInternal method.
-	FindRecentlyCompletedInternalFunc func(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error)
+	FindRecentlyCompletedInternalFunc func(ctx context.Context, createdAfter time.Time, after *repositories.ReconcileCursor, limit int) ([]models.AgentThunderClient, error)
 
 	// GetFunc mocks the Get method.
 	GetFunc func(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error)
@@ -173,6 +173,8 @@ type AgentThunderClientRepositoryMock struct {
 			Ctx context.Context
 			// CreatedAfter is the createdAfter argument value.
 			CreatedAfter time.Time
+			// After is the after argument value.
+			After *repositories.ReconcileCursor
 			// Limit is the limit argument value.
 			Limit int
 		}
@@ -516,23 +518,25 @@ func (mock *AgentThunderClientRepositoryMock) FindDueCalls() []struct {
 }
 
 // FindRecentlyCompletedInternal calls FindRecentlyCompletedInternalFunc.
-func (mock *AgentThunderClientRepositoryMock) FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error) {
+func (mock *AgentThunderClientRepositoryMock) FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, after *repositories.ReconcileCursor, limit int) ([]models.AgentThunderClient, error) {
 	if mock.FindRecentlyCompletedInternalFunc == nil {
 		panic("AgentThunderClientRepositoryMock.FindRecentlyCompletedInternalFunc: method is nil but AgentThunderClientRepository.FindRecentlyCompletedInternal was just called")
 	}
 	callInfo := struct {
 		Ctx          context.Context
 		CreatedAfter time.Time
+		After        *repositories.ReconcileCursor
 		Limit        int
 	}{
 		Ctx:          ctx,
 		CreatedAfter: createdAfter,
+		After:        after,
 		Limit:        limit,
 	}
 	mock.lockFindRecentlyCompletedInternal.Lock()
 	mock.calls.FindRecentlyCompletedInternal = append(mock.calls.FindRecentlyCompletedInternal, callInfo)
 	mock.lockFindRecentlyCompletedInternal.Unlock()
-	return mock.FindRecentlyCompletedInternalFunc(ctx, createdAfter, limit)
+	return mock.FindRecentlyCompletedInternalFunc(ctx, createdAfter, after, limit)
 }
 
 // FindRecentlyCompletedInternalCalls gets all the calls that were made to FindRecentlyCompletedInternal.
@@ -542,11 +546,13 @@ func (mock *AgentThunderClientRepositoryMock) FindRecentlyCompletedInternal(ctx 
 func (mock *AgentThunderClientRepositoryMock) FindRecentlyCompletedInternalCalls() []struct {
 	Ctx          context.Context
 	CreatedAfter time.Time
+	After        *repositories.ReconcileCursor
 	Limit        int
 } {
 	var calls []struct {
 		Ctx          context.Context
 		CreatedAfter time.Time
+		After        *repositories.ReconcileCursor
 		Limit        int
 	}
 	mock.lockFindRecentlyCompletedInternal.RLock()

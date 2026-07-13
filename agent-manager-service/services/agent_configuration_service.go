@@ -2418,15 +2418,20 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 	return s.GetMCP(ctx, existingConfig.UUID, ouID, projectName, agentName)
 }
 
-// refreshTouchedMCPEnvironments pushes a fresh AgentID scope list into every given
-// environment, so an already-running pod gets rolled with the new scopes right away
-// rather than only picking them up on its next deploy/promote. Best-effort: the MCP
-// config change itself already succeeded, so a refresh failure here must never turn
-// that success into an error response — it's logged and the agent simply picks up
-// the change on its next deploy/promote/rotation instead.
+// refreshTouchedMCPEnvironments brings every given environment's live AgentID
+// scope list in line with what it should now be, so an already-running pod
+// gets rolled right away if the scope list actually changed — rather than
+// only picking it up on its next deploy/promote. Uses ReconcileForEnvironment
+// (not InjectForEnvironment) so touching an environment whose scopes didn't
+// actually change (touchedEnvNames is the union of all existing and all
+// requested mappings, so this includes plenty of no-ops) never causes a
+// needless pod rollout. Best-effort: the MCP config change itself already
+// succeeded, so a refresh failure here must never turn that success into an
+// error response — it's logged and the agent simply picks up the change on
+// its next deploy/promote/rotation instead.
 func (s *agentConfigurationService) refreshTouchedMCPEnvironments(ctx context.Context, ouID, projectName, agentName string, touchedEnvNames map[string]struct{}) {
 	for envName := range touchedEnvNames {
-		if err := s.agentIdentityInjection.InjectForEnvironment(ctx, ouID, projectName, agentName, envName); err != nil {
+		if err := s.agentIdentityInjection.ReconcileForEnvironment(ctx, ouID, projectName, agentName, envName); err != nil {
 			s.logger.Warn("Failed to refresh agent identity credentials after MCP config change",
 				"agentName", agentName, "envName", envName, "error", err)
 		}

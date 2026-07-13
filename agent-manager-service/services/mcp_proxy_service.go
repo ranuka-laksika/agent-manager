@@ -487,11 +487,14 @@ func (s *MCPProxyService) Update(ctx context.Context, orgUUID, proxyID string, r
 	return convertModelMCPProxyToSpec(updated), nil
 }
 
-// refreshAgentsBoundToProxy re-injects AgentID credentials (recomputing the scope list)
-// for every agent bound to proxyUUID, across every environment they're deployed to. Purely
-// best-effort: this runs after the proxy update already succeeded, so a failure here must
-// never surface as an error from Update — it's logged and the corresponding agent simply
-// picks up the change on its next deploy/promote/rotation instead.
+// refreshAgentsBoundToProxy brings every agent bound to proxyUUID's live AgentID scope
+// list in line with what it should now be (recomputing the scope list), across every
+// environment they're deployed to. Uses ReconcileForEnvironment (not InjectForEnvironment)
+// so an agent whose scopes didn't actually change from this proxy update never gets its
+// pod needlessly rolled. Purely best-effort: this runs after the proxy update already
+// succeeded, so a failure here must never surface as an error from Update — it's logged
+// and the corresponding agent simply picks up the change on its next deploy/promote/rotation
+// instead.
 func (s *MCPProxyService) refreshAgentsBoundToProxy(ctx context.Context, proxy *models.MCPProxy, orgUUID string) {
 	mappings, err := s.envMCPMappingRepo.ListByMCPProxy(ctx, proxy.UUID)
 	if err != nil {
@@ -523,7 +526,7 @@ func (s *MCPProxyService) refreshAgentsBoundToProxy(ctx context.Context, proxy *
 				"proxyUUID", proxy.UUID, "configUUID", mapping.ConfigUUID, "error", err)
 			continue
 		}
-		if err := s.agentIdentityInjection.InjectForEnvironment(ctx, orgUUID, config.ProjectName, config.AgentID, envName); err != nil {
+		if err := s.agentIdentityInjection.ReconcileForEnvironment(ctx, orgUUID, config.ProjectName, config.AgentID, envName); err != nil {
 			s.logger.Warn("Failed to refresh agent identity credentials after MCP proxy change",
 				"agentName", config.AgentID, "envName", envName, "error", err)
 		}

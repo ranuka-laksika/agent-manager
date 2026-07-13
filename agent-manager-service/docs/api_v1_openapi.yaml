@@ -17716,6 +17716,13 @@ components:
         status:
           type: string
           example: regenerated
+        workloadRefreshWarning:
+          type: string
+          description: |
+            Present only when the secret was rotated successfully but pushing it into the
+            already-running workload failed. The workload keeps using the previous secret
+            until its next deploy, promote, or rotation.
+          example: The secret was rotated, but the running workload could not be refreshed automatically; it will keep using the previous secret until its next deploy, promote, or rotation.
 
     AgentRevokeSecretResponse:
       type: object

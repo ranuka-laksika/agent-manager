@@ -100,10 +100,27 @@ type AgentThunderClientRepository interface {
 	// FindRecentlyCompletedInternal returns up to limit COMPLETED internal
 	// bindings created at/after createdAfter that still hold a valid secret —
 	// the candidates the injection reconciler sweeps. Bounded on the existing
-	// created_at column (no schema change): it only covers the initial build
-	// race, since steady-state sync is owned by the deploy/promote/rotation/
-	// MCP-change paths (see identityInjectionReconcileWindow).
-	FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error)
+	// created_at column (no schema change). Used two ways: the periodic
+	// per-tick sweep passes a recent cutoff (see identityInjectionReconcileWindow)
+	// since steady-state sync is owned by the deploy/promote/rotation/MCP-change
+	// paths; the one-time startup backfill passes the zero time to cover every
+	// completed internal binding regardless of age (see
+	// runInitialIdentityInjectionBackfill).
+	//
+	// Ordered by (created_at, id) — created_at alone is not a unique key, so id
+	// breaks ties deterministically. after is nil for the first page; passing
+	// the previous page's last row back in (see ReconcileCursor) continues
+	// strictly past it, letting a caller page through every eligible row
+	// (not just the oldest limit of them) via keyset pagination.
+	FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, after *ReconcileCursor, limit int) ([]models.AgentThunderClient, error)
+}
+
+// ReconcileCursor identifies the last row returned by a previous
+// FindRecentlyCompletedInternal page, so the next call can continue strictly
+// after it instead of re-selecting the same oldest page every time.
+type ReconcileCursor struct {
+	CreatedAt time.Time
+	ID        uuid.UUID
 }
 
 // AgentThunderAttemptUpdate carries the fields written after one provisioning
@@ -292,13 +309,22 @@ func (r *AgentThunderClientRepo) DeleteByIDs(ctx context.Context, ids []uuid.UUI
 	return nil
 }
 
-func (r *AgentThunderClientRepo) FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, limit int) ([]models.AgentThunderClient, error) {
-	var rows []models.AgentThunderClient
-	if err := r.db.WithContext(ctx).Where(
+func (r *AgentThunderClientRepo) FindRecentlyCompletedInternal(ctx context.Context, createdAfter time.Time, after *ReconcileCursor, limit int) ([]models.AgentThunderClient, error) {
+	q := r.db.WithContext(ctx).Where(
 		"status = ? AND provisioning_type = ? AND secret_ref_path != '' AND created_at >= ?",
 		models.AgentThunderStatusCompleted, models.AgentProvisioningTypeInternal, createdAfter,
-	).
-		Order("created_at").
+	)
+	if after != nil {
+		// (created_at, id) > (after.CreatedAt, after.ID), expressed without tuple
+		// comparison for portability: strictly later timestamp, OR the same
+		// timestamp with a strictly greater id (the deterministic tie-breaker
+		// matching the ORDER BY below).
+		q = q.Where("(created_at > ?) OR (created_at = ? AND id > ?)", after.CreatedAt, after.CreatedAt, after.ID)
+	}
+
+	var rows []models.AgentThunderClient
+	if err := q.
+		Order("created_at, id").
 		Limit(limit).
 		Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("find recently completed internal agent thunder clients: %w", err)

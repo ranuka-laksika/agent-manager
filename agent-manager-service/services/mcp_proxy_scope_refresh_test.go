@@ -56,7 +56,7 @@ func TestRefreshAgentsBoundToProxy_NoMappings_NoOp(t *testing.T) {
 			},
 		},
 		agentIdentityInjection: &agentIdentityInjectorStub{
-			InjectForEnvironmentFunc: func(context.Context, string, string, string, string) error {
+			ReconcileForEnvironmentFunc: func(context.Context, string, string, string, string) error {
 				t.Fatal("must not refresh any agent when none are bound to the proxy")
 				return nil
 			},
@@ -113,7 +113,7 @@ func TestRefreshAgentsBoundToProxy_RefreshesEveryBoundAgent(t *testing.T) {
 	type call struct{ project, agent, env string }
 	var calls []call
 	svc.agentIdentityInjection = &agentIdentityInjectorStub{
-		InjectForEnvironmentFunc: func(_ context.Context, ouID, projectName, agentName, envName string) error {
+		ReconcileForEnvironmentFunc: func(_ context.Context, ouID, projectName, agentName, envName string) error {
 			assert.Equal(t, "acme", ouID)
 			calls = append(calls, call{projectName, agentName, envName})
 			return nil
@@ -153,7 +153,7 @@ func TestRefreshAgentsBoundToProxy_SkipsMappingWhenEnvironmentDeleted(t *testing
 			},
 		},
 		agentIdentityInjection: &agentIdentityInjectorStub{
-			InjectForEnvironmentFunc: func(context.Context, string, string, string, string) error {
+			ReconcileForEnvironmentFunc: func(context.Context, string, string, string, string) error {
 				t.Fatal("must not refresh a mapping whose environment no longer exists")
 				return nil
 			},
@@ -197,7 +197,7 @@ func TestRefreshAgentsBoundToProxy_ContinuesAfterOneAgentFails(t *testing.T) {
 
 	var refreshed []string
 	svc.agentIdentityInjection = &agentIdentityInjectorStub{
-		InjectForEnvironmentFunc: func(_ context.Context, _, _, agentName, _ string) error {
+		ReconcileForEnvironmentFunc: func(_ context.Context, _, _, agentName, _ string) error {
 			if agentName == "agent-a" {
 				return errors.New("release binding conflict")
 			}
