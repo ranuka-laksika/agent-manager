@@ -1563,6 +1563,11 @@ type AgentRegenerateSecretResponse struct {
 	// ProvisioningType Whether the agent runs on the platform (`internal`) or outside it (`external`)
 	ProvisioningType AgentProvisioningType `json:"provisioningType"`
 	Status           string                `json:"status"`
+
+	// WorkloadRefreshWarning Present only when the secret was rotated successfully but pushing it into the
+	// already-running workload failed. The workload keeps using the previous secret
+	// until its next deploy, promote, or rotation.
+	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentResourceConfigsResponse defines model for AgentResourceConfigsResponse.
