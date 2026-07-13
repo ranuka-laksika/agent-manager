@@ -345,13 +345,6 @@ fi
 echo ""
 echo "🌐 Installing API Platform Gateway for '${ENV_NAME}'..."
 
-# Ensure the gateway namespace exists and carries the label the sandbox
-# NetworkPolicy (agent-api ComponentType) matches for agent telemetry egress.
-# Without it, agents in this environment cannot reach the gateway's /otel
-# endpoint when the gateway runs outside openchoreo-data-plane.
-kubectl create namespace "${GATEWAY_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f - > /dev/null
-kubectl label namespace "${GATEWAY_NAMESPACE}" "amp.wso2.com/api-platform-gateway=true" --overwrite > /dev/null
-
 # Release name must match the gateway runtime service lookup expected by
 # the kgateway routes (api-platform-<org>-<env> derives from _helpers.tpl
 # apiGatewayName). DO NOT duplicate the org segment.
