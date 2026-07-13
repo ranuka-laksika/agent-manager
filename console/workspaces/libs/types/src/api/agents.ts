@@ -160,4 +160,88 @@ export interface AgentGroupsResponse {
   groups: ThunderGroup[];
 }
 
+// --- Agent identity: AgentID lifecycle (per environment) ---
+
+export type AgentThunderStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
+
+// One environment's AgentID binding. Never includes a secret — check
+// hasUnclaimedSecret to see if DELETE .../identities/secrets has anything to
+// return for an externally hosted agent.
+export interface AgentIdentityEnvironmentView {
+  environmentName: string;
+  provisioningType: ProvisioningType;
+  status: AgentThunderStatus;
+  agentId?: string;
+  clientId?: string;
+  lastError?: string;
+  hasUnclaimedSecret: boolean;
+  requestedBy?: string;
+}
+
+export interface AgentIdentityActionRequest {
+  environment: string;
+}
+
+// Response for the one-time claim of an externally hosted agent's secret —
+// the only response that will ever include this secret value.
+export interface AgentClaimSecretResponse {
+  environmentName: string;
+  agentId: string;
+  clientId: string;
+  clientSecret: string;
+  status: string;
+}
+
+export interface AgentRegenerateSecretResponse {
+  environmentName: string;
+  provisioningType: ProvisioningType;
+  clientId: string;
+  clientSecret: string;
+  status: string;
+}
+
+// Never includes clientSecret — revoke turns access off rather than rotating it.
+export interface AgentRevokeSecretResponse {
+  environmentName: string;
+  clientId: string;
+  status: string;
+}
+
+// A platform-hosted agent's current AgentID credential. Unlike the other
+// identity responses, clientSecret is always included and this can be called
+// repeatably.
+export interface AgentCredentialsResponse {
+  environmentName: string;
+  agentId: string;
+  clientId: string;
+  clientSecret: string;
+}
+
+export type GetAgentIdentityPathParams = AgentPathParams;
+export interface GetAgentIdentityQuery {
+  environment?: string;
+}
+
+export type ProvisionAgentIdentityPathParams = AgentPathParams;
+export interface ProvisionAgentIdentityQuery {
+  environment: string;
+}
+
+export type RegenerateAgentIdentitySecretPathParams = AgentPathParams;
+
+export type RevokeAgentIdentitySecretPathParams = AgentPathParams;
+export interface RevokeAgentIdentitySecretQuery {
+  environment: string;
+}
+
+export type GetAgentCredentialsPathParams = AgentPathParams;
+export interface GetAgentCredentialsQuery {
+  environment: string;
+}
+
+export type ClaimAgentIdentitySecretPathParams = AgentPathParams;
+export interface ClaimAgentIdentitySecretQuery {
+  environment: string;
+}
+
 

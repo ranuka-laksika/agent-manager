@@ -31,6 +31,7 @@ import { KindInfoCard } from "./KindInfoCard";
 import { EnvMonitorsSection } from "./EnvMonitorsSection";
 import { EnvObservabilitySection } from "./EnvObservabilitySection";
 import { AgentInfoCard } from "./AgentInfoCard";
+import { RegenerateAgentIdentityButton, useRegenerateAgentIdentity } from "./EnvAgentIdentitySection";
 
 export const InternalAgentOverview = () => {
     const { orgId, agentId, projectId } = useParams();
@@ -49,6 +50,12 @@ export const InternalAgentOverview = () => {
     const sortedEnvironmentList = usePipelineEnvironments(orgId, projectId);
 
     const isKindAgent = !!agent?.kindName;
+
+    // The new client ID/secret is intentionally not displayed — it's already
+    // injected straight into the running workload, so unlike the external
+    // agent claim flow there's no reason to surface it in the console.
+    const { regeneratingEnv, regenerate: handleRegenerate } =
+        useRegenerateAgentIdentity(orgId, projectId, agentId);
 
     return (
         <Box display="flex" flexDirection="column" gap={2}>
@@ -86,6 +93,16 @@ export const InternalAgentOverview = () => {
                                 agentId={agentId}
                                 environment={environment}
                                 isFirstEnvironment={index === 0}
+                                actions={
+                                    <RegenerateAgentIdentityButton
+                                        orgId={orgId}
+                                        projectId={projectId}
+                                        agentId={agentId}
+                                        envId={environment.name}
+                                        isRegenerating={regeneratingEnv === environment.name}
+                                        onRegenerate={() => void handleRegenerate(environment.name)}
+                                    />
+                                }
                                 bottomContent={
                                     <>
                                         <EnvObservabilitySection

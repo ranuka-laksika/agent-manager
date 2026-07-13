@@ -41,6 +41,23 @@ import type {
   GetAgentGroupsPathParams,
   GetAgentGroupsQuery,
   AgentGroupsResponse,
+  GetAgentIdentityPathParams,
+  GetAgentIdentityQuery,
+  AgentIdentityEnvironmentView,
+  ProvisionAgentIdentityPathParams,
+  ProvisionAgentIdentityQuery,
+  RegenerateAgentIdentitySecretPathParams,
+  AgentIdentityActionRequest,
+  AgentRegenerateSecretResponse,
+  RevokeAgentIdentitySecretPathParams,
+  RevokeAgentIdentitySecretQuery,
+  AgentRevokeSecretResponse,
+  GetAgentCredentialsPathParams,
+  GetAgentCredentialsQuery,
+  AgentCredentialsResponse,
+  ClaimAgentIdentitySecretPathParams,
+  ClaimAgentIdentitySecretQuery,
+  AgentClaimSecretResponse,
 } from "@agent-management-platform/types";
 
 export async function listAgents(
@@ -231,6 +248,115 @@ export async function getAgentGroups(
     `/projects/${encodeURIComponent(projName)}` +
     `/agents/${encodeURIComponent(agentName ?? "")}/groups`;
   const res = await httpGET(url, { searchParams: { environment: query.environment }, token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// --- Agent identity: AgentID lifecycle (per environment) ---
+
+const identityBase = (orgName: string, projName: string, agentName: string) =>
+  `${SERVICE_BASE}/orgs/${encodeURIComponent(orgName)}` +
+  `/projects/${encodeURIComponent(projName)}` +
+  `/agents/${encodeURIComponent(agentName)}/identities`;
+
+// Lists the agent's AgentID binding for every environment in the project's
+// deployment pipeline (or one, if `environment` is passed). Safe read: never
+// returns or removes a secret.
+export async function getAgentIdentity(
+  params: GetAgentIdentityPathParams,
+  query?: GetAgentIdentityQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentIdentityEnvironmentView[]> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(identityBase(orgName, projName, agentName ?? ""), {
+    searchParams: query?.environment ? { environment: query.environment } : undefined,
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// Creates an AgentID for an externally hosted agent in an environment that
+// was added after the agent already existed. Idempotent: an existing binding
+// is left as is and returned unchanged.
+export async function provisionAgentIdentity(
+  params: ProvisionAgentIdentityPathParams,
+  query: ProvisionAgentIdentityQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentIdentityEnvironmentView> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPUT(identityBase(orgName, projName, agentName ?? ""), {}, {
+    searchParams: { environment: query.environment },
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// Rotates the AgentID secret for one environment and returns the new value
+// straight away, for both platform-hosted and externally hosted agents.
+export async function regenerateAgentIdentitySecret(
+  params: RegenerateAgentIdentitySecretPathParams,
+  body: AgentIdentityActionRequest,
+  getToken?: () => Promise<string>,
+): Promise<AgentRegenerateSecretResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpPOST(identityBase(orgName, projName, agentName ?? ""), body, { token });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// Turns off the AgentID secret for one environment without issuing a new
+// one. Call regenerate afterward to restore access.
+export async function revokeAgentIdentitySecret(
+  params: RevokeAgentIdentitySecretPathParams,
+  query: RevokeAgentIdentitySecretQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentRevokeSecretResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpDELETE(identityBase(orgName, projName, agentName ?? ""), {
+    searchParams: { environment: query.environment },
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// Returns the current client ID and secret for a platform-hosted agent in one
+// environment. Repeatable — always returns the same valid credential.
+export async function getAgentCredentials(
+  params: GetAgentCredentialsPathParams,
+  query: GetAgentCredentialsQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentCredentialsResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpGET(`${identityBase(orgName, projName, agentName ?? "")}/secrets`, {
+    searchParams: { environment: query.environment },
+    token,
+  });
+  if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+// One-time retrieval of an externally hosted agent's AgentID secret. Calling
+// this IS the claim: the first successful call returns the secret and
+// deletes it from storage — every call after that 404s until regenerated.
+export async function claimAgentIdentitySecret(
+  params: ClaimAgentIdentitySecretPathParams,
+  query: ClaimAgentIdentitySecretQuery,
+  getToken?: () => Promise<string>,
+): Promise<AgentClaimSecretResponse> {
+  const { orgName = "default", projName = "default", agentName } = params;
+  const token = getToken ? await getToken() : undefined;
+  const res = await httpDELETE(`${identityBase(orgName, projName, agentName ?? "")}/secrets`, {
+    searchParams: { environment: query.environment },
+    token,
+  });
   if (!res.ok) throw await res.json();
   return res.json();
 }
