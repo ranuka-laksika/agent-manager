@@ -21,10 +21,11 @@ import { Alert, Box, Button, CircularProgress, Divider, Skeleton, Stack, Typogra
 import { AlertTriangle, RotateCcwKey } from "@wso2/oxygen-ui-icons-react";
 import {
   useClaimAgentIdentitySecret,
-  useGetAgentIdentity,
   useRegenerateAgentIdentitySecret,
 } from "@agent-management-platform/api-client";
 import { TextInput } from "@agent-management-platform/views";
+import { RolesGroupsChips, useAgentRolesAndGroups } from "./EnvAgentRolesGroupsSection";
+import { useAgentIdentityBinding } from "./useAgentIdentityBinding";
 
 interface EnvAgentIdentitySectionProps {
   orgId: string;
@@ -123,13 +124,9 @@ export const SecretRevealAlert: React.FC<{
 export const RegenerateAgentIdentityButton: React.FC<
   EnvAgentIdentitySectionProps & { isRegenerating: boolean; onRegenerate: () => void }
 > = ({ orgId, projectId, agentId, envId, isRegenerating, onRegenerate }) => {
-  const { data: identityViews } = useGetAgentIdentity(
-    { orgName: orgId, projName: projectId, agentName: agentId },
-    { environment: envId },
-  );
-  const binding = identityViews?.[0];
+  const { provisioned } = useAgentIdentityBinding({ orgId, projectId, agentId, envId });
 
-  if (!binding || binding.status !== "completed") return null;
+  if (!provisioned) return null;
 
   return (
     <Button
@@ -145,6 +142,23 @@ export const RegenerateAgentIdentityButton: React.FC<
 };
 
 /**
+ * Client ID (or claim/pending state) on the left, Roles & Groups chips on
+ * the right. Shared by both branches below that have a completed binding to
+ * show — only the left-hand content differs between them.
+ */
+const IdentityRow: React.FC<{
+  left: React.ReactNode;
+  rolesAndGroups: React.ComponentProps<typeof RolesGroupsChips>;
+}> = ({ left, rolesAndGroups }) => (
+  <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
+    <Box flex={1}>{left}</Box>
+    <Box flex={1}>
+      <RolesGroupsChips {...rolesAndGroups} />
+    </Box>
+  </Stack>
+);
+
+/**
  * Per-environment "Agent Identity" section, rendered above the other
  * sections inside an EnvironmentCard for externally hosted agents. Lets the
  * user claim the AgentID's one-time client secret — the backend deletes its
@@ -153,14 +167,22 @@ export const RegenerateAgentIdentityButton: React.FC<
 export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = ({
   orgId, projectId, agentId, envId,
 }) => {
-  const { data: identityViews, isLoading } = useGetAgentIdentity(
-    { orgName: orgId, projName: projectId, agentName: agentId },
-    { environment: envId },
-  );
-  const binding = identityViews?.[0];
+  const { binding, provisioned, isLoading } = useAgentIdentityBinding({
+    orgId, projectId, agentId, envId,
+  });
 
   const { mutateAsync: claimSecret, isPending: isClaiming } = useClaimAgentIdentitySecret();
   const [claimed, setClaimed] = useState<{ clientId: string; clientSecret: string } | null>(null);
+
+  // Only the "unclaimed" and "already claimed with a clientId" branches below
+  // actually render <RolesGroupsChips> — skip the fetch for the just-claimed
+  // alert and the "nothing to show" case so it isn't fired for nothing.
+  const alreadyClaimed = provisioned && !binding?.hasUnclaimedSecret;
+  const hasNoIdentityToShow = alreadyClaimed && !binding?.clientId;
+  const showRolesGroups = provisioned && !claimed && !hasNoIdentityToShow;
+  const rolesAndGroups = useAgentRolesAndGroups({
+    orgId, projectId, agentId, envId, enabled: showRolesGroups,
+  });
 
   const handleClaim = async () => {
     try {
@@ -202,8 +224,7 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
 
   // Already claimed in an earlier session, and there's no clientId to show
   // either: nothing left to do here.
-  const alreadyClaimed = binding.status === "completed" && !binding.hasUnclaimedSecret;
-  if (alreadyClaimed && !binding.clientId) {
+  if (hasNoIdentityToShow) {
     return null;
   }
 
@@ -221,8 +242,43 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
 
       <Box sx={{ mt: 1 }}>
         {binding.hasUnclaimedSecret ? (
-          <Stack spacing={1.5}>
-            {binding.clientId && (
+          <IdentityRow
+            rolesAndGroups={rolesAndGroups}
+            left={
+              <Stack spacing={1.5}>
+                {binding.clientId && (
+                  <TextInput
+                    slotProps={{ input: { readOnly: true } }}
+                    label="Client ID"
+                    value={binding.clientId}
+                    copyable
+                    fullWidth
+                    sx={monospaceInputSx}
+                  />
+                )}
+                <Stack direction="row" alignItems="center" gap={1.5}>
+                  <Typography variant="body2" color="text.secondary">
+                    This agent&apos;s identity secret hasn&apos;t been claimed yet.
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => void handleClaim()}
+                    disabled={isClaiming}
+                  >
+                    {isClaiming ? "Claiming..." : "Reveal Secret"}
+                  </Button>
+                </Stack>
+              </Stack>
+            }
+          />
+        ) : alreadyClaimed ? (
+          // binding.clientId is guaranteed here (the early return above
+          // covers the no-clientId case) — the client ID itself isn't
+          // sensitive, unlike the secret, so it's always safe to show.
+          <IdentityRow
+            rolesAndGroups={rolesAndGroups}
+            left={
               <TextInput
                 slotProps={{ input: { readOnly: true } }}
                 label="Client ID"
@@ -231,32 +287,7 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
                 fullWidth
                 sx={monospaceInputSx}
               />
-            )}
-            <Stack direction="row" alignItems="center" gap={1.5}>
-              <Typography variant="body2" color="text.secondary">
-                This agent&apos;s identity secret hasn&apos;t been claimed yet.
-              </Typography>
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={() => void handleClaim()}
-                disabled={isClaiming}
-              >
-                {isClaiming ? "Claiming..." : "Reveal Secret"}
-              </Button>
-            </Stack>
-          </Stack>
-        ) : alreadyClaimed ? (
-          // binding.clientId is guaranteed here (the early return above
-          // covers the no-clientId case) — the client ID itself isn't
-          // sensitive, unlike the secret, so it's always safe to show.
-          <TextInput
-            slotProps={{ input: { readOnly: true } }}
-            label="Client ID"
-            value={binding.clientId}
-            copyable
-            fullWidth
-            sx={monospaceInputSx}
+            }
           />
         ) : binding.status === "failed" ? (
           <Typography variant="body2" color="text.secondary">
@@ -276,5 +307,3 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
     </>
   );
 };
-
-export default EnvAgentIdentitySection;

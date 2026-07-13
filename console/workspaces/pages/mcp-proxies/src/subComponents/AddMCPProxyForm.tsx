@@ -135,7 +135,7 @@ export function AddMCPProxyForm({ onCancel }: AddMCPProxyFormProps) {
     !isCreating;
 
   return (
-    <Stack spacing={3} sx={{ maxWidth: 920 }}>
+    <Stack spacing={3}>
       <Form.Section>
         <Form.Stack spacing={2}>
           <Form.Stack

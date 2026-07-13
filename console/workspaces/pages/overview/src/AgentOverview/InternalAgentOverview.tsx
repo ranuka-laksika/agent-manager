@@ -32,6 +32,7 @@ import { EnvMonitorsSection } from "./EnvMonitorsSection";
 import { EnvObservabilitySection } from "./EnvObservabilitySection";
 import { AgentInfoCard } from "./AgentInfoCard";
 import { RegenerateAgentIdentityButton, useRegenerateAgentIdentity } from "./EnvAgentIdentitySection";
+import { EnvAgentRolesGroupsSection } from "./EnvAgentRolesGroupsSection";
 
 export const InternalAgentOverview = () => {
     const { orgId, agentId, projectId } = useParams();
@@ -105,6 +106,12 @@ export const InternalAgentOverview = () => {
                                 }
                                 bottomContent={
                                     <>
+                                        <EnvAgentRolesGroupsSection
+                                            orgId={orgId}
+                                            projectId={projectId}
+                                            agentId={agentId}
+                                            envId={environment.name}
+                                        />
                                         <EnvObservabilitySection
                                             orgId={orgId}
                                             projectId={projectId}

@@ -168,21 +168,31 @@ export function useGenerateAgentToken(
 
 // --- Agent identity: roles/groups (read-only) ---
 
-export function useGetAgentRoles(params: GetAgentRolesPathParams, query: GetAgentRolesQuery) {
+export function useGetAgentRoles(
+  params: GetAgentRolesPathParams,
+  query: GetAgentRolesQuery,
+  options?: { enabled?: boolean },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<AgentRolesResponse>({
     queryKey: ['agent-roles', params, query],
     queryFn: () => getAgentRoles(params, query, getToken),
-    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+    enabled: (options?.enabled ?? true)
+      && !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
   });
 }
 
-export function useGetAgentGroups(params: GetAgentGroupsPathParams, query: GetAgentGroupsQuery) {
+export function useGetAgentGroups(
+  params: GetAgentGroupsPathParams,
+  query: GetAgentGroupsQuery,
+  options?: { enabled?: boolean },
+) {
   const { getToken } = useAuthHooks();
   return useApiQuery<AgentGroupsResponse>({
     queryKey: ['agent-groups', params, query],
     queryFn: () => getAgentGroups(params, query, getToken),
-    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+    enabled: (options?.enabled ?? true)
+      && !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
   });
 }
 
