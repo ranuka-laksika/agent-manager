@@ -82,6 +82,24 @@ jobs:
           for pod in $(kubectl get pods -n workflows-default --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
             kubectl logs "$pod" -n workflows-default --all-containers=true --tail=200 > "/tmp/pod-logs/wf-pod-${pod}.txt" 2>&1 || true
           done
+          # Per-env API Platform Gateway + Thunder pods. Each environment's gateway
+          # stack lives in its own "<org>-<env>" namespace and its Thunder in
+          # "amp-thunder-<org>-<env>"; the gateway's Helm pre-install bootstrap Job
+          # runs there. Capturing these makes "failed pre-install: timed out
+          # waiting for the condition" debuggable (the bootstrap Job pod log is the
+          # only place the actual healthz/IDP/registration error appears). Also
+          # describe non-Running pods to surface exit reasons and scheduling events.
+          for ns in $(kubectl get ns --no-headers -o custom-columns=":metadata.name" 2>/dev/null \
+              | grep -E '^(default-|amp-thunder-)' || true); do
+            for pod in $(kubectl get pods -n "$ns" --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
+              kubectl logs "$pod" -n "$ns" --all-containers=true --tail=200 > "/tmp/pod-logs/ns-${ns}--${pod}.txt" 2>&1 || true
+            done
+            kubectl get pods -n "$ns" --no-headers 2>/dev/null \
+              | awk '$3 != "Running" && $3 != "Completed" { print $1 }' \
+              | while read -r p; do
+                  kubectl describe pod "$p" -n "$ns" > "/tmp/pod-logs/describe-${ns}--${p}.txt" 2>&1 || true
+                done
+          done
 
       - name: Upload pod logs
         if: failure()
