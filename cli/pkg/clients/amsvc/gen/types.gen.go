@@ -5514,6 +5514,12 @@ type GetAgentEndpointsParams struct {
 	Environment string `form:"environment" json:"environment"`
 }
 
+// GetAgentGroupsParams defines parameters for GetAgentGroups.
+type GetAgentGroupsParams struct {
+	// Environment Environment name to read the agent's groups for
+	Environment string `form:"environment" json:"environment"`
+}
+
 // RevokeAgentIdentitySecretParams defines parameters for RevokeAgentIdentitySecret.
 type RevokeAgentIdentitySecretParams struct {
 	// Environment Environment name to revoke the AgentID secret in
@@ -5635,6 +5641,12 @@ type GetAgentResourceConfigsParams struct {
 type UpdateAgentResourceConfigsParams struct {
 	// Environment Optional environment name. If provided, updates only that environment's resource configurations via release binding componentTypeEnvOverrides. If omitted, updates component-level defaults that apply to all environments (unless overridden).
 	Environment *string `form:"environment,omitempty" json:"environment,omitempty"`
+}
+
+// GetAgentRolesParams defines parameters for GetAgentRoles.
+type GetAgentRolesParams struct {
+	// Environment Environment name to read the agent's roles for
+	Environment string `form:"environment" json:"environment"`
 }
 
 // GetAgentTraceScoresParams defines parameters for GetAgentTraceScores.

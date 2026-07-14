@@ -1,0 +1,172 @@
+/**
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+ *
+ * WSO2 LLC. licenses this file to you under the Apache License,
+ * Version 2.0 (the "License"); you may not use this file except
+ * in compliance with the License. You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+import React, { useMemo, useState } from "react";
+import {
+  Alert,
+  Avatar,
+  Chip,
+  ListingTable,
+  Skeleton,
+  Stack,
+  Typography,
+} from "@wso2/oxygen-ui";
+import { AlertTriangle, Search, Users } from "@wso2/oxygen-ui-icons-react";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
+import { useListAgentIdentityAgents } from "@agent-management-platform/api-client";
+import { absoluteRouteMap, type AgentIdentityAgentResponse } from "@agent-management-platform/types";
+
+const AVATAR_SX = { width: 28, height: 28, fontSize: 12 } as const;
+const MONO_SX = { fontFamily: "monospace" } as const;
+
+type StatusColor = "success" | "warning" | "error" | "info" | "default";
+
+const STATUS_COLORS: Record<string, StatusColor> = {
+  completed: "success",
+  in_progress: "info",
+  pending: "warning",
+  failed: "error",
+};
+
+const matchesQuery = (agent: AgentIdentityAgentResponse, query: string) =>
+  [agent.agentName, agent.projectName, agent.status, agent.thunderAgentId ?? ""]
+    .join(" ")
+    .toLowerCase()
+    .includes(query);
+
+export const AgentsTab: React.FC = () => {
+  const { orgId, envName } = useParams<{ orgId: string; envName: string }>();
+  const navigate = useNavigate();
+  const [search, setSearch] = useState("");
+
+  const { data, isLoading, error } = useListAgentIdentityAgents({
+    orgName: orgId,
+    envName: envName ?? "",
+  });
+
+  const agents = useMemo(() => data?.agents ?? [], [data]);
+
+  const agentsNode =
+    absoluteRouteMap.children.org.children.thunderInstances.children.view.children.agents;
+  const agentDetailPath = (agent: AgentIdentityAgentResponse) =>
+    orgId && envName
+      ? generatePath(agentsNode.children.detail.path, {
+          orgId,
+          envName,
+          projectName: agent.projectName,
+          agentName: agent.agentName,
+        })
+      : "#";
+
+  const filteredAgents = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return query ? agents.filter((a) => matchesQuery(a, query)) : agents;
+  }, [agents, search]);
+
+  if (error != null) {
+    return (
+      <Alert severity="error" icon={<AlertTriangle size={18} />}>
+        Failed to load agents. Please try again.
+      </Alert>
+    );
+  }
+
+  return (
+    <ListingTable.Provider searchValue={search} onSearchChange={setSearch}>
+      <ListingTable.Container>
+        <ListingTable.Toolbar showSearch searchPlaceholder="Search agents..." />
+        {!isLoading && agents.length === 0 ? (
+          <ListingTable.EmptyState
+            illustration={<Users size={64} />}
+            title="No agents yet"
+            description="Agents provisioned in this environment will appear here."
+          />
+        ) : !isLoading && filteredAgents.length === 0 ? (
+          <ListingTable.EmptyState
+            illustration={<Search size={64} />}
+            title="No agents found"
+            description={`No agents match "${search}". Try a different search term.`}
+          />
+        ) : (
+          <ListingTable variant="table">
+            <ListingTable.Head>
+              <ListingTable.Row>
+                <ListingTable.Cell>Agent</ListingTable.Cell>
+                <ListingTable.Cell>Project</ListingTable.Cell>
+                <ListingTable.Cell>Status</ListingTable.Cell>
+                <ListingTable.Cell>Thunder Agent ID</ListingTable.Cell>
+              </ListingTable.Row>
+            </ListingTable.Head>
+            <ListingTable.Body>
+              {isLoading &&
+                Array.from({ length: 5 }).map((_, index) => (
+                  <ListingTable.Row key={index} variant="table">
+                    <ListingTable.Cell>
+                      <Stack direction="row" alignItems="center" spacing={2}>
+                        <Skeleton variant="circular" width={28} height={28} />
+                        <Skeleton variant="text" width="40%" />
+                      </Stack>
+                    </ListingTable.Cell>
+                    <ListingTable.Cell><Skeleton variant="text" width="60%" /></ListingTable.Cell>
+                    <ListingTable.Cell><Skeleton variant="rounded" width={80} height={24} /></ListingTable.Cell>
+                    <ListingTable.Cell><Skeleton variant="text" width="70%" /></ListingTable.Cell>
+                  </ListingTable.Row>
+                ))}
+              {!isLoading &&
+                filteredAgents.map((agent) => (
+                  <ListingTable.Row
+                    key={`${agent.projectName}/${agent.agentName}`}
+                    variant="table"
+                    hover
+                    clickable
+                    onClick={() => navigate(agentDetailPath(agent))}
+                  >
+                    <ListingTable.Cell>
+                      <ListingTable.CellIcon
+                        icon={
+                          <Avatar sx={AVATAR_SX}>
+                            {agent.agentName.charAt(0).toUpperCase() || "A"}
+                          </Avatar>
+                        }
+                        primary={agent.agentName}
+                      />
+                    </ListingTable.Cell>
+                    <ListingTable.Cell>{agent.projectName}</ListingTable.Cell>
+                    <ListingTable.Cell>
+                      <Chip
+                        label={agent.status}
+                        size="small"
+                        color={STATUS_COLORS[agent.status] ?? "default"}
+                        variant="outlined"
+                      />
+                    </ListingTable.Cell>
+                    <ListingTable.Cell>
+                      <Typography variant="caption" color="text.secondary" sx={MONO_SX}>
+                        {agent.thunderAgentId ?? "-"}
+                      </Typography>
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
+                ))}
+            </ListingTable.Body>
+          </ListingTable>
+        )}
+      </ListingTable.Container>
+    </ListingTable.Provider>
+  );
+};
+
+export default AgentsTab;

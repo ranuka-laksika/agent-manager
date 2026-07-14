@@ -47,26 +47,17 @@ export interface MCPPolicyAvailabilityResponse {
 }
 
 /**
- * MCPToolScopeBinding gates an MCP tool behind one or more catalog scopes: a caller must
- * hold every listed scope to invoke the named tool.
- */
-export interface MCPToolScopeBinding {
-  tool: string;
-  scopes: string[];
-}
-
-/**
  * MCPEndpointConfig is the deployable configuration of a single MCP proxy endpoint:
- * upstream (URL + auth), policies, capabilities, security and tool-scope bindings. It is
- * the flat config carried on each MCPProxyEndpoint. Environment binding and per-environment
- * deployment status live on MCPEndpointEnvironment, not here.
+ * upstream (URL + auth), policies, capabilities and security. It is the flat config
+ * carried on each MCPProxyEndpoint. Environment binding and per-environment deployment
+ * status live on MCPEndpointEnvironment, not here. Scopes gating individual tools are
+ * managed separately, at the proxy level (see MCPProxyScopeResponse).
  */
 export interface MCPEndpointConfig {
   upstream?: UpstreamConfig;
   policies?: MCPProxyPolicy[];
   capabilities?: MCPProxyCapabilities;
   security?: SecurityConfig;
-  toolScopeBindings?: MCPToolScopeBinding[];
 }
 
 /**
@@ -81,9 +72,9 @@ export interface MCPEndpointEnvironment {
 
 /**
  * MCPProxyEndpoint is one deployable endpoint of an MCP proxy. Its id is unique within the
- * parent proxy. The endpoint's flat config (upstream/policies/capabilities/security/
- * toolScopeBindings) applies to every environment it is bound to via environments; within a
- * proxy an environment maps to at most one endpoint.
+ * parent proxy. The endpoint's flat config (upstream/policies/capabilities/security) applies
+ * to every environment it is bound to via environments; within a proxy an environment maps to
+ * at most one endpoint.
  */
 export interface MCPProxyEndpoint extends MCPEndpointConfig {
   id: string;

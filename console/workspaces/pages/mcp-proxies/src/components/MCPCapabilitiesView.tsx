@@ -42,7 +42,7 @@ export function MCPCapabilitiesView({
   sectionTitleVariant = "subtitle1",
 }: MCPCapabilitiesViewProps) {
   return (
-    <Stack spacing={2}>
+    <Stack>
       <CapabilitySection
         title="Tools"
         items={tools}
@@ -89,7 +89,7 @@ function CapabilitySection({
         </Stack>
       </AccordionSummary>
       <AccordionDetails>
-        <Stack spacing={1}>
+        <Stack>
           {items.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No {title.toLowerCase()} found.

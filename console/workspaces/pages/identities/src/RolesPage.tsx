@@ -146,7 +146,7 @@ export const RolesPage: React.FC = () => {
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {isLoading && <ListingSkeletonRows rows={rowsPerPage} columns={1} />}
+                {isLoading && <ListingSkeletonRows rows={Math.ceil(rowsPerPage / 2)} columns={1} />}
                 {!isLoading &&
                   filteredRoles.map((role: ThunderRole) => (
                     <ListingTable.Row

@@ -817,6 +817,123 @@ func TestRevokeSecret_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
 	assert.Empty(t, clientID)
 }
 
+func TestGetAgentRoles_Success(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1"}, nil
+		},
+	}
+	wantRoles := []thundersvc.ThunderRole{{ID: "role-1", Name: "reader"}}
+	identityClient := &clientmocks.EnvIdentityClientMock{
+		GetAgentRolesFunc: func(_ context.Context, agentID string) ([]thundersvc.ThunderRole, error) {
+			assert.Equal(t, "thunder-agent-1", agentID)
+			return wantRoles, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) { return identityClient, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	roles, err := svc.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.NoError(t, err)
+	assert.Equal(t, wantRoles, roles)
+}
+
+func TestGetAgentRoles_NotYetProvisioned_Errors(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{ID: uuid.New()}, nil // ThunderAgentID empty
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, err := svc.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentIdentityNotProvisioned)
+}
+
+// TestGetAgentRoles_NoBindingRow_ReturnsNotProvisioned_Not500 guards the same
+// distinction as TestRegenerateSecret_NoBindingRow_ReturnsNotProvisioned_Not500:
+// no row exists at all yet, as opposed to a row existing with an empty
+// ThunderAgentID — both must map to the same sentinel, not an unwrapped
+// repository error that handleCommonErrors has no case for.
+func TestGetAgentRoles_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return nil, repositories.ErrAgentThunderClientNotFound
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, err := svc.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentIdentityNotProvisioned)
+}
+
+func TestGetAgentGroups_Success(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "thunder-agent-1"}, nil
+		},
+	}
+	wantGroups := []thundersvc.ThunderGroup{{ID: "group-1", Name: "operators"}}
+	identityClient := &clientmocks.EnvIdentityClientMock{
+		GetDefaultOUIDFunc: func(_ context.Context) (string, error) { return "ou-1", nil },
+		GetAgentGroupsFunc: func(_ context.Context, ouID, agentID string) ([]thundersvc.ThunderGroup, error) {
+			assert.Equal(t, "ou-1", ouID)
+			assert.Equal(t, "thunder-agent-1", agentID)
+			return wantGroups, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) { return identityClient, nil },
+	}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	groups, err := svc.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.NoError(t, err)
+	assert.Equal(t, wantGroups, groups)
+}
+
+func TestGetAgentGroups_NotYetProvisioned_Errors(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return &models.AgentThunderClient{ID: uuid.New()}, nil // ThunderAgentID empty
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, err := svc.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentIdentityNotProvisioned)
+}
+
+// TestGetAgentGroups_NoBindingRow_ReturnsNotProvisioned_Not500 is the groups
+// counterpart to TestGetAgentRoles_NoBindingRow_ReturnsNotProvisioned_Not500.
+func TestGetAgentGroups_NoBindingRow_ReturnsNotProvisioned_Not500(t *testing.T) {
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		GetFunc: func(_ context.Context, _, _, _, _ string) (*models.AgentThunderClient, error) {
+			return nil, repositories.ErrAgentThunderClientNotFound
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{}
+	store := &clientmocks.AgentSecretStoreMock{}
+
+	svc := newTestProvisioningService(repo, resolver, store)
+	_, err := svc.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "staging")
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrAgentIdentityNotProvisioned)
+}
+
 func TestGetIdentityViews_ExternalUnclaimed_IsSafeRead(t *testing.T) {
 	store := &clientmocks.AgentSecretStoreMock{
 		GetFunc: func(context.Context, string) (string, string, error) {

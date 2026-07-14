@@ -227,7 +227,7 @@ export function LLMProviderSecurityTab({
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 5 }}>
           <FormControl fullWidth disabled={isDisabled}>
-            <FormLabel>Authentication Method</FormLabel>
+            <FormLabel>Method</FormLabel>
             <Select
               size="small"
               value={authenticationType || ""}
