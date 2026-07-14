@@ -116,3 +116,14 @@ const (
 const (
 	GitSecretTypeBasicAuth = "basic-auth"
 )
+
+// Isolation tier constants. Tier values are the API-facing names stored on the
+// environment; the RuntimeClass names are what the rendered pod spec requests
+// (kata-deploy registers the QEMU variant under "kata-qemu").
+const (
+	IsolationTierGvisor = "gvisor"
+	IsolationTierKata   = "kata"
+
+	RuntimeClassGvisor   = "gvisor"
+	RuntimeClassKataQemu = "kata-qemu"
+)

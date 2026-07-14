@@ -74,7 +74,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, ouID string,
 	// time (runtimeClassForIsolationTier returns "" for anything unrecognised), hiding the
 	// typo from the user until they notice their agents are not actually isolated.
 	switch req.IsolationTier {
-	case "", "gvisor", "kata":
+	case "", utils.IsolationTierGvisor, utils.IsolationTierKata:
 	default:
 		return nil, fmt.Errorf("%w: unsupported isolation tier %q (allowed: gvisor, kata)", utils.ErrInvalidInput, req.IsolationTier)
 	}

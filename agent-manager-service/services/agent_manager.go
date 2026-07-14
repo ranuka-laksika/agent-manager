@@ -2934,13 +2934,13 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 // runtimeClassName the agent-api ComponentType should request. Empty means "omit" (default runc).
 func runtimeClassForIsolationTier(tier string) string {
 	switch tier {
-	case "gvisor":
-		return "gvisor"
-	case "kata":
+	case utils.IsolationTierGvisor:
+		return utils.RuntimeClassGvisor
+	case utils.IsolationTierKata:
 		// kata-deploy registers the runtime under the "kata-qemu" RuntimeClass/handler
 		// (the QEMU hypervisor variant). The tier name stays "kata" at the API; only the
 		// rendered runtimeClassName is "kata-qemu" so it matches what the node installs.
-		return "kata-qemu"
+		return utils.RuntimeClassKataQemu
 	default:
 		return ""
 	}
