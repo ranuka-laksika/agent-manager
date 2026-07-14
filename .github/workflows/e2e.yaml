@@ -27,7 +27,10 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Bumped from 60 to accommodate the reduced test parallelism below: with
+    # --procs=2 (was -p, i.e. one proc per vCPU) fewer suites run concurrently,
+    # so wall-clock grows even though each suite no longer thrashes on CPU.
+    timeout-minutes: 90
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,7 +64,15 @@ jobs:
           CHART_VERSION: ${{ env.HELM_CHART_VERSION }}
         run: |
           set -o pipefail
-          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 45m \
+          # --procs=2 (was -p, which auto-picks one proc per vCPU = 4 on the
+          # ubuntu-24.04 runner). The single-node k3d cluster cannot fit 4
+          # concurrent per-environment stacks (each env = its own Thunder +
+          # isolated API Platform Gateway controller/runtime + agent runtime
+          # pods); the node ran out of CPU, leaving pods Pending
+          # ("Insufficient cpu") and gateway bootstrap Jobs timing out. Two
+          # concurrent suites keep the resource footprint within the node.
+          # --timeout raised to 70m to match the longer wall-clock at --procs=2.
+          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v --procs=2 --timeout 70m \
             --poll-progress-after=600s --keep-going --junit-report=report.xml \
             ./tests/... 2>&1 | tee e2e-output.log
 
