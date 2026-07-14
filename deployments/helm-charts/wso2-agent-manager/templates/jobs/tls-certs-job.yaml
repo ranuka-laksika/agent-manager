@@ -29,7 +29,7 @@ spec:
         runAsUser: 65534
         fsGroup: 65534
       {{- end }}
-      serviceAccountName: {{ include "agent-management-platform.serviceAccountName" . }}
+      serviceAccountName: {{ include "agent-management-platform.hookServiceAccountName" . }}
       containers:
         - name: generate-tls-certs
           image: alpine:3.21

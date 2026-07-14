@@ -26,6 +26,7 @@ spec:
         {{- end }}
     spec:
       {{- include "agent-management-platform.imagePullSecrets" . | nindent 6 }}
+      automountServiceAccountToken: false
       {{- with .Values.console.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
