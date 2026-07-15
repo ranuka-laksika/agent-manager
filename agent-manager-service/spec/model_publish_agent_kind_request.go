@@ -25,7 +25,7 @@ type PublishAgentKindRequest struct {
 	KindDisplayName *string `json:"kindDisplayName,omitempty"`
 	// Description — used only when creating a new kind
 	KindDescription *string `json:"kindDescription,omitempty"`
-	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	KindLabels *map[string]string `json:"kindLabels,omitempty"`
 	// Version tag for this release
 	Version string `json:"version"`

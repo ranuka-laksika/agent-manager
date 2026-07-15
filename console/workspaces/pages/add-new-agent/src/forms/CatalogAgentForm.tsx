@@ -150,7 +150,7 @@ export const CatalogAgentForm = ({
             hideTitle
             description="Attach key/value labels to organize and filter agents."
             value={formData.labels ?? {}}
-            onChange={(labels) => setFormData((prev) => ({ ...prev, labels }))}
+            onChange={(labels) => handleFieldChange("labels", labels)}
           />
         </Form.ElementWrapper>
       </Form.Stack>

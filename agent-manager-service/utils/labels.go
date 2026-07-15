@@ -65,7 +65,10 @@ func ValidateLabels(labels map[string]string) error {
 
 // ParseLabelSelectors parses repeated `label=key:value` query parameters into
 // a label map. Each entry is split on the first ':'; the key and value must
-// satisfy the same rules as stored labels.
+// satisfy the same rules as stored labels. Repeating the same key with
+// different values would make the AND-semantics filter impossible to satisfy
+// (no label can equal two different values at once), so that's rejected
+// rather than silently keeping only the last one.
 func ParseLabelSelectors(params []string) (map[string]string, error) {
 	selectors := make(map[string]string, len(params))
 	for _, param := range params {
@@ -74,6 +77,12 @@ func ParseLabelSelectors(params []string) (map[string]string, error) {
 			return nil, NewValidationErrorf(
 				"Label filters must be in key:value format",
 				"label: missing ':' separator in %q", param,
+			)
+		}
+		if existing, exists := selectors[key]; exists && existing != value {
+			return nil, NewValidationErrorf(
+				"Label filter keys cannot be repeated with different values",
+				"label: key %q specified with conflicting values %q and %q", key, existing, value,
 			)
 		}
 		selectors[key] = value

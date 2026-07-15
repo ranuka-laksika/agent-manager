@@ -1448,7 +1448,7 @@ type AgentKindResponse struct {
 	// Kind Resource type discriminator (always "AgentKind" for this schema)
 	Kind AgentKindResponseKind `json:"kind"`
 
-	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *Labels `json:"labels,omitempty"`
 
 	// LatestVersion The most recently published version tag
@@ -1609,7 +1609,7 @@ type AgentResponse struct {
 	// KindName Name of the Agent Kind this agent was instantiated from (absent for source-built agents)
 	KindName *string `json:"kindName,omitempty"`
 
-	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels       *Labels      `json:"labels,omitempty"`
 	Name         string       `json:"name"`
 	ProjectName  string       `json:"projectName"`
@@ -2128,7 +2128,7 @@ type CreateAgentRequest struct {
 	// InputInterface Endpoint configurations
 	InputInterface *InputInterface `json:"inputInterface,omitempty"`
 
-	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *Labels `json:"labels,omitempty"`
 
 	// McpConfig Optional MCP proxy configurations to create atomically with the agent. Applied to the component's initial (lowest) environment. Name and type are auto-generated.
@@ -3606,7 +3606,7 @@ type LabelEvaluatorSummary struct {
 	SkippedCount int32 `json:"skippedCount"`
 }
 
-// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 type Labels map[string]string
 
 // ListAPIKeysResponse defines model for ListAPIKeysResponse.
@@ -4466,7 +4466,7 @@ type PublishAgentKindRequest struct {
 	// KindDisplayName Display name — required when creating a new kind, ignored if kind already exists
 	KindDisplayName *string `json:"kindDisplayName,omitempty"`
 
-	// KindLabels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// KindLabels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	KindLabels *Labels `json:"kindLabels,omitempty"`
 
 	// KindName Target Agent Kind name. Creates a new kind if it does not exist.
@@ -4896,7 +4896,7 @@ type UpdateAgentBasicInfoRequest struct {
 	// DisplayName Display name of the agent
 	DisplayName string `json:"displayName"`
 
-	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *Labels `json:"labels,omitempty"`
 }
 
@@ -4957,7 +4957,7 @@ type UpdateAgentKindRequest struct {
 	Description *string `json:"description,omitempty"`
 	DisplayName string  `json:"displayName"`
 
-	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// Labels User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *Labels `json:"labels,omitempty"`
 }
 

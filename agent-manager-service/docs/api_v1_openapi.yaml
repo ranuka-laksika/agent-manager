@@ -11199,12 +11199,15 @@ components:
       type: object
       description: >-
         User-defined key/value labels. Keys are 1-63 characters of
-        [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the
-        same rules but may be empty. At most 10 labels per resource.
+        [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here
+        as an OpenAPI 3.0 property-name pattern — validated server-side);
+        values follow the same rules but may be empty. At most 10 labels per
+        resource.
       maxProperties: 10
       additionalProperties:
         type: string
         maxLength: 63
+        pattern: "^([a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)?$"
 
     CreateAgentRequest:
       type: object

@@ -35,7 +35,7 @@ type AgentResponse struct {
 	Build          *Build          `json:"build,omitempty"`
 	// Name of the Agent Kind this agent was instantiated from (absent for source-built agents)
 	KindName *string `json:"kindName,omitempty"`
-	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric; values follow the same rules but may be empty. At most 10 labels per resource.
+	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
 	Labels *map[string]string `json:"labels,omitempty"`
 }
 

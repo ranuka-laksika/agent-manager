@@ -23,8 +23,6 @@ package services
 import (
 	"context"
 	"errors"
-	"io"
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,7 +48,7 @@ func newLabelTestService(oc *clientmocks.OpenChoreoClientMock, labelRepo *repomo
 	return &agentManagerService{
 		ocClient:       oc,
 		agentLabelRepo: labelRepo,
-		logger:         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		logger:         discardLogger(),
 	}
 }
 

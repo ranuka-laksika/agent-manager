@@ -100,6 +100,17 @@ func TestParseLabelSelectors(t *testing.T) {
 		_, err := ParseLabelSelectors([]string{"-bad:v"})
 		assert.Error(t, err)
 	})
+
+	t.Run("allows the same key repeated with an identical value", func(t *testing.T) {
+		selectors, err := ParseLabelSelectors([]string{"env:prod", "env:prod"})
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"env": "prod"}, selectors)
+	})
+
+	t.Run("rejects the same key repeated with conflicting values", func(t *testing.T) {
+		_, err := ParseLabelSelectors([]string{"team:ml", "team:web"})
+		assert.Error(t, err)
+	})
 }
 
 func TestLabelsMatch(t *testing.T) {

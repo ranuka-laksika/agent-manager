@@ -857,7 +857,7 @@ func (s *agentManagerService) GetAgent(ctx context.Context, ouID string, project
 	if labelRec, lblErr := s.agentLabelRepo.Get(ctx, ouID, projectName, agentName); lblErr == nil {
 		agent.Labels = labelRec.Labels
 	} else if !errors.Is(lblErr, repositories.ErrAgentLabelsNotFound) {
-		s.logger.Warn("Failed to read agent labels from database", "agentName", agentName, "error", lblErr)
+		s.logger.Warn("Failed to read agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 	}
 
 	// Populate per-environment agent configuration from database
@@ -1085,7 +1085,7 @@ func (s *agentManagerService) CreateAgent(ctx context.Context, ouID string, proj
 			Labels:      *req.Labels,
 		}
 		if lblErr := s.agentLabelRepo.Upsert(ctx, labelRec); lblErr != nil {
-			s.logger.Warn("Failed to persist agent labels", "agentName", req.Name, "error", lblErr)
+			s.logger.Warn("Failed to persist agent labels", "ouID", ouID, "projectName", projectName, "agentName", req.Name, "error", lblErr)
 		}
 	}
 	return nil
@@ -1649,7 +1649,7 @@ func (s *agentManagerService) UpdateAgentBasicInfo(ctx context.Context, ouID str
 			Labels:      *req.Labels,
 		}
 		if lblErr := s.agentLabelRepo.Upsert(ctx, labelRec); lblErr != nil {
-			s.logger.Error("Failed to update agent labels", "agentName", agentName, "error", lblErr)
+			s.logger.Error("Failed to update agent labels", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 			return nil, fmt.Errorf("failed to update agent labels: %w", lblErr)
 		}
 	}
@@ -1667,7 +1667,7 @@ func (s *agentManagerService) UpdateAgentBasicInfo(ctx context.Context, ouID str
 	} else if labelRec, lblErr := s.agentLabelRepo.Get(ctx, ouID, projectName, agentName); lblErr == nil {
 		updatedAgent.Labels = labelRec.Labels
 	} else if !errors.Is(lblErr, repositories.ErrAgentLabelsNotFound) {
-		s.logger.Warn("Failed to read agent labels from database", "agentName", agentName, "error", lblErr)
+		s.logger.Warn("Failed to read agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 	}
 
 	s.logger.Info("Agent basic info update called", "agentName", agentName, "ouID", ouID, "projectName", projectName)
@@ -2271,7 +2271,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 				s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 			}
 			if lblErr := s.agentLabelRepo.DeleteAllByAgent(ctx, ouID, projectName, agentName); lblErr != nil {
-				s.logger.Warn("Failed to delete agent labels from database", "agentName", agentName, "error", lblErr)
+				s.logger.Warn("Failed to delete agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 			}
 			s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
 			if s.agentThunderProvisioning != nil {

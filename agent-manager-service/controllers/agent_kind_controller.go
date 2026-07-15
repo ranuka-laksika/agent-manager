@@ -75,7 +75,7 @@ func (c *agentKindController) ListKinds(w http.ResponseWriter, r *http.Request) 
 
 	labelFilter, err := utils.ParseLabelSelectors(r.URL.Query()["label"])
 	if err != nil {
-		log.Error("ListKinds: invalid label parameter", "error", err)
+		log.Debug("ListKinds: invalid label parameter", "error", err)
 		utils.WriteValidationErrorResponse(w, err)
 		return
 	}
@@ -118,7 +118,7 @@ func (c *agentKindController) UpdateKind(w http.ResponseWriter, r *http.Request)
 
 	if payload.Labels != nil {
 		if err := utils.ValidateLabels(*payload.Labels); err != nil {
-			log.Error("UpdateKind: invalid labels", "error", err)
+			log.Debug("UpdateKind: invalid labels", "error", err)
 			utils.WriteValidationErrorResponse(w, err)
 			return
 		}
