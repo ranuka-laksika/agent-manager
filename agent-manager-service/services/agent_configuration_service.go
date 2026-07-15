@@ -2413,7 +2413,11 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		}
 	}
 
-	s.refreshTouchedMCPEnvironments(ctx, ouID, projectName, agentName, touchedEnvNames)
+	// Detached onto its own goroutine, off the request path — cost scales
+	// with the number of touched environments, and this is already a
+	// best-effort step. context.WithoutCancel keeps request-scoped values
+	// (e.g. a correlation ID) without tying it to this handler's cancellation.
+	go s.refreshTouchedMCPEnvironments(context.WithoutCancel(ctx), ouID, projectName, agentName, touchedEnvNames)
 
 	return s.GetMCP(ctx, existingConfig.UUID, ouID, projectName, agentName)
 }
@@ -2425,10 +2429,11 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 // (not InjectForEnvironment) so touching an environment whose scopes didn't
 // actually change (touchedEnvNames is the union of all existing and all
 // requested mappings, so this includes plenty of no-ops) never causes a
-// needless pod rollout. Best-effort: the MCP config change itself already
-// succeeded, so a refresh failure here must never turn that success into an
-// error response — it's logged and the agent simply picks up the change on
-// its next deploy/promote/rotation instead.
+// needless pod rollout. Best-effort: the caller runs this on a detached
+// goroutine after the MCP config change itself already succeeded, so a
+// refresh failure here must never turn that success into an error response —
+// it's logged and the agent simply picks up the change on its next
+// deploy/promote/rotation instead.
 func (s *agentConfigurationService) refreshTouchedMCPEnvironments(ctx context.Context, ouID, projectName, agentName string, touchedEnvNames map[string]struct{}) {
 	for envName := range touchedEnvNames {
 		if err := s.agentIdentityInjection.ReconcileForEnvironment(ctx, ouID, projectName, agentName, envName); err != nil {

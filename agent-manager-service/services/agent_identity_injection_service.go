@@ -67,9 +67,10 @@ const (
 )
 
 // withReleaseBindingRetry retries fn a bounded number of times, but only when
-// fn fails with utils.ErrConflict (the optimistic-concurrency race this retry
-// exists for) — any other error (validation, auth, not-found) is permanent
-// and returned immediately. Honors ctx cancellation so a doomed or
+// fn fails with utils.ErrConflict or utils.ErrInternalServerError — a stale
+// resourceVersion race that OpenChoreo currently surfaces as a generic 500
+// rather than a 409. Any other error (validation, auth, not-found) is
+// permanent and returned immediately. Honors ctx cancellation so a doomed or
 // already-cancelled request-path call doesn't block a handler goroutine
 // sleeping between attempts.
 func withReleaseBindingRetry(ctx context.Context, fn func() error) error {
@@ -79,7 +80,7 @@ func withReleaseBindingRetry(ctx context.Context, fn func() error) error {
 		if lastErr == nil {
 			return nil
 		}
-		if !errors.Is(lastErr, utils.ErrConflict) {
+		if !errors.Is(lastErr, utils.ErrConflict) && !errors.Is(lastErr, utils.ErrInternalServerError) {
 			return lastErr
 		}
 		if attempt < releaseBindingUpdateRetries-1 {
@@ -93,18 +94,40 @@ func withReleaseBindingRetry(ctx context.Context, fn func() error) error {
 	return lastErr
 }
 
+// agentIdentityEnvVarKeySet is the fixed set of env var names owned by
+// AgentID credential injection. Never mutated after init — every caller of
+// AgentIdentityEnvVarKeys/mergeAgentIdentityEnvVarKeys shares this one map
+// instead of each allocating its own copy.
+var agentIdentityEnvVarKeySet = map[string]bool{
+	client.EnvVarAgentIdentityClientID:      true,
+	client.EnvVarAgentIdentityClientSecret:  true,
+	client.EnvVarAgentIdentityTokenEndpoint: true,
+	client.EnvVarAgentIdentityScopes:        true,
+}
+
 // AgentIdentityEnvVarKeys returns the set of env var names owned by AgentID
 // credential injection. Callers that rewrite an agent's env vars from user
 // input use this to filter user-echoed copies (the console reads
 // configurations back, so these keys can legitimately round-trip in requests)
-// before re-appending the canonical values.
+// before re-appending the canonical values. The returned map is shared and
+// must never be mutated by callers — use mergeAgentIdentityEnvVarKeys to
+// fold these keys into a caller-owned map instead.
 func AgentIdentityEnvVarKeys() map[string]bool {
-	return map[string]bool{
-		client.EnvVarAgentIdentityClientID:      true,
-		client.EnvVarAgentIdentityClientSecret:  true,
-		client.EnvVarAgentIdentityTokenEndpoint: true,
-		client.EnvVarAgentIdentityScopes:        true,
+	return agentIdentityEnvVarKeySet
+}
+
+// mergeAgentIdentityEnvVarKeys adds every AgentID-owned env var key into dst,
+// allocating it first if nil, and returns it — the repeated "filter
+// user-echoed identity keys into a system-managed set" step several callers
+// in agent_manager.go each need.
+func mergeAgentIdentityEnvVarKeys(dst map[string]bool) map[string]bool {
+	if dst == nil {
+		dst = make(map[string]bool, len(agentIdentityEnvVarKeySet))
 	}
+	for k := range agentIdentityEnvVarKeySet {
+		dst[k] = true
+	}
+	return dst
 }
 
 // AgentIdentityInjectionService delivers an internal agent's AgentID
@@ -582,8 +605,9 @@ func (s *agentIdentityInjectionService) RemoveForEnvironment(ctx context.Context
 		return nil
 	}
 
-	keys := make([]string, 0, len(AgentIdentityEnvVarKeys()))
-	for k := range AgentIdentityEnvVarKeys() {
+	identityKeys := AgentIdentityEnvVarKeys()
+	keys := make([]string, 0, len(identityKeys))
+	for k := range identityKeys {
 		keys = append(keys, k)
 	}
 

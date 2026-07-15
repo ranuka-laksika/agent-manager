@@ -354,6 +354,12 @@ func TestPromoteAgent(t *testing.T) {
 	})
 
 	t.Run("returns 400 when target environment AgentID is not ready", func(t *testing.T) {
+		// The hard block only fires when the pipeline's lowest environment
+		// ("development") actually has a real credential to leak, so it must
+		// be seeded here — otherwise promotion proceeds and panics on the
+		// unconfigured PromoteComponentFunc mock below.
+		seedReadyAgentIdentityRow(t, jwtassertion.MockOUID, "my-project", agentName, "development")
+
 		ocClient := apitestutils.CreateMockOpenChoreoClient()
 		stubReadyAgentIdentitySecretReference(ocClient)
 		ocClient.GetProjectDeploymentPipelineFunc = pipelineWithPath("development", "unready-env")

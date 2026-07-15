@@ -245,7 +245,13 @@ func (s *agentThunderProvisioningService) readCredential(ctx context.Context, se
 	if err != nil {
 		return "", "", err
 	}
-	return data[thundersvc.AgentSecretKeyClientID], data[thundersvc.AgentSecretKeyClientSecret], nil
+	clientID, clientSecret = data[thundersvc.AgentSecretKeyClientID], data[thundersvc.AgentSecretKeyClientSecret]
+	if clientID == "" && clientSecret == "" {
+		// A malformed or partially-written entry reads as "nothing stored
+		// here" to every caller, same as a genuinely missing path.
+		return "", "", secretmanagersvc.ErrSecretNotFound
+	}
+	return clientID, clientSecret, nil
 }
 
 // deleteCredential permanently removes the stored credential (and its
@@ -783,14 +789,17 @@ func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, ouID
 
 	if binding.SecretRefPath != "" {
 		if err := s.deleteCredential(ctx, ouID, projectName, agentName, envName); err != nil {
-			// Non-fatal: the stored copy is now stale (points at an invalidated
-			// secret) either way, and cleanup can be retried by revoking again.
-			s.logger.Warn("Failed to delete stored secret during revoke", "bindingID", binding.ID, "error", err)
+			// Non-fatal: the stored copy is now stale either way. Leave
+			// secret_ref_path set (rather than clearing it below) so a
+			// second revoke call reaches this same branch and retries the
+			// delete, instead of orphaning the stored secret and its
+			// SecretReference CR with no path left pointing at them.
+			s.logger.Warn("Failed to delete stored secret during revoke; leaving secret_ref_path set so a re-revoke retries", "bindingID", binding.ID, "error", err)
+			return binding.ThunderClientID, nil
 		}
-	}
-
-	if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
-		return "", err
+		if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
+			return "", err
+		}
 	}
 	return binding.ThunderClientID, nil
 }
@@ -875,8 +884,13 @@ func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, ouID,
 		return "", "", "", fmt.Errorf("read claimed agent secret: %w", getErr)
 	}
 
+	// The claim itself (gated by claimed_at, not secret_ref_path) has already
+	// succeeded — the secret above is returned either way. If destroying the
+	// stored copy fails, leave secret_ref_path set rather than clearing it,
+	// so the orphaned entry stays traceable for manual cleanup.
 	if delErr := s.deleteCredential(ctx, ouID, projectName, agentName, envName); delErr != nil {
-		s.logger.Warn("Failed to destroy claimed external agent secret", "bindingID", binding.ID, "error", delErr)
+		s.logger.Warn("Failed to destroy claimed external agent secret; leaving secret_ref_path set so the orphaned entry stays traceable", "bindingID", binding.ID, "error", delErr)
+		return binding.ThunderAgentID, binding.ThunderClientID, secret, nil
 	}
 	if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
 		s.logger.Warn("Failed to clear claimed external agent secret reference", "bindingID", binding.ID, "error", err)
@@ -886,10 +900,42 @@ func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, ouID,
 }
 
 func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context, ouID, projectName, agentName string) {
-	bindings, err := s.repo.FindByAgent(ctx, ouID, projectName, agentName)
+	snapshot, err := s.repo.FindByAgent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent thunder bindings for deletion", "ouID", ouID, "agentName", agentName, "error", err)
 		return
+	}
+
+	// Acquire each binding's lock — the same one AttemptProvision/RegenerateSecret/
+	// RevokeSecret hold for their duration — before touching it, then re-fetch its
+	// current row rather than trusting the snapshot above. This guarantees any
+	// AttemptProvision in flight for a binding has finished, and its Thunder
+	// identity and secret are visible, before this method deletes it.
+	bindings := make([]models.AgentThunderClient, 0, len(snapshot))
+	var releases []func()
+	defer func() {
+		for _, release := range releases {
+			release()
+		}
+	}()
+	for _, b := range snapshot {
+		release, lockErr := s.bindingLocks.Lock(ctx, bindingLockKey(ouID, projectName, agentName, b.EnvironmentName))
+		if lockErr != nil {
+			s.logger.Warn("Agent thunder binding deletion cancelled while waiting for binding lock",
+				"ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", lockErr)
+			continue
+		}
+		releases = append(releases, release)
+
+		current, getErr := s.repo.Get(ctx, ouID, projectName, agentName, b.EnvironmentName)
+		if getErr != nil {
+			if errors.Is(getErr, repositories.ErrAgentThunderClientNotFound) {
+				continue // already gone — e.g. deleted by a concurrent call
+			}
+			s.logger.Error("Failed to re-fetch agent thunder binding before deletion", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", getErr)
+			continue
+		}
+		bindings = append(bindings, *current)
 	}
 
 	// Clear secret_ref_path on every row FIRST — before the row-delete attempt
@@ -938,12 +984,16 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		s.logger.Error("Failed to delete agent thunder client rows; continuing to clean up external resources anyway", "ouID", ouID, "agentName", agentName, "error", err)
 	}
 
+	injector := s.getWorkloadInjector()
 	for _, b := range bindings {
 		// The AgentID SecretReference CR is independent of whether the identity
 		// ever landed in Thunder — clean it up for every internal binding, even
 		// ones that never completed.
-		if s.workloadInjector != nil && b.ProvisioningType == models.AgentProvisioningTypeInternal {
-			if err := s.workloadInjector.CleanupForEnvironment(ctx, ouID, agentName, b.EnvironmentName); err != nil {
+		if b.ProvisioningType == models.AgentProvisioningTypeInternal {
+			if injector == nil {
+				s.logger.Warn("Skipping agent identity SecretReference cleanup: no workload injector configured",
+					"ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName)
+			} else if err := injector.CleanupForEnvironment(ctx, ouID, agentName, b.EnvironmentName); err != nil {
 				s.logger.Warn("Failed to delete agent identity SecretReference during agent deletion", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
 			}
 		}

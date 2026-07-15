@@ -46,13 +46,18 @@ type SecretLocation struct {
 	SecretKey       string // optional — e.g., "api-key"
 }
 
-// sanitizeSegment trims whitespace and validates the segment for use in a KV path.
-// Returns an error if the segment contains '/' to prevent path traversal and path collisions
-// (e.g., org "a/b" and org "a_b" would otherwise both produce segment "a_b").
+// sanitizeSegment trims whitespace and validates one segment of a KV path.
+// Rejects '/' (would collide two different segments, e.g. org "a/b" and org
+// "a_b" would otherwise both produce "a_b") and the reserved traversal tokens
+// "." and "..". Every SecretLocation field funnels through here via KVPath(),
+// making this the one choke point for every KV path built in the codebase.
 func sanitizeSegment(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	if strings.Contains(s, "/") {
 		return "", fmt.Errorf("secret path segment %q contains invalid character '/'", s)
+	}
+	if s == "." || s == ".." {
+		return "", fmt.Errorf("secret path segment %q is a reserved path traversal token", s)
 	}
 	return s, nil
 }

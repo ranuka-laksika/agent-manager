@@ -176,6 +176,11 @@ type AgentRevokeSecretResponse struct {
 	EnvironmentName string `json:"environmentName"`
 	ClientID        string `json:"clientId"`
 	Status          string `json:"status"`
+	// WorkloadRefreshWarning is set when the revoke succeeded but the
+	// best-effort cleanup of the running pod's credential couldn't be
+	// completed or verified — e.g. the deployment pipeline couldn't be
+	// resolved. Empty on the ordinary success path.
+	WorkloadRefreshWarning string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentCredentialsResponse is returned by the Internal-agent-only credentials

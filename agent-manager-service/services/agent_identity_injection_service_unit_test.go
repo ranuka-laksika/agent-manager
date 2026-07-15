@@ -956,6 +956,38 @@ func TestAgentIdentityInjection_InjectForEnvironment_RetriesOnTransientConflictT
 	assert.Equal(t, 2, attempts)
 }
 
+// TestAgentIdentityInjection_InjectForEnvironment_RetriesOnInternalServerErrorConflict
+// guards the realistic error path: OpenChoreo's UpdateReleaseBindingResp has no
+// JSON409 field at all (see openchoreosvc/client.retryReleaseBindingUpdate's
+// sibling comment), so a stale-resourceVersion conflict on this call can only
+// ever surface as utils.ErrInternalServerError, never utils.ErrConflict. If the
+// retry gate only matched ErrConflict, this exact scenario would never retry.
+func TestAgentIdentityInjection_InjectForEnvironment_RetriesOnInternalServerErrorConflict(t *testing.T) {
+	repo := identityRepoReturning(completedInternalBinding(), nil)
+
+	attempts := 0
+	oc := &clientmocks.OpenChoreoClientMock{
+		GetSecretReferenceFunc: func(_ context.Context, _, refName string) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: refName}, nil
+		},
+		UpdateSecretReferenceFunc: func(_ context.Context, _, _ string, req client.CreateSecretReferenceRequest) (*client.SecretReferenceInfo, error) {
+			return &client.SecretReferenceInfo{Name: req.Name}, nil
+		},
+		UpdateReleaseBindingEnvVarsFunc: func(_ context.Context, _, _, _, _ string, _ []client.EnvVar) error {
+			attempts++
+			if attempts < 2 {
+				return utils.ErrInternalServerError
+			}
+			return nil
+		},
+	}
+	svc := newTestIdentityInjectionService(repo, oc)
+
+	err := svc.InjectForEnvironment(context.Background(), testIdentityOrg, testIdentityProject, testIdentityAgent, testIdentityEnv)
+	require.NoError(t, err, "a stale-resourceVersion conflict surfaced as a 500 (OpenChoreo's actual behavior for this call) must be retried")
+	assert.Equal(t, 2, attempts)
+}
+
 func TestAgentIdentityInjection_InjectForEnvironment_GivesUpAfterRetriesExhausted(t *testing.T) {
 	repo := identityRepoReturning(completedInternalBinding(), nil)
 

@@ -413,6 +413,7 @@ func TestRevokeAgentIdentitySecret_LowestEnv_RemovesWorkloadLevelVars(t *testing
 	assert.Equal(t, "client-abc", resp.ClientID)
 	require.NotNil(t, gotIncludeWorkload)
 	assert.True(t, *gotIncludeWorkload, "revoking the LOWEST environment's credential must also strip the shared workload-level vars")
+	assert.Empty(t, resp.WorkloadRefreshWarning, "a clean revoke with a resolvable pipeline must not carry a warning")
 }
 
 func TestRevokeAgentIdentitySecret_NonLowestEnv_KeepsWorkloadLevelVars(t *testing.T) {
@@ -436,11 +437,12 @@ func TestRevokeAgentIdentitySecret_NonLowestEnv_KeepsWorkloadLevelVars(t *testin
 	}
 	s := &agentManagerService{agentThunderProvisioning: stub, agentIdentityInjection: injector, ocClient: ocClient, logger: discardLogger()}
 
-	_, err := s.RevokeAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "staging")
+	resp, err := s.RevokeAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "staging")
 
 	require.NoError(t, err)
 	require.NotNil(t, gotIncludeWorkload)
 	assert.False(t, *gotIncludeWorkload, "revoking a NON-lowest environment must never strip the lowest environment's shared workload-level vars")
+	assert.Empty(t, resp.WorkloadRefreshWarning, "a clean revoke with a resolvable pipeline must not carry a warning")
 }
 
 func TestRevokeAgentIdentitySecret_PipelineLookupFails_StillRevokesConservatively(t *testing.T) {
@@ -467,6 +469,9 @@ func TestRevokeAgentIdentitySecret_PipelineLookupFails_StillRevokesConservativel
 	assert.Equal(t, "client-abc", resp.ClientID)
 	require.NotNil(t, gotIncludeWorkload)
 	assert.False(t, *gotIncludeWorkload, "with an unknown pipeline, be conservative and leave workload-level vars alone")
+	assert.NotEmpty(t, resp.WorkloadRefreshWarning,
+		"an unresolvable pipeline means it's genuinely unknown whether this environment needed workload-level "+
+			"cleanup too — that must be surfaced to the caller, not reported as a plain, silent success")
 }
 
 // TestDeployAgent_IdentityInjectionError_AbortsDeploy guards that a failure
@@ -686,16 +691,23 @@ func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, t
 
 	identityInjector := &agentIdentityInjectorStub{
 		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, envName string) ([]client.EnvVar, error) {
-			if tgtIdentityErr != nil {
-				return nil, tgtIdentityErr
-			}
 			if envName == "staging" {
+				if tgtIdentityErr != nil {
+					return nil, tgtIdentityErr
+				}
 				return tgtIdentityEnvVars, nil
 			}
-			// Source environment's own identity vars must never be requested
-			// by name for inclusion in the target — if PromoteAgent ever asks
-			// this stub for "dev", something is wrong with the isolation logic.
-			t.Fatalf("agentIdentityInjection.EnvVarsForEnvironment must only be called for the TARGET environment, got %q", envName)
+			if envName == "dev" {
+				// dev (the pipeline's lowest environment) already has a real,
+				// deployed AgentID credential in every fixture built from this
+				// helper — PromoteAgent's leak-safety check reads this to tell
+				// "target genuinely not ready yet, must block" apart from
+				// "AgentID was never used at all, safe to let through" when
+				// tgtIdentityEnvVars comes back empty (see the cross-environment
+				// leak fix in PromoteAgent).
+				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+			}
+			t.Fatalf("agentIdentityInjection.EnvVarsForEnvironment called for unexpected environment %q", envName)
 			return nil, nil
 		},
 	}
@@ -839,6 +851,13 @@ func TestPromoteAgent_KickOffThenRetry_SucceedsOnceTargetIdentityCompletes(t *te
 	targetReady := false
 	identityInjector := &agentIdentityInjectorStub{
 		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, envName string) ([]client.EnvVar, error) {
+			if envName == "dev" {
+				// dev already has a real, deployed credential — AgentID is
+				// actively used for this agent, so the leak-safety check on an
+				// empty target result must fall through to the poll/hard-block
+				// below rather than waving the promotion through.
+				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+			}
 			require.Equal(t, "staging", envName)
 			if !targetReady {
 				return nil, nil
@@ -1011,12 +1030,15 @@ func TestPromoteAgent_TargetProvisioningFailed_BlocksWithReprovisionMessage(t *t
 // TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes covers a
 // deployment mode where AgentID provisioning is not wired in at all
 // (app.Options.AgentThunderProvisioning is nil, so agentManagerService's
-// agentThunderProvisioning field is nil too — see app.go). PromoteAgent must
-// not dereference agentThunderProvisioning or agentIdentityInjection in that
-// mode, and must not hard-block the promotion just because no AgentID binding
-// will ever exist. Both fields are deliberately left nil (not stubs) so a
-// regression that calls either outside the disabled-provisioning guard fails
-// with a nil-pointer/nil-interface panic rather than silently passing.
+// agentThunderProvisioning field is nil too — see app.go). agentIdentityInjection
+// is NOT nil here: it is wired unconditionally in production (see
+// wiring.ProvideAgentIdentityInjectionService), independent of whether AgentID
+// provisioning itself is enabled, so it is always a real, callable service —
+// just one that finds nothing to inject when no binding has ever been created.
+// agentThunderProvisioning is deliberately left nil (not a stub) so a
+// regression that calls it outside the disabled-provisioning guard fails with
+// a nil-interface panic rather than silently passing. PromoteAgent must not
+// hard-block the promotion just because no AgentID binding will ever exist.
 func TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes(t *testing.T) {
 	promoteCalled := false
 	ocClient := &clientmocks.OpenChoreoClientMock{
@@ -1044,12 +1066,21 @@ func TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes(t *test
 		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
 		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
 	}
+	identityInjector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) {
+			// No binding exists anywhere for this agent — AgentID has genuinely
+			// never been used, in dev or staging, so there is nothing that
+			// could leak from one environment's pod into another's.
+			return nil, nil
+		},
+	}
 
 	s := &agentManagerService{
 		ocClient:                  ocClient,
 		agentConfigurationService: agentConfigSvc,
+		agentIdentityInjection:    identityInjector,
 		logger:                    discardLogger(),
-		// agentThunderProvisioning and agentIdentityInjection intentionally omitted (nil).
+		// agentThunderProvisioning intentionally omitted (nil).
 	}
 
 	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
@@ -1058,5 +1089,76 @@ func TestPromoteAgent_ProvisioningDisabled_SkipsIdentityCheckAndPromotes(t *test
 	})
 
 	require.NoError(t, err)
-	assert.True(t, promoteCalled, "promotion must proceed normally when AgentID provisioning is disabled for this deployment")
+	assert.True(t, promoteCalled, "promotion must proceed normally when AgentID has never been used for this agent")
+}
+
+// TestPromoteAgent_ProvisioningDisabledButLowestEnvHasRealCredential_StillBlocks
+// covers the actual cross-environment leak this deployment mode must still
+// guard against: a deployment that provisioned real AgentID credentials while
+// enabled, then had provisioning disabled afterward (agentThunderProvisioning
+// is nil, but agentIdentityInjection — always wired — still finds the lowest
+// environment's real, pre-existing credential). DeployAgent's own identity
+// injection is not gated on agentThunderProvisioning, so it keeps writing that
+// lowest environment's real client_id/client_secret into the shared Workload
+// CR regardless. If PromoteAgent let this through without the target's own
+// override, the promoted pod would silently inherit that real credential.
+func TestPromoteAgent_ProvisioningDisabledButLowestEnvHasRealCredential_StillBlocks(t *testing.T) {
+	promoteCalled := false
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, orgName string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{Name: orgName}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{
+				Provisioning: models.Provisioning{Type: string(utils.InternalAgent)},
+				Type:         models.AgentType{Type: "agent-chat"},
+			}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return &models.DeploymentPipelineResponse{PromotionPaths: []models.PromotionPath{
+				{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: "staging"}}},
+			}}, nil
+		},
+		IsDeploymentInProgressFunc: func(_ context.Context, _, _, _ string) (bool, error) { return false, nil },
+		PromoteComponentFunc: func(_ context.Context, _, _, _, _, _ string, _ []client.EnvVar, _ []client.FileVar, _ map[string]interface{}) error {
+			promoteCalled = true
+			return nil
+		},
+	}
+	agentConfigSvc := &stubAgentConfigurationServiceForPromote{
+		SystemKeysFunc: func(_ context.Context, _, _, _, _ string) (map[string]bool, error) { return map[string]bool{}, nil },
+		SystemVarsFunc: func(_ context.Context, _, _, _, _ string) ([]client.EnvVar, error) { return nil, nil },
+	}
+	identityInjector := &agentIdentityInjectorStub{
+		EnvVarsForEnvironmentFunc: func(_ context.Context, _, _, _, envName string) ([]client.EnvVar, error) {
+			if envName == "dev" {
+				// dev was provisioned and deployed while AgentID was still
+				// enabled — its real credential is already sitting in the
+				// shared Workload CR.
+				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+			}
+			// staging has never been provisioned, and — provisioning being
+			// disabled now — never will be automatically.
+			return nil, nil
+		},
+	}
+
+	s := &agentManagerService{
+		ocClient:                  ocClient,
+		agentConfigurationService: agentConfigSvc,
+		agentIdentityInjection:    identityInjector,
+		logger:                    discardLogger(),
+		// agentThunderProvisioning intentionally omitted (nil): provisioning
+		// disabled NOW, even though dev was provisioned earlier while it was on.
+	}
+
+	err := s.PromoteAgent(context.Background(), "acme", "proj1", "my-agent", &spec.PromoteAgentRequest{
+		SourceEnvironment: "dev",
+		TargetEnvironment: "staging",
+	})
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "AgentID provisioning is disabled")
+	assert.False(t, promoteCalled,
+		"promotion must be blocked BEFORE calling PromoteComponent — otherwise the pod is already promoted with the lowest environment's leaked credentials by the time this error is returned")
 }

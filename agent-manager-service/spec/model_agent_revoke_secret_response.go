@@ -22,6 +22,8 @@ type AgentRevokeSecretResponse struct {
 	EnvironmentName string `json:"environmentName"`
 	ClientId        string `json:"clientId"`
 	Status          string `json:"status"`
+	// Present only when the secret was revoked successfully but the best-effort cleanup of the already-running workload's credential could not be completed or verified — e.g. the deployment pipeline couldn't be resolved, so it's unknown whether this environment's shared Workload-level env vars also need clearing. The workload may keep referencing the revoked credential until this is confirmed or the workload is redeployed.
+	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // NewAgentRevokeSecretResponse instantiates a new AgentRevokeSecretResponse object
@@ -116,6 +118,38 @@ func (o *AgentRevokeSecretResponse) SetStatus(v string) {
 	o.Status = v
 }
 
+// GetWorkloadRefreshWarning returns the WorkloadRefreshWarning field value if set, zero value otherwise.
+func (o *AgentRevokeSecretResponse) GetWorkloadRefreshWarning() string {
+	if o == nil || IsNil(o.WorkloadRefreshWarning) {
+		var ret string
+		return ret
+	}
+	return *o.WorkloadRefreshWarning
+}
+
+// GetWorkloadRefreshWarningOk returns a tuple with the WorkloadRefreshWarning field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *AgentRevokeSecretResponse) GetWorkloadRefreshWarningOk() (*string, bool) {
+	if o == nil || IsNil(o.WorkloadRefreshWarning) {
+		return nil, false
+	}
+	return o.WorkloadRefreshWarning, true
+}
+
+// HasWorkloadRefreshWarning returns a boolean if a field has been set.
+func (o *AgentRevokeSecretResponse) HasWorkloadRefreshWarning() bool {
+	if o != nil && !IsNil(o.WorkloadRefreshWarning) {
+		return true
+	}
+
+	return false
+}
+
+// SetWorkloadRefreshWarning gets a reference to the given string and assigns it to the WorkloadRefreshWarning field.
+func (o *AgentRevokeSecretResponse) SetWorkloadRefreshWarning(v string) {
+	o.WorkloadRefreshWarning = &v
+}
+
 func (o AgentRevokeSecretResponse) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -129,6 +163,9 @@ func (o AgentRevokeSecretResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize["environmentName"] = o.EnvironmentName
 	toSerialize["clientId"] = o.ClientId
 	toSerialize["status"] = o.Status
+	if !IsNil(o.WorkloadRefreshWarning) {
+		toSerialize["workloadRefreshWarning"] = o.WorkloadRefreshWarning
+	}
 	return toSerialize, nil
 }
 
