@@ -2301,7 +2301,7 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 
 	// Cleanup agent labels from database (same best-effort semantics as configs)
 	if lblErr := s.agentLabelRepo.DeleteAllByAgent(ctx, ouID, projectName, agentName); lblErr != nil {
-		s.logger.Warn("Failed to delete agent labels from database", "agentName", agentName, "error", lblErr)
+		s.logger.Warn("Failed to delete agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 	}
 
 	// Cleanup env-scoped API artifact record.
