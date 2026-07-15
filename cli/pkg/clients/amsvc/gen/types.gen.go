@@ -1626,12 +1626,10 @@ type AgentRevokeSecretResponse struct {
 	EnvironmentName string `json:"environmentName"`
 	Status          string `json:"status"`
 
-	// WorkloadRefreshWarning Present only when the secret was revoked successfully but the best-effort
-	// cleanup of the already-running workload's credential could not be completed
-	// or verified — e.g. the deployment pipeline couldn't be resolved, so it's
-	// unknown whether this environment's shared Workload-level env vars also need
-	// clearing. The workload may keep referencing the revoked credential until
-	// this is confirmed or the workload is redeployed.
+	// WorkloadRefreshWarning Present when the secret was revoked successfully but the best-effort cleanup of
+	// the already-running workload's credential could not be completed or verified.
+	// The workload may keep referencing the revoked credential until this is confirmed
+	// or the workload is redeployed.
 	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 

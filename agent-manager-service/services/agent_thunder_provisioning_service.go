@@ -978,13 +978,19 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 	// current row rather than trusting the snapshot above. This guarantees any
 	// AttemptProvision in flight for a binding has finished, and its Thunder
 	// identity and secret are visible, before this method deletes it.
+	//
+	// Each binding's release is paired 1:1 with its entry in bindings (not
+	// collected into one shared defer) so its lock can be released right after
+	// THAT binding's own cleanup finishes, further down — not held through
+	// every other binding's external cleanup too. The lock still guards this
+	// binding's own full lifecycle end-to-end, including its own external
+	// cleanup below: releasing it any earlier (e.g. right after DeleteByIDs)
+	// would let a concurrent re-provision for the same binding key store a
+	// fresh secret at the same deterministic path before this method's own
+	// delayed OpenBao delete call runs, deleting that fresh secret instead of
+	// the one this method actually snapshotted.
 	bindings := make([]models.AgentThunderClient, 0, len(snapshot))
-	var releases []func()
-	defer func() {
-		for _, release := range releases {
-			release()
-		}
-	}()
+	releases := make([]func(), 0, len(snapshot))
 	for _, b := range snapshot {
 		release, lockErr := s.bindingLocks.Lock(ctx, bindingLockKey(ouID, projectName, agentName, b.EnvironmentName))
 		if lockErr != nil {
@@ -992,10 +998,10 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 				"ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", lockErr)
 			continue
 		}
-		releases = append(releases, release)
 
 		current, getErr := s.repo.Get(ctx, ouID, projectName, agentName, b.EnvironmentName)
 		if getErr != nil {
+			release()
 			if errors.Is(getErr, repositories.ErrAgentThunderClientNotFound) {
 				continue // already gone — e.g. deleted by a concurrent call
 			}
@@ -1003,6 +1009,7 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 			continue
 		}
 		bindings = append(bindings, *current)
+		releases = append(releases, release)
 	}
 
 	// Clear secret_ref_path on every row FIRST — before the row-delete attempt
@@ -1051,34 +1058,43 @@ func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context,
 		s.logger.Error("Failed to delete agent thunder client rows; continuing to clean up external resources anyway", "ouID", ouID, "agentName", agentName, "error", err)
 	}
 
+	// Each binding's lock releases as soon as ITS OWN external cleanup below
+	// finishes (via the inline defer), not after every other binding's —
+	// otherwise a binding with a fast cleanup would still sit blocked behind
+	// however long its siblings' Thunder/OpenBao calls take, even though
+	// nothing about it depends on them.
 	injector := s.getWorkloadInjector()
-	for _, b := range bindings {
-		// The AgentID SecretReference CR is independent of whether the identity
-		// ever landed in Thunder — clean it up for every internal binding, even
-		// ones that never completed.
-		if b.ProvisioningType == models.AgentProvisioningTypeInternal {
-			if injector == nil {
-				s.logger.Warn("Skipping agent identity SecretReference cleanup: no workload injector configured",
-					"ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName)
-			} else if err := injector.CleanupForEnvironment(ctx, ouID, agentName, b.EnvironmentName); err != nil {
-				s.logger.Warn("Failed to delete agent identity SecretReference during agent deletion", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+	for i, b := range bindings {
+		func() {
+			defer releases[i]()
+
+			// The AgentID SecretReference CR is independent of whether the identity
+			// ever landed in Thunder — clean it up for every internal binding, even
+			// ones that never completed.
+			if b.ProvisioningType == models.AgentProvisioningTypeInternal {
+				if injector == nil {
+					s.logger.Warn("Skipping agent identity SecretReference cleanup: no workload injector configured",
+						"ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName)
+				} else if err := injector.CleanupForEnvironment(ctx, ouID, agentName, b.EnvironmentName); err != nil {
+					s.logger.Warn("Failed to delete agent identity SecretReference during agent deletion", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+				}
 			}
-		}
-		if b.ThunderAgentID == "" {
-			continue // never made it to Thunder — nothing to delete there
-		}
-		thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(ouID), b.EnvironmentName)
-		if err != nil {
-			s.logger.Warn("Env-thunder resolver error during agent binding cleanup", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
-			continue
-		}
-		if _, err := thunderClient.DeleteAgentIdentity(ctx, b.ThunderAgentID); err != nil {
-			s.logger.Warn("Failed to delete Thunder agent identity", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
-		}
-		if b.SecretRefPath != "" {
-			if err := s.deleteCredential(ctx, ouID, projectName, agentName, b.EnvironmentName); err != nil {
-				s.logger.Warn("Failed to delete stored agent secret", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+			if b.ThunderAgentID == "" {
+				return // never made it to Thunder — nothing to delete there
 			}
-		}
+			thunderClient, err := s.envResolver.Resolve(ctx, s.resolveNamespace(ouID), b.EnvironmentName)
+			if err != nil {
+				s.logger.Warn("Env-thunder resolver error during agent binding cleanup", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+				return
+			}
+			if _, err := thunderClient.DeleteAgentIdentity(ctx, b.ThunderAgentID); err != nil {
+				s.logger.Warn("Failed to delete Thunder agent identity", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+			}
+			if b.SecretRefPath != "" {
+				if err := s.deleteCredential(ctx, ouID, projectName, agentName, b.EnvironmentName); err != nil {
+					s.logger.Warn("Failed to delete stored agent secret", "ouID", ouID, "bindingID", b.ID, "agentName", agentName, "env", b.EnvironmentName, "error", err)
+				}
+			}
+		}()
 	}
 }

@@ -1621,6 +1621,103 @@ func TestDeleteAllBindings_WaitsForInFlightAttemptProvision_NoOrphanedThunderIde
 		"the OpenBao secret the concurrent attempt just stored must be cleaned up, not orphaned")
 }
 
+// TestDeleteAllBindings_ReleasesEachBindingsLockAfterItsOwnCleanup_NotAfterAll
+// guards against re-widening each binding's lock hold time back to "held
+// until every other binding's cleanup also finishes": two bindings, same
+// agent, different environments, processed fast-one-first. The fast one's
+// Thunder delete call returns immediately; the slow one's blocks
+// indefinitely. While DeleteAllBindings is still stuck cleaning up the slow
+// (second) binding, the fast (first) binding's lock must already be free to
+// re-acquire — proving each binding's lock releases as soon as ITS OWN
+// cleanup finishes rather than being held until the whole method returns,
+// even though each binding's own lock still guards its own full lifecycle
+// (DB re-fetch through its own external cleanup) end-to-end.
+func TestDeleteAllBindings_ReleasesEachBindingsLockAfterItsOwnCleanup_NotAfterAll(t *testing.T) {
+	const ouID, projectName, agentName = "acme", "proj1", "my-agent"
+	const slowEnv, fastEnv = "slow-env", "fast-env"
+
+	rows := map[string]models.AgentThunderClient{
+		slowEnv: {
+			ID: uuid.New(), OUID: ouID, ProjectName: projectName, AgentName: agentName,
+			EnvironmentName: slowEnv, ProvisioningType: models.AgentProvisioningTypeInternal,
+			ThunderAgentID: "thunder-slow", SecretRefPath: "path/slow",
+		},
+		fastEnv: {
+			ID: uuid.New(), OUID: ouID, ProjectName: projectName, AgentName: agentName,
+			EnvironmentName: fastEnv, ProvisioningType: models.AgentProvisioningTypeInternal,
+			ThunderAgentID: "thunder-fast", SecretRefPath: "path/fast",
+		},
+	}
+
+	slowDeleteStarted := make(chan struct{})
+	releaseSlowDelete := make(chan struct{})
+	tc := fakeThunderClientMock()
+	tc.DeleteAgentIdentityFunc = func(_ context.Context, thunderAgentID string) (bool, error) {
+		if thunderAgentID == "thunder-slow" {
+			close(slowDeleteStarted)
+			<-releaseSlowDelete
+		}
+		return true, nil
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+	}
+	store := &clientmocks.SecretManagementClientMock{
+		DeleteSecretFunc: func(context.Context, secretmanagersvc.SecretLocation, string) error { return nil },
+	}
+	repo := &repomocks.AgentThunderClientRepositoryMock{
+		FindByAgentFunc: func(_ context.Context, _, _, _ string) ([]models.AgentThunderClient, error) {
+			return []models.AgentThunderClient{rows[fastEnv], rows[slowEnv]}, nil
+		},
+		GetFunc: func(_ context.Context, _, _, _, envName string) (*models.AgentThunderClient, error) {
+			row := rows[envName]
+			return &row, nil
+		},
+		DeleteByIDsFunc:     func(_ context.Context, _ []uuid.UUID) error { return nil },
+		UpdateSecretRefFunc: func(_ context.Context, _ uuid.UUID, _ string) error { return nil },
+	}
+	svcIface := newTestProvisioningService(repo, resolver, store)
+	svc, ok := svcIface.(*agentThunderProvisioningService)
+	require.True(t, ok)
+
+	done := make(chan struct{})
+	go func() {
+		svc.DeleteAllBindings(context.Background(), ouID, projectName, agentName)
+		close(done)
+	}()
+
+	select {
+	case <-slowDeleteStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("slow binding's Thunder delete never started — check the mocked call chain, not the lock behavior under test")
+	}
+
+	// The slow binding's cleanup is still blocked — the fast binding's lock
+	// must already be free: re-acquiring it here must not block.
+	acquired := make(chan func(), 1)
+	go func() {
+		release, err := svc.bindingLocks.Lock(context.Background(), bindingLockKey(ouID, projectName, agentName, fastEnv))
+		if err != nil {
+			return
+		}
+		acquired <- release
+	}()
+	select {
+	case release := <-acquired:
+		release()
+	case <-time.After(200 * time.Millisecond):
+		close(releaseSlowDelete) // unblock the leaked goroutine before failing
+		t.Fatal("fast binding's lock is still held while the slow binding's cleanup is in flight — locks are not being released per-binding")
+	}
+
+	close(releaseSlowDelete)
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("DeleteAllBindings never completed after the slow cleanup was released")
+	}
+}
+
 // TestProvisionForEnvironmentIfMissing_* cover the shared helper behind both the
 // external-agent identity-provision endpoint and PromoteAgent's internal-agent
 // hook: an environment that appeared (or entered the pipeline) after the agent

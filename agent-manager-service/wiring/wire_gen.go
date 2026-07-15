@@ -468,6 +468,7 @@ func ProvideInstrumentationCatalog(cfg config.Config) (*instrumentation.Catalog,
 func validateDefaultCoversBuildpackPython(cat *instrumentation.Catalog) error {
 	entry, ok := cat.Get(cat.Default())
 	if !ok {
+
 		return fmt.Errorf("default instrumentation version %q not in effective set", cat.Default())
 	}
 	bpPython := utils.SupportedPythonVersions()
