@@ -32,6 +32,7 @@ import { FileMount } from "../components/FileMount";
 import { GitSecretSelector } from "../components/GitSecretSelector";
 import { LLMProviderSection } from "../components/LLMProviderSection";
 import { MCPProxySection } from "../components/MCPProxySection";
+import { LabelsEditor } from "@agent-management-platform/shared-component";
 import type { CreateAgentFormValues, LLMProviderFormEntry, MCPProxyFormEntry } from "../form/schema";
 import { BuildpackIcon } from "@agent-management-platform/views";
 
@@ -293,6 +294,14 @@ export const InternalAgentForm = ({
               error={!!errors.description}
               helperText={errors.description}
               fullWidth
+            />
+          </Form.ElementWrapper>
+          <Form.ElementWrapper label="Labels (optional)" name="labels">
+            <LabelsEditor
+              hideTitle
+              description="Attach key/value labels to organize and filter agents."
+              value={formData.labels ?? {}}
+              onChange={(labels) => setFormData((prev) => ({ ...prev, labels }))}
             />
           </Form.ElementWrapper>
         </Form.Stack>

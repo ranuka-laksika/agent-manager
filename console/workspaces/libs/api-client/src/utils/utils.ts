@@ -72,8 +72,12 @@ async function finalizeHttpWriteResponse(response: Response): Promise<Response> 
 }
 
 export async function httpGET(
-    context: string, 
-    params:{searchParams?: Record<string, string>, token?: string, options?: HttpOptions}) {
+    context: string,
+    params:{
+        searchParams?: Record<string, string> | string[][],
+        token?: string,
+        options?: HttpOptions
+    }) {
     const {searchParams, token} = params;
     const baseUrl = globalConfig.apiBaseUrl;
     const response = await fetch(`${baseUrl}${context}?${new URLSearchParams(searchParams).toString()}`, {

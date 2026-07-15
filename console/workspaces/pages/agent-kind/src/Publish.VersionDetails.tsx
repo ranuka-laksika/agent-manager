@@ -34,7 +34,7 @@ import { Edit } from "@wso2/oxygen-ui-icons-react";
 import { DrawerWrapper, DrawerHeader, DrawerContent, TextInput, PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import { useGetAgentKind, useGetAgentKindVersion, useGetBuild, useUpdateAgentKind } from "@agent-management-platform/api-client";
-import { SwaggerSpecViewer, parseOpenApiSpecContent, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { LabelsEditor, SwaggerSpecViewer, parseOpenApiSpecContent, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
 
 const deepEqual = (a: unknown, b: unknown): boolean => {
@@ -126,11 +126,13 @@ export const PublishVersionDetails: React.FC = () => {
   // Edit drawer state — kind fields
   const [displayName, setDisplayName] = useState("");
   const [description, setDescription] = useState("");
+  const [labels, setLabels] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (kind) {
       setDisplayName(kind.displayName);
       setDescription(kind.description ?? "");
+      setLabels(kind.labels ?? {});
     }
   }, [kind]);
 
@@ -173,8 +175,11 @@ export const PublishVersionDetails: React.FC = () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     initialSchemaRows.map(({ id, ...row }) => row),
   );
+  const initialLabels = useMemo(() => kind?.labels ?? {}, [kind]);
+  const isLabelsChanged = !deepEqual(labels, initialLabels);
   const isDirty =
-    displayName !== initialDisplayName || description !== initialDescription || isSchemaChanged;
+    displayName !== initialDisplayName || description !== initialDescription ||
+    isSchemaChanged || isLabelsChanged;
 
   const { mutateAsync: updateKind, isPending: isSaving } = useUpdateAgentKind();
   const { addConfirmation } = useConfirmationDialog();
@@ -189,6 +194,7 @@ export const PublishVersionDetails: React.FC = () => {
         onConfirm: () => {
           setDisplayName(initialDisplayName);
           setDescription(initialDescription);
+          setLabels(initialLabels);
           setEditSchema(initialSchemaRows.map((r) => ({ ...r })));
           navigate(versionDetailsHref);
         },
@@ -196,18 +202,24 @@ export const PublishVersionDetails: React.FC = () => {
     } else {
       navigate(versionDetailsHref);
     }
-  }, [isDirty, addConfirmation, initialDisplayName, initialDescription, initialSchemaRows,
-    navigate, versionDetailsHref]);
+  }, [isDirty, addConfirmation, initialDisplayName, initialDescription, initialLabels,
+    initialSchemaRows, navigate, versionDetailsHref]);
 
   const handleSave = useCallback(async () => {
     if (agentId && orgId) {
+      // Labels are always sent so removing the last one clears them ({} =
+      // clear, absent = leave unchanged on the backend).
       await updateKind({
         params: { orgName: orgId, kindName: agentId },
-        body: { displayName: displayName.trim(), description: description.trim() || undefined },
+        body: {
+          displayName: displayName.trim(),
+          description: description.trim() || undefined,
+          labels,
+        },
       });
       navigate(versionDetailsHref);
     }
-  }, [orgId, agentId, displayName, description, updateKind, navigate, versionDetailsHref]);
+  }, [orgId, agentId, displayName, description, labels, updateKind, navigate, versionDetailsHref]);
 
   return (
     <>
@@ -356,6 +368,15 @@ export const PublishVersionDetails: React.FC = () => {
                     size="small"
                     multiline
                     rows={3}
+                  />
+                </Form.ElementWrapper>
+                <Form.ElementWrapper label="Labels (optional)" name="labels">
+                  <LabelsEditor
+                    hideTitle
+                    description="Attach key/value labels to organize and filter kinds."
+                    value={labels}
+                    onChange={setLabels}
+                    disabled={isSaving}
                   />
                 </Form.ElementWrapper>
               </Form.Stack>

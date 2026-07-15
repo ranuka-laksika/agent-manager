@@ -62,7 +62,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { AgentTypeSummery } from "./subComponents/AgentTypeSummery";
 import { DeploymentPipelineCard } from "./subComponents/DeploymentPipelineCard";
-import { getErrorMessage, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { getErrorMessage, LabelChips, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { EditProjectDrawer } from "../ProjectList/EditProjectDrawer";
 import { formatDistanceToNow } from "date-fns";
 
@@ -249,11 +249,18 @@ export const AgentsList: React.FC = () => {
   const agentsWithHref: AgentWithHref[] = useMemo(
     () =>
       data?.agents
-        ?.filter(
-          (agent: AgentResponse) =>
-            agent.displayName.toLowerCase().includes(search.toLowerCase()) ||
-            agent.name.toLowerCase().includes(search.toLowerCase())
-        )
+        ?.filter((agent: AgentResponse) => {
+          const term = search.toLowerCase();
+          return (
+            agent.displayName.toLowerCase().includes(term) ||
+            agent.name.toLowerCase().includes(term) ||
+            // Labels match as `key:value`, so typing "env:prod" (or a
+            // fragment of it) filters by label.
+            Object.entries(agent.labels ?? {}).some(([k, v]) =>
+              `${k}:${v}`.toLowerCase().includes(term)
+            )
+          );
+        })
         .map((agent) => ({
           ...agent,
           href: generatePath(
@@ -432,6 +439,7 @@ export const AgentsList: React.FC = () => {
                                     }
                                   />
                                 }
+                                <LabelChips labels={agent.labels} />
                               </Stack>
                             </Stack>
                           </ListingTable.Cell>

@@ -54,13 +54,19 @@ export async function listAgentKinds(
 ): Promise<AgentKindListResponse> {
   const { orgName = "default" } = params;
 
-  const search = query
-    ? Object.fromEntries(
-        Object.entries(query)
-          .filter(([, v]) => v !== undefined)
-          .map(([k, v]) => [k, String(v)])
-      )
-    : undefined;
+  // Entries form (not an object) so array values expand into repeated
+  // parameters, e.g. label=env:prod&label=team:ml.
+  const search: string[][] = [];
+  if (query) {
+    for (const [k, v] of Object.entries(query)) {
+      if (v === undefined) continue;
+      if (Array.isArray(v)) {
+        v.forEach((item) => search.push([k, String(item)]));
+      } else {
+        search.push([k, String(v)]);
+      }
+    }
+  }
 
   const token = getToken ? await getToken() : undefined;
   const res = await httpGET(
