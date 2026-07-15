@@ -30,6 +30,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
@@ -46,6 +47,8 @@ type stubAgentThunderProvisioning struct {
 	ClaimFunc           func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
 	RevokeFunc          func(ctx context.Context, orgName, projectName, agentName, envName string) (string, error)
 	GetBindingStateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (*AgentThunderBindingState, error)
+	GetAgentRolesFunc   func(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error)
+	GetAgentGroupsFunc  func(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error)
 }
 
 func (s *stubAgentThunderProvisioning) GetBindingState(ctx context.Context, orgName, projectName, agentName, envName string) (*AgentThunderBindingState, error) {
@@ -62,6 +65,14 @@ func (s *stubAgentThunderProvisioning) ClaimSecret(ctx context.Context, orgName,
 
 func (s *stubAgentThunderProvisioning) RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
 	return s.RevokeFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) GetAgentRoles(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error) {
+	return s.GetAgentRolesFunc(ctx, orgName, projectName, agentName, envName)
+}
+
+func (s *stubAgentThunderProvisioning) GetAgentGroups(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error) {
+	return s.GetAgentGroupsFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func TestValidateInstrumentationVersion_UsesCatalog(t *testing.T) {
@@ -1161,4 +1172,98 @@ func TestPromoteAgent_ProvisioningDisabledButLowestEnvHasRealCredential_StillBlo
 	assert.Contains(t, err.Error(), "AgentID provisioning is disabled")
 	assert.False(t, promoteCalled,
 		"promotion must be blocked BEFORE calling PromoteComponent — otherwise the pod is already promoted with the lowest environment's leaked credentials by the time this error is returned")
+}
+
+func pipelineWithEnv(envName string) *models.DeploymentPipelineResponse {
+	return &models.DeploymentPipelineResponse{
+		PromotionPaths: []models.PromotionPath{
+			{SourceEnvironmentRef: "dev", TargetEnvironmentRefs: []models.TargetEnvironmentRef{{Name: envName}}},
+		},
+	}
+}
+
+func TestGetAgentRoles_EnvironmentInPipeline_DelegatesToProvisioning(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	wantRoles := []thundersvc.ThunderRole{{ID: "role-1", Name: "reader"}}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentRolesFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderRole, error) {
+			return wantRoles, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	roles, err := s.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.NoError(t, err)
+	assert.Equal(t, wantRoles, roles)
+}
+
+// TestGetAgentRoles_EnvironmentNotInPipeline_Errors guards the same visibility
+// rule GetAgentIdentity applies: a project only ever sees bindings for
+// environments in its own deployment pipeline, even though AgentIDs are
+// provisioned across every org-level environment.
+func TestGetAgentRoles_EnvironmentNotInPipeline_Errors(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentRolesFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderRole, error) {
+			t.Fatal("must not reach the provisioning layer for an environment outside the project's pipeline")
+			return nil, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.GetAgentRoles(context.Background(), "acme", "proj1", "my-agent", "prod")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrEnvironmentNotFound)
+}
+
+func TestGetAgentGroups_EnvironmentInPipeline_DelegatesToProvisioning(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	wantGroups := []thundersvc.ThunderGroup{{ID: "group-1", Name: "operators"}}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentGroupsFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderGroup, error) {
+			return wantGroups, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	groups, err := s.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "staging")
+
+	require.NoError(t, err)
+	assert.Equal(t, wantGroups, groups)
+}
+
+// TestGetAgentGroups_EnvironmentNotInPipeline_Errors is the groups counterpart
+// to TestGetAgentRoles_EnvironmentNotInPipeline_Errors.
+func TestGetAgentGroups_EnvironmentNotInPipeline_Errors(t *testing.T) {
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return pipelineWithEnv("staging"), nil
+		},
+	}
+	stub := &stubAgentThunderProvisioning{
+		GetAgentGroupsFunc: func(_ context.Context, _, _, _, _ string) ([]thundersvc.ThunderGroup, error) {
+			t.Fatal("must not reach the provisioning layer for an environment outside the project's pipeline")
+			return nil, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
+
+	_, err := s.GetAgentGroups(context.Background(), "acme", "proj1", "my-agent", "prod")
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, utils.ErrEnvironmentNotFound)
 }

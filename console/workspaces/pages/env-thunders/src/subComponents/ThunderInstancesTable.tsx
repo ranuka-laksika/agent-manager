@@ -16,13 +16,7 @@
  * under the License.
  */
 
-import {
-  type ChangeEvent,
-  type MouseEvent,
-  Fragment,
-  useMemo,
-  useState,
-} from "react";
+import { type ChangeEvent, type MouseEvent, useMemo, useState } from "react";
 import {
   Alert,
   Avatar,
@@ -53,12 +47,11 @@ import { copyToClipboard } from "@agent-management-platform/shared-component";
 import { useSnackBar } from "@agent-management-platform/views";
 
 interface EnvironmentSection {
-  key: string;
   title: string;
   instance: ThunderInstanceResponse;
 }
 
-const PROVIDER_NAME = "Thunder";
+const PROVIDER_NAME = "ThunderID";
 
 const monoEllipsisSx = {
   fontFamily: "monospace",
@@ -116,7 +109,6 @@ export function ThunderInstancesTable() {
       const instance = instancesByEnv.get(env.name);
       if (instance) {
         grouped.push({
-          key: env.name,
           title: env.displayName || env.name,
           instance,
         });
@@ -125,7 +117,6 @@ export function ThunderInstancesTable() {
     for (const instance of instances) {
       if (!knownEnvs.has(instance.envName)) {
         grouped.push({
-          key: instance.envName,
           title: instance.displayName || instance.envName,
           instance,
         });
@@ -244,82 +235,67 @@ export function ThunderInstancesTable() {
             <ListingTable variant="card">
               <ListingTable.Head>
                 <ListingTable.Row>
-                  <ListingTable.Cell width="240px">
-                    Identity Provider
-                  </ListingTable.Cell>
+                  <ListingTable.Cell width="240px">Environment</ListingTable.Cell>
                   <ListingTable.Cell>Issuer</ListingTable.Cell>
                   <ListingTable.Cell>Token Endpoint</ListingTable.Cell>
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {sections.map(({ key, title, instance }) => (
-                  <Fragment key={key}>
-                    <ListingTable.Row>
-                      {/* "&&" outranks the table's descendant padding rule on
-                        .MuiTableCell-root, which beats a plain sx padding. */}
-                      <ListingTable.Cell
-                        colSpan={3}
-                        sx={{ "&&": { border: 0, p: 0 } }}
-                      >
-                        <Typography variant="overline" color="text.secondary">
-                          {title}
-                        </Typography>
-                      </ListingTable.Cell>
-                    </ListingTable.Row>
-                    <ListingTable.Row
-                      variant="card"
-                      hover
-                      clickable
-                      onClick={() => handleRowClick(instance)}
-                    >
-                      <ListingTable.Cell>
-                        <ListingTable.CellIcon
-                          icon={
-                            <Avatar
-                              sx={{
-                                width: 28,
-                                height: 28,
-                                bgcolor: "primary.main",
-                                color: "primary.contrastText",
-                              }}
-                            >
-                              <KeyRound size={16} />
-                            </Avatar>
-                          }
-                          primary={PROVIDER_NAME}
-                          secondary="System identity provider"
-                        />
-                      </ListingTable.Cell>
+                {sections.map(({ title, instance }) => (
+                  <ListingTable.Row
+                    key={instance.envName}
+                    variant="card"
+                    hover
+                    clickable
+                    onClick={() => handleRowClick(instance)}
+                  >
+                    <ListingTable.Cell>
+                      <ListingTable.CellIcon
+                        icon={
+                          <Avatar
+                            sx={{
+                              width: 28,
+                              height: 28,
+                              bgcolor: "primary.main",
+                              color: "primary.contrastText",
+                            }}
+                          >
+                            <KeyRound size={16} />
+                          </Avatar>
+                        }
+                        primary={title}
+                        secondary={PROVIDER_NAME}
+                      />
+                    </ListingTable.Cell>
 
-                      <ListingTable.Cell>
+                    <ListingTable.Cell>
+                      <Typography
+                        variant="caption"
+                        sx={{ ...monoEllipsisSx, maxWidth: 280 }}
+                      >
+                        {instance.issuerUrl}
+                      </Typography>
+                    </ListingTable.Cell>
+
+                    <ListingTable.Cell>
+                      <Stack direction="row" alignItems="center" spacing={1}>
                         <Typography
                           variant="caption"
-                          sx={{ ...monoEllipsisSx, maxWidth: 280 }}
+                          sx={{ ...monoEllipsisSx, maxWidth: 320 }}
                         >
-                          {instance.issuerUrl}
+                          {instance.tokenUrl}
                         </Typography>
-                      </ListingTable.Cell>
-
-                      <ListingTable.Cell>
-                        <Stack direction="row" alignItems="center" spacing={1}>
-                          <Typography
-                            variant="caption"
-                            sx={{ ...monoEllipsisSx, maxWidth: 320 }}
+                        <Tooltip title="Copy token endpoint">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleCopy(e, instance.tokenUrl)}
                           >
-                            {instance.tokenUrl}
-                          </Typography>
-                          <Tooltip title="Copy token endpoint">
-                            <IconButton
-                              size="small"
-                              onClick={(e) => handleCopy(e, instance.tokenUrl)}
-                            >
-                              <Copy size={14} />
-                            </IconButton>
-                          </Tooltip>
-                        </Stack>
-                      </ListingTable.Cell>
-                    </ListingTable.Row>
-                  </Fragment>
+                            <Copy size={14} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </ListingTable.Cell>
+                  </ListingTable.Row>
                 ))}
               </ListingTable.Body>
             </ListingTable>

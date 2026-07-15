@@ -498,3 +498,51 @@ func TestAgentIdentityListAgents_ReturnsBindings(t *testing.T) {
 	assert.Equal(t, "completed", body.Agents[0].Status)
 	assert.Equal(t, "thunder-1", body.Agents[0].ThunderAgentID)
 }
+
+// TestAgentIdentityGetRoleAssignments_UsesAgentSemantics proves the env
+// assignments read goes through GetAgentRoleAssignments (agents + groups) and
+// never the user-store GetRoleAssignments (its mock func is left nil, so any
+// call panics).
+func TestAgentIdentityGetRoleAssignments_UsesAgentSemantics(t *testing.T) {
+	envClient := &clientmocks.EnvIdentityClientMock{
+		GetAgentRoleAssignmentsFunc: func(_ context.Context, roleID string) (*thundersvc.AgentRoleAssignments, error) {
+			assert.Equal(t, "r1", roleID)
+			return &thundersvc.AgentRoleAssignments{
+				Agents: []thundersvc.AssignmentEntry{{ID: "thunder-1", Type: "agent"}},
+				Groups: []thundersvc.ThunderGroup{{ID: "g1", Name: "readers"}},
+			}, nil
+		},
+	}
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return envClient, nil
+		},
+	}
+	ctrl := NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{}, &repomocks.MCPProxyRepositoryMock{}, &repomocks.MCPProxyScopeRepositoryMock{})
+
+	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/roles/r1/assignments", nil)
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r1")
+	w := httptest.NewRecorder()
+
+	ctrl.GetRoleAssignments(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var body struct {
+		Agents []struct {
+			ID   string `json:"id"`
+			Type string `json:"type"`
+		} `json:"agents"`
+		Groups []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"groups"`
+	}
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
+	assert.Len(t, body.Agents, 1)
+	assert.Equal(t, "thunder-1", body.Agents[0].ID)
+	assert.Equal(t, "agent", body.Agents[0].Type)
+	assert.Len(t, body.Groups, 1)
+	assert.Equal(t, "readers", body.Groups[0].Name)
+}

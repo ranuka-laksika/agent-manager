@@ -327,6 +327,7 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
             )}
             {currentDeployment?.status === DeploymentStatus.ACTIVE && (
               <>
+                {actions}
                 <Button
                   startIcon={<TryOutlined size={16} />}
                   variant="text"
@@ -346,7 +347,6 @@ export const EnvironmentCard = (props: EnvironmentCardProps) => {
                 >
                   Try It
                 </Button>
-                {actions}
               </>
             )}
           </Box>

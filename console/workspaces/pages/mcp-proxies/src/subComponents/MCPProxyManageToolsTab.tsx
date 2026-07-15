@@ -30,25 +30,18 @@ import type {
 } from "@agent-management-platform/types";
 import { Alert, Stack, Typography } from "@wso2/oxygen-ui";
 import { ACL_POLICY_NAME } from "../constants";
-
-type CapabilityKind = "tool" | "resource" | "prompt";
+import {
+  CAPABILITY_SECTION_KEY,
+  type CapabilityKind,
+  getCapabilityId,
+  parseAclSection,
+} from "./mcpEndpoints";
 
 const KIND_CHIP_LABEL: Record<CapabilityKind, string> = {
   tool: "Tool",
   resource: "Resource",
   prompt: "Prompt",
 };
-
-function getCapabilityIdentifier(
-  kind: CapabilityKind,
-  raw: Record<string, unknown> | undefined,
-): string | null {
-  if (!raw) return null;
-  const value = kind === "resource" ? raw.uri ?? raw.name : raw.name ?? raw.uri;
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length ? trimmed : null;
-}
 
 function getCapabilityDescription(
   raw: Record<string, unknown> | undefined,
@@ -67,38 +60,26 @@ type ParsedAcl = {
   exceptionKeys: string[];
 };
 
+// Reads the ACL policy via the shared parseAclSection (the single source of
+// truth for the mode/exceptions shape, also used by mcpEndpoints.ts's
+// isToolBlockedByAcl) and folds its per-kind sections into one mode + a flat
+// list of exception keys for the AccessControlPanel.
 function parseExistingAclPolicy(
   policy: MCPProxyPolicy | undefined,
 ): ParsedAcl {
-  if (!policy?.params) {
-    return { mode: "allow", exceptionKeys: [] };
-  }
-  const params = policy.params as Record<string, unknown>;
-  const sections: CapabilityKind[] = ["tool", "resource", "prompt"];
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
+  const params = policy?.params as Record<string, unknown> | undefined;
+  const kinds: CapabilityKind[] = ["tool", "resource", "prompt"];
   let resolvedMode: AccessControlMode | null = null;
   const exceptionKeys: string[] = [];
-  for (const kind of sections) {
-    const section = params[sectionKey[kind]] as
-      | Record<string, unknown>
-      | undefined;
-    if (!section) continue;
-    const rawMode = String(section.mode ?? "").toLowerCase();
-    if (resolvedMode === null && (rawMode === "allow" || rawMode === "deny")) {
-      resolvedMode = rawMode;
+  for (const kind of kinds) {
+    const { mode, exceptions } = parseAclSection(
+      params,
+      CAPABILITY_SECTION_KEY[kind],
+    );
+    if (resolvedMode === null && mode) {
+      resolvedMode = mode;
     }
-    const exceptions = section.exceptions;
-    if (Array.isArray(exceptions)) {
-      for (const entry of exceptions) {
-        if (typeof entry === "string" && entry.trim()) {
-          exceptionKeys.push(makeItemKey(kind, entry.trim()));
-        }
-      }
-    }
+    exceptions.forEach((entry) => exceptionKeys.push(makeItemKey(kind, entry)));
   }
   return {
     mode: resolvedMode ?? "allow",
@@ -111,11 +92,6 @@ function buildAclPolicyParams(
   exceptionKeys: string[],
   hasCapabilities: Record<CapabilityKind, boolean>,
 ): Record<string, unknown> {
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
   const exceptionsByKind: Record<CapabilityKind, string[]> = {
     tool: [],
     resource: [],
@@ -134,7 +110,7 @@ function buildAclPolicyParams(
   const params: Record<string, unknown> = {};
   (["tool", "resource", "prompt"] as CapabilityKind[]).forEach((kind) => {
     if (!hasCapabilities[kind]) return;
-    params[sectionKey[kind]] = {
+    params[CAPABILITY_SECTION_KEY[kind]] = {
       mode,
       exceptions: exceptionsByKind[kind],
     };
@@ -142,7 +118,7 @@ function buildAclPolicyParams(
   return params;
 }
 
-export type MCPProxyAccessControlTabProps = {
+export type MCPProxyManageToolsTabProps = {
   config: MCPEndpointConfig | undefined;
   selectedEndpointId: string;
   orgName: string | undefined;
@@ -151,14 +127,14 @@ export type MCPProxyAccessControlTabProps = {
   isUpdating: boolean;
 };
 
-export function MCPProxyAccessControlTab({
+export function MCPProxyManageToolsTab({
   config,
   selectedEndpointId,
   orgName,
   isLoading = false,
   onUpdate,
   isUpdating,
-}: MCPProxyAccessControlTabProps) {
+}: MCPProxyManageToolsTabProps) {
   const lastSavedRef = useRef<{
     mode: AccessControlMode;
     exceptionKeys: string[];
@@ -187,7 +163,7 @@ export function MCPProxyAccessControlTab({
     ];
     for (const { kind, entries } of kinds) {
       (entries ?? []).forEach((raw) => {
-        const identifier = getCapabilityIdentifier(kind, raw);
+        const identifier = getCapabilityId(kind, raw);
         if (!identifier) return;
         result.push({
           key: makeItemKey(kind, identifier),

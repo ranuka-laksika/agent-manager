@@ -55,6 +55,15 @@ import (
 //			EnsureProxyResourceServerFunc: func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error) {
 //				panic("mock out the EnsureProxyResourceServer method")
 //			},
+//			GetAgentGroupsFunc: func(ctx context.Context, ouID string, agentID string) ([]thundersvc.ThunderGroup, error) {
+//				panic("mock out the GetAgentGroups method")
+//			},
+//			GetAgentRoleAssignmentsFunc: func(ctx context.Context, roleID string) (*thundersvc.AgentRoleAssignments, error) {
+//				panic("mock out the GetAgentRoleAssignments method")
+//			},
+//			GetAgentRolesFunc: func(ctx context.Context, agentID string) ([]thundersvc.ThunderRole, error) {
+//				panic("mock out the GetAgentRoles method")
+//			},
 //			GetDefaultOUIDFunc: func(ctx context.Context) (string, error) {
 //				panic("mock out the GetDefaultOUID method")
 //			},
@@ -178,6 +187,15 @@ type EnvIdentityClientMock struct {
 
 	// EnsureProxyResourceServerFunc mocks the EnsureProxyResourceServer method.
 	EnsureProxyResourceServerFunc func(ctx context.Context, proxyHandle string, displayName string, actions []string) (string, error)
+
+	// GetAgentGroupsFunc mocks the GetAgentGroups method.
+	GetAgentGroupsFunc func(ctx context.Context, ouID string, agentID string) ([]thundersvc.ThunderGroup, error)
+
+	// GetAgentRoleAssignmentsFunc mocks the GetAgentRoleAssignments method.
+	GetAgentRoleAssignmentsFunc func(ctx context.Context, roleID string) (*thundersvc.AgentRoleAssignments, error)
+
+	// GetAgentRolesFunc mocks the GetAgentRoles method.
+	GetAgentRolesFunc func(ctx context.Context, agentID string) ([]thundersvc.ThunderRole, error)
 
 	// GetDefaultOUIDFunc mocks the GetDefaultOUID method.
 	GetDefaultOUIDFunc func(ctx context.Context) (string, error)
@@ -363,6 +381,29 @@ type EnvIdentityClientMock struct {
 			DisplayName string
 			// Actions is the actions argument value.
 			Actions []string
+		}
+		// GetAgentGroups holds details about calls to the GetAgentGroups method.
+		GetAgentGroups []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// OuID is the ouID argument value.
+			OuID string
+			// AgentID is the agentID argument value.
+			AgentID string
+		}
+		// GetAgentRoleAssignments holds details about calls to the GetAgentRoleAssignments method.
+		GetAgentRoleAssignments []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// RoleID is the roleID argument value.
+			RoleID string
+		}
+		// GetAgentRoles holds details about calls to the GetAgentRoles method.
+		GetAgentRoles []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AgentID is the agentID argument value.
+			AgentID string
 		}
 		// GetDefaultOUID holds details about calls to the GetDefaultOUID method.
 		GetDefaultOUID []struct {
@@ -602,6 +643,9 @@ type EnvIdentityClientMock struct {
 	lockDeleteRole                      sync.RWMutex
 	lockDeleteUser                      sync.RWMutex
 	lockEnsureProxyResourceServer       sync.RWMutex
+	lockGetAgentGroups                  sync.RWMutex
+	lockGetAgentRoleAssignments         sync.RWMutex
+	lockGetAgentRoles                   sync.RWMutex
 	lockGetDefaultOUID                  sync.RWMutex
 	lockGetGroup                        sync.RWMutex
 	lockGetGroupMembers                 sync.RWMutex
@@ -1123,6 +1167,118 @@ func (mock *EnvIdentityClientMock) EnsureProxyResourceServerCalls() []struct {
 	mock.lockEnsureProxyResourceServer.RLock()
 	calls = mock.calls.EnsureProxyResourceServer
 	mock.lockEnsureProxyResourceServer.RUnlock()
+	return calls
+}
+
+// GetAgentGroups calls GetAgentGroupsFunc.
+func (mock *EnvIdentityClientMock) GetAgentGroups(ctx context.Context, ouID string, agentID string) ([]thundersvc.ThunderGroup, error) {
+	if mock.GetAgentGroupsFunc == nil {
+		panic("EnvIdentityClientMock.GetAgentGroupsFunc: method is nil but EnvIdentityClient.GetAgentGroups was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		OuID    string
+		AgentID string
+	}{
+		Ctx:     ctx,
+		OuID:    ouID,
+		AgentID: agentID,
+	}
+	mock.lockGetAgentGroups.Lock()
+	mock.calls.GetAgentGroups = append(mock.calls.GetAgentGroups, callInfo)
+	mock.lockGetAgentGroups.Unlock()
+	return mock.GetAgentGroupsFunc(ctx, ouID, agentID)
+}
+
+// GetAgentGroupsCalls gets all the calls that were made to GetAgentGroups.
+// Check the length with:
+//
+//	len(mockedEnvIdentityClient.GetAgentGroupsCalls())
+func (mock *EnvIdentityClientMock) GetAgentGroupsCalls() []struct {
+	Ctx     context.Context
+	OuID    string
+	AgentID string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		OuID    string
+		AgentID string
+	}
+	mock.lockGetAgentGroups.RLock()
+	calls = mock.calls.GetAgentGroups
+	mock.lockGetAgentGroups.RUnlock()
+	return calls
+}
+
+// GetAgentRoleAssignments calls GetAgentRoleAssignmentsFunc.
+func (mock *EnvIdentityClientMock) GetAgentRoleAssignments(ctx context.Context, roleID string) (*thundersvc.AgentRoleAssignments, error) {
+	if mock.GetAgentRoleAssignmentsFunc == nil {
+		panic("EnvIdentityClientMock.GetAgentRoleAssignmentsFunc: method is nil but EnvIdentityClient.GetAgentRoleAssignments was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		RoleID string
+	}{
+		Ctx:    ctx,
+		RoleID: roleID,
+	}
+	mock.lockGetAgentRoleAssignments.Lock()
+	mock.calls.GetAgentRoleAssignments = append(mock.calls.GetAgentRoleAssignments, callInfo)
+	mock.lockGetAgentRoleAssignments.Unlock()
+	return mock.GetAgentRoleAssignmentsFunc(ctx, roleID)
+}
+
+// GetAgentRoleAssignmentsCalls gets all the calls that were made to GetAgentRoleAssignments.
+// Check the length with:
+//
+//	len(mockedEnvIdentityClient.GetAgentRoleAssignmentsCalls())
+func (mock *EnvIdentityClientMock) GetAgentRoleAssignmentsCalls() []struct {
+	Ctx    context.Context
+	RoleID string
+} {
+	var calls []struct {
+		Ctx    context.Context
+		RoleID string
+	}
+	mock.lockGetAgentRoleAssignments.RLock()
+	calls = mock.calls.GetAgentRoleAssignments
+	mock.lockGetAgentRoleAssignments.RUnlock()
+	return calls
+}
+
+// GetAgentRoles calls GetAgentRolesFunc.
+func (mock *EnvIdentityClientMock) GetAgentRoles(ctx context.Context, agentID string) ([]thundersvc.ThunderRole, error) {
+	if mock.GetAgentRolesFunc == nil {
+		panic("EnvIdentityClientMock.GetAgentRolesFunc: method is nil but EnvIdentityClient.GetAgentRoles was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		AgentID string
+	}{
+		Ctx:     ctx,
+		AgentID: agentID,
+	}
+	mock.lockGetAgentRoles.Lock()
+	mock.calls.GetAgentRoles = append(mock.calls.GetAgentRoles, callInfo)
+	mock.lockGetAgentRoles.Unlock()
+	return mock.GetAgentRolesFunc(ctx, agentID)
+}
+
+// GetAgentRolesCalls gets all the calls that were made to GetAgentRoles.
+// Check the length with:
+//
+//	len(mockedEnvIdentityClient.GetAgentRolesCalls())
+func (mock *EnvIdentityClientMock) GetAgentRolesCalls() []struct {
+	Ctx     context.Context
+	AgentID string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		AgentID string
+	}
+	mock.lockGetAgentRoles.RLock()
+	calls = mock.calls.GetAgentRoles
+	mock.lockGetAgentRoles.RUnlock()
 	return calls
 }
 

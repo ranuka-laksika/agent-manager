@@ -29,6 +29,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/jwtassertion"
@@ -70,6 +71,8 @@ type AgentManagerService interface {
 	RevokeAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error)
 	ProvisionAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (view models.AgentIdentityEnvironmentView, alreadyExisted bool, err error)
 	GetAgentCredentials(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error)
+	GetAgentRoles(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) ([]thundersvc.ThunderRole, error)
+	GetAgentGroups(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) ([]thundersvc.ThunderGroup, error)
 }
 
 type agentManagerService struct {
@@ -3052,12 +3055,10 @@ func (s *agentManagerService) GetAgentIdentity(ctx context.Context, ouID string,
 		return nil, err
 	}
 
-	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, ouID, projectName)
+	visible, err := s.visiblePipelineEnvironments(ctx, ouID, projectName)
 	if err != nil {
-		s.logger.Error("Failed to get deployment pipeline for agent identity visibility", "projectName", projectName, "error", err)
-		return nil, translatePipelineError(err)
+		return nil, err
 	}
-	visible := allPipelineEnvironmentNames(pipeline.PromotionPaths)
 
 	filtered := make([]models.AgentIdentityEnvironmentView, 0, len(views))
 	for _, v := range views {
@@ -3066,6 +3067,61 @@ func (s *agentManagerService) GetAgentIdentity(ctx context.Context, ouID string,
 		}
 	}
 	return filtered, nil
+}
+
+// visiblePipelineEnvironments returns the set of environment names visible to
+// projectName's deployment pipeline — AgentIDs are provisioned across every
+// org-level environment (Section 2.1 of the AgentID architecture doc), but a
+// project only ever sees the ones in its own pipeline. Shared by
+// GetAgentIdentity (filtering a list) and requireVisibleEnvironment
+// (checking a single name).
+func (s *agentManagerService) visiblePipelineEnvironments(ctx context.Context, ouID, projectName string) (map[string]bool, error) {
+	pipeline, err := s.ocClient.GetProjectDeploymentPipeline(ctx, ouID, projectName)
+	if err != nil {
+		s.logger.Error("Failed to get deployment pipeline for agent identity visibility", "projectName", projectName, "error", err)
+		return nil, translatePipelineError(err)
+	}
+	return allPipelineEnvironmentNames(pipeline.PromotionPaths), nil
+}
+
+// requireVisibleEnvironment validates that environmentName is part of
+// projectName's deployment pipeline — the same visibility rule GetAgentIdentity
+// applies when filtering its org-wide binding list down to project scope.
+func (s *agentManagerService) requireVisibleEnvironment(ctx context.Context, ouID, projectName, environmentName string) error {
+	visible, err := s.visiblePipelineEnvironments(ctx, ouID, projectName)
+	if err != nil {
+		return err
+	}
+	if !visible[environmentName] {
+		return fmt.Errorf("%w: %s", utils.ErrEnvironmentNotFound, environmentName)
+	}
+	return nil
+}
+
+// GetAgentRoles returns the Thunder roles assigned to the agent's AgentID in
+// one environment, if that environment is part of this project's deployment
+// pipeline.
+func (s *agentManagerService) GetAgentRoles(ctx context.Context, ouID, projectName, agentName, environmentName string) ([]thundersvc.ThunderRole, error) {
+	if s.agentThunderProvisioning == nil {
+		return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, environmentName)
+	}
+	if err := s.requireVisibleEnvironment(ctx, ouID, projectName, environmentName); err != nil {
+		return nil, err
+	}
+	return s.agentThunderProvisioning.GetAgentRoles(ctx, ouID, projectName, agentName, environmentName)
+}
+
+// GetAgentGroups returns the Thunder groups the agent's AgentID belongs to in
+// one environment, if that environment is part of this project's deployment
+// pipeline.
+func (s *agentManagerService) GetAgentGroups(ctx context.Context, ouID, projectName, agentName, environmentName string) ([]thundersvc.ThunderGroup, error) {
+	if s.agentThunderProvisioning == nil {
+		return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, environmentName)
+	}
+	if err := s.requireVisibleEnvironment(ctx, ouID, projectName, environmentName); err != nil {
+		return nil, err
+	}
+	return s.agentThunderProvisioning.GetAgentGroups(ctx, ouID, projectName, agentName, environmentName)
 }
 
 // ClaimAgentIdentitySecret performs the one-time claim of an External agent's

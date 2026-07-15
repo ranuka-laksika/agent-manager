@@ -83,7 +83,7 @@ func newScopeSvcForTest(scopeRepo repositories.MCPProxyScopeRepository, proxy *m
 			return nil, gorm.ErrRecordNotFound
 		},
 	}
-	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, nil, noopRedeployer{}, slog.Default())
+	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, noopRedeployer{}, slog.Default())
 }
 
 // newScopeSvcForTestWithRedeployer is newScopeSvcForTest with an injectable
@@ -102,7 +102,7 @@ func newScopeSvcForTestWithRedeployer(scopeRepo repositories.MCPProxyScopeReposi
 			return nil, gorm.ErrRecordNotFound
 		},
 	}
-	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, nil, redeployer, slog.Default())
+	return NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, nil, redeployer, slog.Default())
 }
 
 // noopRedeployer is the default MCPProxyRedeployer stub for tests that don't
@@ -320,7 +320,7 @@ func TestMCPProxyScopeDelete_CleansThunderBestEffort(t *testing.T) {
 		},
 	}
 	redeployer := &recordingRedeployer{}
-	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, infra, resolver, redeployer, slog.Default())
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, infra, resolver, redeployer, slog.Default())
 
 	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
 
@@ -358,7 +358,7 @@ func TestMCPProxyScopeDelete_BestEffortSurvivesResolverError(t *testing.T) {
 		},
 	}
 	redeployer := &recordingRedeployer{}
-	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, nil, infra, resolver, redeployer, slog.Default())
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, infra, resolver, redeployer, slog.Default())
 
 	err := svc.Delete(context.Background(), "org-uuid", "org", "gh-proxy", "read")
 
@@ -366,9 +366,8 @@ func TestMCPProxyScopeDelete_BestEffortSurvivesResolverError(t *testing.T) {
 	assert.Len(t, redeployer.calls, 1, "redeploy must still run after a best-effort cleanup failure")
 }
 
-func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {
+func TestListEnvironmentScopes_IncludesUndeployedIdentityProxies(t *testing.T) {
 	envUUID := uuid.MustParse("3fa85f64-5717-4562-b3fc-2c963f66afa6")
-	artifactDeployed, artifactUndeployed := uuid.New(), uuid.New()
 	on := true
 	identityEndpoint := func(artifact uuid.UUID, enabled bool) models.MCPProxyEndpoint {
 		ep := models.MCPProxyEndpoint{
@@ -385,9 +384,11 @@ func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {
 		}
 		return ep
 	}
+	// deployed and undeployed are both identity-enabled; deployment state must no
+	// longer affect the catalog. off has identity disabled and must be excluded.
 	deployed := &models.MCPProxy{
 		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "gh-proxy", Name: "GitHub"},
-		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(artifactDeployed, true)},
+		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(uuid.New(), true)},
 	}
 	off := &models.MCPProxy{
 		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "plain", Name: "Plain"},
@@ -395,7 +396,7 @@ func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {
 	}
 	undeployed := &models.MCPProxy{
 		UUID: uuid.New(), Artifact: &models.Artifact{Handle: "idle", Name: "Idle"},
-		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(artifactUndeployed, true)},
+		Endpoints: []models.MCPProxyEndpoint{identityEndpoint(uuid.New(), true)},
 	}
 
 	proxyRepo := &repomocks.MCPProxyRepositoryMock{
@@ -408,23 +409,21 @@ func TestListEnvironmentScopes_FiltersToDeployedIdentityProxies(t *testing.T) {
 	}
 	scopeRepo := &repomocks.MCPProxyScopeRepositoryMock{
 		ListByProxyUUIDsFunc: func(ctx context.Context, ids []uuid.UUID) ([]models.MCPProxyScope, error) {
-			assert.Equal(t, []uuid.UUID{deployed.UUID}, ids)
-			return []models.MCPProxyScope{{MCPProxyUUID: deployed.UUID, Action: "read", Description: "d"}}, nil
-		},
-	}
-	deploymentRepo := &repomocks.DeploymentRepositoryMock{
-		GetDeployedGatewaysByProviderFunc: func(artifactUUID uuid.UUID, orgUUID string) ([]string, error) {
-			if artifactUUID == artifactDeployed {
-				return []string{"gw-1"}, nil
-			}
-			return nil, nil
+			assert.ElementsMatch(t, []uuid.UUID{deployed.UUID, undeployed.UUID}, ids)
+			return []models.MCPProxyScope{
+				{MCPProxyUUID: deployed.UUID, Action: "read", Description: "d"},
+				{MCPProxyUUID: undeployed.UUID, Action: "read", Description: "d"},
+			}, nil
 		},
 	}
 	infra := stubInfraManager{listOrgEnvs: func(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error) {
 		return []*models.EnvironmentResponse{{Name: "dev", UUID: envUUID.String()}}, nil
 	}}
-	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, deploymentRepo, infra, nil, nil, slog.Default())
+	svc := NewMCPProxyScopeService(scopeRepo, proxyRepo, infra, nil, nil, slog.Default())
 	entries, err := svc.ListEnvironmentScopes(context.Background(), "org-uuid", "dev")
 	assert.NoError(t, err)
-	assert.Equal(t, []models.EnvironmentScopeEntry{{Scope: "gh-proxy:read", Description: "d", MCPProxyID: "gh-proxy", MCPProxyName: "GitHub"}}, entries)
+	assert.Equal(t, []models.EnvironmentScopeEntry{
+		{Scope: "gh-proxy:read", Description: "d", MCPProxyID: "gh-proxy", MCPProxyName: "GitHub"},
+		{Scope: "idle:read", Description: "d", MCPProxyID: "idle", MCPProxyName: "Idle"},
+	}, entries)
 }

@@ -150,7 +150,7 @@ export const GroupsPage: React.FC = () => {
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {isLoading && <ListingSkeletonRows rows={rowsPerPage} columns={1} />}
+                {isLoading && <ListingSkeletonRows rows={Math.ceil(rowsPerPage / 2)} columns={1} />}
                 {!isLoading &&
                   filteredGroups.map((group: ThunderGroup) => (
                     <ListingTable.Row

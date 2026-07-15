@@ -43,3 +43,5 @@ export * from './identities';
 export * from './agent-kinds';
 export * from './agent-build-options';
 export * from './thunder-instances';
+export * from './mcp-proxy-scopes';
+export * from './agent-identity';

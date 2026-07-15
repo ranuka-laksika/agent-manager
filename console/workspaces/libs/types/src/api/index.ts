@@ -42,3 +42,5 @@ export * from './git-secrets';
 export * from './identities';
 export * from './agent-kinds';
 export * from './thunder-instances';
+export * from './mcp-proxy-scopes';
+export * from './agent-identity';

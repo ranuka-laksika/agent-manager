@@ -526,17 +526,28 @@ serviceAccount:
   create: true
   name: "agent-management-platform"
   annotations: {}
-  automount: true
+  automount: false
 
 # RBAC Configuration
+# Scoped to exactly what the pre-install/pre-upgrade hook Jobs (TLS certs,
+# JWT keys) do: read/create/patch Secrets in the release namespace. The
+# amp-api service itself makes no Kubernetes API calls.
 rbac:
   create: true
-  # Rules for managing agents and k8s resources
-  # Full permissions for agent management operations
   rules:
-    - apiGroups: ["*"]
-      resources: ["*"]
-      verbs: ["*"]
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get", "create", "patch"]
+
+# ServiceAccount used only by the pre-install/pre-upgrade hook Jobs.
+# This is the sole subject of the scoped RBAC Role. The SA and the
+# Role/RoleBinding are only rendered when at least one hook Job is enabled,
+# so no unused grant is left standing. With create: false, name must point
+# at an existing ServiceAccount (rendering fails fast otherwise).
+hookServiceAccount:
+  create: true
+  name: ""   # defaults to "<fullname>-hooks" (e.g. amp-hooks)
+  annotations: {}
 
 # Global volume mounts and volumes (optional)
 volumeMounts: []

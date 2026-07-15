@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -391,6 +392,14 @@ func (f *fakeProvisioningService) GetBindingState(context.Context, string, strin
 
 func (f *fakeProvisioningService) ClaimSecret(context.Context, string, string, string, string) (string, string, string, error) {
 	return "", "", "", nil
+}
+
+func (f *fakeProvisioningService) GetAgentRoles(context.Context, string, string, string, string) ([]thundersvc.ThunderRole, error) {
+	return nil, nil
+}
+
+func (f *fakeProvisioningService) GetAgentGroups(context.Context, string, string, string, string) ([]thundersvc.ThunderGroup, error) {
+	return nil, nil
 }
 
 // compile-time interface check

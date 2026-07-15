@@ -153,6 +153,16 @@ type AgentThunderProvisioningService interface {
 	// all — the same "nothing to report" convention used elsewhere in this
 	// service, not an error.
 	GetBindingState(ctx context.Context, ouID, projectName, agentName, envName string) (*AgentThunderBindingState, error)
+
+	// GetAgentRoles returns the Thunder roles assigned to the agent's AgentID
+	// in one environment. Returns utils.ErrAgentIdentityNotProvisioned if the
+	// binding doesn't exist or hasn't completed yet.
+	GetAgentRoles(ctx context.Context, ouID, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error)
+
+	// GetAgentGroups returns the Thunder groups the agent's AgentID belongs to
+	// in one environment. Returns utils.ErrAgentIdentityNotProvisioned if the
+	// binding doesn't exist or hasn't completed yet.
+	GetAgentGroups(ctx context.Context, ouID, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error)
 }
 
 // AgentThunderBindingState is a minimal, internal snapshot of one binding's
@@ -756,6 +766,63 @@ func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, ou
 		return "", "", "", fmt.Errorf("read stored agent secret: %w", err)
 	}
 	return binding.ThunderAgentID, clientID, clientSecret, nil
+}
+
+// GetAgentRoles returns the Thunder roles assigned to the agent's AgentID in
+// one environment.
+func (s *agentThunderProvisioningService) GetAgentRoles(ctx context.Context, ouID, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error) {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
+	if err != nil {
+		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
+			return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+		}
+		return nil, err
+	}
+	if binding.ThunderAgentID == "" {
+		return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+	}
+
+	client, err := s.envResolver.ResolveIdentity(ctx, s.resolveNamespace(ouID), envName)
+	if err != nil {
+		return nil, err
+	}
+
+	roles, err := client.GetAgentRoles(ctx, binding.ThunderAgentID)
+	if err != nil {
+		return nil, fmt.Errorf("get agent roles: %w", err)
+	}
+	return roles, nil
+}
+
+// GetAgentGroups returns the Thunder groups the agent's AgentID belongs to in
+// one environment.
+func (s *agentThunderProvisioningService) GetAgentGroups(ctx context.Context, ouID, projectName, agentName, envName string) ([]thundersvc.ThunderGroup, error) {
+	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
+	if err != nil {
+		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
+			return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+		}
+		return nil, err
+	}
+	if binding.ThunderAgentID == "" {
+		return nil, fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
+	}
+
+	client, err := s.envResolver.ResolveIdentity(ctx, s.resolveNamespace(ouID), envName)
+	if err != nil {
+		return nil, err
+	}
+
+	envOUID, err := client.GetDefaultOUID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("resolve environment identity provider OU: %w", err)
+	}
+
+	groups, err := client.GetAgentGroups(ctx, envOUID, binding.ThunderAgentID)
+	if err != nil {
+		return nil, fmt.Errorf("get agent groups: %w", err)
+	}
+	return groups, nil
 }
 
 func (s *agentThunderProvisioningService) RevokeSecret(ctx context.Context, ouID, projectName, agentName, envName string) (string, error) {

@@ -17,7 +17,7 @@
  */
 
 import { globalConfig, type Environment } from '@agent-management-platform/types';
-import { Box, Button, Skeleton, Stack } from "@wso2/oxygen-ui";
+import { Box, Button, Divider, Skeleton, Stack } from "@wso2/oxygen-ui";
 import { Settings } from "@wso2/oxygen-ui-icons-react";
 import { useParams, useSearchParams } from "react-router-dom";
 import { useEffect, useState } from "react";
@@ -30,6 +30,12 @@ import { InstrumentationDrawer } from "./InstrumentationDrawer";
 import { NoDataFound } from "@agent-management-platform/views";
 import { EnvMonitorsSection } from "./EnvMonitorsSection";
 import { EnvObservabilitySection } from "./EnvObservabilitySection";
+import {
+  EnvAgentIdentitySection,
+  RegenerateAgentIdentityButton,
+  SecretRevealAlert,
+  useRegenerateAgentIdentity,
+} from "./EnvAgentIdentitySection";
 
 export const ExternalAgentOverview = () => {
   const { agentId, orgId, projectId } = useParams();
@@ -65,6 +71,19 @@ export const ExternalAgentOverview = () => {
     setSearchParams({ setup: "true" });
   };
 
+  // Keyed by environment name — regenerate rotates one environment's AgentID
+  // secret at a time. Unlike internal agents (already injected into the
+  // running workload), external agents have no other way to get the new
+  // secret, so it's captured here and shown right after the call succeeds.
+  const [regeneratedSecrets, setRegeneratedSecrets] = useState<
+    Record<string, { clientId: string; clientSecret: string }>
+  >({});
+  const { regeneratingEnv, regenerate } = useRegenerateAgentIdentity(orgId, projectId, agentId);
+  const handleRegenerate = (envName: string) =>
+    regenerate(envName, (secret) =>
+      setRegeneratedSecrets((prev) => ({ ...prev, [envName]: secret })),
+    );
+
   useEffect(() => {
     if (!isEnvironmentsLoading && !selectedEnvironmentId) {
       setSelectedEnvironmentId(sortedEnvironmentList.length > 0 ? (sortedEnvironmentList[0].id ?? "") : "");
@@ -96,17 +115,49 @@ export const ExternalAgentOverview = () => {
                     agentId={agentId}
                     environment={environment}
                     actions={
-                      <Button
-                        variant="text"
-                        size="small"
-                        startIcon={<Settings size={16} />}
-                        onClick={() => handleSetupAgent(environment.id ?? "")}
-                      >
-                        Setup Agent
-                      </Button>
+                      <>
+                        <RegenerateAgentIdentityButton
+                          orgId={orgId}
+                          projectId={projectId}
+                          agentId={agentId}
+                          envId={environment.name}
+                          isRegenerating={regeneratingEnv === environment.name}
+                          onRegenerate={() => void handleRegenerate(environment.name)}
+                        />
+                        <Button
+                          variant="text"
+                          size="small"
+                          startIcon={<Settings size={16} />}
+                          onClick={() => handleSetupAgent(environment.id ?? "")}
+                        >
+                          Setup Agent
+                        </Button>
+                      </>
                     }
                     bottomContent={
                       <>
+                        {regeneratedSecrets[environment.name] ? (
+                          // Just regenerated this session: keep the divider
+                          // (separates this from the card header above), but
+                          // skip EnvAgentIdentitySection's own "AGENT
+                          // IDENTITY" caption + "already claimed" client ID
+                          // display, which would just duplicate this alert.
+                          <>
+                            <Divider sx={{ mb: 1 }} />
+                            <SecretRevealAlert
+                              clientId={regeneratedSecrets[environment.name].clientId}
+                              clientSecret={regeneratedSecrets[environment.name].clientSecret}
+                              message="This is the new secret after regenerating — save it securely now."
+                            />
+                          </>
+                        ) : (
+                          <EnvAgentIdentitySection
+                            orgId={orgId}
+                            projectId={projectId}
+                            agentId={agentId}
+                            envId={environment.name}
+                          />
+                        )}
                         <EnvObservabilitySection
                           orgId={orgId}
                           projectId={projectId}
