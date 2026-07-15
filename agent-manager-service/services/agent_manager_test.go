@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/instrumentation"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -504,4 +505,132 @@ func TestGetAgentGroups_EnvironmentNotInPipeline_Errors(t *testing.T) {
 
 	require.Error(t, err)
 	assert.ErrorIs(t, err, utils.ErrEnvironmentNotFound)
+}
+
+// Labels now live on the OpenChoreo component itself rather than a local
+// sidecar table; these tests cover the service-layer wiring that threads
+// labels into/out of the OpenChoreo client requests. The label-merge/extract
+// logic itself is tested at the client-package level
+// (clients/openchoreosvc/client/component_labels_test.go).
+
+func TestToCreateAgentRequestWithSecrets_PassesLabelsThrough(t *testing.T) {
+	s := &agentManagerService{}
+
+	t.Run("labels set", func(t *testing.T) {
+		labels := map[string]string{"team": "ml"}
+		req := &spec.CreateAgentRequest{Name: "agent-1", DisplayName: "Agent 1", Labels: &labels}
+
+		result := s.toCreateAgentRequestWithSecrets(req, "")
+
+		assert.Equal(t, labels, result.Labels)
+	})
+
+	t.Run("labels nil", func(t *testing.T) {
+		req := &spec.CreateAgentRequest{Name: "agent-1", DisplayName: "Agent 1"}
+
+		result := s.toCreateAgentRequestWithSecrets(req, "")
+
+		assert.Nil(t, result.Labels)
+	})
+}
+
+func TestUpdateAgentBasicInfo_PassesLabelsThroughToClient(t *testing.T) {
+	newLabels := map[string]string{"team": "ml"}
+	emptyLabels := map[string]string{}
+
+	testCases := []struct {
+		name       string
+		reqLabels  *map[string]string
+		wantLabels *map[string]string
+	}{
+		{name: "nil means unchanged", reqLabels: nil, wantLabels: nil},
+		{name: "empty map clears user labels", reqLabels: &emptyLabels, wantLabels: &emptyLabels},
+		{name: "populated map replaces user labels", reqLabels: &newLabels, wantLabels: &newLabels},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var captured client.UpdateComponentBasicInfoRequest
+			ocClient := &clientmocks.OpenChoreoClientMock{
+				GetOrganizationFunc: func(_ context.Context, _ string) (*models.OrganizationResponse, error) {
+					return &models.OrganizationResponse{}, nil
+				},
+				GetProjectFunc: func(_ context.Context, _, _ string) (*models.ProjectResponse, error) {
+					return &models.ProjectResponse{}, nil
+				},
+				GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+					return &models.AgentResponse{Name: "agent-1"}, nil
+				},
+				UpdateComponentBasicInfoFunc: func(_ context.Context, _, _, _ string, req client.UpdateComponentBasicInfoRequest) error {
+					captured = req
+					return nil
+				},
+			}
+			s := &agentManagerService{ocClient: ocClient, logger: discardLogger()}
+
+			_, err := s.UpdateAgentBasicInfo(context.Background(), "acme", "proj1", "agent-1", &spec.UpdateAgentBasicInfoRequest{
+				DisplayName: "Agent 1",
+				Description: "desc",
+				Labels:      tc.reqLabels,
+			})
+
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantLabels, captured.Labels)
+		})
+	}
+}
+
+func TestGetAgent_LabelsPassThroughUnmodified(t *testing.T) {
+	wantLabels := map[string]string{"team": "ml"}
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, _ string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{}, nil
+		},
+		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
+			return &models.AgentResponse{Name: "agent-1", Labels: wantLabels}, nil
+		},
+		GetProjectDeploymentPipelineFunc: func(_ context.Context, _, _ string) (*models.DeploymentPipelineResponse, error) {
+			return nil, errors.New("no pipeline in this test")
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, logger: discardLogger()}
+
+	agent, err := s.GetAgent(context.Background(), "acme", "proj1", "agent-1")
+
+	require.NoError(t, err)
+	assert.Equal(t, wantLabels, agent.Labels)
+}
+
+func TestListAgents_LabelsPassThroughUnmodified(t *testing.T) {
+	agents := []*models.AgentResponse{
+		{Name: "agent-1", Labels: map[string]string{"env": "prod"}},
+		{Name: "agent-2", Labels: map[string]string{"env": "dev"}},
+	}
+	ocClient := &clientmocks.OpenChoreoClientMock{
+		GetOrganizationFunc: func(_ context.Context, _ string) (*models.OrganizationResponse, error) {
+			return &models.OrganizationResponse{}, nil
+		},
+		ListComponentsFunc: func(_ context.Context, _, _ string) ([]*models.AgentResponse, error) {
+			return agents, nil
+		},
+	}
+	s := &agentManagerService{ocClient: ocClient, logger: discardLogger()}
+
+	t.Run("unfiltered returns all agents with their labels intact", func(t *testing.T) {
+		result, total, err := s.ListAgents(context.Background(), "acme", "proj1", nil, 10, 0)
+
+		require.NoError(t, err)
+		assert.Equal(t, int32(2), total)
+		require.Len(t, result, 2)
+		assert.Equal(t, map[string]string{"env": "prod"}, result[0].Labels)
+	})
+
+	t.Run("filtered narrows to the matching agent", func(t *testing.T) {
+		result, total, err := s.ListAgents(context.Background(), "acme", "proj1", map[string]string{"env": "prod"}, 10, 0)
+
+		require.NoError(t, err)
+		assert.Equal(t, int32(1), total)
+		require.Len(t, result, 1)
+		assert.Equal(t, "agent-1", result[0].Name)
+	})
 }

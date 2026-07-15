@@ -82,7 +82,6 @@ type agentManagerService struct {
 	gitRepositoryService      RepositoryService
 	tokenManagerService       AgentTokenManagerService
 	agentConfigRepo           repositories.AgentConfigRepository
-	agentLabelRepo            repositories.AgentLabelRepository
 	agentConfigurationService AgentConfigurationService
 	agentKindService          AgentKindService
 	artifactRepo              repositories.ArtifactRepository
@@ -101,7 +100,6 @@ func NewAgentManagerService(
 	gitRepositoryService RepositoryService,
 	tokenManagerService AgentTokenManagerService,
 	agentConfigRepo repositories.AgentConfigRepository,
-	agentLabelRepo repositories.AgentLabelRepository,
 	agentConfigurationService AgentConfigurationService,
 	agentKindService AgentKindService,
 	artifactRepo repositories.ArtifactRepository,
@@ -119,7 +117,6 @@ func NewAgentManagerService(
 		gitRepositoryService:      gitRepositoryService,
 		tokenManagerService:       tokenManagerService,
 		agentConfigRepo:           agentConfigRepo,
-		agentLabelRepo:            agentLabelRepo,
 		agentConfigurationService: agentConfigurationService,
 		agentKindService:          agentKindService,
 		agentThunderProvisioning:  agentThunderProvisioning,
@@ -852,14 +849,6 @@ func (s *agentManagerService) GetAgent(ctx context.Context, ouID string, project
 		return nil, translateAgentError(err)
 	}
 
-	// Merge in user-defined labels from the local sidecar table (non-fatal:
-	// a read failure just renders the agent without labels).
-	if labelRec, lblErr := s.agentLabelRepo.Get(ctx, ouID, projectName, agentName); lblErr == nil {
-		agent.Labels = labelRec.Labels
-	} else if !errors.Is(lblErr, repositories.ErrAgentLabelsNotFound) {
-		s.logger.Warn("Failed to read agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
-	}
-
 	// Populate per-environment agent configuration from database
 	// Get the first/lowest environment to read the config
 	pipeline, pipelineErr := s.ocClient.GetProjectDeploymentPipeline(ctx, ouID, projectName)
@@ -943,27 +932,9 @@ func (s *agentManagerService) ListAgents(ctx context.Context, ouID string, projN
 		return nil, 0, fmt.Errorf("failed to list agents: %w", err)
 	}
 
-	// Merge in user-defined labels from the local sidecar table. A load failure
-	// is tolerable for an unfiltered list (agents just render without labels)
-	// but must fail a filtered one — silently returning unfiltered results
-	// would be wrong, and an empty result would be a lie.
-	labelRows, lblErr := s.agentLabelRepo.ListByProject(ctx, ouID, projName)
-	if lblErr != nil {
-		if len(labelFilter) > 0 {
-			s.logger.Error("Failed to load agent labels for filtered list", "ouID", ouID, "projectName", projName, "error", lblErr)
-			return nil, 0, fmt.Errorf("failed to load agent labels: %w", lblErr)
-		}
-		s.logger.Warn("Failed to load agent labels", "ouID", ouID, "projectName", projName, "error", lblErr)
-	}
-	labelsByAgent := make(map[string]map[string]string, len(labelRows))
-	for i := range labelRows {
-		labelsByAgent[labelRows[i].AgentName] = labelRows[i].Labels
-	}
-	for _, agent := range agents {
-		agent.Labels = labelsByAgent[agent.Name]
-	}
-
 	// Filter before computing total and paginating so both stay correct.
+	// agent.Labels already arrives populated from the component's own
+	// metadata (see convertComponentFromTyped), no separate fetch needed.
 	if len(labelFilter) > 0 {
 		filtered := make([]*models.AgentResponse, 0, len(agents))
 		for _, agent := range agents {
@@ -1070,25 +1041,7 @@ func (s *agentManagerService) CreateAgent(ctx context.Context, ouID string, proj
 			return err
 		}
 	}
-	if err := s.createComponentAgent(ctx, ouID, projectName, req, imageID); err != nil {
-		return err
-	}
-
-	// Persist user-defined labels after the component commit. Best-effort:
-	// failing the create here would orphan an already-created component, and
-	// labels can be re-applied via the basic-info update.
-	if req.Labels != nil && len(*req.Labels) > 0 {
-		labelRec := &models.AgentLabel{
-			OUID:        ouID,
-			ProjectName: projectName,
-			AgentName:   req.Name,
-			Labels:      *req.Labels,
-		}
-		if lblErr := s.agentLabelRepo.Upsert(ctx, labelRec); lblErr != nil {
-			s.logger.Warn("Failed to persist agent labels", "ouID", ouID, "projectName", projectName, "agentName", req.Name, "error", lblErr)
-		}
-	}
-	return nil
+	return s.createComponentAgent(ctx, ouID, projectName, req, imageID)
 }
 
 // createComponentAgent is the shared agent creation flow for all internal agents.
@@ -1533,6 +1486,11 @@ func (s *agentManagerService) toCreateAgentRequestWithSecrets(req *spec.CreateAg
 		}
 	}
 
+	var labels map[string]string
+	if req.Labels != nil {
+		labels = *req.Labels
+	}
+
 	result := client.CreateComponentRequest{
 		Name:             req.Name,
 		DisplayName:      req.DisplayName,
@@ -1543,6 +1501,7 @@ func (s *agentManagerService) toCreateAgentRequestWithSecrets(req *spec.CreateAg
 		AgentKind:        agentKindRef,
 		Build:            mapBuildConfig(req.Build),
 		InputInterface:   mapInputInterface(req.InputInterface),
+		Labels:           labels,
 	}
 
 	result.Configurations = mapConfigurationsWithSecrets(req.Configurations, secretReferences)
@@ -1628,46 +1587,25 @@ func (s *agentManagerService) UpdateAgentBasicInfo(ctx context.Context, ouID str
 		s.logger.Error("Failed to fetch existing agent", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
 		return nil, translateAgentError(err)
 	}
-	// Update agent basic info in OpenChoreo
+	// Update agent basic info in OpenChoreo. Labels: nil means "leave
+	// unchanged", a non-nil (possibly empty) map replaces the user-label set
+	// while system-managed labels are preserved (see UpdateComponentBasicInfo).
 	updateReq := client.UpdateComponentBasicInfoRequest{
 		DisplayName: req.DisplayName,
 		Description: req.Description,
+		Labels:      req.Labels,
 	}
 	if err := s.ocClient.UpdateComponentBasicInfo(ctx, ouID, projectName, agentName, updateReq); err != nil {
 		s.logger.Error("Failed to update agent meta data in OpenChoreo", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
 		return nil, fmt.Errorf("failed to update agent basic info: %w", err)
 	}
 
-	// Update user-defined labels in the local sidecar table. A nil Labels
-	// pointer means "leave unchanged"; an empty map clears all labels. Unlike
-	// creation this is the labels edit path, so a failure is surfaced.
-	if req.Labels != nil {
-		labelRec := &models.AgentLabel{
-			OUID:        ouID,
-			ProjectName: projectName,
-			AgentName:   agentName,
-			Labels:      *req.Labels,
-		}
-		if lblErr := s.agentLabelRepo.Upsert(ctx, labelRec); lblErr != nil {
-			s.logger.Error("Failed to update agent labels", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
-			return nil, fmt.Errorf("failed to update agent labels: %w", lblErr)
-		}
-	}
-
-	// Fetch agent to return current state
+	// Fetch agent to return current state (labels come pre-populated from
+	// the component's own metadata).
 	updatedAgent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
 		return nil, translateAgentError(err)
-	}
-
-	// Attach current labels to the response (non-fatal on read failure).
-	if req.Labels != nil {
-		updatedAgent.Labels = *req.Labels
-	} else if labelRec, lblErr := s.agentLabelRepo.Get(ctx, ouID, projectName, agentName); lblErr == nil {
-		updatedAgent.Labels = labelRec.Labels
-	} else if !errors.Is(lblErr, repositories.ErrAgentLabelsNotFound) {
-		s.logger.Warn("Failed to read agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 	}
 
 	s.logger.Info("Agent basic info update called", "agentName", agentName, "ouID", ouID, "projectName", projectName)
@@ -2270,9 +2208,6 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 			if configErr := s.agentConfigRepo.DeleteAllByAgent(ouID, projectName, agentName); configErr != nil {
 				s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 			}
-			if lblErr := s.agentLabelRepo.DeleteAllByAgent(ctx, ouID, projectName, agentName); lblErr != nil {
-				s.logger.Warn("Failed to delete agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
-			}
 			s.deleteAgentAPIArtifact(ctx, ouID, projectName, agentName)
 			if s.agentThunderProvisioning != nil {
 				go s.agentThunderProvisioning.DeleteAllBindings(context.WithoutCancel(ctx), ouID, projectName, agentName)
@@ -2297,11 +2232,6 @@ func (s *agentManagerService) DeleteAgent(ctx context.Context, ouID string, proj
 	if configErr := s.agentConfigRepo.DeleteAllByAgent(ouID, projectName, agentName); configErr != nil {
 		s.logger.Warn("Failed to delete agent configs from database", "agentName", agentName, "error", configErr)
 		// Don't fail the deletion - configs will be orphaned but harmless
-	}
-
-	// Cleanup agent labels from database (same best-effort semantics as configs)
-	if lblErr := s.agentLabelRepo.DeleteAllByAgent(ctx, ouID, projectName, agentName); lblErr != nil {
-		s.logger.Warn("Failed to delete agent labels from database", "ouID", ouID, "projectName", projectName, "agentName", agentName, "error", lblErr)
 	}
 
 	// Cleanup env-scoped API artifact record.
