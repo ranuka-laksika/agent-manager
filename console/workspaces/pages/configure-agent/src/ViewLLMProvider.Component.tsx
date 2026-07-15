@@ -26,6 +26,7 @@ import {
 import {
   CodeBlock,
   PolicyListSection,
+  usePipelineEnvironmentsState,
   type PolicySelection as GuardrailSelection,
 } from "@agent-management-platform/shared-component";
 import {
@@ -54,7 +55,6 @@ import {
   useGetAgent,
   useGetAgentModelConfig,
   useListCatalogLLMProviders,
-  useListEnvironments,
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
@@ -196,7 +196,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const {
     data: config,
-    isLoading,
+    isLoading: isLoadingConfig,
     isError,
   } = useGetAgentModelConfig({
     orgName: orgId,
@@ -205,9 +205,10 @@ export const ViewLLMProviderComponent: React.FC = () => {
     configId,
   });
 
-  const { data: environments = [] } = useListEnvironments({
-    orgName: orgId,
-  });
+  const { environments, isLoading: isLoadingEnvironments } =
+    usePipelineEnvironmentsState(orgId, projectId);
+
+  const isLoading = isLoadingConfig || isLoadingEnvironments;
 
   const { data: agent } = useGetAgent({
     orgName: orgId,
