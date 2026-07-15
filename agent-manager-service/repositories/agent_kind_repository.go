@@ -70,6 +70,9 @@ func (r *agentKindRepo) CreateKind(ctx context.Context, kind *models.AgentKind) 
 	if kind.ID == uuid.Nil {
 		kind.ID = uuid.New()
 	}
+	if kind.Labels == nil {
+		kind.Labels = map[string]string{}
+	}
 	result := r.db.WithContext(ctx).Create(kind)
 	return result.Error
 }

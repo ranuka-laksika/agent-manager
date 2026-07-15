@@ -214,6 +214,7 @@ func TestDeleteAgentBlockedWhenKindSource(t *testing.T) {
 			OUID:        jwtassertion.MockOUID,
 			ProjectName: projName,
 			AgentName:   agentName,
+			Labels:      map[string]string{},
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 		}
