@@ -10459,6 +10459,7 @@ paths:
       tags:
         - Agent Identity
       summary: List agent identity role assignments
+      description: Lists the role's assignees from the environment's Thunder — agents as raw assignment entries (resolve display data via the agents picker) and groups resolved to full objects.
       operationId: getAgentIdentityRoleAssignments
       responses:
         "200":
@@ -10466,7 +10467,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/AgentIdentityRoleAssignmentsResponse"
         "503":
           description: The environment's identity provider is not available
           content:
@@ -10742,6 +10743,19 @@ components:
             permissions. On update this is a full replacement of the role's
             scopes: omit the field to leave existing scopes untouched, or send
             an explicit empty array to clear them all.
+    AgentIdentityAssignmentEntry:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - agent
+            - group
     AgentIdentityAssignmentsRequest:
       type: object
       required:
@@ -10750,18 +10764,35 @@ components:
         assignments:
           type: array
           items:
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
+    AgentIdentityRoleAssignmentsResponse:
+      type: object
+      properties:
+        agents:
+          type: array
+          description: Raw agent assignment entries; resolve display data via the agents picker.
+          items:
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
+        groups:
+          type: array
+          items:
             type: object
             required:
               - id
-              - type
+              - name
             properties:
               id:
                 type: string
-              type:
+              ouId:
                 type: string
-                enum:
-                  - agent
-                  - group
+              name:
+                type: string
+              description:
+                type: string
+              createdAt:
+                type: string
+              updatedAt:
+                type: string
     AgentIdentityAgentResponse:
       type: object
       required:

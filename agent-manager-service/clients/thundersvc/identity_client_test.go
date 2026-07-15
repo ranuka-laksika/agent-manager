@@ -219,3 +219,66 @@ func TestDeleteProxyResourceServer_DeletesActionsThenRS(t *testing.T) {
 	// action delete MUST precede RS delete (Thunder 400-blocks otherwise)
 	assert.Less(t, indexOf(calls, "DELETE /resource-servers/rs-1/actions/act-1"), indexOf(calls, "DELETE /resource-servers/rs-1"))
 }
+
+// TestGetAgentRoleAssignments_ReturnsAgentEntriesAndResolvedGroups proves the
+// agent-identity read path keeps agent assignees (as raw entries) and resolves
+// group assignees, unlike the user-store GetRoleAssignments which drops agents.
+func TestGetAgentRoleAssignments_ReturnsAgentEntriesAndResolvedGroups(t *testing.T) {
+	srv := newTestThunderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/roles/r1/assignments":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"assignments": []map[string]string{
+					{"id": "a1", "type": "agent"},
+					{"id": "g1", "type": "group"},
+					{"id": "a2", "type": "agent"},
+					{"id": "u1", "type": "user"},
+				},
+			})
+		case "/groups/g1":
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "g1", "name": "readers"})
+		default:
+			t.Fatalf("unexpected call %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer srv.Close()
+
+	client := NewIdentityClient(srv.URL, "sys-client", "sys-secret")
+	assignments, err := client.GetAgentRoleAssignments(context.Background(), "r1")
+
+	require.NoError(t, err)
+	assert.Equal(t, []AssignmentEntry{{ID: "a1", Type: "agent"}, {ID: "a2", Type: "agent"}}, assignments.Agents)
+	require.Len(t, assignments.Groups, 1)
+	assert.Equal(t, "readers", assignments.Groups[0].Name)
+}
+
+// TestGetAgentRoleAssignments_SkipsDeletedGroup proves a group assignee that no
+// longer exists in Thunder is skipped rather than failing the whole listing.
+func TestGetAgentRoleAssignments_SkipsDeletedGroup(t *testing.T) {
+	srv := newTestThunderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/roles/r1/assignments":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"assignments": []map[string]string{
+					{"id": "g-gone", "type": "group"},
+					{"id": "a1", "type": "agent"},
+				},
+			})
+		case "/groups/g-gone":
+			w.WriteHeader(http.StatusNotFound)
+		default:
+			t.Fatalf("unexpected call %s %s", r.Method, r.URL.Path)
+		}
+	})
+	defer srv.Close()
+
+	client := NewIdentityClient(srv.URL, "sys-client", "sys-secret")
+	assignments, err := client.GetAgentRoleAssignments(context.Background(), "r1")
+
+	require.NoError(t, err)
+	assert.Empty(t, assignments.Groups)
+	assert.Equal(t, []AssignmentEntry{{ID: "a1", Type: "agent"}}, assignments.Agents)
+}

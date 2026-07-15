@@ -2051,12 +2051,14 @@ type ApiGetAgentIdentityRoleAssignmentsRequest struct {
 	roleID     string
 }
 
-func (r ApiGetAgentIdentityRoleAssignmentsRequest) Execute() (map[string]interface{}, *http.Response, error) {
+func (r ApiGetAgentIdentityRoleAssignmentsRequest) Execute() (*AgentIdentityRoleAssignmentsResponse, *http.Response, error) {
 	return r.ApiService.GetAgentIdentityRoleAssignmentsExecute(r)
 }
 
 /*
 GetAgentIdentityRoleAssignments List agent identity role assignments
+
+Lists the role's assignees from the environment's Thunder — agents as raw assignment entries (resolve display data via the agents picker) and groups resolved to full objects.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
@@ -2076,13 +2078,13 @@ func (a *AgentIdentityAPIService) GetAgentIdentityRoleAssignments(ctx context.Co
 
 // Execute executes the request
 //
-//	@return map[string]interface{}
-func (a *AgentIdentityAPIService) GetAgentIdentityRoleAssignmentsExecute(r ApiGetAgentIdentityRoleAssignmentsRequest) (map[string]interface{}, *http.Response, error) {
+//	@return AgentIdentityRoleAssignmentsResponse
+func (a *AgentIdentityAPIService) GetAgentIdentityRoleAssignmentsExecute(r ApiGetAgentIdentityRoleAssignmentsRequest) (*AgentIdentityRoleAssignmentsResponse, *http.Response, error) {
 	var (
 		localVarHTTPMethod  = http.MethodGet
 		localVarPostBody    interface{}
 		formFiles           []formFile
-		localVarReturnValue map[string]interface{}
+		localVarReturnValue *AgentIdentityRoleAssignmentsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "AgentIdentityAPIService.GetAgentIdentityRoleAssignments")
