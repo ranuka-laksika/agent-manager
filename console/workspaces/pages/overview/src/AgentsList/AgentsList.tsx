@@ -414,12 +414,12 @@ export const AgentsList: React.FC = () => {
                           onBlur={handleRowMouseLeave}
                         >
                           <ListingTable.Cell>
-                            <Stack direction="row" alignItems="center" spacing={2}>
-                              <Avatar sx={{ bgcolor: "primary.main", fontSize: 16, height: 32, width: 32, color: "primary.contrastText" }}>
+                            <Stack direction="row" alignItems="center" spacing={2} sx={{ width: "100%", minWidth: 0 }}>
+                              <Avatar sx={{ bgcolor: "primary.main", fontSize: 16, height: 32, width: 32, color: "primary.contrastText", flexShrink: 0 }}>
                                 {agent.displayName.charAt(0).toUpperCase()}
                               </Avatar>
-                              <Stack direction="row" alignItems="flex-start" spacing={1}>
-                                <Typography variant="body1">
+                              <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography variant="body1" sx={{ flexShrink: 0 }}>
                                   {agent.displayName}
                                 </Typography>
                                 {agent.provisioning.type !== "internal" && (
@@ -429,6 +429,7 @@ export const AgentsList: React.FC = () => {
                                     )}
                                     size="small"
                                     variant="outlined"
+                                    sx={{ flexShrink: 0 }}
                                   />
                                 )}
                                 {agent.kindName &&
@@ -437,6 +438,7 @@ export const AgentsList: React.FC = () => {
                                       kindDisplayNameMap[agent.kindName]
                                       ?? agent.kindName
                                     }
+                                    sx={{ flexShrink: 0 }}
                                   />
                                 }
                                 <LabelChips labels={agent.labels} />

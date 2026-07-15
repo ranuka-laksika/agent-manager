@@ -115,7 +115,14 @@ export function PageLayout({
               {titleTail && (
                 <Box
                   component="span"
-                  sx={{ display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle', ml: 1 }}
+                  sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    verticalAlign: 'middle',
+                    ml: 1,
+                    flexGrow: 1,
+                    minWidth: 0,
+                  }}
                 >
                   {titleTail}
                 </Box>

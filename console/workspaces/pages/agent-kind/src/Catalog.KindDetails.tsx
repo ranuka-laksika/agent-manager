@@ -181,7 +181,7 @@ export const CatalogKindDetails: React.FC = () => {
       backHref={backHref}
       backLabel="Back to Agent Catalog"
       titleTail={
-        <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", minWidth: 0 }}>
           {kindVersion?.sourceProjectName && kindVersion?.sourceAgentName && (
             <Button
               size="small"
@@ -198,6 +198,7 @@ export const CatalogKindDetails: React.FC = () => {
               )}
               target="_blank"
               rel="noopener noreferrer"
+              sx={{ flexShrink: 0 }}
             >
               View Source Agent
             </Button>

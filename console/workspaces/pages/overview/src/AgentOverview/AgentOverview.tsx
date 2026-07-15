@@ -98,12 +98,13 @@ export function AgentOverview() {
                 description={agent ? <AgentDescription agent={agent} /> : undefined}
                 isLoading={isAgentLoading}
                 titleTail={
-                    <Stack direction="row" spacing={0.5} alignItems="center" flexWrap="wrap">
+                    <Stack direction="row" spacing={0.5} alignItems="center" sx={{ width: "100%", minWidth: 0 }}>
                         <Chip
                             label={displayProvisionTypes(agent?.provisioning?.type)}
                             color="default"
                             size="small"
                             variant="outlined"
+                            sx={{ flexShrink: 0 }}
                         />
                         <LabelChips labels={agent?.labels} />
                     </Stack>

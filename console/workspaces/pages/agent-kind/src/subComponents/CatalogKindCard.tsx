@@ -87,7 +87,7 @@ export const CatalogKindCard: React.FC<CatalogKindCardProps> = ({ item, viewPath
 
                     {/* Labels are a distinct group, anchored to the bottom of the card. */}
                     <Box sx={{ mt: "auto", pt: 1 }}>
-                        <LabelChips labels={item.labels} maxVisible={3} />
+                        <LabelChips labels={item.labels} />
                     </Box>
                 </Form.CardContent>
             </Form.CardButton>
