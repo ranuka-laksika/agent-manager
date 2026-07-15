@@ -257,7 +257,14 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agents, total, err := c.agentService.ListAgents(ctx, ouID, projName, int32(limit), int32(offset))
+	labelFilter, err := utils.ParseLabelSelectors(r.URL.Query()["label"])
+	if err != nil {
+		log.Error("ListAgents: invalid label parameter", "error", err)
+		utils.WriteValidationErrorResponse(w, err)
+		return
+	}
+
+	agents, total, err := c.agentService.ListAgents(ctx, ouID, projName, labelFilter, int32(limit), int32(offset))
 	if err != nil {
 		log.Error("ListAgents: failed to list agents", "error", err)
 		handleCommonErrors(w, err, "Failed to list agents")
@@ -1005,6 +1012,14 @@ func (c *agentController) PublishKind(w http.ResponseWriter, r *http.Request) {
 	if payload.GetKindName() == "" || payload.GetVersion() == "" || payload.GetBuildName() == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "kindName, version, and buildName are required")
 		return
+	}
+
+	if payload.KindLabels != nil {
+		if err := utils.ValidateLabels(*payload.KindLabels); err != nil {
+			log.Error("PublishKind: invalid kind labels", "error", err)
+			utils.WriteValidationErrorResponse(w, err)
+			return
+		}
 	}
 
 	result, err := c.agentKindService.PublishKind(ctx, ouID, projName, agentName, &payload)

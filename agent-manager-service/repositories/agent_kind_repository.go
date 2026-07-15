@@ -18,6 +18,7 @@ package repositories
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/google/uuid"
@@ -30,7 +31,7 @@ import (
 type AgentKindRepository interface {
 	CreateKind(ctx context.Context, kind *models.AgentKind) error
 	GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKind, error)
-	ListKinds(ctx context.Context, ouID string, limit, offset int) ([]models.AgentKind, int64, error)
+	ListKinds(ctx context.Context, ouID string, labelFilter map[string]string, limit, offset int) ([]models.AgentKind, int64, error)
 	UpdateKind(ctx context.Context, kind *models.AgentKind) error
 	DeleteKind(ctx context.Context, ouID, kindName string) error
 
@@ -93,12 +94,20 @@ func (r *agentKindRepo) GetKind(ctx context.Context, ouID, kindName string) (*mo
 	return &kind, result.Error
 }
 
-func (r *agentKindRepo) ListKinds(ctx context.Context, ouID string, limit, offset int) ([]models.AgentKind, int64, error) {
+func (r *agentKindRepo) ListKinds(ctx context.Context, ouID string, labelFilter map[string]string, limit, offset int) ([]models.AgentKind, int64, error) {
 	var kinds []models.AgentKind
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&models.AgentKind{}).
 		Where("ou_id = ?", ouID)
+
+	if len(labelFilter) > 0 {
+		filterJSON, err := json.Marshal(labelFilter)
+		if err != nil {
+			return nil, 0, err
+		}
+		query = query.Where("labels @> ?::jsonb", string(filterJSON))
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -114,12 +123,24 @@ func (r *agentKindRepo) ListKinds(ctx context.Context, ouID string, limit, offse
 }
 
 func (r *agentKindRepo) UpdateKind(ctx context.Context, kind *models.AgentKind) error {
+	// Updates(map) bypasses GORM's serializer:json tag (same caveat as
+	// agent_config_repository.go), so labels must be pre-serialized and cast
+	// to jsonb explicitly. A nil map marshals to SQL null — normalize first.
+	labels := kind.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+	labelsJSON, err := json.Marshal(labels)
+	if err != nil {
+		return err
+	}
 	result := r.db.WithContext(ctx).
 		Model(kind).
 		Where("id = ?", kind.ID).
 		Updates(map[string]interface{}{
 			"display_name": kind.DisplayName,
 			"description":  kind.Description,
+			"labels":       gorm.Expr("?::jsonb", string(labelsJSON)),
 			"updated_at":   kind.UpdatedAt,
 		})
 	if result.Error != nil {

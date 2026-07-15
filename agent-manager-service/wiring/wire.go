@@ -342,6 +342,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideCatalogRepository,
 	ProvideMonitorRepository,
 	ProvideAgentConfigRepository,
+	ProvideAgentLabelRepository,
 	ProvideCustomEvaluatorRepository,
 	ProvideAPIKeyRepository,
 	repositories.NewAgentConfigurationRepository,
@@ -473,6 +474,10 @@ func ProvideMonitorRepository(db *gorm.DB) repositories.MonitorRepository {
 
 func ProvideAgentConfigRepository(db *gorm.DB) repositories.AgentConfigRepository {
 	return repositories.NewAgentConfigRepo(db)
+}
+
+func ProvideAgentLabelRepository(db *gorm.DB) repositories.AgentLabelRepository {
+	return repositories.NewAgentLabelRepo(db)
 }
 
 func ProvideCustomEvaluatorRepository(db *gorm.DB) repositories.CustomEvaluatorRepository {

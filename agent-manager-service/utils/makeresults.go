@@ -115,6 +115,9 @@ func convertToInternalAgentResponse(component *models.AgentResponse) spec.AgentR
 			return &component.KindName
 		}(),
 	}
+	if len(component.Labels) > 0 {
+		response.SetLabels(component.Labels)
+	}
 	return response
 }
 
@@ -157,7 +160,7 @@ func convertToConfigurations(configs *models.Configurations) *spec.Configuration
 }
 
 func convertToExternalAgentResponse(component *models.AgentResponse) spec.AgentResponse {
-	return spec.AgentResponse{
+	response := spec.AgentResponse{
 		Uuid:        component.UUID,
 		Name:        component.Name,
 		DisplayName: component.DisplayName,
@@ -172,6 +175,10 @@ func convertToExternalAgentResponse(component *models.AgentResponse) spec.AgentR
 			Type: component.Type.Type,
 		},
 	}
+	if len(component.Labels) > 0 {
+		response.SetLabels(component.Labels)
+	}
+	return response
 }
 
 func ConvertToBuildResponse(build *models.BuildResponse) spec.BuildResponse {

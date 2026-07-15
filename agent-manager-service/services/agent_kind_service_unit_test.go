@@ -333,3 +333,153 @@ func TestValidateKindConfigValues(t *testing.T) {
 		assert.ErrorIs(t, err, utils.ErrMissingKindConfigValue)
 	})
 }
+
+// -----------------------------------------------------------------------------
+// Labels — ListKinds filter passthrough, UpdateKind set/preserve/clear
+// semantics, and PublishKind stamping labels onto a newly created kind.
+// -----------------------------------------------------------------------------
+
+func TestAgentKindService_Labels(t *testing.T) {
+	const org, kindName = "acme", "chatbot"
+
+	t.Run("ListKinds passes the label filter to the repo and surfaces labels", func(t *testing.T) {
+		var gotFilter map[string]string
+		repo := &repomocks.AgentKindRepositoryMock{
+			ListKindsFunc: func(_ context.Context, _ string, labelFilter map[string]string, _, _ int) ([]models.AgentKind, int64, error) {
+				gotFilter = labelFilter
+				return []models.AgentKind{{Name: kindName, Labels: map[string]string{"env": "prod"}}}, 1, nil
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		resp, err := svc.ListKinds(context.Background(), org, map[string]string{"env": "prod"}, 10, 0)
+
+		require.NoError(t, err)
+		assert.Equal(t, map[string]string{"env": "prod"}, gotFilter)
+		require.Len(t, resp.Kinds, 1)
+		assert.Equal(t, map[string]string{"env": "prod"}, resp.Kinds[0].Labels)
+		assert.Equal(t, int64(1), resp.Total)
+	})
+
+	t.Run("UpdateKind replaces labels when the request provides them", func(t *testing.T) {
+		var persisted map[string]string
+		repo := &repomocks.AgentKindRepositoryMock{
+			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
+				return &models.AgentKind{Name: kindName, DisplayName: "Chatbot", Labels: map[string]string{"old": "label"}}, nil
+			},
+			UpdateKindFunc: func(_ context.Context, kind *models.AgentKind) error {
+				persisted = kind.Labels
+				return nil
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		newLabels := map[string]string{"env": "prod", "team": "ml"}
+		resp, err := svc.UpdateKind(context.Background(), org, kindName, &spec.UpdateAgentKindRequest{
+			DisplayName: "Chatbot",
+			Labels:      &newLabels,
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, newLabels, persisted)
+		assert.Equal(t, newLabels, resp.Labels)
+	})
+
+	t.Run("UpdateKind preserves labels when the request omits them", func(t *testing.T) {
+		existing := map[string]string{"env": "prod"}
+		var persisted map[string]string
+		repo := &repomocks.AgentKindRepositoryMock{
+			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
+				return &models.AgentKind{Name: kindName, DisplayName: "Chatbot", Labels: existing}, nil
+			},
+			UpdateKindFunc: func(_ context.Context, kind *models.AgentKind) error {
+				persisted = kind.Labels
+				return nil
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		_, err := svc.UpdateKind(context.Background(), org, kindName, &spec.UpdateAgentKindRequest{
+			DisplayName: "Chatbot",
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, existing, persisted)
+	})
+
+	t.Run("UpdateKind clears labels when the request sends an empty map", func(t *testing.T) {
+		var persisted map[string]string
+		repo := &repomocks.AgentKindRepositoryMock{
+			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
+				return &models.AgentKind{Name: kindName, DisplayName: "Chatbot", Labels: map[string]string{"env": "prod"}}, nil
+			},
+			UpdateKindFunc: func(_ context.Context, kind *models.AgentKind) error {
+				persisted = kind.Labels
+				return nil
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		empty := map[string]string{}
+		_, err := svc.UpdateKind(context.Background(), org, kindName, &spec.UpdateAgentKindRequest{
+			DisplayName: "Chatbot",
+			Labels:      &empty,
+		})
+
+		require.NoError(t, err)
+		assert.Empty(t, persisted)
+	})
+
+	t.Run("PublishKind stamps kindLabels onto a newly created kind", func(t *testing.T) {
+		var created *models.AgentKind
+		repo := &repomocks.AgentKindRepositoryMock{
+			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
+				return nil, gorm.ErrRecordNotFound
+			},
+			// Failing the create short-circuits publishVersion; the assertion
+			// only cares about the labels handed to the repo.
+			CreateKindFunc: func(_ context.Context, kind *models.AgentKind) error {
+				created = kind
+				return errors.New("stop after capture")
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		labels := map[string]string{"category": "assistant"}
+		_, err := svc.PublishKind(context.Background(), org, "proj", "agent", &spec.PublishAgentKindRequest{
+			KindName:   kindName,
+			Version:    "v1.0.0",
+			BuildName:  "build-1",
+			KindLabels: &labels,
+		})
+
+		require.Error(t, err)
+		require.NotNil(t, created)
+		assert.Equal(t, labels, created.Labels)
+	})
+
+	t.Run("PublishKind normalizes absent kindLabels to an empty map", func(t *testing.T) {
+		var created *models.AgentKind
+		repo := &repomocks.AgentKindRepositoryMock{
+			GetKindFunc: func(_ context.Context, _, _ string) (*models.AgentKind, error) {
+				return nil, gorm.ErrRecordNotFound
+			},
+			CreateKindFunc: func(_ context.Context, kind *models.AgentKind) error {
+				created = kind
+				return errors.New("stop after capture")
+			},
+		}
+		svc := newKindService(repo, &clientmocks.OpenChoreoClientMock{})
+
+		_, err := svc.PublishKind(context.Background(), org, "proj", "agent", &spec.PublishAgentKindRequest{
+			KindName:  kindName,
+			Version:   "v1.0.0",
+			BuildName: "build-1",
+		})
+
+		require.Error(t, err)
+		require.NotNil(t, created)
+		assert.NotNil(t, created.Labels)
+		assert.Empty(t, created.Labels)
+	})
+}

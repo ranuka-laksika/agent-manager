@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 )
 
@@ -822,6 +823,7 @@ type ApiListAgentKindsRequest struct {
 	orgName    string
 	limit      *int32
 	offset     *int32
+	label      *[]string
 }
 
 func (r ApiListAgentKindsRequest) Limit(limit int32) ApiListAgentKindsRequest {
@@ -831,6 +833,12 @@ func (r ApiListAgentKindsRequest) Limit(limit int32) ApiListAgentKindsRequest {
 
 func (r ApiListAgentKindsRequest) Offset(offset int32) ApiListAgentKindsRequest {
 	r.offset = &offset
+	return r
+}
+
+// Filter by label as key:value. Repeat the parameter to require multiple labels (AND semantics).
+func (r ApiListAgentKindsRequest) Label(label []string) ApiListAgentKindsRequest {
+	r.label = &label
 	return r
 }
 
@@ -883,6 +891,17 @@ func (a *AgentKindsAPIService) ListAgentKindsExecute(r ApiListAgentKindsRequest)
 	}
 	if r.offset != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "")
+	}
+	if r.label != nil {
+		t := *r.label
+		if reflect.TypeOf(t).Kind() == reflect.Slice {
+			s := reflect.ValueOf(t)
+			for i := 0; i < s.Len(); i++ {
+				parameterAddToHeaderOrQuery(localVarQueryParams, "label", s.Index(i).Interface(), "multi")
+			}
+		} else {
+			parameterAddToHeaderOrQuery(localVarQueryParams, "label", t, "multi")
+		}
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}

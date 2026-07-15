@@ -73,7 +73,14 @@ func (c *agentKindController) ListKinds(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	result, err := c.kindService.ListKinds(ctx, ouID, limit, offset)
+	labelFilter, err := utils.ParseLabelSelectors(r.URL.Query()["label"])
+	if err != nil {
+		log.Error("ListKinds: invalid label parameter", "error", err)
+		utils.WriteValidationErrorResponse(w, err)
+		return
+	}
+
+	result, err := c.kindService.ListKinds(ctx, ouID, labelFilter, limit, offset)
 	if err != nil {
 		log.Error("Failed to list agent kinds", "error", err)
 		handleCommonErrors(w, err, "Failed to list agent kinds")
@@ -107,6 +114,14 @@ func (c *agentKindController) UpdateKind(w http.ResponseWriter, r *http.Request)
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
 		return
+	}
+
+	if payload.Labels != nil {
+		if err := utils.ValidateLabels(*payload.Labels); err != nil {
+			log.Error("UpdateKind: invalid labels", "error", err)
+			utils.WriteValidationErrorResponse(w, err)
+			return
+		}
 	}
 
 	result, err := c.kindService.UpdateKind(ctx, ouID, kindName, &payload)

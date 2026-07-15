@@ -16,6 +16,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 )
@@ -6432,6 +6433,7 @@ type ApiListAgentsRequest struct {
 	projName   string
 	limit      *int32
 	offset     *int32
+	label      *[]string
 }
 
 // Maximum number of results to return
@@ -6443,6 +6445,12 @@ func (r ApiListAgentsRequest) Limit(limit int32) ApiListAgentsRequest {
 // Number of results to skip
 func (r ApiListAgentsRequest) Offset(offset int32) ApiListAgentsRequest {
 	r.offset = &offset
+	return r
+}
+
+// Filter by label as key:value. Repeat the parameter to require multiple labels (AND semantics).
+func (r ApiListAgentsRequest) Label(label []string) ApiListAgentsRequest {
+	r.label = &label
 	return r
 }
 
@@ -6496,6 +6504,17 @@ func (a *DefaultAPIService) ListAgentsExecute(r ApiListAgentsRequest) (*AgentLis
 	}
 	if r.offset != nil {
 		parameterAddToHeaderOrQuery(localVarQueryParams, "offset", r.offset, "")
+	}
+	if r.label != nil {
+		t := *r.label
+		if reflect.TypeOf(t).Kind() == reflect.Slice {
+			s := reflect.ValueOf(t)
+			for i := 0; i < s.Len(); i++ {
+				parameterAddToHeaderOrQuery(localVarQueryParams, "label", s.Index(i).Interface(), "multi")
+			}
+		} else {
+			parameterAddToHeaderOrQuery(localVarQueryParams, "label", t, "multi")
+		}
 	}
 	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
