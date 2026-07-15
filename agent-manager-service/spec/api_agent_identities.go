@@ -36,7 +36,7 @@ func (r ApiListAgentIdentityScopesRequest) Execute() (*AgentIdentityScopeListRes
 /*
 ListAgentIdentityScopes List grantable agent-identity scopes for an environment
 
-Aggregates scopes from MCP proxies that are deployed to this environment with identity security enabled. Read-only; powers role building.
+Aggregates scopes from MCP proxies that target this environment with identity security enabled. Read-only; powers role building.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName

@@ -10573,7 +10573,7 @@ paths:
   /orgs/{orgName}/environments/{envName}/agent-identities/scopes:
     get:
       summary: List grantable agent-identity scopes for an environment
-      description: Aggregates scopes from MCP proxies that are deployed to this environment with identity security enabled. Read-only; powers role building.
+      description: Aggregates scopes from MCP proxies that target this environment with identity security enabled. Read-only; powers role building.
       operationId: listAgentIdentityScopes
       tags: [AgentIdentities]
       parameters:
