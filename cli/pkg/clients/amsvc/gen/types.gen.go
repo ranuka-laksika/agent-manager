@@ -30,18 +30,18 @@ func (e APIKeySecurityIn) Valid() bool {
 	}
 }
 
-// Defines values for AgentIdentityAssignmentsRequestAssignmentsType.
+// Defines values for AgentIdentityAssignmentEntryType.
 const (
-	AgentIdentityAssignmentsRequestAssignmentsTypeAgent AgentIdentityAssignmentsRequestAssignmentsType = "agent"
-	AgentIdentityAssignmentsRequestAssignmentsTypeGroup AgentIdentityAssignmentsRequestAssignmentsType = "group"
+	AgentIdentityAssignmentEntryTypeAgent AgentIdentityAssignmentEntryType = "agent"
+	AgentIdentityAssignmentEntryTypeGroup AgentIdentityAssignmentEntryType = "group"
 )
 
-// Valid indicates whether the value is a known member of the AgentIdentityAssignmentsRequestAssignmentsType enum.
-func (e AgentIdentityAssignmentsRequestAssignmentsType) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentIdentityAssignmentEntryType enum.
+func (e AgentIdentityAssignmentEntryType) Valid() bool {
 	switch e {
-	case AgentIdentityAssignmentsRequestAssignmentsTypeAgent:
+	case AgentIdentityAssignmentEntryTypeAgent:
 		return true
-	case AgentIdentityAssignmentsRequestAssignmentsTypeGroup:
+	case AgentIdentityAssignmentEntryTypeGroup:
 		return true
 	default:
 		return false
@@ -1311,16 +1311,19 @@ type AgentIdentityAgentResponse struct {
 	ThunderAgentId *string `json:"thunderAgentId,omitempty"`
 }
 
-// AgentIdentityAssignmentsRequest defines model for AgentIdentityAssignmentsRequest.
-type AgentIdentityAssignmentsRequest struct {
-	Assignments []struct {
-		Id   string                                         `json:"id"`
-		Type AgentIdentityAssignmentsRequestAssignmentsType `json:"type"`
-	} `json:"assignments"`
+// AgentIdentityAssignmentEntry defines model for AgentIdentityAssignmentEntry.
+type AgentIdentityAssignmentEntry struct {
+	Id   string                           `json:"id"`
+	Type AgentIdentityAssignmentEntryType `json:"type"`
 }
 
-// AgentIdentityAssignmentsRequestAssignmentsType defines model for AgentIdentityAssignmentsRequest.Assignments.Type.
-type AgentIdentityAssignmentsRequestAssignmentsType string
+// AgentIdentityAssignmentEntryType defines model for AgentIdentityAssignmentEntry.Type.
+type AgentIdentityAssignmentEntryType string
+
+// AgentIdentityAssignmentsRequest defines model for AgentIdentityAssignmentsRequest.
+type AgentIdentityAssignmentsRequest struct {
+	Assignments []AgentIdentityAssignmentEntry `json:"assignments"`
+}
 
 // AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never
 // includes a secret, even if one is waiting to be claimed. Check
@@ -1368,6 +1371,20 @@ type AgentIdentityGroupRequest struct {
 type AgentIdentityMembersRequest struct {
 	// AgentIds Thunder agent IDs (from the agents picker)
 	AgentIds []string `json:"agentIds"`
+}
+
+// AgentIdentityRoleAssignmentsResponse defines model for AgentIdentityRoleAssignmentsResponse.
+type AgentIdentityRoleAssignmentsResponse struct {
+	// Agents Raw agent assignment entries; resolve display data via the agents picker.
+	Agents *[]AgentIdentityAssignmentEntry `json:"agents,omitempty"`
+	Groups *[]struct {
+		CreatedAt   *string `json:"createdAt,omitempty"`
+		Description *string `json:"description,omitempty"`
+		Id          string  `json:"id"`
+		Name        string  `json:"name"`
+		OuId        *string `json:"ouId,omitempty"`
+		UpdatedAt   *string `json:"updatedAt,omitempty"`
+	} `json:"groups,omitempty"`
 }
 
 // AgentIdentityRoleRequest defines model for AgentIdentityRoleRequest.

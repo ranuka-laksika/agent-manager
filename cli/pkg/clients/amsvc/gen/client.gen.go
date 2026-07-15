@@ -18309,7 +18309,7 @@ func (r UpdateAgentIdentityRoleResp) StatusCode() int {
 type GetAgentIdentityRoleAssignmentsResp struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *map[string]interface{}
+	JSON200      *AgentIdentityRoleAssignmentsResponse
 	JSON503      *ErrorResponse
 }
 
@@ -26839,7 +26839,7 @@ func ParseGetAgentIdentityRoleAssignmentsResp(rsp *http.Response) (*GetAgentIden
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest map[string]interface{}
+		var dest AgentIdentityRoleAssignmentsResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
