@@ -718,6 +718,21 @@ func (c *thunderClient) DeleteRole(ctx context.Context, roleID string) error {
 	return nil
 }
 
+// resolveAssignmentGroup expands a group assignment entry to the full group.
+// A group deleted from Thunder after being assigned is tolerated: it logs a
+// warning and returns ok=false rather than failing the whole listing.
+func (c *thunderClient) resolveAssignmentGroup(ctx context.Context, roleID, groupID string) (group *ThunderGroup, ok bool, err error) {
+	group, err = c.GetGroup(ctx, groupID)
+	if err != nil {
+		if IsNotFound(err) {
+			logger.GetLogger(ctx).Warn("skipping deleted role assignment group", "roleID", roleID, "groupID", groupID)
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("thunder get role assignment group %s: %w", groupID, err)
+	}
+	return group, true, nil
+}
+
 func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (*RoleAssignments, error) {
 	token, err := c.getSystemToken(ctx)
 	if err != nil {
@@ -746,15 +761,13 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 			}
 			result.Users = append(result.Users, *user)
 		case "group":
-			group, err := c.GetGroup(ctx, a.ID)
+			group, ok, err := c.resolveAssignmentGroup(ctx, roleID, a.ID)
 			if err != nil {
-				if IsNotFound(err) {
-					log.Warn("skipping deleted role assignment group", "roleID", roleID, "groupID", a.ID)
-					continue
-				}
-				return nil, fmt.Errorf("thunder get role assignment group %s: %w", a.ID, err)
+				return nil, err
 			}
-			result.Groups = append(result.Groups, *group)
+			if ok {
+				result.Groups = append(result.Groups, *group)
+			}
 		}
 	}
 
@@ -762,32 +775,26 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 }
 
 // GetAgentRoleAssignments returns the role's assignments with agent-identity
-// (environment Thunder) semantics. Agent assignees are returned as raw
-// {type, id} entries — Thunder stores only the reference, and callers resolve
-// display data from the agents picker (mirrors ListGroupMemberEntries). Group
-// assignees are resolved to full groups since callers render group names
-// directly.
+// (environment Thunder) semantics; see the IdentityClient interface doc for
+// the contract.
 func (c *thunderClient) GetAgentRoleAssignments(ctx context.Context, roleID string) (*AgentRoleAssignments, error) {
 	entries, err := c.listRoleAssignmentEntries(ctx, roleID)
 	if err != nil {
 		return nil, err
 	}
 	result := &AgentRoleAssignments{}
-	log := logger.GetLogger(ctx)
 	for _, a := range entries {
 		switch a.Type {
 		case "agent":
 			result.Agents = append(result.Agents, a)
 		case "group":
-			group, err := c.GetGroup(ctx, a.ID)
+			group, ok, err := c.resolveAssignmentGroup(ctx, roleID, a.ID)
 			if err != nil {
-				if IsNotFound(err) {
-					log.Warn("skipping deleted role assignment group", "roleID", roleID, "groupID", a.ID)
-					continue
-				}
-				return nil, fmt.Errorf("thunder get role assignment group %s: %w", a.ID, err)
+				return nil, err
 			}
-			result.Groups = append(result.Groups, *group)
+			if ok {
+				result.Groups = append(result.Groups, *group)
+			}
 		}
 	}
 	return result, nil

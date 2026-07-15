@@ -20,7 +20,7 @@ var _ MappedNullable = &AgentIdentityRoleAssignmentsResponse{}
 // AgentIdentityRoleAssignmentsResponse struct for AgentIdentityRoleAssignmentsResponse
 type AgentIdentityRoleAssignmentsResponse struct {
 	// Raw agent assignment entries; resolve display data via the agents picker.
-	Agents []AgentIdentityRoleAssignmentsResponseAgentsInner `json:"agents,omitempty"`
+	Agents []AgentIdentityAssignmentEntry                    `json:"agents,omitempty"`
 	Groups []AgentIdentityRoleAssignmentsResponseGroupsInner `json:"groups,omitempty"`
 }
 
@@ -42,9 +42,9 @@ func NewAgentIdentityRoleAssignmentsResponseWithDefaults() *AgentIdentityRoleAss
 }
 
 // GetAgents returns the Agents field value if set, zero value otherwise.
-func (o *AgentIdentityRoleAssignmentsResponse) GetAgents() []AgentIdentityRoleAssignmentsResponseAgentsInner {
+func (o *AgentIdentityRoleAssignmentsResponse) GetAgents() []AgentIdentityAssignmentEntry {
 	if o == nil || IsNil(o.Agents) {
-		var ret []AgentIdentityRoleAssignmentsResponseAgentsInner
+		var ret []AgentIdentityAssignmentEntry
 		return ret
 	}
 	return o.Agents
@@ -52,7 +52,7 @@ func (o *AgentIdentityRoleAssignmentsResponse) GetAgents() []AgentIdentityRoleAs
 
 // GetAgentsOk returns a tuple with the Agents field value if set, nil otherwise
 // and a boolean to check if the value has been set.
-func (o *AgentIdentityRoleAssignmentsResponse) GetAgentsOk() ([]AgentIdentityRoleAssignmentsResponseAgentsInner, bool) {
+func (o *AgentIdentityRoleAssignmentsResponse) GetAgentsOk() ([]AgentIdentityAssignmentEntry, bool) {
 	if o == nil || IsNil(o.Agents) {
 		return nil, false
 	}
@@ -68,8 +68,8 @@ func (o *AgentIdentityRoleAssignmentsResponse) HasAgents() bool {
 	return false
 }
 
-// SetAgents gets a reference to the given []AgentIdentityRoleAssignmentsResponseAgentsInner and assigns it to the Agents field.
-func (o *AgentIdentityRoleAssignmentsResponse) SetAgents(v []AgentIdentityRoleAssignmentsResponseAgentsInner) {
+// SetAgents gets a reference to the given []AgentIdentityAssignmentEntry and assigns it to the Agents field.
+func (o *AgentIdentityRoleAssignmentsResponse) SetAgents(v []AgentIdentityAssignmentEntry) {
 	o.Agents = v
 }
 

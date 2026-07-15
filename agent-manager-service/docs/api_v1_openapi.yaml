@@ -10743,6 +10743,19 @@ components:
             permissions. On update this is a full replacement of the role's
             scopes: omit the field to leave existing scopes untouched, or send
             an explicit empty array to clear them all.
+    AgentIdentityAssignmentEntry:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - agent
+            - group
     AgentIdentityAssignmentsRequest:
       type: object
       required:
@@ -10751,18 +10764,7 @@ components:
         assignments:
           type: array
           items:
-            type: object
-            required:
-              - id
-              - type
-            properties:
-              id:
-                type: string
-              type:
-                type: string
-                enum:
-                  - agent
-                  - group
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
     AgentIdentityRoleAssignmentsResponse:
       type: object
       properties:
@@ -10770,15 +10772,7 @@ components:
           type: array
           description: Raw agent assignment entries; resolve display data via the agents picker.
           items:
-            type: object
-            required:
-              - id
-              - type
-            properties:
-              id:
-                type: string
-              type:
-                type: string
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
         groups:
           type: array
           items:
