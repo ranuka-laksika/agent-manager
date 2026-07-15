@@ -108,7 +108,7 @@ export const RoleEditPage: React.FC = () => {
   const catalogScopes: ScopeChoice[] = useMemo(() => scopesData?.scopes ?? [], [scopesData]);
 
   const initialAgentIds: string[] = useMemo(
-    () => (assignmentsData?.users ?? []).map((u) => u.id),
+    () => (assignmentsData?.agents ?? []).map((a) => a.id),
     [assignmentsData],
   );
   const initialGroups: ThunderGroup[] = useMemo(

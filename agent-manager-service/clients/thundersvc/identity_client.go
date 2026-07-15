@@ -51,6 +51,12 @@ type IdentityClient interface {
 	// fanning out over every group in ouID and checking its members —
 	// Thunder has no reverse-lookup endpoint for this.
 	GetAgentGroups(ctx context.Context, ouID, agentID string) ([]ThunderGroup, error)
+	// GetAgentRoleAssignments returns a role's assignments with agent-identity
+	// (environment Thunder) semantics: agent assignees as raw {type, id}
+	// entries and group assignees resolved to full groups. Unlike
+	// GetRoleAssignments (built for the platform user store), it does not
+	// resolve or return users.
+	GetAgentRoleAssignments(ctx context.Context, roleID string) (*AgentRoleAssignments, error)
 
 	// Groups
 	ListGroups(ctx context.Context, ouID string, offset, limit int) ([]ThunderGroup, int, error)
@@ -752,6 +758,38 @@ func (c *thunderClient) GetRoleAssignments(ctx context.Context, roleID string) (
 		}
 	}
 
+	return result, nil
+}
+
+// GetAgentRoleAssignments returns the role's assignments with agent-identity
+// (environment Thunder) semantics. Agent assignees are returned as raw
+// {type, id} entries — Thunder stores only the reference, and callers resolve
+// display data from the agents picker (mirrors ListGroupMemberEntries). Group
+// assignees are resolved to full groups since callers render group names
+// directly.
+func (c *thunderClient) GetAgentRoleAssignments(ctx context.Context, roleID string) (*AgentRoleAssignments, error) {
+	entries, err := c.listRoleAssignmentEntries(ctx, roleID)
+	if err != nil {
+		return nil, err
+	}
+	result := &AgentRoleAssignments{}
+	log := logger.GetLogger(ctx)
+	for _, a := range entries {
+		switch a.Type {
+		case "agent":
+			result.Agents = append(result.Agents, a)
+		case "group":
+			group, err := c.GetGroup(ctx, a.ID)
+			if err != nil {
+				if IsNotFound(err) {
+					log.Warn("skipping deleted role assignment group", "roleID", roleID, "groupID", a.ID)
+					continue
+				}
+				return nil, fmt.Errorf("thunder get role assignment group %s: %w", a.ID, err)
+			}
+			result.Groups = append(result.Groups, *group)
+		}
+	}
 	return result, nil
 }
 

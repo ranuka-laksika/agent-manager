@@ -10459,6 +10459,7 @@ paths:
       tags:
         - Agent Identity
       summary: List agent identity role assignments
+      description: Lists the role's assignees from the environment's Thunder — agents as raw assignment entries (resolve display data via the agents picker) and groups resolved to full objects.
       operationId: getAgentIdentityRoleAssignments
       responses:
         "200":
@@ -10466,7 +10467,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/AgentIdentityRoleAssignmentsResponse"
         "503":
           description: The environment's identity provider is not available
           content:
@@ -10762,6 +10763,42 @@ components:
                 enum:
                   - agent
                   - group
+    AgentIdentityRoleAssignmentsResponse:
+      type: object
+      properties:
+        agents:
+          type: array
+          description: Raw agent assignment entries; resolve display data via the agents picker.
+          items:
+            type: object
+            required:
+              - id
+              - type
+            properties:
+              id:
+                type: string
+              type:
+                type: string
+        groups:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+              - name
+            properties:
+              id:
+                type: string
+              ouId:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              createdAt:
+                type: string
+              updatedAt:
+                type: string
     AgentIdentityAgentResponse:
       type: object
       required:

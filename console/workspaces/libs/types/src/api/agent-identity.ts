@@ -17,7 +17,7 @@
  */
 
 import type { ListQuery, OrgPathParams, PaginationMeta } from './common';
-import type { ThunderGroup, ThunderRole, ThunderRoleAssignments } from './identities';
+import type { ThunderGroup, ThunderRole } from './identities';
 
 // Env-Thunder group/role management for agent identities. AMS stores no
 // group/role state of its own — every call is a passthrough to the
@@ -78,7 +78,11 @@ export interface AgentIdentityAssignmentsRequest {
   assignments: AgentIdentityAssignmentEntry[];
 }
 
-export type AgentIdentityRoleAssignmentsResponse = ThunderRoleAssignments;
+export interface AgentIdentityRoleAssignmentsResponse {
+  // Raw agent assignment entries; resolve display data via the agents picker.
+  agents?: AgentIdentityAssignmentEntry[];
+  groups?: ThunderGroup[];
+}
 
 // --- Agents picker ---
 
