@@ -29,6 +29,7 @@ spec:
     spec:
       {{- include "agent-management-platform.imagePullSecrets" . | nindent 6 }}
       serviceAccountName: {{ include "agent-management-platform.serviceAccountName" . }}
+      automountServiceAccountToken: {{ .Values.serviceAccount.automount | default false }}
       {{- if .Values.agentManagerService.podSecurityContext }}
       securityContext:
         {{- toYaml .Values.agentManagerService.podSecurityContext | nindent 8 }}

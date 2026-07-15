@@ -21,7 +21,7 @@ spec:
         app.kubernetes.io/component: jwt-keys-generation
     spec:
       {{- include "agent-management-platform.imagePullSecrets" . | nindent 6 }}
-      serviceAccountName: {{ include "agent-management-platform.serviceAccountName" . }}
+      serviceAccountName: {{ include "agent-management-platform.hookServiceAccountName" . }}
       restartPolicy: Never
       {{- with .Values.jwtKeysGeneration.podSecurityContext }}
       securityContext:
