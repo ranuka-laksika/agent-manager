@@ -600,6 +600,13 @@ jobs:
             echo ""
             echo "### CLI (amctl)"
             echo "Prebuilt \`amctl\` binaries (Linux, macOS, Windows) and \`checksums.txt\` are attached to this release."
+
+            echo ""
+            echo "### VM install bundle"
+            echo "\`amp-vm-bundle-${VERSION}.tar.gz\` and \`bootstrap.sh\` are attached for the one-command VM install:"
+            echo '```'
+            echo "curl -fsSL https://github.com/${REGISTRY_ORG}/agent-manager/releases/download/amp/v${VERSION}/bootstrap.sh | sudo bash -s -- simple --host <PUBLIC_IP> --version ${VERSION}"
+            echo '```'
           } > /tmp/release-body.md
 
           {
@@ -616,6 +623,15 @@ jobs:
         with:
           name: amctl-dist
           path: dist/
+
+      - name: Package VM install bundle
+        run: |
+          bash .github/scripts/build-vm-bundle.sh \
+            "$TARGET_RELEASE" \
+            dist/
+        env:
+          TARGET_RELEASE: ${{ inputs.target_version }}
+        shell: bash
 
       - name: Create GitHub release
         id: create-release

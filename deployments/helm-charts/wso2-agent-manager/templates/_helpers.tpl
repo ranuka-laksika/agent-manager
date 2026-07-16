@@ -52,10 +52,34 @@ Create the name of the service account to use
 Uses simple naming: "amp" instead of release-name-chart-name
 */}}
 {{- define "agent-management-platform.serviceAccountName" -}}
-{{- if or .Values.serviceAccount.create .Values.rbac.create }}
+{{- if .Values.serviceAccount.create }}
 {{- default "amp" .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Non-empty when at least one pre-install/pre-upgrade hook Job (TLS certs,
+JWT keys) will render; the hook SA and Role/RoleBinding are only needed then.
+*/}}
+{{- define "agent-management-platform.hookJobsEnabled" -}}
+{{- if or (and .Values.jwtKeysGeneration.enabled (not .Values.jwtSigning.existingSecret)) (and .Values.agentManagerService.enabled .Values.tlsCertsGeneration.enabled (not .Values.agentManagerService.certificates.certificatesSecret)) -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+ServiceAccount name for the pre-install/pre-upgrade hook Jobs (TLS certs,
+JWT keys). Separate from the amp-api runtime SA so the Deployment holds no RBAC.
+With create disabled an existing SA name must be supplied — there is no safe
+fallback, so fail at render time instead of at the hook deadline.
+*/}}
+{{- define "agent-management-platform.hookServiceAccountName" -}}
+{{- if (.Values.hookServiceAccount).create }}
+{{- default (printf "%s-hooks" (include "agent-management-platform.fullname" .)) .Values.hookServiceAccount.name }}
+{{- else }}
+{{- required "hookServiceAccount.name must name an existing ServiceAccount when hookServiceAccount.create is false" (.Values.hookServiceAccount).name }}
 {{- end }}
 {{- end }}
 

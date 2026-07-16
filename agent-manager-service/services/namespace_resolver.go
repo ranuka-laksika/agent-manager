@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 )
 
 // ResolveNamespace resolves the OpenChoreo namespace (organization) name.
@@ -38,4 +39,16 @@ func ResolveNamespace(ctx context.Context, ocClient occlient.OpenChoreoClient) (
 		return "", fmt.Errorf("no organization found for namespace resolution")
 	}
 	return orgs[0].Namespace, nil
+}
+
+// ThunderOrgNamespace returns the org namespace/handle used to address an
+// env-Thunder instance (see thundersvc.ThunderReleaseName) for AgentID
+// provisioning and injection. Deliberately config-pinned
+// (OPEN_CHOREO_DEFAULT_NAMESPACE, default "default"), NOT resolved dynamically:
+// an env-Thunder's Helm release/namespace is fixed when the platform admin
+// deploys it, so a dynamic lookup that followed an org rename would start
+// addressing a Thunder that doesn't exist and break every provisioned agent.
+// Both the provisioning and injection services call this so they can't disagree.
+func ThunderOrgNamespace() string {
+	return config.GetConfig().OpenChoreo.DefaultNamespace
 }

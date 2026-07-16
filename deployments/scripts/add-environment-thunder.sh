@@ -197,7 +197,13 @@ read_existing_secret() {
 
 # write_to_openbao ORG ENV SECRET — writes the Thunder system-client secret to OpenBao
 # so agent-manager-service can read it from both Docker (local dev) and Kubernetes (prod).
-# Path: {OPENBAO_PATH}/data/thunder-system-clients/{org}/{env}
+# Path: {OPENBAO_PATH}/data/{org}/thunder-system-client-{env}
+#
+# The org segment comes first (rather than a fixed "thunder-system-clients"
+# prefix) to match agent-manager-service's secretmanagersvc.SecretLocation
+# path convention (org always first) — agent-manager-service reads this secret
+# through the same pluggable secret-management client used for every other
+# secret it manages, not a direct OpenBao call.
 #
 # Strategy: try direct HTTP first (works when port-forward is active), then fall back to
 # kubectl exec into the OpenBao pod (works during 'make setup' before the port-forward starts).
@@ -206,7 +212,7 @@ write_to_openbao() {
   local addr="${OPENBAO_ADDR:-http://localhost:8200}"
   local token="${OPENBAO_TOKEN:-root}"
   local mount="${OPENBAO_PATH:-secret}"
-  local kv_path="thunder-system-clients/${org}/${env_name}"
+  local kv_path="${org}/thunder-system-client-${env_name}"
 
   # --- attempt 1: direct HTTP (port-forward or explicit OPENBAO_ADDR) ---
   local http_code
@@ -776,10 +782,19 @@ main() {
     ca_bundle="${mozilla_bundle}
 ${ca_pem}"
 
-    # Store the combined bundle as a ConfigMap.
+    # Store the combined bundle as a ConfigMap. Pass the bundle through a temp
+    # file with --from-file rather than --from-literal: the Mozilla CA bundle is
+    # ~230KB, which exceeds the Linux per-argument limit (MAX_ARG_STRLEN, 128KB)
+    # and makes kubectl exit with "Argument list too long" before it emits any
+    # YAML, so the piped `kubectl apply` then fails with "no objects passed to
+    # apply". (macOS has a larger limit, so this only bites on Linux/CI.)
+    local ca_bundle_file
+    ca_bundle_file="$(mktemp)"
+    printf '%s' "$ca_bundle" >"$ca_bundle_file"
     kubectl create configmap "$ca_cm_name" -n "$ns" \
-      --from-literal=ca-bundle.crt="${ca_bundle}" \
+      --from-file=ca-bundle.crt="$ca_bundle_file" \
       --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    rm -f "$ca_bundle_file"
     echo "🔐 Combined CA bundle (Mozilla + platform Thunder CA) stored in ${ns}/${ca_cm_name}"
   fi
   fi # SKIP_CA_BUNDLE_TRUST

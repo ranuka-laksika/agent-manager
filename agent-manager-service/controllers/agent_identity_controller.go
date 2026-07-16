@@ -637,7 +637,7 @@ func (c *agentIdentityController) GetRoleAssignments(w http.ResponseWriter, r *h
 	if !ok {
 		return
 	}
-	assignments, err := client.GetRoleAssignments(ctx, roleID)
+	assignments, err := client.GetAgentRoleAssignments(ctx, roleID)
 	if err != nil {
 		if thundersvc.IsNotFound(err) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")

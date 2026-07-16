@@ -3628,6 +3628,147 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/roles:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: List the roles assigned to an agent's AgentID in one environment
+      description: |
+        Returns the Thunder roles assigned to the agent's AgentID (directly,
+        via role assignment) in the given environment. `environment` is
+        required — an agent's AgentID (and its role assignments) is
+        per-environment, so there is no single answer across every
+        environment it is deployed to.
+      operationId: getAgentRoles
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to read the agent's roles for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's assigned roles in this environment
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Missing `environment` query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent, environment, or agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /orgs/{orgName}/projects/{projName}/agents/{agentName}/groups:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name
+        schema:
+          type: string
+      - name: projName
+        in: path
+        required: true
+        description: Project name
+        schema:
+          type: string
+      - name: agentName
+        in: path
+        required: true
+        description: Agent name
+        schema:
+          type: string
+
+    get:
+      tags:
+        - Agent Identity
+      summary: List the groups an agent's AgentID belongs to in one environment
+      description: |
+        Returns the Thunder groups the agent's AgentID is a member of in the
+        given environment. `environment` is required — an agent's AgentID
+        (and its group memberships) is per-environment, so there is no single
+        answer across every environment it is deployed to.
+      operationId: getAgentGroups
+      parameters:
+        - name: environment
+          in: query
+          required: true
+          description: Environment name to read the agent's groups for
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The agent's group memberships in this environment
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Missing `environment` query parameter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Agent, environment, or agent identity not yet provisioned for this environment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/projects/{projName}/agents/{agentName}/model-configs:
     post:
       summary: Create agent model configuration
@@ -10318,6 +10459,7 @@ paths:
       tags:
         - Agent Identity
       summary: List agent identity role assignments
+      description: Lists the role's assignees from the environment's Thunder — agents as raw assignment entries (resolve display data via the agents picker) and groups resolved to full objects.
       operationId: getAgentIdentityRoleAssignments
       responses:
         "200":
@@ -10325,7 +10467,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
+                $ref: "#/components/schemas/AgentIdentityRoleAssignmentsResponse"
         "503":
           description: The environment's identity provider is not available
           content:
@@ -10432,7 +10574,7 @@ paths:
   /orgs/{orgName}/environments/{envName}/agent-identities/scopes:
     get:
       summary: List grantable agent-identity scopes for an environment
-      description: Aggregates scopes from MCP proxies that are deployed to this environment with identity security enabled. Read-only; powers role building.
+      description: Aggregates scopes from MCP proxies that target this environment with identity security enabled. Read-only; powers role building.
       operationId: listAgentIdentityScopes
       tags: [AgentIdentities]
       parameters:
@@ -10601,6 +10743,19 @@ components:
             permissions. On update this is a full replacement of the role's
             scopes: omit the field to leave existing scopes untouched, or send
             an explicit empty array to clear them all.
+    AgentIdentityAssignmentEntry:
+      type: object
+      required:
+        - id
+        - type
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum:
+            - agent
+            - group
     AgentIdentityAssignmentsRequest:
       type: object
       required:
@@ -10609,18 +10764,35 @@ components:
         assignments:
           type: array
           items:
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
+    AgentIdentityRoleAssignmentsResponse:
+      type: object
+      properties:
+        agents:
+          type: array
+          description: Raw agent assignment entries; resolve display data via the agents picker.
+          items:
+            $ref: "#/components/schemas/AgentIdentityAssignmentEntry"
+        groups:
+          type: array
+          items:
             type: object
             required:
               - id
-              - type
+              - name
             properties:
               id:
                 type: string
-              type:
+              ouId:
                 type: string
-                enum:
-                  - agent
-                  - group
+              name:
+                type: string
+              description:
+                type: string
+              createdAt:
+                type: string
+              updatedAt:
+                type: string
     AgentIdentityAgentResponse:
       type: object
       required:
@@ -17747,6 +17919,13 @@ components:
         status:
           type: string
           example: regenerated
+        workloadRefreshWarning:
+          type: string
+          description: |
+            Present only when the secret was rotated successfully but pushing it into the
+            already-running workload failed. The workload keeps using the previous secret
+            until its next deploy, promote, or rotation.
+          example: The secret was rotated, but the running workload could not be refreshed automatically; it will keep using the previous secret until its next deploy, promote, or rotation.
 
     AgentRevokeSecretResponse:
       type: object
@@ -17767,6 +17946,14 @@ components:
         status:
           type: string
           example: revoked
+        workloadRefreshWarning:
+          type: string
+          description: |
+            Present when the secret was revoked successfully but the best-effort cleanup of
+            the already-running workload's credential could not be completed or verified.
+            The workload may keep referencing the revoked credential until this is confirmed
+            or the workload is redeployed.
+          example: Could not confirm whether this is the deployment pipeline's lowest environment, so its shared workload-level credentials were left untouched as a precaution.
 
     AgentCredentialsResponse:
       type: object

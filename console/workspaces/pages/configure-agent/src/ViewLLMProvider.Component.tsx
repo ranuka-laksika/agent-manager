@@ -26,6 +26,7 @@ import {
 import {
   CodeBlock,
   PolicyListSection,
+  usePipelineEnvironmentsState,
   type PolicySelection as GuardrailSelection,
 } from "@agent-management-platform/shared-component";
 import {
@@ -54,7 +55,6 @@ import {
   useGetAgent,
   useGetAgentModelConfig,
   useListCatalogLLMProviders,
-  useListEnvironments,
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
 } from "@agent-management-platform/api-client";
@@ -196,8 +196,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const {
     data: config,
-    isLoading,
-    isError,
+    isLoading: isLoadingConfig,
+    isError: isConfigError,
   } = useGetAgentModelConfig({
     orgName: orgId,
     projName: projectId,
@@ -205,9 +205,13 @@ export const ViewLLMProviderComponent: React.FC = () => {
     configId,
   });
 
-  const { data: environments = [] } = useListEnvironments({
-    orgName: orgId,
-  });
+  const {
+    environments,
+    isLoading: isLoadingEnvironments,
+    isError: isEnvironmentsError,
+  } = usePipelineEnvironmentsState(orgId, projectId);
+
+  const isLoading = isLoadingConfig || isLoadingEnvironments;
 
   const { data: agent } = useGetAgent({
     orgName: orgId,
@@ -546,7 +550,22 @@ export const ViewLLMProviderComponent: React.FC = () => {
     );
   }
 
-  if (isError || !config) {
+  if (isEnvironmentsError) {
+    return (
+      <PageLayout
+        title="LLM Configuration"
+        backHref={backHref}
+        disableIcon
+        backLabel="Back to Configure"
+      >
+        <Alert severity="error" icon={<AlertTriangle size={18} />}>
+          Failed to load the project&apos;s deployment pipeline environments. Please try again.
+        </Alert>
+      </PageLayout>
+    );
+  }
+
+  if (isConfigError || !config) {
     return (
       <PageLayout
         title="LLM Configuration"

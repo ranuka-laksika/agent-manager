@@ -19,14 +19,14 @@ var _ MappedNullable = &AgentIdentityAssignmentsRequest{}
 
 // AgentIdentityAssignmentsRequest struct for AgentIdentityAssignmentsRequest
 type AgentIdentityAssignmentsRequest struct {
-	Assignments []AgentIdentityAssignmentsRequestAssignmentsInner `json:"assignments"`
+	Assignments []AgentIdentityAssignmentEntry `json:"assignments"`
 }
 
 // NewAgentIdentityAssignmentsRequest instantiates a new AgentIdentityAssignmentsRequest object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentIdentityAssignmentsRequest(assignments []AgentIdentityAssignmentsRequestAssignmentsInner) *AgentIdentityAssignmentsRequest {
+func NewAgentIdentityAssignmentsRequest(assignments []AgentIdentityAssignmentEntry) *AgentIdentityAssignmentsRequest {
 	this := AgentIdentityAssignmentsRequest{}
 	this.Assignments = assignments
 	return &this
@@ -41,9 +41,9 @@ func NewAgentIdentityAssignmentsRequestWithDefaults() *AgentIdentityAssignmentsR
 }
 
 // GetAssignments returns the Assignments field value
-func (o *AgentIdentityAssignmentsRequest) GetAssignments() []AgentIdentityAssignmentsRequestAssignmentsInner {
+func (o *AgentIdentityAssignmentsRequest) GetAssignments() []AgentIdentityAssignmentEntry {
 	if o == nil {
-		var ret []AgentIdentityAssignmentsRequestAssignmentsInner
+		var ret []AgentIdentityAssignmentEntry
 		return ret
 	}
 
@@ -52,7 +52,7 @@ func (o *AgentIdentityAssignmentsRequest) GetAssignments() []AgentIdentityAssign
 
 // GetAssignmentsOk returns a tuple with the Assignments field value
 // and a boolean to check if the value has been set.
-func (o *AgentIdentityAssignmentsRequest) GetAssignmentsOk() ([]AgentIdentityAssignmentsRequestAssignmentsInner, bool) {
+func (o *AgentIdentityAssignmentsRequest) GetAssignmentsOk() ([]AgentIdentityAssignmentEntry, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -60,7 +60,7 @@ func (o *AgentIdentityAssignmentsRequest) GetAssignmentsOk() ([]AgentIdentityAss
 }
 
 // SetAssignments sets field value
-func (o *AgentIdentityAssignmentsRequest) SetAssignments(v []AgentIdentityAssignmentsRequestAssignmentsInner) {
+func (o *AgentIdentityAssignmentsRequest) SetAssignments(v []AgentIdentityAssignmentEntry) {
 	o.Assignments = v
 }
 

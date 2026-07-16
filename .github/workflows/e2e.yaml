@@ -27,7 +27,10 @@ jobs:
   e2e:
     name: E2E
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    # Bumped from 60 to accommodate the reduced test parallelism below: with
+    # --procs=2 (was -p, i.e. one proc per vCPU) fewer suites run concurrently,
+    # so wall-clock grows even though each suite no longer thrashes on CPU.
+    timeout-minutes: 90
     steps:
       - name: Clone the code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -61,7 +64,15 @@ jobs:
           CHART_VERSION: ${{ env.HELM_CHART_VERSION }}
         run: |
           set -o pipefail
-          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v -p --timeout 45m \
+          # --procs=2 (was -p, which auto-picks one proc per vCPU = 4 on the
+          # ubuntu-24.04 runner). The single-node k3d cluster cannot fit 4
+          # concurrent per-environment stacks (each env = its own Thunder +
+          # isolated API Platform Gateway controller/runtime + agent runtime
+          # pods); the node ran out of CPU, leaving pods Pending
+          # ("Insufficient cpu") and gateway bootstrap Jobs timing out. Two
+          # concurrent suites keep the resource footprint within the node.
+          # --timeout raised to 70m to match the longer wall-clock at --procs=2.
+          cd test/e2e && go run github.com/onsi/ginkgo/v2/ginkgo -v --procs=2 --timeout 70m \
             --poll-progress-after=600s --keep-going --junit-report=report.xml \
             ./tests/... 2>&1 | tee e2e-output.log
 
@@ -81,6 +92,32 @@ jobs:
           # Argo workflow pod logs (builds run in workflows-default namespace)
           for pod in $(kubectl get pods -n workflows-default --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
             kubectl logs "$pod" -n workflows-default --all-containers=true --tail=200 > "/tmp/pod-logs/wf-pod-${pod}.txt" 2>&1 || true
+          done
+          # User workload (agent runtime) pods live in per-env data-plane namespaces
+          # (dp-<org>-<project>-<env>-<hash>). These carry the actual agent invocation
+          # errors (e.g. "500 Connection error"), so capture logs for every pod in them.
+          for ns in $(kubectl get ns --no-headers -o custom-columns=":metadata.name" 2>/dev/null | grep '^dp-'); do
+            for pod in $(kubectl get pods -n "$ns" --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
+              kubectl logs "$pod" -n "$ns" --all-containers=true --tail=500 > "/tmp/pod-logs/dp-${ns}-${pod}.txt" 2>&1 || true
+            done
+          done
+          # Per-env API Platform Gateway + Thunder pods. Each environment's gateway
+          # stack lives in its own "<org>-<env>" namespace and its Thunder in
+          # "amp-thunder-<org>-<env>"; the gateway's Helm pre-install bootstrap Job
+          # runs there. Capturing these makes "failed pre-install: timed out
+          # waiting for the condition" debuggable (the bootstrap Job pod log is the
+          # only place the actual healthz/IDP/registration error appears). Also
+          # describe non-Running pods to surface exit reasons and scheduling events.
+          for ns in $(kubectl get ns --no-headers -o custom-columns=":metadata.name" 2>/dev/null \
+              | grep -E '^(default-|amp-thunder-)' || true); do
+            for pod in $(kubectl get pods -n "$ns" --no-headers -o custom-columns=":metadata.name" 2>/dev/null); do
+              kubectl logs "$pod" -n "$ns" --all-containers=true --tail=200 > "/tmp/pod-logs/ns-${ns}--${pod}.txt" 2>&1 || true
+            done
+            kubectl get pods -n "$ns" --no-headers 2>/dev/null \
+              | awk '$3 != "Running" && $3 != "Completed" { print $1 }' \
+              | while read -r p; do
+                  kubectl describe pod "$p" -n "$ns" > "/tmp/pod-logs/describe-${ns}--${p}.txt" 2>&1 || true
+                done
           done
 
       - name: Upload pod logs

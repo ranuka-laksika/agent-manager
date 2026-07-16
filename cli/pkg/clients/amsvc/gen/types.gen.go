@@ -30,18 +30,18 @@ func (e APIKeySecurityIn) Valid() bool {
 	}
 }
 
-// Defines values for AgentIdentityAssignmentsRequestAssignmentsType.
+// Defines values for AgentIdentityAssignmentEntryType.
 const (
-	AgentIdentityAssignmentsRequestAssignmentsTypeAgent AgentIdentityAssignmentsRequestAssignmentsType = "agent"
-	AgentIdentityAssignmentsRequestAssignmentsTypeGroup AgentIdentityAssignmentsRequestAssignmentsType = "group"
+	AgentIdentityAssignmentEntryTypeAgent AgentIdentityAssignmentEntryType = "agent"
+	AgentIdentityAssignmentEntryTypeGroup AgentIdentityAssignmentEntryType = "group"
 )
 
-// Valid indicates whether the value is a known member of the AgentIdentityAssignmentsRequestAssignmentsType enum.
-func (e AgentIdentityAssignmentsRequestAssignmentsType) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentIdentityAssignmentEntryType enum.
+func (e AgentIdentityAssignmentEntryType) Valid() bool {
 	switch e {
-	case AgentIdentityAssignmentsRequestAssignmentsTypeAgent:
+	case AgentIdentityAssignmentEntryTypeAgent:
 		return true
-	case AgentIdentityAssignmentsRequestAssignmentsTypeGroup:
+	case AgentIdentityAssignmentEntryTypeGroup:
 		return true
 	default:
 		return false
@@ -1347,16 +1347,19 @@ type AgentIdentityAgentResponse struct {
 	ThunderAgentId *string `json:"thunderAgentId,omitempty"`
 }
 
-// AgentIdentityAssignmentsRequest defines model for AgentIdentityAssignmentsRequest.
-type AgentIdentityAssignmentsRequest struct {
-	Assignments []struct {
-		Id   string                                         `json:"id"`
-		Type AgentIdentityAssignmentsRequestAssignmentsType `json:"type"`
-	} `json:"assignments"`
+// AgentIdentityAssignmentEntry defines model for AgentIdentityAssignmentEntry.
+type AgentIdentityAssignmentEntry struct {
+	Id   string                           `json:"id"`
+	Type AgentIdentityAssignmentEntryType `json:"type"`
 }
 
-// AgentIdentityAssignmentsRequestAssignmentsType defines model for AgentIdentityAssignmentsRequest.Assignments.Type.
-type AgentIdentityAssignmentsRequestAssignmentsType string
+// AgentIdentityAssignmentEntryType defines model for AgentIdentityAssignmentEntry.Type.
+type AgentIdentityAssignmentEntryType string
+
+// AgentIdentityAssignmentsRequest defines model for AgentIdentityAssignmentsRequest.
+type AgentIdentityAssignmentsRequest struct {
+	Assignments []AgentIdentityAssignmentEntry `json:"assignments"`
+}
 
 // AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never
 // includes a secret, even if one is waiting to be claimed. Check
@@ -1404,6 +1407,20 @@ type AgentIdentityGroupRequest struct {
 type AgentIdentityMembersRequest struct {
 	// AgentIds Thunder agent IDs (from the agents picker)
 	AgentIds []string `json:"agentIds"`
+}
+
+// AgentIdentityRoleAssignmentsResponse defines model for AgentIdentityRoleAssignmentsResponse.
+type AgentIdentityRoleAssignmentsResponse struct {
+	// Agents Raw agent assignment entries; resolve display data via the agents picker.
+	Agents *[]AgentIdentityAssignmentEntry `json:"agents,omitempty"`
+	Groups *[]struct {
+		CreatedAt   *string `json:"createdAt,omitempty"`
+		Description *string `json:"description,omitempty"`
+		Id          string  `json:"id"`
+		Name        string  `json:"name"`
+		OuId        *string `json:"ouId,omitempty"`
+		UpdatedAt   *string `json:"updatedAt,omitempty"`
+	} `json:"groups,omitempty"`
 }
 
 // AgentIdentityRoleRequest defines model for AgentIdentityRoleRequest.
@@ -1599,6 +1616,11 @@ type AgentRegenerateSecretResponse struct {
 	// ProvisioningType Whether the agent runs on the platform (`internal`) or outside it (`external`)
 	ProvisioningType AgentProvisioningType `json:"provisioningType"`
 	Status           string                `json:"status"`
+
+	// WorkloadRefreshWarning Present only when the secret was rotated successfully but pushing it into the
+	// already-running workload failed. The workload keeps using the previous secret
+	// until its next deploy, promote, or rotation.
+	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentResourceConfigsResponse defines model for AgentResourceConfigsResponse.
@@ -1639,6 +1661,12 @@ type AgentRevokeSecretResponse struct {
 	ClientId        string `json:"clientId"`
 	EnvironmentName string `json:"environmentName"`
 	Status          string `json:"status"`
+
+	// WorkloadRefreshWarning Present when the secret was revoked successfully but the best-effort cleanup of
+	// the already-running workload's credential could not be completed or verified.
+	// The workload may keep referencing the revoked credential until this is confirmed
+	// or the workload is redeployed.
+	WorkloadRefreshWarning *string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentThunderStatus Provisioning status of one AgentID binding. Goes from `pending` to
@@ -5562,6 +5590,12 @@ type GetAgentEndpointsParams struct {
 	Environment string `form:"environment" json:"environment"`
 }
 
+// GetAgentGroupsParams defines parameters for GetAgentGroups.
+type GetAgentGroupsParams struct {
+	// Environment Environment name to read the agent's groups for
+	Environment string `form:"environment" json:"environment"`
+}
+
 // RevokeAgentIdentitySecretParams defines parameters for RevokeAgentIdentitySecret.
 type RevokeAgentIdentitySecretParams struct {
 	// Environment Environment name to revoke the AgentID secret in
@@ -5683,6 +5717,12 @@ type GetAgentResourceConfigsParams struct {
 type UpdateAgentResourceConfigsParams struct {
 	// Environment Optional environment name. If provided, updates only that environment's resource configurations via release binding componentTypeEnvOverrides. If omitted, updates component-level defaults that apply to all environments (unless overridden).
 	Environment *string `form:"environment,omitempty" json:"environment,omitempty"`
+}
+
+// GetAgentRolesParams defines parameters for GetAgentRoles.
+type GetAgentRolesParams struct {
+	// Environment Environment name to read the agent's roles for
+	Environment string `form:"environment" json:"environment"`
 }
 
 // GetAgentTraceScoresParams defines parameters for GetAgentTraceScores.

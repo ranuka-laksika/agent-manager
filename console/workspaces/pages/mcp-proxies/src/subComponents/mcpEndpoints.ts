@@ -16,16 +16,26 @@
  */
 
 import type {
+  MCPEndpointConfig,
   MCPProxyCapabilities,
   MCPProxyEndpoint,
   MCPProxyPolicy,
   MCPServerInfoFetchResponse,
   UpstreamAuth,
 } from "@agent-management-platform/types";
-import type { EndpointDraft } from "./AddEndpointDialog";
+import type { EndpointDraft } from "./EndpointFormFields";
 import { ACL_POLICY_NAME, REWRITE_POLICY_NAME } from "../constants";
 
-type CapabilityKind = "tool" | "resource" | "prompt";
+export type CapabilityKind = "tool" | "resource" | "prompt";
+
+// Policy-params section key for each capability kind (the ACL and Rewrite
+// policies both key their per-kind config off these names) — shared so every
+// reader/writer of those policies' params agrees on the same section names.
+export const CAPABILITY_SECTION_KEY: Record<CapabilityKind, string> = {
+  tool: "tools",
+  resource: "resources",
+  prompt: "prompts",
+};
 
 // Default security applied to freshly configured environment blocks — mirrors the
 // blueprint created by the MCP proxy creation form.
@@ -38,8 +48,55 @@ export const DEFAULT_ENDPOINT_SECURITY = {
   },
 };
 
+export type AuthenticationType = "apiKey" | "identity" | "";
+
+const AUTHENTICATION_TYPE_LABELS: Record<AuthenticationType, string> = {
+  "": "None",
+  apiKey: "API Key",
+  identity: "OAuth",
+};
+
+// Display label for an AuthenticationType, shared by the Security tab's method
+// selector and the Overview tab's Auth Type summary so both stay in sync.
+export function getAuthenticationTypeLabel(type: AuthenticationType): string {
+  return AUTHENTICATION_TYPE_LABELS[type];
+}
+
+export function isAPIKeySecurityEnabled(
+  config: MCPEndpointConfig | undefined,
+): boolean {
+  const apiKeyConfig = config?.security?.apiKey;
+  return (
+    config?.security?.enabled !== false &&
+    !!apiKeyConfig &&
+    apiKeyConfig.enabled !== false
+  );
+}
+
+// Used by resolveAuthenticationType below to derive the Security tab's
+// active auth method from the endpoint's security config.
+function isIdentitySecurityEnabled(
+  config: MCPEndpointConfig | undefined,
+): boolean {
+  return (
+    config?.security?.enabled !== false &&
+    config?.security?.identity?.enabled === true
+  );
+}
+
+// Derives which authentication method is active from the endpoint's security
+// config, the same way both the Security tab (method selector) and the
+// Overview tab (Auth Type summary) need to.
+export function resolveAuthenticationType(
+  config: MCPEndpointConfig | undefined,
+): AuthenticationType {
+  if (isAPIKeySecurityEnabled(config)) return "apiKey";
+  if (isIdentitySecurityEnabled(config)) return "identity";
+  return "";
+}
+
 // Backend identifier of a capability entry, matching the resolution used by the
-// Rewrite / Access Control tabs (resources key on uri, tools/prompts on name).
+// Rewrite / Manage Tools tabs (resources key on uri, tools/prompts on name).
 export function getCapabilityId(
   kind: CapabilityKind,
   raw: Record<string, unknown> | undefined,
@@ -50,6 +107,45 @@ export function getCapabilityId(
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+// Reads one capability-kind section (e.g. "tools") off an ACL policy's params —
+// the single source of truth for the allow/deny + exceptions shape, shared by
+// isToolBlockedByAcl below and MCPProxyManageToolsTab's parseExistingAclPolicy.
+export function parseAclSection(
+  params: Record<string, unknown> | undefined,
+  sectionKey: string,
+): { mode: "allow" | "deny" | null; exceptions: string[] } {
+  const section = params?.[sectionKey] as Record<string, unknown> | undefined;
+  if (!section) return { mode: null, exceptions: [] };
+
+  const rawMode = String(section.mode ?? "").toLowerCase();
+  const mode = rawMode === "allow" || rawMode === "deny" ? rawMode : null;
+  const exceptions = Array.isArray(section.exceptions)
+    ? (section.exceptions as unknown[])
+        .filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0)
+        .map((entry) => entry.trim())
+    : [];
+
+  return { mode, exceptions };
+}
+
+// Whether a tool is currently blocked by the Manage Tools tab's ACL policy
+// (allow-all-except-exceptions, or deny-all-except-exceptions) — used by the
+// Security tab to flag RBAC scope bindings on tools that ACL has shut off.
+export function isToolBlockedByAcl(
+  config: MCPEndpointConfig | undefined,
+  toolIdentifier: string,
+): boolean {
+  const policy = config?.policies?.find((p) => p.name === ACL_POLICY_NAME);
+  const { mode, exceptions } = parseAclSection(
+    policy?.params as Record<string, unknown> | undefined,
+    "tools",
+  );
+  if (!mode) return false;
+
+  const isException = exceptions.includes(toolIdentifier);
+  return mode === "deny" ? !isException : isException;
 }
 
 function collectCapabilityIds(
@@ -124,7 +220,7 @@ function buildUpstreamAuth(endpoint: EndpointDraft): UpstreamAuth | undefined {
 }
 
 /**
- * Removes Rewrite and Access Control policy entries that reference tools, resources
+ * Removes Rewrite and Manage Tools policy entries that reference tools, resources
  * or prompts absent from `capabilities`. Other policy entries and policies are left
  * untouched. Returns `undefined` when no policies remain.
  */
@@ -139,20 +235,15 @@ export function prunePoliciesForCapabilities(
     resource: collectCapabilityIds("resource", capabilities?.resources),
     prompt: collectCapabilityIds("prompt", capabilities?.prompts),
   };
-  const sectionKey: Record<CapabilityKind, string> = {
-    tool: "tools",
-    resource: "resources",
-    prompt: "prompts",
-  };
   const kinds: CapabilityKind[] = ["tool", "resource", "prompt"];
 
   const next: MCPProxyPolicy[] = [];
   for (const policy of policies) {
     if (policy.name === REWRITE_POLICY_NAME) {
-      const pruned = pruneRewritePolicy(policy, validIds, sectionKey, kinds);
+      const pruned = pruneRewritePolicy(policy, validIds, CAPABILITY_SECTION_KEY, kinds);
       if (pruned) next.push(pruned);
     } else if (policy.name === ACL_POLICY_NAME) {
-      const pruned = pruneAclPolicy(policy, validIds, sectionKey, kinds);
+      const pruned = pruneAclPolicy(policy, validIds, CAPABILITY_SECTION_KEY, kinds);
       if (pruned) next.push(pruned);
     } else {
       next.push(policy);
@@ -295,7 +386,6 @@ export function draftToEndpoint(
     capabilities,
     policies: prunePoliciesForCapabilities(existing?.policies, capabilities),
     security: existing?.security ?? DEFAULT_ENDPOINT_SECURITY,
-    toolScopeBindings: existing?.toolScopeBindings,
     environments: draft.environments.map((environmentUuid) => ({
       environmentUuid,
     })),

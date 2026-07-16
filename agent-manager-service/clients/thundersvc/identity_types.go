@@ -168,6 +168,14 @@ type RoleAssignments struct {
 	Groups []ThunderGroup `json:"groups,omitempty"`
 }
 
+// AgentRoleAssignments represents a role's current assignments with
+// agent-identity (environment Thunder) semantics: agent assignees as raw
+// assignment entries, group assignees resolved to full groups.
+type AgentRoleAssignments struct {
+	Agents []AssignmentEntry `json:"agents,omitempty"`
+	Groups []ThunderGroup    `json:"groups,omitempty"`
+}
+
 // RolePermissionRequest is a single resource-server permissions entry.
 type RolePermissionRequest struct {
 	ResourceServerID string   `json:"resourceServerId"`

@@ -17,7 +17,13 @@
  */
 
 import { useQueryClient } from "@tanstack/react-query";
-import { createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent, updateAgentBuildParameters } from "../apis";
+import {
+  createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent,
+  updateAgentBuildParameters, getAgentRoles, getAgentGroups, getAgentIdentity,
+  provisionAgentIdentity, regenerateAgentIdentitySecret, revokeAgentIdentitySecret,
+  getAgentCredentials, claimAgentIdentitySecret,
+} from "../apis";
+import { SLOW_POLL_INTERVAL } from "../utils";
 import type {
   AgentListResponse,
   AgentResponse,
@@ -35,6 +41,29 @@ import type {
   GenerateAgentTokenQuery,
   TokenRequest,
   TokenResponse,
+  GetAgentRolesPathParams,
+  GetAgentRolesQuery,
+  AgentRolesResponse,
+  GetAgentGroupsPathParams,
+  GetAgentGroupsQuery,
+  AgentGroupsResponse,
+  GetAgentIdentityPathParams,
+  GetAgentIdentityQuery,
+  AgentIdentityEnvironmentView,
+  ProvisionAgentIdentityPathParams,
+  ProvisionAgentIdentityQuery,
+  RegenerateAgentIdentitySecretPathParams,
+  AgentIdentityActionRequest,
+  AgentRegenerateSecretResponse,
+  RevokeAgentIdentitySecretPathParams,
+  RevokeAgentIdentitySecretQuery,
+  AgentRevokeSecretResponse,
+  GetAgentCredentialsPathParams,
+  GetAgentCredentialsQuery,
+  AgentCredentialsResponse,
+  ClaimAgentIdentitySecretPathParams,
+  ClaimAgentIdentitySecretQuery,
+  AgentClaimSecretResponse,
 } from "@agent-management-platform/types";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
@@ -134,5 +163,137 @@ export function useGenerateAgentToken(
     queryKey: ['agent-token', params.agentName, params.projName, params.orgName, body?.expires_in, query?.environment],
     queryFn: () => generateAgentToken(params, body, query, getToken),
     enabled: enabled
+  });
+}
+
+// --- Agent identity: roles/groups (read-only) ---
+
+export function useGetAgentRoles(
+  params: GetAgentRolesPathParams,
+  query: GetAgentRolesQuery,
+  options?: { enabled?: boolean },
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentRolesResponse>({
+    queryKey: ['agent-roles', params, query],
+    queryFn: () => getAgentRoles(params, query, getToken),
+    enabled: (options?.enabled ?? true)
+      && !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+  });
+}
+
+export function useGetAgentGroups(
+  params: GetAgentGroupsPathParams,
+  query: GetAgentGroupsQuery,
+  options?: { enabled?: boolean },
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentGroupsResponse>({
+    queryKey: ['agent-groups', params, query],
+    queryFn: () => getAgentGroups(params, query, getToken),
+    enabled: (options?.enabled ?? true)
+      && !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+  });
+}
+
+// --- Agent identity: AgentID lifecycle (per environment) ---
+
+export function useGetAgentIdentity(
+  params: GetAgentIdentityPathParams,
+  query?: GetAgentIdentityQuery,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentIdentityEnvironmentView[]>({
+    queryKey: ['agent-identity', params, query],
+    queryFn: () => getAgentIdentity(params, query, getToken),
+    enabled: !!params.orgName && !!params.projName && !!params.agentName,
+    // Provisioning happens in the background (write-ahead PENDING, then a
+    // best-effort attempt) — poll while any binding is still settling, and
+    // stop automatically once every binding has completed or failed.
+    refetchInterval: (q) => {
+      const views = q.state.data;
+      const stillProvisioning = views?.some(
+        (v) => v.status === 'pending' || v.status === 'in_progress',
+      );
+      return stillProvisioning ? SLOW_POLL_INTERVAL : false;
+    },
+  });
+}
+
+export function useProvisionAgentIdentity() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    AgentIdentityEnvironmentView,
+    unknown,
+    { params: ProvisionAgentIdentityPathParams; query: ProvisionAgentIdentityQuery }
+  >({
+    action: { verb: 'create', target: 'agent identity' },
+    mutationFn: ({ params, query }) => provisionAgentIdentity(params, query, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['agent-identity', params] });
+    },
+  });
+}
+
+export function useRegenerateAgentIdentitySecret() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    AgentRegenerateSecretResponse,
+    unknown,
+    { params: RegenerateAgentIdentitySecretPathParams; body: AgentIdentityActionRequest }
+  >({
+    action: { verb: 'rotate', target: 'agent identity secret' },
+    mutationFn: ({ params, body }) => regenerateAgentIdentitySecret(params, body, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['agent-identity', params] });
+    },
+  });
+}
+
+export function useRevokeAgentIdentitySecret() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    AgentRevokeSecretResponse,
+    unknown,
+    { params: RevokeAgentIdentitySecretPathParams; query: RevokeAgentIdentitySecretQuery }
+  >({
+    action: { verb: 'revoke', target: 'agent identity secret' },
+    mutationFn: ({ params, query }) => revokeAgentIdentitySecret(params, query, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['agent-identity', params] });
+    },
+  });
+}
+
+export function useGetAgentCredentials(
+  params: GetAgentCredentialsPathParams,
+  query: GetAgentCredentialsQuery,
+) {
+  const { getToken } = useAuthHooks();
+  return useApiQuery<AgentCredentialsResponse>({
+    queryKey: ['agent-credentials', params, query],
+    queryFn: () => getAgentCredentials(params, query, getToken),
+    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
+  });
+}
+
+export function useClaimAgentIdentitySecret() {
+  const { getToken } = useAuthHooks();
+  const queryClient = useQueryClient();
+  return useApiMutation<
+    AgentClaimSecretResponse,
+    unknown,
+    { params: ClaimAgentIdentitySecretPathParams; query: ClaimAgentIdentitySecretQuery }
+  >({
+    // No action/successMessage: the claimed secret itself is the success UI
+    // (shown once, inline, with an explicit "won't be shown again" warning),
+    // not a generic toast.
+    mutationFn: ({ params, query }) => claimAgentIdentitySecret(params, query, getToken),
+    onSuccess: (_data, { params }) => {
+      queryClient.invalidateQueries({ queryKey: ['agent-identity', params] });
+    },
   });
 }

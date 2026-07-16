@@ -168,7 +168,7 @@ export const UsersPage: React.FC = () => {
                 </ListingTable.Row>
               </ListingTable.Head>
               <ListingTable.Body>
-                {isLoading && <ListingSkeletonRows rows={rowsPerPage} />}
+                {isLoading && <ListingSkeletonRows rows={Math.ceil(rowsPerPage / 2)} />}
                 {!isLoading &&
                   filteredUsers.map((user: ThunderUser) => {
                     const username = getUsername(user);

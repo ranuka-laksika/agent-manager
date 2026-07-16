@@ -642,7 +642,6 @@ while IFS= read -r _ns; do
   echo ""
 done < <(kubectl get namespaces -o name 2>/dev/null | sed 's|^namespace/||' | grep '^amp-thunder-')
 if [ "$_active_count" -gt 0 ]; then
-  echo "  💡 Retrieve credentials anytime with the kubectl command above."
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo ""
 fi

@@ -233,9 +233,22 @@ export interface APIKeySecurity {
   in?: APIKeyLocation;
 }
 
+/**
+ * Agent Identity security — callers present a JWT issued by the environment's
+ * IdP. v1 pins the issuer to the ThunderKeyManager key manager.
+ */
+export interface IdentitySecurity {
+  enabled?: boolean;
+}
+
+/**
+ * Exactly one variant is active: apiKey or identity (both omitted /
+ * enabled=false means no security).
+ */
 export interface SecurityConfig {
   enabled?: boolean;
   apiKey?: APIKeySecurity;
+  identity?: IdentitySecurity;
 }
 
 /**

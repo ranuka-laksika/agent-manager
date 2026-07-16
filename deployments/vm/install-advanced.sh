@@ -198,8 +198,8 @@ run_advanced_install() {
 
   preflight_dns strict
 
-  log "Phase 1/2: bootstrap (Docker + tools + firewall)"
-  ensure_prerequisites
+  log "Phase 1/2: preflight (verify tools + firewall)"
+  verify_prerequisites openssl
   ensure_inotify_limits
   if [[ "$TLS_MODE" == upstream ]]; then ensure_firewall "${UPSTREAM_LISTEN_PORT:-80}"; else ensure_firewall 443; fi
   ensure_disk

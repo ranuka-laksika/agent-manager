@@ -118,6 +118,7 @@ Feature pages are discovered by their exported `metaData` (`{ title, icon, path,
 ## Conventions & gotchas
 
 - **UI imports** from `@wso2/oxygen-ui` (+ `@wso2/oxygen-ui-icons-react`), not `@mui/material`. Theme is `AcrylicOrangeTheme` via `OxygenUIThemeProvider`. Use theme tokens in `sx` (`color: "text.primary"`, `p: 2`).
+- **No floating labels on `TextField`** — don't pass `label` to `TextField` (it produces MUI's floating/shrinking label). Use a static label instead: `FormControl` + `FormLabel` above the field (see `libs/views/src/component/FormElements/TextInput.tsx`), or a `Typography` caption for read-only display cards.
 - **Forms are manual** — `useState` + inline validation; no react-hook-form/Formik. Zod appears in `core-ui` only.
 - **Server state = TanStack Query**; local/UI state = `useState`. No Redux/global store.
 - **Config is load-time** — anything under `globalConfig` (auth mode, API base URL, RBAC flag) is fixed once the page boots.
