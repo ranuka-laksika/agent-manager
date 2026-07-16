@@ -686,7 +686,15 @@ func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, ouID, p
 			return fmt.Errorf("failed to convert resources to map: %w", err)
 		}
 		existingResources, _ := componentTypeEnvOverrides["resources"].(map[string]interface{})
-		componentTypeEnvOverrides["resources"] = mergeResourceOverrides(existingResources, resourcesMap)
+		mergedResources := mergeResourceOverrides(existingResources, resourcesMap)
+		// Validate the exact override being persisted, not an earlier caller-side
+		// snapshot — the binding may have changed in between. Kubernetes rejects a
+		// requests>limits pod spec at admission, after the old pod is already gone
+		// (warm pools recreate), so an invalid pair must never be written.
+		if err := c.validateMergedResourceOverrides(ctx, namespaceName, componentName, mergedResources); err != nil {
+			return err
+		}
+		componentTypeEnvOverrides["resources"] = mergedResources
 	}
 
 	// Add autoscaling to componentTypeEnvOverrides if provided
@@ -852,6 +860,42 @@ func mergeResourceOverrides(existing, incoming map[string]interface{}) map[strin
 		}
 	}
 	return merged
+}
+
+// validateMergedResourceOverrides checks that the merged resources override about to
+// be written to a release binding keeps requests within limits, resolving any side
+// absent from the override against the component's baseline — the same fallback the
+// ComponentType template applies at render time.
+func (c *openChoreoClient) validateMergedResourceOverrides(ctx context.Context, namespaceName, componentName string, merged map[string]interface{}) error {
+	compResp, err := c.ocClient.GetComponentWithResponse(ctx, namespaceName, componentName)
+	if err != nil {
+		return fmt.Errorf("failed to get component for resource validation: %w", err)
+	}
+	if compResp.StatusCode() != http.StatusOK || compResp.JSON200 == nil {
+		return fmt.Errorf("failed to get component for resource validation: status %d", compResp.StatusCode())
+	}
+	defaults, err := c.getEnvConfigDefaultsFromComponentType(ctx, namespaceName, compResp.JSON200)
+	if err != nil {
+		return fmt.Errorf("failed to get component type defaults for resource validation: %w", err)
+	}
+
+	pick := func(section, field, fallback string) string {
+		if sub, ok := merged[section].(map[string]interface{}); ok {
+			if v, ok := sub[field].(string); ok && v != "" {
+				return v
+			}
+		}
+		return fallback
+	}
+	cpuRequest := pick("requests", "cpu", defaults.Resources.Requests.CPU)
+	memRequest := pick("requests", "memory", defaults.Resources.Requests.Memory)
+	cpuLimit := pick("limits", "cpu", defaults.Resources.Limits.CPU)
+	memLimit := pick("limits", "memory", defaults.Resources.Limits.Memory)
+
+	if err := utils.ValidateRequestWithinLimit(cpuRequest, cpuLimit, "CPU"); err != nil {
+		return err
+	}
+	return utils.ValidateRequestWithinLimit(memRequest, memLimit, "memory")
 }
 
 // structToMap converts a struct to map[string]interface{} using JSON marshaling

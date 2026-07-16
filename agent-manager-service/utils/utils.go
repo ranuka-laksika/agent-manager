@@ -259,10 +259,10 @@ func ValidateResourceRequestsWithinLimits(requested spec.ResourceConfig, current
 	cpuLimit := effectiveResourceField(limitCPU(requested.Limits), limitCPU(currentLimits))
 	memLimit := effectiveResourceField(limitMemory(requested.Limits), limitMemory(currentLimits))
 
-	if err := validateRequestWithinLimit(cpuRequest, cpuLimit, "CPU"); err != nil {
+	if err := ValidateRequestWithinLimit(cpuRequest, cpuLimit, "CPU"); err != nil {
 		return err
 	}
-	if err := validateRequestWithinLimit(memRequest, memLimit, "memory"); err != nil {
+	if err := ValidateRequestWithinLimit(memRequest, memLimit, "memory"); err != nil {
 		return err
 	}
 	return nil
@@ -304,19 +304,20 @@ func effectiveResourceField(requested, current *string) string {
 	return StrPointerAsStr(current, "")
 }
 
-func validateRequestWithinLimit(request, limit, fieldName string) error {
+// ValidateRequestWithinLimit rejects a request quantity that exceeds its limit.
+// Either side may be empty (unresolved), in which case there is nothing to compare;
+// rendering falls back to the ComponentType/component baseline for that side.
+func ValidateRequestWithinLimit(request, limit, fieldName string) error {
 	if request == "" || limit == "" {
-		// Nothing to compare; rendering will fall back to the ComponentType/component
-		// baseline for whichever side is still unresolved.
 		return nil
 	}
 	requestQty, err := resource.ParseQuantity(request)
 	if err != nil {
-		return fmt.Errorf("%w: %s request has invalid format %q: %v", ErrInvalidInput, fieldName, request, err)
+		return fmt.Errorf("%w: %s request has invalid format %q: %w", ErrInvalidInput, fieldName, request, err)
 	}
 	limitQty, err := resource.ParseQuantity(limit)
 	if err != nil {
-		return fmt.Errorf("%w: %s limit has invalid format %q: %v", ErrInvalidInput, fieldName, limit, err)
+		return fmt.Errorf("%w: %s limit has invalid format %q: %w", ErrInvalidInput, fieldName, limit, err)
 	}
 	if requestQty.Cmp(limitQty) > 0 {
 		return fmt.Errorf("%w: %s request (%s) must be less than or equal to %s limit (%s)",
