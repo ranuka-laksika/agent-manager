@@ -461,23 +461,41 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 	utils.WriteSuccessResponse(w, http.StatusCreated, role)
 }
 
-func (c *agentIdentityController) GetRole(w http.ResponseWriter, r *http.Request) {
+// managedRole fetches the role and treats Thunder's native Administrator role
+// as nonexistent (404, matching its exclusion from ListRoles): it carries the
+// built-in "system" scope, and exposing it through this API is how agent
+// identities were acquiring env-Thunder admin — see
+// thundersvc.NativeAdministratorRoleName. Writes the error response itself when
+// ok=false. RemoveRoleAssignees deliberately skips this guard so an existing
+// mis-assignment can still be cleaned up through the same API.
+func (c *agentIdentityController) managedRole(w http.ResponseWriter, r *http.Request, client thundersvc.EnvIdentityClient, roleID string) (*thundersvc.ThunderRole, bool) {
 	ctx := r.Context()
-	log := logger.GetLogger(ctx)
+	role, err := client.GetRole(ctx, roleID)
+	if err != nil {
+		if thundersvc.IsNotFound(err) {
+			utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")
+			return nil, false
+		}
+		logger.GetLogger(ctx).Error("agent-identity: get role failed", "roleID", roleID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get role")
+		return nil, false
+	}
+	if role.Name == thundersvc.NativeAdministratorRoleName {
+		utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")
+		return nil, false
+	}
+	return role, true
+}
+
+func (c *agentIdentityController) GetRole(w http.ResponseWriter, r *http.Request) {
 	roleID := r.PathValue(utils.PathParamRoleID)
 
 	client, ok := c.envClient(w, r)
 	if !ok {
 		return
 	}
-	role, err := client.GetRole(ctx, roleID)
-	if err != nil {
-		if thundersvc.IsNotFound(err) {
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")
-			return
-		}
-		log.Error("agent-identity GetRole failed", "roleID", roleID, "error", err)
-		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to get role")
+	role, ok := c.managedRole(w, r, client, roleID)
+	if !ok {
 		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, role)
@@ -504,14 +522,8 @@ func (c *agentIdentityController) UpdateRole(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
-	current, err := client.GetRole(ctx, roleID)
-	if err != nil {
-		if thundersvc.IsNotFound(err) {
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")
-			return
-		}
-		log.Error("agent-identity UpdateRole: get role failed", "roleID", roleID, "error", err)
-		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to update role")
+	current, ok := c.managedRole(w, r, client, roleID)
+	if !ok {
 		return
 	}
 
@@ -616,6 +628,9 @@ func (c *agentIdentityController) DeleteRole(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
+	if _, ok := c.managedRole(w, r, client, roleID); !ok {
+		return
+	}
 	if err := client.DeleteRole(ctx, roleID); err != nil {
 		if thundersvc.IsNotFound(err) {
 			utils.WriteErrorResponse(w, http.StatusNotFound, "Role not found")
@@ -663,6 +678,9 @@ func (c *agentIdentityController) AddRoleAssignees(w http.ResponseWriter, r *htt
 
 	client, ok := c.envClient(w, r)
 	if !ok {
+		return
+	}
+	if _, ok := c.managedRole(w, r, client, roleID); !ok {
 		return
 	}
 	if err := client.AddRoleAssignees(ctx, roleID, assignments); err != nil {

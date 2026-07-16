@@ -546,3 +546,123 @@ func TestAgentIdentityGetRoleAssignments_UsesAgentSemantics(t *testing.T) {
 	assert.Len(t, body.Groups, 1)
 	assert.Equal(t, "readers", body.Groups[0].Name)
 }
+
+// adminRoleEnvClient returns an env client whose GetRole always resolves the
+// native Administrator role. Every mutating func is left nil, so any write
+// reaching Thunder panics the test.
+func adminRoleEnvClient() *clientmocks.EnvIdentityClientMock {
+	return &clientmocks.EnvIdentityClientMock{
+		GetRoleFunc: func(_ context.Context, roleID string) (*thundersvc.ThunderRole, error) {
+			return &thundersvc.ThunderRole{ID: roleID, OuID: "ou-env", Name: thundersvc.NativeAdministratorRoleName}, nil
+		},
+	}
+}
+
+func adminRoleController(envClient *clientmocks.EnvIdentityClientMock) AgentIdentityController {
+	resolver := &clientmocks.EnvThunderResolverMock{
+		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return envClient, nil
+		},
+	}
+	return NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{}, &repomocks.MCPProxyRepositoryMock{}, &repomocks.MCPProxyScopeRepositoryMock{})
+}
+
+// TestAgentIdentityGetRole_NativeAdministratorHidden proves the native
+// Administrator role is invisible through the agent-identity API: fetching it by
+// ID returns 404, consistent with it being filtered from the role listing.
+func TestAgentIdentityGetRole_NativeAdministratorHidden(t *testing.T) {
+	ctrl := adminRoleController(adminRoleEnvClient())
+
+	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", nil)
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	w := httptest.NewRecorder()
+
+	ctrl.GetRole(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestAgentIdentityUpdateRole_NativeAdministratorRejected proves the native
+// Administrator role cannot be updated through the agent-identity API — an
+// UpdateRole with scopes would otherwise strip its "system" permission and cut
+// off the amp-system-client. UpdateRoleFunc is nil, so any write panics.
+func TestAgentIdentityUpdateRole_NativeAdministratorRejected(t *testing.T) {
+	ctrl := adminRoleController(adminRoleEnvClient())
+
+	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/r-admin",
+		strings.NewReader(`{"name":"renamed","scopes":[]}`))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	req = req.WithContext(middleware.WithResolvedOrg(req.Context(), middleware.ResolvedOrg{OUID: "ou-org"}))
+	w := httptest.NewRecorder()
+
+	ctrl.UpdateRole(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestAgentIdentityDeleteRole_NativeAdministratorRejected proves the native
+// Administrator role cannot be deleted through the agent-identity API.
+// DeleteRoleFunc is nil, so any delete reaching Thunder panics.
+func TestAgentIdentityDeleteRole_NativeAdministratorRejected(t *testing.T) {
+	ctrl := adminRoleController(adminRoleEnvClient())
+
+	req := httptest.NewRequest(http.MethodDelete, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", nil)
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	w := httptest.NewRecorder()
+
+	ctrl.DeleteRole(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestAgentIdentityAddRoleAssignees_NativeAdministratorRejected proves agents
+// and groups cannot be assigned to the native Administrator role — the path by
+// which agent identities were acquiring the "system" scope.
+// AddRoleAssigneesFunc is nil, so any assignment reaching Thunder panics.
+func TestAgentIdentityAddRoleAssignees_NativeAdministratorRejected(t *testing.T) {
+	ctrl := adminRoleController(adminRoleEnvClient())
+
+	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/add",
+		strings.NewReader(`{"assignments":[{"id":"thunder-1","type":"agent"}]}`))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	w := httptest.NewRecorder()
+
+	ctrl.AddRoleAssignees(w, req)
+
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestAgentIdentityRemoveRoleAssignees_NativeAdministratorAllowed pins the
+// deliberate asymmetry with AddRoleAssignees: removal from the native
+// Administrator role stays open so an existing mis-assignment can be cleaned up
+// through the same API — the guard must never be applied symmetrically.
+func TestAgentIdentityRemoveRoleAssignees_NativeAdministratorAllowed(t *testing.T) {
+	removed := false
+	envClient := adminRoleEnvClient()
+	envClient.RemoveRoleAssigneesFunc = func(_ context.Context, roleID string, req thundersvc.RoleAssignmentsRequest) error {
+		removed = true
+		assert.Equal(t, "r-admin", roleID)
+		return nil
+	}
+	ctrl := adminRoleController(envClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/remove",
+		strings.NewReader(`{"assignments":[{"id":"thunder-1","type":"agent"}]}`))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	w := httptest.NewRecorder()
+
+	ctrl.RemoveRoleAssignees(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.True(t, removed, "cleanup removal must pass through to Thunder")
+}
