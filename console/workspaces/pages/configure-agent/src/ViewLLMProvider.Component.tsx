@@ -197,7 +197,7 @@ export const ViewLLMProviderComponent: React.FC = () => {
   const {
     data: config,
     isLoading: isLoadingConfig,
-    isError,
+    isError: isConfigError,
   } = useGetAgentModelConfig({
     orgName: orgId,
     projName: projectId,
@@ -205,8 +205,11 @@ export const ViewLLMProviderComponent: React.FC = () => {
     configId,
   });
 
-  const { environments, isLoading: isLoadingEnvironments } =
-    usePipelineEnvironmentsState(orgId, projectId);
+  const {
+    environments,
+    isLoading: isLoadingEnvironments,
+    isError: isEnvironmentsError,
+  } = usePipelineEnvironmentsState(orgId, projectId);
 
   const isLoading = isLoadingConfig || isLoadingEnvironments;
 
@@ -547,7 +550,22 @@ export const ViewLLMProviderComponent: React.FC = () => {
     );
   }
 
-  if (isError || !config) {
+  if (isEnvironmentsError) {
+    return (
+      <PageLayout
+        title="LLM Configuration"
+        backHref={backHref}
+        disableIcon
+        backLabel="Back to Configure"
+      >
+        <Alert severity="error" icon={<AlertTriangle size={18} />}>
+          Failed to load the project&apos;s deployment pipeline environments. Please try again.
+        </Alert>
+      </PageLayout>
+    );
+  }
+
+  if (isConfigError || !config) {
     return (
       <PageLayout
         title="LLM Configuration"

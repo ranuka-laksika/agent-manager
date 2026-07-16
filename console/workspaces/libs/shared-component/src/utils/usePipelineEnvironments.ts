@@ -95,41 +95,57 @@ export function orderPipelineEnvironments(
  * pipeline-scoped, promotion-ordered environment list.
  */
 export interface PipelineEnvironmentsState {
-    /** Pipeline-scoped, promotion-ordered environments. */
+    /** Pipeline-scoped, promotion-ordered environments. 
+     * Empty while loading or if any underlying query errored. */
     environments: Environment[];
     /** True while any of the underlying environment/project/pipeline queries are still loading. */
     isLoading: boolean;
+    /** True if the environments, project, or deployment pipelines query failed. */
+    isError: boolean;
 }
 
 /**
  * Like {@link usePipelineEnvironments} but also reports whether the underlying
- * environments/project/pipeline queries are still loading. Callers should hold
- * off rendering the environment list until {@link PipelineEnvironmentsState.isLoading}
- * is false: while the project/pipeline are still resolving, the pipeline scope
- * is unknown and the list falls back to *all* org environments, which would
- * otherwise flash before collapsing to the pipeline subset.
+ * environments/project/pipeline queries are still loading or have errored.
+ * Callers should hold off rendering the environment list until
+ * {@link PipelineEnvironmentsState.isLoading} is false: while the
+ * project/pipeline are still resolving, the pipeline scope is unknown and the
+ * list falls back to *all* org environments, which would otherwise flash
+ * before collapsing to the pipeline subset. If any query errors, the pipeline
+ * scope can never be determined, so `environments` is empty rather than
+ * silently falling back to the unscoped org-wide list.
  */
 export function usePipelineEnvironmentsState(
     orgId?: string,
     projectId?: string,
 ): PipelineEnvironmentsState {
-    const { data: environments, isLoading: isLoadingEnvironments } =
-        useListEnvironments({ orgName: orgId });
-    const { data: project, isLoading: isLoadingProject } = useGetProject({
-        orgName: orgId,
-        projName: projectId,
-    });
-    const { data: pipelinesData, isLoading: isLoadingPipelines } =
-        useListDeploymentPipelines({ orgName: orgId });
+    const {
+        data: environments,
+        isLoading: isLoadingEnvironments,
+        isError: isErrorEnvironments,
+    } = useListEnvironments({ orgName: orgId });
+    const {
+        data: project,
+        isLoading: isLoadingProject,
+        isError: isErrorProject,
+    } = useGetProject({ orgName: orgId, projName: projectId });
+    const {
+        data: pipelinesData,
+        isLoading: isLoadingPipelines,
+        isError: isErrorPipelines,
+    } = useListDeploymentPipelines({ orgName: orgId });
+
+    const isError = isErrorEnvironments || isErrorProject || isErrorPipelines;
 
     const ordered = useMemo(
-        () => orderPipelineEnvironments(environments, pipelinesData, project),
-        [environments, pipelinesData, project],
+        () => (isError ? [] : orderPipelineEnvironments(environments, pipelinesData, project)),
+        [environments, pipelinesData, project, isError],
     );
 
     return {
         environments: ordered,
         isLoading: isLoadingEnvironments || isLoadingProject || isLoadingPipelines,
+        isError,
     };
 }
 
