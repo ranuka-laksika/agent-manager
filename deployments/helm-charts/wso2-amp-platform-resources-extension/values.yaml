@@ -134,6 +134,11 @@ environment:
 apiPlatformGatewayVhost:
   host: gateway.localhost
   port: 19080
+  # Full override for the agent OTEL endpoint. When set, it replaces the
+  # "http://<env>-<org>.<host>:<port>/otel" template entirely — used on installs
+  # that front a single public gateway host on :443 (e.g. a VM install), where
+  # the per-env template does not apply. Empty = use the template above.
+  otelEndpointOverride: ""
 
 # Deployment Pipeline configuration
 deploymentPipeline:
