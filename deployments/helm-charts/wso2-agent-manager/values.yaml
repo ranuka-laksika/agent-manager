@@ -208,6 +208,8 @@ agentManagerService:
       # Secret containing the token instead.
       token: "root"
       existingSecret: ""
+      # Key to read from existingSecret. Applies ONLY when existingSecret is set;
+      # the chart-managed Secret always uses the fixed key "openbao-token".
       existingSecretKey: "openbao-token"
 
     # Workflow Plane OpenBao configuration (for Git Secrets)
@@ -220,6 +222,9 @@ agentManagerService:
       # For production, use existingSecret instead.
       token: "root"
       existingSecret: ""
+      # Key to read from existingSecret. Applies ONLY when existingSecret is set.
+      # The chart-managed Secret packs both OpenBao tokens into one Secret, so this
+      # token is stored there under the distinct key "workflow-plane-openbao-token".
       existingSecretKey: "openbao-token"
 
     # Agent resource limits — operator-configured upper bounds enforced on PUT /resource-configs
