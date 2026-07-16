@@ -855,7 +855,7 @@ func (c *identityController) ListRoles(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	roles, _, err := c.client.ListRoles(ctx, resolvedOrg.OUID, offset, limit)
+	roles, total, err := c.client.ListRoles(ctx, resolvedOrg.OUID, offset, limit)
 	if err != nil {
 		log.Error("ListRoles failed", "ouID", resolvedOrg.OUID, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list roles")
@@ -863,13 +863,14 @@ func (c *identityController) ListRoles(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// The OU-scoped ListRoles already restricts to the caller's OU and hides
-	// Thunder's native Administrator role (thundersvc.NativeAdministratorRoleName);
-	// only the display-only IsReadOnly flag is computed here.
+	// Thunder's native Administrator role (thundersvc.NativeAdministratorRoleName),
+	// so its total is the true post-filter count; only the display-only
+	// IsReadOnly flag is computed here.
 	for i := range roles {
 		roles[i].IsReadOnly = constants.IsPredefinedRole(roles[i].Name)
 	}
 
-	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles, "total": len(roles), "offset": 0, "limit": limit})
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles, "total": total, "offset": offset, "limit": limit})
 }
 
 func (c *identityController) GetRole(w http.ResponseWriter, r *http.Request) {
