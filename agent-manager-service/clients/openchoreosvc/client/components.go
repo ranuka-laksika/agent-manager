@@ -677,13 +677,16 @@ func (c *openChoreoClient) UpdateEnvResourceConfigs(ctx context.Context, ouID, p
 		componentTypeEnvOverrides["replicas"] = *req.Replicas
 	}
 
-	// Add resources if provided
+	// Add resources if provided — merge onto the existing override instead of
+	// replacing it wholesale, so a partial update (e.g. cpu only) doesn't drop a
+	// previously-set override for the untouched field (e.g. an existing memory limit).
 	if req.Resources != nil {
 		resourcesMap, err := structToMap(req.Resources)
 		if err != nil {
 			return fmt.Errorf("failed to convert resources to map: %w", err)
 		}
-		componentTypeEnvOverrides["resources"] = resourcesMap
+		existingResources, _ := componentTypeEnvOverrides["resources"].(map[string]interface{})
+		componentTypeEnvOverrides["resources"] = mergeResourceOverrides(existingResources, resourcesMap)
 	}
 
 	// Add autoscaling to componentTypeEnvOverrides if provided
@@ -823,6 +826,34 @@ func (c *openChoreoClient) GetEnvResourceConfigs(ctx context.Context, ouID, proj
 	return response, nil
 }
 
+// mergeResourceOverrides merges a new resources override (requests/limits) onto an
+// existing one field-by-field, so e.g. updating only cpu.requests doesn't wipe an
+// existing memory.limits override that the update didn't touch.
+func mergeResourceOverrides(existing, incoming map[string]interface{}) map[string]interface{} {
+	merged := map[string]interface{}{}
+	for _, key := range []string{"requests", "limits"} {
+		existingSub, _ := existing[key].(map[string]interface{})
+		incomingSub, hasIncoming := incoming[key].(map[string]interface{})
+
+		switch {
+		case hasIncoming && existingSub != nil:
+			sub := make(map[string]interface{}, len(existingSub)+len(incomingSub))
+			for k, v := range existingSub {
+				sub[k] = v
+			}
+			for k, v := range incomingSub {
+				sub[k] = v
+			}
+			merged[key] = sub
+		case hasIncoming:
+			merged[key] = incomingSub
+		case existingSub != nil:
+			merged[key] = existingSub
+		}
+	}
+	return merged
+}
+
 // structToMap converts a struct to map[string]interface{} using JSON marshaling
 func structToMap(v interface{}) (map[string]interface{}, error) {
 	data, err := json.Marshal(v)
@@ -887,13 +918,58 @@ func (c *openChoreoClient) getEnvConfigDefaultsFromComponentType(ctx context.Con
 		return nil, fmt.Errorf("empty response from get cluster component type")
 	}
 
-	if ctResp.JSON200.Spec == nil || ctResp.JSON200.Spec.EnvironmentConfigs == nil || ctResp.JSON200.Spec.EnvironmentConfigs.OpenAPIV3Schema == nil {
-		return response, nil
+	if ctResp.JSON200.Spec != nil && ctResp.JSON200.Spec.EnvironmentConfigs != nil && ctResp.JSON200.Spec.EnvironmentConfigs.OpenAPIV3Schema != nil {
+		// Extract defaults from schema (covers replicas/autoscaling, which the
+		// environmentConfigs schema declares defaults for).
+		applySchemaDefaults(response, *ctResp.JSON200.Spec.EnvironmentConfigs.OpenAPIV3Schema)
 	}
 
-	// Extract defaults from schema
-	applySchemaDefaults(response, *ctResp.JSON200.Spec.EnvironmentConfigs.OpenAPIV3Schema)
+	// The ComponentType template's resources fields fall back to the component's own
+	// baseline parameters (`parameters.resources.*`) at render time — the
+	// environmentConfigs schema declares no cpu/memory defaults, so relying on it alone
+	// (as above) always reports blank resources when no per-environment override
+	// exists. Overlay the component's actual baseline so this reports what the agent
+	// is really running with.
+	applyComponentResourceParameterDefaults(response.Resources, component.Spec.Parameters)
 	return response, nil
+}
+
+// applyComponentResourceParameterDefaults overlays the component's own baseline
+// resources (component.spec.parameters.resources, set at creation time from the
+// ComponentType's parameters schema) onto the response. This mirrors the
+// ComponentType template's `parameters.resources.*` render-time fallback.
+func applyComponentResourceParameterDefaults(resources *ResourceConfig, parameters *map[string]interface{}) {
+	if parameters == nil {
+		return
+	}
+	resourcesRaw, ok := (*parameters)["resources"]
+	if !ok {
+		return
+	}
+	data, err := json.Marshal(resourcesRaw)
+	if err != nil {
+		return
+	}
+	var baseline ResourceConfig
+	if err := json.Unmarshal(data, &baseline); err != nil {
+		return
+	}
+	if baseline.Requests != nil {
+		if baseline.Requests.CPU != "" {
+			resources.Requests.CPU = baseline.Requests.CPU
+		}
+		if baseline.Requests.Memory != "" {
+			resources.Requests.Memory = baseline.Requests.Memory
+		}
+	}
+	if baseline.Limits != nil {
+		if baseline.Limits.CPU != "" {
+			resources.Limits.CPU = baseline.Limits.CPU
+		}
+		if baseline.Limits.Memory != "" {
+			resources.Limits.Memory = baseline.Limits.Memory
+		}
+	}
 }
 
 // applySchemaDefaults extracts default values from OpenAPI V3 Schema and applies them to the response

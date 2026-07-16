@@ -239,6 +239,92 @@ func validateResourceMaxMemory(value *string, maxMemory string, fieldName string
 	return nil
 }
 
+// ValidateResourceRequestsWithinLimits ensures that once `requested` is merged onto
+// `current` (a partial update falls back to the agent's current effective value for
+// whichever side it didn't touch — the same fallback the ComponentType template
+// applies at render time), CPU/memory requests never exceed limits. Kubernetes
+// rejects a requests>limits pod spec at admission time, and that failure happens deep
+// in the sandbox/deployment controller — invisible to this API — so it must be caught
+// here, before anything is written to OpenChoreo.
+func ValidateResourceRequestsWithinLimits(requested spec.ResourceConfig, current *spec.ResourceConfig) error {
+	var currentRequests *spec.ResourceRequests
+	var currentLimits *spec.ResourceLimits
+	if current != nil {
+		currentRequests = current.Requests
+		currentLimits = current.Limits
+	}
+
+	cpuRequest := effectiveResourceField(requestCPU(requested.Requests), requestCPU(currentRequests))
+	memRequest := effectiveResourceField(requestMemory(requested.Requests), requestMemory(currentRequests))
+	cpuLimit := effectiveResourceField(limitCPU(requested.Limits), limitCPU(currentLimits))
+	memLimit := effectiveResourceField(limitMemory(requested.Limits), limitMemory(currentLimits))
+
+	if err := validateRequestWithinLimit(cpuRequest, cpuLimit, "CPU"); err != nil {
+		return err
+	}
+	if err := validateRequestWithinLimit(memRequest, memLimit, "memory"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requestCPU(r *spec.ResourceRequests) *string {
+	if r == nil {
+		return nil
+	}
+	return r.Cpu
+}
+
+func requestMemory(r *spec.ResourceRequests) *string {
+	if r == nil {
+		return nil
+	}
+	return r.Memory
+}
+
+func limitCPU(l *spec.ResourceLimits) *string {
+	if l == nil {
+		return nil
+	}
+	return l.Cpu
+}
+
+func limitMemory(l *spec.ResourceLimits) *string {
+	if l == nil {
+		return nil
+	}
+	return l.Memory
+}
+
+// effectiveResourceField returns the requested value if set, else the current value.
+func effectiveResourceField(requested, current *string) string {
+	if v := StrPointerAsStr(requested, ""); v != "" {
+		return v
+	}
+	return StrPointerAsStr(current, "")
+}
+
+func validateRequestWithinLimit(request, limit, fieldName string) error {
+	if request == "" || limit == "" {
+		// Nothing to compare; rendering will fall back to the ComponentType/component
+		// baseline for whichever side is still unresolved.
+		return nil
+	}
+	requestQty, err := resource.ParseQuantity(request)
+	if err != nil {
+		return fmt.Errorf("%w: %s request has invalid format %q: %v", ErrInvalidInput, fieldName, request, err)
+	}
+	limitQty, err := resource.ParseQuantity(limit)
+	if err != nil {
+		return fmt.Errorf("%w: %s limit has invalid format %q: %v", ErrInvalidInput, fieldName, limit, err)
+	}
+	if requestQty.Cmp(limitQty) > 0 {
+		return fmt.Errorf("%w: %s request (%s) must be less than or equal to %s limit (%s)",
+			ErrInvalidInput, fieldName, request, fieldName, limit)
+	}
+	return nil
+}
+
 func ValidateProjectUpdatePayload(payload spec.UpdateProjectRequest) error {
 	if err := ValidateResourceDisplayName(payload.DisplayName, "project"); err != nil {
 		return err

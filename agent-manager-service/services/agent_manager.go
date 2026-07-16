@@ -1772,6 +1772,19 @@ func (s *agentManagerService) UpdateAgentResourceConfigs(ctx context.Context, ou
 		return nil, translateEnvironmentError(err)
 	}
 
+	// Fetch the agent's current effective resource configuration so a partial update
+	// (e.g. requests-only, leaving limits untouched) can be validated against whatever
+	// stays in effect for the side it didn't touch.
+	currentConfigs, err := s.GetAgentResourceConfigs(ctx, ouID, projectName, agentName, environment)
+	if err != nil {
+		s.logger.Error("Failed to fetch current agent resource configurations", "agentName", agentName, "ouID", ouID, "projectName", projectName, "environment", environment, "error", err)
+		return nil, fmt.Errorf("failed to get current agent resource configurations: %w", err)
+	}
+	if err := utils.ValidateResourceRequestsWithinLimits(req.Resources, currentConfigs.Resources); err != nil {
+		s.logger.Error("Rejected agent resource configuration update", "agentName", agentName, "ouID", ouID, "projectName", projectName, "environment", environment, "error", err)
+		return nil, err
+	}
+
 	// Update agent resource configurations in OpenChoreo
 	updateReq := buildUpdateResourceConfigsRequest(req)
 	if err := s.ocClient.UpdateEnvResourceConfigs(ctx, ouID, projectName, agentName, environment, updateReq); err != nil {
