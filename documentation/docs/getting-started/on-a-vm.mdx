@@ -27,40 +27,60 @@ The simple installer exposes the platform over HTTPS using [sslip.io](https://ss
 
 ## Prerequisites
 
-You only need an SSH client to log into the VM; everything else runs on the VM.
-- **Git** to clone this repository and fetch the installer. This is the one tool you need *before* running the script (the script can't install what you use to download it). Most images have it; on a minimal one install it with `sudo apt-get update && sudo apt-get install -y git` (Debian/Ubuntu).
-- **Docker** is required; the whole stack runs on it (k3d runs the Kubernetes cluster as Docker containers, and Caddy runs as a container). If Docker isn't already installed, the script installs it for you, along with k3d, kubectl, helm, and lsof.
-- A Linux VM with a **static (reserved) public IP** and SSH access (sudo). The install derives every hostname, TLS certificate, and OAuth issuer from the IP (`*.amp.<IP>.sslip.io`), so a **changing IP breaks the install**, and stopping the VM (for example to resize its disk) releases an ephemeral IP. Reserve the address before installing. If the IP ever changes, reinstall against the new IP.
+You need an SSH client to log into the VM. On the VM itself, install the tools below **before** running the installer — it **verifies** they are present and exits with install hints if any are missing; it does **not** install host tooling for you. The whole stack runs on Docker: k3d runs the Kubernetes cluster as Docker containers, and Caddy runs as a container.
+
+| Tool | Version | Purpose |
+| --- | --- | --- |
+| [Docker](https://docs.docker.com/engine/install/) | v26+ (8 GB RAM, 4 CPU) | Container runtime |
+| [k3d](https://k3d.io/#installation) | v5.8+ | Local Kubernetes cluster |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) | v1.33+ | Kubernetes CLI |
+| [Helm](https://helm.sh/docs/intro/install/) | v3.12+ | Package manager |
+
+`curl` and `lsof` are also required — usually preinstalled, but on a minimal image install them with your OS package manager (for example `sudo apt-get install -y curl lsof`).
+
+Verify everything is installed:
+
+```bash
+docker --version
+k3d --version
+kubectl version --client
+helm version --short
+```
+
+Verify the Docker daemon is running:
+
+```bash
+docker info > /dev/null
+```
+
+The VM also needs:
+- A **static (reserved) public IP** and SSH access (sudo). The install derives every hostname, TLS certificate, and OAuth issuer from the IP (`*.amp.<IP>.sslip.io`), so a **changing IP breaks the install**, and stopping the VM (for example to resize its disk) releases an ephemeral IP. Reserve the address before installing. If the IP ever changes, reinstall against the new IP.
 - **At least 50 GB of disk.** Building and running agents pushes the in-cluster image store past 13 GB; on a smaller disk the node hits `DiskPressure`, which evicts pods and can take cluster DNS down mid-build.
-- **At least 4 vCPUs and 8 GB of RAM** to run the full k3d + OpenChoreo + Agent Manager stack comfortably.
 - **Inbound `443/tcp` open** in the cloud security group / firewall, and only 443. Certificates issue via the TLS-ALPN-01 ACME challenge, which runs inside the `:443` TLS handshake, so no inbound port 80 is ever needed. The `:443` exposure must be **TCP passthrough** (not a TLS-terminating load balancer in front), since the challenge happens inside the handshake.
 
 ## Install
 
-SSH into the VM, get the installer, and run it with `sudo`:
+SSH into the VM and run the one-command installer with `sudo`. It downloads a single versioned install bundle (no repository clone) and runs from it:
 
 ```bash
-# on the VM
-git clone https://github.com/wso2/agent-manager.git
-cd agent-manager/deployments/vm
-git checkout tags/amp/v0.0.0-dev
-
-sudo ./install-vm.sh \
-  --host <VM_PUBLIC_IP> \
-  --version 0.0.0-dev \
-  --email you@example.com
+# on the VM (Docker, k3d, kubectl, helm already installed)
+curl -fsSL https://github.com/wso2/agent-manager/releases/download/amp/v0.0.0-dev/bootstrap.sh \
+  | sudo bash -s -- simple \
+      --host <VM_PUBLIC_IP> \
+      --version 0.0.0-dev \
+      --email you@example.com
 ```
 
 Pass `--host` the VM's **public** IPv4 address. A cloud VM usually can't read its own public IP (it's NAT'd behind the address you used to SSH in), so the installer needs it to build the `*.amp.<IP>.sslip.io` hostnames.
 
-The installer runs in two phases: bootstrap (Docker + tools + firewall) and the platform install + Caddy startup. Allow 8-15 minutes. It needs `sudo` because it installs Docker, opens the firewall, and creates the cluster.
+The installer runs in two phases: preflight (verify the required tools + open the firewall) and the platform install + Caddy startup. Allow 8-15 minutes. It needs `sudo` because it opens the firewall and creates the cluster. Downloading one bundle instead of cloning the repo and fetching each file separately avoids the GitHub rate-limiting that can throttle a per-file install.
 
 ### Options
 
 | Flag | Default | Purpose |
 |---|---|---|
 | `--host` | _(required)_ | The VM's public IPv4 address |
-| `--version` | _(required)_ | Agent Manager release to install; use the same `amp/v*` tag you checked out above |
+| `--version` | _(required)_ | Agent Manager release to install; an existing `amp/v*` [release](https://github.com/wso2/agent-manager/releases) (the `bootstrap.sh` URL embeds the same version) |
 | `--email` | _(none)_ | ACME contact for expiry notices |
 | `--no-external-gateways` | off | Drop the gateway control-plane endpoint if you won't connect external gateways |
 
@@ -181,7 +201,7 @@ If you just want a quick IP-based demo with automatic TLS, prefer the **Simple**
 The compute, disk, and tooling prerequisites are:
 
 - **Git** to clone this repository and fetch the installer. This is the one tool you need *before* running the script (the script can't install what you use to download it); on a minimal image install it with `sudo apt-get update && sudo apt-get install -y git` (Debian/Ubuntu).
-- **Docker.** The whole stack runs on it. If it isn't already installed, the script installs it for you, along with k3d, kubectl, helm, lsof, and openssl.
+- **Docker, k3d, kubectl, Helm, curl, `lsof`, and `openssl`** must already be installed on the VM (the whole stack runs on Docker: k3d runs the cluster as containers and Caddy runs as a container). The installer **verifies** these are present and exits with install hints if any are missing — it does **not** install them for you.
 - A **Linux VM** with at least **4 vCPUs**, **8 GB RAM**, and **50 GB of disk**, with SSH access (sudo).
 
 In addition, the advanced installer needs:

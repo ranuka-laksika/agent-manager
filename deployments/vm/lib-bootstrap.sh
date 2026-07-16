@@ -6,46 +6,56 @@
 command -v log >/dev/null 2>&1 || log() { printf '\033[0;34m[bootstrap]\033[0m %s\n' "$*"; }
 command -v die >/dev/null 2>&1 || die() { printf '\033[0;31m[bootstrap] ERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
-ensure_docker() {
-  if ! command -v docker >/dev/null 2>&1; then
-    log "Installing Docker via get.docker.com"
-    curl -fsSL https://get.docker.com | sh
-  else
-    log "Docker CLI present"
-  fi
-  systemctl enable --now docker
-  local _
-  for _ in $(seq 1 15); do docker info >/dev/null 2>&1 && return; sleep 2; done
-  die "Docker daemon did not become ready"
+# The VM installer NO LONGER installs host tooling. Piping remote installers
+# (get.docker.com, k3d, dl.k8s.io, get-helm-3) added several unauthenticated
+# GitHub/network round-trips that get rate-limited (429) behind shared NAT and
+# silently mutated host state. Instead we verify the tools are already present and
+# fail with actionable hints — mirroring OpenChoreo's k3d installer, which also only
+# checks (command -v) for docker/k3d/kubectl/helm.
+
+# _tool_hint <tool> — print a one-line "how to install" hint for a required tool.
+_tool_hint() {
+  case "$1" in
+    docker)  echo "Docker Engine — https://docs.docker.com/engine/install/" ;;
+    k3d)     echo "k3d — https://k3d.io/#installation" ;;
+    kubectl) echo "kubectl — https://kubernetes.io/docs/tasks/tools/#kubectl" ;;
+    helm)    echo "Helm 3 — https://helm.sh/docs/intro/install/" ;;
+    curl)    echo "curl — install via your OS package manager (e.g. apt-get install -y curl)" ;;
+    lsof)    echo "lsof — install via your OS package manager (e.g. apt-get install -y lsof)" ;;
+    openssl) echo "OpenSSL — install via your OS package manager (e.g. apt-get install -y openssl)" ;;
+    *)       echo "$1 — install via your OS package manager" ;;
+  esac
 }
 
-ensure_prerequisites() {
-  local arch; arch="$(dpkg --print-architecture)"   # amd64 | arm64
-  local pkgs=()
-  command -v curl >/dev/null 2>&1 || pkgs+=(curl)
-  command -v lsof >/dev/null 2>&1 || pkgs+=(lsof)
-  command -v openssl >/dev/null 2>&1 || pkgs+=(openssl)
-  if (( ${#pkgs[@]} )); then
-    log "Installing base packages: ${pkgs[*]}"
-    apt-get update -qq && apt-get install -y -qq "${pkgs[@]}"
+# verify_prerequisites [extra-tool ...] — confirm the required host tools are present
+# (and the Docker daemon is reachable) BEFORE any cluster work. Core set:
+# docker/k3d/kubectl/helm/curl; callers may append extras (e.g. openssl). All missing
+# tools are reported together with install hints, then the installer exits non-zero.
+verify_prerequisites() {
+  # lsof is required by the wrapped quick-start installer (install.sh port checks),
+  # so include it here to fail fast in this friendly preflight rather than deep inside.
+  local -a required=(docker k3d kubectl helm curl lsof) missing=()
+  required+=("$@")
+  local t
+  for t in "${required[@]}"; do
+    command -v "$t" >/dev/null 2>&1 || missing+=("$t")
+  done
+
+  if (( ${#missing[@]} )); then
+    log "Missing required tools: ${missing[*]}"
+    log "This installer does not install host tooling — install these and re-run:"
+    for t in "${missing[@]}"; do
+      printf '    - %s\n' "$(_tool_hint "$t")" >&2
+    done
+    die "prerequisites not met (${#missing[@]} missing) — install the tools above first"
   fi
 
-  ensure_docker
+  # Docker present but the daemon may be down or not permitted for this user.
+  if ! docker info >/dev/null 2>&1; then
+    die "Docker is installed but its daemon is not reachable — start it (e.g. 'sudo systemctl enable --now docker') and ensure this user can run it, then re-run"
+  fi
 
-  if ! command -v k3d >/dev/null 2>&1; then
-    log "Installing k3d"
-    curl -fsSL https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-  fi
-  if ! command -v kubectl >/dev/null 2>&1; then
-    log "Installing kubectl (${arch})"
-    local kver; kver="$(curl -fsSL https://dl.k8s.io/release/stable.txt)"
-    curl -fsSLo /usr/local/bin/kubectl "https://dl.k8s.io/release/${kver}/bin/linux/${arch}/kubectl"
-    chmod +x /usr/local/bin/kubectl
-  fi
-  if ! command -v helm >/dev/null 2>&1; then
-    log "Installing helm"
-    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-  fi
+  log "Prerequisites present: ${required[*]}"
 }
 
 # ensure_firewall <port> — open the given inbound TCP port on the OS firewall.

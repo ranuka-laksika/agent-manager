@@ -14,7 +14,9 @@
 # TLS is always Let's Encrypt, 443-only: certificates issue via the TLS-ALPN-01
 # challenge inside the :443 handshake, so only inbound 443 is required (no port
 # 80). The public :443 must reach the VM as raw TCP (no TLS-terminating proxy in
-# front). Docker, k3d, kubectl, helm and lsof are installed automatically if missing.
+# front). Docker, k3d, kubectl, helm, curl and lsof must already be installed on the
+# VM — the installer verifies they are present and exits with install hints if any
+# are missing.
 set -euo pipefail
 
 VM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -142,8 +144,8 @@ run_install() {
   start_caddy
 }
 
-log "Phase 1/2: bootstrap (Docker + tools + firewall)"
-ensure_prerequisites
+log "Phase 1/2: preflight (verify tools + firewall)"
+verify_prerequisites
 ensure_inotify_limits
 ensure_firewall 443
 ensure_disk
