@@ -35,6 +35,12 @@ data:
   KEY_MANAGER_JWKS_URL: {{ .Values.agentManagerService.config.keyManager.jwksUrl | quote }}                                         
   SERVER_PUBLIC_URL: {{ .Values.agentManagerService.config.serverPublicURL | default "" | quote }}
   OAUTH_AUTHORIZATION_SERVERS: {{ .Values.agentManagerService.config.oauthAuthorizationServers | default "" | quote }}
+  # Domain suffix env-Thunder's developer-facing hostnames are built from:
+  # "<org>-<env>.thunder.<THUNDER_HOST_BASE_DOMAIN>". Must match the value the
+  # deployment-wide provisioning uses, or the identity-provider endpoints the API
+  # reports diverge from the actual env-Thunder hosts (e.g. amp.localhost vs the
+  # public sslip.io/custom domain on a VM install).
+  THUNDER_HOST_BASE_DOMAIN: {{ .Values.agentManagerService.config.thunderHostBaseDomain | default "amp.localhost" | quote }}
   OAUTH_SCOPES_SUPPORTED: {{ .Values.agentManagerService.config.oauthScopesSupported | default "" | quote }}
   IS_ON_PREM_DEPLOYMENT: {{ .Values.agentManagerService.config.isOnPremDeployment | quote }}
   IDP_TOKEN_URL: {{ .Values.agentManagerService.config.oidc.tokenUrl | quote }}
