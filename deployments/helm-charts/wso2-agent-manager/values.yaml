@@ -538,6 +538,12 @@ rbac:
     - apiGroups: [""]
       resources: ["secrets"]
       verbs: ["get", "create", "patch"]
+    # The tls-certs hook also publishes the gateway-management CA as a ConfigMap
+    # (amp-api-gateway-mgmt-ca) for the control-plane gateway's BackendTLSPolicy;
+    # kubectl apply needs get + create/patch on configmaps.
+    - apiGroups: [""]
+      resources: ["configmaps"]
+      verbs: ["get", "create", "patch"]
 
 # ServiceAccount used only by the pre-install/pre-upgrade hook Jobs.
 # This is the sole subject of the scoped RBAC Role. The SA and the
