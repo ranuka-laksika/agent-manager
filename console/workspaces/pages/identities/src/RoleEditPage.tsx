@@ -548,48 +548,43 @@ export const RoleEditPage: React.FC = () => {
                     No permissions assigned yet.
                   </Typography>
                 ) : (
-                  <Stack spacing={2}>
-                    {catalogGroups
-                      .filter(({ permissions }) =>
-                        permissions.some((p) => selectedNames.has(p.name)),
-                      )
-                      .map(({ resource, permissions }) => (
-                        <Box key={resource}>
-                          <Typography
-                            variant="caption"
-                            fontWeight={600}
-                            color="text.secondary"
-                            sx={{
-                              textTransform: "uppercase",
-                              letterSpacing: 0.5,
-                            }}
-                          >
-                            {resource}
-                          </Typography>
-                          <Stack
-                            direction="row"
-                            flexWrap="wrap"
-                            gap={1}
-                            mt={0.5}
-                          >
-                            {permissions
+                  <ListingTable.Container>
+                    <ListingTable>
+                      <ListingTable.Head>
+                        <ListingTable.Row>
+                          <ListingTable.Cell>Resource</ListingTable.Cell>
+                          <ListingTable.Cell>Permission</ListingTable.Cell>
+                          {!isPermissionsReadOnly && <ListingTable.Cell />}
+                        </ListingTable.Row>
+                      </ListingTable.Head>
+                      <ListingTable.Body>
+                        {catalogGroups
+                          .flatMap(({ resource, permissions }) =>
+                            permissions
                               .filter((p) => selectedNames.has(p.name))
-                              .map((p) => (
-                                <Chip
-                                  key={p.name}
-                                  label={permLabel(p)}
-                                  size="small"
-                                  onDelete={
-                                    !isPermissionsReadOnly
-                                      ? () => handleRemovePermission(p.name)
-                                      : undefined
-                                  }
-                                />
-                              ))}
-                          </Stack>
-                        </Box>
-                      ))}
-                  </Stack>
+                              .map((p) => ({ resource, permission: p })),
+                          )
+                          .map(({ resource, permission: p }) => (
+                            <ListingTable.Row key={p.name}>
+                              <ListingTable.Cell>{resource}</ListingTable.Cell>
+                              <ListingTable.Cell>{permLabel(p)}</ListingTable.Cell>
+                              {!isPermissionsReadOnly && (
+                                <ListingTable.Cell align="right">
+                                  <Tooltip title="Remove permission">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleRemovePermission(p.name)}
+                                    >
+                                      <Trash size={16} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </ListingTable.Cell>
+                              )}
+                            </ListingTable.Row>
+                          ))}
+                      </ListingTable.Body>
+                    </ListingTable>
+                  </ListingTable.Container>
                 )}
               </Box>
             </>

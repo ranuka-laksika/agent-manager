@@ -16,7 +16,16 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { Alert, Box, Chip, Form, Stack, Tab, Tabs, Typography } from "@wso2/oxygen-ui";
+import {
+  Alert,
+  Box,
+  Form,
+  ListingTable,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from "@wso2/oxygen-ui";
 import { generatePath, useParams } from "react-router-dom";
 import {
   useGetAgent,
@@ -33,20 +42,24 @@ import {
 
 type TabId = "roles" | "groups";
 
-type ChipItem = { id: string; name: string };
+type TableItem = { id: string; name: string; description?: string };
 
-// Shared shape for the two read-only tabs below: a header, description, and
-// a chip list of assignments (or an empty-state message).
-function ReadOnlyChipTab({
+// Shared shape for the three read-only tabs below: a header, description, and
+// a table of assignments (or an empty-state message).
+function ReadOnlyItemsTable({
   header,
   description,
   items,
   emptyText,
+  nameHeader,
+  showDescriptionColumn = true,
 }: {
   header: string;
   description: React.ReactNode;
-  items: ChipItem[];
+  items: TableItem[];
   emptyText: string;
+  nameHeader: string;
+  showDescriptionColumn?: boolean;
 }) {
   return (
     <>
@@ -61,11 +74,28 @@ function ReadOnlyChipTab({
             {emptyText}
           </Typography>
         ) : (
-          <Stack direction="row" flexWrap="wrap" gap={1}>
-            {items.map((item) => (
-              <Chip key={item.id} label={item.name} size="small" />
-            ))}
-          </Stack>
+          <ListingTable.Container>
+            <ListingTable>
+              <ListingTable.Head>
+                <ListingTable.Row>
+                  <ListingTable.Cell>{nameHeader}</ListingTable.Cell>
+                  {showDescriptionColumn && (
+                    <ListingTable.Cell>Description</ListingTable.Cell>
+                  )}
+                </ListingTable.Row>
+              </ListingTable.Head>
+              <ListingTable.Body>
+                {items.map((item) => (
+                  <ListingTable.Row key={item.id}>
+                    <ListingTable.Cell>{item.name}</ListingTable.Cell>
+                    {showDescriptionColumn && (
+                      <ListingTable.Cell>{item.description ?? "-"}</ListingTable.Cell>
+                    )}
+                  </ListingTable.Row>
+                ))}
+              </ListingTable.Body>
+            </ListingTable>
+          </ListingTable.Container>
         )}
       </Box>
     </>
@@ -153,7 +183,7 @@ export const AgentDetailPage: React.FC = () => {
           </Tabs>
 
           {activeTab === "roles" && (
-            <ReadOnlyChipTab
+            <ReadOnlyItemsTable
               header="Assigned Roles"
               description={
                 <>
@@ -162,12 +192,13 @@ export const AgentDetailPage: React.FC = () => {
                 </>
               }
               items={roles}
+              nameHeader="Name"
               emptyText="No roles assigned to this agent."
             />
           )}
 
           {activeTab === "groups" && (
-            <ReadOnlyChipTab
+            <ReadOnlyItemsTable
               header="Group Memberships"
               description={
                 <>
@@ -176,6 +207,7 @@ export const AgentDetailPage: React.FC = () => {
                 </>
               }
               items={groups}
+              nameHeader="Name"
               emptyText="This agent is not a member of any groups."
             />
           )}
