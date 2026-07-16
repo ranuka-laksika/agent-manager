@@ -23,13 +23,17 @@ export type IsolationTierValue = "runc" | "gvisor" | "kata";
 
 export interface IsolationTierMeta {
   value: IsolationTierValue;
-  /** Sandboxing tier rank: 1 (runc) → 3 (kata). */
+  /** Sandbox level rank: 1 (runc) → 3 (kata). */
   tier: 1 | 2 | 3;
-  /** Human name of the underlying runtime, e.g. "gVisor". */
+  /**
+   * Human name of the underlying runtime, e.g. "gVisor". Only surfaced at
+   * environment creation — everywhere else (chips, tooltips, badges) use the
+   * runtime-agnostic shortLabel/fullLabel.
+   */
   runtimeLabel: string;
-  /** Compact label for chips/columns, e.g. "Sandboxing T2". */
+  /** Compact label for chips/columns, e.g. "Sandbox L2". */
   shortLabel: string;
-  /** Full label for tooltips, e.g. "Sandboxing Tier 2 — gVisor". */
+  /** Full label for tooltips, e.g. "Sandbox Level 2". */
   fullLabel: string;
   color: "default" | "info" | "success";
   /** Theme color path for tinting the bare shield icon, e.g. "info.main". */
@@ -42,8 +46,8 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     value: "runc",
     tier: 1,
     runtimeLabel: "runc (default)",
-    shortLabel: "Sandboxing T1",
-    fullLabel: "Sandboxing Tier 1 — runc (default)",
+    shortLabel: "Sandbox L1",
+    fullLabel: "Sandbox Level 1",
     color: "default",
     iconColor: "text.secondary",
     icon: Shield,
@@ -52,8 +56,8 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     value: "gvisor",
     tier: 2,
     runtimeLabel: "gVisor",
-    shortLabel: "Sandboxing T2",
-    fullLabel: "Sandboxing Tier 2 — gVisor",
+    shortLabel: "Sandbox L2",
+    fullLabel: "Sandbox Level 2",
     color: "info",
     iconColor: "info.main",
     icon: ShieldPlus,
@@ -62,8 +66,8 @@ const TIER_META: Record<IsolationTierValue, IsolationTierMeta> = {
     value: "kata",
     tier: 3,
     runtimeLabel: "Kata Containers",
-    shortLabel: "Sandboxing T3",
-    fullLabel: "Sandboxing Tier 3 — Kata Containers",
+    shortLabel: "Sandbox L3",
+    fullLabel: "Sandbox Level 3",
     color: "success",
     iconColor: "success.main",
     icon: ShieldCheck,
@@ -81,7 +85,7 @@ interface IsolationTierBadgeProps {
 }
 
 /**
- * Bare shield icon with a "Sandboxing Tier N — <runtime>" tooltip.
+ * Bare shield icon with a "Sandbox Level N" tooltip.
  * Used next to environment names where a chip would be too heavy.
  */
 export function IsolationTierBadge({ tier, size = 18 }: IsolationTierBadgeProps) {
@@ -101,14 +105,13 @@ interface IsolationTierChipProps {
 }
 
 /**
- * "Sandboxing TN" chip with the tier's shield icon; the tooltip names the
- * concrete runtime (runc / gVisor / Kata Containers).
+ * "Sandbox LN" chip with the tier's shield icon and a "Sandbox Level N" tooltip.
  */
 export function IsolationTierChip({ tier }: IsolationTierChipProps) {
   const meta = getIsolationTierMeta(tier);
   const IconComponent = meta.icon;
   return (
-    <Tooltip title={meta.runtimeLabel}>
+    <Tooltip title={meta.fullLabel}>
       <Chip
         icon={<IconComponent size={14} />}
         label={meta.shortLabel}

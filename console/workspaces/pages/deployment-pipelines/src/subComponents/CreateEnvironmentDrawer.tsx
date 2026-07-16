@@ -69,10 +69,10 @@ const ISOLATION_TIER_OPTIONS: {
   docsUrl?: string;
   docsLabel?: string;
 }[] = [
-  { value: "runc", label: "Sandboxing T1 (runc)" },
+  { value: "runc", label: "Sandbox Level 1 — runc (default)" },
   {
     value: "gvisor",
-    label: "Sandboxing T2 (gVisor)",
+    label: "Sandbox Level 2 — gVisor",
     warning:
       "gVisor environments need a dedicated x86_64 node with the gVisor (runsc) runtime installed before agents can be deployed. Set up the node first — see the ",
     docsUrl: GVISOR_ISOLATION_DOCS_URL,
@@ -80,7 +80,7 @@ const ISOLATION_TIER_OPTIONS: {
   },
   {
     value: "kata",
-    label: "Sandboxing T3 (Kata Containers)",
+    label: "Sandbox Level 3 — Kata Containers",
     warning:
       "Kata environments need a dedicated node with KVM support (nested virtualization) and the Kata runtime installed before agents can be deployed. Set up the node first — see the ",
     docsUrl: KATA_ISOLATION_DOCS_URL,
