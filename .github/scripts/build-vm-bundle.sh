@@ -34,5 +34,7 @@ cp deployments/vm/bootstrap.sh "${OUT_DIR}/bootstrap.sh"
 
 echo "✅ Built VM install bundle: $BUNDLE"
 echo "   Contents (top level):"
-tar -tzf "$BUNDLE" | sed 's/^/     /' | head -n 20
+# head closes the pipe after 20 lines; under `set -o pipefail` the SIGPIPE tar/sed
+# then take would fail the build, so cap first and swallow the expected broken pipe.
+tar -tzf "$BUNDLE" | head -n 20 | sed 's/^/     /' || true
 echo "✅ Copied bootstrap.sh: ${OUT_DIR}/bootstrap.sh"

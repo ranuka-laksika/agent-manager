@@ -201,7 +201,7 @@ If you just want a quick IP-based demo with automatic TLS, prefer the **Simple**
 The compute, disk, and tooling prerequisites are:
 
 - **Git** to clone this repository and fetch the installer. This is the one tool you need *before* running the script (the script can't install what you use to download it); on a minimal image install it with `sudo apt-get update && sudo apt-get install -y git` (Debian/Ubuntu).
-- **Docker.** The whole stack runs on it. If it isn't already installed, the script installs it for you, along with k3d, kubectl, helm, lsof, and openssl.
+- **Docker, k3d, kubectl, Helm, curl, `lsof`, and `openssl`** must already be installed on the VM (the whole stack runs on Docker: k3d runs the cluster as containers and Caddy runs as a container). The installer **verifies** these are present and exits with install hints if any are missing — it does **not** install them for you.
 - A **Linux VM** with at least **4 vCPUs**, **8 GB RAM**, and **50 GB of disk**, with SSH access (sudo).
 
 In addition, the advanced installer needs:

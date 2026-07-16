@@ -81,5 +81,6 @@ esac
 [[ -f "$installer" ]] || die "installer not found in bundle: ${installer}"
 
 log "Running ${MODE} installer from the bundle"
-# Preserve the invoker's working directory so a relative --config path still resolves.
-exec bash "$installer" "${args[@]}"
+# Run as a child (not exec) so the EXIT trap still fires and cleans up $WORKDIR; the
+# child inherits the invoker's working directory, so a relative --config path resolves.
+bash "$installer" "${args[@]}"
