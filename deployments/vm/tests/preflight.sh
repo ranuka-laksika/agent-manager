@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Cert/DNS pre-flight tests for lib-advanced.sh. Generates throwaway certs with openssl.
-# Run: bash deployments/vm/tests/preflight.sh
+# Pre-flight / config tests for the advanced VM installer: config validation
+# (lib-advanced.sh), the cert-manager DNS-01 renderers (lib-certmanager.sh), and the
+# advisory DNS check. Run: bash deployments/vm/tests/preflight.sh
 # AMP_HOST_*/DOMAIN_BASE/AMP_AGENTS_BASE are consumed by sourced lib functions; the
-# source boundary hides that from shellcheck, so disable the unused-var warning. The
-# _resolve_host stubs are invoked indirectly by validate_dns (SC2329).
+# source boundary hides that from shellcheck. _resolve_host stubs are invoked indirectly.
 # shellcheck disable=SC2034,SC2329
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -11,25 +11,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../lib-advanced.sh"
 # shellcheck source=../lib-vm.sh disable=SC1091
 source "${SCRIPT_DIR}/../lib-vm.sh"
-# shellcheck source=../lib-tls.sh disable=SC1091
-source "${SCRIPT_DIR}/../lib-tls.sh"
+# shellcheck source=../lib-certmanager.sh disable=SC1091
+source "${SCRIPT_DIR}/../lib-certmanager.sh"
 
 FAILLOG="$(mktemp)"
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP" "$FAILLOG"' EXIT
+trap 'rm -f "$FAILLOG"' EXIT
 assert_eq() {
   local label="$1" expected="$2" actual="$3"
   if [[ "$expected" == "$actual" ]]; then printf 'ok   - %s\n' "$label"
   else printf 'FAIL - %s\n      expected: %q\n      actual:   %q\n' "$label" "$expected" "$actual"; echo 1 >>"$FAILLOG"; fi
-}
-
-# gen_cert <out-prefix> <days> <san-csv> — self-signed cert/key with the given SANs.
-gen_cert() {
-  local out="$1" days="$2" sans="$3" san_arg
-  san_arg="DNS:${sans//,/,DNS:}"
-  openssl req -x509 -newkey rsa:2048 -nodes -days "$days" \
-    -keyout "${out}.key" -out "${out}.crt" -subj "/CN=test" \
-    -addext "subjectAltName=${san_arg}" >/dev/null 2>&1
 }
 
 DOMAIN_BASE=amp.mycompany.com
@@ -41,92 +31,61 @@ AMP_HOST_OBSERVER=observer.amp.mycompany.com
 AMP_HOST_GATEWAY=gateway.amp.mycompany.com
 AMP_HOST_CP=cp.amp.mycompany.com
 
-# Good cert: wildcard for services + wildcard for agents.
-gen_cert "$TMP/good" 365 "*.amp.mycompany.com,*.agents.amp.mycompany.com"
-validate_cert "$TMP/good.crt" "$TMP/good.key"; rc=$?
-assert_eq "good cert validates rc=0" "0" "$rc"
+# --- cert_dns_names: fixed hosts + the two dynamic wildcards ---
+sans="$(cert_dns_names)"
+assert_eq "cert SANs include console"          "yes" "$(grep -qxF 'console.amp.mycompany.com' <<<"$sans" && echo yes || echo no)"
+assert_eq "cert SANs include cp (external gw)" "yes" "$(grep -qxF 'cp.amp.mycompany.com' <<<"$sans" && echo yes || echo no)"
+assert_eq "cert SANs include agents wildcard"  "yes" "$(grep -qxF '*.agents.amp.mycompany.com' <<<"$sans" && echo yes || echo no)"
+assert_eq "cert SANs include env-Thunder wild" "yes" "$(grep -qxF '*.thunder.amp.mycompany.com' <<<"$sans" && echo yes || echo no)"
+# CP omitted when external gateways are off.
+AMP_HOST_CP="" sans_nocp="$(AMP_HOST_CP="" cert_dns_names)"
+assert_eq "cert SANs omit cp when unset"       "no"  "$(grep -qxF 'cp.amp.mycompany.com' <<<"$sans_nocp" && echo yes || echo no)"
 
-# Missing agents SAN: must fail and name the agents wildcard.
-gen_cert "$TMP/noagents" 365 "*.amp.mycompany.com"
-validate_cert "$TMP/noagents.crt" "$TMP/noagents.key"; rc=$?
-assert_eq "missing agents SAN rc=1" "1" "$rc"
-assert_eq "names agents wildcard" "yes" \
-  "$(printf '%s\n' "${CERT_ERRORS[@]}" | grep -qF '*.agents.amp.mycompany.com' && echo yes || echo no)"
+# --- validate_dns01_config: provider + credential presence (appends to CONFIG_ERRORS) ---
+run_validate() { CONFIG_ERRORS=(); validate_dns01_config; echo "${#CONFIG_ERRORS[@]}"; }
 
-# Mismatched key: cert from one keypair, key from another.
-gen_cert "$TMP/other" 365 "*.amp.mycompany.com,*.agents.amp.mycompany.com"
-validate_cert "$TMP/good.crt" "$TMP/other.key"; rc=$?
-assert_eq "key mismatch rc=1" "1" "$rc"
+n="$(DNS_PROVIDER=cloudflare CLOUDFLARE_API_TOKEN=tok run_validate)"
+assert_eq "cloudflare with token: 0 errors" "0" "$n"
+n="$(DNS_PROVIDER=cloudflare run_validate)"                # token missing
+assert_eq "cloudflare without token: error" "1" "$n"
+n="$(DNS_PROVIDER=route53 AWS_ACCESS_KEY_ID=a AWS_SECRET_ACCESS_KEY=s AWS_REGION=us-east-1 run_validate)"
+assert_eq "route53 with all creds: 0 errors" "0" "$n"
+n="$(DNS_PROVIDER=route53 AWS_ACCESS_KEY_ID=a run_validate)"   # 2 missing
+assert_eq "route53 missing creds: 2 errors" "2" "$n"
+n="$(DNS_PROVIDER=bogus run_validate)"
+assert_eq "unknown provider: error" "1" "$n"
 
-# EC cert/key pair: the public-key comparison must work for non-RSA keys too
-# (the old RSA-only modulus check would false-fail here).
-openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -days 365 \
-  -keyout "$TMP/ec.key" -out "$TMP/ec.crt" -subj "/CN=test" \
-  -addext "subjectAltName=DNS:*.amp.mycompany.com,DNS:*.agents.amp.mycompany.com" >/dev/null 2>&1
-validate_cert "$TMP/ec.crt" "$TMP/ec.key"; rc=$?
-assert_eq "EC cert/key validates rc=0" "0" "$rc"
+# --- render_acme_clusterissuer emits the right provider solver block ---
+issuer_cf="$(DNS_PROVIDER=cloudflare ACME_EMAIL=o@x.com render_acme_clusterissuer amp-acme amp-creds)"
+assert_eq "cloudflare issuer has cloudflare solver" "yes" "$(grep -q 'cloudflare:' <<<"$issuer_cf" && echo yes || echo no)"
+assert_eq "cloudflare issuer references cred secret" "yes" "$(grep -q 'name: amp-creds' <<<"$issuer_cf" && echo yes || echo no)"
+issuer_r53="$(DNS_PROVIDER=route53 ACME_EMAIL=o@x.com AWS_REGION=us-east-1 AWS_ACCESS_KEY_ID=AK render_acme_clusterissuer amp-acme amp-creds)"
+assert_eq "route53 issuer has route53 solver" "yes" "$(grep -q 'route53:' <<<"$issuer_r53" && echo yes || echo no)"
+assert_eq "route53 issuer sets region"        "yes" "$(grep -q 'region: us-east-1' <<<"$issuer_r53" && echo yes || echo no)"
 
-# Expired cert. -days must be positive on OpenSSL 3.x, so backdate explicitly with
-# -not_before/-not_after (OpenSSL >=3.2). On older openssl these flags are absent and
-# the cert won't actually be expired — skip the assertion rather than fail spuriously.
-openssl req -x509 -newkey rsa:2048 -nodes \
-  -keyout "$TMP/expired.key" -out "$TMP/expired.crt" -subj "/CN=test" \
-  -addext "subjectAltName=DNS:*.amp.mycompany.com,DNS:*.agents.amp.mycompany.com" \
-  -not_before 20200101000000Z -not_after 20200102000000Z >/dev/null 2>&1 || true
-if [[ -f "$TMP/expired.crt" ]] && ! openssl x509 -checkend 0 -noout -in "$TMP/expired.crt" >/dev/null 2>&1; then
-  validate_cert "$TMP/expired.crt" "$TMP/expired.key"; rc=$?
-  assert_eq "expired cert rc=1" "1" "$rc"
-  assert_eq "names expiry" "yes" \
-    "$(printf '%s\n' "${CERT_ERRORS[@]}" | grep -qiF 'expired' && echo yes || echo no)"
-else
-  printf 'skip - expired cert assertion (openssl lacks -not_before/-not_after backdating)\n'
-fi
+# --- render_wildcard_certificate covers the SANs and references the issuer ---
+cert="$(render_wildcard_certificate amp-tls amp-tls amp-acme)"
+assert_eq "cert manifest lists agents wildcard" "yes" "$(grep -q '\*.agents.amp.mycompany.com' <<<"$cert" && echo yes || echo no)"
+assert_eq "cert manifest references issuer"     "yes" "$(grep -q 'name: amp-acme' <<<"$cert" && echo yes || echo no)"
 
-# --- validate_dns: stub the resolver so the test is hermetic ---
-TLS_MODE=letsencrypt
-# Stub: every host resolves to the expected IP.
-_resolve_host() { echo "203.0.113.10"; }
+# --- render_consolidated_gateway: :443 HTTPS Terminate, from All, cert ref ---
+gw="$(render_consolidated_gateway amp-gw amp-tls 443)"
+assert_eq "gateway listens :443"        "yes" "$(grep -q 'port: 443' <<<"$gw" && echo yes || echo no)"
+assert_eq "gateway terminates TLS"      "yes" "$(grep -q 'mode: Terminate' <<<"$gw" && echo yes || echo no)"
+assert_eq "gateway allows all routes"   "yes" "$(grep -q 'from: All' <<<"$gw" && echo yes || echo no)"
+assert_eq "gateway references cert sec" "yes" "$(grep -q 'name: amp-tls' <<<"$gw" && echo yes || echo no)"
+
+# --- render_k3d_advanced_config: publishes :443 (public) + loopback-binds plane ports ---
+k3d_out="$(printf 'ports:\n  - port: 8080:8080\n    nodeFilters:\n      - loadbalancer\n' | render_k3d_advanced_config)"
+assert_eq "k3d advanced publishes 443"        "yes" "$(grep -q -- '- port: 443:443' <<<"$k3d_out" && echo yes || echo no)"
+assert_eq "k3d advanced loopback-binds 8080"  "yes" "$(grep -q -- '- port: 127.0.0.1:8080:8080' <<<"$k3d_out" && echo yes || echo no)"
+
+# --- validate_dns is advisory: records errors but never fails (no more hard-fail mode) ---
+_resolve_host() { echo "198.51.100.5"; }        # resolves to a non-candidate IP
 validate_dns 203.0.113.10; rc=$?
-assert_eq "LE all-resolve rc=0" "0" "$rc"
-
-# Resolving to any one of several candidate IPs (local + public) passes. This is the
-# NAT'd cloud-VM case: DNS points at the public IP, which is one of the candidates.
-_resolve_host() { echo "203.0.113.10"; }
-validate_dns 10.128.0.5 203.0.113.10; rc=$?
-assert_eq "LE resolve-to-public-candidate rc=0" "0" "$rc"
-
-# Stub: a host resolves to none of the candidates -> hard fail in letsencrypt.
-_resolve_host() { echo "198.51.100.5"; }
-validate_dns 10.128.0.5 203.0.113.10; rc=$?
-assert_eq "LE wrong-resolve rc=1" "1" "$rc"
-
-# Same wrong resolution is advisory (rc=0) in byoc/upstream.
-TLS_MODE=byoc
-validate_dns 203.0.113.10; rc=$?
-assert_eq "byoc wrong-resolve advisory rc=0" "0" "$rc"
+assert_eq "validate_dns advisory rc=0"       "0"  "$rc"
+assert_eq "validate_dns records the mismatch" "yes" "$([[ ${#DNS_ERRORS[@]} -gt 0 ]] && echo yes || echo no)"
 unset -f _resolve_host
-
-# Every A record must point at this VM: a host with one rogue record fails (letsencrypt).
-TLS_MODE=letsencrypt
-_resolve_host() { printf '203.0.113.10\n198.51.100.5\n'; }
-validate_dns 203.0.113.10; rc=$?
-assert_eq "LE multi-record one-rogue rc=1" "1" "$rc"
-# A host that doesn't resolve at all fails too.
-_resolve_host() { echo ""; }
-validate_dns 203.0.113.10; rc=$?
-assert_eq "LE unresolved rc=1" "1" "$rc"
-unset -f _resolve_host
-
-# --- generate_selfsigned_ca: produces a CA + leaf whose SANs cover every host ---
-generate_selfsigned_ca "$TMP/ssg" 365
-assert_eq "selfsigned writes ca.crt"      "yes" "$([[ -f "$TMP/ssg/ca.crt" ]] && echo yes || echo no)"
-assert_eq "selfsigned writes fullchain"   "yes" "$([[ -f "$TMP/ssg/fullchain.pem" ]] && echo yes || echo no)"
-# validate_cert reads AMP_HOST_* (set at top of this file) + checks SAN coverage incl.
-# the *.agents wildcard, so a passing rc proves the generated SANs are complete.
-validate_cert "$TMP/ssg/fullchain.pem" "$TMP/ssg/privkey.pem"; rc=$?
-assert_eq "selfsigned cert validates rc=0" "0" "$rc"
-ssg_sans="$(openssl x509 -noout -ext subjectAltName -in "$TMP/ssg/fullchain.pem" 2>/dev/null)"
-assert_eq "selfsigned covers agents wildcard" "yes" "$(grep -qF '*.agents.amp.mycompany.com' <<<"$ssg_sans" && echo yes || echo no)"
 
 if [[ -s "$FAILLOG" ]]; then echo "PREFLIGHT TESTS FAILED"; exit 1; fi
 echo "ALL PREFLIGHT TESTS PASSED"

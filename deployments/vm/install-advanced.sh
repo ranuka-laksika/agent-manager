@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # install-advanced.sh — config-driven Agent Manager install on a VM with Docker.
-# Run ON the target VM with sudo. Supports custom domains and three TLS modes
-# (letsencrypt | byoc | upstream). See --init for the annotated config template.
+# Run ON the target VM with sudo. Custom domain + publicly-trusted TLS via cert-manager's
+# ACME DNS-01 challenge (kgateway terminates TLS on :443 — no Caddy, no lego). Works on a
+# public OR private VM: issuance is egress-only (the ACME CA reads a DNS TXT record).
+# See --init for the annotated config template.
 #
 # Usage:
 #   sudo ./install-advanced.sh --config amp-config.env
@@ -22,59 +24,36 @@ source "${VM_DIR}/lib-vm.sh"
 source "${VM_DIR}/lib-advanced.sh"
 # shellcheck source=lib-bootstrap.sh
 source "${VM_DIR}/lib-bootstrap.sh"
-# shellcheck source=lib-tls.sh
-source "${VM_DIR}/lib-tls.sh"
+# shellcheck source=lib-certmanager.sh
+source "${VM_DIR}/lib-certmanager.sh"
 
 print_template() {
   cat <<'TEMPLATE'
 # amp-config.env — Agent Manager advanced VM install configuration.
 # Sourced by install-advanced.sh. Lines are shell assignments.
+#
+# TLS is always publicly-trusted certificates issued in-cluster by cert-manager
+# using the ACME DNS-01 challenge (kgateway terminates TLS on :443 — there is no
+# Caddy). The ACME CA validates by reading a DNS TXT record, so the VM needs NO
+# inbound access for issuance (egress only) and this works on a private VM too.
 
 # --- Required ---
-AMP_VERSION=0.15.0                 # amp/v* release tag (see github.com/wso2/agent-manager/tags)
+AMP_VERSION=0.15.0                 # amp/v* release tag (see github.com/wso2/agent-manager/releases)
 DOMAIN_BASE=amp.mycompany.com      # service hosts derived as <svc>.<DOMAIN_BASE>
-TLS_MODE=letsencrypt               # letsencrypt | letsencrypt-dns | byoc | selfsigned | upstream
+ACME_EMAIL=ops@mycompany.com       # ACME account contact (required)
 
-# --- letsencrypt mode ---
-ACME_EMAIL=ops@mycompany.com       # ACME contact (recommended)
-
-# --- letsencrypt-dns mode (DNS-01: public-trusted certs on a PRIVATE VM) ---
-# The ACME CA never connects to the VM; it reads a DNS TXT record, so no public
-# ingress is needed (egress only). Requires a public DNS zone you control — A records
-# may point at the VM's private IP (split-horizon is fine). ACME_EMAIL (above) is
-# required in this mode. Set DNS_PROVIDER to a lego provider and supply that provider's
-# credentials as env vars in this file (lego reads them natively). Documented
-# providers: route53 (AWS) | cloudflare | gcloud (Google Cloud DNS) | azuredns.
-# DNS_PROVIDER=route53
-#   AWS:        AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=us-east-1
-#   Cloudflare: CF_DNS_API_TOKEN=...
-#   Google:     GCE_PROJECT=... GCE_SERVICE_ACCOUNT_FILE=/opt/amp/gcp-sa.json
-#   Azure:      AZURE_TENANT_ID=... AZURE_CLIENT_ID=... AZURE_CLIENT_SECRET=... AZURE_SUBSCRIPTION_ID=...
+# --- DNS-01 provider (you must control the DNS zone for DOMAIN_BASE) ---
+# cert-manager writes a TXT record to prove control of the zone, then issues a
+# wildcard certificate covering every service host, the deployed-agent wildcard, and
+# the env-Thunder wildcard. Set DNS_PROVIDER and that provider's credentials below;
+# the installer turns them into the Kubernetes Secret the ClusterIssuer references.
+DNS_PROVIDER=cloudflare            # cloudflare | route53 | clouddns | azuredns
+#   Cloudflare:        CLOUDFLARE_API_TOKEN=...            (scoped Zone.DNS:Edit token)
+#   AWS Route53:       AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=us-east-1
+#   Google Cloud DNS:  GCP_PROJECT=... GCP_SERVICE_ACCOUNT_FILE=/opt/amp/gcp-sa.json
+#   Azure DNS:         AZURE_TENANT_ID=... AZURE_CLIENT_ID=... AZURE_CLIENT_SECRET=... \
+#                      AZURE_SUBSCRIPTION_ID=... AZURE_RESOURCE_GROUP=...
 # ACME_SERVER=https://acme-staging-v02.api.letsencrypt.org/directory  # optional: LE staging for testing
-
-# --- selfsigned mode (fully offline: no public zone, no internal CA) ---
-# Generates a local CA + leaf covering every service host + the *.<AGENTS_BASE>
-# wildcard. The CA is written to /opt/amp/certs/ca.crt — import it into client trust
-# stores (MDM/GPO) so browsers trust the console/API without warnings. No extra keys.
-
-# --- byoc mode (operator-supplied cert/key) ---
-# The cert MUST carry SANs covering *.<DOMAIN_BASE> AND *.<AGENTS_BASE>.
-# TLS_CERT_FILE=/opt/amp/certs/fullchain.pem
-# TLS_KEY_FILE=/opt/amp/certs/privkey.pem
-# If this cert is signed by an internal/private CA (not a public one like Let's
-# Encrypt or a commercial CA), set TLS_CA_FILE so env-Thunder can trust it when
-# fetching platform Thunder's HTTPS JWKS. Leave unset for a publicly-trusted cert.
-# TLS_CA_FILE=/opt/amp/certs/internal-ca.crt
-
-# --- upstream mode (TLS terminated by a cloud LB / proxy in front of the VM) ---
-# The LB must forward each hostname to the VM and set X-Forwarded-Proto: https.
-# UPSTREAM_LISTEN_PORT=80          # plain-HTTP port the LB forwards to (default 80).
-#   Must not be a loopback-bound cluster port (8080/11080/19080);
-#   80 is safe.
-# Restrict the listen port to the LB at the firewall, and set the LB's source CIDRs
-# below so only it can set X-Forwarded-* (default 0.0.0.0/0 trusts any source). Use a
-# space-separated list; the example is the GCP Application Load Balancer's ranges.
-# UPSTREAM_TRUSTED_PROXIES="130.211.0.0/22 35.191.0.0/16"
 
 # --- Optional ---
 EXTERNAL_GATEWAYS=true             # expose the cp endpoint for external data-plane gateways
@@ -114,116 +93,95 @@ AMP_HOST_CONSOLE="" AMP_HOST_API="" AMP_HOST_THUNDER="" AMP_HOST_OBSERVER=""
 AMP_HOST_GATEWAY="" AMP_HOST_CP="" AMP_AGENTS_BASE=""
 derive_hosts
 
-# letsencrypt-dns and selfsigned both produce a cert/key and reuse the byoc serving
-# path, so default the served paths to the canonical cert dir when unset.
-if [[ "$TLS_MODE" == letsencrypt-dns || "$TLS_MODE" == selfsigned ]]; then
-  TLS_CERT_FILE="${TLS_CERT_FILE:-/opt/amp/certs/fullchain.pem}"
-  TLS_KEY_FILE="${TLS_KEY_FILE:-/opt/amp/certs/privkey.pem}"
-fi
+# Names of the cert-manager + gateway resources the installer creates post-install.
+DNS01_SECRET="amp-dns01-credentials"
+ACME_ISSUER="amp-acme-dns01"
+WILDCARD_CERT="amp-wildcard-tls"
+WILDCARD_SECRET="amp-wildcard-tls"
+CONSOLIDATED_GATEWAY="amp-consolidated-gateway"
+GATEWAY_NS="openchoreo-control-plane"
 
-# BYOC cert validation happens before any cluster work.
-if [[ "$TLS_MODE" == byoc ]]; then
-  if ! validate_cert "$TLS_CERT_FILE" "$TLS_KEY_FILE"; then
-    printf '%s\n' "${CERT_ERRORS[@]}" >&2
-    die "certificate validation failed — see errors above"
-  fi
-fi
-
-render_active_caddyfile() {   # echoes the Caddyfile for the active TLS_MODE
-  case "$TLS_MODE" in
-    letsencrypt) caddyfile letsencrypt "${ACME_EMAIL:-}" "" "" "" ;;
-    byoc|letsencrypt-dns|selfsigned) caddyfile byoc "" "$TLS_CERT_FILE" "$TLS_KEY_FILE" "" ;;
-    upstream)    caddyfile upstream "" "" "" "${UPSTREAM_LISTEN_PORT:-80}" "${UPSTREAM_TRUSTED_PROXIES:-0.0.0.0/0}" ;;
-  esac
-}
-
-# start_caddy_advanced — render the active Caddyfile and (re)start the Caddy container.
-# The cert-file modes (byoc, letsencrypt-dns, selfsigned) bind-mount the cert/key
-# read-only into the container.
-start_caddy_advanced() {
-  mkdir -p /opt/amp
-  render_active_caddyfile >/opt/amp/Caddyfile
-  log "Wrote /opt/amp/Caddyfile (${TLS_MODE})"
-
-  local mounts=(-v amp-caddy-data:/data -v amp-caddy-config:/config
-                -v /opt/amp/Caddyfile:/etc/caddy/Caddyfile:ro)
-  if [[ "$TLS_MODE" == byoc || "$TLS_MODE" == letsencrypt-dns || "$TLS_MODE" == selfsigned ]]; then
-    mounts+=(-v "${TLS_CERT_FILE}:${TLS_CERT_FILE}:ro" -v "${TLS_KEY_FILE}:${TLS_KEY_FILE}:ro")
-  fi
-
-  docker rm -f amp-caddy >/dev/null 2>&1 || true
-  docker run -d --name amp-caddy --restart unless-stopped --network host \
-    "${mounts[@]}" caddy:2
-  verify_caddy_up
-}
-
-# preflight_dns <strict|advisory> — confirm the derived hostnames point at THIS VM.
-# On a NAT'd cloud VM the host's own interfaces show only the private IP while DNS
-# points at the public one, so candidates = local IPs + the public egress IP. In
-# strict mode a letsencrypt mismatch aborts (only when the public IP is known, so a
-# detection failure doesn't block a correct install); in advisory mode (dry-run) it
-# reports without aborting.
+# preflight_dns — advisory only. DNS-01 needs NO inbound and does NOT require the service
+# hostnames to point at this VM (the ACME CA proves control by reading a TXT record the
+# provider API writes). The A records only matter for clients reaching the services, so
+# report whether they resolve here without ever aborting the install.
 preflight_dns() {
-  local mode="$1"
   local -a cand=(); local ip pub
   while IFS= read -r ip; do [[ -n "$ip" ]] && cand+=("$ip"); done < <(_local_ips)
   pub="$(_public_ip)"; [[ -n "$pub" ]] && cand+=("$pub")
-  if (( ${#cand[@]} == 0 )); then
-    log "Could not determine the VM's IP for the DNS check; skipping (verify DNS manually)."
-    return 0
+  (( ${#cand[@]} )) || { log "Could not determine the VM's IP for the DNS check; skipping."; return 0; }
+  validate_dns "${cand[@]}" >/dev/null 2>&1 || true   # advisory: validate_dns hard-fails only in the (removed) letsencrypt mode
+  if (( ${#DNS_ERRORS[@]} == 0 )); then
+    log "DNS check: all service hostnames resolve to this VM."
+  else
+    log "DNS check (advisory): some hostnames don't resolve to this VM yet — point your DNS (or client /etc/hosts) at it before connecting. Certificate issuance itself needs no inbound and no A records."
   fi
-  if validate_dns "${cand[@]}"; then
-    # validate_dns returns 0 in advisory modes even when some hosts did not resolve,
-    # so only claim success when it actually recorded no errors; otherwise tell the
-    # operator to point their private DNS / client hosts at this VM.
-    if [[ "$mode" == advisory ]]; then
-      if (( ${#DNS_ERRORS[@]} == 0 )); then
-        log "DNS check: all hostnames resolve to this VM."
-      else
-        log "DNS check: some hostnames do not resolve to this VM yet (advisory; see above). Point your private DNS, or client /etc/hosts entries, at this VM before connecting."
-      fi
-    fi
-    return 0
-  fi
-  # validate_dns already printed the per-host details + (letsencrypt) remediation.
-  if [[ "$mode" == strict && "${TLS_MODE:-}" == letsencrypt ]]; then
-    [[ -n "$pub" ]] && die "DNS pre-flight failed (letsencrypt) — see remediation above"
-    log "WARNING: DNS check inconclusive (could not determine the VM's public IP); proceeding — Caddy will fail loudly if the hostnames don't point at this VM."
-  fi
-  return 0
+}
+
+# apply_advanced_tls — after the base install, create the cert-manager DNS-01 resources
+# (provider Secret + ACME ClusterIssuer + wildcard Certificate) and the single :443 HTTPS
+# Gateway that terminates TLS with the issued cert, then wait for issuance. This replaces
+# the old lego + Caddy path entirely; cert-manager auto-renews the cert in-cluster.
+apply_advanced_tls() {
+  log "Applying cert-manager DNS-01 resources (provider=${DNS_PROVIDER}) + consolidated :443 gateway"
+  { render_dns01_credentials_secret "$DNS01_SECRET"
+    echo "---"
+    render_acme_clusterissuer "$ACME_ISSUER" "$DNS01_SECRET"
+    echo "---"
+    render_wildcard_certificate "$WILDCARD_CERT" "$WILDCARD_SECRET" "$ACME_ISSUER"
+    echo "---"
+    render_consolidated_gateway "$CONSOLIDATED_GATEWAY" "$WILDCARD_SECRET" 443
+  } | kubectl apply -f - || die "failed to apply cert-manager/gateway resources"
+
+  log "Waiting for cert-manager to issue the wildcard cert via DNS-01 (can take a few minutes)…"
+  kubectl wait --for=condition=Ready "certificate/${WILDCARD_CERT}" -n "$GATEWAY_NS" --timeout=600s \
+    || die "cert-manager did not issue the cert — inspect: kubectl describe certificate ${WILDCARD_CERT} -n ${GATEWAY_NS}; kubectl get challenge -A"
+
+  # Routes not repointed via chart/config overrides (platform + env Thunder, the
+  # api-platform gateway/LLM-proxy routes) are attached to the consolidated gateway here.
+  # amp-console/api/gateway-mgmt (ocIngress override) and deployed agents (DP external
+  # ingress override) are already born on it; observer via its ocIngress override.
+  attach_routes_to_consolidated_gateway
+}
+
+# attach_routes_to_consolidated_gateway — ensure every HTTPRoute in the platform
+# namespaces also lists the consolidated :443 gateway as a parent, so it is served on
+# :443 regardless of which plane gateway the chart/OpenChoreo generated it against. Adds
+# the parentRef only when absent (idempotent), so re-runs are safe.
+attach_routes_to_consolidated_gateway() {
+  local ns route parent
+  parent="{\"group\":\"gateway.networking.k8s.io\",\"kind\":\"Gateway\",\"name\":\"${CONSOLIDATED_GATEWAY}\",\"namespace\":\"${GATEWAY_NS}\"}"
+  for ns in openchoreo-control-plane openchoreo-observability-plane openchoreo-data-plane \
+            $(kubectl get ns -o name 2>/dev/null | sed 's|namespace/||' | grep -E '^(amp-thunder|dp-)' || true); do
+    while IFS= read -r route; do
+      [[ -z "$route" ]] && continue
+      # Skip routes that already parent the consolidated gateway.
+      if kubectl get httproute "$route" -n "$ns" -o json 2>/dev/null \
+          | grep -q "\"name\":\"${CONSOLIDATED_GATEWAY}\""; then continue; fi
+      kubectl patch httproute "$route" -n "$ns" --type=json \
+        -p "[{\"op\":\"add\",\"path\":\"/spec/parentRefs/-\",\"value\":${parent}}]" >/dev/null 2>&1 \
+        && log "  attached ${ns}/${route} to ${CONSOLIDATED_GATEWAY}"
+    done < <(kubectl get httproute -n "$ns" -o name 2>/dev/null | sed 's|httproute.gateway.networking.k8s.io/||')
+  done
 }
 
 run_advanced_install() {
-  [[ "$(id -u)" -eq 0 ]] || die "run with sudo — this installs Docker, opens the firewall and creates the cluster"
+  [[ "$(id -u)" -eq 0 ]] || die "run with sudo — this opens the firewall and creates the cluster"
 
-  preflight_dns strict
-
-  log "Phase 1/2: preflight (verify tools + firewall)"
-  verify_prerequisites openssl
+  log "Phase 1/3: preflight (verify tools + firewall)"
+  verify_prerequisites
   ensure_inotify_limits
-  if [[ "$TLS_MODE" == upstream ]]; then ensure_firewall "${UPSTREAM_LISTEN_PORT:-80}"; else ensure_firewall 443; fi
+  ensure_firewall 443     # inbound :443 for client traffic; DNS-01 issuance itself needs no inbound
   ensure_disk
+  preflight_dns
 
-  # Produce the cert before the cluster work for the cert-file modes; both then reuse
-  # the byoc serving path in start_caddy_advanced below.
-  case "$TLS_MODE" in
-    selfsigned)
-      log "Generating local CA + leaf (offline TLS)"
-      generate_selfsigned_ca "$(dirname "$TLS_CERT_FILE")"
-      validate_cert "$TLS_CERT_FILE" "$TLS_KEY_FILE" \
-        || { printf '%s\n' "${CERT_ERRORS[@]}" >&2; die "generated self-signed cert failed validation"; }
-      ;;
-    letsencrypt-dns)
-      mkdir -p /opt/amp
-      install -m 600 "$CONFIG_FILE" /opt/amp/amp-config.env
-      issue_dns01_cert "$(dirname "$TLS_CERT_FILE")"
-      ;;
-  esac
-
-  log "Phase 2/2: install Agent Manager + start Caddy (this takes 8-15 min)"
-  # Build the override arrays install.sh honors, from the hostname-driven cores.
+  log "Phase 2/3: install Agent Manager (cert-manager DNS-01, no Caddy) — 8-15 min"
+  # Hostname-driven helm overrides (same cores as the simple path), plus advanced-only
+  # overrides that make the fixed-service routes parent the consolidated :443 gateway.
   # shellcheck disable=SC2034  # arrays are inherited by the subshell that sources install.sh
   mapfile -t AMP_HELM_ARGS < <(amp_helm_args)
+  AMP_HELM_ARGS+=(--set "ocIngress.gatewayName=${CONSOLIDATED_GATEWAY}"
+                  --set "ocIngress.gatewayNamespace=${GATEWAY_NS}")
   # shellcheck disable=SC2034
   mapfile -t THUNDER_HELM_ARGS < <(thunder_helm_args)
   # shellcheck disable=SC2034
@@ -234,66 +192,41 @@ run_advanced_install() {
   mapfile -t PLATFORM_RESOURCES_HELM_ARGS < <(build_platform_resources_helm_args)
   # shellcheck disable=SC2034
   mapfile -t OBSERVABILITY_HELM_ARGS < <(observability_helm_args)
+  OBSERVABILITY_HELM_ARGS+=(--set "tracesObserver.ocIngress.gatewayName=${CONSOLIDATED_GATEWAY}"
+                            --set "tracesObserver.ocIngress.gatewayNamespace=${GATEWAY_NS}")
 
   DP_EXTERNAL_INGRESS="$(dataplane_external_ingress)"; export DP_EXTERNAL_INGRESS
+  # Deployed-agent routes are generated by OpenChoreo against this gateway; point them at
+  # the consolidated :443 gateway (install.sh reads these; defaults keep the simple path).
+  export DP_EXTERNAL_GATEWAY_NAME="${CONSOLIDATED_GATEWAY}"
+  export DP_EXTERNAL_GATEWAY_NAMESPACE="${GATEWAY_NS}"
   export VERSION="$AMP_VERSION"
   export SHOW_LOCALHOST_URLS=false
 
-  # Env-Thunder deployment-wide config, inherited by install_default_env_thunder()
-  # (called from install.sh, sourced below) as exported env vars — see
-  # add-environment-thunder.sh's THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED/
-  # SKIP_CA_BUNDLE_TRUST/PLATFORM_THUNDER_CA_PEM/PLATFORM_THUNDER_ISSUER/
-  # PLATFORM_THUNDER_JWKS_URL, and agent-manager-service's identical
-  # THUNDER_HOST_BASE_DOMAIN/TLS_ENABLED config (must match on both sides or the
-  # reported and actually-deployed URLs diverge). AMP_HOST_THUNDER is
-  # "thunder.<DOMAIN_BASE>"; stripping the "thunder." prefix gives env-Thunder's
-  # base domain, so "<org>-<env>.thunder.<base>" is a subdomain of it — exactly
-  # what the Caddy wildcard site added for it matches.
+  # Env-Thunder deployment-wide config (inherited by install_default_env_thunder). The
+  # wildcard cert is publicly trusted, so env-Thunder trusts platform Thunder's HTTPS via
+  # the container's default trust store — no custom CA bundle needed. AMP_HOST_THUNDER is
+  # "thunder.<DOMAIN_BASE>"; stripping "thunder." gives env-Thunder's base domain.
   export THUNDER_HOST_BASE_DOMAIN="${AMP_HOST_THUNDER#thunder.}"
   export TLS_ENABLED=true
+  export SKIP_CA_BUNDLE_TRUST=true
   export PLATFORM_THUNDER_ISSUER="https://${AMP_HOST_THUNDER}"
   export PLATFORM_THUNDER_JWKS_URL="https://${AMP_HOST_THUNDER}/oauth2/jwks"
-  case "$TLS_MODE" in
-    byoc)
-      if [[ -n "${TLS_CA_FILE:-}" ]]; then
-        # Operator flagged this cert as internally-signed — mount its CA for env-Thunder.
-        export PLATFORM_THUNDER_CA_PEM
-        PLATFORM_THUNDER_CA_PEM="$(cat "$TLS_CA_FILE")"
-      else
-        # No TLS_CA_FILE -> assume a publicly-trusted CA, already in the container's trust store.
-        export SKIP_CA_BUNDLE_TRUST=true
-      fi
-      ;;
-    letsencrypt|letsencrypt-dns|upstream)
-      # Publicly-trusted CA, already in the container's default trust store.
-      export SKIP_CA_BUNDLE_TRUST=true
-      ;;
-    selfsigned)
-      # generate_selfsigned_ca wrote its own root CA alongside the leaf cert — env-
-      # Thunder needs THIS specific CA (not local dev's cert-manager one, which
-      # doesn't exist on a VM) to trust platform Thunder's self-signed cert.
-      export PLATFORM_THUNDER_CA_PEM
-      PLATFORM_THUNDER_CA_PEM="$(cat "$(dirname "$TLS_CERT_FILE")/ca.crt")"
-      ;;
-  esac
 
-  render_k3d_vm_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
+  # k3d: publish :443 (the consolidated gateway) to the host; keep the plane ports
+  # loopback-bound (only :443 faces the network).
+  render_k3d_advanced_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
   export K3D_CONFIG=/tmp/k3d-config-vm.yaml
   render_coredns_vm_config "k3d-amp-local-server-0" >/tmp/coredns-amp-vm.yaml
   export COREDNS_FILE=/tmp/coredns-amp-vm.yaml
 
-  log "Running base installer with custom-domain overrides (${TLS_MODE})"
+  log "Running base installer with custom-domain overrides (DNS-01)"
   local rc=0
   ( set +e; source "${QS_DIR}/install.sh" ) || rc=$?
   [[ "$rc" -eq 0 ]] || die "Base installer exited $rc"
 
-  start_caddy_advanced
-
-  # DNS-01 certs are short-lived; install a daily renewal timer (lego renew + Caddy
-  # reload). The timer reads provider creds from the saved config copy.
-  if [[ "$TLS_MODE" == letsencrypt-dns ]]; then
-    install_renewal_timer "$(dirname "$TLS_CERT_FILE")" /opt/amp/amp-config.env
-  fi
+  log "Phase 3/3: issue TLS certificate (cert-manager DNS-01) + expose :443"
+  apply_advanced_tls
 
   log "Done. Access URLs:"
   cat <<EOF
@@ -306,12 +239,6 @@ run_advanced_install() {
   Deployed agents: https://<org>-<project>.${AMP_AGENTS_BASE}/...
 EOF
   [[ -n "$AMP_HOST_CP" ]] && echo "  Gateway control plane: https://${AMP_HOST_CP}  (connect external gateways here; registration token is secret-bearing)"
-  [[ "$TLS_MODE" == selfsigned ]] && cat <<EOF
-
-  Self-signed mode: import the CA into client trust stores so browsers trust these
-  hosts without warnings:
-    CA cert: $(dirname "$TLS_CERT_FILE")/ca.crt
-EOF
 }
 
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -320,18 +247,13 @@ if [[ "$DRY_RUN" == "true" ]]; then
     "$AMP_HOST_CONSOLE" "$AMP_HOST_API" "$AMP_HOST_THUNDER" "$AMP_HOST_OBSERVER" \
     "$AMP_HOST_GATEWAY" "${AMP_HOST_CP:-<none>}" "$AMP_AGENTS_BASE"
   log "DRY RUN — amp helm args:"; amp_helm_args
-  log "DRY RUN — Caddyfile (${TLS_MODE}):"; render_active_caddyfile
-  case "$TLS_MODE" in
-    letsencrypt-dns)
-      log "DRY RUN — DNS-01 issuance plan (lego):"
-      build_lego_args "${ACME_EMAIL:-}" "$DNS_PROVIDER" "$(dirname "$TLS_CERT_FILE")" "${ACME_SERVER:-}" run
-      ;;
-    selfsigned)
-      log "DRY RUN — self-signed cert SANs:"
-      tls_san_list
-      ;;
-  esac
-  log "DRY RUN — DNS pre-flight (advisory):"; preflight_dns advisory
+  log "DRY RUN — wildcard cert SANs:"; cert_dns_names
+  log "DRY RUN — cert-manager resources:"
+  render_dns01_credentials_secret "$DNS01_SECRET"; echo "---"
+  render_acme_clusterissuer "$ACME_ISSUER" "$DNS01_SECRET"; echo "---"
+  render_wildcard_certificate "$WILDCARD_CERT" "$WILDCARD_SECRET" "$ACME_ISSUER"; echo "---"
+  render_consolidated_gateway "$CONSOLIDATED_GATEWAY" "$WILDCARD_SECRET" 443
+  log "DRY RUN — DNS pre-flight (advisory):"; preflight_dns
   exit 0
 fi
 

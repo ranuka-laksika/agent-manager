@@ -1016,8 +1016,8 @@ $(echo "$CA_CERT" | sed 's/^/        /')
   gateway:
     ingress:
       external:
-        name: gateway-default
-        namespace: openchoreo-data-plane
+        name: ${DP_EXTERNAL_GATEWAY_NAME:-gateway-default}
+        namespace: ${DP_EXTERNAL_GATEWAY_NAMESPACE:-openchoreo-data-plane}
 ${DP_EXTERNAL_INGRESS}
   secretStoreRef:
     name: default
