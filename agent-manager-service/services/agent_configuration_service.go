@@ -125,6 +125,7 @@ type agentConfigurationService struct {
 	aiApplicationService      *AIApplicationService
 	infraResourceManager      InfraResourceManager
 	ocClient                  client.OpenChoreoClient
+	agentIdentityInjection    AgentIdentityInjectionService
 	logger                    *slog.Logger
 	secretClient              secretmanagersvc.SecretManagementClient
 	encryptionKey             []byte
@@ -740,6 +741,7 @@ func NewAgentConfigurationService(
 	ocClient client.OpenChoreoClient,
 	llmProviderAPIKeyService *LLMProviderAPIKeyService,
 	aiApplicationService *AIApplicationService,
+	agentIdentityInjection AgentIdentityInjectionService,
 	logger *slog.Logger,
 	secretClient secretmanagersvc.SecretManagementClient,
 	encryptionKey []byte,
@@ -766,6 +768,7 @@ func NewAgentConfigurationService(
 		infraResourceManager:     infraResourceManager,
 		ocClient:                 ocClient,
 		llmProviderAPIKeyService: llmProviderAPIKeyService,
+		agentIdentityInjection:   agentIdentityInjection,
 		logger:                   logger,
 		secretClient:             secretClient,
 		encryptionKey:            encryptionKey,
@@ -2209,6 +2212,20 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		existingEnvMap[name] = &existingConfig.EnvMCPMappings[i]
 	}
 
+	// touchedEnvNames tracks every environment whose MCP binding (proxy, tool-scope
+	// requirements, or deployability) this call may have changed — the union of what
+	// existed before (existingEnvMap, snapshotted here before the loop below deletes
+	// from it) and what's requested now (req.EnvMappings). Used after the loop to
+	// refresh each affected agent's injected AgentID scopes so a running pod picks up
+	// the new binding immediately instead of waiting for its next deploy/promote.
+	touchedEnvNames := make(map[string]struct{}, len(existingEnvMap)+len(req.EnvMappings))
+	for envName := range existingEnvMap {
+		touchedEnvNames[envName] = struct{}{}
+	}
+	for envName := range req.EnvMappings {
+		touchedEnvNames[envName] = struct{}{}
+	}
+
 	for envName := range req.EnvMappings {
 		env := envMap[envName]
 		envUUID, err := uuid.Parse(env.UUID)
@@ -2396,7 +2413,34 @@ func (s *agentConfigurationService) updateMCPConfig(ctx context.Context, existin
 		}
 	}
 
+	// Detached onto its own goroutine, off the request path — cost scales
+	// with the number of touched environments, and this is already a
+	// best-effort step. context.WithoutCancel keeps request-scoped values
+	// (e.g. a correlation ID) without tying it to this handler's cancellation.
+	go s.refreshTouchedMCPEnvironments(context.WithoutCancel(ctx), ouID, projectName, agentName, touchedEnvNames)
+
 	return s.GetMCP(ctx, existingConfig.UUID, ouID, projectName, agentName)
+}
+
+// refreshTouchedMCPEnvironments brings every given environment's live AgentID
+// scope list in line with what it should now be, so an already-running pod
+// gets rolled right away if the scope list actually changed — rather than
+// only picking it up on its next deploy/promote. Uses ReconcileForEnvironment
+// (not InjectForEnvironment) so touching an environment whose scopes didn't
+// actually change (touchedEnvNames is the union of all existing and all
+// requested mappings, so this includes plenty of no-ops) never causes a
+// needless pod rollout. Best-effort: the caller runs this on a detached
+// goroutine after the MCP config change itself already succeeded, so a
+// refresh failure here must never turn that success into an error response —
+// it's logged and the agent simply picks up the change on its next
+// deploy/promote/rotation instead.
+func (s *agentConfigurationService) refreshTouchedMCPEnvironments(ctx context.Context, ouID, projectName, agentName string, touchedEnvNames map[string]struct{}) {
+	for envName := range touchedEnvNames {
+		if err := s.agentIdentityInjection.ReconcileForEnvironment(ctx, ouID, projectName, agentName, envName); err != nil {
+			s.logger.Warn("Failed to refresh agent identity credentials after MCP config change",
+				"agentName", agentName, "envName", envName, "error", err)
+		}
+	}
 }
 
 func (s *agentConfigurationService) updateMCPConfigEnvironmentVariableNames(

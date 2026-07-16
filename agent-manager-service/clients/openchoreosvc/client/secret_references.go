@@ -68,6 +68,10 @@ func (c *openChoreoClient) CreateSecretReference(ctx context.Context, ouID strin
 			},
 		},
 	}
+	if len(req.TemplateAnnotations) > 0 {
+		annotations := req.TemplateAnnotations
+		body.Spec.Template.Metadata.Annotations = &annotations
+	}
 
 	// Set refresh interval if provided
 	if req.RefreshInterval != "" {
@@ -194,6 +198,10 @@ func (c *openChoreoClient) UpdateSecretReference(ctx context.Context, ouID, secr
 				},
 			},
 		},
+	}
+	if len(req.TemplateAnnotations) > 0 {
+		annotations := req.TemplateAnnotations
+		body.Spec.Template.Metadata.Annotations = &annotations
 	}
 
 	// Set refresh interval if provided

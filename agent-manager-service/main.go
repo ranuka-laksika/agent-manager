@@ -47,7 +47,7 @@ func main() {
 	secretProvider := openbao.NewProvider()
 
 	// Open-source: OpenBao-backed AgentID provisioning
-	agentThunderProvisioning := services.NewOpenBaoAgentThunderProvisioning(*cfg)
+	agentThunderProvisioning := services.NewOpenBaoAgentThunderProvisioning()
 
 	app.Run(authProvider, secretProvider, app.Options{
 		Server:                   *serverFlag,

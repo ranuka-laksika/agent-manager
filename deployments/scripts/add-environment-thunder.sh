@@ -197,7 +197,13 @@ read_existing_secret() {
 
 # write_to_openbao ORG ENV SECRET — writes the Thunder system-client secret to OpenBao
 # so agent-manager-service can read it from both Docker (local dev) and Kubernetes (prod).
-# Path: {OPENBAO_PATH}/data/thunder-system-clients/{org}/{env}
+# Path: {OPENBAO_PATH}/data/{org}/thunder-system-client-{env}
+#
+# The org segment comes first (rather than a fixed "thunder-system-clients"
+# prefix) to match agent-manager-service's secretmanagersvc.SecretLocation
+# path convention (org always first) — agent-manager-service reads this secret
+# through the same pluggable secret-management client used for every other
+# secret it manages, not a direct OpenBao call.
 #
 # Strategy: try direct HTTP first (works when port-forward is active), then fall back to
 # kubectl exec into the OpenBao pod (works during 'make setup' before the port-forward starts).
@@ -206,7 +212,7 @@ write_to_openbao() {
   local addr="${OPENBAO_ADDR:-http://localhost:8200}"
   local token="${OPENBAO_TOKEN:-root}"
   local mount="${OPENBAO_PATH:-secret}"
-  local kv_path="thunder-system-clients/${org}/${env_name}"
+  local kv_path="${org}/thunder-system-client-${env_name}"
 
   # --- attempt 1: direct HTTP (port-forward or explicit OPENBAO_ADDR) ---
   local http_code

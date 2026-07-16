@@ -59,7 +59,10 @@ type AgentThunderClient struct {
 	ThunderClientID  string                `gorm:"column:thunder_client_id;not null;default:''"`
 	// SecretRefPath is the OpenBao KV path holding the credential. Populated for both
 	// ownership types, but with different retention: permanent for internal, transient
-	// (deleted on claim) for external.
+	// (deleted on claim) for external. Read directly (assumed to be an OpenBao path,
+	// not resolved through AgentThunderProvisioningService) by
+	// services.AgentIdentityInjectionService — see that interface's doc comment
+	// before changing what this field holds or how it's populated.
 	SecretRefPath string             `gorm:"column:secret_ref_path;not null;default:''"`
 	Status        AgentThunderStatus `gorm:"column:status;not null;default:'pending'"`
 	// RequestedBy is the calling user's own subject (from AMS's existing
@@ -152,6 +155,13 @@ type AgentRegenerateSecretResponse struct {
 	ClientID         string                `json:"clientId"`
 	ClientSecret     string                `json:"clientSecret"`
 	Status           string                `json:"status"`
+	// WorkloadRefreshWarning is set only when the rotation itself succeeded
+	// (the response above is otherwise unaffected) but the best-effort push of
+	// the new secret into the already-running pod failed. Without this, the
+	// pod keeps serving the now-invalidated old secret via its env var until
+	// something else redeploys it — silently, since the rotation still
+	// reports success. Empty on the ordinary success path.
+	WorkloadRefreshWarning string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentRevokeSecretStatus is the fixed value of AgentRevokeSecretResponse.Status —
@@ -166,6 +176,11 @@ type AgentRevokeSecretResponse struct {
 	EnvironmentName string `json:"environmentName"`
 	ClientID        string `json:"clientId"`
 	Status          string `json:"status"`
+	// WorkloadRefreshWarning is set when the revoke succeeded but the
+	// best-effort cleanup of the running pod's credential couldn't be
+	// completed or verified — e.g. the deployment pipeline couldn't be
+	// resolved. Empty on the ordinary success path.
+	WorkloadRefreshWarning string `json:"workloadRefreshWarning,omitempty"`
 }
 
 // AgentCredentialsResponse is returned by the Internal-agent-only credentials

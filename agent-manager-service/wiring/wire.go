@@ -60,8 +60,9 @@ var clientProviderSet = wire.NewSet(
 	ProvideOrgResolver,
 	thundersvc.NewProber,
 	// EnvThunderResolver is wired for AgentIdentityController's passthrough
-	// endpoints. The OpenBao-backed AgentSecretStore is not wired here; AgentID
-	// provisioning is injected via app.Options.AgentThunderProvisioning.
+	// endpoints. AgentID provisioning itself is injected via
+	// app.Options.AgentThunderProvisioning, built with its own
+	// secretmanagersvc.SecretManagementClient instance — see app.Run.
 	ProvideEnvThunderResolver,
 )
 
@@ -78,6 +79,7 @@ var serviceProviderSet = wire.NewSet(
 	services.NewMonitorSchedulerService,
 	// Provisioning service is injected (see InitializeAppParams); only the
 	// reconciler that consumes it is wired here.
+	ProvideAgentIdentityInjectionService,
 	services.NewAgentThunderReconcilerService,
 	services.NewEvaluatorManagerService,
 	services.NewEnvironmentService,
@@ -151,7 +153,6 @@ var testClientProviderSet = wire.NewSet(
 	ProvideOrgResolver,
 	thundersvc.NewProber,
 	ProvideEnvThunderResolver,
-	ProvideAgentSecretStore,
 )
 
 // thunderProvisioningTestSet builds the OpenBao-backed provisioning service for
@@ -497,16 +498,26 @@ func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderC
 
 // ProvideEnvThunderResolver creates the resolver that maps (org, environment) to an
 // authenticated ThunderClient for that environment's Thunder instance, reading the
-// system-client secret that add-environment-thunder.sh already wrote to OpenBao.
-func ProvideEnvThunderResolver(cfg config.Config) (thundersvc.EnvThunderResolver, error) {
-	return thundersvc.NewEnvThunderResolver(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+// system-client secret that add-environment-thunder.sh already wrote, via the
+// same shared secretmanagersvc.SecretManagementClient every other secret-backed
+// service in this graph uses.
+func ProvideEnvThunderResolver(secretMgmtClient secretmanagersvc.SecretManagementClient) thundersvc.EnvThunderResolver {
+	return thundersvc.NewEnvThunderResolver(secretMgmtClient)
 }
 
-// ProvideAgentSecretStore creates the raw OpenBao-backed store for AgentID
-// client credentials (see agent_secret_store.go for why this bypasses the
-// SecretManagementClient/SecretReference machinery).
-func ProvideAgentSecretStore(cfg config.Config) (thundersvc.AgentSecretStore, error) {
-	return thundersvc.NewAgentSecretStore(cfg.OpenBao.URL, cfg.OpenBao.Token, cfg.OpenBao.Path)
+// ProvideAgentIdentityInjectionService creates the Gateway Binding service that
+// delivers AgentID credentials into internal agents' workloads. It reuses the
+// secret manager's SecretReference refresh interval so AgentID Secrets follow
+// the same re-sync cadence as every other injected secret.
+func ProvideAgentIdentityInjectionService(
+	repo repositories.AgentThunderClientRepository,
+	agentConfigRepo repositories.AgentConfigurationRepository,
+	mcpProxyScopeRepo repositories.MCPProxyScopeRepository,
+	ocClient occlient.OpenChoreoClient,
+	cfg config.Config,
+	logger *slog.Logger,
+) services.AgentIdentityInjectionService {
+	return services.NewAgentIdentityInjectionService(repo, agentConfigRepo, mcpProxyScopeRepo, ocClient, cfg.SecretManager.RefreshInterval, logger)
 }
 
 func ProvideThunderConfig(cfg config.Config) config.ThunderConfig {

@@ -17906,6 +17906,13 @@ components:
         status:
           type: string
           example: regenerated
+        workloadRefreshWarning:
+          type: string
+          description: |
+            Present only when the secret was rotated successfully but pushing it into the
+            already-running workload failed. The workload keeps using the previous secret
+            until its next deploy, promote, or rotation.
+          example: The secret was rotated, but the running workload could not be refreshed automatically; it will keep using the previous secret until its next deploy, promote, or rotation.
 
     AgentRevokeSecretResponse:
       type: object
@@ -17926,6 +17933,14 @@ components:
         status:
           type: string
           example: revoked
+        workloadRefreshWarning:
+          type: string
+          description: |
+            Present when the secret was revoked successfully but the best-effort cleanup of
+            the already-running workload's credential could not be completed or verified.
+            The workload may keep referencing the revoked credential until this is confirmed
+            or the workload is redeployed.
+          example: Could not confirm whether this is the deployment pipeline's lowest environment, so its shared workload-level credentials were left untouched as a precaution.
 
     AgentCredentialsResponse:
       type: object

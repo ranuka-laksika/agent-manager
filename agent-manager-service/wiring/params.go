@@ -77,10 +77,11 @@ type AppParams struct {
 	AgentThunderReconciler           services.AgentThunderReconcilerService
 
 	// Services
-	LLMTemplateStore         *services.LLMTemplateStore
-	InfraResourceManager     services.InfraResourceManager
-	AgentManagerService      services.AgentManagerService
-	AgentTokenManagerService services.AgentTokenManagerService
+	LLMTemplateStore              *services.LLMTemplateStore
+	InfraResourceManager          services.InfraResourceManager
+	AgentManagerService           services.AgentManagerService
+	AgentTokenManagerService      services.AgentTokenManagerService
+	AgentIdentityInjectionService services.AgentIdentityInjectionService
 
 	// Clients
 	OpenChoreoClient       occlient.OpenChoreoClient
