@@ -245,10 +245,15 @@ agentManagerService:
       # KV secrets engine path
       path: "secret"
       version: "v2"
-      # OpenBao token (for dev mode, use "root")
-      # For production, use existingSecret to reference a secret containing the token
+      # OpenBao token (for dev mode, use "root"). When set, it is stored in the
+      # chart-managed Secret and injected via secretKeyRef — never as a plaintext
+      # env var in the pod spec.
+      # For production, use existingSecret to reference an externally-managed
+      # Secret containing the token instead.
       token: "root"
       existingSecret: ""
+      # Key to read from existingSecret. Applies ONLY when existingSecret is set;
+      # the chart-managed Secret always uses the fixed key "openbao-token".
       existingSecretKey: "openbao-token"
 
     # Workflow Plane OpenBao configuration (for Git Secrets)
@@ -256,9 +261,14 @@ agentManagerService:
     workflowPlaneOpenbao:
       # Workflow plane OpenBao URL
       url: "http://openbao.openbao.svc.cluster.local:8200"
-      # OpenBao token
+      # OpenBao token. When set, it is stored in the chart-managed Secret and
+      # injected via secretKeyRef — never as a plaintext env var in the pod spec.
+      # For production, use existingSecret instead.
       token: "root"
       existingSecret: ""
+      # Key to read from existingSecret. Applies ONLY when existingSecret is set.
+      # The chart-managed Secret packs both OpenBao tokens into one Secret, so this
+      # token is stored there under the distinct key "workflow-plane-openbao-token".
       existingSecretKey: "openbao-token"
 
     # Agent resource limits — operator-configured upper bounds enforced on PUT /resource-configs
