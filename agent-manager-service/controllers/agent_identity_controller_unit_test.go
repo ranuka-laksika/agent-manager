@@ -567,16 +567,23 @@ func adminRoleController(envClient *clientmocks.EnvIdentityClientMock) AgentIden
 	return NewAgentIdentityController(resolver, &repomocks.AgentThunderClientRepositoryMock{}, &repomocks.MCPProxyRepositoryMock{}, &repomocks.MCPProxyScopeRepositoryMock{})
 }
 
+// adminRoleRequest builds a request with the org/env/role path values shared by
+// every native-Administrator guard test.
+func adminRoleRequest(method, url, body string) *http.Request {
+	req := httptest.NewRequest(method, url, strings.NewReader(body))
+	req.SetPathValue("orgName", "o1")
+	req.SetPathValue("envName", "dev")
+	req.SetPathValue("roleID", "r-admin")
+	return req
+}
+
 // TestAgentIdentityGetRole_NativeAdministratorHidden proves the native
 // Administrator role is invisible through the agent-identity API: fetching it by
 // ID returns 404, consistent with it being filtered from the role listing.
 func TestAgentIdentityGetRole_NativeAdministratorHidden(t *testing.T) {
 	ctrl := adminRoleController(adminRoleEnvClient())
 
-	req := httptest.NewRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", nil)
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	req.SetPathValue("roleID", "r-admin")
+	req := adminRoleRequest(http.MethodGet, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", "")
 	w := httptest.NewRecorder()
 
 	ctrl.GetRole(w, req)
@@ -591,12 +598,8 @@ func TestAgentIdentityGetRole_NativeAdministratorHidden(t *testing.T) {
 func TestAgentIdentityUpdateRole_NativeAdministratorRejected(t *testing.T) {
 	ctrl := adminRoleController(adminRoleEnvClient())
 
-	req := httptest.NewRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/r-admin",
-		strings.NewReader(`{"name":"renamed","scopes":[]}`))
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	req.SetPathValue("roleID", "r-admin")
-	req = req.WithContext(middleware.WithResolvedOrg(req.Context(), middleware.ResolvedOrg{OUID: "ou-org"}))
+	req := adminRoleRequest(http.MethodPut, "/orgs/o1/environments/dev/agent-identities/roles/r-admin",
+		`{"name":"renamed","scopes":[]}`)
 	w := httptest.NewRecorder()
 
 	ctrl.UpdateRole(w, req)
@@ -610,10 +613,7 @@ func TestAgentIdentityUpdateRole_NativeAdministratorRejected(t *testing.T) {
 func TestAgentIdentityDeleteRole_NativeAdministratorRejected(t *testing.T) {
 	ctrl := adminRoleController(adminRoleEnvClient())
 
-	req := httptest.NewRequest(http.MethodDelete, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", nil)
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	req.SetPathValue("roleID", "r-admin")
+	req := adminRoleRequest(http.MethodDelete, "/orgs/o1/environments/dev/agent-identities/roles/r-admin", "")
 	w := httptest.NewRecorder()
 
 	ctrl.DeleteRole(w, req)
@@ -628,11 +628,8 @@ func TestAgentIdentityDeleteRole_NativeAdministratorRejected(t *testing.T) {
 func TestAgentIdentityAddRoleAssignees_NativeAdministratorRejected(t *testing.T) {
 	ctrl := adminRoleController(adminRoleEnvClient())
 
-	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/add",
-		strings.NewReader(`{"assignments":[{"id":"thunder-1","type":"agent"}]}`))
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	req.SetPathValue("roleID", "r-admin")
+	req := adminRoleRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/add",
+		`{"assignments":[{"id":"thunder-1","type":"agent"}]}`)
 	w := httptest.NewRecorder()
 
 	ctrl.AddRoleAssignees(w, req)
@@ -654,11 +651,8 @@ func TestAgentIdentityRemoveRoleAssignees_NativeAdministratorAllowed(t *testing.
 	}
 	ctrl := adminRoleController(envClient)
 
-	req := httptest.NewRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/remove",
-		strings.NewReader(`{"assignments":[{"id":"thunder-1","type":"agent"}]}`))
-	req.SetPathValue("orgName", "o1")
-	req.SetPathValue("envName", "dev")
-	req.SetPathValue("roleID", "r-admin")
+	req := adminRoleRequest(http.MethodPost, "/orgs/o1/environments/dev/agent-identities/roles/r-admin/assignments/remove",
+		`{"assignments":[{"id":"thunder-1","type":"agent"}]}`)
 	w := httptest.NewRecorder()
 
 	ctrl.RemoveRoleAssignees(w, req)

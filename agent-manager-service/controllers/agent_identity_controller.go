@@ -467,7 +467,9 @@ func (c *agentIdentityController) CreateRole(w http.ResponseWriter, r *http.Requ
 // identities were acquiring env-Thunder admin — see
 // thundersvc.NativeAdministratorRoleName. Writes the error response itself when
 // ok=false. RemoveRoleAssignees deliberately skips this guard so an existing
-// mis-assignment can still be cleaned up through the same API.
+// mis-assignment can still be cleaned up through the same API, and the
+// read-only GetRoleAssignments/GetGroupRoles stay unguarded for the same
+// reason — finding which agents and groups to clean up requires seeing them.
 func (c *agentIdentityController) managedRole(w http.ResponseWriter, r *http.Request, client thundersvc.EnvIdentityClient, roleID string) (*thundersvc.ThunderRole, bool) {
 	ctx := r.Context()
 	role, err := client.GetRole(ctx, roleID)
