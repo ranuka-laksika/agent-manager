@@ -93,6 +93,14 @@ func runScript(scriptName string, params *ScriptParams, extraEnv []string) error
 	return cmd.Run()
 }
 
+// envOr returns the ambient value of key when set (non-blank), else fallback.
+func envOr(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
+
 // AddEnvironment runs deployments/scripts/add-environment.sh, which creates the
 // environment via the Agent Manager API and installs its API Platform Gateway.
 // Asserts the script succeeds.
@@ -106,6 +114,10 @@ func AddEnvironment(params *ScriptParams) {
 		"DISPLAY_NAME=" + params.DisplayName,
 		"CHART_VERSION=" + chartVersion,
 		fmt.Sprintf("IS_PRODUCTION=%t", params.IsProduction),
+		"AGENT_MANAGER_INTERNAL_BASE_URL=" + envOr("AGENT_MANAGER_INTERNAL_BASE_URL",
+			"http://amp-api.wso2-amp.svc.cluster.local:9000"),
+		"AGENT_MANAGER_INTERNAL_CP=" + envOr("AGENT_MANAGER_INTERNAL_CP",
+			"amp-api-gateway-manager.wso2-amp.svc.cluster.local:9243"),
 	}
 	err := runScript("add-environment.sh", params, extra)
 	Expect(err).NotTo(HaveOccurred(), "add-environment.sh failed for env %q", params.EnvName)
