@@ -163,7 +163,12 @@ func validateWithJWKS(ctx context.Context, tokenString string, cfg config.AuthCo
 			return jwkToRSAPublicKey(pub)
 		}
 		return nil, fmt.Errorf("no key found for kid: %s", kid)
-	})
+	},
+		// Require exp so a validly-signed token minted without an expiry is not
+		// accepted permanently; validate iat when present for consistency.
+		jwt.WithExpirationRequired(),
+		jwt.WithIssuedAt(),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to parse token: %w", err)
 	}
