@@ -23,6 +23,8 @@ type UpdateAgentBasicInfoRequest struct {
 	DisplayName string `json:"displayName"`
 	// Description of the agent
 	Description string `json:"description"`
+	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
+	Labels *map[string]string `json:"labels,omitempty"`
 }
 
 // NewUpdateAgentBasicInfoRequest instantiates a new UpdateAgentBasicInfoRequest object
@@ -92,6 +94,38 @@ func (o *UpdateAgentBasicInfoRequest) SetDescription(v string) {
 	o.Description = v
 }
 
+// GetLabels returns the Labels field value if set, zero value otherwise.
+func (o *UpdateAgentBasicInfoRequest) GetLabels() map[string]string {
+	if o == nil || IsNil(o.Labels) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.Labels
+}
+
+// GetLabelsOk returns a tuple with the Labels field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *UpdateAgentBasicInfoRequest) GetLabelsOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.Labels) {
+		return nil, false
+	}
+	return o.Labels, true
+}
+
+// HasLabels returns a boolean if a field has been set.
+func (o *UpdateAgentBasicInfoRequest) HasLabels() bool {
+	if o != nil && !IsNil(o.Labels) {
+		return true
+	}
+
+	return false
+}
+
+// SetLabels gets a reference to the given map[string]string and assigns it to the Labels field.
+func (o *UpdateAgentBasicInfoRequest) SetLabels(v map[string]string) {
+	o.Labels = &v
+}
+
 func (o UpdateAgentBasicInfoRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -104,6 +138,9 @@ func (o UpdateAgentBasicInfoRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["displayName"] = o.DisplayName
 	toSerialize["description"] = o.Description
+	if !IsNil(o.Labels) {
+		toSerialize["labels"] = o.Labels
+	}
 	return toSerialize, nil
 }
 

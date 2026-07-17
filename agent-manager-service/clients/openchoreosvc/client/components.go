@@ -93,6 +93,7 @@ func buildInternalAgentFromKindComponentRequestBody(namespaceName, projectName s
 	if req.Build != nil && req.Build.Docker != nil {
 		labels[string(LabelKeyAgentLanguage)] = "docker"
 	}
+	addUserLabels(labels, req.Labels)
 
 	componentTypeKind := gen.ComponentSpecComponentTypeKindComponentType
 	// The kind's source component build (incl. buildpack language) is resolved
@@ -147,6 +148,7 @@ func buildExternalAgentComponentRequestBody(namespaceName, projectName string, r
 	labels := map[string]string{
 		string(LabelKeyProvisioningType): string(req.ProvisioningType),
 	}
+	addUserLabels(labels, req.Labels)
 	componentTypeKind := gen.ComponentSpecComponentTypeKindComponentType
 	componentType, err := getOpenChoreoComponentType(string(req.ProvisioningType), req.AgentType.Type)
 	if err != nil {
@@ -203,6 +205,7 @@ func buildInternalAgentFromSourceComponentRequestBody(namespaceName, projectName
 	if req.Build != nil && req.Build.Docker != nil {
 		labels[string(LabelKeyAgentLanguage)] = "docker"
 	}
+	addUserLabels(labels, req.Labels)
 	componentTypeKind := gen.ComponentSpecComponentTypeKindComponentType
 	componentType, err := getOpenChoreoComponentType(string(req.ProvisioningType), req.AgentType.Type)
 	if err != nil {
@@ -589,6 +592,11 @@ func (c *openChoreoClient) UpdateComponentBasicInfo(ctx context.Context, ouID, p
 	}
 	(*component.Metadata.Annotations)[string(AnnotationKeyDisplayName)] = req.DisplayName
 	(*component.Metadata.Annotations)[string(AnnotationKeyDescription)] = req.Description
+
+	if req.Labels != nil {
+		merged := mergeUserLabels(component.Metadata.Labels, *req.Labels)
+		component.Metadata.Labels = &merged
+	}
 
 	component.Status = nil
 	updateResp, err := c.ocClient.UpdateComponentWithResponse(ctx, namespaceName, componentName, *component)
@@ -2841,7 +2849,8 @@ func convertComponentFromTyped(comp *gen.Component) (*models.AgentResponse, erro
 		Provisioning: models.Provisioning{
 			Type: provisioningType,
 		},
-		Type: agentType,
+		Type:   agentType,
+		Labels: extractUserLabels(comp.Metadata.Labels),
 	}
 
 	if comp.Metadata.CreationTimestamp != nil {

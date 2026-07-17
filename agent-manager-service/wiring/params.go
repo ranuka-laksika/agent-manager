@@ -24,10 +24,9 @@ import (
 
 	"gorm.io/gorm"
 
-	observabilitysvc "github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
+	observersvc "github.com/wso2/agent-manager/agent-manager-service/clients/observersvc"
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
-	traceobserversvc "github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
@@ -84,8 +83,8 @@ type AppParams struct {
 	AgentIdentityInjectionService services.AgentIdentityInjectionService
 
 	// Clients
-	OpenChoreoClient       occlient.OpenChoreoClient
-	TraceObserverSvcClient traceobserversvc.TraceObserverSvcClient
+	OpenChoreoClient  occlient.OpenChoreoClient
+	ObserverSvcClient observersvc.ObserverSvcClient
 
 	// WebSocket
 	WebSocketManager *websocket.Manager
@@ -99,10 +98,9 @@ type AppParams struct {
 
 // TestClients contains all mock clients needed for testing
 type TestClients struct {
-	OpenChoreoClient       occlient.OpenChoreoClient
-	ObservabilitySvcClient observabilitysvc.ObservabilitySvcClient
-	SecretMgmtClient       secretmanagersvc.SecretManagementClient
-	TraceObserverSvcClient traceobserversvc.TraceObserverSvcClient
+	OpenChoreoClient  occlient.OpenChoreoClient
+	SecretMgmtClient  secretmanagersvc.SecretManagementClient
+	ObserverSvcClient observersvc.ObserverSvcClient
 }
 
 func ProvideConfigFromPtr(config *config.Config) config.Config {

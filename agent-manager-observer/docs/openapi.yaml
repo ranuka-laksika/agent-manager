@@ -1,0 +1,927 @@
+openapi: 3.0.3
+info:
+  title: Agent Manager Observer API
+  description: |
+    Observer Service-backed API for listing, exporting, and fetching distributed traces,
+    component/build logs, and resource metrics.
+
+    Endpoints use human-readable `organization`, `project`, `agent`, and `environment` identifiers.
+    Lazy loading is supported: the span list endpoint returns summaries only; individual span
+    attributes are fetched on demand via the span detail endpoint.
+
+    All endpoints require the same Bearer JWT as the Agent Manager Service console
+    (validated via JWKS / local-dev mode).
+  version: 1.0.0
+  contact:
+    name: WSO2 LLC
+    url: https://www.wso2.com
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:9098
+    description: Local development
+  - url: https://observer.example.com
+    description: Production (replace with your deployment URL)
+
+tags:
+  - name: health
+    description: Liveness / readiness (unauthenticated)
+  - name: traces
+    description: Observer Service-backed trace data with lazy loading (requires JWT)
+  - name: logs
+    description: Observer Service-backed component and build logs (requires JWT)
+  - name: metrics
+    description: Observer Service-backed resource metrics (requires JWT)
+
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health check
+      description: Verifies service liveness and readiness. Does not require authentication.
+      operationId: health
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthOkResponse"
+        "503":
+          description: Service unhealthy (e.g. dependency unavailable)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthErrorResponse"
+
+  /api/v1/traces:
+    get:
+      tags:
+        - traces
+      summary: List traces
+      description: |
+        Returns paginated trace overviews for a component. Each trace includes input, output, token usage,
+        and status extracted from the root span — the same richness as the v1 list endpoint.
+        Uses the Observer Service instead of OpenSearch. No offset; use `limit` for page size.
+      operationId: listTraces
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/project"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/environment"
+        - $ref: "#/components/parameters/startTimeRequired"
+        - $ref: "#/components/parameters/endTimeRequired"
+        - name: limit
+          in: query
+          required: false
+          description: Page size (default 10, max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 10
+        - $ref: "#/components/parameters/sortOrder"
+      responses:
+        "200":
+          description: Trace overview list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceOverviewListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ObserverUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/traces/export:
+    get:
+      tags:
+        - traces
+      summary: Export traces with full span details
+      description: |
+        Returns complete trace objects for a component including ALL spans, each fully enriched with
+        AmpAttributes (LLM data, tool calls, token usage, etc.). Response includes Content-Disposition
+        for download. Export limit is capped at 1000 traces.
+
+        `organization`, `project`, `agent`, and `environment` are all required to scope the export
+        to a specific agent.
+      operationId: exportTraces
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/project"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/environment"
+        - $ref: "#/components/parameters/startTimeRequired"
+        - $ref: "#/components/parameters/endTimeRequired"
+        - name: limit
+          in: query
+          required: false
+          description: Max traces to export (default 100, max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+        - $ref: "#/components/parameters/sortOrder"
+      responses:
+        "200":
+          description: Export payload
+          headers:
+            Content-Disposition:
+              description: Suggested download filename
+              schema:
+                type: string
+                example: 'attachment; filename="traces-export-20260406-120000.json"'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceExportResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ObserverUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/traces/{traceId}/spans:
+    get:
+      tags:
+        - traces
+      summary: List spans for a trace
+      description: |
+        Returns lightweight span summaries (name, parentSpanId, timing) for a trace.
+        No attributes are included — fetch individual span details via the span detail endpoint.
+      operationId: listTraceSpans
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: traceId
+          in: path
+          required: true
+          description: Trace identifier
+          schema:
+            type: string
+            example: "3cae024cf613a5f37843e9c6eefa3020"
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/projectOptional"
+        - $ref: "#/components/parameters/agentOptional"
+        - $ref: "#/components/parameters/environmentOptional"
+        - $ref: "#/components/parameters/startTimeRequired"
+        - $ref: "#/components/parameters/endTimeRequired"
+        - name: limit
+          in: query
+          required: false
+          description: Max spans to return (default 10, max 1000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 10
+        - $ref: "#/components/parameters/sortOrder"
+      responses:
+        "200":
+          description: Span summary list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpanSummaryListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ObserverUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/traces/{traceId}/spans/{spanId}:
+    get:
+      tags:
+        - traces
+      summary: Get full span detail
+      description: |
+        Returns the full span including all OTEL attributes and enriched AmpAttributes
+        (semantic kind, input/output, token usage, LLM data, tool calls, etc.).
+      operationId: getSpanDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: traceId
+          in: path
+          required: true
+          description: Trace identifier
+          schema:
+            type: string
+            example: "3cae024cf613a5f37843e9c6eefa3020"
+        - name: spanId
+          in: path
+          required: true
+          description: Span identifier
+          schema:
+            type: string
+            example: "a1b2c3d4e5f60001"
+      responses:
+        "200":
+          description: Full enriched span
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnrichedSpan"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          $ref: "#/components/responses/ObserverUnavailable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/logs:
+    get:
+      tags:
+        - logs
+      summary: Query component logs
+      description: |
+        Returns log entries for an agent's runtime component, scoped by organization,
+        project, agent, and environment. `startTime`/`endTime` are required and the
+        range is capped at 14 days. Not available to `amp-publisher-*` tokens.
+      operationId: queryLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/project"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/environment"
+        - $ref: "#/components/parameters/startTimeRequired"
+        - $ref: "#/components/parameters/endTimeRequired"
+        - name: searchPhrase
+          in: query
+          required: false
+          description: Free-text phrase to filter log lines by
+          schema:
+            type: string
+        - $ref: "#/components/parameters/logLevels"
+        - name: limit
+          in: query
+          required: false
+          description: Max log lines to return (optional; upstream default applies when omitted, max 10000)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+        - $ref: "#/components/parameters/sortOrder"
+      responses:
+        "200":
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/UpstreamObserverError"
+
+  /api/v1/build-logs:
+    get:
+      tags:
+        - logs
+      summary: Query build (workflow) logs
+      description: |
+        Returns log entries for an Argo build workflow run, over a fixed 30-day lookback
+        window, oldest first, capped at 1000 lines. Not available to `amp-publisher-*` tokens.
+      operationId: queryBuildLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/buildName"
+      responses:
+        "200":
+          description: Log entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/UpstreamObserverError"
+
+  /api/v1/metrics:
+    get:
+      tags:
+        - metrics
+      summary: Query agent resource metrics
+      description: |
+        Returns CPU and memory usage/requests/limits time series for an agent's runtime
+        component, scoped by organization, project, agent, and environment.
+        `startTime`/`endTime` are required (no range cap). Not available to
+        `amp-publisher-*` tokens.
+      operationId: queryMetrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/organization"
+        - $ref: "#/components/parameters/project"
+        - $ref: "#/components/parameters/agent"
+        - $ref: "#/components/parameters/environment"
+        - $ref: "#/components/parameters/startTimeRequired"
+        - $ref: "#/components/parameters/endTimeRequired"
+      responses:
+        "200":
+          description: Resource metrics time series
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MetricsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "502":
+          $ref: "#/components/responses/UpstreamObserverError"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Same access token as used for Agent Manager Service API calls.
+
+  parameters:
+    organization:
+      name: organization
+      in: query
+      required: true
+      description: Organization name
+      schema:
+        type: string
+        example: "default"
+    project:
+      name: project
+      in: query
+      required: true
+      description: Project name
+      schema:
+        type: string
+    agent:
+      name: agent
+      in: query
+      required: true
+      description: Agent name
+      schema:
+        type: string
+    environment:
+      name: environment
+      in: query
+      required: true
+      description: Environment name
+      schema:
+        type: string
+    projectOptional:
+      name: project
+      in: query
+      required: false
+      description: Project name filter
+      schema:
+        type: string
+    agentOptional:
+      name: agent
+      in: query
+      required: false
+      description: Agent name filter
+      schema:
+        type: string
+    environmentOptional:
+      name: environment
+      in: query
+      required: false
+      description: Environment name filter
+      schema:
+        type: string
+    buildName:
+      name: buildName
+      in: query
+      required: true
+      description: Argo workflow run name for the build
+      schema:
+        type: string
+    logLevels:
+      name: logLevels
+      in: query
+      required: false
+      description: Comma-separated log levels to filter by
+      schema:
+        type: string
+        example: "INFO,WARN,ERROR"
+    startTimeRequired:
+      name: startTime
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+        example: "2026-04-01T00:00:00Z"
+    endTimeRequired:
+      name: endTime
+      in: query
+      required: true
+      schema:
+        type: string
+        format: date-time
+        example: "2026-04-06T23:59:59Z"
+    sortOrder:
+      name: sortOrder
+      in: query
+      required: false
+      schema:
+        type: string
+        enum: [asc, desc]
+        default: desc
+
+  responses:
+    BadRequest:
+      description: Bad request — missing or invalid query parameter
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid JWT
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ObserverUnavailable:
+      description: Observer Service not configured (OPENCHOREO_OBSERVER_URL unset)
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Publisher-audience (`amp-publisher-*`) tokens are not permitted on this endpoint
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    UpstreamObserverError:
+      description: The Observer Service query failed
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    HealthOkResponse:
+      type: object
+      required:
+        - status
+        - timestamp
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+
+    HealthErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: unhealthy
+        error:
+          type: string
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Short error code or literal (e.g. error, Unauthorized)
+        message:
+          type: string
+          description: Human-readable detail
+
+    Span:
+      type: object
+      required:
+        - traceId
+        - spanId
+        - name
+        - service
+        - startTime
+        - endTime
+        - durationInNanos
+      properties:
+        traceId:
+          type: string
+        spanId:
+          type: string
+        parentSpanId:
+          type: string
+          nullable: true
+        name:
+          type: string
+        service:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        durationInNanos:
+          type: integer
+          format: int64
+        kind:
+          type: string
+        status:
+          type: string
+        attributes:
+          type: object
+          additionalProperties: true
+
+    FullTrace:
+      type: object
+      required:
+        - traceId
+        - rootSpanId
+        - rootSpanName
+        - startTime
+        - endTime
+        - spans
+      properties:
+        traceId:
+          type: string
+        rootSpanId:
+          type: string
+        rootSpanName:
+          type: string
+        rootSpanKind:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        durationInNanos:
+          type: integer
+          format: int64
+        spanCount:
+          type: integer
+        tokenUsage:
+          $ref: "#/components/schemas/TokenUsage"
+        status:
+          $ref: "#/components/schemas/TraceStatus"
+        input:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+        output:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+        taskId:
+          type: string
+          nullable: true
+          description: Task ID from baggage (evaluation experiments)
+        trialId:
+          type: string
+          nullable: true
+          description: Trial ID from baggage (evaluation experiments)
+        spans:
+          type: array
+          maxItems: 10000
+          items:
+            $ref: "#/components/schemas/EnrichedSpan"
+
+    TraceExportResponse:
+      type: object
+      required:
+        - traces
+        - totalCount
+        - truncated
+      properties:
+        traces:
+          type: array
+          items:
+            $ref: "#/components/schemas/FullTrace"
+        totalCount:
+          type: integer
+        truncated:
+          type: boolean
+          description: True if any trace hit the MaxSpansPerRequest cap (10 000 spans)
+
+    # ── schemas ─────────────────────────────────────────────────────────────
+
+    TraceOverview:
+      type: object
+      description: |
+        Single trace overview as returned by GET /api/v1/traces.
+        Includes root-span-derived input, output, and token usage.
+      required:
+        - traceId
+        - rootSpanId
+        - rootSpanName
+        - rootSpanKind
+        - startTime
+        - endTime
+        - durationInNanos
+        - spanCount
+      properties:
+        traceId:
+          type: string
+        rootSpanId:
+          type: string
+        rootSpanName:
+          type: string
+        rootSpanKind:
+          type: string
+          description: Semantic span type (llm, tool, agent, chain, etc.)
+          example: llm
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        durationInNanos:
+          type: integer
+          format: int64
+        spanCount:
+          type: integer
+        tokenUsage:
+          $ref: "#/components/schemas/TokenUsage"
+        status:
+          $ref: "#/components/schemas/TraceStatus"
+        input:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+        output:
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+
+    TraceOverviewListResponse:
+      type: object
+      required:
+        - traces
+        - totalCount
+      properties:
+        traces:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceOverview"
+        totalCount:
+          type: integer
+
+    SpanSummary:
+      type: object
+      description: Lightweight span summary returned by GET /api/v1/traces/{traceId}/spans. No attributes included.
+      required:
+        - spanId
+        - spanName
+        - startTime
+        - endTime
+        - durationNs
+      properties:
+        spanId:
+          type: string
+        spanName:
+          type: string
+        parentSpanId:
+          type: string
+          nullable: true
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        durationNs:
+          type: integer
+          format: int64
+
+    SpanSummaryListResponse:
+      type: object
+      required:
+        - spans
+        - totalCount
+      properties:
+        spans:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpanSummary"
+        totalCount:
+          type: integer
+
+    SpanStatus:
+      type: object
+      properties:
+        error:
+          type: boolean
+          description: Whether the span has an error
+        errorType:
+          type: string
+          description: Error type from error.type attribute (only present when error is true)
+          nullable: true
+
+    AmpAttributes:
+      type: object
+      description: Semantically enriched attributes added by the AMP platform.
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          description: Semantic span type
+          enum: [llm, tool, embedding, retriever, agent, crewaitask, chain, unknown]
+        input:
+          description: Input data (type varies by kind)
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+        output:
+          description: Output data (type varies by kind)
+          nullable: true
+          oneOf:
+            - type: string
+            - type: object
+            - type: array
+              items: {}
+        status:
+          $ref: "#/components/schemas/SpanStatus"
+        data:
+          description: Kind-specific data (LLMData, ToolData, EmbeddingData, etc.)
+          nullable: true
+          type: object
+          additionalProperties: true
+
+    EnrichedSpan:
+      description: |
+        Full span as returned by GET /api/v1/traces/{traceId}/spans/{spanId}.
+        Includes raw OTEL attributes and enriched AmpAttributes.
+      allOf:
+        - $ref: "#/components/schemas/Span"
+        - type: object
+          properties:
+            ampAttributes:
+              $ref: "#/components/schemas/AmpAttributes"
+
+    TokenUsage:
+      type: object
+      properties:
+        inputTokens:
+          type: integer
+        outputTokens:
+          type: integer
+        totalTokens:
+          type: integer
+
+    TraceStatus:
+      type: object
+      properties:
+        errorCount:
+          type: integer
+
+    LogEntry:
+      type: object
+      description: Single log line as returned by GET /api/v1/logs and GET /api/v1/build-logs.
+      required:
+        - timestamp
+        - log
+        - logLevel
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        log:
+          type: string
+        logLevel:
+          type: string
+          example: "INFO"
+
+    LogsResponse:
+      type: object
+      required:
+        - logs
+        - totalCount
+        - tookMs
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogEntry"
+        totalCount:
+          type: integer
+        tookMs:
+          type: number
+          format: float
+
+    MetricDataPoint:
+      type: object
+      description: Single timestamped value in a metrics time series.
+      required:
+        - time
+        - value
+      properties:
+        time:
+          type: string
+          format: date-time
+        value:
+          type: number
+          format: double
+
+    MetricsResponse:
+      type: object
+      description: Resource metrics time series as returned by GET /api/v1/metrics.
+      required:
+        - cpuUsage
+        - cpuRequests
+        - cpuLimits
+        - memory
+        - memoryRequests
+        - memoryLimits
+      properties:
+        cpuUsage:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+        cpuRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+        cpuLimits:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+        memory:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+        memoryRequests:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+        memoryLimits:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDataPoint"
+
+security:
+  - bearerAuth: []

@@ -85,6 +85,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'reference/mcp-server',
+        'reference/observer-mcp-server',
         {
           type: 'category',
           label: 'CLI',

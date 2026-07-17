@@ -62,7 +62,7 @@ import {
 } from "@agent-management-platform/api-client";
 import { AgentTypeSummery } from "./subComponents/AgentTypeSummery";
 import { DeploymentPipelineCard } from "./subComponents/DeploymentPipelineCard";
-import { getErrorMessage, useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { getErrorMessage, LabelChips, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { EditProjectDrawer } from "../ProjectList/EditProjectDrawer";
 import { formatDistanceToNow } from "date-fns";
 
@@ -249,11 +249,18 @@ export const AgentsList: React.FC = () => {
   const agentsWithHref: AgentWithHref[] = useMemo(
     () =>
       data?.agents
-        ?.filter(
-          (agent: AgentResponse) =>
-            agent.displayName.toLowerCase().includes(search.toLowerCase()) ||
-            agent.name.toLowerCase().includes(search.toLowerCase())
-        )
+        ?.filter((agent: AgentResponse) => {
+          const term = search.toLowerCase();
+          return (
+            agent.displayName.toLowerCase().includes(term) ||
+            agent.name.toLowerCase().includes(term) ||
+            // Labels match as `key:value`, so typing "env:prod" (or a
+            // fragment of it) filters by label.
+            Object.entries(agent.labels ?? {}).some(([k, v]) =>
+              `${k}:${v}`.toLowerCase().includes(term)
+            )
+          );
+        })
         .map((agent) => ({
           ...agent,
           href: generatePath(
@@ -407,12 +414,12 @@ export const AgentsList: React.FC = () => {
                           onBlur={handleRowMouseLeave}
                         >
                           <ListingTable.Cell>
-                            <Stack direction="row" alignItems="center" spacing={2}>
-                              <Avatar sx={{ bgcolor: "primary.main", fontSize: 16, height: 32, width: 32, color: "primary.contrastText" }}>
+                            <Stack direction="row" alignItems="center" spacing={2} sx={{ width: "100%", minWidth: 0 }}>
+                              <Avatar sx={{ bgcolor: "primary.main", fontSize: 16, height: 32, width: 32, color: "primary.contrastText", flexShrink: 0 }}>
                                 {agent.displayName.charAt(0).toUpperCase()}
                               </Avatar>
-                              <Stack direction="row" alignItems="flex-start" spacing={1}>
-                                <Typography variant="body1">
+                              <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+                                <Typography variant="body1" sx={{ flexShrink: 0 }}>
                                   {agent.displayName}
                                 </Typography>
                                 {agent.provisioning.type !== "internal" && (
@@ -422,6 +429,7 @@ export const AgentsList: React.FC = () => {
                                     )}
                                     size="small"
                                     variant="outlined"
+                                    sx={{ flexShrink: 0 }}
                                   />
                                 )}
                                 {agent.kindName &&
@@ -430,8 +438,10 @@ export const AgentsList: React.FC = () => {
                                       kindDisplayNameMap[agent.kindName]
                                       ?? agent.kindName
                                     }
+                                    sx={{ flexShrink: 0 }}
                                   />
                                 }
+                                <LabelChips labels={agent.labels} />
                               </Stack>
                             </Stack>
                           </ListingTable.Cell>

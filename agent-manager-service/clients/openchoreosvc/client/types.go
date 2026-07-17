@@ -72,6 +72,11 @@ type CreateComponentRequest struct {
 	Build            *BuildConfig          // nil for external or kind-sourced agents
 	Configurations   *Configurations       // nil for external agents or if no env vars
 	InputInterface   *InputInterfaceConfig // nil unless custom-api
+	// Labels holds user-defined labels to attach to the component alongside
+	// the system-managed ones. User label keys can never collide with system
+	// keys (all system keys are namespaced "openchoreo.dev/...", which user
+	// keys are validated to never contain).
+	Labels map[string]string
 }
 
 // RepositoryConfig contains the source repository details
@@ -125,6 +130,11 @@ type InputInterfaceConfig struct {
 type UpdateComponentBasicInfoRequest struct {
 	DisplayName string
 	Description string
+	// Labels holds the caller's desired full set of user-defined labels. A
+	// nil pointer means "leave labels unchanged"; a non-nil (possibly empty)
+	// map replaces the entire user-label set while leaving system-managed
+	// labels untouched.
+	Labels *map[string]string
 }
 
 // UpdateComponentBuildParametersRequest contains data for updating build parameters of a component

@@ -12,11 +12,10 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	"github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/observersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
-	"github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/eventhub"
@@ -42,10 +41,6 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	identityClient := ProvideIdentityClient(thunderConfig)
 	orgResolver := ProvideOrgResolver(identityClient)
 	openChoreoClient, err := ProvideOCClient(configConfig, authProvider)
-	if err != nil {
-		return nil, err
-	}
-	observabilitySvcClient, err := ProvideObservabilitySvcClient(configConfig, authProvider)
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +95,10 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	agentKindRepository := ProvideAgentKindRepository(db)
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
+	observerSvcClient, err := ProvideObserverClient(configConfig, authProvider)
+	if err != nil {
+		return nil, err
+	}
 	monitorRepository := ProvideMonitorRepository(db)
 	customEvaluatorRepository := ProvideCustomEvaluatorRepository(db)
 	orgPublisherCredentialRepository := ProvideOrgPublisherCredentialRepository(db)
@@ -112,8 +111,8 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	if err != nil {
 		return nil, err
 	}
-	monitorManagerService := services.NewMonitorManagerService(logger, db, openChoreoClient, observabilitySvcClient, monitorExecutor, evaluatorManagerService, monitorRepository, scoreRepository, llmProxyProvisioner, monitorLLMMappingRepository, publisherCredentialProvisioner)
-	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioning, monitorManagerService, agentIdentityInjectionService, logger)
+	monitorManagerService := services.NewMonitorManagerService(logger, db, openChoreoClient, observerSvcClient, monitorExecutor, evaluatorManagerService, monitorRepository, scoreRepository, llmProxyProvisioner, monitorLLMMappingRepository, publisherCredentialProvisioner)
+	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioning, monitorManagerService, agentIdentityInjectionService, logger)
 	agentController := controllers.NewAgentController(agentManagerService, agentKindService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
@@ -167,10 +166,6 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, agentThunderClientRepository, mcpProxyRepository, mcpProxyScopeRepository)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
 	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioning, agentIdentityInjectionService, agentThunderClientRepository, logger)
-	traceObserverSvcClient, err := ProvideTraceObserverClient(configConfig, authProvider)
-	if err != nil {
-		return nil, err
-	}
 	appParams := &AppParams{
 		AuthMiddleware:                   middleware,
 		Logger:                           logger,
@@ -210,7 +205,7 @@ func InitializeAppParams(cfg *config.Config, db *gorm.DB, authProvider client.Au
 		AgentTokenManagerService:         agentTokenManagerService,
 		AgentIdentityInjectionService:    agentIdentityInjectionService,
 		OpenChoreoClient:                 openChoreoClient,
-		TraceObserverSvcClient:           traceObserverSvcClient,
+		ObserverSvcClient:                observerSvcClient,
 		WebSocketManager:                 manager,
 		EventHub:                         eventHub,
 		DB:                               db,
@@ -226,7 +221,6 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	identityClient := ProvideIdentityClient(thunderConfig)
 	orgResolver := ProvideOrgResolver(identityClient)
 	openChoreoClient := ProvideTestOpenChoreoClient(testClients)
-	observabilitySvcClient := ProvideTestObservabilitySvcClient(testClients)
 	secretManagementClient := ProvideTestSecretManagementClient(testClients)
 	gitCredentialsService, err := ProvideGitCredentialsService(openChoreoClient, configConfig)
 	if err != nil {
@@ -276,6 +270,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentKindService := services.NewAgentKindService(agentKindRepository, openChoreoClient)
 	artifactRepository := ProvideArtifactRepository(db)
 	agentThunderProvisioningService := services.NewAgentThunderProvisioningService(agentThunderClientRepository, envThunderResolver, secretManagementClient, agentIdentityInjectionService, logger)
+	observerSvcClient := ProvideTestObserverClient(testClients)
 	monitorRepository := ProvideMonitorRepository(db)
 	customEvaluatorRepository := ProvideCustomEvaluatorRepository(db)
 	orgPublisherCredentialRepository := ProvideOrgPublisherCredentialRepository(db)
@@ -288,8 +283,8 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	if err != nil {
 		return nil, err
 	}
-	monitorManagerService := services.NewMonitorManagerService(logger, db, openChoreoClient, observabilitySvcClient, monitorExecutor, evaluatorManagerService, monitorRepository, scoreRepository, llmProxyProvisioner, monitorLLMMappingRepository, publisherCredentialProvisioner)
-	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, observabilitySvcClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioningService, monitorManagerService, agentIdentityInjectionService, logger)
+	monitorManagerService := services.NewMonitorManagerService(logger, db, openChoreoClient, observerSvcClient, monitorExecutor, evaluatorManagerService, monitorRepository, scoreRepository, llmProxyProvisioner, monitorLLMMappingRepository, publisherCredentialProvisioner)
+	agentManagerService := services.NewAgentManagerService(db, openChoreoClient, secretManagementClient, repositoryService, agentTokenManagerService, agentConfigRepository, agentConfigurationService, agentKindService, artifactRepository, aiApplicationService, gatewayRepository, agentThunderProvisioningService, monitorManagerService, agentIdentityInjectionService, logger)
 	agentController := controllers.NewAgentController(agentManagerService, agentKindService)
 	agentKindController := controllers.NewAgentKindController(agentKindService)
 	infraResourceController := controllers.NewInfraResourceController(infraResourceManager)
@@ -343,7 +338,6 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 	agentIdentityController := controllers.NewAgentIdentityController(envThunderResolver, agentThunderClientRepository, mcpProxyRepository, mcpProxyScopeRepository)
 	monitorSchedulerService := services.NewMonitorSchedulerService(openChoreoClient, publisherCredentialProvisioner, logger, monitorExecutor, monitorRepository)
 	agentThunderReconcilerService := services.NewAgentThunderReconcilerService(agentThunderProvisioningService, agentIdentityInjectionService, agentThunderClientRepository, logger)
-	traceObserverSvcClient := ProvideTestTraceObserverClient(testClients)
 	appParams := &AppParams{
 		AuthMiddleware:                   authMiddleware,
 		Logger:                           logger,
@@ -383,7 +377,7 @@ func InitializeTestAppParamsWithClientMocks(cfg *config.Config, db *gorm.DB, aut
 		AgentTokenManagerService:         agentTokenManagerService,
 		AgentIdentityInjectionService:    agentIdentityInjectionService,
 		OpenChoreoClient:                 openChoreoClient,
-		TraceObserverSvcClient:           traceObserverSvcClient,
+		ObserverSvcClient:                observerSvcClient,
 		WebSocketManager:                 manager,
 		EventHub:                         eventHub,
 		DB:                               db,
@@ -400,8 +394,7 @@ var configProviderSet = wire.NewSet(
 )
 
 var clientProviderSet = wire.NewSet(
-	ProvideObservabilitySvcClient,
-	ProvideTraceObserverClient,
+	ProvideObserverClient,
 	ProvideOCClient,
 	ProvideSecretManagementClient,
 	ProvidePublisherProvisioner,
@@ -421,8 +414,7 @@ var controllerProviderSet = wire.NewSet(controllers.NewAgentController, controll
 
 var testClientProviderSet = wire.NewSet(
 	ProvideTestOpenChoreoClient,
-	ProvideTestObservabilitySvcClient,
-	ProvideTestTraceObserverClient,
+	ProvideTestObserverClient,
 	ProvideTestSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
@@ -543,17 +535,9 @@ func ProvideOCClient(cfg config.Config, authProvider client.AuthProvider) (clien
 	})
 }
 
-// ProvideObservabilitySvcClient creates the observability service client
-func ProvideObservabilitySvcClient(cfg config.Config, authProvider client.AuthProvider) (observabilitysvc.ObservabilitySvcClient, error) {
-	return observabilitysvc.NewObservabilitySvcClient(&observabilitysvc.Config{
+func ProvideObserverClient(cfg config.Config, authProvider client.AuthProvider) (observersvc.ObserverSvcClient, error) {
+	return observersvc.NewObserverClient(&observersvc.Config{
 		BaseURL:      cfg.Observer.URL,
-		AuthProvider: authProvider,
-	})
-}
-
-func ProvideTraceObserverClient(cfg config.Config, authProvider client.AuthProvider) (traceobserversvc.TraceObserverSvcClient, error) {
-	return traceobserversvc.NewTraceObserverClient(&traceobserversvc.Config{
-		BaseURL:      cfg.TraceObserver.URL,
 		AuthProvider: authProvider,
 	})
 }
@@ -636,12 +620,8 @@ func ProvideTestOpenChoreoClient(testClients TestClients) client.OpenChoreoClien
 	return testClients.OpenChoreoClient
 }
 
-func ProvideTestObservabilitySvcClient(testClients TestClients) observabilitysvc.ObservabilitySvcClient {
-	return testClients.ObservabilitySvcClient
-}
-
-func ProvideTestTraceObserverClient(testClients TestClients) traceobserversvc.TraceObserverSvcClient {
-	return testClients.TraceObserverSvcClient
+func ProvideTestObserverClient(testClients TestClients) observersvc.ObserverSvcClient {
+	return testClients.ObserverSvcClient
 }
 
 func ProvideTestSecretManagementClient(testClients TestClients) secretmanagersvc.SecretManagementClient {

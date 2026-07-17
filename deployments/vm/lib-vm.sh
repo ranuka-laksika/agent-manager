@@ -37,7 +37,8 @@ amp_helm_args() {
       "--set" "${k}.config.serverPublicURL=https://${AMP_HOST_API}" \
       "--set" "${k}.config.oauthAuthorizationServers=https://${AMP_HOST_THUNDER}" \
       "--set" "${k}.config.keyManager.issuer=https://${AMP_HOST_THUNDER}" \
-      "--set" "${k}.config.tlsEnabled=true"
+      "--set" "${k}.config.tlsEnabled=true" \
+      "--set" "${k}.config.thunderHostBaseDomain=${AMP_HOST_THUNDER#thunder.}"
   done
 
   printf '%s\n' \
@@ -45,7 +46,7 @@ amp_helm_args() {
     "--set" "console.config.auth.signInRedirectURL=https://${AMP_HOST_CONSOLE}/login" \
     "--set" "console.config.auth.signOutRedirectURL=https://${AMP_HOST_CONSOLE}/login" \
     "--set" "console.config.apiBaseUrl=https://${AMP_HOST_API}" \
-    "--set" "console.config.obsApiBaseUrl=https://${AMP_HOST_OBSERVER}" \
+    "--set" "agentManagerService.config.amObserverPublicURL=https://${AMP_HOST_OBSERVER}" \
     "--set" "console.config.instrumentationUrl=https://${AMP_HOST_GATEWAY}/otel"
 
   # Console and API are ClusterIP behind the OC control-plane kgateway; their
@@ -119,7 +120,7 @@ build_gateway_helm_args() {
 }
 
 # build_observability_helm_args <ip>
-# Prints OBSERVABILITY_HELM_ARGS tokens. The traces observer validates the same
+# Prints OBSERVABILITY_HELM_ARGS tokens. The observer validates the same
 # user token (its `iss` must match), so the console's traces page 401s until its
 # issuer is the public Thunder URL too. jwksUrl stays on the in-cluster service.
 # observability_helm_args — hostname-driven core. Reads AMP_HOST_THUNDER and
@@ -127,8 +128,10 @@ build_gateway_helm_args() {
 # shellcheck disable=SC2154  # AMP_HOST_* come from the caller's scope by design.
 observability_helm_args() {
   printf '%s\n' \
-    "--set" "tracesObserver.auth.issuer=https://${AMP_HOST_THUNDER}" \
-    "--set" "tracesObserver.ocIngress.hostname=${AMP_HOST_OBSERVER}"
+    "--set" "amObserver.auth.issuer=https://${AMP_HOST_THUNDER}" \
+    "--set" "amObserver.ocIngress.hostname=${AMP_HOST_OBSERVER}" \
+    "--set" "amObserver.publicUrl=https://${AMP_HOST_OBSERVER}" \
+    "--set" "amObserver.oauth.authorizationServers=https://${AMP_HOST_THUNDER}"
 }
 
 # build_observability_helm_args <ip> — sslip.io-from-IP wrapper.
@@ -192,14 +195,15 @@ build_cp_helm_args() {
 #    externalURL: the invoke URL is empty and try-out falls back to a relative /chat
 #    (405) — the very symptom this override exists to fix. Both bind listenerName
 #    http (TLS terminates at Caddy) and differ only in advertised scheme.
-# shellcheck disable=SC2154  # AMP_AGENTS_BASE comes from the caller's scope by design.
+# shellcheck disable=SC2154  # AMP_AGENTS_BASE/AMP_HOST_GATEWAY come from the caller's scope by design.
 build_platform_resources_helm_args() {
   printf '%s\n' \
     "--set" "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
     "--set" "environment.gateway.http.host=${AMP_AGENTS_BASE}" \
     "--set" "environment.gateway.http.port=443" \
     "--set" "environment.gateway.https.host=${AMP_AGENTS_BASE}" \
-    "--set" "environment.gateway.https.port=443"
+    "--set" "environment.gateway.https.port=443" \
+    "--set" "apiPlatformGatewayVhost.otelEndpointOverride=https://${AMP_HOST_GATEWAY}/otel"
 }
 
 # build_thunder_helm_args <ip>
@@ -393,10 +397,10 @@ caddyfile() {
   printf '%s*.%s%s {\n%s\treverse_proxy 127.0.0.1:8080\n}\n\n' \
     "$([[ "$scheme" == http ]] && printf 'http://')" "$AMP_HOST_THUNDER" "$addr_suffix" "$agent_tls"
 
-  # Traces observer is ClusterIP behind the OC observability-plane kgateway
+  # Observer is ClusterIP behind the OC observability-plane kgateway
   # (11080), host-routed the same way (observability_helm_args sets the route
   # hostname).
-  _site "$AMP_HOST_OBSERVER" 11080  # traces observer (OC kgateway, host-routed)
+  _site "$AMP_HOST_OBSERVER" 11080  # observer (OC kgateway, host-routed)
   # The api-platform gateway runtime is a ClusterIP service (ports 22893/22894 are
   # not node-published), so it is reached through the kgateway data plane on 19080 —
   # which has a catch-all HTTPRoute for AMP_HOST_GATEWAY that forwards to the runtime

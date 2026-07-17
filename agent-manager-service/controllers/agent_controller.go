@@ -48,10 +48,7 @@ type AgentController interface {
 	GetAgentEndpoints(w http.ResponseWriter, r *http.Request)
 	GetBuild(w http.ResponseWriter, r *http.Request)
 	GetAgentConfigurations(w http.ResponseWriter, r *http.Request)
-	GetBuildLogs(w http.ResponseWriter, r *http.Request)
 	GenerateName(w http.ResponseWriter, r *http.Request)
-	GetAgentMetrics(w http.ResponseWriter, r *http.Request)
-	GetAgentRuntimeLogs(w http.ResponseWriter, r *http.Request)
 	GetAgentResourceConfigs(w http.ResponseWriter, r *http.Request)
 	UpdateAgentResourceConfigs(w http.ResponseWriter, r *http.Request)
 	PublishKind(w http.ResponseWriter, r *http.Request)
@@ -257,7 +254,14 @@ func (c *agentController) ListAgents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agents, total, err := c.agentService.ListAgents(ctx, ouID, projName, int32(limit), int32(offset))
+	labelFilter, err := utils.ParseLabelSelectors(r.URL.Query()["label"])
+	if err != nil {
+		log.Debug("ListAgents: invalid label parameter", "error", err)
+		utils.WriteValidationErrorResponse(w, err)
+		return
+	}
+
+	agents, total, err := c.agentService.ListAgents(ctx, ouID, projName, labelFilter, int32(limit), int32(offset))
 	if err != nil {
 		log.Error("ListAgents: failed to list agents", "error", err)
 		handleCommonErrors(w, err, "Failed to list agents")
@@ -486,91 +490,6 @@ func (c *agentController) BuildAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	utils.WriteSuccessResponse(w, http.StatusAccepted, build)
-}
-
-func (c *agentController) GetBuildLogs(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	// Extract path parameters
-	ouID := middleware.OUIDFromRequest(r)
-	projName := r.PathValue(utils.PathParamProjName)
-	agentName := r.PathValue(utils.PathParamAgentName)
-	buildName := r.PathValue(utils.PathParamBuildName)
-
-	buildLogs, err := c.agentService.GetBuildLogs(ctx, ouID, projName, agentName, buildName)
-	if err != nil {
-		log.Error("GetBuildLogs: failed to get build logs", "error", err)
-		handleCommonErrors(w, err, "Failed to get build logs")
-		return
-	}
-	buildLogsResponse := utils.ConvertToLogsResponse(*buildLogs)
-	utils.WriteSuccessResponse(w, http.StatusOK, buildLogsResponse)
-}
-
-func (c *agentController) GetAgentRuntimeLogs(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	// Extract path parameters
-	ouID := middleware.OUIDFromRequest(r)
-	projName := r.PathValue(utils.PathParamProjName)
-	agentName := r.PathValue(utils.PathParamAgentName)
-
-	// Parse and validate request body
-	var payload spec.LogFilterRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Error("GetAgentRuntimeLogs: failed to decode request body", "error", err)
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := utils.ValidateLogFilterRequest(payload); err != nil {
-		log.Error("GetAgentRuntimeLogs: invalid request payload", "error", err)
-		utils.WriteValidationErrorResponse(w, err)
-		return
-	}
-
-	applicationLogs, err := c.agentService.GetAgentRuntimeLogs(ctx, ouID, projName, agentName, payload)
-	if err != nil {
-		log.Error("GetAgentRuntimeLogs: failed to get run-time logs", "error", err)
-		handleCommonErrors(w, err, "Failed to get run-time logs")
-		return
-	}
-	buildLogsResponse := utils.ConvertToLogsResponse(*applicationLogs)
-	utils.WriteSuccessResponse(w, http.StatusOK, buildLogsResponse)
-}
-
-func (c *agentController) GetAgentMetrics(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	// Extract path parameters
-	ouID := middleware.OUIDFromRequest(r)
-	projName := r.PathValue(utils.PathParamProjName)
-	agentName := r.PathValue(utils.PathParamAgentName)
-
-	// Parse and validate request body
-	var payload spec.MetricsFilterRequest
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		log.Error("GetAgentMetrics: failed to decode request body", "error", err)
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if err := utils.ValidateMetricsFilterRequest(payload); err != nil {
-		log.Error("GetAgentMetrics: invalid request payload", "error", err)
-		utils.WriteValidationErrorResponse(w, err)
-		return
-	}
-
-	metricsResponse, err := c.agentService.GetAgentMetrics(ctx, ouID, projName, agentName, payload)
-	if err != nil {
-		log.Error("GetAgentMetrics: failed to get agent metrics", "error", err)
-		handleCommonErrors(w, err, "Failed to get agent metrics")
-		return
-	}
-	utils.WriteSuccessResponse(w, http.StatusOK, metricsResponse)
 }
 
 func (c *agentController) DeployAgent(w http.ResponseWriter, r *http.Request) {
@@ -1005,6 +924,14 @@ func (c *agentController) PublishKind(w http.ResponseWriter, r *http.Request) {
 	if payload.GetKindName() == "" || payload.GetVersion() == "" || payload.GetBuildName() == "" {
 		utils.WriteErrorResponse(w, http.StatusBadRequest, "kindName, version, and buildName are required")
 		return
+	}
+
+	if payload.KindLabels != nil {
+		if err := utils.ValidateLabels(*payload.KindLabels); err != nil {
+			log.Debug("PublishKind: invalid kind labels", "error", err)
+			utils.WriteValidationErrorResponse(w, err)
+			return
+		}
 	}
 
 	result, err := c.agentKindService.PublishKind(ctx, ouID, projName, agentName, &payload)

@@ -158,6 +158,7 @@ install_agent_management_platform() {
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${AMP_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
         --set console.config.instrumentationUrl="http://default-default.gateway.localhost:19080/otel" \
+        --set agentManagerService.config.amObserverPublicURL="http://traces.amp.localhost:11080" \
         "${AMP_HELM_ARGS[@]}" >"${helm_log}" 2>&1; then
         echo "Helm installation log (last 50 lines):"
         tail -50 "${helm_log}" 2>/dev/null || cat "${helm_log}" 2>/dev/null || echo "Log file not available"
@@ -228,13 +229,13 @@ install_observability_extension() {
         return 1
     fi
 
-    # Wait for traces-observer if enabled
-    if kubectl get deployment amp-traces-observer -n "${OBSERVABILITY_NS}" &>/dev/null; then
-        if ! wait_for_deployment "amp-traces-observer" "${OBSERVABILITY_NS}" "${TIMEOUT_DEPLOYMENT}"; then
-            echo "Traces Observer Service deployment failed to become ready"
+    # Wait for amp-observer if enabled
+    if kubectl get deployment amp-observer -n "${OBSERVABILITY_NS}" &>/dev/null; then
+        if ! wait_for_deployment "amp-observer" "${OBSERVABILITY_NS}" "${TIMEOUT_DEPLOYMENT}"; then
+            echo "Agent Manager Observer deployment failed to become ready"
             echo ""
-            echo "Traces Observer pod status:"
-            kubectl get pods -n "${OBSERVABILITY_NS}" -l app.kubernetes.io/component=traces-observer 2>&1 || true
+            echo "Agent Manager Observer pod status:"
+            kubectl get pods -n "${OBSERVABILITY_NS}" -l app.kubernetes.io/component=observer 2>&1 || true
             return 1
         fi
     fi

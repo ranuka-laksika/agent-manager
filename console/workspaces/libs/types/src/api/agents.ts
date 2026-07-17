@@ -43,11 +43,14 @@ interface AgentRequestBase {
   inputInterface?: InputInterface;
   modelConfig?: ModelConfigRequest[];
   mcpConfig?: MCPConfigRequest[];
+  labels?: Record<string, string>;
 }
 
 interface UpdateAgentBasicInfoRequest {
   displayName: string;
   description?: string;
+  /** Omit to leave labels unchanged; send {} to clear all labels. */
+  labels?: Record<string, string>;
 }
 
 interface UpdateAgentBuildParametersRequest {
@@ -105,6 +108,7 @@ export interface AgentResponse {
   inputInterface?: InputInterface;
   uuid?: string;
   kindName?: string;
+  labels?: Record<string, string>;
 }
 
 export interface AgentListResponse extends PaginationMeta {
@@ -119,7 +123,8 @@ export type DeleteAgentPathParams = AgentPathParams;
 export type UpdateAgentPathParams = AgentPathParams;
 export type UpdateAgentBasicInfoPathParams = AgentPathParams;
 export type UpdateAgentBuildParametersPathParams = AgentPathParams;
-export type ListAgentsQuery = ListQuery;
+/** `label` entries are `key:value` selectors; repeat for AND semantics. */
+export type ListAgentsQuery = ListQuery & { label?: string[] };
 
 // Agent Token
 export interface TokenRequest {
