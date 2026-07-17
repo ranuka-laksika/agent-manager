@@ -135,6 +135,18 @@ func requireField(value, name string) (string, error) {
 	return trimmed, nil
 }
 
+// optionalScope trims value and returns a pointer to it, or nil when it is
+// empty/whitespace — mirroring optionalStr in handlers/handlers.go for optional
+// scoping filters (project/agent/environment) that are omitted rather than
+// required.
+func optionalScope(value string) *string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
 // validSortOrders are the only sort_order values accepted by the trace and
 // log tools, mirroring parseSortOrder in handlers/handlers.go.
 var validSortOrders = map[string]bool{"asc": true, "desc": true}

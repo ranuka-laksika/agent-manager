@@ -61,12 +61,16 @@ type listTracesInput struct {
 	SortOrder    string `json:"sort_order,omitempty"`
 }
 
+// traceDetailsInput mirrors REST GetTraceSpans: only organization + trace_id
+// are required. project/agent/environment are optional scoping filters (the
+// REST route treats them as optionalStr), so a valid organization + trace_id
+// lookup succeeds without them.
 type traceDetailsInput struct {
 	Organization string `json:"organization" jsonschema:"required"`
-	Project      string `json:"project" jsonschema:"required"`
-	Agent        string `json:"agent" jsonschema:"required"`
-	Environment  string `json:"environment" jsonschema:"required"`
 	TraceID      string `json:"trace_id" jsonschema:"required"`
+	Project      string `json:"project,omitempty"`
+	Agent        string `json:"agent,omitempty"`
+	Environment  string `json:"environment,omitempty"`
 	StartTime    string `json:"start_time,omitempty"`
 	EndTime      string `json:"end_time,omitempty"`
 }
@@ -212,7 +216,7 @@ func getTraces(tracing *controllers.TracingController) func(context.Context, *go
 
 func getTraceDetails(tracing *controllers.TracingController) func(context.Context, *gomcp.CallToolRequest, traceDetailsInput) (*gomcp.CallToolResult, any, error) {
 	return func(ctx context.Context, _ *gomcp.CallToolRequest, input traceDetailsInput) (*gomcp.CallToolResult, any, error) {
-		scope, err := requireTraceScope(input.Organization, input.Project, input.Agent, input.Environment)
+		organization, err := requireField(input.Organization, "organization")
 		if err != nil {
 			return nil, nil, err
 		}
@@ -227,10 +231,10 @@ func getTraceDetails(tracing *controllers.TracingController) func(context.Contex
 		}
 
 		params := controllers.TraceQueryParams{
-			Organization: scope.Organization,
-			Project:      &scope.Project,
-			Agent:        &scope.Agent,
-			Environment:  &scope.Environment,
+			Organization: organization,
+			Project:      optionalScope(input.Project),
+			Agent:        optionalScope(input.Agent),
+			Environment:  optionalScope(input.Environment),
 			StartTime:    startTime,
 			EndTime:      endTime,
 			Limit:        traceDetailsSpanLimit,

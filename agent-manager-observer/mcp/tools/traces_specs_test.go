@@ -54,16 +54,15 @@ func tracesToolSpecs() []toolTestSpec {
 			testArgs:            baseTraceArgs,
 		},
 		{
+			// Mirrors REST GetTraceSpans: only organization + trace_id are
+			// required; project/agent/environment are optional scoping filters.
 			name:                "get_trace_details",
 			descriptionKeywords: []string{"trace", "span"},
 			descriptionMinLen:   20,
-			requiredParams:      []string{"organization", "project", "agent", "environment", "trace_id"},
-			optionalParams:      []string{"start_time", "end_time"},
+			requiredParams:      []string{"organization", "trace_id"},
+			optionalParams:      []string{"project", "agent", "environment", "start_time", "end_time"},
 			testArgs: map[string]any{
 				"organization": testOrgName,
-				"project":      testProjectName,
-				"agent":        testAgentName,
-				"environment":  testEnvName,
 				"trace_id":     testTraceID,
 			},
 		},
@@ -256,6 +255,46 @@ func TestGetTracesLimitClamped(t *testing.T) {
 	}
 	if req.Limit == nil || *req.Limit != maxTraceExportLimit {
 		t.Errorf("Limit: got %v, want %d (clamped)", req.Limit, maxTraceExportLimit)
+	}
+}
+
+// Verifies that get_trace_details accepts only organization + trace_id (no
+// project/agent/environment), mirroring REST GetTraceSpans, and forwards the
+// omitted scope filters to the observer as nil rather than empty strings.
+func TestGetTraceDetailsOptionalScope(t *testing.T) {
+	clientSession, fake := setupTestServer(t)
+	ctx := context.Background()
+
+	result, err := clientSession.CallTool(ctx, &gomcp.CallToolParams{
+		Name: "get_trace_details",
+		Arguments: map[string]any{
+			"organization": testOrgName,
+			"trace_id":     testTraceID,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool failed: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("expected success with only organization + trace_id, got tool error: %+v", result.Content)
+	}
+
+	calls := fake.calls["QueryTraceSpans"]
+	if len(calls) != 1 {
+		t.Fatalf("expected exactly one QueryTraceSpans call, got %d", len(calls))
+	}
+	args, ok := calls[0].([]any)
+	if !ok || len(args) != 2 {
+		t.Fatalf("unexpected recorded args: %v", calls[0])
+	}
+	req, ok := args[1].(observer.TracesQueryRequest)
+	if !ok {
+		t.Fatalf("recorded arg has unexpected type %T", args[1])
+	}
+	scope := req.SearchScope
+	if scope.Project != nil || scope.Component != nil || scope.Environment != nil {
+		t.Errorf("expected nil project/agent/environment, got project=%v agent=%v environment=%v",
+			scope.Project, scope.Component, scope.Environment)
 	}
 }
 
