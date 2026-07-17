@@ -102,16 +102,3 @@ func WaitForBuildSuccess(client *framework.AMPClient, params *WaitForBuildParams
 
 	return buildName
 }
-
-// GetBuildLogs retrieves the build logs for a specific build.
-func GetBuildLogs(g Gomega, client *framework.AMPClient, orgName, projName, agentName, buildName string) framework.LogsResponse {
-	path := fmt.Sprintf("/api/v1/orgs/%s/projects/%s/agents/%s/builds/%s/build-logs",
-		orgName, projName, agentName, buildName)
-
-	resp, err := client.Get(path)
-	g.Expect(err).NotTo(HaveOccurred(), "get build logs request failed")
-	defer resp.Body.Close()
-	framework.ExpectStatus(g, resp, 200)
-
-	return framework.DecodeBody[framework.LogsResponse](g, resp)
-}

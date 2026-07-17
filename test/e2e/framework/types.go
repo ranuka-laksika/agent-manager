@@ -936,7 +936,7 @@ type AgentModelConfigListResponse struct {
 }
 
 // ---------------------------------------------------------------------------
-// Traces (traces-observer-service)
+// Traces (agent-manager-observer)
 // ---------------------------------------------------------------------------
 
 type TraceOverview struct {
@@ -1071,28 +1071,8 @@ type AgentChatRequest struct {
 }
 
 // ---------------------------------------------------------------------------
-// Runtime Logs
-// ---------------------------------------------------------------------------
-
-type LogFilterRequest struct {
-	EnvironmentName string   `json:"environmentName"`
-	StartTime       string   `json:"startTime"`
-	EndTime         string   `json:"endTime"`
-	Limit           int      `json:"limit,omitempty"`
-	SortOrder       string   `json:"sortOrder,omitempty"`
-	LogLevels       []string `json:"logLevels,omitempty"`
-	SearchPhrase    string   `json:"searchPhrase,omitempty"`
-}
-
-// ---------------------------------------------------------------------------
 // Metrics
 // ---------------------------------------------------------------------------
-
-type MetricsFilterRequest struct {
-	EnvironmentName string `json:"environmentName"`
-	StartTime       string `json:"startTime"`
-	EndTime         string `json:"endTime"`
-}
 
 type MetricDataPoint struct {
 	Time  string  `json:"time"`

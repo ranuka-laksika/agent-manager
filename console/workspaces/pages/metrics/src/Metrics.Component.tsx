@@ -21,9 +21,10 @@ import { EnvironmentSelector } from "@agent-management-platform/shared-component
 import { NoDataFound, PageLayout, TimeRangeSelector, useTimeRangeParams } from "@agent-management-platform/views";
 import { useParams, useSearchParams } from "react-router-dom";
 import { TraceListTimeRange } from "@agent-management-platform/types";
-import { useGetAgentMetrics, useListAgentDeployments } from "@agent-management-platform/api-client";
+import { useGetAgentMetrics, useListAgentDeployments, isObserverConfigured } from "@agent-management-platform/api-client";
 import { MetricsView } from "./components/MetricsView/MetricsView";
 import {
+  Alert,
   CircularProgress,
   IconButton,
   Stack,
@@ -107,6 +108,21 @@ export const MetricsComponent: React.FC = () => {
     },
     [searchParams, setSearchParams],
   );
+
+  // Mirror Traces.Component: without a configured observer the request fails
+  // as an opaque "Failed to fetch" snackbar, so surface an actionable empty
+  // state instead.
+  if (!isObserverConfigured()) {
+    return (
+      <PageLayout title="System Metrics" disableIcon>
+        <Alert severity="error" sx={{ mt: 2 }}>
+          <strong>Observer not configured.</strong> Ask your platform
+          administrator to set <code>AM_OBSERVER_PUBLIC_URL</code> on the
+          agent-manager service.
+        </Alert>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout

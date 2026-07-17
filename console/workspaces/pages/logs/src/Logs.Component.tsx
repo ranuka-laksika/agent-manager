@@ -25,8 +25,9 @@ import {
   type LogLevel,
 } from "@agent-management-platform/types";
 import { debounce } from "lodash";
-import { useAgentRuntimeLogs } from "@agent-management-platform/api-client";
+import { useAgentRuntimeLogs, isObserverConfigured } from "@agent-management-platform/api-client";
 import {
+  Alert,
   CircularProgress,
   IconButton,
   InputAdornment,
@@ -194,6 +195,21 @@ export const LogsComponent: React.FC = () => {
     },
     [searchParams, setSearchParams],
   );
+
+  // Mirror Traces.Component: without a configured observer the request fails
+  // as an opaque "Failed to fetch" snackbar, so surface an actionable empty
+  // state instead.
+  if (!isObserverConfigured()) {
+    return (
+      <PageLayout title="Runtime Logs" disableIcon>
+        <Alert severity="error" sx={{ mt: 2 }}>
+          <strong>Observer not configured.</strong> Ask your platform
+          administrator to set <code>AM_OBSERVER_PUBLIC_URL</code> on the
+          agent-manager service.
+        </Alert>
+      </PageLayout>
+    );
+  }
 
   return (
     <PageLayout

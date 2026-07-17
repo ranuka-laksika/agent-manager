@@ -27,11 +27,10 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
-	observabilitysvc "github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
+	observersvc "github.com/wso2/agent-manager/agent-manager-service/clients/observersvc"
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
-	traceobserversvc "github.com/wso2/agent-manager/agent-manager-service/clients/traceobserversvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/controllers"
 	"github.com/wso2/agent-manager/agent-manager-service/eventhub"
@@ -51,8 +50,7 @@ var configProviderSet = wire.NewSet(
 )
 
 var clientProviderSet = wire.NewSet(
-	ProvideObservabilitySvcClient,
-	ProvideTraceObserverClient,
+	ProvideObserverClient,
 	ProvideOCClient,
 	ProvideSecretManagementClient,
 	ProvidePublisherProvisioner,
@@ -145,8 +143,7 @@ var controllerProviderSet = wire.NewSet(
 
 var testClientProviderSet = wire.NewSet(
 	ProvideTestOpenChoreoClient,
-	ProvideTestObservabilitySvcClient,
-	ProvideTestTraceObserverClient,
+	ProvideTestObserverClient,
 	ProvideTestSecretManagementClient,
 	ProvidePublisherProvisioner,
 	ProvideIdentityClient,
@@ -271,17 +268,9 @@ func ProvideOCClient(cfg config.Config, authProvider occlient.AuthProvider) (occ
 	})
 }
 
-// ProvideObservabilitySvcClient creates the observability service client
-func ProvideObservabilitySvcClient(cfg config.Config, authProvider occlient.AuthProvider) (observabilitysvc.ObservabilitySvcClient, error) {
-	return observabilitysvc.NewObservabilitySvcClient(&observabilitysvc.Config{
+func ProvideObserverClient(cfg config.Config, authProvider occlient.AuthProvider) (observersvc.ObserverSvcClient, error) {
+	return observersvc.NewObserverClient(&observersvc.Config{
 		BaseURL:      cfg.Observer.URL,
-		AuthProvider: authProvider,
-	})
-}
-
-func ProvideTraceObserverClient(cfg config.Config, authProvider occlient.AuthProvider) (traceobserversvc.TraceObserverSvcClient, error) {
-	return traceobserversvc.NewTraceObserverClient(&traceobserversvc.Config{
-		BaseURL:      cfg.TraceObserver.URL,
 		AuthProvider: authProvider,
 	})
 }
@@ -375,12 +364,8 @@ func ProvideTestOpenChoreoClient(testClients TestClients) occlient.OpenChoreoCli
 	return testClients.OpenChoreoClient
 }
 
-func ProvideTestObservabilitySvcClient(testClients TestClients) observabilitysvc.ObservabilitySvcClient {
-	return testClients.ObservabilitySvcClient
-}
-
-func ProvideTestTraceObserverClient(testClients TestClients) traceobserversvc.TraceObserverSvcClient {
-	return testClients.TraceObserverSvcClient
+func ProvideTestObserverClient(testClients TestClients) observersvc.ObserverSvcClient {
+	return testClients.ObserverSvcClient
 }
 
 func ProvideTestSecretManagementClient(testClients TestClients) secretmanagersvc.SecretManagementClient {

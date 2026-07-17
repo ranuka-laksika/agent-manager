@@ -1,0 +1,22 @@
+# Log files
+*.log
+
+# Environment files
+local.development.env
+.env
+.idea
+.vscode
+localdata/*
+data/*
+.DS_Store
+.bin
+
+# Build output
+tmp/*
+agent-manager-observer
+
+# Test output
+coverage/*
+test_output/*
+coverage.html
+
