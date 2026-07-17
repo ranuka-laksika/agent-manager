@@ -196,10 +196,12 @@ EOF
 }
 
 # render_consolidated_gateway <name> <cert_secret> [port] — print the single HTTPS
-# Gateway that fronts all three planes on :443 (validated in the consolidation spike).
-# It terminates TLS with the cert-manager wildcard Secret and accepts HTTPRoutes from
-# ANY namespace (from: All), so the control-plane, observability, and data-plane routes
-# all attach to it cross-namespace. Lives in GATEWAY_NS (same as the cert Secret).
+# Gateway that fronts all three planes on :443. It terminates TLS with the cert-manager
+# wildcard Secret, then forwards by host to each plane's own gateway via the front-proxy
+# HTTPRoutes (see render_frontproxy_route). Those routes live alongside the Gateway in
+# GATEWAY_NS, so allowedRoutes is `Same`: the plane gateways keep their own routes and
+# plane separation is preserved — nothing reparents onto this Gateway. Lives in GATEWAY_NS
+# (same as the cert Secret, so the listener's certificateRefs resolves same-namespace).
 render_consolidated_gateway() {
   local name="$1" secret="$2" port="${3:-443}"
   cat <<EOF
@@ -220,6 +222,67 @@ spec:
           - name: ${secret}
       allowedRoutes:
         namespaces:
-          from: All
+          from: Same
+EOF
+}
+
+# render_frontproxy_route <name> <gateway> <backend_ns> <backend_svc> <backend_port> <host>...
+# Print an HTTPRoute in GATEWAY_NS, parented to the consolidated :443 Gateway, that
+# forwards the given hostnames to one plane's gateway Service. This is the front-proxy
+# model: the :443 Gateway terminates TLS and forwards by host to each plane's own gateway
+# (kgateway->kgateway, validated on a live VM), which then routes to the workload with the
+# Host header preserved. Plane separation stays intact (each plane keeps its gateway and
+# its routes), and wildcard hostnames (*.agents, *.thunder) cover the dynamic tiers —
+# deployed agents and per-env Thunder — with no per-object reparenting.
+render_frontproxy_route() {
+  local name="$1" gateway="$2" bns="$3" bsvc="$4" bport="$5"; shift 5
+  cat <<EOF
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: ${name}
+  namespace: ${GATEWAY_NS}
+spec:
+  parentRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: ${gateway}
+  hostnames:
+EOF
+  local h
+  for h in "$@"; do
+    [[ -n "$h" ]] && printf '    - %s\n' "$(_yaml_quote "$h")"
+  done
+  cat <<EOF
+  rules:
+    - backendRefs:
+        - group: ""
+          kind: Service
+          name: ${bsvc}
+          namespace: ${bns}
+          port: ${bport}
+EOF
+}
+
+# render_backend_referencegrant <target_ns> — print a ReferenceGrant in <target_ns> that
+# lets the front-proxy HTTPRoutes (in GATEWAY_NS) backendRef Services there. Required for
+# the observability and data plane gateways, which are cross-namespace from GATEWAY_NS; the
+# control-plane gateway is same-namespace as GATEWAY_NS and needs no grant.
+render_backend_referencegrant() {
+  local tns="$1"
+  cat <<EOF
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: amp-frontproxy-to-services
+  namespace: ${tns}
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: ${GATEWAY_NS}
+  to:
+    - group: ""
+      kind: Service
 EOF
 }
