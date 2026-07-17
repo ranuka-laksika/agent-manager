@@ -16,7 +16,7 @@
  */
 
 import React, { useMemo, useState } from "react";
-import { generatePath, useParams } from "react-router-dom";
+import { generatePath, useParams, useSearchParams } from "react-router-dom";
 import { Box, Card, Divider, Tab, Tabs } from "@wso2/oxygen-ui";
 import { PageLayout } from "@agent-management-platform/views";
 import {
@@ -31,6 +31,7 @@ import {
   type AgentConfigTableLabels,
 } from "./Configure/subComponents/AgentConfigTableSection";
 import { AddMCPToolConfigPanel } from "./Configure/subComponents/AddMCPToolConfigPanel";
+import { CONFIGURE_TAB_PARAM, type ConfigureTabKey } from "./configureTabs";
 
 const configureRoutes =
   absoluteRouteMap.children.org.children.projects.children.agents.children
@@ -85,8 +86,18 @@ function TabPanel({ value, index, children }: TabPanelProps) {
   );
 }
 
+const TAB_KEYS: ConfigureTabKey[] = ["llm", "tools"];
+
 export const ConfigureComponent: React.FC = () => {
-  const [tabIndex, setTabIndex] = useState(0);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabIndex = Math.max(
+    0,
+    TAB_KEYS.indexOf(searchParams.get(CONFIGURE_TAB_PARAM) as ConfigureTabKey),
+  );
+  const handleTabChange = (_: React.SyntheticEvent, index: number) => {
+    setSearchParams({ [CONFIGURE_TAB_PARAM]: TAB_KEYS[index] }, { replace: true });
+  };
+
   const [isAddingMcp, setIsAddingMcp] = useState(false);
   const { orgId, projectId, agentId } = useParams<{
     orgId: string;
@@ -156,7 +167,7 @@ export const ConfigureComponent: React.FC = () => {
       <Card variant="outlined">
         <Tabs
           value={tabIndex}
-          onChange={(_, v: number) => setTabIndex(v)}
+          onChange={handleTabChange}
           variant="scrollable"
           allowScrollButtonsMobile
         >

@@ -63,6 +63,7 @@ import { ProviderSelectDrawer } from "./ProviderSelectDrawer";
 import { EmptyConfigCard } from "./Configure/subComponents/EmptyConfigCard";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
 import { LLMProxyAPIKeysSection } from "./Configure/subComponents/LLMProxyAPIKeysSection";
+import { CONFIGURE_TAB_PARAM } from "./configureTabs";
 
 function generateDisplayName(key: string): string {
   switch (key) {
@@ -187,11 +188,11 @@ export const ViewLLMProviderComponent: React.FC = () => {
 
   const backHref =
     orgId && projectId && agentId
-      ? generatePath(
+      ? `${generatePath(
         absoluteRouteMap.children.org.children.projects.children.agents
           .children.configure.path,
         { orgId, projectId, agentId },
-      )
+      )}?${CONFIGURE_TAB_PARAM}=llm`
       : "#";
 
   const {

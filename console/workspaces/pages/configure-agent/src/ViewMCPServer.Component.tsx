@@ -33,11 +33,13 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   Divider,
   Form,
   FormControl,
   FormLabel,
   IconButton,
+  ListingTable,
   MenuItem,
   Select,
   Skeleton,
@@ -49,6 +51,7 @@ import {
   AlertTriangle,
   BookOpen,
   ExternalLink,
+  Wrench,
 } from "@wso2/oxygen-ui-icons-react";
 import {
   useGetAgent,
@@ -56,6 +59,7 @@ import {
   useGetMCPProxy,
   useListEnvironments,
   useListMCPProxies,
+  useListMCPProxyScopes,
   useUpdateAgentMCPConfig,
 } from "@agent-management-platform/api-client";
 import {
@@ -63,6 +67,10 @@ import {
   type EnvironmentVariableConfig,
   type EnvProviderConfigMappings,
 } from "@agent-management-platform/types";
+import {
+  getCapabilityId,
+  isToolBlockedByAcl,
+} from "@agent-management-platform/mcp-proxies";
 import {
   generatePath,
   useLocation,
@@ -76,6 +84,7 @@ import {
 } from "./Configure/subComponents/EnvironmentVariablesReference";
 import { MCPServerDisplay } from "./Configure/subComponents/MCPServerDisplay";
 import { MCPProxyAPIKeysSection } from "./Configure/subComponents/MCPProxyAPIKeysSection";
+import { CONFIGURE_TAB_PARAM } from "./configureTabs";
 
 type AuthInfoEntry = {
   type: string;
@@ -161,6 +170,8 @@ export const ViewMCPServerComponent = () => {
   const decodedConfigId = useMemo(() => decodeRouteParam(proxyId), [proxyId]);
   const environmentSelectId = useId();
   const environmentSelectLabelId = useId();
+  const toolGroupSelectId = useId();
+  const toolGroupSelectLabelId = useId();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -202,6 +213,8 @@ export const ViewMCPServerComponent = () => {
   const isExternal = agent?.provisioning?.type === "external";
 
   const { data: environments = [] } = useListEnvironments({ orgName: orgId });
+  const getEnvDisplayName = (name: string) =>
+    environments.find((env) => env.name === name)?.displayName ?? name;
   const { environments: pipelineEnvs } = usePipelineEnvironmentsState(
     orgId,
     projectId,
@@ -215,11 +228,11 @@ export const ViewMCPServerComponent = () => {
 
   const backHref =
     orgId && projectId && agentId
-      ? generatePath(
+      ? `${generatePath(
           absoluteRouteMap.children.org.children.projects.children.agents
             .children.configure.path,
           { orgId, projectId, agentId },
-        )
+        )}?${CONFIGURE_TAB_PARAM}=tools`
       : "#";
 
   // Show every environment the agent deploys to (pipeline order), plus any mapped
@@ -268,21 +281,99 @@ export const ViewMCPServerComponent = () => {
     orgName: orgId,
     proxyId: configProxyName ?? "",
   });
-  // Security lives on the source proxy's endpoint. Resolve the endpoint bound to the
-  // selected environment (matched by UUID; at most one per environment) to derive the
-  // header name.
+  // Security lives on the source proxy's endpoint bound to the selected
+  // environment (matched by UUID; at most one per environment).
   const selectedEnvUuid = environments.find(
     (env) => env.name === selectedEnvName,
   )?.id;
-  const sourceProxySecurity = selectedEnvUuid
+  const sourceProxyEndpoint = selectedEnvUuid
     ? sourceProxyDetails?.endpoints?.find((endpoint) =>
         endpoint.environments?.some(
           (binding) => binding.environmentUuid === selectedEnvUuid,
         ),
-      )?.security
+      )
     : undefined;
-  const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
-  const usesIdentitySecurity = sourceProxySecurity?.identity?.enabled === true;
+  const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxyEndpoint?.security);
+  const usesIdentitySecurity = sourceProxyEndpoint?.security?.identity?.enabled === true;
+
+  // Scopes are a proxy-level catalog (action -> tools it authorizes), not
+  // per-endpoint, so this fetch doesn't depend on the selected environment.
+  const { data: scopesData } = useListMCPProxyScopes(
+    { orgName: orgId ?? "", proxyId: configProxyName ?? "" },
+    { enabled: !!orgId && !!configProxyName },
+  );
+
+  // Tools belong to an endpoint, and each endpoint is bound to one or more of
+  // the agent's environments, so two environments can expose different tools
+  // if they're bound to different endpoints. Environments that share the same
+  // endpoint (the common case) are grouped into one option instead of
+  // repeating an identical entry per environment — picked via the selector
+  // below, the same way the existing "Environment" selector works.
+  const toolGroups = useMemo(() => {
+    const scopesByTool: Record<string, string[]> = {};
+    for (const scope of scopesData?.scopes ?? []) {
+      for (const toolId of scope.tools) {
+        (scopesByTool[toolId] ??= []).push(scope.scope);
+      }
+    }
+
+    const groups: {
+      key: string;
+      envNames: string[];
+      rows: { id: string; blocked: boolean; scopes: string[] }[];
+    }[] = [];
+    const groupIndexByEndpointId = new Map<string, number>();
+
+    for (const envName of envNames) {
+      const envUuid = environments.find((env) => env.name === envName)?.id;
+      const endpoint = envUuid
+        ? sourceProxyDetails?.endpoints?.find((ep) =>
+            ep.environments?.some((binding) => binding.environmentUuid === envUuid),
+          )
+        : undefined;
+
+      // Environments with no matching endpoint each get their own (empty) group
+      // rather than being merged together under a made-up shared key.
+      const groupKey = endpoint?.id ?? `__unbound__:${envName}`;
+      const existingIndex = groupIndexByEndpointId.get(groupKey);
+      if (existingIndex !== undefined) {
+        groups[existingIndex].envNames.push(envName);
+        continue;
+      }
+
+      const rows = (endpoint?.capabilities?.tools ?? [])
+        .map((raw) => {
+          const id = getCapabilityId("tool", raw);
+          if (!id) return null;
+          return {
+            id,
+            blocked: isToolBlockedByAcl(endpoint, id),
+            scopes: scopesByTool[id] ?? [],
+          };
+        })
+        .filter(
+          (row): row is { id: string; blocked: boolean; scopes: string[] } =>
+            row !== null,
+        );
+
+      groupIndexByEndpointId.set(groupKey, groups.length);
+      groups.push({ key: groupKey, envNames: [envName], rows });
+    }
+
+    return groups;
+  }, [envNames, environments, sourceProxyDetails, scopesData]);
+
+  const [selectedToolGroupKey, setSelectedToolGroupKey] = useState("");
+  useEffect(() => {
+    if (toolGroups.length === 0) return;
+    if (!toolGroups.some((group) => group.key === selectedToolGroupKey)) {
+      setSelectedToolGroupKey(toolGroups[0].key);
+    }
+  }, [toolGroups, selectedToolGroupKey]);
+
+  const selectedToolGroup = toolGroups.find(
+    (group) => group.key === selectedToolGroupKey,
+  );
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
@@ -668,6 +759,92 @@ export const ViewMCPServerComponent = () => {
           )}
         </Form.Section>
 
+        <Form.Section>
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
+            <Form.Subheader>Tools</Form.Subheader>
+            {toolGroups.length > 1 && (
+              <Stack direction="row" spacing={2} alignItems="center">
+                <Typography
+                  id={toolGroupSelectLabelId}
+                  variant="body2"
+                  color="text.secondary"
+                >
+                  Environment
+                </Typography>
+                <FormControl size="small" sx={{ minWidth: 260 }}>
+                  <Select
+                    id={toolGroupSelectId}
+                    labelId={toolGroupSelectLabelId}
+                    value={selectedToolGroupKey}
+                    onChange={(event) =>
+                      setSelectedToolGroupKey(event.target.value as string)
+                    }
+                  >
+                    {toolGroups.map((group) => (
+                      <MenuItem key={group.key} value={group.key}>
+                        {group.envNames.map(getEnvDisplayName).join(", ")}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            )}
+          </Stack>
+          {!selectedToolGroup || selectedToolGroup.rows.length === 0 ? (
+            <ListingTable.Container>
+              <ListingTable.EmptyState
+                illustration={<Wrench size={56} />}
+                title="No tools available"
+                description="This environment's endpoint hasn't reported any tools yet."
+              />
+            </ListingTable.Container>
+          ) : (
+            <ListingTable.Container>
+              <ListingTable variant="table">
+                <ListingTable.Head>
+                  <ListingTable.Row>
+                    <ListingTable.Cell>Tool</ListingTable.Cell>
+                    <ListingTable.Cell width="140px">Status</ListingTable.Cell>
+                    <ListingTable.Cell>Scopes</ListingTable.Cell>
+                  </ListingTable.Row>
+                </ListingTable.Head>
+                <ListingTable.Body>
+                  {selectedToolGroup.rows.map((tool) => (
+                    <ListingTable.Row key={tool.id} variant="table">
+                      <ListingTable.Cell>
+                        <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                          {tool.id}
+                        </Typography>
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Chip
+                          size="small"
+                          variant="outlined"
+                          label={tool.blocked ? "Blocked" : "Allowed"}
+                          color={tool.blocked ? "error" : "success"}
+                        />
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        {tool.scopes.length > 0 ? (
+                          <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                            {tool.scopes.map((scope) => (
+                              <Chip key={scope} size="small" variant="outlined" label={scope} />
+                            ))}
+                          </Stack>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">
+                            —
+                          </Typography>
+                        )}
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))}
+                </ListingTable.Body>
+              </ListingTable>
+            </ListingTable.Container>
+          )}
+        </Form.Section>
+
         {isExternal && providerConfig && (
           <Stack spacing={2}>
             <Stack direction="row" spacing={2} alignItems="center">
@@ -689,8 +866,7 @@ export const ViewMCPServerComponent = () => {
                 >
                   {envNames.map((name) => (
                     <MenuItem key={name} value={name}>
-                      {environments.find((e) => e.name === name)?.displayName ??
-                        name}
+                      {getEnvDisplayName(name)}
                     </MenuItem>
                   ))}
                 </Select>
