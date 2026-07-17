@@ -52,8 +52,9 @@ amObserver:
   # Externally reachable base URL of this service.
   # Used as the `resource` identifier in RFC 9728 protected resource metadata
   # and in the WWW-Authenticate resource_metadata parameter on 401 responses.
-  # Routed through the observability-plane gateway (see ocIngress above).
-  publicUrl: "http://traces.amp.localhost:8080"
+  # Routed through the observability-plane gateway (see ocIngress above), which
+  # k3d maps to host port 11080 — not the 8080 control-plane gateway.
+  publicUrl: "http://traces.amp.localhost:11080"
   # OAuth 2.0 discovery metadata for MCP clients (RFC 9728). Consumed by the
   # /mcp route's protected-resource well-known endpoint; the observer itself
   # only authenticates tokens (no scope/claims enforcement).
