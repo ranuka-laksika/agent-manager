@@ -3,7 +3,12 @@
 # Variables
 TAG=0.0.0-dev
 APP_NAME=agent-manager-observer
-DOCKER_IMAGE=$(APP_NAME):$(TAG)
+# Published image name is the canonical amp-* name (see .github/release-config.json:
+# agent-manager-observer -> amp-observer), matching how agent-manager-service ships
+# as amp-api. The helm chart's developmentMode references amp-observer:0.0.0-dev, so
+# the local build/import must produce that name too.
+IMAGE_NAME=amp-observer
+DOCKER_IMAGE=$(IMAGE_NAME):$(TAG)
 CONTAINER_NAME=$(APP_NAME)
 PORT=9098
 KIND_CLUSTER_NAME=openchoreo-local
