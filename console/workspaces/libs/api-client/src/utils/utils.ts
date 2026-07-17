@@ -72,33 +72,51 @@ async function finalizeHttpWriteResponse(response: Response): Promise<Response> 
 }
 
 export async function httpGET(
-    context: string, 
-    params:{searchParams?: Record<string, string>, token?: string, options?: HttpOptions}) {
-    const {searchParams, token} = params;
+    context: string,
+    params:{
+        searchParams?: Record<string, string>,
+        token?: string,
+        options?: HttpOptions,
+        timeoutMs?: number,
+    }) {
+    const {searchParams, token, timeoutMs} = params;
     const baseUrl = globalConfig.apiBaseUrl;
-    const response = await fetch(`${baseUrl}${context}?${new URLSearchParams(searchParams).toString()}`, {
-        method: 'GET',
-        headers:  token ? {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            } : {
-              'Content-Type': 'application/json'
-            }
-    });
-    if (!response.ok) {
-        const err = new Error(`HTTP error! status: ${response.status}`) as HttpErrorWithStatus;
-        err.status = response.status;
-        throw err;
+    // Optional AbortController timeout so a hung endpoint rejects (as an
+    // AbortError) instead of leaving the request pending forever. Callers that
+    // gate app bootstrap on a GET (e.g. runtime config) must pass timeoutMs.
+    const controller = timeoutMs ? new AbortController() : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+    try {
+        const response = await fetch(`${baseUrl}${context}?${new URLSearchParams(searchParams).toString()}`, {
+            method: 'GET',
+            headers:  token ? {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                } : {
+                  'Content-Type': 'application/json'
+                },
+            signal: controller?.signal
+        });
+        if (!response.ok) {
+            const err = new Error(`HTTP error! status: ${response.status}`) as HttpErrorWithStatus;
+            err.status = response.status;
+            throw err;
+        }
+        await sleep(DEFAULT_TIMEOUT);
+        return response;
+    } finally {
+        if (timer) clearTimeout(timer);
     }
-    await sleep(DEFAULT_TIMEOUT);
-    return response;
 }
 
 let observerBaseUrl: string | undefined;
 
 /** Set by the runtime-config bootstrap once GET /api/v1/config resolves. */
 export function setObserverBaseUrl(url: string | undefined): void {
-  observerBaseUrl = url?.trim() || undefined;
+  // Strip trailing slashes: requests are built as `${observerBaseUrl}${context}`
+  // where context already starts with "/", so a trailing slash here would
+  // produce "//api/v1/..." and 404 on gateways that don't collapse "//".
+  observerBaseUrl = url?.trim().replace(/\/+$/, "") || undefined;
 }
 
 export function isObserverConfigured(): boolean {

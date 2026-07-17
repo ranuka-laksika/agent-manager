@@ -19,9 +19,14 @@
 import { httpGET, SERVICE_BASE } from "../utils";
 import type { ConfigResponse } from "@agent-management-platform/types";
 
+// The whole app renders a full-page loader until this resolves, so bound the
+// request: a hung config endpoint must surface as an error (via AbortError)
+// rather than trapping the user on the loader forever.
+const CONFIG_FETCH_TIMEOUT_MS = 5000;
+
 /** Unauthenticated discovery endpoint served by agent-manager. */
 export async function getRuntimeConfig(): Promise<ConfigResponse> {
-  const res = await httpGET(`${SERVICE_BASE}/config`, {});
+  const res = await httpGET(`${SERVICE_BASE}/config`, { timeoutMs: CONFIG_FETCH_TIMEOUT_MS });
   if (!res.ok) throw await res.json();
   return res.json();
 }
