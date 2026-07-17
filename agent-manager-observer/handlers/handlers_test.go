@@ -277,12 +277,53 @@ func TestGetLogs_TimeRangeExceeds14Days(t *testing.T) {
 	assertBadRequest(t, rec)
 }
 
-func TestGetLogs_InvalidLogLevel(t *testing.T) {
-	h := newHandler()
+// An unknown log level is ignored (filtering by the valid ones) rather than
+// failing the whole request, matching typical filter semantics.
+func TestGetLogs_UnknownLogLevelIgnored(t *testing.T) {
+	fake := &fakeObserverClient{}
+	h := NewHandler(nil, controllers.NewObservabilityController(fake))
+
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/logs?"+baseParams()+"&logLevels=INFO,BOGUS", nil)
 	rec := httptest.NewRecorder()
 	h.GetLogs(rec, r)
-	assertBadRequest(t, rec)
+
+	assertStatus(t, rec, http.StatusOK)
+	if got := fake.lastLogsReq.LogLevels; len(got) != 1 || got[0] != "INFO" {
+		t.Errorf("expected only valid levels forwarded, got %v", got)
+	}
+}
+
+// A trailing or duplicate comma yields empty tokens that must be skipped, not
+// rejected as an invalid ("") level.
+func TestGetLogs_EmptyLogLevelTokensSkipped(t *testing.T) {
+	fake := &fakeObserverClient{}
+	h := NewHandler(nil, controllers.NewObservabilityController(fake))
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/logs?"+baseParams()+"&logLevels=INFO,,ERROR,", nil)
+	rec := httptest.NewRecorder()
+	h.GetLogs(rec, r)
+
+	assertStatus(t, rec, http.StatusOK)
+	got := fake.lastLogsReq.LogLevels
+	if len(got) != 2 || got[0] != "INFO" || got[1] != "ERROR" {
+		t.Errorf("expected [INFO ERROR], got %v", got)
+	}
+}
+
+// When every supplied level is unknown, no filter is applied (nil levels)
+// rather than failing the request.
+func TestGetLogs_AllUnknownLogLevelsYieldNoFilter(t *testing.T) {
+	fake := &fakeObserverClient{}
+	h := NewHandler(nil, controllers.NewObservabilityController(fake))
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/logs?"+baseParams()+"&logLevels=BOGUS,NOPE", nil)
+	rec := httptest.NewRecorder()
+	h.GetLogs(rec, r)
+
+	assertStatus(t, rec, http.StatusOK)
+	if got := fake.lastLogsReq.LogLevels; len(got) != 0 {
+		t.Errorf("expected no log-level filter, got %v", got)
+	}
 }
 
 func TestGetLogs_LimitTooHigh(t *testing.T) {

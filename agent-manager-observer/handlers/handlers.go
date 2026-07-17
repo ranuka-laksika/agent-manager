@@ -360,11 +360,7 @@ func (h *Handler) GetLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logLevels, err := parseLogLevels(query.Get("logLevels"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
+	logLevels := parseLogLevels(query.Get("logLevels"))
 
 	limit, err := parseOptionalLimit(query.Get("limit"), maxLogLimit)
 	if err != nil {
@@ -587,22 +583,32 @@ func validateLogTimeRange(start, end time.Time) error {
 }
 
 // parseLogLevels splits a comma-separated logLevels value, uppercases each
-// entry, and validates it against the accepted set. An empty string yields a
+// entry, and keeps the ones in the accepted set. It tolerates malformed input
+// the way a filter should: empty tokens (from trailing or duplicate commas)
+// are skipped, and unknown levels are ignored rather than failing the whole
+// request. An empty string — or a value with no recognized levels — yields a
 // nil slice (no filtering).
-func parseLogLevels(s string) ([]string, error) {
+func parseLogLevels(s string) []string {
 	if s == "" {
-		return nil, nil
+		return nil
 	}
 	parts := strings.Split(s, ",")
 	levels := make([]string, 0, len(parts))
 	for _, p := range parts {
 		level := strings.ToUpper(strings.TrimSpace(p))
+		if level == "" {
+			continue
+		}
 		if !validLogLevels[level] {
-			return nil, fmt.Errorf("invalid logLevels value %q: must be one of INFO, DEBUG, WARN, ERROR", p)
+			slog.Debug("ignoring unknown logLevels value", "value", p)
+			continue
 		}
 		levels = append(levels, level)
 	}
-	return levels, nil
+	if len(levels) == 0 {
+		return nil
+	}
+	return levels
 }
 
 // parseOptionalLimit parses an optional limit query parameter for /api/v1/logs:
