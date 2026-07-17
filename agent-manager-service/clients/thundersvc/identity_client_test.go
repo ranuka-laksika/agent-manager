@@ -282,3 +282,58 @@ func TestGetAgentRoleAssignments_SkipsDeletedGroup(t *testing.T) {
 	assert.Empty(t, assignments.Groups)
 	assert.Equal(t, []AssignmentEntry{{ID: "a1", Type: "agent"}}, assignments.Agents)
 }
+
+// TestListRoles_OUFiltered_ExcludesNativeAdministrator proves the OU-scoped role
+// listing hides Thunder's native Administrator role — it carries the built-in
+// "system" scope and must never surface as an assignable agent role — and that
+// the exclusion happens before client-side pagination so offset/limit/total stay
+// consistent.
+func TestListRoles_OUFiltered_ExcludesNativeAdministrator(t *testing.T) {
+	srv := newTestThunderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodGet, r.Method)
+		require.Equal(t, "/roles", r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"totalResults": 3,
+			"roles": []map[string]any{
+				{"id": "r-admin", "ouId": "ou-1", "name": NativeAdministratorRoleName},
+				{"id": "r-readers", "ouId": "ou-1", "name": "readers"},
+				{"id": "r-elsewhere", "ouId": "ou-2", "name": "writers"},
+			},
+		})
+	})
+	defer srv.Close()
+
+	client := NewIdentityClient(srv.URL, "sys-client", "sys-secret")
+	roles, total, err := client.ListRoles(context.Background(), "ou-1", 0, 20)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, total, "Administrator must not count toward the OU total")
+	require.Len(t, roles, 1)
+	assert.Equal(t, "readers", roles[0].Name)
+}
+
+// TestListRoles_Unfiltered_KeepsNativeAdministrator pins the ouID="" contract:
+// rolesForAssignee and the scope-cleanup sweep walk every role in the instance
+// and must still see the native Administrator role (e.g. to report an agent
+// already mis-assigned to it).
+func TestListRoles_Unfiltered_KeepsNativeAdministrator(t *testing.T) {
+	srv := newTestThunderServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"totalResults": 2,
+			"roles": []map[string]any{
+				{"id": "r-admin", "ouId": "ou-1", "name": NativeAdministratorRoleName},
+				{"id": "r-readers", "ouId": "ou-1", "name": "readers"},
+			},
+		})
+	})
+	defer srv.Close()
+
+	client := NewIdentityClient(srv.URL, "sys-client", "sys-secret")
+	roles, total, err := client.ListRoles(context.Background(), "", 0, 20)
+
+	require.NoError(t, err)
+	assert.Equal(t, 2, total)
+	require.Len(t, roles, 2)
+}
