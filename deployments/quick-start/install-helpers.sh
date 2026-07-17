@@ -153,6 +153,7 @@ install_agent_management_platform() {
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${AMP_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
         --set console.config.instrumentationUrl="http://default-default.gateway.localhost:19080/otel" \
+        --set agentManagerService.config.amObserverPublicURL="http://traces.amp.localhost:11080" \
         "${AMP_HELM_ARGS[@]}" >"${helm_log}" 2>&1; then
         echo "Helm installation log (last 50 lines):"
         tail -50 "${helm_log}" 2>/dev/null || cat "${helm_log}" 2>/dev/null || echo "Log file not available"
