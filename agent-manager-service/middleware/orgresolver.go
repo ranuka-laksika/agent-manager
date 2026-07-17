@@ -23,26 +23,22 @@ import (
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/orgctx"
 )
 
 // ResolvedOrg holds the org identity injected into the request context by
-// RequireOrgMatch after successful token validation.
-type ResolvedOrg struct {
-	OuHandle string // Thunder OU handle from token
-	OUID     string // Thunder OU ID from token
-}
-
-type resolvedOrgKey struct{}
+// RequireOrgMatch after successful token validation. It lives in the leaf
+// orgctx package so outbound clients can read it without importing middleware.
+type ResolvedOrg = orgctx.ResolvedOrg
 
 // WithResolvedOrg stores a ResolvedOrg in the context.
 func WithResolvedOrg(ctx context.Context, org ResolvedOrg) context.Context {
-	return context.WithValue(ctx, resolvedOrgKey{}, org)
+	return orgctx.WithResolvedOrg(ctx, org)
 }
 
 // GetResolvedOrg retrieves the ResolvedOrg injected by RequireOrgMatch.
 func GetResolvedOrg(ctx context.Context) (ResolvedOrg, bool) {
-	org, ok := ctx.Value(resolvedOrgKey{}).(ResolvedOrg)
-	return org, ok
+	return orgctx.GetResolvedOrg(ctx)
 }
 
 // OUIDFromRequest returns the token's OU ID injected by RequireOrgMatch.
