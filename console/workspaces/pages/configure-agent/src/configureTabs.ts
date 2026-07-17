@@ -21,4 +21,5 @@
 // resetting to the first one. Shared by Configure.Component.tsx (reads/writes
 // it) and the LLM/MCP detail views (write it into their own backHref).
 export const CONFIGURE_TAB_PARAM = "tab";
-export type ConfigureTabKey = "llm" | "tools";
+export const CONFIGURE_TAB_KEYS = ["llm", "tools"] as const;
+export type ConfigureTabKey = (typeof CONFIGURE_TAB_KEYS)[number];

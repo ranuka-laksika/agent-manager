@@ -31,7 +31,7 @@ import {
   type AgentConfigTableLabels,
 } from "./Configure/subComponents/AgentConfigTableSection";
 import { AddMCPToolConfigPanel } from "./Configure/subComponents/AddMCPToolConfigPanel";
-import { CONFIGURE_TAB_PARAM, type ConfigureTabKey } from "./configureTabs";
+import { CONFIGURE_TAB_KEYS, CONFIGURE_TAB_PARAM } from "./configureTabs";
 
 const configureRoutes =
   absoluteRouteMap.children.org.children.projects.children.agents.children
@@ -86,16 +86,23 @@ function TabPanel({ value, index, children }: TabPanelProps) {
   );
 }
 
-const TAB_KEYS: ConfigureTabKey[] = ["llm", "tools"];
-
 export const ConfigureComponent: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabIndex = Math.max(
-    0,
-    TAB_KEYS.indexOf(searchParams.get(CONFIGURE_TAB_PARAM) as ConfigureTabKey),
+  const requestedTabIndex = CONFIGURE_TAB_KEYS.indexOf(
+    searchParams.get(CONFIGURE_TAB_PARAM) as (typeof CONFIGURE_TAB_KEYS)[number],
   );
+  const tabIndex = requestedTabIndex === -1 ? 0 : requestedTabIndex;
   const handleTabChange = (_: React.SyntheticEvent, index: number) => {
-    setSearchParams({ [CONFIGURE_TAB_PARAM]: TAB_KEYS[index] }, { replace: true });
+    // Preserve any other query params already on the URL instead of
+    // replacing the whole search string with just this one.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set(CONFIGURE_TAB_PARAM, CONFIGURE_TAB_KEYS[index]);
+        return next;
+      },
+      { replace: true },
+    );
   };
 
   const [isAddingMcp, setIsAddingMcp] = useState(false);
