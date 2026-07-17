@@ -55,7 +55,11 @@ jobs:
           - wso2-amp-evaluation-extension
           - wso2-amp-api-platform-gateway-extension
     steps:
+      # Best-effort: the package may not exist yet (e.g. right after an image
+      # is renamed, before its first build/push creates the GHCR package), in
+      # which case the action 404s. Don't let that block build/e2e downstream.
       - name: Delete previous 0.0.0-dev-* tags for ${{ matrix.package }}
+        continue-on-error: true
         uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
