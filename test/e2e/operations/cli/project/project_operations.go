@@ -33,7 +33,6 @@ type Project struct {
 	DisplayName        string    `json:"displayName"`
 	Description        string    `json:"description"`
 	DeploymentPipeline string    `json:"deploymentPipeline"`
-	OrgName            string    `json:"orgName"`
 	UUID               string    `json:"uuid"`
 	CreatedAt          time.Time `json:"createdAt"`
 }
