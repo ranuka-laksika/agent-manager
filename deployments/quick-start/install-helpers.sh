@@ -22,6 +22,11 @@ THUNDER_EXTENSION_CHART_NAME="wso2-amp-thunder-extension"
 EVALUATION_CHART_NAME="wso2-amp-evaluation-extension"
 GATEWAY_EXTENSION_CHART_NAME="wso2-amp-api-platform-gateway-extension"
 
+# Agent Sandbox community module (openchoreo registry, versioned independently of AMP)
+AGENT_SANDBOX_CHART_REF="oci://ghcr.io/openchoreo/helm-charts/agent-sandbox"
+AGENT_SANDBOX_MODULE_VERSION="${AGENT_SANDBOX_MODULE_VERSION:-0.1.1}"
+AGENT_SANDBOX_UPSTREAM_VERSION="${AGENT_SANDBOX_UPSTREAM_VERSION:-v0.4.6}"
+
 # Namespace definitions
 AMP_NS="${AMP_NS:-wso2-amp}"
 OBSERVABILITY_NS="${OBSERVABILITY_NS:-openchoreo-observability-plane}"
@@ -301,6 +306,33 @@ install_evaluation_extension() {
     if ! install_amp_helm_chart "${release_name}" "${chart_ref}" "${EVALUATION_NS}" "${TIMEOUT_AMP_INSTALL}" \
         --version "${chart_version}" \
         "${EVALUATION_HELM_ARGS[@]}"; then
+        return 1
+    fi
+
+    return 0
+}
+
+# Install Agent Sandbox module (required — agents run as sandboxed pods
+# rendered from SandboxTemplate/SandboxWarmPool CRDs this module provides)
+install_agent_sandbox_module() {
+    local release_name="agent-sandbox"
+
+    # Install Helm chart
+    if ! install_amp_helm_chart "${release_name}" "${AGENT_SANDBOX_CHART_REF}" "${DATA_PLANE_NS}" "${TIMEOUT_AMP_INSTALL}" \
+        --version "${AGENT_SANDBOX_MODULE_VERSION}" \
+        --wait \
+        --set namespace=openchoreo-control-plane \
+        --set dataPlaneNamespace="${DATA_PLANE_NS}" \
+        --set dataPlaneServiceAccount=cluster-agent-dataplane \
+        --set upstream.version="${AGENT_SANDBOX_UPSTREAM_VERSION}"; then
+        return 1
+    fi
+
+    # Wait for the sandbox controller to come up
+    if ! kubectl wait -n agent-sandbox-system \
+        --for=condition=available \
+        --timeout=180s \
+        deployment/agent-sandbox-controller &>/dev/null; then
         return 1
     fi
 

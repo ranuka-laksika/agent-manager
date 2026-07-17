@@ -28,6 +28,8 @@ type GatewayEnvironmentResponse struct {
 	DisplayName string `json:"displayName"`
 	// Optional description of the environment
 	Description *string `json:"description,omitempty"`
+	// Pod runtime isolation tier for agents. Use \"gvisor\" for runsc kernel isolation or \"kata\" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *string `json:"isolationTier,omitempty"`
 	// Reference to the dataplane
 	DataplaneRef string `json:"dataplaneRef"`
 	// DNS prefix for the environment
@@ -168,6 +170,38 @@ func (o *GatewayEnvironmentResponse) HasDescription() bool {
 // SetDescription gets a reference to the given string and assigns it to the Description field.
 func (o *GatewayEnvironmentResponse) SetDescription(v string) {
 	o.Description = &v
+}
+
+// GetIsolationTier returns the IsolationTier field value if set, zero value otherwise.
+func (o *GatewayEnvironmentResponse) GetIsolationTier() string {
+	if o == nil || IsNil(o.IsolationTier) {
+		var ret string
+		return ret
+	}
+	return *o.IsolationTier
+}
+
+// GetIsolationTierOk returns a tuple with the IsolationTier field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *GatewayEnvironmentResponse) GetIsolationTierOk() (*string, bool) {
+	if o == nil || IsNil(o.IsolationTier) {
+		return nil, false
+	}
+	return o.IsolationTier, true
+}
+
+// HasIsolationTier returns a boolean if a field has been set.
+func (o *GatewayEnvironmentResponse) HasIsolationTier() bool {
+	if o != nil && !IsNil(o.IsolationTier) {
+		return true
+	}
+
+	return false
+}
+
+// SetIsolationTier gets a reference to the given string and assigns it to the IsolationTier field.
+func (o *GatewayEnvironmentResponse) SetIsolationTier(v string) {
+	o.IsolationTier = &v
 }
 
 // GetDataplaneRef returns the DataplaneRef field value
@@ -337,6 +371,9 @@ func (o GatewayEnvironmentResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize["displayName"] = o.DisplayName
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
+	}
+	if !IsNil(o.IsolationTier) {
+		toSerialize["isolationTier"] = o.IsolationTier
 	}
 	toSerialize["dataplaneRef"] = o.DataplaneRef
 	toSerialize["dnsPrefix"] = o.DnsPrefix

@@ -25,6 +25,8 @@ type CreateEnvironmentRequest struct {
 	DisplayName string `json:"displayName"`
 	// Optional description of the environment
 	Description *string `json:"description,omitempty"`
+	// Pod runtime isolation tier for agents. Use \"gvisor\" for runsc kernel isolation or \"kata\" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *string `json:"isolationTier,omitempty"`
 	// Optional reference to the dataplane. When omitted, the default dataplane is used.
 	DataplaneRef *string `json:"dataplaneRef,omitempty"`
 	// DNS prefix for the environment
@@ -132,6 +134,38 @@ func (o *CreateEnvironmentRequest) HasDescription() bool {
 // SetDescription gets a reference to the given string and assigns it to the Description field.
 func (o *CreateEnvironmentRequest) SetDescription(v string) {
 	o.Description = &v
+}
+
+// GetIsolationTier returns the IsolationTier field value if set, zero value otherwise.
+func (o *CreateEnvironmentRequest) GetIsolationTier() string {
+	if o == nil || IsNil(o.IsolationTier) {
+		var ret string
+		return ret
+	}
+	return *o.IsolationTier
+}
+
+// GetIsolationTierOk returns a tuple with the IsolationTier field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CreateEnvironmentRequest) GetIsolationTierOk() (*string, bool) {
+	if o == nil || IsNil(o.IsolationTier) {
+		return nil, false
+	}
+	return o.IsolationTier, true
+}
+
+// HasIsolationTier returns a boolean if a field has been set.
+func (o *CreateEnvironmentRequest) HasIsolationTier() bool {
+	if o != nil && !IsNil(o.IsolationTier) {
+		return true
+	}
+
+	return false
+}
+
+// SetIsolationTier gets a reference to the given string and assigns it to the IsolationTier field.
+func (o *CreateEnvironmentRequest) SetIsolationTier(v string) {
+	o.IsolationTier = &v
 }
 
 // GetDataplaneRef returns the DataplaneRef field value if set, zero value otherwise.
@@ -268,6 +302,9 @@ func (o CreateEnvironmentRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize["displayName"] = o.DisplayName
 	if !IsNil(o.Description) {
 		toSerialize["description"] = o.Description
+	}
+	if !IsNil(o.IsolationTier) {
+		toSerialize["isolationTier"] = o.IsolationTier
 	}
 	if !IsNil(o.DataplaneRef) {
 		toSerialize["dataplaneRef"] = o.DataplaneRef

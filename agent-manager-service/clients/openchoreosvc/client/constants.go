@@ -45,7 +45,7 @@ const (
 type ComponentType string
 
 const (
-	ComponentTypeInternalAgentAPI ComponentType = "deployment/agent-api"
+	ComponentTypeInternalAgentAPI ComponentType = "proxy/agent-api"
 	ComponentTypeExternalAgentAPI ComponentType = "proxy/external-agent-api"
 )
 
@@ -186,8 +186,9 @@ const (
 // -----------------------------------------------------------------------------
 
 const (
-	AnnotationKeyDisplayName = "openchoreo.dev/display-name"
-	AnnotationKeyDescription = "openchoreo.dev/description"
+	AnnotationKeyDisplayName   = "openchoreo.dev/display-name"
+	AnnotationKeyDescription   = "openchoreo.dev/description"
+	AnnotationKeyIsolationTier = "openchoreo.dev/isolation-tier"
 )
 
 // / -----------------------------------------------------------------------------

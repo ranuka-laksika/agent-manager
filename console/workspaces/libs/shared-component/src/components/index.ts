@@ -28,6 +28,7 @@ export * from "./FileMountSection";
 export * from "./ResourceMetricChip";
 export * from "./GatewayTypeChip";
 export * from "./EnvironmentCard";
+export * from "./IsolationTierIndicator";
 export * from "./InvokeEndpoints";
 export * from "./ConfirmationDialog";
 export * from "./EnvironmentSelector";

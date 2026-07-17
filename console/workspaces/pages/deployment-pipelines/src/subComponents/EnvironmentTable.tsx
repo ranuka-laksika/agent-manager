@@ -35,7 +35,7 @@ import { AlertTriangle, Edit, Plus, Search, Server, Trash } from "@wso2/oxygen-u
 import { formatDistanceToNow } from "date-fns";
 import { generatePath, useNavigate, useParams } from "react-router-dom";
 import { useListEnvironments } from "@agent-management-platform/api-client";
-import { getErrorMessage } from "@agent-management-platform/shared-component";
+import { getErrorMessage, IsolationTierChip } from "@agent-management-platform/shared-component";
 import { absoluteRouteMap, type Environment } from "@agent-management-platform/types";
 import { FadeIn } from "@agent-management-platform/views";
 
@@ -210,6 +210,7 @@ export function EnvironmentTable(
                 <ListingTable.Cell>Environment</ListingTable.Cell>
                 <ListingTable.Cell>Data Plane</ListingTable.Cell>
                 <ListingTable.Cell align="center" width="160px">Type</ListingTable.Cell>
+                <ListingTable.Cell align="center" width="160px">Isolation Tier</ListingTable.Cell>
                 <ListingTable.Cell align="right" width="160px">Created</ListingTable.Cell>
               </ListingTable.Row>
             </ListingTable.Head>
@@ -259,6 +260,10 @@ export function EnvironmentTable(
                       variant="outlined"
                       color={env.isProduction ? "primary" : "default"}
                     />
+                  </ListingTable.Cell>
+
+                  <ListingTable.Cell align="center">
+                    <IsolationTierChip tier={env.isolationTier} />
                   </ListingTable.Cell>
 
                   <ListingTable.Cell align="right" sx={{ cursor: "default" }} onClick={(e) => e.stopPropagation()}>

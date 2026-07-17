@@ -25,7 +25,7 @@ type DeploymentDetailsResponse struct {
 	// Deployment status
 	Status string `json:"status"`
 	// Timestamp of last deployment
-	LastDeployed time.Time `json:"lastDeployed"`
+	LastDeployed *time.Time `json:"lastDeployed,omitempty"`
 	// List of deployment endpoints
 	Endpoints []DeploymentEndpoint `json:"endpoints"`
 	// Environment display name
@@ -37,11 +37,10 @@ type DeploymentDetailsResponse struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDeploymentDetailsResponse(imageId string, status string, lastDeployed time.Time, endpoints []DeploymentEndpoint) *DeploymentDetailsResponse {
+func NewDeploymentDetailsResponse(imageId string, status string, endpoints []DeploymentEndpoint) *DeploymentDetailsResponse {
 	this := DeploymentDetailsResponse{}
 	this.ImageId = imageId
 	this.Status = status
-	this.LastDeployed = lastDeployed
 	this.Endpoints = endpoints
 	return &this
 }
@@ -102,28 +101,36 @@ func (o *DeploymentDetailsResponse) SetStatus(v string) {
 	o.Status = v
 }
 
-// GetLastDeployed returns the LastDeployed field value
+// GetLastDeployed returns the LastDeployed field value if set, zero value otherwise.
 func (o *DeploymentDetailsResponse) GetLastDeployed() time.Time {
-	if o == nil {
+	if o == nil || IsNil(o.LastDeployed) {
 		var ret time.Time
 		return ret
 	}
-
-	return o.LastDeployed
+	return *o.LastDeployed
 }
 
-// GetLastDeployedOk returns a tuple with the LastDeployed field value
+// GetLastDeployedOk returns a tuple with the LastDeployed field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *DeploymentDetailsResponse) GetLastDeployedOk() (*time.Time, bool) {
-	if o == nil {
+	if o == nil || IsNil(o.LastDeployed) {
 		return nil, false
 	}
-	return &o.LastDeployed, true
+	return o.LastDeployed, true
 }
 
-// SetLastDeployed sets field value
+// HasLastDeployed returns a boolean if a field has been set.
+func (o *DeploymentDetailsResponse) HasLastDeployed() bool {
+	if o != nil && !IsNil(o.LastDeployed) {
+		return true
+	}
+
+	return false
+}
+
+// SetLastDeployed gets a reference to the given time.Time and assigns it to the LastDeployed field.
 func (o *DeploymentDetailsResponse) SetLastDeployed(v time.Time) {
-	o.LastDeployed = v
+	o.LastDeployed = &v
 }
 
 // GetEndpoints returns the Endpoints field value
@@ -226,7 +233,9 @@ func (o DeploymentDetailsResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["imageId"] = o.ImageId
 	toSerialize["status"] = o.Status
-	toSerialize["lastDeployed"] = o.LastDeployed
+	if !IsNil(o.LastDeployed) {
+		toSerialize["lastDeployed"] = o.LastDeployed
+	}
 	toSerialize["endpoints"] = o.Endpoints
 	if !IsNil(o.EnvironmentDisplayName) {
 		toSerialize["environmentDisplayName"] = o.EnvironmentDisplayName
