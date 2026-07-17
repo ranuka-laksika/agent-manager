@@ -1,7 +1,8 @@
 import React from "react";
-import { Form, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
+import { Box, Form, Stack, Tooltip, Typography } from "@wso2/oxygen-ui";
 import { Link } from "react-router-dom";
 import type { AgentKindResponse } from "@agent-management-platform/types";
+import { LabelChips } from "@agent-management-platform/shared-component";
 
 interface CatalogKindCardProps {
     item: AgentKindResponse;
@@ -29,6 +30,7 @@ export const CatalogKindCard: React.FC<CatalogKindCardProps> = ({ item, viewPath
                 }}
             >
                 <Form.CardHeader
+                    sx={{ pb: 0.5 }}
                     title={
                         <Tooltip title={item.displayName} placement="top">
                             <Typography
@@ -49,30 +51,44 @@ export const CatalogKindCard: React.FC<CatalogKindCardProps> = ({ item, viewPath
                         flexDirection: "column",
                         flexGrow: 1,
                         minHeight: 0,
+                        pt: 0,
                     }}
                 >
-                    <Stack flexGrow={1} minHeight={0}>
-                        <Tooltip title={description} placement="top" disableHoverListener={!description}>
-                            <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                sx={{
-                                    display: "-webkit-box",
-                                    WebkitBoxOrient: "vertical",
-                                    WebkitLineClamp: 2,
-                                    overflow: "hidden",
-                                    mb: 1,
-                                }}
-                            >
-                                {description || "No description provided."}
+                    {/* Name, description, and version form one tight metadata group. */}
+                    <Stack spacing={0.5} minHeight={0}>
+                        {/*
+                          Box is a plain block element, not a flex item directly —
+                          -webkit-line-clamp collapses to zero height (causing the
+                          next line to overlap it) when applied straight to a flex
+                          child, so it needs this non-flex wrapper to size correctly.
+                        */}
+                        <Box>
+                            <Tooltip title={description} placement="top" disableHoverListener={!description}>
+                                <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{
+                                        display: "-webkit-box",
+                                        WebkitBoxOrient: "vertical",
+                                        WebkitLineClamp: 2,
+                                        overflow: "hidden",
+                                    }}
+                                >
+                                    {description || "No description provided."}
+                                </Typography>
+                            </Tooltip>
+                        </Box>
+                        {latestReleaseLabel && (
+                            <Typography variant="caption" color="text.secondary">
+                                {latestReleaseLabel}
                             </Typography>
-                        </Tooltip>
+                        )}
                     </Stack>
-                    {latestReleaseLabel && (
-                        <Typography variant="caption" color="text.secondary">
-                            {latestReleaseLabel}
-                        </Typography>
-                    )}
+
+                    {/* Labels are a distinct group, anchored to the bottom of the card. */}
+                    <Box sx={{ mt: "auto", pt: 1 }}>
+                        <LabelChips labels={item.labels} />
+                    </Box>
                 </Form.CardContent>
             </Form.CardButton>
         </Link>

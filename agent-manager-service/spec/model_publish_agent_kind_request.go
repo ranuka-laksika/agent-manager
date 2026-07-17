@@ -25,6 +25,8 @@ type PublishAgentKindRequest struct {
 	KindDisplayName *string `json:"kindDisplayName,omitempty"`
 	// Description — used only when creating a new kind
 	KindDescription *string `json:"kindDescription,omitempty"`
+	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
+	KindLabels *map[string]string `json:"kindLabels,omitempty"`
 	// Version tag for this release
 	Version string `json:"version"`
 	// Build name from this agent's build history
@@ -142,6 +144,38 @@ func (o *PublishAgentKindRequest) HasKindDescription() bool {
 // SetKindDescription gets a reference to the given string and assigns it to the KindDescription field.
 func (o *PublishAgentKindRequest) SetKindDescription(v string) {
 	o.KindDescription = &v
+}
+
+// GetKindLabels returns the KindLabels field value if set, zero value otherwise.
+func (o *PublishAgentKindRequest) GetKindLabels() map[string]string {
+	if o == nil || IsNil(o.KindLabels) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.KindLabels
+}
+
+// GetKindLabelsOk returns a tuple with the KindLabels field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PublishAgentKindRequest) GetKindLabelsOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.KindLabels) {
+		return nil, false
+	}
+	return o.KindLabels, true
+}
+
+// HasKindLabels returns a boolean if a field has been set.
+func (o *PublishAgentKindRequest) HasKindLabels() bool {
+	if o != nil && !IsNil(o.KindLabels) {
+		return true
+	}
+
+	return false
+}
+
+// SetKindLabels gets a reference to the given map[string]string and assigns it to the KindLabels field.
+func (o *PublishAgentKindRequest) SetKindLabels(v map[string]string) {
+	o.KindLabels = &v
 }
 
 // GetVersion returns the Version field value
@@ -265,6 +299,9 @@ func (o PublishAgentKindRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.KindDescription) {
 		toSerialize["kindDescription"] = o.KindDescription
+	}
+	if !IsNil(o.KindLabels) {
+		toSerialize["kindLabels"] = o.KindLabels
 	}
 	toSerialize["version"] = o.Version
 	toSerialize["buildName"] = o.BuildName

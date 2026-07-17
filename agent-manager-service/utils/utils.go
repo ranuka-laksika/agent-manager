@@ -52,6 +52,11 @@ func ValidateAgentBasicInfoUpdatePayload(payload spec.UpdateAgentBasicInfoReques
 	if err := ValidateResourceDisplayName(payload.DisplayName, "agent"); err != nil {
 		return err
 	}
+	if payload.Labels != nil {
+		if err := ValidateLabels(*payload.Labels); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -251,6 +256,11 @@ func ValidateProjectUpdatePayload(payload spec.UpdateProjectRequest) error {
 }
 
 func ValidateAgentCreatePayload(payload spec.CreateAgentRequest) error {
+	if payload.Labels != nil {
+		if err := ValidateLabels(*payload.Labels); err != nil {
+			return err
+		}
+	}
 	return validateAgentPayload(agentPayload{
 		name:           payload.Name,
 		displayName:    payload.DisplayName,

@@ -41,7 +41,7 @@ import (
 )
 
 type AgentManagerService interface {
-	ListAgents(ctx context.Context, ouID string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error)
+	ListAgents(ctx context.Context, ouID string, projName string, labelFilter map[string]string, limit int32, offset int32) ([]*models.AgentResponse, int32, error)
 	CreateAgent(ctx context.Context, ouID string, projectName string, req *spec.CreateAgentRequest) error
 	UpdateAgentBasicInfo(ctx context.Context, ouID string, projectName string, agentName string, req *spec.UpdateAgentBasicInfoRequest) (*models.AgentResponse, error)
 	UpdateAgentBuildParameters(ctx context.Context, ouID string, projectName string, agentName string, req *spec.UpdateAgentBuildParametersRequest) (*models.AgentResponse, error)
@@ -920,7 +920,7 @@ func (s *agentManagerService) GetAgent(ctx context.Context, ouID string, project
 	return agent, nil
 }
 
-func (s *agentManagerService) ListAgents(ctx context.Context, ouID string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
+func (s *agentManagerService) ListAgents(ctx context.Context, ouID string, projName string, labelFilter map[string]string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
 	s.logger.Info("Listing agents", "ouID", ouID, "projectName", projName, "limit", limit, "offset", offset)
 	// Validate organization exists
 	_, err := s.ocClient.GetOrganization(ctx, ouID)
@@ -934,6 +934,19 @@ func (s *agentManagerService) ListAgents(ctx context.Context, ouID string, projN
 	if err != nil {
 		s.logger.Error("Failed to list agents from repository", "ouID", ouID, "projectName", projName, "error", err)
 		return nil, 0, fmt.Errorf("failed to list agents: %w", err)
+	}
+
+	// Filter before computing total and paginating so both stay correct.
+	// agent.Labels already arrives populated from the component's own
+	// metadata (see convertComponentFromTyped), no separate fetch needed.
+	if len(labelFilter) > 0 {
+		filtered := make([]*models.AgentResponse, 0, len(agents))
+		for _, agent := range agents {
+			if utils.LabelsMatch(agent.Labels, labelFilter) {
+				filtered = append(filtered, agent)
+			}
+		}
+		agents = filtered
 	}
 
 	total := int32(len(agents))
@@ -1477,6 +1490,11 @@ func (s *agentManagerService) toCreateAgentRequestWithSecrets(req *spec.CreateAg
 		}
 	}
 
+	var labels map[string]string
+	if req.Labels != nil {
+		labels = *req.Labels
+	}
+
 	result := client.CreateComponentRequest{
 		Name:             req.Name,
 		DisplayName:      req.DisplayName,
@@ -1487,6 +1505,7 @@ func (s *agentManagerService) toCreateAgentRequestWithSecrets(req *spec.CreateAg
 		AgentKind:        agentKindRef,
 		Build:            mapBuildConfig(req.Build),
 		InputInterface:   mapInputInterface(req.InputInterface),
+		Labels:           labels,
 	}
 
 	result.Configurations = mapConfigurationsWithSecrets(req.Configurations, secretReferences)
@@ -1572,17 +1591,21 @@ func (s *agentManagerService) UpdateAgentBasicInfo(ctx context.Context, ouID str
 		s.logger.Error("Failed to fetch existing agent", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
 		return nil, translateAgentError(err)
 	}
-	// Update agent basic info in OpenChoreo
+	// Update agent basic info in OpenChoreo. Labels: nil means "leave
+	// unchanged", a non-nil (possibly empty) map replaces the user-label set
+	// while system-managed labels are preserved (see UpdateComponentBasicInfo).
 	updateReq := client.UpdateComponentBasicInfoRequest{
 		DisplayName: req.DisplayName,
 		Description: req.Description,
+		Labels:      req.Labels,
 	}
 	if err := s.ocClient.UpdateComponentBasicInfo(ctx, ouID, projectName, agentName, updateReq); err != nil {
 		s.logger.Error("Failed to update agent meta data in OpenChoreo", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
 		return nil, fmt.Errorf("failed to update agent basic info: %w", err)
 	}
 
-	// Fetch agent to return current state
+	// Fetch agent to return current state (labels come pre-populated from
+	// the component's own metadata).
 	updatedAgent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
 	if err != nil {
 		s.logger.Error("Failed to fetch agent", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)

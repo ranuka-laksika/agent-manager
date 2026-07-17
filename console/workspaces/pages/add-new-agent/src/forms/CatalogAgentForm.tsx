@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { debounce } from "lodash";
 import { useGenerateResourceName } from "@agent-management-platform/api-client";
+import { LabelsEditor } from "@agent-management-platform/shared-component";
 import type { CreateAgentFormValues } from "../form/schema";
 
 interface CatalogAgentFormProps {
@@ -142,6 +143,14 @@ export const CatalogAgentForm = ({
             error={!!errors.description}
             helperText={errors.description}
             fullWidth
+          />
+        </Form.ElementWrapper>
+        <Form.ElementWrapper label="Labels (optional)" name="labels">
+          <LabelsEditor
+            hideTitle
+            description="Attach key/value labels to organize and filter agents."
+            value={formData.labels ?? {}}
+            onChange={(labels) => handleFieldChange("labels", labels)}
           />
         </Form.ElementWrapper>
       </Form.Stack>

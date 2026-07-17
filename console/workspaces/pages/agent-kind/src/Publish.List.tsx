@@ -38,7 +38,7 @@ import {
   type AgentKindVersionResponse,
   type BuildResponse,
 } from "@agent-management-platform/types";
-import { useConfirmationDialog } from "@agent-management-platform/shared-component";
+import { LabelsEditor, useConfirmationDialog } from "@agent-management-platform/shared-component";
 import { RuntimeConfigEditor, createRuntimeConfigRow, type RuntimeConfigRow } from "./RuntimeConfigEditor";
 import { useGetAgent, useGetAgentBuilds, useGetAgentKind, useListAgentKindVersions, usePublishAgentKind } from "@agent-management-platform/api-client";
 
@@ -84,6 +84,7 @@ export const PublishedList: React.FC = () => {
   const [selectedBuildName, setSelectedBuildName] = useState("");
   const [kindDisplayName, setKindDisplayName] = useState("");
   const [kindDescription, setKindDescription] = useState("");
+  const [kindLabels, setKindLabels] = useState<Record<string, string>>({});
   const [createRows, setCreateRows] = useState<RuntimeConfigRow[]>([createRuntimeConfigRow()]);
 
   const { addConfirmation } = useConfirmationDialog();
@@ -102,8 +103,8 @@ export const PublishedList: React.FC = () => {
   const { mutateAsync: publishAgentKind, isPending: isCreating } = usePublishAgentKind();
 
   const isDirty = useMemo(
-    () => versionName.trim() !== "" || selectedBuildName !== "" || kindDisplayName.trim() !== "" || kindDescription.trim() !== "" || createRows.some((r) => r.key.trim() !== ""),
-    [versionName, selectedBuildName, kindDisplayName, kindDescription, createRows],
+    () => versionName.trim() !== "" || selectedBuildName !== "" || kindDisplayName.trim() !== "" || kindDescription.trim() !== "" || Object.keys(kindLabels).length > 0 || createRows.some((r) => r.key.trim() !== ""),
+    [versionName, selectedBuildName, kindDisplayName, kindDescription, kindLabels, createRows],
   );
 
   const resetCreateForm = useCallback(() => {
@@ -111,6 +112,7 @@ export const PublishedList: React.FC = () => {
     setSelectedBuildName("");
     setKindDisplayName("");
     setKindDescription("");
+    setKindLabels({});
     setCreateRows([createRuntimeConfigRow()]);
   }, []);
 
@@ -147,6 +149,7 @@ export const PublishedList: React.FC = () => {
         kindName: agentId ?? "",
         kindDisplayName: kindDisplayName.trim() || undefined,
         kindDescription: kindDescription.trim() || undefined,
+        kindLabels: Object.keys(kindLabels).length > 0 ? kindLabels : undefined,
         version: versionName.trim(),
         buildName: selectedBuildName,
         configSchema,
@@ -156,7 +159,7 @@ export const PublishedList: React.FC = () => {
     resetCreateForm();
     navigate(listPath);
   }, [orgId, projectId, agentId, versionName, selectedBuildName, kindDisplayName, kindDescription,
-    createRows, publishAgentKind, resetCreateForm, navigate, listPath]);
+    kindLabels, createRows, publishAgentKind, resetCreateForm, navigate, listPath]);
 
   const { data: buildsData, isLoading: isBuildsLoading } = useGetAgentBuilds({
     orgName: orgId,
@@ -302,6 +305,14 @@ export const PublishedList: React.FC = () => {
                       size="small"
                       multiline
                       rows={2}
+                    />
+                  </Form.ElementWrapper>
+                  <Form.ElementWrapper label="Labels (optional)" name="kindLabels">
+                    <LabelsEditor
+                      hideTitle
+                      description="Attach key/value labels to organize and filter kinds."
+                      value={kindLabels}
+                      onChange={setKindLabels}
                     />
                   </Form.ElementWrapper>
                 </Form.Stack>

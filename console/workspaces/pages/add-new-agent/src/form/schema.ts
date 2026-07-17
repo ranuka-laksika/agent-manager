@@ -52,6 +52,9 @@ const baseAgentFields = {
     .trim()
     .max(50, 'Name must be at most 50 characters'),
   description: z.string().trim().optional(),
+  // Per-entry validation is enforced inline by LabelsEditor (mirroring the
+  // backend rules), so the schema only constrains the overall shape.
+  labels: z.record(z.string(), z.string()).optional(),
 };
 
 // Schema for connecting to an existing agent (minimal fields)

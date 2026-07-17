@@ -36,7 +36,8 @@ func NewAgentHandler(agentSvc services.AgentManagerService, tokenSvc services.Ag
 }
 
 func (h *AgentHandler) ListAgents(ctx context.Context, ouID string, projName string, limit int32, offset int32) ([]*models.AgentResponse, int32, error) {
-	return h.agentSvc.ListAgents(ctx, ouID, projName, limit, offset)
+	// MCP tools do not expose label filtering yet; list unfiltered.
+	return h.agentSvc.ListAgents(ctx, ouID, projName, nil, limit, offset)
 }
 
 func (h *AgentHandler) CreateAgent(ctx context.Context, ouID string, projectName string, req *spec.CreateAgentRequest) error {

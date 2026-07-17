@@ -54,6 +54,7 @@ export interface AgentKindResponse {
   organizationName: string;
   kind: 'AgentKind';
   latestVersion?: string;
+  labels?: Record<string, string>;
   versions: AgentKindVersionResponse[];
   createdAt: string;
   updatedAt?: string;
@@ -73,6 +74,8 @@ export interface AgentKindListResponse {
 export interface UpdateAgentKindRequest {
   displayName: string;
   description?: string;
+  /** Omit to leave labels unchanged; send {} to clear all labels. */
+  labels?: Record<string, string>;
 }
 
 export interface AddAgentKindVersionRequest {
@@ -88,6 +91,8 @@ export interface PublishAgentKindRequest {
   kindName: string;
   kindDisplayName?: string;
   kindDescription?: string;
+  /** Labels for the kind — used only when creating a new kind, ignored otherwise. */
+  kindLabels?: Record<string, string>;
   version: string;
   buildName: string;
   configSchema: AgentKindConfigSchemaItem[];
@@ -119,4 +124,5 @@ export type ListKindAgentsPathParams = OrgPathParams & { kindName: string };
 // Query params
 // ============================================
 
-export type ListAgentKindsQuery = ListQuery;
+/** `label` entries are `key:value` selectors; repeat for AND semantics. */
+export type ListAgentKindsQuery = ListQuery & { label?: string[] };

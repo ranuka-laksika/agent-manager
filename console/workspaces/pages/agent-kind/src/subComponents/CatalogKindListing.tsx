@@ -67,7 +67,12 @@ export const CatalogKindListing: React.FC<CatalogKindListingProps> = ({
       (item) =>
         item.displayName.toLowerCase().includes(term) ||
         item.name.toLowerCase().includes(term) ||
-        (item.description ?? "").toLowerCase().includes(term),
+        (item.description ?? "").toLowerCase().includes(term) ||
+        // Labels match as `key:value`, so typing "env:prod" (or a fragment
+        // of it) filters by label.
+        Object.entries(item.labels ?? {}).some(([k, v]) =>
+          `${k}:${v}`.toLowerCase().includes(term),
+        ),
     );
   }, [items, debouncedSearch]);
 
