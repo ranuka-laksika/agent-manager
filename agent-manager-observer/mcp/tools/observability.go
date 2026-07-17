@@ -18,12 +18,32 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	gomcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/wso2/agent-manager/agent-manager-observer/controllers"
+	"github.com/wso2/agent-manager/agent-manager-observer/middleware"
 )
+
+// rejectPublisherToken mirrors the REST RejectPublisherAudience guard for the
+// am-obs-mcp logs/build-logs/metrics tools. Publisher-audience (amp-publisher-*)
+// tokens are allowed on /mcp for the trace tools, but must never read logs,
+// build logs or metrics on any transport. The per-request bearer token is
+// carried on req.Extra.Header (set by the streamable-HTTP transport for every
+// tool call); JWTAuth has already verified it, so this only re-reads the
+// audience claim.
+func rejectPublisherToken(req *gomcp.CallToolRequest) error {
+	var authHeader string
+	if req != nil && req.Extra != nil && req.Extra.Header != nil {
+		authHeader = req.Extra.Header.Get("Authorization")
+	}
+	if middleware.IsPublisherAudience(authHeader) {
+		return fmt.Errorf("publisher tokens are not permitted on this tool")
+	}
+	return nil
+}
 
 // maxLogsLimit is the maximum "limit" get_runtime_logs accepts, mirroring
 // maxLogLimit in handlers/handlers.go.
@@ -77,7 +97,10 @@ func (t *Toolsets) registerObservabilityTools(server *gomcp.Server) {
 }
 
 func getRuntimeLogs(obs *controllers.ObservabilityController) func(context.Context, *gomcp.CallToolRequest, runtimeLogsInput) (*gomcp.CallToolResult, any, error) {
-	return func(ctx context.Context, _ *gomcp.CallToolRequest, input runtimeLogsInput) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, req *gomcp.CallToolRequest, input runtimeLogsInput) (*gomcp.CallToolResult, any, error) {
+		if err := rejectPublisherToken(req); err != nil {
+			return nil, nil, err
+		}
 		organization, err := requireField(input.Organization, "organization")
 		if err != nil {
 			return nil, nil, err
@@ -140,7 +163,10 @@ func getRuntimeLogs(obs *controllers.ObservabilityController) func(context.Conte
 }
 
 func getBuildLogs(obs *controllers.ObservabilityController) func(context.Context, *gomcp.CallToolRequest, buildLogsInput) (*gomcp.CallToolResult, any, error) {
-	return func(ctx context.Context, _ *gomcp.CallToolRequest, input buildLogsInput) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, req *gomcp.CallToolRequest, input buildLogsInput) (*gomcp.CallToolResult, any, error) {
+		if err := rejectPublisherToken(req); err != nil {
+			return nil, nil, err
+		}
 		organization, err := requireField(input.Organization, "organization")
 		if err != nil {
 			return nil, nil, err
@@ -159,7 +185,10 @@ func getBuildLogs(obs *controllers.ObservabilityController) func(context.Context
 }
 
 func getMetrics(obs *controllers.ObservabilityController) func(context.Context, *gomcp.CallToolRequest, metricsInput) (*gomcp.CallToolResult, any, error) {
-	return func(ctx context.Context, _ *gomcp.CallToolRequest, input metricsInput) (*gomcp.CallToolResult, any, error) {
+	return func(ctx context.Context, req *gomcp.CallToolRequest, input metricsInput) (*gomcp.CallToolResult, any, error) {
+		if err := rejectPublisherToken(req); err != nil {
+			return nil, nil, err
+		}
 		organization, err := requireField(input.Organization, "organization")
 		if err != nil {
 			return nil, nil, err

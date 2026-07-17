@@ -30,22 +30,41 @@ import (
 func RejectPublisherAudience() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
-			claims := jwt.MapClaims{}
-			parser := jwt.NewParser()
-			if _, _, err := parser.ParseUnverified(tokenString, claims); err == nil {
-				if audiences, err := claims.GetAudience(); err == nil {
-					for _, aud := range audiences {
-						if validPublisherAudPattern.MatchString(strings.TrimSpace(aud)) {
-							writeAuthError(w, http.StatusForbidden,
-								"publisher tokens are not permitted on this endpoint")
-							return
-						}
-					}
-				}
+			if IsPublisherAudience(r.Header.Get("Authorization")) {
+				writeAuthError(w, http.StatusForbidden,
+					"publisher tokens are not permitted on this endpoint")
+				return
 			}
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// IsPublisherAudience reports whether the Bearer token in authHeader carries an
+// amp-publisher-* audience. The token is parsed without verifying its signature
+// — callers must ensure it was already validated by JWTAuth — purely to read
+// the audience claim. A missing, non-Bearer, or unparseable token reports false
+// (JWTAuth is responsible for rejecting those). It lets both the REST
+// RejectPublisherAudience middleware and the am-obs-mcp tool handlers apply the
+// same publisher carve-out regardless of transport.
+func IsPublisherAudience(authHeader string) bool {
+	tokenString := strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer "))
+	if tokenString == "" || tokenString == authHeader {
+		return false
+	}
+	claims := jwt.MapClaims{}
+	parser := jwt.NewParser()
+	if _, _, err := parser.ParseUnverified(tokenString, claims); err != nil {
+		return false
+	}
+	audiences, err := claims.GetAudience()
+	if err != nil {
+		return false
+	}
+	for _, aud := range audiences {
+		if validPublisherAudPattern.MatchString(strings.TrimSpace(aud)) {
+			return true
+		}
+	}
+	return false
 }

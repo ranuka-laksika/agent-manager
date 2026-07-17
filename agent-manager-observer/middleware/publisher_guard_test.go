@@ -114,3 +114,24 @@ func TestRejectPublisherAudience_GarbledTokenPassesThrough(t *testing.T) {
 		t.Error("expected next handler to be called when the token can't be parsed (JWTAuth handles this)")
 	}
 }
+
+func TestIsPublisherAudience(t *testing.T) {
+	tests := []struct {
+		name       string
+		authHeader string
+		want       bool
+	}{
+		{name: "publisher audience", authHeader: "Bearer " + signToken(t, "amp-publisher-acme"), want: true},
+		{name: "normal audience", authHeader: "Bearer " + signToken(t, "localhost"), want: false},
+		{name: "empty header", authHeader: "", want: false},
+		{name: "non-bearer scheme", authHeader: "Basic dXNlcjpwYXNz", want: false},
+		{name: "garbled token", authHeader: "Bearer not-a-valid-jwt", want: false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsPublisherAudience(tc.authHeader); got != tc.want {
+				t.Errorf("IsPublisherAudience(%q) = %v, want %v", tc.authHeader, got, tc.want)
+			}
+		})
+	}
+}
