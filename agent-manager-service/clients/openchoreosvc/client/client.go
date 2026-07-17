@@ -28,8 +28,13 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/requests"
+	"github.com/wso2/agent-manager/agent-manager-service/middleware"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
+
+// HeaderImpersonateOrg carries the org UUID the call is performed on behalf
+// of, resolved from the request context (see middleware.GetResolvedOrg).
+const HeaderImpersonateOrg = "X-Impersonate-Org"
 
 // Config contains configuration for the OpenChoreo client
 type Config struct {
@@ -205,11 +210,22 @@ func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
 		return nil
 	}
 
+	// Propagate the resolved org so OpenChoreo can attribute the call to the
+	// organization being operated on. Absent on contexts that don't originate
+	// from an authenticated API request (e.g. background reconcilers).
+	orgEditor := func(ctx context.Context, req *http.Request) error {
+		if org, ok := middleware.GetResolvedOrg(ctx); ok && org.OUID != "" {
+			req.Header.Set(HeaderImpersonateOrg, org.OUID)
+		}
+		return nil
+	}
+
 	// Create the generated OpenAPI client with retryable HTTP client and auth
 	ocClient, err := gen.NewClientWithResponses(
 		cfg.BaseURL,
 		gen.WithHTTPClient(httpClient),
 		gen.WithRequestEditorFn(authEditor),
+		gen.WithRequestEditorFn(orgEditor),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenChoreo client: %w", err)
