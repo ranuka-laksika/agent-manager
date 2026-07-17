@@ -548,6 +548,18 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: label
+          in: query
+          description: >-
+            Filter by label as key:value. Repeat the parameter to require
+            multiple labels (AND semantics).
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
       responses:
         "200":
           description: List of agents
@@ -8609,6 +8621,18 @@ paths:
             type: integer
             default: 0
             minimum: 0
+        - name: label
+          in: query
+          description: >-
+            Filter by label as key:value. Repeat the parameter to require
+            multiple labels (AND semantics).
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
       responses:
         "200":
           description: List of Agent Kinds
@@ -11015,6 +11039,20 @@ components:
           buildpack: "#/components/schemas/BuildpackBuild"
           docker: "#/components/schemas/DockerBuild"
 
+    Labels:
+      type: object
+      description: >-
+        User-defined key/value labels. Keys are 1-63 characters of
+        [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here
+        as an OpenAPI 3.0 property-name pattern — validated server-side);
+        values follow the same rules but may be empty. At most 10 labels per
+        resource.
+      maxProperties: 10
+      additionalProperties:
+        type: string
+        maxLength: 63
+        pattern: "^([a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?)?$"
+
     CreateAgentRequest:
       type: object
       required:
@@ -11058,6 +11096,8 @@ components:
             and type are auto-generated.
           items:
             $ref: "#/components/schemas/MCPConfigRequest"
+        labels:
+          $ref: "#/components/schemas/Labels"
 
     ModelConfigRequest:
       type: object
@@ -11107,6 +11147,8 @@ components:
         description:
           type: string
           description: Description of the agent
+        labels:
+          $ref: "#/components/schemas/Labels"
 
     UpdateAgentBuildParametersRequest:
       type: object
@@ -11321,6 +11363,8 @@ components:
         kindName:
           type: string
           description: Name of the Agent Kind this agent was instantiated from (absent for source-built agents)
+        labels:
+          $ref: "#/components/schemas/Labels"
       required:
         - uuid
         - name
@@ -17024,6 +17068,8 @@ components:
         updatedAt:
           type: string
           format: date-time
+        labels:
+          $ref: "#/components/schemas/Labels"
 
     AgentKindListResponse:
       type: object
@@ -17056,6 +17102,8 @@ components:
           type: string
         description:
           type: string
+        labels:
+          $ref: "#/components/schemas/Labels"
 
     AddAgentKindVersionRequest:
       type: object
@@ -17112,6 +17160,8 @@ components:
         kindDescription:
           type: string
           description: Description — used only when creating a new kind
+        kindLabels:
+          $ref: "#/components/schemas/Labels"
         version:
           type: string
           description: Version tag for this release

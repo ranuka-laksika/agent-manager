@@ -44,7 +44,7 @@ import (
 //			GetVersionByImageIDFunc: func(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error) {
 //				panic("mock out the GetVersionByImageID method")
 //			},
-//			ListKindsFunc: func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error) {
+//			ListKindsFunc: func(ctx context.Context, ouID string, labelFilter map[string]string, limit int, offset int) ([]models.AgentKind, int64, error) {
 //				panic("mock out the ListKinds method")
 //			},
 //			ListVersionsFunc: func(ctx context.Context, kindID uuid.UUID) ([]models.AgentKindVersion, error) {
@@ -88,7 +88,7 @@ type AgentKindRepositoryMock struct {
 	GetVersionByImageIDFunc func(ctx context.Context, kindID uuid.UUID, imageID string) (*models.AgentKindVersion, error)
 
 	// ListKindsFunc mocks the ListKinds method.
-	ListKindsFunc func(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error)
+	ListKindsFunc func(ctx context.Context, ouID string, labelFilter map[string]string, limit int, offset int) ([]models.AgentKind, int64, error)
 
 	// ListVersionsFunc mocks the ListVersions method.
 	ListVersionsFunc func(ctx context.Context, kindID uuid.UUID) ([]models.AgentKindVersion, error)
@@ -183,6 +183,8 @@ type AgentKindRepositoryMock struct {
 			Ctx context.Context
 			// OuID is the ouID argument value.
 			OuID string
+			// LabelFilter is the labelFilter argument value.
+			LabelFilter map[string]string
 			// Limit is the limit argument value.
 			Limit int
 			// Offset is the offset argument value.
@@ -574,25 +576,27 @@ func (mock *AgentKindRepositoryMock) GetVersionByImageIDCalls() []struct {
 }
 
 // ListKinds calls ListKindsFunc.
-func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string, limit int, offset int) ([]models.AgentKind, int64, error) {
+func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string, labelFilter map[string]string, limit int, offset int) ([]models.AgentKind, int64, error) {
 	if mock.ListKindsFunc == nil {
 		panic("AgentKindRepositoryMock.ListKindsFunc: method is nil but AgentKindRepository.ListKinds was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		OuID   string
-		Limit  int
-		Offset int
+		Ctx         context.Context
+		OuID        string
+		LabelFilter map[string]string
+		Limit       int
+		Offset      int
 	}{
-		Ctx:    ctx,
-		OuID:   ouID,
-		Limit:  limit,
-		Offset: offset,
+		Ctx:         ctx,
+		OuID:        ouID,
+		LabelFilter: labelFilter,
+		Limit:       limit,
+		Offset:      offset,
 	}
 	mock.lockListKinds.Lock()
 	mock.calls.ListKinds = append(mock.calls.ListKinds, callInfo)
 	mock.lockListKinds.Unlock()
-	return mock.ListKindsFunc(ctx, ouID, limit, offset)
+	return mock.ListKindsFunc(ctx, ouID, labelFilter, limit, offset)
 }
 
 // ListKindsCalls gets all the calls that were made to ListKinds.
@@ -600,16 +604,18 @@ func (mock *AgentKindRepositoryMock) ListKinds(ctx context.Context, ouID string,
 //
 //	len(mockedAgentKindRepository.ListKindsCalls())
 func (mock *AgentKindRepositoryMock) ListKindsCalls() []struct {
-	Ctx    context.Context
-	OuID   string
-	Limit  int
-	Offset int
+	Ctx         context.Context
+	OuID        string
+	LabelFilter map[string]string
+	Limit       int
+	Offset      int
 } {
 	var calls []struct {
-		Ctx    context.Context
-		OuID   string
-		Limit  int
-		Offset int
+		Ctx         context.Context
+		OuID        string
+		LabelFilter map[string]string
+		Limit       int
+		Offset      int
 	}
 	mock.lockListKinds.RLock()
 	calls = mock.calls.ListKinds

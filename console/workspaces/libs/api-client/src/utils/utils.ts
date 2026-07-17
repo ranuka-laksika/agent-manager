@@ -74,7 +74,7 @@ async function finalizeHttpWriteResponse(response: Response): Promise<Response> 
 export async function httpGET(
     context: string,
     params:{
-        searchParams?: Record<string, string>,
+        searchParams?: Record<string, string> | string[][],
         token?: string,
         options?: HttpOptions,
         timeoutMs?: number,

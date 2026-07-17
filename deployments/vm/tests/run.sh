@@ -269,7 +269,11 @@ assert_eq "caddy cp no direct 9243" "" "$(grep -F '127.0.0.1:9243' <<<"$cf_cp")"
 #     with try-out 405ing against its own host). Reads AMP_AGENTS_BASE from scope. ---
 (
   AMP_AGENTS_BASE=agents.amp.example.com
+  AMP_HOST_GATEWAY=gateway.amp.example.com
   pr="$(build_platform_resources_helm_args)"
+  assert_eq "platform-resources agent OTEL endpoint override (public gateway)" \
+    "apiPlatformGatewayVhost.otelEndpointOverride=https://gateway.amp.example.com/otel" \
+    "$(grep -F 'apiPlatformGatewayVhost.otelEndpointOverride' <<<"$pr")"
   assert_eq "platform-resources oauth tokenUrl (direct svc)" \
     "global.oauth.tokenUrl=http://amp-thunder-extension-service.amp-thunder.svc.cluster.local:8090/oauth2/token" \
     "$(grep -F 'global.oauth.tokenUrl' <<<"$pr")"

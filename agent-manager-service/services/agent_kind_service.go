@@ -36,7 +36,7 @@ import (
 type AgentKindService interface {
 	// Kind CRUD
 	GetKind(ctx context.Context, ouID, kindName string) (*models.AgentKindResponse, error)
-	ListKinds(ctx context.Context, ouID string, limit, offset int) (*models.AgentKindListResponse, error)
+	ListKinds(ctx context.Context, ouID string, labelFilter map[string]string, limit, offset int) (*models.AgentKindListResponse, error)
 	UpdateKind(ctx context.Context, ouID, kindName string, req *spec.UpdateAgentKindRequest) (*models.AgentKindResponse, error)
 	DeleteKind(ctx context.Context, ouID, kindName string) error
 
@@ -85,9 +85,10 @@ func (s *agentKindService) GetKind(ctx context.Context, ouID, kindName string) (
 	return toAgentKindResponse(kind), nil
 }
 
-// ListKinds returns a paginated list of Agent Kinds in the org.
-func (s *agentKindService) ListKinds(ctx context.Context, ouID string, limit, offset int) (*models.AgentKindListResponse, error) {
-	kinds, total, err := s.kindRepo.ListKinds(ctx, ouID, limit, offset)
+// ListKinds returns a paginated list of Agent Kinds in the org, optionally
+// filtered by user-defined labels (AND semantics).
+func (s *agentKindService) ListKinds(ctx context.Context, ouID string, labelFilter map[string]string, limit, offset int) (*models.AgentKindListResponse, error) {
+	kinds, total, err := s.kindRepo.ListKinds(ctx, ouID, labelFilter, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list agent kinds: %w", err)
 	}
@@ -118,6 +119,10 @@ func (s *agentKindService) UpdateKind(ctx context.Context, ouID, kindName string
 
 	kind.DisplayName = req.GetDisplayName()
 	kind.Description = req.GetDescription()
+	// A nil Labels pointer means "leave unchanged"; an empty map clears them.
+	if req.Labels != nil {
+		kind.Labels = *req.Labels
+	}
 	kind.UpdatedAt = time.Now()
 
 	if err := s.kindRepo.UpdateKind(ctx, kind); err != nil {
@@ -257,9 +262,13 @@ func (s *agentKindService) PublishKind(ctx context.Context, ouID, projectName, a
 			OUID:        ouID,
 			ProjectName: projectName,
 			AgentName:   agentName,
+			Labels:      req.GetKindLabels(),
 			CreatedAt:   time.Now(),
 			UpdatedAt:   time.Now(),
 			Versions:    []models.AgentKindVersion{},
+		}
+		if newKind.Labels == nil {
+			newKind.Labels = map[string]string{}
 		}
 		if createErr := s.kindRepo.CreateKind(ctx, newKind); createErr != nil {
 			// Handle concurrent creation race
@@ -488,6 +497,11 @@ func toAgentKindResponse(kind *models.AgentKind) *models.AgentKindResponse {
 		}
 	}
 
+	labels := kind.Labels
+	if labels == nil {
+		labels = map[string]string{}
+	}
+
 	return &models.AgentKindResponse{
 		UUID:          kind.ID.String(),
 		Name:          kind.Name,
@@ -497,6 +511,7 @@ func toAgentKindResponse(kind *models.AgentKind) *models.AgentKindResponse {
 		ProjectName:   kind.ProjectName,
 		AgentName:     kind.AgentName,
 		LatestVersion: latestVersion,
+		Labels:        labels,
 		Versions:      versions,
 		CreatedAt:     kind.CreatedAt,
 		UpdatedAt:     kind.UpdatedAt,

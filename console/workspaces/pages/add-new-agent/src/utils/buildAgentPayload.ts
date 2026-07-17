@@ -141,6 +141,9 @@ export const buildAgentCreationPayload = (
   const modelConfig = buildModelConfig(llmProviders, initialEnvironmentName);
   const mcpConfig = buildMCPConfig(mcpProxies, initialEnvironmentName);
 
+  const labels =
+    data.labels && Object.keys(data.labels).length > 0 ? data.labels : undefined;
+
   if (data.deploymentType === "new") {
     return {
       params,
@@ -148,6 +151,7 @@ export const buildAgentCreationPayload = (
         name: data.name,
         displayName: data.displayName,
         description: data.description?.trim() || undefined,
+        ...(labels ? { labels } : {}),
         provisioning: {
           type: "internal",
           repository: {
@@ -232,6 +236,7 @@ export const buildAgentCreationPayload = (
       name: data.name,
       displayName: data.displayName,
       description: data.description,
+      ...(labels ? { labels } : {}),
       provisioning: {
         type: "external",
       },
@@ -262,6 +267,9 @@ export const buildCatalogAgentPayload = (
       name: data.name,
       displayName: data.displayName,
       description: data.description?.trim() || undefined,
+      ...(data.labels && Object.keys(data.labels).length > 0
+        ? { labels: data.labels }
+        : {}),
       provisioning: {
         type: "internal",
         agentKind: {

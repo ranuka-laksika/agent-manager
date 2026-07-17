@@ -36,7 +36,7 @@ import {
 } from "@wso2/oxygen-ui";
 import { PageLayout } from "@agent-management-platform/views";
 import { absoluteRouteMap } from "@agent-management-platform/types";
-import { SwaggerSpecViewer, parseOpenApiSpecContent } from "@agent-management-platform/shared-component";
+import { LabelChips, SwaggerSpecViewer, parseOpenApiSpecContent } from "@agent-management-platform/shared-component";
 import { useGetAgentKind, useGetBuild, useListKindAgents, useListProjects, useGetAgentKindVersion } from "@agent-management-platform/api-client";
 import { ExternalLink, Plus } from "@wso2/oxygen-ui-icons-react";
 
@@ -181,26 +181,30 @@ export const CatalogKindDetails: React.FC = () => {
       backHref={backHref}
       backLabel="Back to Agent Catalog"
       titleTail={
-        kindVersion?.sourceProjectName && kindVersion?.sourceAgentName ? (
-          <Button
-            size="small"
-            startIcon={<ExternalLink size={14} />}
-            variant="outlined"
-            component={Link}
-            to={generatePath(
-              absoluteRouteMap.children.org.children.projects.children.agents.path,
-              {
-                orgId,
-                projectId: kindVersion.sourceProjectName,
-                agentId: kindVersion.sourceAgentName,
-              },
-            )}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            View Source Agent
-          </Button>
-        ) : undefined
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ width: "100%", minWidth: 0 }}>
+          {kindVersion?.sourceProjectName && kindVersion?.sourceAgentName && (
+            <Button
+              size="small"
+              startIcon={<ExternalLink size={14} />}
+              variant="outlined"
+              component={Link}
+              to={generatePath(
+                absoluteRouteMap.children.org.children.projects.children.agents.path,
+                {
+                  orgId,
+                  projectId: kindVersion.sourceProjectName,
+                  agentId: kindVersion.sourceAgentName,
+                },
+              )}
+              target="_blank"
+              rel="noopener noreferrer"
+              sx={{ flexShrink: 0 }}
+            >
+              View Source Agent
+            </Button>
+          )}
+          <LabelChips labels={kind.labels} />
+        </Stack>
       }
       actions={[
         versionSelector || undefined,

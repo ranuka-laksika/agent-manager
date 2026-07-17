@@ -34,6 +34,8 @@ type CreateAgentRequest struct {
 	ModelConfig []ModelConfigRequest `json:"modelConfig,omitempty"`
 	// Optional MCP proxy configurations to create atomically with the agent. Applied to the component's initial (lowest) environment. Name and type are auto-generated.
 	McpConfig []MCPConfigRequest `json:"mcpConfig,omitempty"`
+	// User-defined key/value labels. Keys are 1-63 characters of [a-zA-Z0-9._-] starting and ending alphanumeric (not enforceable here as an OpenAPI 3.0 property-name pattern — validated server-side); values follow the same rules but may be empty. At most 10 labels per resource.
+	Labels *map[string]string `json:"labels,omitempty"`
 }
 
 // NewCreateAgentRequest instantiates a new CreateAgentRequest object
@@ -352,6 +354,38 @@ func (o *CreateAgentRequest) SetMcpConfig(v []MCPConfigRequest) {
 	o.McpConfig = v
 }
 
+// GetLabels returns the Labels field value if set, zero value otherwise.
+func (o *CreateAgentRequest) GetLabels() map[string]string {
+	if o == nil || IsNil(o.Labels) {
+		var ret map[string]string
+		return ret
+	}
+	return *o.Labels
+}
+
+// GetLabelsOk returns a tuple with the Labels field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CreateAgentRequest) GetLabelsOk() (*map[string]string, bool) {
+	if o == nil || IsNil(o.Labels) {
+		return nil, false
+	}
+	return o.Labels, true
+}
+
+// HasLabels returns a boolean if a field has been set.
+func (o *CreateAgentRequest) HasLabels() bool {
+	if o != nil && !IsNil(o.Labels) {
+		return true
+	}
+
+	return false
+}
+
+// SetLabels gets a reference to the given map[string]string and assigns it to the Labels field.
+func (o *CreateAgentRequest) SetLabels(v map[string]string) {
+	o.Labels = &v
+}
+
 func (o CreateAgentRequest) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -385,6 +419,9 @@ func (o CreateAgentRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.McpConfig) {
 		toSerialize["mcpConfig"] = o.McpConfig
+	}
+	if !IsNil(o.Labels) {
+		toSerialize["labels"] = o.Labels
 	}
 	return toSerialize, nil
 }

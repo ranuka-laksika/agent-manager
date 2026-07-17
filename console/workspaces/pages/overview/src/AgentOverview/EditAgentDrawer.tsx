@@ -22,6 +22,7 @@ import { DrawerWrapper, DrawerHeader, DrawerContent, TextInput, useFormValidatio
 import { z } from "zod";
 import { useUpdateAgent } from "@agent-management-platform/api-client";
 import { AgentResponse, UpdateAgentRequest } from "@agent-management-platform/types";
+import { LabelsEditor } from "@agent-management-platform/shared-component";
 import { useEffect, useState, useCallback } from "react";
 
 interface EditAgentDrawerProps {
@@ -61,6 +62,7 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
     displayName: agent.displayName,
     description: agent.description || '',
   });
+  const [labels, setLabels] = useState<Record<string, string>>(agent.labels ?? {});
 
   const { errors, validateField, validateForm, clearErrors, setFieldError } =
     useFormValidation<EditAgentFormValues>(editAgentSchema);
@@ -75,6 +77,7 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
         displayName: agent.displayName,
         description: agent.description || '',
       });
+      setLabels(agent.labels ?? {});
       clearErrors();
     }
   }, [agent, open, clearErrors]);
@@ -92,9 +95,12 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
       return;
     }
 
+    // Always send labels so removing the last one clears them ({} = clear,
+    // absent = leave unchanged on the backend).
     const payload: UpdateAgentRequest = {
       displayName: formData.displayName,
       description: formData.description,
+      labels,
     };
 
     updateAgent(
@@ -158,6 +164,16 @@ export function EditAgentDrawer({ open, onClose, agent, orgId, projectId }: Edit
                     disabled={isPending}
                   />
                 </Box>
+              </CardContent>
+            </Card>
+
+            <Card variant="outlined">
+              <CardContent sx={{ gap: 1, display: "flex", flexDirection: "column" }}>
+                <LabelsEditor
+                  value={labels}
+                  onChange={setLabels}
+                  disabled={isPending}
+                />
               </CardContent>
             </Card>
 
