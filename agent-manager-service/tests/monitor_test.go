@@ -1499,10 +1499,13 @@ func TestGetMonitorRunLogs(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), "Sample log output")
 
-	// Verify the correct organization was passed to the observer client
+	// Verify the correct organization was passed to the observer client.
+	// The observer's "organization" param is the org handle (as sent by every
+	// other consumer), not the OU UUID. The mock middleware derives the handle
+	// from the request path, so it matches "test-org" here.
 	calls := mockObserverClient.GetWorkflowRunLogsCalls()
 	require.Len(t, calls, 1)
-	assert.Equal(t, jwtassertion.MockOUID, calls[0].Organization)
+	assert.Equal(t, "test-org", calls[0].Organization)
 }
 
 // TestStopMonitor tests stopping a future monitor
