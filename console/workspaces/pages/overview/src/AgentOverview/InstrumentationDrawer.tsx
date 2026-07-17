@@ -20,6 +20,7 @@ import { Box, Typography, Select, MenuItem, SelectChangeEvent, Stack } from "@ws
 import { Settings } from "@wso2/oxygen-ui-icons-react";
 import { SetupStep } from "./SetupStep";
 import { TokenGenerationStep } from "./TokenGenerationStep";
+import { EnvAgentIdentitySection } from "./EnvAgentIdentitySection";
 import { useState } from "react";
 import {
   DrawerWrapper,
@@ -88,7 +89,7 @@ export const InstrumentationDrawer = ({
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 2,
+            gap: 3,
             pt: 1,
             width: "100%",
           }}
@@ -178,6 +179,15 @@ export BAL_CONFIG_VAR_BALLERINAX_AMP_APIKEY="${effectiveApiKey}"`}
             </>
           )}
         </Box>
+
+        {orgName && projName && agentName && environment && (
+          <EnvAgentIdentitySection
+            orgId={orgName}
+            projectId={projName}
+            agentId={agentName}
+            envId={environment}
+          />
+        )}
       </DrawerContent>
     </DrawerWrapper>
   );

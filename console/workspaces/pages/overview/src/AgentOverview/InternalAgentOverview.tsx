@@ -112,13 +112,13 @@ export const InternalAgentOverview = () => {
                                             agentId={agentId}
                                             envId={environment.name}
                                         />
-                                        <EnvObservabilitySection
+                                        <EnvMonitorsSection
                                             orgId={orgId}
                                             projectId={projectId}
                                             agentId={agentId}
                                             envId={environment.name}
                                         />
-                                        <EnvMonitorsSection
+                                        <EnvObservabilitySection
                                             orgId={orgId}
                                             projectId={projectId}
                                             agentId={agentId}

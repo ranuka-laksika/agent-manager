@@ -46,7 +46,7 @@ export interface AgentIdentityGroupMembersResponse extends PaginationMeta {
 }
 
 export interface AgentIdentityMembersRequest {
-  // Thunder agent IDs (from the agents picker)
+  // Agent IDs (from the agents picker)
   agentIds: string[];
 }
 

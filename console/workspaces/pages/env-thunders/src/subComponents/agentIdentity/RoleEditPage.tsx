@@ -444,7 +444,7 @@ export const RoleEditPage: React.FC = () => {
                         <ListingTable.Head>
                           <ListingTable.Row>
                             <ListingTable.Cell>Agent</ListingTable.Cell>
-                            <ListingTable.Cell>Thunder Agent ID</ListingTable.Cell>
+                            <ListingTable.Cell>Agent ID</ListingTable.Cell>
                             <ListingTable.Cell />
                           </ListingTable.Row>
                         </ListingTable.Head>
