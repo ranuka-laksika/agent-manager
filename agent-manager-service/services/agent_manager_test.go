@@ -44,7 +44,6 @@ import (
 type stubAgentThunderProvisioning struct {
 	AgentThunderProvisioningService
 	RegenerateFunc      func(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error)
-	ClaimFunc           func(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error)
 	RevokeFunc          func(ctx context.Context, orgName, projectName, agentName, envName string) (string, error)
 	GetBindingStateFunc func(ctx context.Context, orgName, projectName, agentName, envName string) (*AgentThunderBindingState, error)
 	GetAgentRolesFunc   func(ctx context.Context, orgName, projectName, agentName, envName string) ([]thundersvc.ThunderRole, error)
@@ -57,10 +56,6 @@ func (s *stubAgentThunderProvisioning) GetBindingState(ctx context.Context, orgN
 
 func (s *stubAgentThunderProvisioning) RegenerateSecret(ctx context.Context, orgName, projectName, agentName, envName string) (models.AgentProvisioningType, string, string, error) {
 	return s.RegenerateFunc(ctx, orgName, projectName, agentName, envName)
-}
-
-func (s *stubAgentThunderProvisioning) ClaimSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, string, string, error) {
-	return s.ClaimFunc(ctx, orgName, projectName, agentName, envName)
 }
 
 func (s *stubAgentThunderProvisioning) RevokeSecret(ctx context.Context, orgName, projectName, agentName, envName string) (string, error) {
@@ -566,73 +561,6 @@ func TestUpdateAgentConfigurations_IdentityInjectionError_AbortsUpdate(t *testin
 	assert.False(t, overridesReplaced, "the env var override rewrite must never happen once identity env vars failed to build")
 }
 
-func TestClaimAgentIdentitySecret_ExternalAgent_ReturnsSecret(t *testing.T) {
-	ocClient := &clientmocks.OpenChoreoClientMock{
-		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
-			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.ExternalAgent)}}, nil
-		},
-	}
-	stub := &stubAgentThunderProvisioning{
-		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
-			return "agent-uuid", "client-abc", "claimed-secret-xyz", nil
-		},
-	}
-	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
-
-	resp, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
-
-	require.NoError(t, err)
-	assert.Equal(t, "dev", resp.EnvironmentName)
-	assert.Equal(t, "agent-uuid", resp.AgentID)
-	assert.Equal(t, "client-abc", resp.ClientID)
-	assert.Equal(t, "claimed-secret-xyz", resp.ClientSecret)
-	assert.Equal(t, models.AgentClaimSecretStatus, resp.Status)
-}
-
-func TestClaimAgentIdentitySecret_InternalAgent_RejectedBeforeClaim(t *testing.T) {
-	ocClient := &clientmocks.OpenChoreoClientMock{
-		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
-			return &models.AgentResponse{Provisioning: models.Provisioning{Type: string(utils.InternalAgent)}}, nil
-		},
-	}
-	stub := &stubAgentThunderProvisioning{
-		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
-			t.Fatal("must not attempt to claim a secret for an internal agent")
-			return "", "", "", nil
-		},
-	}
-	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
-
-	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
-
-	require.Error(t, err)
-	assert.ErrorIs(t, err, utils.ErrInvalidInput)
-}
-
-// TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError guards against a
-// stale local binding surviving a best-effort cleanup: the claim must be
-// rejected as soon as the agent's own source-of-truth record (OpenChoreo) is
-// missing, without ever reaching the Thunder provisioning layer.
-func TestClaimAgentIdentitySecret_AgentNotFound_PropagatesError(t *testing.T) {
-	boom := errors.New("component not found")
-	ocClient := &clientmocks.OpenChoreoClientMock{
-		GetComponentFunc: func(_ context.Context, _, _, _ string) (*models.AgentResponse, error) {
-			return nil, boom
-		},
-	}
-	stub := &stubAgentThunderProvisioning{
-		ClaimFunc: func(_ context.Context, _, _, _, _ string) (string, string, string, error) {
-			t.Fatal("must not attempt to claim a secret when the agent itself cannot be fetched")
-			return "", "", "", nil
-		},
-	}
-	s := &agentManagerService{ocClient: ocClient, agentThunderProvisioning: stub, logger: slog.Default()}
-
-	_, err := s.ClaimAgentIdentitySecret(context.Background(), "acme", "proj1", "my-agent", "dev")
-
-	require.ErrorIs(t, err, boom)
-}
-
 // stubAgentConfigurationServiceForPromote implements AgentConfigurationService
 // by embedding the (nil) interface and overriding only the two methods
 // PromoteAgent actually calls — any other method call panics on the nil
@@ -716,7 +644,7 @@ func promoteAgentTestFixture(t *testing.T, tgtIdentityEnvVars []client.EnvVar, t
 				// "AgentID was never used at all, safe to let through" when
 				// tgtIdentityEnvVars comes back empty (see the cross-environment
 				// leak fix in PromoteAgent).
-				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+				return []client.EnvVar{{Key: client.EnvVarAgentIDClientID, Value: "dev-client-id"}}, nil
 			}
 			t.Fatalf("agentIdentityInjection.EnvVarsForEnvironment called for unexpected environment %q", envName)
 			return nil, nil
@@ -775,7 +703,7 @@ func TestPromoteAgent_BlocksWhenTargetIdentityNotReady(t *testing.T) {
 
 func TestPromoteAgent_TargetIdentityReady_PromotesWithTargetOnlyCredentials(t *testing.T) {
 	targetVars := []client.EnvVar{
-		{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"},
+		{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"},
 	}
 	s, _ := promoteAgentTestFixture(t, targetVars, nil)
 
@@ -797,7 +725,7 @@ func TestPromoteAgent_TargetIdentityReady_PromotesWithTargetOnlyCredentials(t *t
 
 	found := false
 	for _, ev := range capturedOverrides {
-		if ev.Key == "AMP_AGENT_IDENTITY_CLIENT_ID" {
+		if ev.Key == "AMP_AGENTID_CLIENT_ID" {
 			found = true
 			assert.Equal(t, "staging-client-id", ev.Value,
 				"the target environment's own identity vars must be the ones actually sent to PromoteComponent")
@@ -867,13 +795,13 @@ func TestPromoteAgent_KickOffThenRetry_SucceedsOnceTargetIdentityCompletes(t *te
 				// actively used for this agent, so the leak-safety check on an
 				// empty target result must fall through to the poll/hard-block
 				// below rather than waving the promotion through.
-				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+				return []client.EnvVar{{Key: client.EnvVarAgentIDClientID, Value: "dev-client-id"}}, nil
 			}
 			require.Equal(t, "staging", envName)
 			if !targetReady {
 				return nil, nil
 			}
-			return []client.EnvVar{{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"}}, nil
+			return []client.EnvVar{{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"}}, nil
 		},
 	}
 	provisioning := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: &stubAgentThunderProvisioning{
@@ -912,7 +840,7 @@ func TestPromoteAgent_KickOffThenRetry_SucceedsOnceTargetIdentityCompletes(t *te
 
 	found := false
 	for _, ev := range capturedOverrides {
-		if ev.Key == "AMP_AGENT_IDENTITY_CLIENT_ID" {
+		if ev.Key == "AMP_AGENTID_CLIENT_ID" {
 			found = true
 			assert.Equal(t, "staging-client-id", ev.Value)
 		}
@@ -963,7 +891,7 @@ func TestPromoteAgent_PollSucceedsWithinBudget_PromotesOnFirstCall(t *testing.T)
 			if atomic.AddInt32(&checks, 1) < 3 {
 				return nil, nil
 			}
-			return []client.EnvVar{{Key: "AMP_AGENT_IDENTITY_CLIENT_ID", Value: "staging-client-id"}}, nil
+			return []client.EnvVar{{Key: "AMP_AGENTID_CLIENT_ID", Value: "staging-client-id"}}, nil
 		},
 	}
 	provisioning := &provisionForEnvIfMissingStub{stubAgentThunderProvisioning: &stubAgentThunderProvisioning{}}
@@ -1146,7 +1074,7 @@ func TestPromoteAgent_ProvisioningDisabledButLowestEnvHasRealCredential_StillBlo
 				// dev was provisioned and deployed while AgentID was still
 				// enabled — its real credential is already sitting in the
 				// shared Workload CR.
-				return []client.EnvVar{{Key: client.EnvVarAgentIdentityClientID, Value: "dev-client-id"}}, nil
+				return []client.EnvVar{{Key: client.EnvVarAgentIDClientID, Value: "dev-client-id"}}, nil
 			}
 			// staging has never been provisioned, and — provisioning being
 			// disabled now — never will be automatically.

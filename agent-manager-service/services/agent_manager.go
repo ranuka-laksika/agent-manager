@@ -66,11 +66,9 @@ type AgentManagerService interface {
 	UpdateAgentDeploySettings(ctx context.Context, ouID string, projectName string, agentName string, req *spec.UpdateAgentDeploySettingsRequest) error
 	UpdateAgentConfigurations(ctx context.Context, ouID string, projectName string, agentName string, req *spec.UpdateAgentConfigurationsRequest) error
 	GetAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error)
-	ClaimAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error)
 	RegenerateAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error)
 	RevokeAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentRevokeSecretResponse, error)
 	ProvisionAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (view models.AgentIdentityEnvironmentView, alreadyExisted bool, err error)
-	GetAgentCredentials(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error)
 	GetAgentRoles(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) ([]thundersvc.ThunderRole, error)
 	GetAgentGroups(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) ([]thundersvc.ThunderGroup, error)
 }
@@ -3066,8 +3064,8 @@ func allPipelineEnvironmentNames(promotionPaths []models.PromotionPath) map[stri
 // org-level environment (Section 2.1 of the AgentID architecture doc), but a
 // project only ever shows the bindings for environments in its own pipeline —
 // this filters the org-wide result down to that visibility rule. A safe GET:
-// it never returns or destroys a secret. Use ClaimAgentIdentitySecret to
-// actually retrieve an unclaimed External agent's secret.
+// it never returns or destroys a secret. Use RegenerateAgentIdentitySecret to
+// obtain a secret for an External agent.
 func (s *agentManagerService) GetAgentIdentity(ctx context.Context, ouID string, projectName string, agentName string) ([]models.AgentIdentityEnvironmentView, error) {
 	// No provisioning implementation: no identities to report.
 	if s.agentThunderProvisioning == nil {
@@ -3147,47 +3145,12 @@ func (s *agentManagerService) GetAgentGroups(ctx context.Context, ouID, projectN
 	return s.agentThunderProvisioning.GetAgentGroups(ctx, ouID, projectName, agentName, environmentName)
 }
 
-// ClaimAgentIdentitySecret performs the one-time claim of an External agent's
-// secret for one environment. Unlike GetAgentIdentity (a safe GET), calling
-// this IS the claim — the first successful call returns and permanently
-// destroys the stored secret. Internal agents are rejected; use
-// GetAgentCredentials instead.
-func (s *agentManagerService) ClaimAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentClaimSecretResponse, error) {
-	if s.agentThunderProvisioning == nil {
-		return nil, utils.ErrAgentIdentityNotProvisioned
-	}
-	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
-	if err != nil {
-		s.logger.Error("Failed to fetch agent for identity secret claim", "agentName", agentName, "error", err)
-		return nil, translateAgentError(err)
-	}
-	if agent.Provisioning.Type != string(utils.ExternalAgent) {
-		return nil, fmt.Errorf(
-			"%w: agent %q is an internal agent — internal agent credentials are retrieved via GetAgentCredentials, not claim",
-			utils.ErrInvalidInput, agentName,
-		)
-	}
-
-	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.ClaimSecret(ctx, ouID, projectName, agentName, environmentName)
-	if err != nil {
-		return nil, err
-	}
-	return &models.AgentClaimSecretResponse{
-		EnvironmentName: environmentName,
-		AgentID:         agentID,
-		ClientID:        clientID,
-		ClientSecret:    clientSecret,
-		Status:          models.AgentClaimSecretStatus,
-	}, nil
-}
-
 // RegenerateAgentIdentitySecret rotates the AgentID secret for one environment.
 // The new secret is returned in the response for BOTH Internal and External
 // agents — the caller already holds agent:update and just explicitly asked
 // for a new credential, so withholding the value it produced would only
-// force a second call (GetAgentCredentials) to see it. ProvisioningType is
-// included so the caller can tell which kind of agent this is without a
-// separate lookup.
+// force a second call to fetch it separately. ProvisioningType is included
+// so the caller can tell which kind of agent this is without a separate lookup.
 func (s *agentManagerService) RegenerateAgentIdentitySecret(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentRegenerateSecretResponse, error) {
 	if s.agentThunderProvisioning == nil {
 		return nil, utils.ErrAgentIdentityNotProvisioned
@@ -3332,42 +3295,6 @@ func (s *agentManagerService) ProvisionAgentIdentity(ctx context.Context, ouID s
 	// Upsert inside ProvisionForEnvironmentIfMissing is synchronous, so the row
 	// (at minimum PENDING) must already be visible to this read.
 	return models.AgentIdentityEnvironmentView{}, alreadyExisted, fmt.Errorf("agent thunder binding for %s/%s vanished immediately after being provisioned", agentName, environmentName)
-}
-
-// GetAgentCredentials returns the current client ID and secret for an Internal
-// agent in one environment — repeatable, unlike the External agent's one-time
-// claim via ClaimAgentIdentitySecret. Internal agents have no other way to
-// retrieve their own credential today; Gateway Binding (automatically injecting
-// it into the workload) is a later phase. Rejects External agents outright —
-// they already have their own retrieval path (ClaimAgentIdentitySecret's
-// one-time claim, or RegenerateAgentIdentitySecret), and letting them use this
-// endpoint too would defeat the point of that one-time claim design.
-func (s *agentManagerService) GetAgentCredentials(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (models.AgentCredentialsResponse, error) {
-	if s.agentThunderProvisioning == nil {
-		return models.AgentCredentialsResponse{}, utils.ErrAgentIdentityNotProvisioned
-	}
-	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
-	if err != nil {
-		s.logger.Error("Failed to fetch agent for credential retrieval", "agentName", agentName, "error", err)
-		return models.AgentCredentialsResponse{}, translateAgentError(err)
-	}
-	if agent.Provisioning.Type != string(utils.InternalAgent) {
-		return models.AgentCredentialsResponse{}, fmt.Errorf(
-			"%w: agent %q is an external agent — external agent credentials are retrieved via DELETE .../identities/secrets (one-time claim) or POST .../identities (regenerate), not this endpoint",
-			utils.ErrInvalidInput, agentName,
-		)
-	}
-
-	agentID, clientID, clientSecret, err := s.agentThunderProvisioning.GetCredentials(ctx, ouID, projectName, agentName, environmentName)
-	if err != nil {
-		return models.AgentCredentialsResponse{}, err
-	}
-	return models.AgentCredentialsResponse{
-		EnvironmentName: environmentName,
-		AgentID:         agentID,
-		ClientID:        clientID,
-		ClientSecret:    clientSecret,
-	}, nil
 }
 
 // PromoteAgent promotes an agent from one environment to another.

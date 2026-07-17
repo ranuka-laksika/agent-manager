@@ -22,9 +22,6 @@ import (
 //			ClaimForAttemptFunc: func(ctx context.Context, id uuid.UUID) (bool, error) {
 //				panic("mock out the ClaimForAttempt method")
 //			},
-//			ClearClaimFunc: func(ctx context.Context, id uuid.UUID) error {
-//				panic("mock out the ClearClaim method")
-//			},
 //			DeleteByAgentFunc: func(ctx context.Context, ouID string, projectName string, agentName string) error {
 //				panic("mock out the DeleteByAgent method")
 //			},
@@ -46,9 +43,6 @@ import (
 //			GetFunc: func(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error) {
 //				panic("mock out the Get method")
 //			},
-//			MarkClaimedFunc: func(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error) {
-//				panic("mock out the MarkClaimed method")
-//			},
 //			UpdateAfterAttemptFunc: func(ctx context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error {
 //				panic("mock out the UpdateAfterAttempt method")
 //			},
@@ -67,9 +61,6 @@ import (
 type AgentThunderClientRepositoryMock struct {
 	// ClaimForAttemptFunc mocks the ClaimForAttempt method.
 	ClaimForAttemptFunc func(ctx context.Context, id uuid.UUID) (bool, error)
-
-	// ClearClaimFunc mocks the ClearClaim method.
-	ClearClaimFunc func(ctx context.Context, id uuid.UUID) error
 
 	// DeleteByAgentFunc mocks the DeleteByAgent method.
 	DeleteByAgentFunc func(ctx context.Context, ouID string, projectName string, agentName string) error
@@ -92,9 +83,6 @@ type AgentThunderClientRepositoryMock struct {
 	// GetFunc mocks the Get method.
 	GetFunc func(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (*models.AgentThunderClient, error)
 
-	// MarkClaimedFunc mocks the MarkClaimed method.
-	MarkClaimedFunc func(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error)
-
 	// UpdateAfterAttemptFunc mocks the UpdateAfterAttempt method.
 	UpdateAfterAttemptFunc func(ctx context.Context, id uuid.UUID, fields repositories.AgentThunderAttemptUpdate) error
 
@@ -108,13 +96,6 @@ type AgentThunderClientRepositoryMock struct {
 	calls struct {
 		// ClaimForAttempt holds details about calls to the ClaimForAttempt method.
 		ClaimForAttempt []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// ID is the id argument value.
-			ID uuid.UUID
-		}
-		// ClearClaim holds details about calls to the ClearClaim method.
-		ClearClaim []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// ID is the id argument value.
@@ -191,15 +172,6 @@ type AgentThunderClientRepositoryMock struct {
 			// EnvironmentName is the environmentName argument value.
 			EnvironmentName string
 		}
-		// MarkClaimed holds details about calls to the MarkClaimed method.
-		MarkClaimed []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// ID is the id argument value.
-			ID uuid.UUID
-			// ClaimedAt is the claimedAt argument value.
-			ClaimedAt time.Time
-		}
 		// UpdateAfterAttempt holds details about calls to the UpdateAfterAttempt method.
 		UpdateAfterAttempt []struct {
 			// Ctx is the ctx argument value.
@@ -227,7 +199,6 @@ type AgentThunderClientRepositoryMock struct {
 		}
 	}
 	lockClaimForAttempt               sync.RWMutex
-	lockClearClaim                    sync.RWMutex
 	lockDeleteByAgent                 sync.RWMutex
 	lockDeleteByIDs                   sync.RWMutex
 	lockFindByAgent                   sync.RWMutex
@@ -235,7 +206,6 @@ type AgentThunderClientRepositoryMock struct {
 	lockFindDue                       sync.RWMutex
 	lockFindRecentlyCompletedInternal sync.RWMutex
 	lockGet                           sync.RWMutex
-	lockMarkClaimed                   sync.RWMutex
 	lockUpdateAfterAttempt            sync.RWMutex
 	lockUpdateSecretRef               sync.RWMutex
 	lockUpsert                        sync.RWMutex
@@ -274,42 +244,6 @@ func (mock *AgentThunderClientRepositoryMock) ClaimForAttemptCalls() []struct {
 	mock.lockClaimForAttempt.RLock()
 	calls = mock.calls.ClaimForAttempt
 	mock.lockClaimForAttempt.RUnlock()
-	return calls
-}
-
-// ClearClaim calls ClearClaimFunc.
-func (mock *AgentThunderClientRepositoryMock) ClearClaim(ctx context.Context, id uuid.UUID) error {
-	if mock.ClearClaimFunc == nil {
-		panic("AgentThunderClientRepositoryMock.ClearClaimFunc: method is nil but AgentThunderClientRepository.ClearClaim was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-		ID  uuid.UUID
-	}{
-		Ctx: ctx,
-		ID:  id,
-	}
-	mock.lockClearClaim.Lock()
-	mock.calls.ClearClaim = append(mock.calls.ClearClaim, callInfo)
-	mock.lockClearClaim.Unlock()
-	return mock.ClearClaimFunc(ctx, id)
-}
-
-// ClearClaimCalls gets all the calls that were made to ClearClaim.
-// Check the length with:
-//
-//	len(mockedAgentThunderClientRepository.ClearClaimCalls())
-func (mock *AgentThunderClientRepositoryMock) ClearClaimCalls() []struct {
-	Ctx context.Context
-	ID  uuid.UUID
-} {
-	var calls []struct {
-		Ctx context.Context
-		ID  uuid.UUID
-	}
-	mock.lockClearClaim.RLock()
-	calls = mock.calls.ClearClaim
-	mock.lockClearClaim.RUnlock()
 	return calls
 }
 
@@ -606,46 +540,6 @@ func (mock *AgentThunderClientRepositoryMock) GetCalls() []struct {
 	mock.lockGet.RLock()
 	calls = mock.calls.Get
 	mock.lockGet.RUnlock()
-	return calls
-}
-
-// MarkClaimed calls MarkClaimedFunc.
-func (mock *AgentThunderClientRepositoryMock) MarkClaimed(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error) {
-	if mock.MarkClaimedFunc == nil {
-		panic("AgentThunderClientRepositoryMock.MarkClaimedFunc: method is nil but AgentThunderClientRepository.MarkClaimed was just called")
-	}
-	callInfo := struct {
-		Ctx       context.Context
-		ID        uuid.UUID
-		ClaimedAt time.Time
-	}{
-		Ctx:       ctx,
-		ID:        id,
-		ClaimedAt: claimedAt,
-	}
-	mock.lockMarkClaimed.Lock()
-	mock.calls.MarkClaimed = append(mock.calls.MarkClaimed, callInfo)
-	mock.lockMarkClaimed.Unlock()
-	return mock.MarkClaimedFunc(ctx, id, claimedAt)
-}
-
-// MarkClaimedCalls gets all the calls that were made to MarkClaimed.
-// Check the length with:
-//
-//	len(mockedAgentThunderClientRepository.MarkClaimedCalls())
-func (mock *AgentThunderClientRepositoryMock) MarkClaimedCalls() []struct {
-	Ctx       context.Context
-	ID        uuid.UUID
-	ClaimedAt time.Time
-} {
-	var calls []struct {
-		Ctx       context.Context
-		ID        uuid.UUID
-		ClaimedAt time.Time
-	}
-	mock.lockMarkClaimed.RLock()
-	calls = mock.calls.MarkClaimed
-	mock.lockMarkClaimed.RUnlock()
 	return calls
 }
 

@@ -22,6 +22,7 @@ import {
   useListMCPProxyScopes,
   useUpdateMCPProxyScope,
 } from "@agent-management-platform/api-client";
+import { useConfirmationDialog } from "@agent-management-platform/shared-component";
 import type {
   APIKeyLocation,
   MCPEndpointConfig,
@@ -158,6 +159,7 @@ export function MCPProxySecurityTab({
     severity: "success" | "error";
   } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<{ keyValue?: string }>({});
+  const { addConfirmation } = useConfirmationDialog();
 
   // Tracks what was last confirmed persisted (seeded from config, refreshed on
   // save) rather than re-deriving "saved" straight from the config prop on
@@ -337,6 +339,28 @@ export function MCPProxySecurityTab({
     [setRowScopes],
   );
 
+  // Confirm before switching methods — it breaks agents already configured
+  // to use this proxy. Reads the saved type from `config`, not
+  // lastSavedAuthRef, which defaults to "apiKey" until the sync effect above
+  // runs and would otherwise warn about a method nobody actually configured.
+  const handleAuthTypeChange = useCallback(
+    (nextType: AuthenticationType) => {
+      const savedType = resolveAuthenticationType(config);
+      if (savedType && nextType !== savedType) {
+        addConfirmation({
+          title: "Switch authentication method?",
+          description: `This proxy is currently secured with ${getAuthenticationTypeLabel(savedType)}. Switching to ${getAuthenticationTypeLabel(nextType)} will break any agent already configured to use it, until their tool configuration is updated to match.`,
+          confirmButtonText: "Switch Method",
+          confirmButtonColor: "error",
+          onConfirm: () => setAuthenticationType(nextType),
+        });
+        return;
+      }
+      setAuthenticationType(nextType);
+    },
+    [addConfirmation, config],
+  );
+
   const isDirty = authIsDirty || toolScopesDirty;
 
   const handleDiscard = useCallback(() => {
@@ -489,9 +513,7 @@ export function MCPProxySecurityTab({
               displayEmpty
               value={authenticationType || ""}
               onChange={(e) =>
-                setAuthenticationType(
-                  (e.target.value as AuthenticationType) || "",
-                )
+                handleAuthTypeChange((e.target.value as AuthenticationType) || "")
               }
             >
               {AUTHENTICATION_TYPE_OPTIONS.map((type) => (

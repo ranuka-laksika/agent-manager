@@ -29,6 +29,8 @@ export interface EnvVarReferenceRow {
 }
 
 interface EnvironmentVariablesReferenceProps {
+  /** Heading text; override when a page shows more than one of these blocks. */
+  title?: string;
   /** Explanatory text rendered under the heading. */
   description: ReactNode;
   rows: EnvVarReferenceRow[];
@@ -51,6 +53,7 @@ interface EnvironmentVariablesReferenceProps {
  * code.
  */
 export function EnvironmentVariablesReference({
+  title = "Environment Variables References",
   description,
   rows,
   variant = "alert",
@@ -61,7 +64,7 @@ export function EnvironmentVariablesReference({
   const content = (
     <>
       <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-        Environment Variables References
+        {title}
       </Typography>
       <Typography variant="body2" sx={{ mb: 2 }}>
         {description}

@@ -16,11 +16,11 @@
  * under the License.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Divider, Skeleton, Stack, Typography } from "@wso2/oxygen-ui";
 import { AlertTriangle, RotateCcwKey } from "@wso2/oxygen-ui-icons-react";
 import {
-  useClaimAgentIdentitySecret,
+  useProvisionAgentIdentity,
   useRegenerateAgentIdentitySecret,
 } from "@agent-management-platform/api-client";
 import { TextInput } from "@agent-management-platform/views";
@@ -122,8 +122,12 @@ export const SecretRevealAlert: React.FC<{
  * since there's no other way for the operator to get it).
  */
 export const RegenerateAgentIdentityButton: React.FC<
-  EnvAgentIdentitySectionProps & { isRegenerating: boolean; onRegenerate: () => void }
-> = ({ orgId, projectId, agentId, envId, isRegenerating, onRegenerate }) => {
+  EnvAgentIdentitySectionProps & {
+    isRegenerating: boolean;
+    onRegenerate: () => void;
+    label?: string;
+  }
+> = ({ orgId, projectId, agentId, envId, isRegenerating, onRegenerate, label = "Regenerate ID" }) => {
   const { provisioned } = useAgentIdentityBinding({ orgId, projectId, agentId, envId });
 
   if (!provisioned) return null;
@@ -136,7 +140,7 @@ export const RegenerateAgentIdentityButton: React.FC<
       onClick={onRegenerate}
       disabled={isRegenerating}
     >
-      {isRegenerating ? "Regenerating..." : "Regenerate ID"}
+      {isRegenerating ? "Generating..." : label}
     </Button>
   );
 };
@@ -160,9 +164,10 @@ const IdentityRow: React.FC<{
 
 /**
  * Per-environment "Agent Identity" section, rendered above the other
- * sections inside an EnvironmentCard for externally hosted agents. Lets the
- * user claim the AgentID's one-time client secret — the backend deletes its
- * stored copy the moment it's returned, so this is the only chance to see it.
+ * sections inside an EnvironmentCard for externally hosted agents. Shows the
+ * AgentID's client ID once provisioning completes — the client secret itself
+ * is never stored, so getting one is always the header's "Generate Secret"
+ * action (see RegenerateAgentIdentityButton), not anything this section does.
  */
 export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = ({
   orgId, projectId, agentId, envId,
@@ -171,60 +176,33 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
     orgId, projectId, agentId, envId,
   });
 
-  const { mutateAsync: claimSecret, isPending: isClaiming } = useClaimAgentIdentitySecret();
-  const [claimed, setClaimed] = useState<{ clientId: string; clientSecret: string } | null>(null);
+  const { mutate: provisionIdentity } = useProvisionAgentIdentity();
+  const [hasRequestedProvision, setHasRequestedProvision] = useState(false);
 
-  // Only the "unclaimed" and "already claimed with a clientId" branches below
-  // actually render <RolesGroupsChips> — skip the fetch for the just-claimed
-  // alert and the "nothing to show" case so it isn't fired for nothing.
-  const alreadyClaimed = provisioned && !binding?.hasUnclaimedSecret;
-  const hasNoIdentityToShow = alreadyClaimed && !binding?.clientId;
-  const showRolesGroups = provisioned && !claimed && !hasNoIdentityToShow;
+  // Automatically provision AgentID for this environment if no binding
+  // exists yet (e.g. environment added to project pipeline after agent creation).
+  useEffect(() => {
+    if (isLoading || binding || hasRequestedProvision) return;
+    setHasRequestedProvision(true);
+    provisionIdentity({
+      params: { orgName: orgId, projName: projectId, agentName: agentId },
+      query: { environment: envId },
+    });
+  }, [
+    isLoading, binding, hasRequestedProvision, provisionIdentity, orgId, projectId, agentId, envId,
+  ]);
+
   const rolesAndGroups = useAgentRolesAndGroups({
-    orgId, projectId, agentId, envId, enabled: showRolesGroups,
+    orgId, projectId, agentId, envId, enabled: provisioned,
   });
-
-  const handleClaim = async () => {
-    try {
-      const resp = await claimSecret({
-        params: { orgName: orgId, projName: projectId, agentName: agentId },
-        query: { environment: envId },
-      });
-      setClaimed({ clientId: resp.clientId, clientSecret: resp.clientSecret });
-    } catch {
-      // Error already surfaced via useClaimAgentIdentitySecret's snackbar.
-    }
-  };
 
   if (isLoading) {
     return <Skeleton variant="rounded" height={56} sx={{ mt: 2 }} />;
   }
 
-  // Nothing to show for a binding that isn't provisioned yet, or a
-  // platform-hosted agent (which has no claim flow — see GetAgentCredentials).
-  if (!binding || binding.provisioningType !== "external") {
-    return null;
-  }
-
-  // Just claimed this session: keep the divider (separates this from the
-  // card header/other content above), but skip the "AGENT IDENTITY" caption
-  // — the alert alone is unambiguous about what it is.
-  if (claimed) {
-    return (
-      <>
-        <Divider sx={{ mb: 1 }} />
-        <SecretRevealAlert
-          clientId={claimed.clientId}
-          clientSecret={claimed.clientSecret}
-          message="This secret will not be shown again — save it securely now."
-        />
-      </>
-    );
-  }
-
-  // Already claimed in an earlier session, and there's no clientId to show
-  // either: nothing left to do here.
-  if (hasNoIdentityToShow) {
+  // Nothing to show for a platform-hosted agent — its credentials are
+  // injected straight into its pod, never surfaced through this UI.
+  if (binding && binding.provisioningType !== "external") {
     return null;
   }
 
@@ -241,58 +219,35 @@ export const EnvAgentIdentitySection: React.FC<EnvAgentIdentitySectionProps> = (
       </Typography>
 
       <Box sx={{ mt: 1 }}>
-        {binding.hasUnclaimedSecret ? (
-          <IdentityRow
-            rolesAndGroups={rolesAndGroups}
-            left={
-              <Stack spacing={1.5}>
-                {binding.clientId && (
-                  <TextInput
-                    slotProps={{ input: { readOnly: true } }}
-                    label="Client ID"
-                    value={binding.clientId}
-                    copyable
-                    fullWidth
-                    sx={monospaceInputSx}
-                  />
-                )}
-                <Stack direction="row" alignItems="center" gap={1.5}>
-                  <Typography variant="body2" color="text.secondary">
-                    This agent&apos;s identity secret hasn&apos;t been claimed yet.
-                  </Typography>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => void handleClaim()}
-                    disabled={isClaiming}
-                  >
-                    {isClaiming ? "Claiming..." : "Reveal Secret"}
-                  </Button>
-                </Stack>
-              </Stack>
-            }
-          />
-        ) : alreadyClaimed ? (
-          // binding.clientId is guaranteed here (the early return above
-          // covers the no-clientId case) — the client ID itself isn't
-          // sensitive, unlike the secret, so it's always safe to show.
-          <IdentityRow
-            rolesAndGroups={rolesAndGroups}
-            left={
-              <TextInput
-                slotProps={{ input: { readOnly: true } }}
-                label="Client ID"
-                value={binding.clientId}
-                copyable
-                fullWidth
-                sx={monospaceInputSx}
-              />
-            }
-          />
+        {!binding ? (
+          <Stack direction="row" alignItems="center" gap={1}>
+            <CircularProgress size={14} />
+            <Typography variant="body2" color="text.secondary">
+              Provisioning identity for this environment…
+            </Typography>
+          </Stack>
         ) : binding.status === "failed" ? (
           <Typography variant="body2" color="text.secondary">
             Provisioning failed — check the identity settings for details.
           </Typography>
+        ) : provisioned ? (
+          // The client ID itself isn't sensitive, unlike the secret, so it's
+          // always safe to show once provisioning has completed.
+          binding.clientId && (
+            <IdentityRow
+              rolesAndGroups={rolesAndGroups}
+              left={
+                <TextInput
+                  slotProps={{ input: { readOnly: true } }}
+                  label="Client ID"
+                  value={binding.clientId}
+                  copyable
+                  fullWidth
+                  sx={monospaceInputSx}
+                />
+              }
+            />
+          )
         ) : (
           // Polled by useGetAgentIdentity while status is pending/in_progress,
           // so this updates on its own once provisioning settles.
