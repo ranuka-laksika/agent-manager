@@ -146,10 +146,12 @@ export function AddMCPToolConfigPanel({
     proxyId: selectedProxyId ?? "",
   });
 
+  // No single environment to check security against (this proxy maps to all at once).
+  // Hide apikey only when every endpoint uses OAuth, so mixed security keeps both fields.
+  const proxyEndpoints = selectedProxyDetails?.endpoints ?? [];
   const usesIdentitySecurity =
-    selectedProxyDetails?.endpoints?.some(
-      (endpoint) => endpoint.security?.identity?.enabled === true,
-    ) ?? false;
+    proxyEndpoints.length > 0 &&
+    proxyEndpoints.every((endpoint) => endpoint.security?.identity?.enabled === true);
   const relevantEnvVarKeys: EnvVarKey[] = useMemo(
     () => (usesIdentitySecurity ? ["url"] : [...ENV_VAR_KEYS]),
     [usesIdentitySecurity],
