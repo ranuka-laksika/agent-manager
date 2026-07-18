@@ -78,8 +78,32 @@ jobs:
             exit 1
           fi
 
-      - name: Delete previous 0.0.0-dev-* tags for ${{ matrix.package }}
+      # GHCR refuses to delete a package's last remaining tagged version
+      # ("You must delete the package instead"). A package that has only
+      # ever had nightly dev builds (e.g. right after a rename, before its
+      # first real release) has no other tag to fall back on, so deleting
+      # its sole 0.0.0-dev-* tag would hit that error. Detect this case and
+      # skip cleanup for it instead of failing the job.
+      - name: Check tagged versions for ${{ matrix.package }}
+        id: check-tags
         if: steps.check-package.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          tags=$(gh api "orgs/${REGISTRY_ORG}/packages/container/${PACKAGE}/versions" \
+            --paginate --jq '.[].metadata.container.tags[]?')
+          total=$(printf '%s\n' "$tags" | grep -c . || true)
+          dev_only=$(printf '%s\n' "$tags" | grep -c '^0\.0\.0-dev-' || true)
+          if [ "$total" -gt 0 ] && [ "$total" -eq "$dev_only" ]; then
+            echo "::warning::${PACKAGE} has no tagged version besides its nightly dev tag(s) yet; GHCR won't allow deleting the last tagged version, so skipping cleanup until a real release tag exists."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Delete previous 0.0.0-dev-* tags for ${{ matrix.package }}
+        if: steps.check-package.outputs.exists == 'true' && steps.check-tags.outputs.skip != 'true'
         uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
