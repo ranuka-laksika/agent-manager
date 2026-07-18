@@ -131,6 +131,7 @@ export interface Environment {
   gateway?: GatewaySpec;
   createdAt: string; // ISO date-time
   id?: string;
+  isolationTier?: string;
 }
 
 export type EnvironmentListResponse = Environment[];

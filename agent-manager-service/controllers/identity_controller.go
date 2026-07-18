@@ -855,25 +855,22 @@ func (c *identityController) ListRoles(w http.ResponseWriter, r *http.Request) {
 		limit = 20
 	}
 
-	roles, _, err := c.client.ListRoles(ctx, resolvedOrg.OUID, offset, limit)
+	roles, total, err := c.client.ListRoles(ctx, resolvedOrg.OUID, offset, limit)
 	if err != nil {
 		log.Error("ListRoles failed", "ouID", resolvedOrg.OUID, "error", err)
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list roles")
 		return
 	}
 
-	// Filter roles to only include those belonging to the caller's OU
-	// Thunder's ListRoles endpoint returns all roles, not OU-scoped
-	// Also exclude the "Administrator" role from public visibility
-	filteredRoles := make([]thundersvc.ThunderRole, 0, len(roles))
-	for _, role := range roles {
-		if role.OuID == resolvedOrg.OUID && role.Name != "Administrator" {
-			role.IsReadOnly = constants.IsPredefinedRole(role.Name)
-			filteredRoles = append(filteredRoles, role)
-		}
+	// The OU-scoped ListRoles already restricts to the caller's OU and hides
+	// Thunder's native Administrator role (thundersvc.NativeAdministratorRoleName),
+	// so its total is the true post-filter count; only the display-only
+	// IsReadOnly flag is computed here.
+	for i := range roles {
+		roles[i].IsReadOnly = constants.IsPredefinedRole(roles[i].Name)
 	}
 
-	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": filteredRoles, "total": len(filteredRoles), "offset": 0, "limit": limit})
+	utils.WriteSuccessResponse(w, http.StatusOK, map[string]any{"roles": roles, "total": total, "offset": offset, "limit": limit})
 }
 
 func (c *identityController) GetRole(w http.ResponseWriter, r *http.Request) {

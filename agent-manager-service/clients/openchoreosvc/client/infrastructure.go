@@ -122,6 +122,9 @@ func (c *openChoreoClient) CreateEnvironment(ctx context.Context, ouID string, r
 	if req.Description != "" {
 		annotations[AnnotationKeyDescription] = req.Description
 	}
+	if req.IsolationTier != "" {
+		annotations[AnnotationKeyIsolationTier] = req.IsolationTier
+	}
 
 	isProduction := req.IsProduction
 	dataplaneRefKind := ocapi.EnvironmentSpecDataPlaneRefKindClusterDataPlane
@@ -649,6 +652,7 @@ func convertEnvironmentToResponse(env *ocapi.Environment) *models.EnvironmentRes
 
 	displayName := getAnnotation(env.Metadata.Annotations, AnnotationKeyDisplayName)
 	description := getAnnotation(env.Metadata.Annotations, AnnotationKeyDescription)
+	isolationTier := getAnnotation(env.Metadata.Annotations, AnnotationKeyIsolationTier)
 
 	var createdAt time.Time
 	if env.Metadata.CreationTimestamp != nil {
@@ -669,14 +673,15 @@ func convertEnvironmentToResponse(env *ocapi.Environment) *models.EnvironmentRes
 	}
 
 	return &models.EnvironmentResponse{
-		UUID:         utils.StrPointerAsStr(env.Metadata.Uid, ""),
-		Name:         env.Metadata.Name,
-		DisplayName:  displayName,
-		DataplaneRef: dataplaneRef,
-		IsProduction: isProduction,
-		Description:  description,
-		Gateway:      gateway,
-		CreatedAt:    createdAt,
+		UUID:          utils.StrPointerAsStr(env.Metadata.Uid, ""),
+		Name:          env.Metadata.Name,
+		DisplayName:   displayName,
+		DataplaneRef:  dataplaneRef,
+		IsProduction:  isProduction,
+		Description:   description,
+		IsolationTier: isolationTier,
+		Gateway:       gateway,
+		CreatedAt:     createdAt,
 	}
 }
 

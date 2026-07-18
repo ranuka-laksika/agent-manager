@@ -81,14 +81,14 @@ spec:
   # are unaffected.
   patches:
     - target:
-        kind: Deployment
-        group: apps
-        version: v1
+        kind: SandboxTemplate
+        group: extensions.agents.x-k8s.io
+        version: v1alpha1
         where: |
           ${has(environmentConfigs.envInjectionEnabled) ? environmentConfigs.envInjectionEnabled : parameters.envInjectionEnabled}
       operations:
         - op: add
-          path: /spec/template/spec/containers/0/env/-
+          path: /spec/podTemplate/spec/containers/0/env/-
           value:
             name: ${parameters.otelEndpointEnvName}
             # kgateway-routed vhost ("<env>-<org>.<domain>"): traces flow through
@@ -102,7 +102,7 @@ spec:
             # empty for the default kgateway-routed vhost.
             value: {{ if .Values.apiPlatformGatewayVhost.otelEndpointOverride }}{{ .Values.apiPlatformGatewayVhost.otelEndpointOverride | quote }}{{ else }}"http://${metadata.environmentName}-${metadata.componentNamespace}.{{ .Values.apiPlatformGatewayVhost.host }}:{{ .Values.apiPlatformGatewayVhost.port }}/otel"{{ end }}
         - op: add
-          path: /spec/template/spec/containers/0/env/-
+          path: /spec/podTemplate/spec/containers/0/env/-
           value:
             name: ${parameters.apiKeyEnvName}
             valueFrom:

@@ -36,8 +36,8 @@ ampEvaluation:
   # When false, uses repository:tag directly (for k3d imported images or external registries)
   useLocalRegistry: false
 
-  # -- In-cluster URL for the traces observer API
-  tracesApiEndpoint: "http://amp-traces-observer.openchoreo-observability-plane.svc.cluster.local:9098"
+  # -- In-cluster URL for the observer API
+  tracesApiEndpoint: "http://amp-observer.openchoreo-observability-plane.svc.cluster.local:9098"
 
   # -- Publisher settings (for publishing evaluation scores to agent-manager)
   publisher:

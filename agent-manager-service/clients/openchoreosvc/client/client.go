@@ -29,7 +29,12 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/requests"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
+	"github.com/wso2/agent-manager/agent-manager-service/orgctx"
 )
+
+// HeaderImpersonateOrg carries the org UUID the call is performed on behalf
+// of, resolved from the request context (see middleware.GetResolvedOrg).
+const HeaderImpersonateOrg = "X-Impersonate-Org"
 
 // Config contains configuration for the OpenChoreo client
 type Config struct {
@@ -107,11 +112,14 @@ type OpenChoreoClient interface {
 	ListEnvironments(ctx context.Context, ouID string) ([]*models.EnvironmentResponse, error)
 
 	// Release Binding Operations
-	UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}) error
+	UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error
+	// EnsureReleaseBindingRuntimeClass idempotently reconciles runtimeClassName on a binding created
+	// out-of-band by OpenChoreo AutoDeploy. Writes only when the value differs (see impl).
+	EnsureReleaseBindingRuntimeClass(ctx context.Context, ouID, componentName, environment, desiredRuntimeClass string) error
 	ReplaceReleaseBindingWorkloadOverrides(ctx context.Context, ouID, componentName, environment string, envOverrides []EnvVar, fileOverrides []FileVar) error
 
 	// Promotion Operations
-	PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error
+	PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error
 	// GetSourceEnvWorkloadOverrides fetches the workload overrides (env vars and file mounts)
 	// from the source environment's release binding, converted to client types.
 	GetSourceEnvWorkloadOverrides(ctx context.Context, ouID, componentName, sourceEnvironment string) ([]EnvVar, []FileVar, error)
@@ -205,11 +213,22 @@ func NewOpenChoreoClient(cfg *Config) (OpenChoreoClient, error) {
 		return nil
 	}
 
+	// Propagate the resolved org so OpenChoreo can attribute the call to the
+	// organization being operated on. Absent on contexts that don't originate
+	// from an authenticated API request (e.g. background reconcilers).
+	orgEditor := func(ctx context.Context, req *http.Request) error {
+		if org, ok := orgctx.GetResolvedOrg(ctx); ok && org.OUID != "" {
+			req.Header.Set(HeaderImpersonateOrg, org.OUID)
+		}
+		return nil
+	}
+
 	// Create the generated OpenAPI client with retryable HTTP client and auth
 	ocClient, err := gen.NewClientWithResponses(
 		cfg.BaseURL,
 		gen.WithHTTPClient(httpClient),
 		gen.WithRequestEditorFn(authEditor),
+		gen.WithRequestEditorFn(orgEditor),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OpenChoreo client: %w", err)

@@ -1,0 +1,192 @@
+// Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/wso2/agent-manager/agent-manager-observer/config"
+	"github.com/wso2/agent-manager/agent-manager-observer/controllers"
+	"github.com/wso2/agent-manager/agent-manager-observer/handlers"
+	"github.com/wso2/agent-manager/agent-manager-observer/mcp"
+	"github.com/wso2/agent-manager/agent-manager-observer/middleware"
+	"github.com/wso2/agent-manager/agent-manager-observer/middleware/logger"
+	"github.com/wso2/agent-manager/agent-manager-observer/observer"
+)
+
+func setupLogger(cfg *config.Config) {
+	var level slog.Level
+	switch cfg.LogLevel {
+	case "DEBUG":
+		level = slog.LevelDebug
+	case "INFO":
+		level = slog.LevelInfo
+	case "WARN":
+		level = slog.LevelWarn
+	case "ERROR":
+		level = slog.LevelError
+	default:
+		level = slog.LevelInfo // default to INFO
+	}
+
+	// Create handler options
+	opts := &slog.HandlerOptions{
+		Level: level,
+	}
+	handler := slog.NewJSONHandler(os.Stdout, opts)
+	slogger := slog.New(handler)
+	slog.SetDefault(slogger)
+
+	slog.Info("Logger configured",
+		"level", level.String())
+}
+
+func main() {
+	// Load configuration
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("Failed to load config", "error", err)
+		os.Exit(1)
+	}
+
+	// Setup structured logging
+	setupLogger(cfg)
+
+	slog.Info("Starting agent-manager-observer", "port", cfg.Server.Port)
+
+	// Setup routes
+	mux := http.NewServeMux()
+
+	// Health check - no authentication required
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, `{"status":"healthy","timestamp":"%s"}`, time.Now().Format(time.RFC3339))
+	})
+
+	// OAuth 2.0 protected resource metadata (RFC 9728) - no authentication
+	// required; consumed by MCP clients to discover the authorization server.
+	handlers.RegisterWellKnownRoutes(mux, cfg.Auth)
+
+	// Authenticated API routes
+	apiMux := http.NewServeMux()
+
+	// v1 routes — observer-backed
+	authProvider := observer.NewAuthProvider(
+		cfg.Observer.TokenURL,
+		cfg.Observer.ClientID,
+		cfg.Observer.ClientSecret,
+	)
+	observerClient := observer.NewClient(cfg.Observer.BaseURL, authProvider, cfg.Observer.DefaultNamespace)
+	controller := controllers.NewTracingController(observerClient)
+	obsController := controllers.NewObservabilityController(observerClient)
+	handler := handlers.NewHandler(controller, obsController)
+
+	apiMux.HandleFunc("/api/v1/traces", handler.GetTraceOverviews)
+	apiMux.HandleFunc("/api/v1/traces/export", handler.ExportTraces)
+	apiMux.HandleFunc("/api/v1/traces/", func(w http.ResponseWriter, r *http.Request) {
+		// Route /api/v1/traces/{traceId}/spans and /api/v1/traces/{traceId}/spans/{spanId}
+		if isSpanDetailPath(r.URL.Path) {
+			handler.GetSpanDetail(w, r)
+		} else {
+			handler.GetTraceSpans(w, r)
+		}
+	})
+
+	// logs/build-logs/metrics reject publisher-audience tokens: those routes
+	// are for the console/CLI, not the amp-publisher-* service-to-service carve-out.
+	noPublisher := middleware.RejectPublisherAudience()
+	apiMux.Handle("/api/v1/logs", noPublisher(http.HandlerFunc(handler.GetLogs)))
+	apiMux.Handle("/api/v1/build-logs", noPublisher(http.HandlerFunc(handler.GetBuildLogs)))
+	apiMux.Handle("/api/v1/metrics", noPublisher(http.HandlerFunc(handler.GetMetrics)))
+
+	slog.Info("v1 observer-backed routes registered", "observerBaseURL", cfg.Observer.BaseURL)
+
+	// Apply JWT auth middleware to API routes
+	authenticatedHandler := middleware.JWTAuth(cfg.Auth)(apiMux)
+	mux.Handle("/api/v1/", authenticatedHandler)
+
+	// am-obs-mcp: streamable-HTTP MCP server on the root mux (not under
+	// /api/v1/). Behind the same JWTAuth middleware, but — unlike the REST
+	// logs/metrics/build-logs routes — deliberately not gated by
+	// RejectPublisherAudience: publisher-audience tokens may call it.
+	mcp.RegisterRoute(mux, mcp.Dependencies{
+		Tracing:       controller,
+		Observability: obsController,
+	}, middleware.JWTAuth(cfg.Auth))
+	slog.Info("am-obs-mcp registered", "path", "/mcp")
+
+	// Apply middleware: Request Logger -> CORS
+	corsConfig := middleware.DefaultCORSConfig()
+	corsHandler := middleware.CORS(corsConfig)(mux)
+	loggerHandler := logger.RequestLogger()(corsHandler)
+
+	// Create server
+	server := &http.Server{
+		Addr:         fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:      loggerHandler,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
+	}
+
+	// Start server in a goroutine
+	go func() {
+		slog.Info("Server listening", "port", cfg.Server.Port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Server failed", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	slog.Info("Shutting down server...")
+
+	// Graceful shutdown
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Server exited")
+}
+
+// isSpanDetailPath returns true for /api/v1/traces/{traceId}/spans/{spanId}
+// (i.e. the path has a non-empty segment after "/spans/").
+func isSpanDetailPath(path string) bool {
+	const spansSlash = "/spans/"
+	idx := strings.LastIndex(path, spansSlash)
+	if idx < 0 {
+		return false
+	}
+	tail := path[idx+len(spansSlash):]
+	return tail != ""
+}

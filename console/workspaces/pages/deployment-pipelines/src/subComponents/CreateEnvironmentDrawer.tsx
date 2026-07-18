@@ -44,14 +44,49 @@ import { useListDataPlanes } from "@agent-management-platform/api-client";
 import { globalConfig, type DataPlane } from "@agent-management-platform/types";
 import {
   getAmpVersionHelm,
+  getIsolationTierMeta,
   getRawScriptUrl,
 } from "@agent-management-platform/shared-component";
 import {
   createEnvironmentSchema,
   type CreateEnvironmentFormValues,
+  type IsolationTier,
 } from "../form/environmentSchema";
 
 const TOKEN_MASK = "•••••••••••••••";
+
+const GVISOR_ISOLATION_DOCS_URL =
+  "https://wso2.github.io/agent-manager/docs/administration/isolation-tiers/gvisor";
+const KATA_ISOLATION_DOCS_URL =
+  "https://wso2.github.io/agent-manager/docs/administration/isolation-tiers/kata";
+
+// Per-tier copy for the picker and the pre-deploy node-requirement warning.
+// runc has no warning: it is the default and needs no extra cluster setup.
+const ISOLATION_TIER_OPTIONS: {
+  value: IsolationTier;
+  label: string;
+  warning?: string;
+  docsUrl?: string;
+  docsLabel?: string;
+}[] = [
+  { value: "runc", label: "Sandbox Level 1 — runc (default)" },
+  {
+    value: "gvisor",
+    label: "Sandbox Level 2 — gVisor",
+    warning:
+      "gVisor environments need a dedicated x86_64 node with the gVisor (runsc) runtime installed before agents can be deployed. Set up the node first — see the ",
+    docsUrl: GVISOR_ISOLATION_DOCS_URL,
+    docsLabel: "gVisor setup guide",
+  },
+  {
+    value: "kata",
+    label: "Sandbox Level 3 — Kata Containers",
+    warning:
+      "Kata environments need a dedicated node with KVM support (nested virtualization) and the Kata runtime installed before agents can be deployed. Set up the node first — see the ",
+    docsUrl: KATA_ISOLATION_DOCS_URL,
+    docsLabel: "Kata setup guide",
+  },
+];
 
 interface CreateEnvironmentDrawerProps {
   open: boolean;
@@ -66,6 +101,7 @@ const DEFAULT_FORM: CreateEnvironmentFormValues = {
   dataplaneRef: "",
   dnsPrefix: "",
   isProduction: false,
+  isolationTier: "runc",
 };
 
 function deriveNameFromDisplayName(displayName: string): string {
@@ -81,6 +117,7 @@ function buildScript(
   name: string,
   displayName: string,
   isProduction: boolean,
+  isolationTier: IsolationTier,
   token: string,
 ): string {
   // Cluster-internal addresses the gateway uses to reach Agent Manager. Sourced
@@ -102,6 +139,9 @@ function buildScript(
     `curl -fsSL ${getRawScriptUrl("add-environment.sh")} \\`,
     `  | ENV_NAME=${name || "<env-name>"} \\`,
     `    DISPLAY_NAME="${displayName || "<display-name>"}" \\`,
+    ...(isolationTier !== "runc"
+      ? [`    ISOLATION_TIER=${isolationTier} \\`]
+      : []),
     `    AGENT_MANAGER_TOKEN=${token} \\`,
     `    CHART_VERSION=${chartVersion || "<chart-version>"} \\`,
     ...(isProduction ? ["    IS_PRODUCTION=true \\"] : []),
@@ -214,6 +254,7 @@ export function CreateEnvironmentDrawer({
         formData.name,
         formData.displayName,
         formData.isProduction ?? false,
+        formData.isolationTier ?? "runc",
         token,
       );
       await navigator.clipboard.writeText(script);
@@ -228,6 +269,7 @@ export function CreateEnvironmentDrawer({
     formData.name,
     formData.displayName,
     formData.isProduction,
+    formData.isolationTier,
   ]);
 
   const displayScript = useMemo(
@@ -236,15 +278,21 @@ export function CreateEnvironmentDrawer({
         formData.name,
         formData.displayName,
         formData.isProduction ?? false,
+        formData.isolationTier ?? "runc",
         showToken && resolvedToken ? resolvedToken : TOKEN_MASK,
       ),
     [
       formData.name,
       formData.displayName,
       formData.isProduction,
+      formData.isolationTier,
       showToken,
       resolvedToken,
     ],
+  );
+
+  const selectedTier = ISOLATION_TIER_OPTIONS.find(
+    (t) => t.value === (formData.isolationTier ?? "runc"),
   );
 
   return (
@@ -320,6 +368,33 @@ export function CreateEnvironmentDrawer({
               />
             </FormControl>
 
+            <FormControl fullWidth>
+              <FormLabel>Isolation Tier</FormLabel>
+              <Select
+                size="small"
+                value={formData.isolationTier ?? "runc"}
+                onChange={(e) =>
+                  handleChange("isolationTier", e.target.value as string)
+                }
+              >
+                {ISOLATION_TIER_OPTIONS.map((tier) => {
+                  const TierIcon = getIsolationTierMeta(tier.value).icon;
+                  return (
+                    <MenuItem key={tier.value} value={tier.value}>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <TierIcon size={14} />
+                        <span>{tier.label}</span>
+                      </Stack>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+              <Typography variant="caption" color="text.secondary">
+                Container runtime isolation for agents deployed to this
+                environment.
+              </Typography>
+            </FormControl>
+
             <FormControlLabel
               control={
                 <Checkbox
@@ -332,6 +407,22 @@ export function CreateEnvironmentDrawer({
               label="Production environment"
             />
           </Stack>
+
+          {selectedTier?.warning && (
+            <Alert severity="warning">
+              {selectedTier.warning}
+              <Typography
+                component="a"
+                href={selectedTier.docsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                sx={{ color: "primary.main" }}
+              >
+                {selectedTier.docsLabel}
+              </Typography>
+              .
+            </Alert>
+          )}
 
           <Stack spacing={1}>
             <Typography variant="body2">

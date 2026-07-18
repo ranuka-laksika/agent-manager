@@ -40,6 +40,7 @@ Environments are provisioned by a script that creates the environment in Agent M
    | Field | Description | Example |
    |---|---|---|
    | **Display Name** | Human-readable name shown throughout the Console. | `Production` |
+   | **Isolation Tier** | Container runtime isolation for agents deployed to this environment. The dropdown lists three sandboxing tiers of increasing strength — `Sandboxing T1 (runc)` (default), `Sandboxing T2 (gVisor)`, and `Sandboxing T3 (Kata Containers)`. Stronger tiers need a dedicated node set up first; see [Isolation tiers](#isolation-tiers) below. | `Sandboxing T1 (runc)` |
    | **Production environment** | Mark this environment as production. Production environments are typically the last stage of a pipeline. | — |
 
 3. Copy the generated command using the copy icon. Your access token is substituted into the command automatically when you copy.
@@ -48,6 +49,30 @@ Environments are provisioned by a script that creates the environment in Agent M
    The script creates the environment in Agent Manager and provisions an API Platform Gateway for that environment via Helm.
 
    > The script is idempotent — it is safe to re-run. Once it completes, the new environment appears in the list.
+
+### Isolation tiers
+
+Every environment has an **isolation tier** that decides which container runtime its agents run under. The tier is chosen at environment creation time and cannot be changed afterwards.
+
+The Console presents the tiers as three sandboxing levels of increasing strength, each marked by its own shield icon. The environment list shows the tier as a **Sandboxing T1**–**T3** shield chip, and on an agent's Deploy and Overview pages (and in a pipeline's promotion chain) a shield icon next to the environment name identifies its tier — hover over it to see the tier and runtime, e.g. *Sandboxing Tier 2 — gVisor*.
+
+| Console label | Tier value | Runtime | Isolation | Requirements |
+|------|------|---------|-----------|--------------|
+| **Sandboxing T1** (default) | `runc` | Standard container runtime | Sandboxed pod, shared host kernel | None — works everywhere |
+| **Sandboxing T2** | `gvisor` | gVisor (`runsc`) | Userspace kernel intercepts syscalls | A dedicated x86_64 node — see the [gVisor guide](./isolation-tiers/gvisor.mdx) |
+| **Sandboxing T3** | `kata` | Kata Containers (`kata-qemu`) | Per-agent VM with its own guest kernel | A dedicated node with KVM — see the [Kata guide](./isolation-tiers/kata.mdx) |
+
+To create an environment with a stronger tier, set up the node first (per the guides above), then pick the tier from the **Isolation Tier** dropdown in the **Create Environment** drawer. The generated command automatically includes the matching `ISOLATION_TIER` variable — for `runc` (the default) no variable is added. Selecting gVisor or Kata also shows a warning with a link to the corresponding node setup guide.
+
+If you script environment creation directly instead of using the Console, set the variable yourself:
+
+```bash
+ISOLATION_TIER=gvisor \
+  ENV_NAME=... DISPLAY_NAME=... AGENT_MANAGER_TOKEN=... \
+  bash add-environment.sh
+```
+
+Agents deployed or promoted to that environment automatically run under the tier's runtime — no agent-side changes are needed.
 
 ### Delete an environment
 

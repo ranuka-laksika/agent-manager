@@ -142,6 +142,12 @@ func (c *gatewayController) RegisterGateway(w http.ResponseWriter, r *http.Reque
 	ouID := middleware.OUIDFromRequest(r)
 	if req.OrgId != nil && *req.OrgId != "" {
 		ouID = *req.OrgId
+		// Re-stash the effective org so downstream context consumers (e.g. the
+		// OpenChoreo client's org header) see the org actually operated on
+		// rather than the caller's token org.
+		org, _ := middleware.GetResolvedOrg(ctx)
+		org.OUID = ouID
+		ctx = middleware.WithResolvedOrg(ctx, org)
 	}
 
 	// Validate environments if present

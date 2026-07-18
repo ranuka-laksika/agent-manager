@@ -19,15 +19,16 @@ package models
 import "time"
 
 type EnvironmentResponse struct {
-	UUID         string       `json:"uuid"`
-	Name         string       `json:"name"`
-	DataplaneRef string       `json:"dataplaneRef"`
-	DisplayName  string       `json:"displayName,omitempty"`
-	IsProduction bool         `json:"isProduction"`
-	DNSPrefix    string       `json:"dnsPrefix,omitempty"`
-	Description  string       `json:"description,omitempty"`
-	Gateway      *GatewaySpec `json:"gateway,omitempty"`
-	CreatedAt    time.Time    `json:"createdAt"`
+	UUID          string       `json:"uuid"`
+	Name          string       `json:"name"`
+	DataplaneRef  string       `json:"dataplaneRef"`
+	DisplayName   string       `json:"displayName,omitempty"`
+	IsProduction  bool         `json:"isProduction"`
+	DNSPrefix     string       `json:"dnsPrefix,omitempty"`
+	Description   string       `json:"description,omitempty"`
+	IsolationTier string       `json:"isolationTier,omitempty"`
+	Gateway       *GatewaySpec `json:"gateway,omitempty"`
+	CreatedAt     time.Time    `json:"createdAt"`
 }
 
 type DataPlaneResponse struct {
@@ -74,17 +75,4 @@ type LogsResponse struct {
 	Logs       []LogEntry `json:"logs"`
 	TotalCount int32      `json:"totalCount"`
 	TookMs     float32    `json:"tookMs"`
-}
-type TimeValuePoint struct {
-	Time  string  `json:"time"`
-	Value float64 `json:"value"`
-}
-
-type MetricsResponse struct {
-	CpuUsage       []TimeValuePoint `json:"cpuUsage"`
-	CpuRequests    []TimeValuePoint `json:"cpuRequests"`
-	CpuLimits      []TimeValuePoint `json:"cpuLimits"`
-	Memory         []TimeValuePoint `json:"memory"`
-	MemoryRequests []TimeValuePoint `json:"memoryRequests"`
-	MemoryLimits   []TimeValuePoint `json:"memoryLimits"`
 }

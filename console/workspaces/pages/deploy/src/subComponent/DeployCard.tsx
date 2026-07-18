@@ -75,6 +75,7 @@ import {
 import {
   DeploymentStatus,
   EnvStatus,
+  IsolationTierBadge,
   ResourceMetricChip,
   formatUsagePercent,
   getUsagePercentVariant,
@@ -679,9 +680,12 @@ export function DeployCard(props: DeployCardProps) {
     >
       <CardContent>
         <Stack gap={2}>
-          <Typography variant="h5">
-            {currentEnvironment?.displayName} Environment
-          </Typography>
+          <Stack direction="row" gap={1} alignItems="center">
+            <IsolationTierBadge tier={currentEnvironment?.isolationTier} />
+            <Typography variant="h5">
+              {currentEnvironment?.displayName} Environment
+            </Typography>
+          </Stack>
           <Divider />
           <Stack direction="row" gap={1} alignItems="center">
             <Typography variant="body2">Last Deployed</Typography>

@@ -76,41 +76,67 @@ export async function httpGET(
     params:{
         searchParams?: Record<string, string> | string[][],
         token?: string,
-        options?: HttpOptions
+        options?: HttpOptions,
+        timeoutMs?: number,
     }) {
-    const {searchParams, token} = params;
+    const {searchParams, token, timeoutMs} = params;
     const baseUrl = globalConfig.apiBaseUrl;
-    const response = await fetch(`${baseUrl}${context}?${new URLSearchParams(searchParams).toString()}`, {
-        method: 'GET',
-        headers:  token ? {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}`
-            } : {
-              'Content-Type': 'application/json'
-            }
-    });
-    if (!response.ok) {
-        const err = new Error(`HTTP error! status: ${response.status}`) as HttpErrorWithStatus;
-        err.status = response.status;
-        throw err;
+    // Optional AbortController timeout so a hung endpoint rejects (as an
+    // AbortError) instead of leaving the request pending forever. Callers that
+    // gate app bootstrap on a GET (e.g. runtime config) must pass timeoutMs.
+    const controller = timeoutMs ? new AbortController() : undefined;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+    try {
+        const response = await fetch(`${baseUrl}${context}?${new URLSearchParams(searchParams).toString()}`, {
+            method: 'GET',
+            headers:  token ? {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`
+                } : {
+                  'Content-Type': 'application/json'
+                },
+            signal: controller?.signal
+        });
+        if (!response.ok) {
+            const err = new Error(`HTTP error! status: ${response.status}`) as HttpErrorWithStatus;
+            err.status = response.status;
+            throw err;
+        }
+        await sleep(DEFAULT_TIMEOUT);
+        return response;
+    } finally {
+        if (timer) clearTimeout(timer);
     }
-    await sleep(DEFAULT_TIMEOUT);
-    return response;
+}
+
+let observerBaseUrl: string | undefined;
+
+/** Set by the runtime-config bootstrap once GET /api/v1/config resolves. */
+export function setObserverBaseUrl(url: string | undefined): void {
+  // Strip trailing slashes: requests are built as `${observerBaseUrl}${context}`
+  // where context already starts with "/", so a trailing slash here would
+  // produce "//api/v1/..." and 404 on gateways that don't collapse "//".
+  observerBaseUrl = url?.trim().replace(/\/+$/, "") || undefined;
+}
+
+export function isObserverConfigured(): boolean {
+  return !!observerBaseUrl;
 }
 
 /**
- * Same as httpGET but calls the traces-observer-service directly using obsApiBaseUrl.
- * Throws if obsApiBaseUrl is not configured — the agent-manager no longer serves
- * traces routes, so silently falling back would produce opaque 404 errors.
+ * Same as httpGET but calls the observer service directly using the
+ * observer base URL discovered at runtime via GET /api/v1/config.
+ * Throws if the observer is not configured — the agent-manager no longer
+ * serves traces routes, so silently falling back would produce opaque 404s.
  */
 export async function httpGETObserver(
     context: string,
     params: {searchParams?: Record<string, string>, token?: string}) {
     const {searchParams, token} = params;
-    const obsUrl = globalConfig.obsApiBaseUrl?.trim();
-    if (!obsUrl || obsUrl === '$OBS_API_BASE_URL') {
+    const obsUrl = observerBaseUrl;
+    if (!obsUrl) {
         throw new Error(
-            'obsApiBaseUrl is not configured. Set OBS_API_BASE_URL to the traces-observer-service URL.'
+            'Observer is not configured. Set AM_OBSERVER_PUBLIC_URL on the agent-manager service.'
         );
     }
     const baseUrl = obsUrl;

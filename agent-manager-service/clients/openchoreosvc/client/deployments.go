@@ -344,7 +344,7 @@ func (c *openChoreoClient) setRestartedAt(ctx context.Context, namespaceName, co
 // pod rollout. Splitting them produced races (two separate updates contending on the same
 // resourceVersion) without giving callers any control they'd actually use.
 // Returns ErrNotFound when no binding exists yet for (component, environment).
-func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}) error {
+func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context, ouID, componentName, environment string, traitConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error {
 	namespaceName := c.NamespaceFor(ouID)
 	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
 	if err != nil {
@@ -360,6 +360,72 @@ func (c *openChoreoClient) UpdateReleaseBindingTraitConfigs(ctx context.Context,
 			overrides := make(map[string]interface{})
 			rb.Spec.ComponentTypeEnvironmentConfigs = &overrides
 		}
+		(*rb.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
+		// Merge component-type configs (e.g. runtimeClassName from the env's isolation tier).
+		for k, v := range componentTypeConfigs {
+			(*rb.Spec.ComponentTypeEnvironmentConfigs)[k] = v
+		}
+		// runtimeClassName is derived wholly from the target environment's isolation tier, so
+		// the incoming configs are authoritative: when they omit it (the env reverted to the
+		// default runc tier) the stale value must be cleared, not left behind.
+		if _, ok := componentTypeConfigs["runtimeClassName"]; !ok {
+			delete(*rb.Spec.ComponentTypeEnvironmentConfigs, "runtimeClassName")
+		}
+	})
+}
+
+// EnsureReleaseBindingRuntimeClass idempotently reconciles runtimeClassName on a release
+// binding's ComponentTypeEnvironmentConfigs for (component, environment).
+//
+// Why this exists: OpenChoreo's AutoDeploy creates the release binding when a build completes,
+// WITHOUT going through the backend's deploy-time config write — so an agent in an isolation-tier
+// environment first comes up on the default (runc) runtime. This is called from the deploy-status
+// read path to correct that out-of-band binding.
+//
+// It is strictly idempotent: it writes (and bumps restartedAt once, to roll the warm pods onto the
+// isolation node) ONLY when the binding's current runtimeClassName differs from desired. Once
+// correct, every subsequent call is a no-op — no write, no restart loop. Returns nil (no-op) when
+// desired is empty or the binding does not exist yet (build/auto-deploy not finished).
+func (c *openChoreoClient) EnsureReleaseBindingRuntimeClass(ctx context.Context, ouID, componentName, environment, desiredRuntimeClass string) error {
+	namespaceName := c.NamespaceFor(ouID)
+	binding, err := c.findReleaseBindingForEnv(ctx, namespaceName, componentName, environment)
+	if err != nil {
+		return err
+	}
+	if binding == nil {
+		return nil // binding not created yet — nothing to reconcile
+	}
+
+	return c.retryReleaseBindingUpdate(ctx, namespaceName, binding.Metadata.Name, func(rb *gen.ReleaseBinding) {
+		// Re-read desired-vs-current from the freshly fetched binding INSIDE the mutation
+		// closure (not from the stale outer read) so concurrent callers don't each bump
+		// restartedAt off the same pre-image and trigger redundant pod rolls.
+		if rb.Spec == nil {
+			return
+		}
+		current := ""
+		if rb.Spec.ComponentTypeEnvironmentConfigs != nil {
+			if v, ok := (*rb.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"].(string); ok {
+				current = v
+			}
+		}
+		if current == desiredRuntimeClass {
+			return // already correct — leave the binding untouched (no restartedAt bump)
+		}
+		if rb.Spec.ComponentTypeEnvironmentConfigs == nil {
+			overrides := make(map[string]interface{})
+			rb.Spec.ComponentTypeEnvironmentConfigs = &overrides
+		}
+		if desiredRuntimeClass == "" {
+			// Reverting to the default (runc) tier: remove the key entirely so the
+			// SandboxTemplate renders without runtimeClassName, rather than leaving a
+			// stale isolation-tier value behind.
+			delete(*rb.Spec.ComponentTypeEnvironmentConfigs, "runtimeClassName")
+		} else {
+			(*rb.Spec.ComponentTypeEnvironmentConfigs)["runtimeClassName"] = desiredRuntimeClass
+		}
+		// Bump restartedAt so the SandboxTemplate re-renders and the warm pods roll onto the
+		// isolation node. Only runs on correction (current != desired), so there is no restart loop.
 		(*rb.Spec.ComponentTypeEnvironmentConfigs)["restartedAt"] = time.Now().Format(time.RFC3339)
 	})
 }
@@ -406,7 +472,7 @@ func (c *openChoreoClient) ReplaceReleaseBindingWorkloadOverrides(ctx context.Co
 // PromoteComponent promotes a component from sourceEnvironment to targetEnvironment.
 // It finds the release name deployed in the source environment, then creates or updates
 // a release binding in the target environment using the naming convention {componentName}-{targetEnv}.
-func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}) error {
+func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectName, componentName, sourceEnvironment, targetEnvironment string, envOverrides []EnvVar, fileOverrides []FileVar, traitEnvConfigs map[string]interface{}, componentTypeConfigs map[string]interface{}) error {
 	namespaceName := c.NamespaceFor(ouID)
 	// Step 1: List release bindings for the component to find the source release name
 	bindingsResp, err := c.ocClient.ListReleaseBindingsWithResponse(ctx, namespaceName, &gen.ListReleaseBindingsParams{
@@ -474,6 +540,12 @@ func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectNa
 		traitConfigs = &traitEnvConfigs
 	}
 
+	// Build component type environment configs (e.g. runtimeClassName from the env's isolation tier).
+	var ctConfigs *map[string]interface{}
+	if len(componentTypeConfigs) > 0 {
+		ctConfigs = &componentTypeConfigs
+	}
+
 	// Step 4: Create or update the release binding in the target environment
 	if getResp.StatusCode() == http.StatusOK && getResp.JSON200 != nil && getResp.JSON200.Spec != nil {
 		activeState := gen.ReleaseBindingSpecStateActive
@@ -484,6 +556,9 @@ func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectNa
 			// clears any stale target-specific env vars, file mounts, or trait configs.
 			binding.Spec.WorkloadOverrides = workloadOverrides
 			binding.Spec.TraitEnvironmentConfigs = traitConfigs
+			if ctConfigs != nil {
+				binding.Spec.ComponentTypeEnvironmentConfigs = ctConfigs
+			}
 		}); err != nil {
 			return err
 		}
@@ -496,11 +571,12 @@ func (c *openChoreoClient) PromoteComponent(ctx context.Context, ouID, projectNa
 				Namespace: &namespaceName,
 			},
 			Spec: &gen.ReleaseBindingSpec{
-				Environment:             targetEnvironment,
-				ReleaseName:             &sourceReleaseName,
-				State:                   &activeState,
-				WorkloadOverrides:       workloadOverrides,
-				TraitEnvironmentConfigs: traitConfigs,
+				Environment:                     targetEnvironment,
+				ReleaseName:                     &sourceReleaseName,
+				State:                           &activeState,
+				WorkloadOverrides:               workloadOverrides,
+				TraitEnvironmentConfigs:         traitConfigs,
+				ComponentTypeEnvironmentConfigs: ctConfigs,
 				Owner: struct {
 					ComponentName string `json:"componentName"`
 					ProjectName   string `json:"projectName"`
@@ -991,9 +1067,11 @@ func toDeploymentDetailsResponse(binding *gen.ReleaseBinding, componentRelease *
 		environmentDisplayName = env.DisplayName
 	}
 
-	// Use the Ready condition's LastTransitionTime for accurate last deployed time,
-	// falling back to CreationTimestamp if no Ready condition is found
-	lastDeployedAt := getLastDeployedTime(binding)
+	t := getLastDeployedTime(binding)
+	var lastDeployedAt *time.Time
+	if !t.IsZero() {
+		lastDeployedAt = &t
+	}
 
 	return &models.DeploymentResponse{
 		ImageId:                    deployedImage,
@@ -1007,18 +1085,31 @@ func toDeploymentDetailsResponse(binding *gen.ReleaseBinding, componentRelease *
 }
 
 // getLastDeployedTime extracts the most accurate last deployed time from a ReleaseBinding.
-// It looks for the Ready condition's LastTransitionTime, falling back to CreationTimestamp.
+// Sandbox agents stay Ready=True across redeploys — only LastSpecUpdateTime changes on each
+// deploy — so we take the max of both to return the true last-deployed time.
 func getLastDeployedTime(binding *gen.ReleaseBinding) time.Time {
-	// Try to get LastTransitionTime from the Ready condition
-	if binding.Status != nil && binding.Status.Conditions != nil {
-		for _, condition := range *binding.Status.Conditions {
-			if condition.Type == "Ready" {
-				return condition.LastTransitionTime
+	var readyTime, specUpdateTime time.Time
+
+	if binding.Status != nil {
+		if binding.Status.Conditions != nil {
+			for _, c := range *binding.Status.Conditions {
+				if c.Type == "Ready" {
+					readyTime = c.LastTransitionTime
+				}
 			}
+		}
+		if binding.Status.LastSpecUpdateTime != nil {
+			specUpdateTime = *binding.Status.LastSpecUpdateTime
 		}
 	}
 
-	// Fall back to CreationTimestamp if no Ready condition found
+	t := readyTime
+	if specUpdateTime.After(t) {
+		t = specUpdateTime
+	}
+	if !t.IsZero() {
+		return t
+	}
 	if binding.Metadata.CreationTimestamp != nil {
 		return *binding.Metadata.CreationTimestamp
 	}

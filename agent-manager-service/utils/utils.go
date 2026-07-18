@@ -244,6 +244,93 @@ func validateResourceMaxMemory(value *string, maxMemory string, fieldName string
 	return nil
 }
 
+// ValidateResourceRequestsWithinLimits ensures that once `requested` is merged onto
+// `current` (a partial update falls back to the agent's current effective value for
+// whichever side it didn't touch — the same fallback the ComponentType template
+// applies at render time), CPU/memory requests never exceed limits. Kubernetes
+// rejects a requests>limits pod spec at admission time, and that failure happens deep
+// in the sandbox/deployment controller — invisible to this API — so it must be caught
+// here, before anything is written to OpenChoreo.
+func ValidateResourceRequestsWithinLimits(requested spec.ResourceConfig, current *spec.ResourceConfig) error {
+	var currentRequests *spec.ResourceRequests
+	var currentLimits *spec.ResourceLimits
+	if current != nil {
+		currentRequests = current.Requests
+		currentLimits = current.Limits
+	}
+
+	cpuRequest := effectiveResourceField(requestCPU(requested.Requests), requestCPU(currentRequests))
+	memRequest := effectiveResourceField(requestMemory(requested.Requests), requestMemory(currentRequests))
+	cpuLimit := effectiveResourceField(limitCPU(requested.Limits), limitCPU(currentLimits))
+	memLimit := effectiveResourceField(limitMemory(requested.Limits), limitMemory(currentLimits))
+
+	if err := ValidateRequestWithinLimit(cpuRequest, cpuLimit, "CPU"); err != nil {
+		return err
+	}
+	if err := ValidateRequestWithinLimit(memRequest, memLimit, "memory"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func requestCPU(r *spec.ResourceRequests) *string {
+	if r == nil {
+		return nil
+	}
+	return r.Cpu
+}
+
+func requestMemory(r *spec.ResourceRequests) *string {
+	if r == nil {
+		return nil
+	}
+	return r.Memory
+}
+
+func limitCPU(l *spec.ResourceLimits) *string {
+	if l == nil {
+		return nil
+	}
+	return l.Cpu
+}
+
+func limitMemory(l *spec.ResourceLimits) *string {
+	if l == nil {
+		return nil
+	}
+	return l.Memory
+}
+
+// effectiveResourceField returns the requested value if set, else the current value.
+func effectiveResourceField(requested, current *string) string {
+	if v := StrPointerAsStr(requested, ""); v != "" {
+		return v
+	}
+	return StrPointerAsStr(current, "")
+}
+
+// ValidateRequestWithinLimit rejects a request quantity that exceeds its limit.
+// Either side may be empty (unresolved), in which case there is nothing to compare;
+// rendering falls back to the ComponentType/component baseline for that side.
+func ValidateRequestWithinLimit(request, limit, fieldName string) error {
+	if request == "" || limit == "" {
+		return nil
+	}
+	requestQty, err := resource.ParseQuantity(request)
+	if err != nil {
+		return fmt.Errorf("%w: %s request has invalid format %q: %w", ErrInvalidInput, fieldName, request, err)
+	}
+	limitQty, err := resource.ParseQuantity(limit)
+	if err != nil {
+		return fmt.Errorf("%w: %s limit has invalid format %q: %w", ErrInvalidInput, fieldName, limit, err)
+	}
+	if requestQty.Cmp(limitQty) > 0 {
+		return fmt.Errorf("%w: %s request (%s) must be less than or equal to %s limit (%s)",
+			ErrInvalidInput, fieldName, request, fieldName, limit)
+	}
+	return nil
+}
+
 func ValidateProjectUpdatePayload(payload spec.UpdateProjectRequest) error {
 	if err := ValidateResourceDisplayName(payload.DisplayName, "project"); err != nil {
 		return err
@@ -1099,103 +1186,6 @@ func GenerateUniqueNameWithSuffix(baseName string, checker NameChecker) (string,
 	}
 
 	return "", fmt.Errorf("failed to generate unique name after %d attempts", MaxNameGenerationAttempts)
-}
-
-func ValidateMetricsFilterRequest(payload spec.MetricsFilterRequest) error {
-	// Validate required fields
-	if payload.EnvironmentName == "" {
-		return fmt.Errorf("environment is required")
-	}
-
-	validateTimesErr := validateTimes(payload.StartTime, payload.EndTime)
-	if validateTimesErr != nil {
-		return validateTimesErr
-	}
-
-	return nil
-}
-
-func ValidateLogFilterRequest(payload spec.LogFilterRequest) error {
-	// Validate required fields
-	if payload.EnvironmentName == "" {
-		return fmt.Errorf("environment is required")
-	}
-
-	validateTimesErr := validateTimes(payload.StartTime, payload.EndTime)
-	if validateTimesErr != nil {
-		return validateTimesErr
-	}
-
-	// Validate optional limit if provided
-	if payload.Limit != nil {
-		if *payload.Limit < MinLogLimit || *payload.Limit > MaxLogLimit {
-			return fmt.Errorf("limit must be between %d and %d", MinLogLimit, MaxLogLimit)
-		}
-	}
-
-	// Validate optional sortOrder if provided
-	if payload.SortOrder != nil {
-		sortOrder := *payload.SortOrder
-		if sortOrder != SortOrderAsc && sortOrder != SortOrderDesc {
-			return fmt.Errorf("sortOrder must be '%s' or '%s'", SortOrderAsc, SortOrderDesc)
-		}
-	}
-
-	// Validate optional logLevels if provided
-	if len(payload.LogLevels) > 0 {
-		for _, level := range payload.LogLevels {
-			if !isValidLogLevel(level) {
-				return fmt.Errorf("invalid log level '%s': must be one of INFO, DEBUG, WARN, ERROR", level)
-			}
-		}
-	}
-
-	return nil
-}
-
-func validateTimes(startTime string, endTime string) error {
-	if startTime == "" {
-		return fmt.Errorf("required field startTime not found")
-	}
-
-	if endTime == "" {
-		return fmt.Errorf("required field endTime not found")
-	}
-
-	// Validate time format
-	if _, err := time.Parse(time.RFC3339, startTime); err != nil {
-		return fmt.Errorf("startTime must be in RFC3339 format (e.g., 2024-01-01T00:00:00Z): %w", err)
-	}
-
-	if _, err := time.Parse(time.RFC3339, endTime); err != nil {
-		return fmt.Errorf("endTime must be in RFC3339 format (e.g., 2024-01-01T00:00:00Z): %w", err)
-	}
-
-	// Validate that end time is after start time
-	parsedStartTime, _ := time.Parse(time.RFC3339, startTime)
-	parsedEndTime, _ := time.Parse(time.RFC3339, endTime)
-
-	// Validate that start time is not in the future
-	if parsedStartTime.After(time.Now()) {
-		return fmt.Errorf("startTime cannot be in the future")
-	}
-
-	if parsedEndTime.Before(parsedStartTime) {
-		return fmt.Errorf("endTime (%s) must be after startTime (%s)", parsedEndTime, parsedStartTime)
-	}
-
-	// Validate time range does not exceed maximum allowed duration
-	maxDuration := MaxLogTimeRangeDays * 24 * time.Hour
-	if parsedEndTime.Sub(parsedStartTime) > maxDuration {
-		return fmt.Errorf("time range cannot exceed %d days", MaxLogTimeRangeDays)
-	}
-
-	return nil
-}
-
-// isValidLogLevel checks if the given log level is valid
-func isValidLogLevel(level string) bool {
-	return level == LogLevelInfo || level == LogLevelDebug || level == LogLevelWarn || level == LogLevelError
 }
 
 // isValidGitHubIdentifier validates that a string contains only characters allowed in GitHub usernames/repos

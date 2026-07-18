@@ -25,6 +25,10 @@ export const editEnvironmentSchema = z.object({
 
 export type EditEnvironmentFormValues = z.infer<typeof editEnvironmentSchema>;
 
+export const isolationTiers = ["runc", "gvisor", "kata"] as const;
+
+export type IsolationTier = (typeof isolationTiers)[number];
+
 export const createEnvironmentSchema = z.object({
   name: z
     .string()
@@ -36,6 +40,7 @@ export const createEnvironmentSchema = z.object({
   dataplaneRef: z.string().min(1, "Data plane is required"),
   dnsPrefix: z.string().min(1, "DNS prefix is required").max(100),
   isProduction: z.boolean().optional(),
+  isolationTier: z.enum(isolationTiers).optional(),
 });
 
 export type CreateEnvironmentFormValues = z.infer<typeof createEnvironmentSchema>;

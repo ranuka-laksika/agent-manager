@@ -78,6 +78,52 @@ jobs:
           # main, so this is main; on a manual branch run it's that branch.
           AMP_AGENT_REPO_BRANCH: ${{ github.ref_name }}
         run: nox -s heavy
+      - name: Dump cluster diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo "=== port-forward liveness (HTTP 000 = no connection / dropped forward) ==="
+          for p in 9000 8195 9243 22893 8090 9098 8200; do
+            code=$(curl -s -m3 -o /dev/null -w "%{http_code}" "http://localhost:$p" 2>/dev/null)
+            echo "  localhost:$p -> ${code:-000}"
+          done
+          echo "=== pods (all namespaces) ==="
+          kubectl get pods -A -o wide
+          echo "=== agent pod logs (incl. Running — the deploy may be healthy yet acked failed) ==="
+          kubectl get pods -A --no-headers 2>/dev/null \
+            | awk '/traceloop-/{print $1" "$2}' \
+            | while read -r ns pod; do
+                echo "----- $ns/$pod -----"
+                kubectl describe pod -n "$ns" "$pod" 2>/dev/null | sed -n '/Events:/,$p' | tail -25
+                kubectl logs -n "$ns" "$pod" --all-containers --tail=80 2>/dev/null
+              done
+          echo "=== OpenChoreo / gateway CRD kinds present ==="
+          mapfile -t KINDS < <(kubectl get crd -o name 2>/dev/null | grep -iE 'openchoreo|api-platform|wso2' | sed 's#.*/##')
+          printf '  %s\n' "${KINDS[@]}"
+          echo "=== agent CR instances + status (deploy/binding/release/component/workload) ==="
+          for k in "${KINDS[@]}"; do
+            while read -r ns name _; do
+              [ "$ns" = "NAMESPACE" ] && continue
+              case "$name" in
+                *traceloop-*)
+                  echo "--- $k $ns/$name ---"
+                  kubectl get "$k" "$name" -n "$ns" -o yaml 2>/dev/null | sed -n '/^status:/,$p' | head -50 ;;
+              esac
+            done < <(kubectl get "$k" -A 2>/dev/null)
+          done
+          echo "=== data-plane cluster-agent logs (sends deploy acks) ==="
+          kubectl logs -n openchoreo-data-plane deploy/cluster-agent-dataplane --tail=100 2>/dev/null
+          echo "=== gateway controller logs ==="
+          # Gateway stacks live in per-org-env namespaces ("<org>-<env>", e.g.
+          # default-default); also sweep openchoreo-data-plane for legacy installs.
+          for gwns in default-default openchoreo-data-plane; do
+            kubectl get pods -n "$gwns" --no-headers 2>/dev/null \
+              | awk '/gateway-controller/{print $1}' \
+              | while read -r p; do echo "----- $gwns/$p -----"; kubectl logs -n "$gwns" "$p" --tail=80 2>/dev/null; done
+          done
+          echo "=== recent events ==="
+          kubectl get events -A --sort-by=.lastTimestamp 2>/dev/null | tail -80
       - uses: actions/upload-artifact@v7
         if: always()
         with:

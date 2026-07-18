@@ -125,7 +125,7 @@ check_required_ports() {
     #         external AI gateway control plane)
     # 8443  - Control Plane Gateway HTTPS
     # 10082 - Container Registry (Workflow Plane)
-    # 11080 - Observability Plane Gateway HTTP (Traces Observer, Observer API)
+    # 11080 - Observability Plane Gateway HTTP (Agent Manager Observer, Observer API)
     # 11082 - OpenSearch API
     # 11085 - OpenSearch HTTPS
     # 19080 - Data Plane Gateway HTTP (agent workloads, OTLP /otel)
@@ -1522,6 +1522,22 @@ fi
 log_success "Agent Management Platform installed successfully"
 echo ""
 
+# Install agent sandbox module (required: agents run as sandboxed pods)
+log_info "Installing Agent Sandbox Module (sandboxed agent runtime)..."
+if ! install_agent_sandbox_module; then
+    log_error "Failed to install Agent Sandbox Module"
+    echo ""
+    echo "Agent deployments cannot work without the Agent Sandbox module."
+    echo ""
+    echo "Troubleshooting steps:"
+    echo "  1. Check Helm release: helm list -n ${DATA_PLANE_NS}"
+    echo "  2. Check controller: kubectl get pods -n agent-sandbox-system"
+    echo "  3. Check CRDs: kubectl get crd | grep agents.x-k8s.io"
+    exit 1
+fi
+log_success "Agent Sandbox Module installed successfully"
+echo ""
+
 # Install platform resources extension
 log_info "Installing Platform Resources Extension (Default Organization, Project, Environment, DeploymentPipeline)..."
 if ! install_platform_resources_extension; then
@@ -1551,7 +1567,7 @@ fi
 echo ""
 
 # Install observability extension
-log_info "Installing Observability Extension (Traces Observer)..."
+log_info "Installing Observability Extension (Agent Manager Observer)..."
 if ! install_observability_extension; then
     log_warning "Observability Extension installation failed (non-fatal)"
     echo "The platform is installed but observability features may not work."

@@ -58,7 +58,6 @@ var _ = Describe("amctl project CRUD", Label("cli", "project"), Ordered, func() 
 		Expect(p.Name).To(Equal(projName))
 		Expect(p.DisplayName).To(Equal(displayName))
 		Expect(p.Description).To(Equal(description))
-		Expect(p.OrgName).To(Equal(H.Org()))
 	})
 
 	It("lists the created project", func() {

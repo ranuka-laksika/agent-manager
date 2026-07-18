@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	observabilitysvc "github.com/wso2/agent-manager/agent-manager-service/clients/observabilitysvc"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/gen"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
@@ -56,10 +55,7 @@ type AgentManagerService interface {
 	GetAgentEndpoints(ctx context.Context, ouID string, projectName string, agentName string, environmentName string) (map[string]models.EndpointsResponse, error)
 	GetAgentConfigurations(ctx context.Context, ouID string, projectName string, agentName string, environment string) ([]models.EnvVars, error)
 	GetAgentFileMounts(ctx context.Context, ouID string, projectName string, agentName string, environment string) ([]models.FileMountEntry, error)
-	GetBuildLogs(ctx context.Context, ouID string, projectName string, agentName string, buildName string) (*models.LogsResponse, error)
 	GenerateName(ctx context.Context, ouID string, payload spec.ResourceNameRequest) (string, error)
-	GetAgentMetrics(ctx context.Context, ouID string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error)
-	GetAgentRuntimeLogs(ctx context.Context, ouID string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error)
 	GetAgentResourceConfigs(ctx context.Context, ouID string, projectName string, agentName string, environment string) (*spec.AgentResourceConfigsResponse, error)
 	UpdateAgentResourceConfigs(ctx context.Context, ouID string, projectName string, agentName string, environment string, req *spec.UpdateAgentResourceConfigsRequest) (*spec.AgentResourceConfigsResponse, error)
 	PromoteAgent(ctx context.Context, ouID string, projectName string, agentName string, req *spec.PromoteAgentRequest) error
@@ -76,7 +72,6 @@ type AgentManagerService interface {
 type agentManagerService struct {
 	db                        *gorm.DB
 	ocClient                  client.OpenChoreoClient
-	observabilitySvcClient    observabilitysvc.ObservabilitySvcClient
 	secretMgmtClient          secretmanagersvc.SecretManagementClient
 	gitRepositoryService      RepositoryService
 	tokenManagerService       AgentTokenManagerService
@@ -95,7 +90,6 @@ type agentManagerService struct {
 func NewAgentManagerService(
 	db *gorm.DB,
 	OpenChoreoClient client.OpenChoreoClient,
-	observabilitySvcClient observabilitysvc.ObservabilitySvcClient,
 	secretMgmtClient secretmanagersvc.SecretManagementClient,
 	gitRepositoryService RepositoryService,
 	tokenManagerService AgentTokenManagerService,
@@ -113,7 +107,6 @@ func NewAgentManagerService(
 	return &agentManagerService{
 		db:                        db,
 		ocClient:                  OpenChoreoClient,
-		observabilitySvcClient:    observabilitySvcClient,
 		secretMgmtClient:          secretMgmtClient,
 		gitRepositoryService:      gitRepositoryService,
 		tokenManagerService:       tokenManagerService,
@@ -1800,6 +1793,19 @@ func (s *agentManagerService) UpdateAgentResourceConfigs(ctx context.Context, ou
 		return nil, translateEnvironmentError(err)
 	}
 
+	// Fetch the agent's current effective resource configuration so a partial update
+	// (e.g. requests-only, leaving limits untouched) can be validated against whatever
+	// stays in effect for the side it didn't touch.
+	currentConfigs, err := s.GetAgentResourceConfigs(ctx, ouID, projectName, agentName, environment)
+	if err != nil {
+		s.logger.Error("Failed to fetch current agent resource configurations", "agentName", agentName, "ouID", ouID, "projectName", projectName, "environment", environment, "error", err)
+		return nil, fmt.Errorf("failed to get current agent resource configurations: %w", err)
+	}
+	if err := utils.ValidateResourceRequestsWithinLimits(req.Resources, currentConfigs.Resources); err != nil {
+		s.logger.Error("Rejected agent resource configuration update", "agentName", agentName, "ouID", ouID, "projectName", projectName, "environment", environment, "error", err)
+		return nil, err
+	}
+
 	// Update agent resource configurations in OpenChoreo
 	updateReq := buildUpdateResourceConfigsRequest(req)
 	if err := s.ocClient.UpdateEnvResourceConfigs(ctx, ouID, projectName, agentName, environment, updateReq); err != nil {
@@ -2703,9 +2709,15 @@ func (s *agentManagerService) DeployAgent(ctx context.Context, ouID string, proj
 		return "", err
 	}
 
-	// Update trait environment configs on the release binding after deploy
-	if len(deployTraitEnvConfigs) > 0 {
-		if err := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, ouID, agentName, lowestEnv, deployTraitEnvConfigs); err != nil {
+	// Update trait + component-type environment configs (e.g. runtimeClassName) on the release binding after deploy.
+	// Component-type configs (runtimeClassName) only apply to sandboxed API agents; external agents have no pod,
+	// so gate on isAPIAgent to match PromoteAgent and avoid writing an irrelevant key to their bindings.
+	var deployCTConfigs map[string]interface{}
+	if isAPIAgent {
+		deployCTConfigs = buildComponentTypeEnvConfigs(targetEnv)
+	}
+	if len(deployTraitEnvConfigs) > 0 || len(deployCTConfigs) > 0 {
+		if err := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, ouID, agentName, lowestEnv, deployTraitEnvConfigs, deployCTConfigs); err != nil {
 			s.logger.Warn("Failed to update trait environment configs on release binding", "agentName", agentName, "environment", lowestEnv, "error", err)
 		}
 	}
@@ -2969,6 +2981,36 @@ func buildPolicies(cfg resolvedCORSConfig) []map[string]interface{} {
 		}))
 	}
 	return policies
+}
+
+// runtimeClassForIsolationTier maps an environment's isolation tier to the Kubernetes
+// runtimeClassName the agent-api ComponentType should request. Empty means "omit" (default runc).
+func runtimeClassForIsolationTier(tier string) string {
+	switch tier {
+	case utils.IsolationTierGvisor:
+		return utils.RuntimeClassGvisor
+	case utils.IsolationTierKata:
+		// kata-deploy registers the runtime under the "kata-qemu" RuntimeClass/handler
+		// (the QEMU hypervisor variant). The tier name stays "kata" at the API; only the
+		// rendered runtimeClassName is "kata-qemu" so it matches what the node installs.
+		return utils.RuntimeClassKataQemu
+	default:
+		return ""
+	}
+}
+
+// buildComponentTypeEnvConfigs builds the ComponentTypeEnvironmentConfigs overrides for a deployment,
+// derived from the target environment's isolation tier. Returns an empty map for the default (runc)
+// tier so the rendered SandboxTemplate is unchanged for existing environments.
+func buildComponentTypeEnvConfigs(env *models.EnvironmentResponse) map[string]interface{} {
+	configs := map[string]interface{}{}
+	if env == nil {
+		return configs
+	}
+	if rc := runtimeClassForIsolationTier(env.IsolationTier); rc != "" {
+		configs["runtimeClassName"] = rc
+	}
+	return configs
 }
 
 // buildTraitEnvConfigs builds the traitEnvironmentConfigs map for a release binding.
@@ -3506,6 +3548,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 
 	// Build trait environment configs for per-environment trait overrides
 	var traitEnvConfigs map[string]interface{}
+	var promoteCTConfigs map[string]interface{}
 	isAPIAgent := agent.Type.Type == string(utils.AgentTypeAPI)
 	if isAPIAgent {
 		// Resolve config values: request > source env DB > defaults
@@ -3568,6 +3611,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 			return resolveErr
 		}
 		traitEnvConfigs = buildTraitEnvConfigs(agentName, policies, targetArtifactID, promotePythonBuildpack, promoteBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, promoteInstrumentationImage)
+		promoteCTConfigs = buildComponentTypeEnvConfigs(targetEnv)
 
 		apiKey, apiKeyErr := s.generateAgentAPIKey(ctx, ouID, projectName, agentName, req.TargetEnvironment)
 		if apiKeyErr != nil {
@@ -3619,7 +3663,7 @@ func (s *agentManagerService) PromoteAgent(ctx context.Context, ouID string, pro
 	// guaranteed to exist and be COMPLETED at this point — the pre-promote
 	// hard block above returns before reaching here otherwise — so there is
 	// nothing left to provision for it after a successful promote.
-	if err := s.ocClient.PromoteComponent(ctx, ouID, projectName, agentName, req.SourceEnvironment, req.TargetEnvironment, envOverrides, fileOverrides, traitEnvConfigs); err != nil {
+	if err := s.ocClient.PromoteComponent(ctx, ouID, projectName, agentName, req.SourceEnvironment, req.TargetEnvironment, envOverrides, fileOverrides, traitEnvConfigs, promoteCTConfigs); err != nil {
 		s.logger.Error("Failed to promote agent", "agentName", agentName, "sourceEnvironment", req.SourceEnvironment, "targetEnvironment", req.TargetEnvironment, "error", err)
 		return fmt.Errorf("failed to promote agent: %w", err)
 	}
@@ -3806,8 +3850,9 @@ func (s *agentManagerService) UpdateAgentDeploySettings(ctx context.Context, ouI
 	}
 	traitEnvConfigs := buildTraitEnvConfigs(agentName, policies, artifact.UUID.String(), isPythonBuildpack, isBallerinaBuildpack, tracingCfg.EnableAutoInstrumentation, instrumentationImage)
 
-	// Apply to the release binding (atomic: trait configs + restartedAt in a single update).
-	if updateErr := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, ouID, agentName, req.EnvironmentName, traitEnvConfigs); updateErr != nil {
+	// Apply to the release binding (atomic: trait configs + component-type configs + restartedAt in a single update).
+	settingsCTConfigs := buildComponentTypeEnvConfigs(targetEnv)
+	if updateErr := s.ocClient.UpdateReleaseBindingTraitConfigs(ctx, ouID, agentName, req.EnvironmentName, traitEnvConfigs, settingsCTConfigs); updateErr != nil {
 		s.logger.Error("Failed to update release binding deploy settings", "agentName", agentName, "environment", req.EnvironmentName, "error", updateErr)
 		return fmt.Errorf("failed to update deploy settings: %w", updateErr)
 	}
@@ -4400,7 +4445,58 @@ func (s *agentManagerService) GetAgentDeployments(ctx context.Context, ouID stri
 	}
 
 	s.logger.Info("Fetched deployments successfully", "agentName", agentName, "ouID", ouID, "projectName", projectName, "deploymentCount", len(deployments))
+
+	// Reconcile isolation-tier runtimeClassName on out-of-band bindings. OpenChoreo's AutoDeploy
+	// creates a release binding when a build completes, WITHOUT the backend's deploy-time config
+	// write — so an agent in a gVisor/Kata environment first comes up on the default runtime. The
+	// deploy-status poll is the natural point to detect that the binding now exists and correct it.
+	// Only platform-hosted API agents carry a SandboxTemplate (and thus a runtimeClassName);
+	// external agents have no pod to reconcile, so skip the work — and its per-environment API
+	// calls — entirely for them. Best-effort and idempotent: it never fails the read, is a no-op
+	// for all-runc setups, and converges in a single write per binding.
+	if agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName); err != nil {
+		s.logger.Warn("isolation reconcile: failed to fetch agent for type gate", "agentName", agentName, "error", err)
+	} else if agent.Type.Type == string(utils.AgentTypeAPI) {
+		s.reconcileIsolationRuntimeClass(ctx, ouID, agentName, deployments)
+	}
+
 	return deployments, nil
+}
+
+// reconcileIsolationRuntimeClass ensures every deployment whose environment has an isolation tier
+// carries the matching runtimeClassName on its release binding. See EnsureReleaseBindingRuntimeClass
+// for why this is needed (AutoDeploy bypasses the deploy-time config write). Best-effort: failures
+// are logged and ignored so they never break the deployments read.
+func (s *agentManagerService) reconcileIsolationRuntimeClass(ctx context.Context, ouID, agentName string, deployments []*models.DeploymentResponse) {
+	if len(deployments) == 0 {
+		return
+	}
+	envs, err := s.ocClient.ListEnvironments(ctx, ouID)
+	if err != nil {
+		s.logger.Warn("isolation reconcile: failed to list environments", "agentName", agentName, "error", err)
+		return
+	}
+	// Map only the environments that actually have an isolation tier; for all-runc setups this
+	// stays empty and we skip the work entirely.
+	rcByEnv := make(map[string]string)
+	for _, e := range envs {
+		if rc := runtimeClassForIsolationTier(e.IsolationTier); rc != "" {
+			rcByEnv[e.Name] = rc
+		}
+	}
+	if len(rcByEnv) == 0 {
+		return
+	}
+	for _, d := range deployments {
+		rc, ok := rcByEnv[d.Environment]
+		if !ok {
+			continue
+		}
+		if err := s.ocClient.EnsureReleaseBindingRuntimeClass(ctx, ouID, agentName, d.Environment, rc); err != nil {
+			s.logger.Warn("isolation reconcile: failed to set runtimeClassName",
+				"agentName", agentName, "environment", d.Environment, "runtimeClass", rc, "error", err)
+		}
+	}
 }
 
 // UpdateAgentDeploymentState updates the deployment state of an agent in a specific environment
@@ -4552,149 +4648,6 @@ func (s *agentManagerService) GetAgentFileMounts(ctx context.Context, ouID strin
 
 	s.logger.Info("Fetched file mounts successfully", "agentName", agentName, "count", len(fileMounts))
 	return fileMounts, nil
-}
-
-func (s *agentManagerService) GetBuildLogs(ctx context.Context, ouID string, projectName string, agentName string, buildName string) (*models.LogsResponse, error) {
-	s.logger.Info("Getting build logs", "agentName", agentName, "buildName", buildName, "ouID", ouID, "projectName", projectName)
-	// Validate organization exists
-	_, err := s.ocClient.GetOrganization(ctx, ouID)
-	if err != nil {
-		s.logger.Error("Failed to validate organization", "ouID", ouID, "error", err)
-		return nil, translateOrgError(err)
-	}
-	// Validates the project name by checking its existence
-	_, err = s.ocClient.GetProject(ctx, ouID, projectName)
-	if err != nil {
-		s.logger.Error("Failed to get OpenChoreo project", "projectName", projectName, "ouID", ouID, "error", err)
-		return nil, translateProjectError(err)
-	}
-
-	// Check if component already exists
-	_, err = s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
-	if err != nil {
-		s.logger.Error("Failed to check component existence", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
-		return nil, translateAgentError(err)
-	}
-
-	// Check if build exists
-	build, err := s.ocClient.GetBuild(ctx, ouID, projectName, agentName, buildName)
-	if err != nil {
-		s.logger.Error("Failed to get build", "buildName", buildName, "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
-		return nil, translateBuildError(err)
-	}
-
-	// Fetch the build logs from Observability service
-	buildLogsParams := observabilitysvc.BuildLogsParams{
-		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
-		NamespaceName:      s.ocClient.NamespaceFor(ouID),
-		ProjectName:        projectName,
-		AgentComponentName: agentName,
-		BuildName:          build.Name,
-	}
-	buildLogs, err := s.observabilitySvcClient.GetBuildLogs(ctx, buildLogsParams)
-	if err != nil {
-		s.logger.Error("Failed to fetch build logs from observability service", "buildName", build.Name, "error", err)
-		return nil, fmt.Errorf("failed to fetch build logs: %w", err)
-	}
-	s.logger.Info("Fetched build logs successfully", "agentName", agentName, "ouID", ouID, "projectName", projectName, "buildName", buildName, "logCount", len(buildLogs.Logs))
-	return buildLogs, nil
-}
-
-func (s *agentManagerService) GetAgentRuntimeLogs(ctx context.Context, ouID string, projectName string, agentName string, payload spec.LogFilterRequest) (*models.LogsResponse, error) {
-	s.logger.Info("Getting application logs", "agentName", agentName, "ouID", ouID, "projectName", projectName)
-	// Validate organization exists
-	_, err := s.ocClient.GetOrganization(ctx, ouID)
-	if err != nil {
-		s.logger.Error("Failed to validate organization", "ouID", ouID, "error", err)
-		return nil, translateOrgError(err)
-	}
-	// Validates the project name by checking its existence
-	_, err = s.ocClient.GetProject(ctx, ouID, projectName)
-	if err != nil {
-		s.logger.Error("Failed to get OpenChoreo project", "projectName", projectName, "ouID", ouID, "error", err)
-		return nil, translateProjectError(err)
-	}
-
-	// Check if component already exists
-	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
-	if err != nil {
-		s.logger.Error("Failed to check component existence", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
-		return nil, translateAgentError(err)
-	}
-	if agent.Provisioning.Type != string(utils.InternalAgent) {
-		return nil, fmt.Errorf("runtime logs are not supported for agent type: '%s'", agent.Provisioning.Type)
-	}
-	// Fetch environment from open choreo
-	environment, err := s.ocClient.GetEnvironment(ctx, ouID, payload.EnvironmentName)
-	if err != nil {
-		s.logger.Error("Failed to fetch environment from OpenChoreo", "environmentName", payload.EnvironmentName, "ouID", ouID, "error", err)
-		return nil, translateEnvironmentError(err)
-	}
-
-	// Fetch the run time logs from Observability service
-	componentLogsParams := observabilitysvc.ComponentLogsParams{
-		AgentComponentId: agent.UUID,
-		EnvId:            environment.UUID,
-		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
-		NamespaceName:   s.ocClient.NamespaceFor(ouID),
-		ComponentName:   agentName,
-		ProjectName:     projectName,
-		EnvironmentName: payload.EnvironmentName,
-	}
-	applicationLogs, err := s.observabilitySvcClient.GetComponentLogs(ctx, componentLogsParams, payload)
-	if err != nil {
-		s.logger.Error("Failed to fetch application logs from observability service", "agent", agentName, "error", err)
-		return nil, fmt.Errorf("failed to fetch application logs: %w", err)
-	}
-	s.logger.Info("Fetched application logs successfully", "agentName", agentName, "ouID", ouID, "projectName", projectName, "logCount", len(applicationLogs.Logs))
-	return applicationLogs, nil
-}
-
-func (s *agentManagerService) GetAgentMetrics(ctx context.Context, ouID string, projectName string, agentName string, payload spec.MetricsFilterRequest) (*spec.MetricsResponse, error) {
-	s.logger.Info("Getting agent metrics", "agentName", agentName, "ouID", ouID, "projectName", projectName)
-	// Validate organization exists
-	_, err := s.ocClient.GetOrganization(ctx, ouID)
-	if err != nil {
-		s.logger.Error("Failed to validate organization", "ouID", ouID, "error", err)
-		return nil, translateOrgError(err)
-	}
-	// Validates the project name by checking its existence
-	project, err := s.ocClient.GetProject(ctx, ouID, projectName)
-	if err != nil {
-		s.logger.Error("Failed to get OpenChoreo project", "projectName", projectName, "ouID", ouID, "error", err)
-		return nil, translateProjectError(err)
-	}
-	// Fetch environment from open choreo
-	environment, err := s.ocClient.GetEnvironment(ctx, ouID, payload.EnvironmentName)
-	if err != nil {
-		s.logger.Error("Failed to fetch environment from OpenChoreo", "environmentName", payload.EnvironmentName, "ouID", ouID, "error", err)
-		return nil, translateEnvironmentError(err)
-	}
-	// Check if component already exists
-	agent, err := s.ocClient.GetComponent(ctx, ouID, projectName, agentName)
-	if err != nil {
-		s.logger.Error("Failed to check component existence", "agentName", agentName, "ouID", ouID, "projectName", projectName, "error", err)
-		return nil, translateAgentError(err)
-	}
-
-	// Fetch the metrics from Observability service
-	componentMetricsParams := observabilitysvc.ComponentMetricsParams{
-		AgentComponentId: agent.UUID,
-		EnvId:            environment.UUID,
-		ProjectId:        project.UUID,
-		// Observability queries the OpenChoreo namespace the workloads run in, not the OU ID.
-		NamespaceName:   s.ocClient.NamespaceFor(ouID),
-		ProjectName:     projectName,
-		ComponentName:   agentName,
-		EnvironmentName: payload.EnvironmentName,
-	}
-	metrics, err := s.observabilitySvcClient.GetComponentMetrics(ctx, componentMetricsParams, payload)
-	if err != nil {
-		s.logger.Error("Failed to fetch agent metrics from observability service", "agent", agentName, "error", err)
-		return nil, fmt.Errorf("failed to fetch agent metrics: %w", err)
-	}
-	s.logger.Info("Fetched agent metrics successfully", "agentName", agentName, "ouID", ouID, "projectName", projectName)
-	return utils.ConvertToMetricsResponse(metrics), nil
 }
 
 // modelBuildToSpecBuild converts a models.Build (from GetComponent) into a spec.Build for CreateAgent enrichment.

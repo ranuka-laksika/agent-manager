@@ -348,6 +348,24 @@ func (e CreateCustomEvaluatorRequestType) Valid() bool {
 	}
 }
 
+// Defines values for CreateEnvironmentRequestIsolationTier.
+const (
+	CreateEnvironmentRequestIsolationTierGvisor CreateEnvironmentRequestIsolationTier = "gvisor"
+	CreateEnvironmentRequestIsolationTierKata   CreateEnvironmentRequestIsolationTier = "kata"
+)
+
+// Valid indicates whether the value is a known member of the CreateEnvironmentRequestIsolationTier enum.
+func (e CreateEnvironmentRequestIsolationTier) Valid() bool {
+	switch e {
+	case CreateEnvironmentRequestIsolationTierGvisor:
+		return true
+	case CreateEnvironmentRequestIsolationTierKata:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for CreateGitSecretRequestType.
 const (
 	CreateGitSecretRequestTypeBasic CreateGitSecretRequestType = "basic"
@@ -549,6 +567,24 @@ func (e ExtractionIdentifierLocation) Valid() bool {
 	case ExtractionIdentifierLocationPayload:
 		return true
 	case ExtractionIdentifierLocationQueryParam:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GatewayEnvironmentResponseIsolationTier.
+const (
+	GatewayEnvironmentResponseIsolationTierGvisor GatewayEnvironmentResponseIsolationTier = "gvisor"
+	GatewayEnvironmentResponseIsolationTierKata   GatewayEnvironmentResponseIsolationTier = "kata"
+)
+
+// Valid indicates whether the value is a known member of the GatewayEnvironmentResponseIsolationTier enum.
+func (e GatewayEnvironmentResponseIsolationTier) Valid() bool {
+	switch e {
+	case GatewayEnvironmentResponseIsolationTierGvisor:
+		return true
+	case GatewayEnvironmentResponseIsolationTierKata:
 		return true
 	default:
 		return false
@@ -768,48 +804,6 @@ func (e LogEntryLogLevel) Valid() bool {
 	case LogEntryLogLevelINFO:
 		return true
 	case LogEntryLogLevelWARN:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LogFilterRequestLogLevels.
-const (
-	LogFilterRequestLogLevelsDEBUG LogFilterRequestLogLevels = "DEBUG"
-	LogFilterRequestLogLevelsERROR LogFilterRequestLogLevels = "ERROR"
-	LogFilterRequestLogLevelsINFO  LogFilterRequestLogLevels = "INFO"
-	LogFilterRequestLogLevelsWARN  LogFilterRequestLogLevels = "WARN"
-)
-
-// Valid indicates whether the value is a known member of the LogFilterRequestLogLevels enum.
-func (e LogFilterRequestLogLevels) Valid() bool {
-	switch e {
-	case LogFilterRequestLogLevelsDEBUG:
-		return true
-	case LogFilterRequestLogLevelsERROR:
-		return true
-	case LogFilterRequestLogLevelsINFO:
-		return true
-	case LogFilterRequestLogLevelsWARN:
-		return true
-	default:
-		return false
-	}
-}
-
-// Defines values for LogFilterRequestSortOrder.
-const (
-	LogFilterRequestSortOrderAsc  LogFilterRequestSortOrder = "asc"
-	LogFilterRequestSortOrderDesc LogFilterRequestSortOrder = "desc"
-)
-
-// Valid indicates whether the value is a known member of the LogFilterRequestSortOrder enum.
-func (e LogFilterRequestSortOrder) Valid() bool {
-	switch e {
-	case LogFilterRequestSortOrderAsc:
-		return true
-	case LogFilterRequestSortOrderDesc:
 		return true
 	default:
 		return false
@@ -1067,22 +1061,22 @@ func (e ListGatewaysParamsType) Valid() bool {
 
 // Defines values for ListGatewaysParamsStatus.
 const (
-	ListGatewaysParamsStatusACTIVE       ListGatewaysParamsStatus = "ACTIVE"
-	ListGatewaysParamsStatusERROR        ListGatewaysParamsStatus = "ERROR"
-	ListGatewaysParamsStatusINACTIVE     ListGatewaysParamsStatus = "INACTIVE"
-	ListGatewaysParamsStatusPROVISIONING ListGatewaysParamsStatus = "PROVISIONING"
+	ACTIVE       ListGatewaysParamsStatus = "ACTIVE"
+	ERROR        ListGatewaysParamsStatus = "ERROR"
+	INACTIVE     ListGatewaysParamsStatus = "INACTIVE"
+	PROVISIONING ListGatewaysParamsStatus = "PROVISIONING"
 )
 
 // Valid indicates whether the value is a known member of the ListGatewaysParamsStatus enum.
 func (e ListGatewaysParamsStatus) Valid() bool {
 	switch e {
-	case ListGatewaysParamsStatusACTIVE:
+	case ACTIVE:
 		return true
-	case ListGatewaysParamsStatusERROR:
+	case ERROR:
 		return true
-	case ListGatewaysParamsStatusINACTIVE:
+	case INACTIVE:
 		return true
-	case ListGatewaysParamsStatusPROVISIONING:
+	case PROVISIONING:
 		return true
 	default:
 		return false
@@ -1151,16 +1145,16 @@ func (e GetGroupedScoresParamsLevel) Valid() bool {
 
 // Defines values for GetAgentTraceScoresParamsSortOrder.
 const (
-	GetAgentTraceScoresParamsSortOrderAsc  GetAgentTraceScoresParamsSortOrder = "asc"
-	GetAgentTraceScoresParamsSortOrderDesc GetAgentTraceScoresParamsSortOrder = "desc"
+	Asc  GetAgentTraceScoresParamsSortOrder = "asc"
+	Desc GetAgentTraceScoresParamsSortOrder = "desc"
 )
 
 // Valid indicates whether the value is a known member of the GetAgentTraceScoresParamsSortOrder enum.
 func (e GetAgentTraceScoresParamsSortOrder) Valid() bool {
 	switch e {
-	case GetAgentTraceScoresParamsSortOrderAsc:
+	case Asc:
 		return true
-	case GetAgentTraceScoresParamsSortOrderDesc:
+	case Desc:
 		return true
 	default:
 		return false
@@ -1989,8 +1983,8 @@ type CommitAuthor struct {
 
 // ConfigResponse defines model for ConfigResponse.
 type ConfigResponse struct {
-	// TraceObserverBaseUrl Base URL for the traces observer service
-	TraceObserverBaseUrl string `json:"traceObserverBaseUrl"`
+	// ObserverBaseUrl Base URL for the agent-manager-observer service
+	ObserverBaseUrl string `json:"observerBaseUrl"`
 }
 
 // ConfigurationItem defines model for ConfigurationItem.
@@ -2188,9 +2182,15 @@ type CreateEnvironmentRequest struct {
 	// IsProduction Whether this is a production environment
 	IsProduction *bool `json:"isProduction,omitempty"`
 
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *CreateEnvironmentRequestIsolationTier `json:"isolationTier,omitempty"`
+
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 }
+
+// CreateEnvironmentRequestIsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+type CreateEnvironmentRequestIsolationTier string
 
 // CreateGatewayRequest defines model for CreateGatewayRequest.
 type CreateGatewayRequest struct {
@@ -2490,7 +2490,7 @@ type DeploymentDetailsResponse struct {
 	ImageId string `json:"imageId"`
 
 	// LastDeployed Timestamp of last deployment
-	LastDeployed time.Time `json:"lastDeployed"`
+	LastDeployed *time.Time `json:"lastDeployed,omitempty"`
 
 	// PromotionTargetEnvironment Promotion target environment details
 	PromotionTargetEnvironment *struct {
@@ -2899,12 +2899,18 @@ type GatewayEnvironmentResponse struct {
 	// IsProduction Whether this is a production environment
 	IsProduction bool `json:"isProduction"`
 
+	// IsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+	IsolationTier *GatewayEnvironmentResponseIsolationTier `json:"isolationTier,omitempty"`
+
 	// Name Unique environment name (lowercase, alphanumeric with hyphens)
 	Name string `json:"name"`
 
 	// UpdatedAt Timestamp when the environment was last updated
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// GatewayEnvironmentResponseIsolationTier Pod runtime isolation tier for agents. Use "gvisor" for runsc kernel isolation or "kata" for Kata Containers VM isolation (rendered as the kata-qemu RuntimeClass); omit for the default runc runtime.
+type GatewayEnvironmentResponseIsolationTier string
 
 // GatewayListResponse defines model for GatewayListResponse.
 type GatewayListResponse struct {
@@ -3684,36 +3690,6 @@ type LogEntry struct {
 // LogEntryLogLevel defines model for LogEntry.LogLevel.
 type LogEntryLogLevel string
 
-// LogFilterRequest Request body for filtering and retrieving application logs
-type LogFilterRequest struct {
-	// EndTime End time for log filtering (RFC3339 format). Must be provided with startTime.
-	EndTime string `json:"endTime"`
-
-	// EnvironmentName Environment name
-	EnvironmentName string `json:"environmentName"`
-
-	// Limit Maximum number of log entries to return
-	Limit *int `json:"limit,omitempty"`
-
-	// LogLevels Array of log levels to filter by
-	LogLevels *[]LogFilterRequestLogLevels `json:"logLevels,omitempty"`
-
-	// SearchPhrase Search phrase to filter logs by content
-	SearchPhrase *string `json:"searchPhrase,omitempty"`
-
-	// SortOrder Sort order of the logs
-	SortOrder *LogFilterRequestSortOrder `json:"sortOrder,omitempty"`
-
-	// StartTime Start time for log filtering (RFC3339 format). Must be provided with endTime.
-	StartTime string `json:"startTime"`
-}
-
-// LogFilterRequestLogLevels defines model for LogFilterRequest.LogLevels.
-type LogFilterRequestLogLevels string
-
-// LogFilterRequestSortOrder Sort order of the logs
-type LogFilterRequestSortOrder string
-
 // LogsResponse defines model for LogsResponse.
 type LogsResponse struct {
 	Logs       []LogEntry `json:"logs"`
@@ -3968,48 +3944,6 @@ type MCPServerInfoFetchResponse struct {
 	// ServerInfo MCP server metadata returned by initialize
 	ServerInfo *map[string]interface{}   `json:"serverInfo,omitempty"`
 	Tools      *[]map[string]interface{} `json:"tools,omitempty"`
-}
-
-// MetricDataPoint A single metric data point with timestamp and value
-type MetricDataPoint struct {
-	// Time Timestamp of the metric data point in RFC3339 format
-	Time string `json:"time"`
-
-	// Value Metric value (CPU as decimal cores, memory as bytes)
-	Value float64 `json:"value"`
-}
-
-// MetricsFilterRequest Request body for filtering and retrieving agent resource metrics
-type MetricsFilterRequest struct {
-	// EndTime End time for metrics filtering (RFC3339 format)
-	EndTime string `json:"endTime"`
-
-	// EnvironmentName Environment name
-	EnvironmentName string `json:"environmentName"`
-
-	// StartTime Start time for metrics filtering (RFC3339 format)
-	StartTime string `json:"startTime"`
-}
-
-// MetricsResponse Resource metrics response containing CPU and memory usage data
-type MetricsResponse struct {
-	// CpuLimits CPU limit values over time
-	CpuLimits []MetricDataPoint `json:"cpuLimits"`
-
-	// CpuRequests CPU request values over time
-	CpuRequests []MetricDataPoint `json:"cpuRequests"`
-
-	// CpuUsage CPU usage metrics over time
-	CpuUsage []MetricDataPoint `json:"cpuUsage"`
-
-	// Memory Memory usage in bytes over time
-	Memory []MetricDataPoint `json:"memory"`
-
-	// MemoryLimits Memory limit values in bytes over time
-	MemoryLimits []MetricDataPoint `json:"memoryLimits"`
-
-	// MemoryRequests Memory request values in bytes over time
-	MemoryRequests []MetricDataPoint `json:"memoryRequests"`
 }
 
 // ModelConfigRequest defines model for ModelConfigRequest.
@@ -5887,9 +5821,6 @@ type CreateMCPConfigAPIKeyJSONRequestBody = CreateLLMAPIKeyRequest
 // RotateMCPConfigAPIKeyJSONRequestBody defines body for RotateMCPConfigAPIKey for application/json ContentType.
 type RotateMCPConfigAPIKeyJSONRequestBody = RotateLLMAPIKeyRequest
 
-// GetAgentMetricsJSONRequestBody defines body for GetAgentMetrics for application/json ContentType.
-type GetAgentMetricsJSONRequestBody = MetricsFilterRequest
-
 // CreateAgentModelConfigJSONRequestBody defines body for CreateAgentModelConfig for application/json ContentType.
 type CreateAgentModelConfigJSONRequestBody = CreateAgentModelConfigRequest
 
@@ -5916,9 +5847,6 @@ type PublishAgentKindJSONRequestBody = PublishAgentKindRequest
 
 // UpdateAgentResourceConfigsJSONRequestBody defines body for UpdateAgentResourceConfigs for application/json ContentType.
 type UpdateAgentResourceConfigsJSONRequestBody = UpdateAgentResourceConfigsRequest
-
-// FilterAgentRuntimeLogsJSONRequestBody defines body for FilterAgentRuntimeLogs for application/json ContentType.
-type FilterAgentRuntimeLogsJSONRequestBody = LogFilterRequest
 
 // GenerateAgentTokenJSONRequestBody defines body for GenerateAgentToken for application/json ContentType.
 type GenerateAgentTokenJSONRequestBody = TokenRequest

@@ -5,6 +5,10 @@ sidebar_position: 1
 
 Get the Agent Manager running with a single command using a dev container!
 
+:::info Stronger agent isolation tiers
+Agents run sandboxed under the standard **runc** runtime by default. Agent Manager also supports stronger per-environment isolation tiers — **gVisor** (userspace kernel) and **Kata Containers** (per-agent VM) — but they have hardware/OS requirements and need a dedicated node. For more information, see the [gVisor](../administration/isolation-tiers/gvisor.mdx) and [Kata Containers](../administration/isolation-tiers/kata.mdx) setup guides.
+:::
+
 ## Prerequisites
 
 Ensure the following before you begin:
@@ -63,7 +67,8 @@ This installs everything you need:
 8. **Gateway Operator**: Installs Gateway Operator with RBAC for WSO2 API Platform CRDs
 9. **AMP Thunder Extension**: Installs WSO2 AMP Thunder Extension
 10. **AI Gateway Extension**: Registers and installs WSO2 AI Gateway for LLM Provider management.
-11. **Agent Management Platform**: Installs core platform (PostgreSQL, API, Console) and extensions (Secrets, Platform Resources, Observability, Build, Evaluation, Gateway)
+11. **Agent Sandbox Module**: Installs the Agent Sandbox controller that runs agents as sandboxed pods
+12. **Agent Management Platform**: Installs core platform (PostgreSQL, API, Console) and extensions (Secrets, Platform Resources, Observability, Build, Evaluation, Gateway)
 
 ## Access Your Platform
 

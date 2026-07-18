@@ -1,0 +1,42 @@
+// Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+// Package orgctx carries the resolved org identity through a context.Context.
+// It is a leaf package (stdlib-only imports) so both HTTP middleware and
+// outbound clients can share the contract without import cycles.
+package orgctx
+
+import "context"
+
+// ResolvedOrg holds the org identity injected into the request context by
+// middleware.RequireOrgMatch after successful token validation.
+type ResolvedOrg struct {
+	OuHandle string // Thunder OU handle from token
+	OUID     string // Thunder OU ID from token
+}
+
+type resolvedOrgKey struct{}
+
+// WithResolvedOrg stores a ResolvedOrg in the context.
+func WithResolvedOrg(ctx context.Context, org ResolvedOrg) context.Context {
+	return context.WithValue(ctx, resolvedOrgKey{}, org)
+}
+
+// GetResolvedOrg retrieves the ResolvedOrg stored by WithResolvedOrg.
+func GetResolvedOrg(ctx context.Context) (ResolvedOrg, bool) {
+	org, ok := ctx.Value(resolvedOrgKey{}).(ResolvedOrg)
+	return org, ok
+}

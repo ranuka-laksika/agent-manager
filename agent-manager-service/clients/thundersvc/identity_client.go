@@ -601,6 +601,15 @@ func (c *thunderClient) GetAgentGroups(ctx context.Context, ouID, agentID string
 
 // --- Roles ---
 
+// NativeAdministratorRoleName is the role every ThunderID install seeds in its
+// default OU. It carries Thunder's built-in "system" scope (the admin-API
+// permission the amp-system-client authenticates with — see fetchSystemToken),
+// so it must never surface as an assignable agent-identity role: OU-scoped
+// ListRoles hides it, and the agent-identity controller rejects reads/writes
+// against it. Thunder enforces unique role names per OU, so post-bootstrap the
+// only role with this name in the default OU is the native one.
+const NativeAdministratorRoleName = "Administrator"
+
 // ListRoles returns roles scoped to ouID when non-empty, by fetching all pages
 // from Thunder and filtering client-side (Thunder has no OU-scoped list endpoint for roles).
 func (c *thunderClient) ListRoles(ctx context.Context, ouID string, offset, limit int) ([]ThunderRole, int, error) {
@@ -635,7 +644,11 @@ func (c *thunderClient) ListRoles(ctx context.Context, ouID string, offset, limi
 			return nil, 0, fmt.Errorf("thunder list roles decode: %w", err)
 		}
 		for _, role := range wrapped.Roles {
-			if role.OuID == ouID {
+			// The exclusion happens before the client-side pagination below so
+			// offset/limit/total stay consistent. The unfiltered ouID=="" branch
+			// above deliberately keeps the native role: rolesForAssignee and the
+			// scope-cleanup sweep must still see every role in the instance.
+			if role.OuID == ouID && role.Name != NativeAdministratorRoleName {
 				all = append(all, role)
 			}
 		}

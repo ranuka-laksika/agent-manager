@@ -84,12 +84,13 @@ func (c *environmentController) CreateEnvironment(w http.ResponseWriter, r *http
 
 	// Convert spec request to internal model
 	internalReq := &models.CreateEnvironmentRequest{
-		Name:         req.Name,
-		DisplayName:  req.DisplayName,
-		DataplaneRef: utils.GetOrDefault(req.DataplaneRef, ""),
-		DNSPrefix:    req.DnsPrefix,
-		IsProduction: false,
-		Gateway:      fromSpecGatewaySpec(req.Gateway),
+		Name:          req.Name,
+		DisplayName:   req.DisplayName,
+		DataplaneRef:  utils.GetOrDefault(req.DataplaneRef, ""),
+		DNSPrefix:     req.DnsPrefix,
+		IsProduction:  false,
+		Gateway:       fromSpecGatewaySpec(req.Gateway),
+		IsolationTier: utils.GetOrDefault(req.IsolationTier, ""),
 	}
 
 	if req.Description != nil {
@@ -269,6 +270,9 @@ func convertToSpecEnvironmentResponse(env *models.GatewayEnvironmentResponse) sp
 		Gateway:      toSpecGatewaySpec(env.Gateway),
 		CreatedAt:    env.CreatedAt,
 		UpdatedAt:    env.UpdatedAt,
+	}
+	if env.IsolationTier != "" {
+		response.IsolationTier = &env.IsolationTier
 	}
 
 	return response

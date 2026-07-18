@@ -77,6 +77,11 @@ fi
 
 # --- Configuration (can be overridden via env vars) ---
 ORG_NAME="${ORG_NAME:-default}"
+# Namespace the OpenChoreo Environment CRs are created in. The platform-resources
+# chart provisions them in its defaultResources namespace ("default"), which is NOT
+# necessarily the org name — keep them distinct so a non-default ORG_NAME still
+# annotates the right namespace.
+ENVIRONMENT_NAMESPACE="${ENVIRONMENT_NAMESPACE:-default}"
 
 # The APIGateway controller materializes a Service named
 # "api-platform-<org>-<env>-gateway-gateway-runtime" (24-char suffix), which
@@ -213,12 +218,26 @@ if [ -n "${ENV_INGRESS_HTTPS_HOST}" ]; then
     EXTERNAL_LISTENERS="${EXTERNAL_LISTENERS}, \"https\": {\"host\": \"${ENV_INGRESS_HTTPS_HOST}\", \"port\": ${ENV_INGRESS_HTTPS_PORT}}"
 fi
 
+# Optional pod runtime isolation tier for this environment. "gvisor" makes agents run
+# under the runsc RuntimeClass (requires a gVisor node — see `make setup-gvisor`); "kata"
+# makes them run under the kata-qemu RuntimeClass in a lightweight VM (requires a Kata node
+# with nested virtualization — see `make setup-kata`). Empty (default) uses the standard
+# runc runtime. Only include the field in the payload when set, so runc environments send
+# the exact same request body as before.
+ISOLATION_TIER="${ISOLATION_TIER:-}"
+ISOLATION_TIER_FIELD=""
+if [ -n "${ISOLATION_TIER}" ]; then
+    ISOLATION_TIER_FIELD="\"isolationTier\": \"${ISOLATION_TIER}\","
+    echo "   Isolation tier: ${ISOLATION_TIER}"
+fi
+
 ENV_RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${AGENT_MANAGER_API_URL}/orgs/${ORG_NAME}/environments" \
     -H "${AUTH_HEADER}" \
     -H "Content-Type: application/json" \
     -d "{
         \"name\": \"${ENV_NAME}\",
         \"displayName\": \"${DISPLAY_NAME_JSON}\",
+        ${ISOLATION_TIER_FIELD}
         \"dataplaneRef\": \"${DATAPLANE_REF}\",
         \"dnsPrefix\": \"${ENV_NAME}\",
         \"isProduction\": ${IS_PRODUCTION},
@@ -238,6 +257,19 @@ if [ "$ENV_HTTP_CODE" = "201" ]; then
     echo "✅ Environment '${ENV_NAME}' created"
 elif [ "$ENV_HTTP_CODE" = "409" ]; then
     echo "ℹ️  Environment '${ENV_NAME}' already exists, continuing..."
+    # The create request is the only place the API accepts isolationTier, so a
+    # re-run against an existing environment (e.g. after a partial first run)
+    # would otherwise silently drop it. The Environment CR annotation is the
+    # source of truth, so apply it directly instead.
+    if [ -n "${ISOLATION_TIER}" ]; then
+        if kubectl annotate environment "${ENV_NAME}" -n "${ENVIRONMENT_NAMESPACE}" \
+            "openchoreo.dev/isolation-tier=${ISOLATION_TIER}" --overwrite > /dev/null 2>&1; then
+            echo "✅ Isolation tier '${ISOLATION_TIER}' applied to existing environment"
+        else
+            echo "⚠️  Could not set isolation tier on the existing environment. Apply it manually:"
+            echo "    kubectl annotate environment ${ENV_NAME} -n ${ENVIRONMENT_NAMESPACE} openchoreo.dev/isolation-tier=${ISOLATION_TIER} --overwrite"
+        fi
+    fi
 else
     echo "❌ Failed to create environment (HTTP ${ENV_HTTP_CODE})"
     echo "   Response: ${ENV_BODY}"

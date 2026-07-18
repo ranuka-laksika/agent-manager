@@ -10,7 +10,7 @@
 
 The Agent Manager installs as a set of Helm charts on top of OpenChoreo. The components fall into two groups based on install order:
 
-1. **Agent Manager Core :** Gateway Operator, Agent Manager and Platform Resources (agent component types, workflow templates etc). Each depends on the one before it.
+1. **Agent Manager Core :** Gateway Operator, Agent Manager, Agent Sandbox Module and Platform Resources (agent component types, workflow templates etc). Each depends on the one before it.
 2. **Extensions :** Secret Management, Observability, Evaluation extensions and the API Platform Gateway Extension.
 
 :::info Prerequisites
@@ -96,7 +96,7 @@ helm install amp \
   --set console.config.auth.signInRedirectURL="${CONSOLE_PUBLIC_URL}/login" \
   --set console.config.auth.signOutRedirectURL="${CONSOLE_PUBLIC_URL}/login" \
   --set console.config.apiBaseUrl="${API_PUBLIC_URL}" \
-  --set console.config.obsApiBaseUrl="${OBS_API_PUBLIC_URL}" \
+  --set agentManagerService.config.amObserverPublicURL="${OBS_API_PUBLIC_URL}" \
   --set console.ocIngress.hostname="${CONSOLE_PUBLIC_HOST}" \
   --set agentManagerService.ocIngress.hostname="${API_PUBLIC_HOST}" \
   --set agentManagerService.config.serverPublicURL="${API_PUBLIC_URL}" \
@@ -130,7 +130,51 @@ kubectl get pods -n ${AMP_NS}
 ```
 :::
 
-#### Step 3: Platform Resources
+#### Step 3: Agent Sandbox Module
+
+Agents run as **sandboxed pods** managed by the [Agent Sandbox](https://agent-sandbox.sigs.k8s.io/) controller (`SandboxTemplate` / `SandboxWarmPool` resources) instead of plain Deployments. This module is **required** — without it, agent deployments cannot be rendered.
+
+```bash
+helm upgrade --install agent-sandbox \
+  oci://ghcr.io/openchoreo/helm-charts/agent-sandbox \
+  --version 0.1.1 \
+  --namespace ${DATA_PLANE_NS} \
+  --create-namespace \
+  --wait \
+  --timeout 10m \
+  --set namespace=openchoreo-control-plane \
+  --set dataPlaneNamespace=${DATA_PLANE_NS} \
+  --set dataPlaneServiceAccount=cluster-agent-dataplane \
+  --set upstream.version=v0.4.6
+```
+
+Wait for the controller:
+
+```bash
+kubectl wait -n agent-sandbox-system \
+  --for=condition=available \
+  --timeout=180s \
+  deployment/agent-sandbox-controller
+```
+
+:::tip Verify
+```bash
+kubectl get crd \
+  sandboxtemplates.extensions.agents.x-k8s.io \
+  sandboxwarmpools.extensions.agents.x-k8s.io \
+  sandboxclaims.extensions.agents.x-k8s.io
+# All three CRDs should be listed
+
+kubectl get clusterrole openchoreo-agent-sandbox-access
+# RBAC granting the data-plane agent access to sandbox resources
+```
+:::
+
+:::info Stronger isolation tiers
+With this module, agents run sandboxed under the standard **runc** runtime. Optionally, individual environments can run agents under **gVisor** or **Kata Containers** for stronger isolation — these have hardware/OS requirements and need a dedicated node. See the [gVisor](../../administration/isolation-tiers/gvisor.mdx) and [Kata Containers](../../administration/isolation-tiers/kata.mdx) isolation tier guides.
+:::
+
+#### Step 4: Platform Resources
 
 Creates the default Organization, Project, Environment, DeploymentPipeline, and workflow template resources that the console needs on first login. This chart also configures the **container registry endpoint** used by build workflows to push agent images.
 
@@ -188,23 +232,24 @@ helm install amp-platform-resources \\
 
 These can be installed in any order after Core is ready.
 
-#### Step 4: Observability Extension (Traces Observer)
+#### Step 5: Observability Extension (Agent Manager Observer)
 
-Deploys the Traces Observer service that queries and serves trace data to the console.
+Deploys the observer service that queries and serves trace, log, and metrics data to the console and CLI.
 
 ```bash
 helm install amp-observability-traces \
   oci://${HELM_CHART_REGISTRY}/wso2-amp-observability-extension \
   --version ${VERSION} \
   --namespace ${OBSERVABILITY_NS} \
-  --set tracesObserver.ocIngress.hostname="${OBS_API_PUBLIC_HOST}" \
+  --set amObserver.ocIngress.hostname="${OBS_API_PUBLIC_HOST}" \
+  --set amObserver.publicUrl="${OBS_API_PUBLIC_URL}" \
   --timeout 1800s
 
 kubectl wait --for=condition=Available \
-  deployment/amp-traces-observer -n ${OBSERVABILITY_NS} --timeout=600s
+  deployment/amp-observer -n ${OBSERVABILITY_NS} --timeout=600s
 ```
 
-#### Step 5: Evaluation Extension
+#### Step 6: Evaluation Extension
 
 Installs workflow templates for running automated evaluations (accuracy, safety, reasoning, tool usage) against agent traces.
 

@@ -69,13 +69,24 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, ouID string,
 		s.logger.Warn("No dataplaneRef provided", "name", req.Name, "ouID", ouID)
 	}
 
+	// Reject unsupported isolation tiers up front. An unknown value would otherwise be
+	// persisted verbatim on the Environment CR and silently fall back to runc at render
+	// time (runtimeClassForIsolationTier returns "" for anything unrecognised), hiding the
+	// typo from the user until they notice their agents are not actually isolated.
+	switch req.IsolationTier {
+	case "", utils.IsolationTierGvisor, utils.IsolationTierKata:
+	default:
+		return nil, fmt.Errorf("%w: unsupported isolation tier %q (allowed: gvisor, kata)", utils.ErrInvalidInput, req.IsolationTier)
+	}
+
 	ocReq := occlient.CreateEnvironmentRequest{
-		Name:         req.Name,
-		DisplayName:  req.DisplayName,
-		Description:  req.Description,
-		DataplaneRef: req.DataplaneRef,
-		IsProduction: req.IsProduction,
-		Gateway:      toOCClientGatewaySpec(req.Gateway),
+		Name:          req.Name,
+		DisplayName:   req.DisplayName,
+		Description:   req.Description,
+		IsolationTier: req.IsolationTier,
+		DataplaneRef:  req.DataplaneRef,
+		IsProduction:  req.IsProduction,
+		Gateway:       toOCClientGatewaySpec(req.Gateway),
 	}
 
 	env, err := s.ocClient.CreateEnvironment(ctx, ouID, ocReq)
@@ -90,6 +101,7 @@ func (s *environmentService) CreateEnvironment(ctx context.Context, ouID string,
 		Name:             env.Name,
 		DisplayName:      env.DisplayName,
 		Description:      req.Description,
+		IsolationTier:    env.IsolationTier,
 		DataplaneRef:     env.DataplaneRef,
 		IsProduction:     env.IsProduction,
 		Gateway:          env.Gateway,
@@ -120,6 +132,7 @@ func (s *environmentService) GetEnvironment(ctx context.Context, ouID string, en
 		Name:             env.Name,
 		DisplayName:      env.DisplayName,
 		Description:      env.Description,
+		IsolationTier:    env.IsolationTier,
 		DataplaneRef:     env.DataplaneRef,
 		DNSPrefix:        env.DNSPrefix,
 		IsProduction:     env.IsProduction,
@@ -170,6 +183,7 @@ func (s *environmentService) ListEnvironments(ctx context.Context, ouID string, 
 			Name:             env.Name,
 			DisplayName:      env.DisplayName,
 			Description:      env.Description,
+			IsolationTier:    env.IsolationTier,
 			DataplaneRef:     env.DataplaneRef,
 			DNSPrefix:        env.DNSPrefix,
 			IsProduction:     env.IsProduction,

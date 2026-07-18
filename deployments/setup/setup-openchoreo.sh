@@ -226,7 +226,14 @@ install_observability_plane() {
       --set adapter.openSearchSecretName="opensearch-admin-credentials"
     echo "✅ OpenSearch based logs module installed"
 
-    # Enable logs collection in the configured logs module
+    # Enable logs collection in the configured logs module.
+    # fluent-bit.tolerations[operator=Exists] lets the Fluent Bit log collector (a
+    # DaemonSet, one pod per node) run on EVERY node, including tainted isolation-tier
+    # nodes such as the gVisor node (setup-gvisor-node.sh) or the Kata node
+    # (setup-kata-node.sh). Without it, agents on those nodes produce no runtime logs
+    # because no collector tails that node's container logs. operator=Exists tolerates
+    # any taint, so both the gvisor and kata taints are covered. Harmless for all-runc
+    # clusters (the toleration just matches nothing).
     echo "Enabling log collection in Observability Plane..."
     helm upgrade observability-logs-opensearch \
       oci://ghcr.io/openchoreo/helm-charts/observability-logs-opensearch \
@@ -234,7 +241,8 @@ install_observability_plane() {
       --namespace openchoreo-observability-plane \
       --version "${OBSERVABILITY_LOGS_OPENSEARCH_VERSION}" \
       --reuse-values \
-      --set fluent-bit.enabled=true
+      --set fluent-bit.enabled=true \
+      --set "fluent-bit.tolerations[0].operator=Exists"
     echo "✅ OpenSearch Log collection enabled"
 
     echo "Enabling opensearch based tracing module..."
@@ -247,7 +255,13 @@ install_observability_plane() {
         --set openSearchSetup.openSearchSecretName="opensearch-admin-credentials" \
         --set opentelemetry-collector.configMap.existingName="amp-opentelemetry-collector-config"
 
-    # Prometheus based metrics module
+    # Prometheus based metrics module.
+    # The values file relabels sandbox-cgroup cAdvisor series (gVisor/Kata
+    # isolation tiers) to container="sandbox" so the metrics adapter's
+    # container-scoped usage queries return data for sandboxed agents too —
+    # without it, CPU/memory usage charts are empty on gVisor/Kata
+    # environments (usage lives in the sandbox cgroup, not per-container
+    # cgroups, on those runtimes).
     echo "Installing Prometheus based metrics module..."
     install_metrics_prometheus() {
         helm upgrade --install observability-metrics-prometheus \
@@ -255,6 +269,7 @@ install_observability_plane() {
           --create-namespace \
           --namespace openchoreo-observability-plane \
           --version "${OBSERVABILITY_METRICS_PROMETHEUS_VERSION}" \
+          --values "${PROJECT_ROOT}/deployments/values/observability-metrics-prometheus.yaml" \
           --set adapter.image.tag="" \
           --timeout 10m
     }
@@ -487,22 +502,22 @@ else
 fi
 
 # ============================================================================
-# Step 6: Install Observability Extension (Traces Observer Service)
+# Step 6: Install Observability Extension (Agent Manager Observer)
 # ============================================================================
-echo "6️⃣  Observability Extension (Traces Observer Service)"
+echo "6️⃣  Observability Extension (Agent Manager Observer)"
 if ! helm status wso2-amp-observability-extension -n openchoreo-observability-plane &>/dev/null; then
-    echo "Building and loading Traces Observer Service Docker image into k3d cluster..."
-    make -C ${PROJECT_ROOT}/traces-observer-service docker-load-k3d
+    echo "Building and loading Agent Manager Observer Docker image into k3d cluster..."
+    make -C ${PROJECT_ROOT}/agent-manager-observer docker-load-k3d
     sleep 10
 fi
-echo "   Installing/upgrading Traces Observer (local dev: JWKS disabled, unverified JWT parse)..."
+echo "   Installing/upgrading Agent Manager Observer (local dev: JWKS disabled, unverified JWT parse)..."
 helm upgrade --install wso2-amp-observability-extension ${PROJECT_ROOT}/deployments/helm-charts/wso2-amp-observability-extension \
     --create-namespace \
     --namespace openchoreo-observability-plane \
     --timeout=10m \
-    --set tracesObserver.developmentMode=true \
-    --set tracesObserver.auth.isLocalDevEnv=true \
-    --set-string tracesObserver.auth.jwksUrl=""
+    --set amObserver.developmentMode=true \
+    --set amObserver.auth.isLocalDevEnv=true \
+    --set-string amObserver.auth.jwksUrl=""
 echo ""
 
 # ============================================================================

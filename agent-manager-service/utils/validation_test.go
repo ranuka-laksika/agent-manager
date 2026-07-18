@@ -17,6 +17,7 @@
 package utils
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -157,6 +158,90 @@ func TestValidateTemplateHandle(t *testing.T) {
 				if err != nil {
 					t.Errorf("ValidateTemplateHandle() unexpected error = %v", err)
 				}
+			}
+		})
+	}
+}
+
+func TestValidateResourceRequestsWithinLimits(t *testing.T) {
+	tests := []struct {
+		name      string
+		requested spec.ResourceConfig
+		current   *spec.ResourceConfig
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name: "requests-only update exceeding the current limits is rejected",
+			requested: spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("500m"), Memory: strPtrForTest("512Mi")},
+			},
+			current: &spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+			},
+			wantErr: true,
+			errMsg:  "must be less than or equal to",
+		},
+		{
+			name: "requests and limits raised together is allowed",
+			requested: spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("500m"), Memory: strPtrForTest("512Mi")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("500m"), Memory: strPtrForTest("512Mi")},
+			},
+			current: &spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+			},
+			wantErr: false,
+		},
+		{
+			name: "limits-only update lowering below current requests is rejected",
+			requested: spec.ResourceConfig{
+				Limits: &spec.ResourceLimits{Cpu: strPtrForTest("50m"), Memory: strPtrForTest("128Mi")},
+			},
+			current: &spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("500m"), Memory: strPtrForTest("512Mi")},
+			},
+			wantErr: true,
+			errMsg:  "must be less than or equal to",
+		},
+		{
+			name: "cpu-only update leaves memory untouched and valid",
+			requested: spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("200m")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("200m")},
+			},
+			current: &spec.ResourceConfig{
+				Requests: &spec.ResourceRequests{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+				Limits:   &spec.ResourceLimits{Cpu: strPtrForTest("100m"), Memory: strPtrForTest("256Mi")},
+			},
+			wantErr: false,
+		},
+		{
+			name:      "no current config and no limits in request skips the check",
+			requested: spec.ResourceConfig{Requests: &spec.ResourceRequests{Cpu: strPtrForTest("500m"), Memory: strPtrForTest("512Mi")}},
+			current:   nil,
+			wantErr:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateResourceRequestsWithinLimits(tt.requested, tt.current)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("ValidateResourceRequestsWithinLimits() expected error but got nil")
+				}
+				if !errors.Is(err, ErrInvalidInput) {
+					t.Errorf("ValidateResourceRequestsWithinLimits() error should wrap ErrInvalidInput, got %v", err)
+				}
+				if tt.errMsg != "" && !strings.Contains(err.Error(), tt.errMsg) {
+					t.Errorf("ValidateResourceRequestsWithinLimits() error = %v, want error containing %v", err, tt.errMsg)
+				}
+			} else if err != nil {
+				t.Errorf("ValidateResourceRequestsWithinLimits() unexpected error = %v", err)
 			}
 		})
 	}
