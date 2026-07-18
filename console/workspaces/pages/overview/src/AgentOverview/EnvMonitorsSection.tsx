@@ -19,7 +19,6 @@
 import React, { useMemo } from "react";
 import {
     Box,
-    Button,
     Card,
     CardContent,
     Divider,
@@ -27,7 +26,7 @@ import {
     Skeleton,
     Typography,
 } from "@wso2/oxygen-ui";
-import { ChevronRight, ExternalLink } from "@wso2/oxygen-ui-icons-react";
+import { ExternalLink } from "@wso2/oxygen-ui-icons-react";
 import {
     useListMonitors,
     useMonitorScores,
@@ -41,6 +40,7 @@ import {
 import { formatTraceWindow } from "@agent-management-platform/views";
 import { generatePath, Link } from "react-router-dom";
 import { DonutIcon, type DonutColor } from "./DonutIcon";
+import { SectionHeader } from "./SectionHeader";
 
 interface EnvMonitorsSectionProps {
     orgId: string;
@@ -199,22 +199,7 @@ export const EnvMonitorsSection: React.FC<EnvMonitorsSectionProps> = ({
     return (
         <>
             <Divider sx={{ mt: 2, mb: 1 }} />
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Agent Performance
-                </Typography>
-                <Button
-                    size="small"
-                    variant="text"
-                    endIcon={<ChevronRight size={14} />}
-                    component={Link}
-                    to={allMonitorsHref}
-                    sx={{ minWidth: 0, fontSize: "0.75rem" }}
-                >
-                    View all
-                </Button>
-            </Box>
+            <SectionHeader title="Agent Performance" viewAllHref={allMonitorsHref} />
             {isLoading ? (
                 <Box sx={gridSx}>
                     {[1, 2, 3].map((i) => <Skeleton key={i} variant="rounded" height={96} />)}

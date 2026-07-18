@@ -209,6 +209,16 @@ export function ViewMCPProxy() {
 
   const displayName = proxy?.name ?? proxy?.id ?? proxyId ?? "MCP Proxy";
   const hasEndpoints = endpoints.length > 0;
+  // The proxy fetch's own isLoading flips to false as soon as `proxy` arrives,
+  // but selecting the first endpoint (when the URL doesn't already name one)
+  // happens in a follow-up effect — so for a render or two, endpoints exist
+  // but selectedEndpoint/selectedConfig is still undefined. Tabs that treat
+  // that as "loaded, and there's nothing here" (e.g. Manage Tools) flash an
+  // empty list before the real config shows up; folding this into the
+  // isLoading passed to every tab keeps them on their loading skeleton until
+  // the endpoint actually resolves.
+  const isResolvingEndpoint = hasEndpoints && !selectedEndpoint;
+  const isTabContentLoading = isLoading || isResolvingEndpoint;
   const backHref = generatePath(
     absoluteRouteMap.children.org.children.mcpProxies.path,
     { orgId: orgId ?? "" },
@@ -389,7 +399,7 @@ export function ViewMCPProxy() {
                       proxy={proxy}
                       config={selectedConfig}
                       envChips={selectedEnvChips}
-                      isLoading={isLoading}
+                      isLoading={isTabContentLoading}
                     />
                   )}
                   {tabIndex === 1 && (
@@ -404,7 +414,7 @@ export function ViewMCPProxy() {
                     <MCPProxyConnectionTab
                       config={selectedConfig}
                       selectedEndpointId={selectedEndpointId}
-                      isLoading={isLoading}
+                      isLoading={isTabContentLoading}
                       onUpdate={updateSelectedEndpointConfig}
                       isUpdating={updateMCPProxy.isPending}
                     />
@@ -414,7 +424,7 @@ export function ViewMCPProxy() {
                       config={selectedConfig}
                       selectedEndpointId={selectedEndpointId}
                       orgName={orgId}
-                      isLoading={isLoading}
+                      isLoading={isTabContentLoading}
                       onUpdate={updateSelectedEndpointConfig}
                       isUpdating={updateMCPProxy.isPending}
                     />
@@ -425,7 +435,7 @@ export function ViewMCPProxy() {
                       selectedEndpointId={selectedEndpointId}
                       orgName={orgId}
                       proxyId={routeProxyId}
-                      isLoading={isLoading}
+                      isLoading={isTabContentLoading}
                       onUpdate={updateSelectedEndpointConfig}
                       isUpdating={updateMCPProxy.isPending}
                     />
@@ -435,7 +445,7 @@ export function ViewMCPProxy() {
                       config={selectedConfig}
                       selectedEndpointId={selectedEndpointId}
                       orgName={orgId}
-                      isLoading={isLoading}
+                      isLoading={isTabContentLoading}
                       onUpdate={updateSelectedEndpointConfig}
                       isUpdating={updateMCPProxy.isPending}
                     />

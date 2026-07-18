@@ -66,6 +66,7 @@ import {
   absoluteRouteMap,
   type EnvironmentVariableConfig,
   type EnvProviderConfigMappings,
+  type MCPProxyEndpoint,
 } from "@agent-management-platform/types";
 import {
   getCapabilityId,
@@ -158,6 +159,39 @@ function buildAgentIDPythonSnippet(urlEnvVar: string): string {
     "mcp_client = MultiServerMCPClient(server_configs)",
     "tools = await mcp_client.get_tools()",
   ].join("\n");
+}
+
+type ToolRow = { id: string; blocked: boolean; scopes: string[] };
+type ToolGroup = { key: string; envNames: string[]; rows: ToolRow[] };
+
+// The endpoint bound to a given environment (matched by UUID; at most one per
+// environment) — shared by the security/API-key lookup and the per-environment
+// tool grouping below, which otherwise each re-derived this same lookup.
+function findEndpointForEnvUuid(
+  endpoints: MCPProxyEndpoint[] | undefined,
+  envUuid: string | undefined,
+): MCPProxyEndpoint | undefined {
+  if (!envUuid) return undefined;
+  return endpoints?.find((endpoint) =>
+    endpoint.environments?.some((binding) => binding.environmentUuid === envUuid),
+  );
+}
+
+// Defaults `selected` to the first item once `items` resolves, and re-snaps it
+// if the current selection stops being valid (e.g. the underlying data
+// changes) — shared by the environment selector and the tool-group selector,
+// which otherwise each implemented the identical effect.
+function useDefaultSelection<T extends string>(
+  items: T[],
+  selected: T,
+  setSelected: (value: T) => void,
+) {
+  useEffect(() => {
+    if (items.length === 0) return;
+    if (!items.includes(selected)) {
+      setSelected(items[0]);
+    }
+  }, [items, selected, setSelected]);
 }
 
 export const ViewMCPServerComponent = () => {
@@ -268,40 +302,34 @@ export const ViewMCPServerComponent = () => {
 
   // Default the selected environment (external connect / API-key panels) to the
   // first environment once names resolve, and keep it valid.
-  useEffect(() => {
-    if (envNames.length === 0) return;
-    if (!envNames.includes(selectedEnvName)) {
-      setSelectedEnvName(envNames[0]);
-    }
-  }, [envNames, selectedEnvName]);
+  useDefaultSelection(envNames, selectedEnvName, setSelectedEnvName);
 
   const providerConfig = config?.envMappings?.[selectedEnvName]?.configuration;
 
-  const { data: sourceProxyDetails } = useGetMCPProxy({
+  const { data: sourceProxyDetails, isLoading: isLoadingProxyDetails } = useGetMCPProxy({
     orgName: orgId,
     proxyId: configProxyName ?? "",
   });
-  // Security lives on the source proxy's endpoint bound to the selected
-  // environment (matched by UUID; at most one per environment).
   const selectedEnvUuid = environments.find(
     (env) => env.name === selectedEnvName,
   )?.id;
-  const sourceProxyEndpoint = selectedEnvUuid
-    ? sourceProxyDetails?.endpoints?.find((endpoint) =>
-        endpoint.environments?.some(
-          (binding) => binding.environmentUuid === selectedEnvUuid,
-        ),
-      )
-    : undefined;
+  const sourceProxyEndpoint = findEndpointForEnvUuid(
+    sourceProxyDetails?.endpoints,
+    selectedEnvUuid,
+  );
   const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxyEndpoint?.security);
   const usesIdentitySecurity = sourceProxyEndpoint?.security?.identity?.enabled === true;
 
   // Scopes are a proxy-level catalog (action -> tools it authorizes), not
   // per-endpoint, so this fetch doesn't depend on the selected environment.
-  const { data: scopesData } = useListMCPProxyScopes(
+  const { data: scopesData, isLoading: isLoadingScopes } = useListMCPProxyScopes(
     { orgName: orgId ?? "", proxyId: configProxyName ?? "" },
     { enabled: !!orgId && !!configProxyName },
   );
+  // Both feed toolGroups below — while either is still in flight, the group
+  // computation would run against stale/empty data and the Tools section
+  // would flash "No tools available" before the real list shows up.
+  const isLoadingTools = isLoadingProxyDetails || isLoadingScopes;
 
   // Tools belong to an endpoint, and each endpoint is bound to one or more of
   // the agent's environments, so two environments can expose different tools
@@ -317,27 +345,18 @@ export const ViewMCPServerComponent = () => {
       }
     }
 
-    const groups: {
-      key: string;
-      envNames: string[];
-      rows: { id: string; blocked: boolean; scopes: string[] }[];
-    }[] = [];
-    const groupIndexByEndpointId = new Map<string, number>();
+    const groupsByKey = new Map<string, ToolGroup>();
 
     for (const envName of envNames) {
       const envUuid = environments.find((env) => env.name === envName)?.id;
-      const endpoint = envUuid
-        ? sourceProxyDetails?.endpoints?.find((ep) =>
-            ep.environments?.some((binding) => binding.environmentUuid === envUuid),
-          )
-        : undefined;
+      const endpoint = findEndpointForEnvUuid(sourceProxyDetails?.endpoints, envUuid);
 
       // Environments with no matching endpoint each get their own (empty) group
       // rather than being merged together under a made-up shared key.
       const groupKey = endpoint?.id ?? `__unbound__:${envName}`;
-      const existingIndex = groupIndexByEndpointId.get(groupKey);
-      if (existingIndex !== undefined) {
-        groups[existingIndex].envNames.push(envName);
+      const existing = groupsByKey.get(groupKey);
+      if (existing) {
+        existing.envNames.push(envName);
         continue;
       }
 
@@ -351,25 +370,20 @@ export const ViewMCPServerComponent = () => {
             scopes: scopesByTool[id] ?? [],
           };
         })
-        .filter(
-          (row): row is { id: string; blocked: boolean; scopes: string[] } =>
-            row !== null,
-        );
+        .filter((row): row is ToolRow => row !== null);
 
-      groupIndexByEndpointId.set(groupKey, groups.length);
-      groups.push({ key: groupKey, envNames: [envName], rows });
+      groupsByKey.set(groupKey, { key: groupKey, envNames: [envName], rows });
     }
 
-    return groups;
+    return [...groupsByKey.values()];
   }, [envNames, environments, sourceProxyDetails, scopesData]);
 
   const [selectedToolGroupKey, setSelectedToolGroupKey] = useState("");
-  useEffect(() => {
-    if (toolGroups.length === 0) return;
-    if (!toolGroups.some((group) => group.key === selectedToolGroupKey)) {
-      setSelectedToolGroupKey(toolGroups[0].key);
-    }
-  }, [toolGroups, selectedToolGroupKey]);
+  useDefaultSelection(
+    toolGroups.map((group) => group.key),
+    selectedToolGroupKey,
+    setSelectedToolGroupKey,
+  );
 
   const selectedToolGroup = toolGroups.find(
     (group) => group.key === selectedToolGroupKey,
@@ -790,7 +804,9 @@ export const ViewMCPServerComponent = () => {
               </Stack>
             )}
           </Stack>
-          {!selectedToolGroup || selectedToolGroup.rows.length === 0 ? (
+          {isLoadingTools ? (
+            <Skeleton variant="rounded" height={160} />
+          ) : !selectedToolGroup || selectedToolGroup.rows.length === 0 ? (
             <ListingTable.Container>
               <ListingTable.EmptyState
                 illustration={<Wrench size={56} />}
