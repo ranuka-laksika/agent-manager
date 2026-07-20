@@ -31,6 +31,7 @@ import {
   Typography,
 } from "@wso2/oxygen-ui";
 import {
+  AlertTriangle,
   Eye,
   ExternalLink,
   Fingerprint,
@@ -54,6 +55,7 @@ import {
   TextInput,
 } from "@agent-management-platform/views";
 import {
+  getErrorMessage,
   RolesGroupsChips,
   useAgentRolesAndGroups,
 } from "@agent-management-platform/shared-component";
@@ -80,7 +82,7 @@ interface AgentIdentitySectionProps {
 const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
   orgId, projectId, agentId, envId,
 }) => {
-  const { binding, provisioned, isLoading } = useAgentIdentityBinding({
+  const { binding, provisioned, isLoading, isError, error } = useAgentIdentityBinding({
     orgId, projectId, agentId, envId,
   });
 
@@ -89,8 +91,12 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
     useRegenerateAgentIdentitySecret();
   const [revealed, setRevealed] = useState<Secret | null>(null);
 
-  const { data: thunderInstancesData, isLoading: isLoadingThunderInstance } =
-    useListThunderInstances({ orgName: orgId });
+  const {
+    data: thunderInstancesData,
+    isLoading: isLoadingThunderInstance,
+    isError: isThunderInstanceError,
+    error: thunderInstanceError,
+  } = useListThunderInstances({ orgName: orgId });
   const thunderInstance = thunderInstancesData?.thunderInstances.find(
     (instance) => instance.envName === envId,
   );
@@ -129,6 +135,19 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
 
   if (isLoading) {
     return <Skeleton variant="rounded" height={120} />;
+  }
+
+  if (isError) {
+    return (
+      <ListingTable.Container>
+        <ListingTable.EmptyState
+          illustration={<AlertTriangle size={56} />}
+          title="Failed to load agent identity"
+          description={getErrorMessage(error)}
+          minHeight={160}
+        />
+      </ListingTable.Container>
+    );
   }
 
   if (!binding) {
@@ -252,12 +271,12 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Form.Subheader>Client Credentials</Form.Subheader>
           <Stack direction="row" spacing={1}>
-            {!revealed && binding.hasUnclaimedSecret && (
+            {!revealed && isExternal && binding.hasUnclaimedSecret && (
               <Button
                 variant="text"
                 size="small"
                 onClick={() => void handleClaim()}
-                disabled={isClaiming}
+                disabled={isClaiming || isRegenerating}
                 startIcon={isClaiming ? <CircularProgress size={16} /> : <Eye size={16} />}
               >
                 {isClaiming ? "Claiming..." : "Reveal Secret"}
@@ -268,7 +287,7 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
                 variant="text"
                 size="small"
                 onClick={() => void handleRegenerate()}
-                disabled={isRegenerating}
+                disabled={isClaiming || isRegenerating}
                 startIcon={
                   isRegenerating ? <CircularProgress size={16} /> : <RotateCcwKey size={16} />
                 }
@@ -313,6 +332,15 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
 
         {isLoadingThunderInstance ? (
           <Skeleton variant="rounded" height={120} />
+        ) : isThunderInstanceError ? (
+          <ListingTable.Container>
+            <ListingTable.EmptyState
+              illustration={<AlertTriangle size={56} />}
+              title="Failed to load identity provider"
+              description={getErrorMessage(thunderInstanceError)}
+              minHeight={160}
+            />
+          </ListingTable.Container>
         ) : !thunderInstance ? (
           <ListingTable.Container>
             <ListingTable.EmptyState
@@ -423,6 +451,7 @@ export const ManageIdentityDrawer: React.FC<ManageIdentityDrawerProps> = ({
 
           {envName && (
             <AgentIdentitySection
+              key={envName}
               orgId={orgId}
               projectId={projectId}
               agentId={agentId}

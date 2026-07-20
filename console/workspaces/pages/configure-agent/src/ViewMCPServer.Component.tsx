@@ -385,8 +385,17 @@ export const ViewMCPServerComponent = () => {
     setSelectedToolGroupKey,
   );
 
-  const selectedToolGroup = toolGroups.find(
+  // Falls back to the first group synchronously instead of waiting for the
+  // effect above to run — otherwise the Tools section (and the Select's own
+  // value) briefly shows no selection at all once toolGroups first resolves.
+  const effectiveToolGroupKey = toolGroups.some(
     (group) => group.key === selectedToolGroupKey,
+  )
+    ? selectedToolGroupKey
+    : (toolGroups[0]?.key ?? "");
+
+  const selectedToolGroup = toolGroups.find(
+    (group) => group.key === effectiveToolGroupKey,
   );
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
@@ -789,7 +798,7 @@ export const ViewMCPServerComponent = () => {
                   <Select
                     id={toolGroupSelectId}
                     labelId={toolGroupSelectLabelId}
-                    value={selectedToolGroupKey}
+                    value={effectiveToolGroupKey}
                     onChange={(event) =>
                       setSelectedToolGroupKey(event.target.value as string)
                     }

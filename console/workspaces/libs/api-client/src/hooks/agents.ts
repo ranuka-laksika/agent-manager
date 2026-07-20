@@ -231,7 +231,7 @@ interface AgentIdentityBindingParams {
 export function useAgentIdentityBinding({
   orgId, projectId, agentId, envId,
 }: AgentIdentityBindingParams) {
-  const { data: identityViews, isLoading } = useGetAgentIdentity(
+  const { data: identityViews, isLoading, isError, error } = useGetAgentIdentity(
     { orgName: orgId, projName: projectId, agentName: agentId },
     { environment: envId },
   );
@@ -241,6 +241,8 @@ export function useAgentIdentityBinding({
     binding,
     provisioned: binding?.status === "completed",
     isLoading,
+    isError,
+    error,
   };
 }
 

@@ -135,12 +135,15 @@ export const ConfigureComponent: React.FC = () => {
     });
   };
   const closeManageIdentity = () => {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.delete(MANAGE_IDENTITY_PARAM);
-      next.delete(IDENTITY_ENV_PARAM);
-      return next;
-    });
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(MANAGE_IDENTITY_PARAM);
+        next.delete(IDENTITY_ENV_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
   };
   const setSelectedIdentityEnv = (envName: string) => {
     setSearchParams(
