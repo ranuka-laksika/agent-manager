@@ -19,6 +19,17 @@ set -euo pipefail
 #   - ENV_NAME: the environment name (lowercase alphanumeric with hyphens)
 # Optional:
 #   - ORG_NAME (default: default)
+#   Best-effort cleanup of the system-client credential agent-manager-service
+#   (AMS) stores in its own database (see add-environment-thunder.sh's
+#   store_via_ams) — failure here does NOT abort this script, since environment
+#   teardown must succeed even if AMS is unreachable; an orphaned row is
+#   harmless (it's only ever read by org+env, and a deleted environment's name
+#   is not expected to be reused for a Thunder instance with different secrets).
+#   - AMP_API_URL (default: http://localhost:9000/api/v1)
+#   - AGENT_MANAGER_TOKEN (default: unset) — if unset, obtains one via
+#     client_credentials against IDP_TOKEN_URL/IDP_CLIENT_ID/IDP_CLIENT_SECRET
+#     (defaults: http://thunder.amp.localhost:8080/oauth2/token, amp-api-client,
+#     amp-api-client-secret) — same identity add-environment-thunder.sh uses.
 
 # ---------------------------------------------------------------------------
 # Pure helpers
@@ -27,6 +38,26 @@ set -euo pipefail
 validate_name() {
   printf '%s' "${1:-}" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
 }
+
+# Load the shared AMS auth helpers (json_escape/get_ams_token) — see
+# deployments/scripts/ams-auth.sh. Same prefer-local-sibling,
+# fallback-to-curl-fetch pattern as the thunder-naming.sh load below.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/ams-auth.sh" ]; then
+  # shellcheck source=ams-auth.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/ams-auth.sh"
+else
+  _ams_auth_lib_url="${AMS_AUTH_LIB_URL:-${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}/ams-auth.sh}"
+  _ams_auth_lib_tmp="$(mktemp)"
+  if ! curl -fsSL "${_ams_auth_lib_url}" -o "${_ams_auth_lib_tmp}"; then
+    echo "❌ Failed to fetch AMS auth helpers from ${_ams_auth_lib_url}" >&2
+    rm -f "${_ams_auth_lib_tmp}"
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "${_ams_auth_lib_tmp}"
+  rm -f "${_ams_auth_lib_tmp}"
+  unset _ams_auth_lib_url _ams_auth_lib_tmp
+fi
 
 # Load the shared Thunder naming helpers (thunder_release_name/thunder_namespace)
 # — the single source of truth for this derivation, see
@@ -113,6 +144,35 @@ main() {
     echo "✅ Thunder namespace deleted"
   else
     echo "ℹ️  Namespace '${ns}' not found — already deleted"
+  fi
+
+  # --- Step 3: Best-effort cleanup of the AMS-stored system-client credential ---
+  # Never fatal — environment teardown must succeed even if AMS is unreachable.
+  echo ""
+  echo "🗑️  Removing system-client credential from agent-manager-service (best-effort)..."
+  local amp_api_url="${AMP_API_URL:-http://localhost:9000/api/v1}"
+  local access_token
+  if access_token="$(get_ams_token 3)"; then
+    local http_code
+    http_code="$(curl -s -o /dev/null -w "%{http_code}" \
+      --max-time 30 --retry 3 --retry-delay 5 \
+      -X DELETE "${amp_api_url}/orgs/${org}/environments/${ENV_NAME}/thunder-system-client" \
+      -H "Authorization: Bearer ${access_token}" 2>/dev/null)"
+    # curl's own -w already writes "000" when no response is received; falling
+    # back with `|| echo "000"` on top of that double-appends into "000000".
+    http_code="${http_code:-000}"
+    case "$http_code" in
+      200|204)
+        echo "✅ Removed system-client credential from agent-manager-service"
+        ;;
+      *)
+        echo "⚠️  Could not remove the system-client credential from agent-manager-service (HTTP ${http_code})."
+        echo "   Harmless to skip — continuing."
+        ;;
+    esac
+  else
+    echo "⚠️  Could not obtain a token to clean up the system-client credential in agent-manager-service."
+    echo "   Harmless to skip — continuing."
   fi
 
   echo ""

@@ -46,19 +46,31 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
 
+// envTestKey is a 32-byte AES key for the SetThunderSystemClientSecret tests.
+var envTestKey = []byte("0123456789abcdef0123456789abcdef")
+
 // newEnvService wires the service with a discard logger and the two mocked deps.
 // The Thunder prober is left unconfigured (panics if called) since only the
-// ListThunderInstances tests exercise it — see newEnvServiceWithProber.
+// ListThunderInstances tests exercise it — see newEnvServiceWithProber. The
+// env-Thunder repo and encryption key are nil/empty here; SetThunderSystemClient
+// tests use newEnvServiceWithThunderRepo instead.
 func newEnvService(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock) EnvironmentService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewEnvironmentService(logger, repo, oc, &clientmocks.ThunderProberMock{}, nil)
+	return NewEnvironmentService(logger, repo, oc, &clientmocks.ThunderProberMock{}, nil, nil, nil)
 }
 
 // newEnvServiceWithProber is like newEnvService but with a configured Thunder prober,
 // for tests that exercise ListThunderInstances' reachability branch.
 func newEnvServiceWithProber(repo *repomocks.GatewayRepositoryMock, oc *clientmocks.OpenChoreoClientMock, prober thundersvc.Prober) EnvironmentService {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return NewEnvironmentService(logger, repo, oc, prober, nil)
+	return NewEnvironmentService(logger, repo, oc, prober, nil, nil, nil)
+}
+
+// newEnvServiceWithThunderRepo wires the service with a configured env-Thunder
+// repo + encryption key, for the SetThunderSystemClientSecret tests.
+func newEnvServiceWithThunderRepo(repo *repomocks.EnvThunderSystemClientRepositoryMock) EnvironmentService {
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return NewEnvironmentService(logger, &repomocks.GatewayRepositoryMock{}, &clientmocks.OpenChoreoClientMock{}, &clientmocks.ThunderProberMock{}, nil, repo, envTestKey)
 }
 
 // -----------------------------------------------------------------------------
@@ -832,5 +844,91 @@ func TestEnvironmentService_ListThunderInstances(t *testing.T) {
 		staging := resp.ThunderInstances[1]
 		assert.Equal(t, "staging", staging.EnvName)
 		assert.True(t, staging.IsProduction)
+	})
+}
+
+// -----------------------------------------------------------------------------
+// SetThunderSystemClientSecret / DeleteThunderSystemClientSecret — encrypt +
+// upsert, decrypt round-trip, validation, delete.
+// -----------------------------------------------------------------------------
+
+func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
+	t.Run("encrypts the secret and upserts with the given client id", func(t *testing.T) {
+		var stored *models.EnvThunderSystemClient
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			UpsertFunc: func(cred *models.EnvThunderSystemClient) error {
+				stored = cred
+				return nil
+			},
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "s3cr3t")
+		require.NoError(t, err)
+		require.NotNil(t, stored)
+		assert.Equal(t, "default", stored.OrgName)
+		assert.Equal(t, "staging", stored.EnvName)
+		assert.Equal(t, "amp-system-client", stored.ClientID)
+		// Ciphertext must not equal the plaintext, and must decrypt back to it.
+		assert.NotEqual(t, []byte("s3cr3t"), stored.ClientSecretEncrypted)
+		decrypted, err := utils.DecryptBytes(stored.ClientSecretEncrypted, envTestKey)
+		require.NoError(t, err)
+		assert.Equal(t, "s3cr3t", string(decrypted))
+	})
+
+	t.Run("rejects an empty secret", func(t *testing.T) {
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			UpsertFunc: func(*models.EnvThunderSystemClient) error {
+				t.Fatal("must not upsert when the secret is empty")
+				return nil
+			},
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, utils.ErrInvalidInput)
+	})
+
+	t.Run("wraps a repo error", func(t *testing.T) {
+		boom := errors.New("db down")
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			UpsertFunc: func(*models.EnvThunderSystemClient) error { return boom },
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "s3cr3t")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, boom)
+	})
+}
+
+func TestEnvironmentService_DeleteThunderSystemClientSecret(t *testing.T) {
+	t.Run("delegates to the repo", func(t *testing.T) {
+		var gotOrg, gotEnv string
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			DeleteFunc: func(orgName, envName string) error {
+				gotOrg, gotEnv = orgName, envName
+				return nil
+			},
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.DeleteThunderSystemClientSecret(context.Background(), "default", "staging")
+		require.NoError(t, err)
+		assert.Equal(t, "default", gotOrg)
+		assert.Equal(t, "staging", gotEnv)
+	})
+
+	t.Run("wraps a repo error", func(t *testing.T) {
+		boom := errors.New("db down")
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			DeleteFunc: func(string, string) error { return boom },
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.DeleteThunderSystemClientSecret(context.Background(), "default", "staging")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, boom)
 	})
 }

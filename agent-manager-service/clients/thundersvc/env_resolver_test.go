@@ -26,76 +26,69 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
 )
 
-// fakeSecretManagementClient is a hand-written test double for
-// secretmanagersvc.SecretManagementClient (mirrors the Func-field mock style
-// used elsewhere in this codebase). Not the moq-generated
-// clientmocks.SecretManagementClientMock: clientmocks imports this package
-// (for EnvThunderResolverMock/EnvIdentityClientMock), so importing it back
-// from an in-package thundersvc test would be an import cycle.
-type fakeSecretManagementClient struct {
-	GetSecretWithValueFunc func(ctx context.Context, kvPath string) (map[string]string, error)
+// okReader returns a fixed clientID/secret for any (org, env) — the common case
+// for tests that don't care about the read itself.
+func okReader(clientID, secret string) ReadSystemClientFunc {
+	return func(context.Context, string, string) (string, string, error) {
+		return clientID, secret, nil
+	}
 }
 
-func (f *fakeSecretManagementClient) CreateSecret(context.Context, secretmanagersvc.SecretLocation, map[string]string) (string, error) {
-	panic("fakeSecretManagementClient.CreateSecret: not used by these tests")
-}
-
-func (f *fakeSecretManagementClient) PatchSecret(context.Context, secretmanagersvc.SecretLocation, map[string]string, []string) (string, error) {
-	panic("fakeSecretManagementClient.PatchSecret: not used by these tests")
-}
-
-func (f *fakeSecretManagementClient) DeleteSecret(context.Context, secretmanagersvc.SecretLocation, string) error {
-	panic("fakeSecretManagementClient.DeleteSecret: not used by these tests")
-}
-
-func (f *fakeSecretManagementClient) GetSecret(context.Context, string) (*secretmanagersvc.SecretInfo, error) {
-	panic("fakeSecretManagementClient.GetSecret: not used by these tests")
-}
-
-func (f *fakeSecretManagementClient) GetSecretWithValue(ctx context.Context, kvPath string) (map[string]string, error) {
-	return f.GetSecretWithValueFunc(ctx, kvPath)
-}
-
-// fakeResolveBaseURL stands in for real network probing in tests that don't care
-// about base-URL resolution itself — it always reports a fake base URL reachable
-// with no dial override.
+// fakeResolveBaseURL stands in for real network probing — always reports a
+// fake, reachable base URL with no dial override.
 func fakeResolveBaseURL(_ context.Context, _, _ string) (string, string, bool) {
 	return "http://fake-thunder:8090", "", true
 }
 
 func TestEnvThunderResolver_Resolve_Success(t *testing.T) {
-	var capturedPath string
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(_ context.Context, kvPath string) (map[string]string, error) {
-			capturedPath = kvPath
-			return map[string]string{"client-secret": "the-system-client-secret"}, nil
-		},
+	var gotOrg, gotEnv string
+	read := func(_ context.Context, org, env string) (string, string, error) {
+		gotOrg, gotEnv = org, env
+		return "amp-system-client", "the-system-client-secret", nil
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 
 	client, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.NoError(t, err)
 	require.NotNil(t, client)
-	assert.Equal(t, "acme/thunder-system-client-staging", capturedPath)
+	assert.Equal(t, "acme", gotOrg)
+	assert.Equal(t, "staging", gotEnv)
 }
 
-// TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments guards the org
-// segment (always the KV path's first, bare segment) and the env segment
-// (embedded inside a composite entity name, but still explicitly rejected
-// here for a clear, fast error instead of silently building a nonsensical
-// location and letting the secret backend reject it).
+// TestEnvThunderResolver_Resolve_UsesStoredClientID confirms the resolver uses
+// the client ID returned by the reader (not only the well-known constant).
+func TestEnvThunderResolver_Resolve_UsesStoredClientID(t *testing.T) {
+	resolver := newEnvThunderResolverWithReader(okReader("custom-client-id", "s3cr3t"), fakeResolveBaseURL)
+
+	client, err := resolver.Resolve(context.Background(), "acme", "staging")
+	require.NoError(t, err)
+	tc, ok := client.(*thunderClient)
+	require.True(t, ok)
+	assert.Equal(t, "custom-client-id", tc.clientID)
+}
+
+// TestEnvThunderResolver_Resolve_FallsBackToConstantClientID confirms an empty
+// stored client ID (rows predating the client_id column) falls back to thunderSystemClientID.
+func TestEnvThunderResolver_Resolve_FallsBackToConstantClientID(t *testing.T) {
+	resolver := newEnvThunderResolverWithReader(okReader("", "s3cr3t"), fakeResolveBaseURL)
+
+	client, err := resolver.Resolve(context.Background(), "acme", "staging")
+	require.NoError(t, err)
+	tc, ok := client.(*thunderClient)
+	require.True(t, ok)
+	assert.Equal(t, thunderSystemClientID, tc.clientID)
+}
+
+// TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments guards org/env
+// with a clear, fast error rather than letting a nonsensical pair reach the reader.
 func TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			t.Fatal("must not read the secret store when a segment is invalid")
-			return nil, nil //nolint:nilnil // unreachable — t.Fatal above halts the test
-		},
+	read := func(context.Context, string, string) (string, string, error) {
+		t.Fatal("must not read the store when a segment is invalid")
+		return "", "", nil // unreachable — t.Fatal above halts the test
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 
 	cases := []struct{ org, env string }{
 		{"..", "staging"},
@@ -112,13 +105,11 @@ func TestEnvThunderResolver_Resolve_RejectsPathBreakingSegments(t *testing.T) {
 
 func TestEnvThunderResolver_Resolve_Caches(t *testing.T) {
 	calls := 0
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			calls++
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
+	read := func(context.Context, string, string) (string, string, error) {
+		calls++
+		return "amp-system-client", "s3cr3t", nil
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 
 	c1, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.NoError(t, err)
@@ -129,20 +120,15 @@ func TestEnvThunderResolver_Resolve_Caches(t *testing.T) {
 	assert.Equal(t, 1, calls, "the secret must only be fetched once per org/env")
 }
 
-// TestEnvThunderResolver_Resolve_ExpiresAfterTTL guards against a cached
-// ThunderClient (and the system-client secret baked into it) surviving
-// forever: if that secret is ever rotated (e.g. a re-bootstrap), every call
-// against a never-expiring cache would keep authenticating with the stale
-// secret until the AMS process restarts.
+// TestEnvThunderResolver_Resolve_ExpiresAfterTTL guards against a cached client
+// outliving a secret rotation — without the TTL, a rotated secret would break until restart.
 func TestEnvThunderResolver_Resolve_ExpiresAfterTTL(t *testing.T) {
 	calls := 0
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			calls++
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
+	read := func(context.Context, string, string) (string, string, error) {
+		calls++
+		return "amp-system-client", "s3cr3t", nil
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 	now := time.Now()
 	resolver.now = func() time.Time { return now }
 	resolver.ttl = time.Minute
@@ -159,28 +145,24 @@ func TestEnvThunderResolver_Resolve_ExpiresAfterTTL(t *testing.T) {
 	now = now.Add(time.Minute)
 	c3, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.NoError(t, err)
-	assert.NotSame(t, c1, c3, "past TTL, must re-read the secret store and rebuild so a rotated secret takes effect")
+	assert.NotSame(t, c1, c3, "past TTL, must re-read the store and rebuild so a rotated secret takes effect")
 	assert.Equal(t, 2, calls)
 }
 
 // TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight guards
-// against a thundering-herd on cold cache: many concurrent first-time Resolve calls
-// for the same org/env must share one secret-store read and one base-URL probe, not
-// each pay that cost independently.
+// against a thundering-herd: concurrent first-time resolves must share one read/probe.
 func TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight(t *testing.T) {
 	var readCalls, probeCalls int64
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			atomic.AddInt64(&readCalls, 1)
-			time.Sleep(20 * time.Millisecond) // widen the race window
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
+	read := func(context.Context, string, string) (string, string, error) {
+		atomic.AddInt64(&readCalls, 1)
+		time.Sleep(20 * time.Millisecond) // widen the race window
+		return "amp-system-client", "s3cr3t", nil
 	}
 	probeFn := func(_ context.Context, _, _ string) (string, string, bool) {
 		atomic.AddInt64(&probeCalls, 1)
 		return "http://fake-thunder:8090", "", true
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, probeFn)
+	resolver := newEnvThunderResolverWithReader(read, probeFn)
 
 	const goroutines = 20
 	clients := make([]ThunderClient, goroutines)
@@ -200,7 +182,7 @@ func TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight(t
 	for i, err := range errs {
 		require.NoError(t, err, "goroutine %d", i)
 	}
-	assert.EqualValues(t, 1, atomic.LoadInt64(&readCalls), "concurrent cache misses for the same key must share one secret-store read")
+	assert.EqualValues(t, 1, atomic.LoadInt64(&readCalls), "concurrent cache misses for the same key must share one credential read")
 	assert.EqualValues(t, 1, atomic.LoadInt64(&probeCalls), "concurrent cache misses for the same key must share one base-URL probe")
 	for i := 1; i < goroutines; i++ {
 		assert.Same(t, clients[0], clients[i], "all concurrent resolvers for the same key must get the identical client")
@@ -208,12 +190,7 @@ func TestEnvThunderResolver_Resolve_ConcurrentCacheMiss_DedupesViaSingleflight(t
 }
 
 func TestEnvThunderResolver_Resolve_DifferentEnvironmentsAreNotCachedTogether(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
-	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(okReader("amp-system-client", "s3cr3t"), fakeResolveBaseURL)
 
 	staging, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.NoError(t, err)
@@ -223,56 +200,42 @@ func TestEnvThunderResolver_Resolve_DifferentEnvironmentsAreNotCachedTogether(t 
 	assert.NotSame(t, staging, prod)
 }
 
-func TestEnvThunderResolver_Resolve_NotProvisioned_SecretNotFound(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return nil, secretmanagersvc.ErrSecretNotFound
-		},
+func TestEnvThunderResolver_Resolve_NotProvisioned_NoRow(t *testing.T) {
+	read := func(context.Context, string, string) (string, string, error) {
+		return "", "", ErrThunderNotProvisioned
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 
 	_, err := resolver.Resolve(context.Background(), "acme", "no-such-env")
 	assert.True(t, errors.Is(err, ErrThunderNotProvisioned))
 }
 
-func TestEnvThunderResolver_Resolve_NotProvisioned_MissingSecretKey(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return map[string]string{}, nil
-		},
-	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+func TestEnvThunderResolver_Resolve_NotProvisioned_EmptySecret(t *testing.T) {
+	resolver := newEnvThunderResolverWithReader(okReader("amp-system-client", ""), fakeResolveBaseURL)
 
 	_, err := resolver.Resolve(context.Background(), "acme", "half-provisioned-env")
 	assert.True(t, errors.Is(err, ErrThunderNotProvisioned))
 }
 
-func TestEnvThunderResolver_Resolve_SecretStoreErrorPropagates(t *testing.T) {
-	boom := errors.New("connection refused")
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return nil, boom
-		},
+func TestEnvThunderResolver_Resolve_ReadErrorPropagates(t *testing.T) {
+	boom := errors.New("decrypt failed")
+	read := func(context.Context, string, string) (string, string, error) {
+		return "", "", boom
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, fakeResolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(read, fakeResolveBaseURL)
 
 	_, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.Error(t, err)
-	assert.False(t, errors.Is(err, ErrThunderNotProvisioned), "a real secret-store error must not be mistaken for not-provisioned")
+	assert.False(t, errors.Is(err, ErrThunderNotProvisioned), "a real read error must not be mistaken for not-provisioned")
 }
 
 func TestEnvThunderResolver_Resolve_UsesResolvedBaseURLAndDialOverride(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
-	}
 	var gotOrg, gotEnv string
 	resolveBaseURL := func(_ context.Context, org, env string) (string, string, bool) {
 		gotOrg, gotEnv = org, env
 		return "http://acme-staging.thunder.amp.localhost:8080", "host.docker.internal:8080", true
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, resolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(okReader("amp-system-client", "s3cr3t"), resolveBaseURL)
 
 	client, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.NoError(t, err)
@@ -287,15 +250,10 @@ func TestEnvThunderResolver_Resolve_UsesResolvedBaseURLAndDialOverride(t *testin
 }
 
 func TestEnvThunderResolver_Resolve_ThunderUnreachable(t *testing.T) {
-	secretClient := &fakeSecretManagementClient{
-		GetSecretWithValueFunc: func(context.Context, string) (map[string]string, error) {
-			return map[string]string{"client-secret": "s3cr3t"}, nil
-		},
-	}
 	resolveBaseURL := func(_ context.Context, _, _ string) (string, string, bool) {
 		return "", "", false
 	}
-	resolver := newEnvThunderResolverWithSecretClient(secretClient, resolveBaseURL)
+	resolver := newEnvThunderResolverWithReader(okReader("amp-system-client", "s3cr3t"), resolveBaseURL)
 
 	_, err := resolver.Resolve(context.Background(), "acme", "staging")
 	require.Error(t, err)

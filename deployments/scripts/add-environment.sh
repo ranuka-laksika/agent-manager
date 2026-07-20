@@ -7,7 +7,7 @@ set -euo pipefail
 # All inputs are provided via environment variables so the script can be piped
 # directly into bash:
 #
-#   curl -fsSL https://raw.githubusercontent.com/wso2/ai-agent-management-platform/main/deployments/scripts/add-environment.sh \
+#   curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/add-environment.sh \
 #     | ENV_NAME=staging \
 #       DISPLAY_NAME="Staging" \
 #       AGENT_MANAGER_TOKEN=<token> \
@@ -309,9 +309,12 @@ if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
       # Reset CHART_VERSION so the AMP release version doesn't bleed into the ThunderID chart
       # install. SCRIPT_BASE_URL IS forwarded (unlike CHART_VERSION) so the chained script
       # fetches thunder-naming.sh from the same git ref as this one — see thunder-naming.sh.
+      # AMP_API_URL/AGENT_MANAGER_TOKEN forward this call's already-verified AMS
+      # reachability + bearer token to the chained script's store_via_ams.
       if ENV_NAME="${ENV_NAME}" DISPLAY_NAME="${DISPLAY_NAME}" ORG_NAME="${ORG_NAME}" \
           DATAPLANE_REF="${DATAPLANE_REF}" THUNDER_CHART="${THUNDER_CHART:-}" \
           CHART_VERSION="${THUNDER_CHART_VERSION:-}" SCRIPT_BASE_URL="${SCRIPT_BASE_URL}" \
+          AMP_API_URL="${AGENT_MANAGER_API_URL}" AGENT_MANAGER_TOKEN="${AGENT_MANAGER_TOKEN}" \
           bash "$script_tmp"; then
         echo "✅ Thunder ID instance provisioned"
         THUNDER_PROVISIONED=true
@@ -322,7 +325,7 @@ if [ "${PROVISION_THUNDER:-true}" = "true" ]; then
         else
           echo "    The gateway will use its default ThunderKeyManager (shared platform Thunder)"
           echo "    instead of an address that doesn't exist. To fix:"
-          echo "    1) Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} bash"
+          echo "    1) Re-run: curl -fsSL ${THUNDER_SCRIPT_URL} | ENV_NAME=${ENV_NAME} DISPLAY_NAME=\"${DISPLAY_NAME}\" ORG_NAME=${ORG_NAME} AMP_API_URL=${AGENT_MANAGER_API_URL} AGENT_MANAGER_TOKEN=<token> bash"
           echo "    2) Re-run this add-environment.sh with the same ENV_NAME (idempotent) to re-wire the gateway"
         fi
       fi

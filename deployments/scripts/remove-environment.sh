@@ -10,7 +10,7 @@ set -euo pipefail
 # All inputs are provided via environment variables so the script can be piped
 # directly into bash:
 #
-#   curl -fsSL https://raw.githubusercontent.com/wso2/ai-agent-management-platform/main/deployments/scripts/remove-environment.sh \
+#   curl -fsSL https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts/remove-environment.sh \
 #     | ENV_NAME=staging \
 #       AGENT_MANAGER_TOKEN=<token> \
 #       bash
@@ -93,12 +93,19 @@ esac
 if [ "${DEPROVISION_THUNDER:-true}" = "true" ]; then
     echo ""
     echo "🔐 Removing Thunder ID instance for '${ENV_NAME}'..."
+    # The console overrides THUNDER_SCRIPT_URL to a release-pinned URL but never
+    # sets SCRIPT_BASE_URL directly — derive it from THUNDER_SCRIPT_URL's own
+    # directory so the chained script's thunder-naming.sh/ams-auth.sh fetches
+    # use that SAME release ref instead of silently defaulting to main.
+    if [ -z "${SCRIPT_BASE_URL:-}" ] && [ -n "${THUNDER_SCRIPT_URL:-}" ]; then
+        SCRIPT_BASE_URL="$(dirname "$THUNDER_SCRIPT_URL")"
+    fi
     SCRIPT_BASE_URL="${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}"
     THUNDER_SCRIPT_URL="${THUNDER_SCRIPT_URL:-${SCRIPT_BASE_URL}/remove-environment-thunder.sh}"
     script_tmp="$(mktemp)"
     if curl -fsSL "${THUNDER_SCRIPT_URL}" -o "$script_tmp"; then
       # SCRIPT_BASE_URL is forwarded so the chained script fetches
-      # thunder-naming.sh from the same git ref as this one (see thunder-naming.sh).
+      # thunder-naming.sh/ams-auth.sh from the same git ref as this one.
       if ENV_NAME="${ENV_NAME}" ORG_NAME="${ORG_NAME}" SCRIPT_BASE_URL="${SCRIPT_BASE_URL}" bash "$script_tmp"; then
         echo "✅ Thunder ID instance removed"
       else

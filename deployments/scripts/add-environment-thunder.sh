@@ -48,9 +48,20 @@ set -euo pipefail
 #     key "password") so re-running the script reuses it instead of rotating it.
 #   - PERSISTENCE_SIZE (default: 1Gi), STORAGE_CLASS (default: cluster default)
 #   - WAIT_TIMEOUT (default: 180s)
-#   - OPENBAO_ADDR (default: http://localhost:8200) — OpenBao for storing the system-client secret
-#   - OPENBAO_TOKEN (default: root)
-#   - OPENBAO_PATH (default: secret) — KV mount path
+#   Delivering the system-client secret to agent-manager-service (AMS): the secret
+#   is handed to AMS over HTTP, which encrypts it and stores it in its own database
+#   (AMS decrypts it in-process when needed — it is never read back from a key
+#   vault). AMS must be running and reachable when this step runs.
+#   - AMP_API_URL (default: http://localhost:9000/api/v1) — AMS API base URL.
+#     Local dev (docker-compose): http://localhost:9000/api/v1. k3d/quick-start:
+#     http://api.amp.localhost:8080/api/v1. Set explicitly for other topologies.
+#   - AGENT_MANAGER_TOKEN (default: unset) — a Bearer token with the
+#     org:manage-service-account permission. If unset, this script obtains one via
+#     a client_credentials grant using IDP_* below.
+#   - IDP_TOKEN_URL (default: http://thunder.amp.localhost:8080/oauth2/token) —
+#     platform Thunder token endpoint (used only when AGENT_MANAGER_TOKEN is unset).
+#   - IDP_CLIENT_ID (default: amp-api-client), IDP_CLIENT_SECRET
+#     (default: amp-api-client-secret) — the platform system client to grant as.
 #   Platform Thunder trusted-issuer (env-Thunder accepts platform Thunder tokens):
 #   - PLATFORM_THUNDER_ISSUER   (default: http://thunder.amp.localhost:8080)
 #   - PLATFORM_THUNDER_JWKS_URL (default: HTTPS JWKS endpoint of platform Thunder)
@@ -195,59 +206,65 @@ read_existing_secret() {
   printf '%s' "$b64" | _b64decode
 }
 
-# write_to_openbao ORG ENV SECRET — writes the Thunder system-client secret to OpenBao
-# so agent-manager-service can read it from both Docker (local dev) and Kubernetes (prod).
-# Path: {OPENBAO_PATH}/data/{org}/thunder-system-client-{env}
-#
-# The org segment comes first (rather than a fixed "thunder-system-clients"
-# prefix) to match agent-manager-service's secretmanagersvc.SecretLocation
-# path convention (org always first) — agent-manager-service reads this secret
-# through the same pluggable secret-management client used for every other
-# secret it manages, not a direct OpenBao call.
-#
-# Strategy: try direct HTTP first (works when port-forward is active), then fall back to
-# kubectl exec into the OpenBao pod (works during 'make setup' before the port-forward starts).
-write_to_openbao() {
-  local org="$1" env_name="$2" secret_val="$3"
-  local addr="${OPENBAO_ADDR:-http://localhost:8200}"
-  local token="${OPENBAO_TOKEN:-root}"
-  local mount="${OPENBAO_PATH:-secret}"
-  local kv_path="${org}/thunder-system-client-${env_name}"
+# Load the shared AMS auth helpers (json_escape/get_ams_token) — see
+# deployments/scripts/ams-auth.sh. Same prefer-local-sibling,
+# fallback-to-curl-fetch pattern as the thunder-naming.sh load above.
+if [ -n "${BASH_SOURCE[0]:-}" ] && [ -f "$(dirname "${BASH_SOURCE[0]}")/ams-auth.sh" ]; then
+  # shellcheck source=ams-auth.sh
+  source "$(dirname "${BASH_SOURCE[0]}")/ams-auth.sh"
+else
+  _ams_auth_lib_url="${AMS_AUTH_LIB_URL:-${SCRIPT_BASE_URL:-https://raw.githubusercontent.com/wso2/agent-manager/main/deployments/scripts}/ams-auth.sh}"
+  _ams_auth_lib_tmp="$(mktemp)"
+  if ! curl -fsSL "${_ams_auth_lib_url}" -o "${_ams_auth_lib_tmp}"; then
+    echo "❌ Failed to fetch AMS auth helpers from ${_ams_auth_lib_url}" >&2
+    rm -f "${_ams_auth_lib_tmp}"
+    exit 1
+  fi
+  # shellcheck source=/dev/null
+  source "${_ams_auth_lib_tmp}"
+  rm -f "${_ams_auth_lib_tmp}"
+  unset _ams_auth_lib_url _ams_auth_lib_tmp
+fi
 
-  # --- attempt 1: direct HTTP (port-forward or explicit OPENBAO_ADDR) ---
+# store_via_ams ORG ENV CLIENT_ID SECRET — hands the credential to AMS over
+# HTTP; AMS encrypts and stores it (never read back from a vault). Idempotent (PUT).
+store_via_ams() {
+  local org="$1" env_name="$2" client_id="$3" secret_val="$4"
+  local amp_api_url="${AMP_API_URL:-http://localhost:9000/api/v1}"
+
+  local access_token
+  if ! access_token="$(get_ams_token)"; then
+    echo "⚠️  Could not obtain an access token to call agent-manager-service."
+    echo "   Set AGENT_MANAGER_TOKEN, or check IDP_TOKEN_URL/IDP_CLIENT_ID/IDP_CLIENT_SECRET"
+    echo "   and that platform Thunder is reachable."
+    return 1
+  fi
+
+  # json_escape guards against a custom SYSTEM_CLIENT_SECRET breaking the JSON body.
+  local body
+  body="$(printf '{"clientId":"%s","clientSecret":"%s"}' "$(json_escape "$client_id")" "$(json_escape "$secret_val")")"
+
   local http_code
   http_code="$(curl -s -o /dev/null -w "%{http_code}" \
-    -X POST "${addr}/v1/${mount}/data/${kv_path}" \
-    -H "X-Vault-Token: ${token}" \
+    --max-time 30 --retry 5 --retry-delay 5 \
+    -X PUT "${amp_api_url}/orgs/${org}/environments/${env_name}/thunder-system-client" \
+    -H "Authorization: Bearer ${access_token}" \
     -H "Content-Type: application/json" \
-    -d '{"data":{"client-secret":"'"${secret_val}"'"}}' 2>/dev/null || echo "000")"
+    -d "${body}" 2>/dev/null)"
+  # curl's own -w already writes "000" when no response is received; falling
+  # back with `|| echo "000"` on top of that double-appends into "000000".
+  http_code="${http_code:-000}"
 
   case "$http_code" in
     200|204)
-      echo "🔐 Stored system-client secret in OpenBao (${kv_path})"
+      echo "🔐 Stored system-client secret in agent-manager-service (org=${org}, env=${env_name})"
       return 0
       ;;
   esac
 
-  # --- attempt 2: kubectl exec into the OpenBao pod (no port-forward needed) ---
-  if command -v kubectl &>/dev/null; then
-    local openbao_pod
-    openbao_pod="$(kubectl get pod -n openbao -l app.kubernetes.io/name=openbao \
-      -o name 2>/dev/null | head -1)"
-    if [ -n "$openbao_pod" ]; then
-      if kubectl exec -n openbao "$openbao_pod" -- \
-          env VAULT_ADDR="http://127.0.0.1:8200" VAULT_TOKEN="${token}" \
-          bao kv put "${mount}/${kv_path}" "client-secret=${secret_val}" \
-          >/dev/null 2>&1; then
-        echo "🔐 Stored system-client secret in OpenBao via kubectl exec (${kv_path})"
-        return 0
-      fi
-    fi
-  fi
-
-  echo "⚠️  Could not write to OpenBao (HTTP ${http_code:-unreachable}, kubectl exec also failed)"
-  echo "   agent-manager-service uses OpenBao to resolve env-Thunder credentials."
-  echo "   Re-run add-environment-thunder.sh once OpenBao is reachable."
+  echo "⚠️  Could not store the system-client secret in agent-manager-service (HTTP ${http_code})."
+  echo "   Check that AMP_API_URL (${amp_api_url}) is reachable and the token has the"
+  echo "   org:manage-service-account permission, then re-run add-environment-thunder.sh."
   return 1
 }
 
@@ -584,8 +601,9 @@ main() {
       --dry-run=client -o yaml | kubectl apply -f - >/dev/null
     echo "🔐 Stored new system-client secret (${secret_name})"
   fi
-  # Mirror the secret to OpenBao so agent-manager-service can read it from Docker and K8s.
-  if ! write_to_openbao "$org" "$ENV_NAME" "$system_secret"; then
+  # Deliver the secret to AMS (see store_via_ams). client_id here must match
+  # CLIENT_ID in render_system_client_bootstrap_script below (both "amp-system-client").
+  if ! store_via_ams "$org" "$ENV_NAME" "amp-system-client" "$system_secret"; then
     exit 1
   fi
 
@@ -851,6 +869,8 @@ ${ca_pem}"
   echo "  Username: admin"
   echo "  Password: ${admin_password}"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  ⚠️  Save this password now to access the '${ENV_NAME}' Environment ThunderID"
+  echo "     console later, you'll need it, and it won't be shown again."
   echo ""
 }
 

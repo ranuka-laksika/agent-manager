@@ -33,4 +33,10 @@ func registerEnvironmentRoutes(rr *middleware.RouteRegistrar, ctrl controllers.E
 	rr.HandleFuncWithValidationAndAnyAuthz("GET /orgs/{orgName}/environments/{envID}/gateways", ctrl.GetEnvironmentGateways,
 		rbac.EnvironmentRead, rbac.GatewayRead)
 	rr.HandleFuncWithValidationAndAuthz("GET /orgs/{orgName}/thunder-instances", rbac.EnvironmentRead, ctrl.ListThunderInstances)
+	// Bootstrap-only: add/remove-environment-thunder.sh use these to store/remove
+	// the env-Thunder system-client credential AMS uses to reach that Thunder.
+	rr.HandleFuncWithValidationAndAuthz("PUT /orgs/{orgName}/environments/{envID}/thunder-system-client",
+		rbac.OrgManageServiceAccount, ctrl.SetThunderSystemClient)
+	rr.HandleFuncWithValidationAndAuthz("DELETE /orgs/{orgName}/environments/{envID}/thunder-system-client",
+		rbac.OrgManageServiceAccount, ctrl.DeleteThunderSystemClient)
 }

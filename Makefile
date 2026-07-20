@@ -1,4 +1,4 @@
-.PHONY: help setup setup-colima setup-k3d setup-openchoreo setup-sandbox setup-gvisor setup-kata setup-platform setup-gateway setup-console-local setup-console-local-force dev-up dev-down dev-restart dev-rebuild dev-logs dev-migrate openchoreo-up openchoreo-down openchoreo-status teardown db-connect db-logs service-logs service-shell console-logs port-forward stop-port-forward gen-eval-artifacts gen-instrumentation-contract check-contract-drift check-matrix-manifest e2e-test
+.PHONY: help setup setup-colima setup-k3d setup-openchoreo setup-default-env-thunder setup-sandbox setup-gvisor setup-kata setup-platform setup-gateway setup-console-local setup-console-local-force dev-up dev-down dev-restart dev-rebuild dev-logs dev-migrate openchoreo-up openchoreo-down openchoreo-status teardown db-connect db-logs service-logs service-shell console-logs port-forward stop-port-forward gen-eval-artifacts gen-instrumentation-contract check-contract-drift check-matrix-manifest e2e-test
 
 # Absolute path to the console directory on the host. Passed to docker-compose
 # so the container mounts and builds at the same path, keeping rush/pnpm
@@ -65,6 +65,7 @@ help:
 setup: setup-colima setup-k3d setup-openchoreo setup-platform setup-sandbox setup-console-local
 	@$(MAKE) dev-migrate
 	@cd deployments/setup && ./port-forward.sh --platform --background
+	@$(MAKE) setup-default-env-thunder
 	@$(MAKE) setup-gateway
 	@cd deployments/setup && ./port-forward.sh --background
 	@echo ""
@@ -85,6 +86,21 @@ setup-k3d:
 
 setup-openchoreo:
 	@cd deployments/setup && ./setup-openchoreo.sh $(CURDIR)
+
+# Provisions the default env-Thunder instance. Must run after AMS is up +
+# migrated (store_via_ams needs it) — hence after dev-migrate, not in setup-openchoreo.sh.
+setup-default-env-thunder:
+	@ENV_NAME=default DISPLAY_NAME="Default" ORG_NAME=default \
+	  WAIT_TIMEOUT=300s \
+	  AMP_API_URL="http://localhost:9000/api/v1" \
+	  bash deployments/scripts/add-environment-thunder.sh \
+	  && echo "✅ Default environment Thunder ID instance provisioned" \
+	  || { \
+	    echo "⚠️  Default-env Thunder provisioning failed — continuing with remaining setup steps."; \
+	    echo "    Re-run manually: ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"; \
+	    echo "      AMP_API_URL=http://localhost:9000/api/v1 \\"; \
+	    echo "      bash deployments/scripts/add-environment-thunder.sh"; \
+	  }
 
 setup-sandbox:
 	@cd deployments/scripts && ./setup-sandbox.sh

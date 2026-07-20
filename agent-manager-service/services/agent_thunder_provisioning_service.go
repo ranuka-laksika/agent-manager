@@ -313,12 +313,9 @@ func reconcileWorkloadInjection(ctx context.Context, injector AgentIdentityInjec
 // (LLM/MCP/publisher) — this factory can't build it itself: it runs BEFORE
 // InitializeAppParams (which constructs the OpenChoreo client the shared
 // instance depends on), the same ordering constraint SetWorkloadInjector's
-// doc comment describes for workloadInjector below. The two instances are
-// functionally interchangeable (same backend, same config), just separate
-// objects — a small, harmless duplication that avoids threading this service
-// back through the wire graph. The same secretMgmtClient also resolves
-// env-Thunder's own system-client secret (see thundersvc.NewEnvThunderResolver)
-// — this factory has no direct OpenBao dependency of its own.
+// doc comment describes for workloadInjector below. secretMgmtClient here is
+// used only for per-agent credentials; env-Thunder's own system-client secret
+// comes from encryptionKey + NewEnvThunderSecretReader (Postgres, not a vault).
 //
 // workloadInjector starts nil: this factory runs before the OpenChoreo client
 // exists (built inside wiring.InitializeAppParams, which this feeds into), so
@@ -327,11 +324,12 @@ func reconcileWorkloadInjection(ctx context.Context, injector AgentIdentityInjec
 // agent whose workload comes up outside AgentManagerService.DeployAgent (a
 // git/build-pipeline agent, or a kind-sourced one) would never get its AgentID
 // env vars — neither path calls InjectForEnvironment itself.
-func NewOpenBaoAgentThunderProvisioning() func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient) AgentThunderProvisioningService {
-	return func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient) AgentThunderProvisioningService {
+func NewOpenBaoAgentThunderProvisioning() func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient, encryptionKey []byte) AgentThunderProvisioningService {
+	return func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient, encryptionKey []byte) AgentThunderProvisioningService {
+		envThunderRepo := repositories.NewEnvThunderSystemClientRepo(db)
 		return NewAgentThunderProvisioningService(
 			repositories.NewAgentThunderClientRepo(db),
-			thundersvc.NewEnvThunderResolver(secretMgmtClient),
+			thundersvc.NewEnvThunderResolver(NewEnvThunderSecretReader(envThunderRepo, encryptionKey)),
 			secretMgmtClient,
 			nil, // see doc comment above
 			slog.Default(),
