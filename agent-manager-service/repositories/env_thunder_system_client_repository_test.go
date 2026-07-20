@@ -19,6 +19,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -33,7 +34,7 @@ import (
 func cleanupEnvThunderSystemClient(t *testing.T, repo EnvThunderSystemClientRepository, org, env string) {
 	t.Helper()
 	t.Cleanup(func() {
-		_ = repo.Delete(org, env)
+		_ = repo.Delete(context.Background(), org, env)
 	})
 }
 
@@ -55,9 +56,9 @@ func TestEnvThunderSystemClientRepo_UpsertIsIdempotentOnRetry(t *testing.T) {
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext-v1"),
 	}
-	require.NoError(t, repo.Upsert(first))
+	require.NoError(t, repo.Upsert(context.Background(), first))
 
-	got, err := repo.Get(org, env)
+	got, err := repo.Get(context.Background(), org, env)
 	require.NoError(t, err)
 	assert.Equal(t, []byte("ciphertext-v1"), got.ClientSecretEncrypted)
 
@@ -69,9 +70,9 @@ func TestEnvThunderSystemClientRepo_UpsertIsIdempotentOnRetry(t *testing.T) {
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext-v2-after-retry"),
 	}
-	require.NoError(t, repo.Upsert(second), "a retry must overwrite the existing row via ON CONFLICT, not fail with a duplicate-key error")
+	require.NoError(t, repo.Upsert(context.Background(), second), "a retry must overwrite the existing row via ON CONFLICT, not fail with a duplicate-key error")
 
-	got, err = repo.Get(org, env)
+	got, err = repo.Get(context.Background(), org, env)
 	require.NoError(t, err)
 	assert.Equal(t, []byte("ciphertext-v2-after-retry"), got.ClientSecretEncrypted, "the retry's value must win")
 
@@ -84,7 +85,7 @@ func TestEnvThunderSystemClientRepo_UpsertIsIdempotentOnRetry(t *testing.T) {
 func TestEnvThunderSystemClientRepo_GetNotFound(t *testing.T) {
 	repo := NewEnvThunderSystemClientRepo(db.GetDB())
 
-	_, err := repo.Get("no-such-org", "no-such-env")
+	_, err := repo.Get(context.Background(), "no-such-org", "no-such-env")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 }
@@ -97,18 +98,18 @@ func TestEnvThunderSystemClientRepo_DeleteIsIdempotent(t *testing.T) {
 	repo := NewEnvThunderSystemClientRepo(db.GetDB())
 	const org, env = "test-org", "env-thunder-delete-idempotent"
 
-	require.NoError(t, repo.Delete(org, env), "deleting a non-existent row must not be an error")
+	require.NoError(t, repo.Delete(context.Background(), org, env), "deleting a non-existent row must not be an error")
 
-	require.NoError(t, repo.Upsert(&models.EnvThunderSystemClient{
+	require.NoError(t, repo.Upsert(context.Background(), &models.EnvThunderSystemClient{
 		OrgName:               org,
 		EnvName:               env,
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext"),
 	}))
-	require.NoError(t, repo.Delete(org, env))
-	_, err := repo.Get(org, env)
+	require.NoError(t, repo.Delete(context.Background(), org, env))
+	_, err := repo.Get(context.Background(), org, env)
 	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 
 	// Deleting again (simulating a retried teardown) must still succeed.
-	require.NoError(t, repo.Delete(org, env))
+	require.NoError(t, repo.Delete(context.Background(), org, env))
 }

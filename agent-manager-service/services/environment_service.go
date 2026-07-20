@@ -528,7 +528,7 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 
 // SetThunderSystemClientSecret encrypts and upserts the env-Thunder system-client
 // credential. orgName must match what the resolver reads with (ThunderOrgNamespace()).
-func (s *environmentService) SetThunderSystemClientSecret(_ context.Context, orgName, envName, clientID, clientSecret string) error {
+func (s *environmentService) SetThunderSystemClientSecret(ctx context.Context, orgName, envName, clientID, clientSecret string) error {
 	if clientSecret == "" {
 		return fmt.Errorf("%w: clientSecret is required", utils.ErrInvalidInput)
 	}
@@ -542,7 +542,7 @@ func (s *environmentService) SetThunderSystemClientSecret(_ context.Context, org
 		ClientID:              clientID,
 		ClientSecretEncrypted: encrypted,
 	}
-	if err := s.envThunderRepo.Upsert(cred); err != nil {
+	if err := s.envThunderRepo.Upsert(ctx, cred); err != nil {
 		return fmt.Errorf("failed to store env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
 	}
 	s.logger.Info("Stored env-thunder system-client secret", "orgName", orgName, "envName", envName)
@@ -551,8 +551,8 @@ func (s *environmentService) SetThunderSystemClientSecret(_ context.Context, org
 
 // DeleteThunderSystemClientSecret removes the credential for (orgName, envName).
 // Idempotent — deleting a non-existent row is not an error.
-func (s *environmentService) DeleteThunderSystemClientSecret(_ context.Context, orgName, envName string) error {
-	if err := s.envThunderRepo.Delete(orgName, envName); err != nil {
+func (s *environmentService) DeleteThunderSystemClientSecret(ctx context.Context, orgName, envName string) error {
+	if err := s.envThunderRepo.Delete(ctx, orgName, envName); err != nil {
 		return fmt.Errorf("failed to delete env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
 	}
 	s.logger.Info("Deleted env-thunder system-client secret", "orgName", orgName, "envName", envName)

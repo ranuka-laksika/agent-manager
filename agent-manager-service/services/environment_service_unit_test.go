@@ -856,7 +856,7 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 	t.Run("encrypts the secret and upserts with the given client id", func(t *testing.T) {
 		var stored *models.EnvThunderSystemClient
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			UpsertFunc: func(cred *models.EnvThunderSystemClient) error {
+			UpsertFunc: func(_ context.Context, cred *models.EnvThunderSystemClient) error {
 				stored = cred
 				return nil
 			},
@@ -878,7 +878,7 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 
 	t.Run("rejects an empty secret", func(t *testing.T) {
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			UpsertFunc: func(*models.EnvThunderSystemClient) error {
+			UpsertFunc: func(context.Context, *models.EnvThunderSystemClient) error {
 				t.Fatal("must not upsert when the secret is empty")
 				return nil
 			},
@@ -893,7 +893,7 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 	t.Run("wraps a repo error", func(t *testing.T) {
 		boom := errors.New("db down")
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			UpsertFunc: func(*models.EnvThunderSystemClient) error { return boom },
+			UpsertFunc: func(context.Context, *models.EnvThunderSystemClient) error { return boom },
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
@@ -907,7 +907,7 @@ func TestEnvironmentService_DeleteThunderSystemClientSecret(t *testing.T) {
 	t.Run("delegates to the repo", func(t *testing.T) {
 		var gotOrg, gotEnv string
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			DeleteFunc: func(orgName, envName string) error {
+			DeleteFunc: func(_ context.Context, orgName, envName string) error {
 				gotOrg, gotEnv = orgName, envName
 				return nil
 			},
@@ -923,7 +923,7 @@ func TestEnvironmentService_DeleteThunderSystemClientSecret(t *testing.T) {
 	t.Run("wraps a repo error", func(t *testing.T) {
 		boom := errors.New("db down")
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			DeleteFunc: func(string, string) error { return boom },
+			DeleteFunc: func(context.Context, string, string) error { return boom },
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 

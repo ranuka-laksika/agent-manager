@@ -4,6 +4,7 @@
 package repomocks
 
 import (
+	"context"
 	"sync"
 
 	"github.com/wso2/agent-manager/agent-manager-service/models"
@@ -15,13 +16,13 @@ import (
 //
 //		// make and configure a mocked repositories.EnvThunderSystemClientRepository
 //		mockedEnvThunderSystemClientRepository := &EnvThunderSystemClientRepositoryMock{
-//			DeleteFunc: func(orgName string, envName string) error {
+//			DeleteFunc: func(ctx context.Context, orgName string, envName string) error {
 //				panic("mock out the Delete method")
 //			},
-//			GetFunc: func(orgName string, envName string) (*models.EnvThunderSystemClient, error) {
+//			GetFunc: func(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error) {
 //				panic("mock out the Get method")
 //			},
-//			UpsertFunc: func(cred *models.EnvThunderSystemClient) error {
+//			UpsertFunc: func(ctx context.Context, cred *models.EnvThunderSystemClient) error {
 //				panic("mock out the Upsert method")
 //			},
 //		}
@@ -32,18 +33,20 @@ import (
 //	}
 type EnvThunderSystemClientRepositoryMock struct {
 	// DeleteFunc mocks the Delete method.
-	DeleteFunc func(orgName string, envName string) error
+	DeleteFunc func(ctx context.Context, orgName string, envName string) error
 
 	// GetFunc mocks the Get method.
-	GetFunc func(orgName string, envName string) (*models.EnvThunderSystemClient, error)
+	GetFunc func(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error)
 
 	// UpsertFunc mocks the Upsert method.
-	UpsertFunc func(cred *models.EnvThunderSystemClient) error
+	UpsertFunc func(ctx context.Context, cred *models.EnvThunderSystemClient) error
 
 	// calls tracks calls to the methods.
 	calls struct {
 		// Delete holds details about calls to the Delete method.
 		Delete []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 			// EnvName is the envName argument value.
@@ -51,6 +54,8 @@ type EnvThunderSystemClientRepositoryMock struct {
 		}
 		// Get holds details about calls to the Get method.
 		Get []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// OrgName is the orgName argument value.
 			OrgName string
 			// EnvName is the envName argument value.
@@ -58,6 +63,8 @@ type EnvThunderSystemClientRepositoryMock struct {
 		}
 		// Upsert holds details about calls to the Upsert method.
 		Upsert []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// Cred is the cred argument value.
 			Cred *models.EnvThunderSystemClient
 		}
@@ -68,21 +75,23 @@ type EnvThunderSystemClientRepositoryMock struct {
 }
 
 // Delete calls DeleteFunc.
-func (mock *EnvThunderSystemClientRepositoryMock) Delete(orgName string, envName string) error {
+func (mock *EnvThunderSystemClientRepositoryMock) Delete(ctx context.Context, orgName string, envName string) error {
 	if mock.DeleteFunc == nil {
 		panic("EnvThunderSystemClientRepositoryMock.DeleteFunc: method is nil but EnvThunderSystemClientRepository.Delete was just called")
 	}
 	callInfo := struct {
+		Ctx     context.Context
 		OrgName string
 		EnvName string
 	}{
+		Ctx:     ctx,
 		OrgName: orgName,
 		EnvName: envName,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
 	mock.lockDelete.Unlock()
-	return mock.DeleteFunc(orgName, envName)
+	return mock.DeleteFunc(ctx, orgName, envName)
 }
 
 // DeleteCalls gets all the calls that were made to Delete.
@@ -90,10 +99,12 @@ func (mock *EnvThunderSystemClientRepositoryMock) Delete(orgName string, envName
 //
 //	len(mockedEnvThunderSystemClientRepository.DeleteCalls())
 func (mock *EnvThunderSystemClientRepositoryMock) DeleteCalls() []struct {
+	Ctx     context.Context
 	OrgName string
 	EnvName string
 } {
 	var calls []struct {
+		Ctx     context.Context
 		OrgName string
 		EnvName string
 	}
@@ -104,21 +115,23 @@ func (mock *EnvThunderSystemClientRepositoryMock) DeleteCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *EnvThunderSystemClientRepositoryMock) Get(orgName string, envName string) (*models.EnvThunderSystemClient, error) {
+func (mock *EnvThunderSystemClientRepositoryMock) Get(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error) {
 	if mock.GetFunc == nil {
 		panic("EnvThunderSystemClientRepositoryMock.GetFunc: method is nil but EnvThunderSystemClientRepository.Get was just called")
 	}
 	callInfo := struct {
+		Ctx     context.Context
 		OrgName string
 		EnvName string
 	}{
+		Ctx:     ctx,
 		OrgName: orgName,
 		EnvName: envName,
 	}
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(orgName, envName)
+	return mock.GetFunc(ctx, orgName, envName)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -126,10 +139,12 @@ func (mock *EnvThunderSystemClientRepositoryMock) Get(orgName string, envName st
 //
 //	len(mockedEnvThunderSystemClientRepository.GetCalls())
 func (mock *EnvThunderSystemClientRepositoryMock) GetCalls() []struct {
+	Ctx     context.Context
 	OrgName string
 	EnvName string
 } {
 	var calls []struct {
+		Ctx     context.Context
 		OrgName string
 		EnvName string
 	}
@@ -140,19 +155,21 @@ func (mock *EnvThunderSystemClientRepositoryMock) GetCalls() []struct {
 }
 
 // Upsert calls UpsertFunc.
-func (mock *EnvThunderSystemClientRepositoryMock) Upsert(cred *models.EnvThunderSystemClient) error {
+func (mock *EnvThunderSystemClientRepositoryMock) Upsert(ctx context.Context, cred *models.EnvThunderSystemClient) error {
 	if mock.UpsertFunc == nil {
 		panic("EnvThunderSystemClientRepositoryMock.UpsertFunc: method is nil but EnvThunderSystemClientRepository.Upsert was just called")
 	}
 	callInfo := struct {
+		Ctx  context.Context
 		Cred *models.EnvThunderSystemClient
 	}{
+		Ctx:  ctx,
 		Cred: cred,
 	}
 	mock.lockUpsert.Lock()
 	mock.calls.Upsert = append(mock.calls.Upsert, callInfo)
 	mock.lockUpsert.Unlock()
-	return mock.UpsertFunc(cred)
+	return mock.UpsertFunc(ctx, cred)
 }
 
 // UpsertCalls gets all the calls that were made to Upsert.
@@ -160,9 +177,11 @@ func (mock *EnvThunderSystemClientRepositoryMock) Upsert(cred *models.EnvThunder
 //
 //	len(mockedEnvThunderSystemClientRepository.UpsertCalls())
 func (mock *EnvThunderSystemClientRepositoryMock) UpsertCalls() []struct {
+	Ctx  context.Context
 	Cred *models.EnvThunderSystemClient
 } {
 	var calls []struct {
+		Ctx  context.Context
 		Cred *models.EnvThunderSystemClient
 	}
 	mock.lockUpsert.RLock()
