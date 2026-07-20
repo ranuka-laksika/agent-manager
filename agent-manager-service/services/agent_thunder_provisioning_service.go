@@ -99,20 +99,14 @@ type AgentThunderProvisioningService interface {
 	// best-effort background attempt.
 	ProvisionForEnvironmentIfMissing(ctx context.Context, ouID, projectName, agentName, envName string, ownership models.AgentProvisioningType, requestedBy string) (alreadyExisted bool, err error)
 
-	// GetCredentials returns the current client ID and secret for one binding
-	// WITHOUT destroying the stored copy — repeatable, unlike ClaimSecret's
-	// one-time External claim. For Internal agents, which have no other way to
-	// retrieve their credential today (Gateway Binding — automatically injecting
-	// it into the workload — is a later phase). Returns
-	// utils.ErrAgentIdentityNotProvisioned if the binding doesn't exist or hasn't
-	// completed yet, utils.ErrAgentCredentialNotAvailable if it has completed but
-	// there is currently no stored secret (e.g. right after a revoke).
-	GetCredentials(ctx context.Context, ouID, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
-
 	// RegenerateSecret rotates the secret for one binding and returns the
 	// binding's ownership type, client ID, and the new secret. The caller (the
 	// HTTP layer) decides whether to expose the secret in the response based on
-	// ownership — this service always returns the true new secret.
+	// ownership — this service always returns the true new secret. For External
+	// agents this is the ONLY way to obtain a secret at all (first time or any
+	// later rotation) — nothing is ever persisted for them, so there is no
+	// separate "claim" step; the secret is minted via Thunder and handed back
+	// directly, never written to secretMgmtClient.
 	RegenerateSecret(ctx context.Context, ouID, projectName, agentName, envName string) (ownership models.AgentProvisioningType, clientID string, newSecret string, err error)
 
 	// RevokeSecret rotates the secret in Thunder (invalidating the old one) and
@@ -128,21 +122,11 @@ type AgentThunderProvisioningService interface {
 
 	// GetIdentityViews returns the current binding for every environment this
 	// agent has been provisioned in. A safe, side-effect-free read: it never
-	// returns or destroys a secret, even for an unclaimed External binding —
-	// each view's HasUnclaimedSecret flag reports whether one is available,
-	// and ClaimSecret is the only way to actually retrieve and consume it.
-	// Callers needing project-level visibility filtering (Section 2.1 of the
+	// returns or destroys a secret — External agents never have one stored to
+	// begin with; RegenerateSecret is the only way to obtain one. Callers
+	// needing project-level visibility filtering (Section 2.1 of the
 	// architecture doc) apply it on top of this org-wide result.
 	GetIdentityViews(ctx context.Context, ouID, projectName, agentName string) ([]models.AgentIdentityEnvironmentView, error)
-
-	// ClaimSecret performs the one-time claim of an External agent's secret
-	// for one environment: the first successful call destroys the stored copy
-	// and returns it; every call after that fails with
-	// utils.ErrAgentCredentialNotAvailable. This is the only endpoint-facing
-	// operation that actually exposes an External agent's secret — GetIdentityViews
-	// never does. Internal agents are rejected with utils.ErrInvalidInput;
-	// they have no claim state, and use GetCredentials instead.
-	ClaimSecret(ctx context.Context, ouID, projectName, agentName, envName string) (agentID, clientID, clientSecret string, err error)
 
 	// GetBindingState returns the raw provisioning state for one (agent, env)
 	// binding — status, whether a secret is currently stored, and the last
@@ -230,8 +214,7 @@ func agentIdentitySecretLocation(ouID, projectName, agentName, envName string) s
 // AgentThunderClient.SecretRefPath — computed directly from the location
 // rather than using CreateSecret's own return value, since that value is a
 // SecretReference CR name when an OpenChoreo client is configured (see
-// SecretManagementClient.CreateSecret's doc comment), not the raw KV path
-// readCredential later needs.
+// SecretManagementClient.CreateSecret's doc comment), not the raw KV path.
 func (s *agentThunderProvisioningService) storeCredential(ctx context.Context, ouID, projectName, agentName, envName, clientID, clientSecret string) (string, error) {
 	location := agentIdentitySecretLocation(ouID, projectName, agentName, envName)
 	if _, err := s.secretMgmtClient.CreateSecret(ctx, location, map[string]string{
@@ -245,23 +228,6 @@ func (s *agentThunderProvisioningService) storeCredential(ctx context.Context, o
 		return "", fmt.Errorf("derive kv path: %w", err)
 	}
 	return kvPath, nil
-}
-
-// readCredential reads back the client ID/secret pair stored at secretRefPath
-// (an AgentThunderClient.SecretRefPath value — see agentIdentitySecretLocation).
-// Returns secretmanagersvc.ErrSecretNotFound if nothing is stored there.
-func (s *agentThunderProvisioningService) readCredential(ctx context.Context, secretRefPath string) (clientID, clientSecret string, err error) {
-	data, err := s.secretMgmtClient.GetSecretWithValue(ctx, secretRefPath)
-	if err != nil {
-		return "", "", err
-	}
-	clientID, clientSecret = data[thundersvc.AgentSecretKeyClientID], data[thundersvc.AgentSecretKeyClientSecret]
-	if clientID == "" && clientSecret == "" {
-		// A malformed or partially-written entry reads as "nothing stored
-		// here" to every caller, same as a genuinely missing path.
-		return "", "", secretmanagersvc.ErrSecretNotFound
-	}
-	return clientID, clientSecret, nil
 }
 
 // deleteCredential permanently removes the stored credential (and its
@@ -581,6 +547,10 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 		return
 	}
 
+	// External agents only need a client ID at provisioning time.
+	// Secrets are minted on demand via RegenerateSecret and never persisted.
+	isExternal := binding.ProvisioningType == models.AgentProvisioningTypeExternal
+
 	thunderAgentID := binding.ThunderAgentID
 	clientID := binding.ThunderClientID
 	var clientSecret string
@@ -600,13 +570,15 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 			return
 		}
 
-		// Partial-failure recovery (Section 6.8): if Thunder already had this
-		// agent (created=false, found via the 409 fallback), it never returns a
-		// secret. That only happens if a prior attempt got as far as creating
-		// the identity in Thunder but failed before we could store a secret —
-		// there is no way to retrieve the original one, so generate a fresh,
-		// storable secret now instead of leaving the binding stuck forever.
-		if !created && clientSecret == "" {
+		if isExternal {
+			clientSecret = ""
+		} else if !created && clientSecret == "" {
+			// Partial-failure recovery (Section 6.8): if Thunder already had this
+			// agent (created=false, found via the 409 fallback), it never returns a
+			// secret. That only happens if a prior attempt got as far as creating
+			// the identity in Thunder but failed before we could store a secret —
+			// there is no way to retrieve the original one, so generate a fresh,
+			// storable secret now instead of leaving the binding stuck forever.
 			clientSecret, err = thunderClient.RegenerateAgentSecret(ctx, thunderAgentID)
 			if err != nil {
 				// thunderAgentID/clientID are already resolved at this point —
@@ -616,7 +588,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 				return
 			}
 		}
-	} else if binding.SecretRefPath == "" {
+	} else if !isExternal && binding.SecretRefPath == "" {
 		// Retry of an attempt that created the identity but failed before storing a secret.
 		clientSecret, err = thunderClient.RegenerateAgentSecret(ctx, thunderAgentID)
 		if err != nil {
@@ -626,7 +598,7 @@ func (s *agentThunderProvisioningService) AttemptProvision(ctx context.Context, 
 	}
 
 	secretRefPath := binding.SecretRefPath
-	if clientSecret != "" {
+	if !isExternal && clientSecret != "" {
 		secretRefPath, err = s.storeCredential(ctx, binding.OUID, binding.ProjectName, binding.AgentName, binding.EnvironmentName, clientID, clientSecret)
 		if err != nil {
 			// The Thunder identity was already created successfully above —
@@ -725,47 +697,19 @@ func (s *agentThunderProvisioningService) RegenerateSecret(ctx context.Context, 
 		return "", "", "", err
 	}
 
-	secretPath, err := s.storeCredential(ctx, ouID, projectName, agentName, envName, binding.ThunderClientID, newSecret)
-	if err != nil {
-		return "", "", "", fmt.Errorf("store regenerated secret: %w", err)
-	}
-	if err := s.repo.UpdateSecretRef(ctx, binding.ID, secretPath); err != nil {
-		return "", "", "", fmt.Errorf("record regenerated secret location: %w", err)
-	}
-	// Regenerate's own response already hands the caller this secret directly
-	// (see RegenerateAgentIdentitySecret), so it must not also show up as
-	// unclaimed — mark it claimed now rather than leaving/reopening a claim
-	// for a secret that's already been shown.
-	if _, err := s.repo.MarkClaimed(ctx, binding.ID, time.Now()); err != nil {
-		s.logger.Warn("Failed to mark claim state after regenerate", "bindingID", binding.ID, "error", err)
+	// External agent secrets are only returned to the caller and never persisted.
+	// Internal agent secrets must be stored to be injected into the workload.
+	if binding.ProvisioningType != models.AgentProvisioningTypeExternal {
+		secretPath, err := s.storeCredential(ctx, ouID, projectName, agentName, envName, binding.ThunderClientID, newSecret)
+		if err != nil {
+			return "", "", "", fmt.Errorf("store regenerated secret: %w", err)
+		}
+		if err := s.repo.UpdateSecretRef(ctx, binding.ID, secretPath); err != nil {
+			return "", "", "", fmt.Errorf("record regenerated secret location: %w", err)
+		}
 	}
 
 	return binding.ProvisioningType, binding.ThunderClientID, newSecret, nil
-}
-
-func (s *agentThunderProvisioningService) GetCredentials(ctx context.Context, ouID, projectName, agentName, envName string) (string, string, string, error) {
-	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
-	if err != nil {
-		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
-			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
-		}
-		return "", "", "", err
-	}
-	if binding.ThunderAgentID == "" {
-		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
-	}
-	if binding.SecretRefPath == "" {
-		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
-	}
-
-	clientID, clientSecret, err := s.readCredential(ctx, binding.SecretRefPath)
-	if err != nil {
-		if errors.Is(err, secretmanagersvc.ErrSecretNotFound) {
-			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
-		}
-		return "", "", "", fmt.Errorf("read stored agent secret: %w", err)
-	}
-	return binding.ThunderAgentID, clientID, clientSecret, nil
 }
 
 // GetAgentRoles returns the Thunder roles assigned to the agent's AgentID in
@@ -887,8 +831,6 @@ func (s *agentThunderProvisioningService) GetIdentityViews(ctx context.Context, 
 			ClientID:         b.ThunderClientID,
 			LastError:        b.LastError,
 			RequestedBy:      b.RequestedBy,
-			HasUnclaimedSecret: b.ProvisioningType == models.AgentProvisioningTypeExternal &&
-				b.SecretRefPath != "" && b.ClaimedAt == nil,
 		})
 	}
 
@@ -909,61 +851,6 @@ func (s *agentThunderProvisioningService) GetBindingState(ctx context.Context, o
 		HasSecret:        binding.SecretRefPath != "",
 		LastError:        binding.LastError,
 	}, nil
-}
-
-func (s *agentThunderProvisioningService) ClaimSecret(ctx context.Context, ouID, projectName, agentName, envName string) (string, string, string, error) {
-	binding, err := s.repo.Get(ctx, ouID, projectName, agentName, envName)
-	if err != nil {
-		if errors.Is(err, repositories.ErrAgentThunderClientNotFound) {
-			return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
-		}
-		return "", "", "", err
-	}
-	if binding.ProvisioningType != models.AgentProvisioningTypeExternal {
-		return "", "", "", fmt.Errorf("%w: agent %q is an internal agent — internal agent credentials are retrieved via GetAgentCredentials, not claim", utils.ErrInvalidInput, agentName)
-	}
-	if binding.ThunderAgentID == "" {
-		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentIdentityNotProvisioned, agentName, envName)
-	}
-	if binding.SecretRefPath == "" {
-		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
-	}
-
-	// MarkClaimed is a compare-and-swap (claimed_at IS NULL) and is the sole
-	// gate for "shown exactly once": it must run BEFORE reading the secret,
-	// not after, so two concurrent claims for the same binding can't both
-	// read and return the same secret.
-	claimed, claimErr := s.repo.MarkClaimed(ctx, binding.ID, time.Now())
-	if claimErr != nil {
-		return "", "", "", fmt.Errorf("mark agent secret as claimed: %w", claimErr)
-	}
-	if !claimed {
-		return "", "", "", fmt.Errorf("%w: %s in %s", utils.ErrAgentCredentialNotAvailable, agentName, envName)
-	}
-
-	_, secret, getErr := s.readCredential(ctx, binding.SecretRefPath)
-	if getErr != nil {
-		// Roll back the claim so a retry can still see this secret — the read
-		// failure means it was never actually shown to anyone.
-		if clearErr := s.repo.ClearClaim(ctx, binding.ID); clearErr != nil {
-			s.logger.Warn("Failed to roll back claim after secret read failure", "bindingID", binding.ID, "error", clearErr)
-		}
-		return "", "", "", fmt.Errorf("read claimed agent secret: %w", getErr)
-	}
-
-	// The claim itself (gated by claimed_at, not secret_ref_path) has already
-	// succeeded — the secret above is returned either way. If destroying the
-	// stored copy fails, leave secret_ref_path set rather than clearing it,
-	// so the orphaned entry stays traceable for manual cleanup.
-	if delErr := s.deleteCredential(ctx, ouID, projectName, agentName, envName); delErr != nil {
-		s.logger.Warn("Failed to destroy claimed external agent secret; leaving secret_ref_path set so the orphaned entry stays traceable", "bindingID", binding.ID, "error", delErr)
-		return binding.ThunderAgentID, binding.ThunderClientID, secret, nil
-	}
-	if err := s.repo.UpdateSecretRef(ctx, binding.ID, ""); err != nil {
-		s.logger.Warn("Failed to clear claimed external agent secret reference", "bindingID", binding.ID, "error", err)
-	}
-
-	return binding.ThunderAgentID, binding.ThunderClientID, secret, nil
 }
 
 func (s *agentThunderProvisioningService) DeleteAllBindings(ctx context.Context, ouID, projectName, agentName string) {

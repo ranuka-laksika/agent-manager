@@ -72,22 +72,11 @@ type AgentThunderClientRepository interface {
 	// time (nil once the binding is COMPLETED or FAILED).
 	UpdateAfterAttempt(ctx context.Context, id uuid.UUID, fields AgentThunderAttemptUpdate) error
 
-	// MarkClaimed atomically marks an external agent's transient secret as
-	// retrieved, but only if it hasn't been claimed already (compare-and-swap on
-	// claimed_at IS NULL). claimed=false means a concurrent caller already won
-	// the claim — the caller must not read or return the secret in that case.
-	MarkClaimed(ctx context.Context, id uuid.UUID, claimedAt time.Time) (claimed bool, err error)
-
 	// UpdateSecretRef updates only the stored secret location, without touching
-	// status or retry bookkeeping. Used by regenerate (new path) and revoke
-	// (cleared to "" — there is no currently valid stored secret).
+	// status or retry bookkeeping. Used by regenerate (new path, internal
+	// agents only) and revoke (cleared to "" — there is no currently valid
+	// stored secret).
 	UpdateSecretRef(ctx context.Context, id uuid.UUID, secretRefPath string) error
-
-	// ClearClaim resets claimed_at to NULL — used by regenerate immediately
-	// after storing a brand-new secret, so that new secret is eligible for the
-	// one-time claim again (MarkClaimed from a previous secret must not carry
-	// over and make a *different*, never-yet-seen secret look already-claimed).
-	ClearClaim(ctx context.Context, id uuid.UUID) error
 
 	// DeleteByAgent removes every binding for the given agent. Test-cleanup use
 	// only — production deletion goes through DeleteByIDs so a concurrent
@@ -262,16 +251,6 @@ func (r *AgentThunderClientRepo) UpdateAfterAttempt(ctx context.Context, id uuid
 	return nil
 }
 
-func (r *AgentThunderClientRepo) MarkClaimed(ctx context.Context, id uuid.UUID, claimedAt time.Time) (bool, error) {
-	result := r.db.WithContext(ctx).Model(&models.AgentThunderClient{}).
-		Where("id = ? AND claimed_at IS NULL", id).
-		Update("claimed_at", claimedAt)
-	if result.Error != nil {
-		return false, fmt.Errorf("mark agent thunder client claimed: %w", result.Error)
-	}
-	return result.RowsAffected > 0, nil
-}
-
 func (r *AgentThunderClientRepo) UpdateSecretRef(ctx context.Context, id uuid.UUID, secretRefPath string) error {
 	if err := r.db.WithContext(ctx).Model(&models.AgentThunderClient{}).Where("id = ?", id).
 		Updates(map[string]interface{}{
@@ -279,14 +258,6 @@ func (r *AgentThunderClientRepo) UpdateSecretRef(ctx context.Context, id uuid.UU
 			"updated_at":      clause.Expr{SQL: "NOW()"},
 		}).Error; err != nil {
 		return fmt.Errorf("update agent thunder client secret ref: %w", err)
-	}
-	return nil
-}
-
-func (r *AgentThunderClientRepo) ClearClaim(ctx context.Context, id uuid.UUID) error {
-	if err := r.db.WithContext(ctx).Model(&models.AgentThunderClient{}).Where("id = ?", id).
-		Update("claimed_at", nil).Error; err != nil {
-		return fmt.Errorf("clear agent thunder client claim: %w", err)
 	}
 	return nil
 }

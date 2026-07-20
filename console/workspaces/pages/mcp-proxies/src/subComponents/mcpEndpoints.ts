@@ -37,8 +37,10 @@ export const CAPABILITY_SECTION_KEY: Record<CapabilityKind, string> = {
   prompt: "prompts",
 };
 
-// Default security applied to freshly configured environment blocks — mirrors the
-// blueprint created by the MCP proxy creation form.
+// Default for a brand-new endpoint (no prior config) — matches upstream's
+// long-standing default (AddMCPProxyForm on main hardcodes the same shape):
+// every new proxy requires an X-API-Key header until an admin deliberately
+// changes it.
 export const DEFAULT_ENDPOINT_SECURITY = {
   enabled: true,
   apiKey: {

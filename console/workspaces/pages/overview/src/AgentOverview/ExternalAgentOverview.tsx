@@ -123,6 +123,7 @@ export const ExternalAgentOverview = () => {
                           envId={environment.name}
                           isRegenerating={regeneratingEnv === environment.name}
                           onRegenerate={() => void handleRegenerate(environment.name)}
+                          label="Generate Secret"
                         />
                         <Button
                           variant="text"
@@ -147,7 +148,7 @@ export const ExternalAgentOverview = () => {
                             <SecretRevealAlert
                               clientId={regeneratedSecrets[environment.name].clientId}
                               clientSecret={regeneratedSecrets[environment.name].clientSecret}
-                              message="This is the new secret after regenerating — save it securely now."
+                              message="This secret is never stored — save it securely now, it won't be shown again."
                             />
                           </>
                         ) : (

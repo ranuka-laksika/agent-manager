@@ -149,18 +149,18 @@ func TestAgentIdentityInjection_EnvVarsForEnvironment_CreatesSecretReferenceAndB
 	for _, ev := range envVars {
 		byKey[ev.Key] = ev
 	}
-	assert.Equal(t, "client-abc", byKey[client.EnvVarAgentIdentityClientID].Value)
+	assert.Equal(t, "client-abc", byKey[client.EnvVarAgentIDClientID].Value)
 
-	secretVar := byKey[client.EnvVarAgentIdentityClientSecret]
+	secretVar := byKey[client.EnvVarAgentIDClientSecret]
 	require.NotNil(t, secretVar.ValueFrom, "client secret must be a SecretKeyRef, never a literal")
 	require.NotNil(t, secretVar.ValueFrom.SecretKeyRef)
 	assert.Equal(t, expectedRefName, secretVar.ValueFrom.SecretKeyRef.Name)
 	assert.Equal(t, thundersvc.AgentSecretKeyClientSecret, secretVar.ValueFrom.SecretKeyRef.Key)
 	assert.Empty(t, secretVar.Value)
 
-	assert.Equal(t, thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv), byKey[client.EnvVarAgentIdentityTokenEndpoint].Value,
+	assert.Equal(t, thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv), byKey[client.EnvVarAgentIDTokenEndpoint].Value,
 		"token endpoint must be built from the org's Thunder namespace, NOT the raw ouID")
-	assert.Empty(t, byKey[client.EnvVarAgentIdentityScopes].Value, "no agent configuration means no MCP bindings, so no scopes to request")
+	assert.Empty(t, byKey[client.EnvVarAgentIDScopes].Value, "no agent configuration means no MCP bindings, so no scopes to request")
 }
 
 // mcpProxyBinding is one EnvAgentMCPMapping's worth of fixture data: a proxy
@@ -569,10 +569,10 @@ func inSyncIdentityEnvVars() []models.EnvVars {
 	refName := testIdentitySecretRefName()
 	return []models.EnvVars{
 		{Key: "AMP_OTEL_ENDPOINT", Value: "http://otel"}, // unrelated base var, must be ignored
-		{Key: client.EnvVarAgentIdentityClientID, Value: "client-abc"},
-		{Key: client.EnvVarAgentIdentityClientSecret, IsSensitive: true, SecretRef: refName, SecretKey: thundersvc.AgentSecretKeyClientSecret},
-		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv)},
-		{Key: client.EnvVarAgentIdentityScopes, Value: ""},
+		{Key: client.EnvVarAgentIDClientID, Value: "client-abc"},
+		{Key: client.EnvVarAgentIDClientSecret, IsSensitive: true, SecretRef: refName, SecretKey: thundersvc.AgentSecretKeyClientSecret},
+		{Key: client.EnvVarAgentIDTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv)},
+		{Key: client.EnvVarAgentIDScopes, Value: ""},
 	}
 }
 
@@ -644,15 +644,15 @@ func TestAgentIdentityInjection_ReconcileForEnvironment_ScopeDrift_Reinjects(t *
 			// now-desired "tickets:read".
 			refName := testIdentitySecretRefName()
 			return []models.EnvVars{
-				{Key: client.EnvVarAgentIdentityClientID, Value: "client-abc"},
-				{Key: client.EnvVarAgentIdentityClientSecret, IsSensitive: true, SecretRef: refName, SecretKey: thundersvc.AgentSecretKeyClientSecret},
-				{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv)},
-				{Key: client.EnvVarAgentIdentityScopes, Value: ""},
+				{Key: client.EnvVarAgentIDClientID, Value: "client-abc"},
+				{Key: client.EnvVarAgentIDClientSecret, IsSensitive: true, SecretRef: refName, SecretKey: thundersvc.AgentSecretKeyClientSecret},
+				{Key: client.EnvVarAgentIDTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), testIdentityEnv)},
+				{Key: client.EnvVarAgentIDScopes, Value: ""},
 			}, nil
 		},
 		UpdateReleaseBindingEnvVarsFunc: func(_ context.Context, _, _, _, _ string, envVars []client.EnvVar) error {
 			for _, ev := range envVars {
-				if ev.Key == client.EnvVarAgentIdentityScopes {
+				if ev.Key == client.EnvVarAgentIDScopes {
 					injectedScopes = ev.Value
 				}
 			}

@@ -56,11 +56,9 @@ type AgentController interface {
 	UpdateAgentDeploySettings(w http.ResponseWriter, r *http.Request)
 	UpdateAgentConfigurations(w http.ResponseWriter, r *http.Request)
 	GetAgentIdentity(w http.ResponseWriter, r *http.Request)
-	ClaimAgentIdentitySecret(w http.ResponseWriter, r *http.Request)
 	RegenerateAgentIdentitySecret(w http.ResponseWriter, r *http.Request)
 	RevokeAgentIdentitySecret(w http.ResponseWriter, r *http.Request)
 	ProvisionAgentIdentity(w http.ResponseWriter, r *http.Request)
-	GetAgentCredentials(w http.ResponseWriter, r *http.Request)
 	GetAgentRoles(w http.ResponseWriter, r *http.Request)
 	GetAgentGroups(w http.ResponseWriter, r *http.Request)
 }
@@ -948,8 +946,8 @@ func (c *agentController) PublishKind(w http.ResponseWriter, r *http.Request) {
 //
 // Returns the agent's AgentID binding for every environment in this project's
 // deployment pipeline. A safe, side-effect-free read: it never returns or
-// destroys a secret. Each view's hasUnclaimedSecret flag reports whether an
-// External agent has one waiting; use ClaimAgentIdentitySecret to retrieve it.
+// destroys a secret; use RegenerateAgentIdentitySecret to obtain a secret for
+// an External agent.
 //
 // An optional ?environment= query parameter filters the result down to that
 // one binding — still returned as an array (0 or 1 elements), so the response
@@ -985,50 +983,6 @@ func (c *agentController) GetAgentIdentity(w http.ResponseWriter, r *http.Reques
 		views = filtered
 	}
 	utils.WriteSuccessResponse(w, http.StatusOK, views)
-}
-
-// ClaimAgentIdentitySecret handles
-// DELETE /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities/secrets?environment={envID}
-//
-// Performs the one-time claim of an External agent's secret for one
-// environment. Calling this IS the claim — the first successful call returns
-// and permanently destroys the stored secret; every call after that is a 404.
-// Rejects Internal agents with a 400 pointing them at GetAgentCredentials.
-func (c *agentController) ClaimAgentIdentitySecret(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	orgName := r.PathValue(utils.PathParamOrgName)
-	ouID := middleware.OUIDFromRequest(r)
-	projName := r.PathValue(utils.PathParamProjName)
-	agentName := r.PathValue(utils.PathParamAgentName)
-	envID := r.URL.Query().Get("environment")
-	if envID == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "environment query parameter is required")
-		return
-	}
-
-	log.Info("ClaimAgentIdentitySecret: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
-
-	resp, err := c.agentService.ClaimAgentIdentitySecret(ctx, ouID, projName, agentName, envID)
-	if err != nil {
-		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
-			log.Warn("ClaimAgentIdentitySecret: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Agent identity not yet provisioned for this environment")
-			return
-		}
-		if errors.Is(err, utils.ErrAgentCredentialNotAvailable) {
-			log.Warn("ClaimAgentIdentitySecret: no unclaimed secret available", "orgName", orgName, "agentName", agentName, "envID", envID)
-			utils.WriteErrorResponse(w, http.StatusNotFound, "No unclaimed secret currently available for this agent/environment — call regenerate to obtain a new one")
-			return
-		}
-		log.Error("ClaimAgentIdentitySecret: failed to claim secret", "orgName", orgName, "agentName", agentName, "envID", envID, "error", err)
-		handleCommonErrors(w, err, "Failed to claim agent identity secret")
-		return
-	}
-
-	log.Info("ClaimAgentIdentitySecret: secret claimed successfully", "orgName", orgName, "agentName", agentName, "envID", envID)
-	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }
 
 // RegenerateAgentIdentitySecret handles
@@ -1153,50 +1107,6 @@ func (c *agentController) ProvisionAgentIdentity(w http.ResponseWriter, r *http.
 	}
 	log.Info("ProvisionAgentIdentity: completed", "orgName", orgName, "agentName", agentName, "envID", envID, "alreadyExisted", alreadyExisted)
 	utils.WriteSuccessResponse(w, status, view)
-}
-
-// GetAgentCredentials handles
-// GET /orgs/{orgName}/projects/{projName}/agents/{agentName}/identities/secrets?environment={envID}
-//
-// Returns the current client ID and secret for an Internal agent in one
-// environment. Repeatable — unlike ClaimAgentIdentitySecret's one-time External
-// claim, calling this again returns the same, still-valid credential. Rejects
-// External agents with a 400 pointing them at their own retrieval path.
-func (c *agentController) GetAgentCredentials(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	log := logger.GetLogger(ctx)
-
-	orgName := r.PathValue(utils.PathParamOrgName)
-	ouID := middleware.OUIDFromRequest(r)
-	projName := r.PathValue(utils.PathParamProjName)
-	agentName := r.PathValue(utils.PathParamAgentName)
-	envID := r.URL.Query().Get("environment")
-	if envID == "" {
-		utils.WriteErrorResponse(w, http.StatusBadRequest, "environment query parameter is required")
-		return
-	}
-
-	log.Info("GetAgentCredentials: starting", "orgName", orgName, "agentName", agentName, "envID", envID)
-
-	resp, err := c.agentService.GetAgentCredentials(ctx, ouID, projName, agentName, envID)
-	if err != nil {
-		if errors.Is(err, utils.ErrAgentIdentityNotProvisioned) {
-			log.Warn("GetAgentCredentials: identity not yet provisioned", "orgName", orgName, "agentName", agentName, "envID", envID)
-			utils.WriteErrorResponse(w, http.StatusNotFound, "Agent identity not yet provisioned for this environment")
-			return
-		}
-		if errors.Is(err, utils.ErrAgentCredentialNotAvailable) {
-			log.Warn("GetAgentCredentials: no credential currently stored", "orgName", orgName, "agentName", agentName, "envID", envID)
-			utils.WriteErrorResponse(w, http.StatusNotFound, "No credential currently stored for this agent/environment — call regenerate to obtain a new one")
-			return
-		}
-		log.Error("GetAgentCredentials: failed to get agent credentials", "orgName", orgName, "agentName", agentName, "envID", envID, "error", err)
-		handleCommonErrors(w, err, "Failed to get agent credentials")
-		return
-	}
-
-	log.Info("GetAgentCredentials: completed", "orgName", orgName, "agentName", agentName, "envID", envID)
-	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }
 
 // GetAgentRoles handles

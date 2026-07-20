@@ -169,9 +169,8 @@ export interface AgentGroupsResponse {
 
 export type AgentThunderStatus = 'pending' | 'in_progress' | 'completed' | 'failed';
 
-// One environment's AgentID binding. Never includes a secret — check
-// hasUnclaimedSecret to see if DELETE .../identities/secrets has anything to
-// return for an externally hosted agent.
+// One environment's AgentID binding. Never includes a secret — for an
+// externally hosted agent, use RegenerateAgentIdentitySecret to obtain one.
 export interface AgentIdentityEnvironmentView {
   environmentName: string;
   provisioningType: ProvisioningType;
@@ -179,22 +178,11 @@ export interface AgentIdentityEnvironmentView {
   agentId?: string;
   clientId?: string;
   lastError?: string;
-  hasUnclaimedSecret: boolean;
   requestedBy?: string;
 }
 
 export interface AgentIdentityActionRequest {
   environment: string;
-}
-
-// Response for the one-time claim of an externally hosted agent's secret —
-// the only response that will ever include this secret value.
-export interface AgentClaimSecretResponse {
-  environmentName: string;
-  agentId: string;
-  clientId: string;
-  clientSecret: string;
-  status: string;
 }
 
 export interface AgentRegenerateSecretResponse {
@@ -210,16 +198,6 @@ export interface AgentRevokeSecretResponse {
   environmentName: string;
   clientId: string;
   status: string;
-}
-
-// A platform-hosted agent's current AgentID credential. Unlike the other
-// identity responses, clientSecret is always included and this can be called
-// repeatably.
-export interface AgentCredentialsResponse {
-  environmentName: string;
-  agentId: string;
-  clientId: string;
-  clientSecret: string;
 }
 
 export type GetAgentIdentityPathParams = AgentPathParams;
@@ -238,15 +216,4 @@ export type RevokeAgentIdentitySecretPathParams = AgentPathParams;
 export interface RevokeAgentIdentitySecretQuery {
   environment: string;
 }
-
-export type GetAgentCredentialsPathParams = AgentPathParams;
-export interface GetAgentCredentialsQuery {
-  environment: string;
-}
-
-export type ClaimAgentIdentitySecretPathParams = AgentPathParams;
-export interface ClaimAgentIdentitySecretQuery {
-  environment: string;
-}
-
 

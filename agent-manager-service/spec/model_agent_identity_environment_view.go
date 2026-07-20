@@ -17,7 +17,7 @@ import (
 // checks if the AgentIdentityEnvironmentView type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &AgentIdentityEnvironmentView{}
 
-// AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never includes a secret, even if one is waiting to be claimed. Check `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has anything to return.
+// AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never includes a secret. For an externally hosted agent, use `POST .../identities` (regenerate) to obtain one.
 type AgentIdentityEnvironmentView struct {
 	// Environment this binding belongs to
 	EnvironmentName string `json:"environmentName"`
@@ -30,8 +30,6 @@ type AgentIdentityEnvironmentView struct {
 	ClientId *string `json:"clientId,omitempty"`
 	// Most recent provisioning error, if the last attempt failed
 	LastError *string `json:"lastError,omitempty"`
-	// True only when this is a completed external-agent binding whose secret hasn't been claimed yet. Always false for platform-hosted agents and already-claimed bindings.
-	HasUnclaimedSecret bool `json:"hasUnclaimedSecret"`
 	// Who requested this binding, kept for audit purposes only
 	RequestedBy *string `json:"requestedBy,omitempty"`
 }
@@ -40,12 +38,11 @@ type AgentIdentityEnvironmentView struct {
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewAgentIdentityEnvironmentView(environmentName string, provisioningType string, status AgentThunderStatus, hasUnclaimedSecret bool) *AgentIdentityEnvironmentView {
+func NewAgentIdentityEnvironmentView(environmentName string, provisioningType string, status AgentThunderStatus) *AgentIdentityEnvironmentView {
 	this := AgentIdentityEnvironmentView{}
 	this.EnvironmentName = environmentName
 	this.ProvisioningType = provisioningType
 	this.Status = status
-	this.HasUnclaimedSecret = hasUnclaimedSecret
 	return &this
 }
 
@@ -225,30 +222,6 @@ func (o *AgentIdentityEnvironmentView) SetLastError(v string) {
 	o.LastError = &v
 }
 
-// GetHasUnclaimedSecret returns the HasUnclaimedSecret field value
-func (o *AgentIdentityEnvironmentView) GetHasUnclaimedSecret() bool {
-	if o == nil {
-		var ret bool
-		return ret
-	}
-
-	return o.HasUnclaimedSecret
-}
-
-// GetHasUnclaimedSecretOk returns a tuple with the HasUnclaimedSecret field value
-// and a boolean to check if the value has been set.
-func (o *AgentIdentityEnvironmentView) GetHasUnclaimedSecretOk() (*bool, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.HasUnclaimedSecret, true
-}
-
-// SetHasUnclaimedSecret sets field value
-func (o *AgentIdentityEnvironmentView) SetHasUnclaimedSecret(v bool) {
-	o.HasUnclaimedSecret = v
-}
-
 // GetRequestedBy returns the RequestedBy field value if set, zero value otherwise.
 func (o *AgentIdentityEnvironmentView) GetRequestedBy() string {
 	if o == nil || IsNil(o.RequestedBy) {
@@ -303,7 +276,6 @@ func (o AgentIdentityEnvironmentView) ToMap() (map[string]interface{}, error) {
 	if !IsNil(o.LastError) {
 		toSerialize["lastError"] = o.LastError
 	}
-	toSerialize["hasUnclaimedSecret"] = o.HasUnclaimedSecret
 	if !IsNil(o.RequestedBy) {
 		toSerialize["requestedBy"] = o.RequestedBy
 	}

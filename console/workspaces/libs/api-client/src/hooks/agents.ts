@@ -21,7 +21,6 @@ import {
   createAgent, deleteAgent, getAgent, listAgents, generateAgentToken, updateAgent,
   updateAgentBuildParameters, getAgentRoles, getAgentGroups, getAgentIdentity,
   provisionAgentIdentity, regenerateAgentIdentitySecret, revokeAgentIdentitySecret,
-  getAgentCredentials, claimAgentIdentitySecret,
 } from "../apis";
 import { SLOW_POLL_INTERVAL } from "../utils";
 import type {
@@ -58,12 +57,6 @@ import type {
   RevokeAgentIdentitySecretPathParams,
   RevokeAgentIdentitySecretQuery,
   AgentRevokeSecretResponse,
-  GetAgentCredentialsPathParams,
-  GetAgentCredentialsQuery,
-  AgentCredentialsResponse,
-  ClaimAgentIdentitySecretPathParams,
-  ClaimAgentIdentitySecretQuery,
-  AgentClaimSecretResponse,
 } from "@agent-management-platform/types";
 import { useAuthHooks } from "@agent-management-platform/auth";
 import { useApiMutation, useApiQuery } from "./react-query-notifications";
@@ -268,32 +261,3 @@ export function useRevokeAgentIdentitySecret() {
   });
 }
 
-export function useGetAgentCredentials(
-  params: GetAgentCredentialsPathParams,
-  query: GetAgentCredentialsQuery,
-) {
-  const { getToken } = useAuthHooks();
-  return useApiQuery<AgentCredentialsResponse>({
-    queryKey: ['agent-credentials', params, query],
-    queryFn: () => getAgentCredentials(params, query, getToken),
-    enabled: !!params.orgName && !!params.projName && !!params.agentName && !!query.environment,
-  });
-}
-
-export function useClaimAgentIdentitySecret() {
-  const { getToken } = useAuthHooks();
-  const queryClient = useQueryClient();
-  return useApiMutation<
-    AgentClaimSecretResponse,
-    unknown,
-    { params: ClaimAgentIdentitySecretPathParams; query: ClaimAgentIdentitySecretQuery }
-  >({
-    // No action/successMessage: the claimed secret itself is the success UI
-    // (shown once, inline, with an explicit "won't be shown again" warning),
-    // not a generic toast.
-    mutationFn: ({ params, query }) => claimAgentIdentitySecret(params, query, getToken),
-    onSuccess: (_data, { params }) => {
-      queryClient.invalidateQueries({ queryKey: ['agent-identity', params] });
-    },
-  });
-}

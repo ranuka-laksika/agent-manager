@@ -70,6 +70,10 @@ import {
   useParams,
 } from "react-router-dom";
 import { EnvironmentVariablesGuideDrawer } from "./Configure/subComponents/EnvironmentVariablesGuideDrawer";
+import {
+  EnvironmentVariablesReference,
+  type EnvVarReferenceRow,
+} from "./Configure/subComponents/EnvironmentVariablesReference";
 import { MCPServerDisplay } from "./Configure/subComponents/MCPServerDisplay";
 import { MCPProxyAPIKeysSection } from "./Configure/subComponents/MCPProxyAPIKeysSection";
 
@@ -79,6 +83,73 @@ type AuthInfoEntry = {
   name: string;
   value?: string;
 };
+
+// Fixed, never-renameable AMP_AGENTID_* names (client.EnvVarAgentID* in
+// constants.go) — kept as their own reference instead of folding into
+// envVarReferenceRows.
+export const AGENTID_ENV_VAR_ROWS: EnvVarReferenceRow[] = [
+  {
+    key: "clientId",
+    name: "AMP_AGENTID_CLIENT_ID",
+    description: "This agent's OAuth2 client ID for this environment",
+  },
+  {
+    key: "clientSecret",
+    name: "AMP_AGENTID_CLIENT_SECRET",
+    description: "This agent's OAuth2 client secret for this environment",
+  },
+  {
+    key: "tokenEndpoint",
+    name: "AMP_AGENTID_TOKEN_ENDPOINT",
+    description: "Token endpoint to call with a client_credentials grant",
+  },
+  {
+    key: "scopes",
+    name: "AMP_AGENTID_SCOPES",
+    description: "Space-separated scopes to request for this tool's actions",
+  },
+];
+
+// Mirrors how buildMCPPythonSnippet resolves the (possibly renamed) URL var,
+// so both guides stay consistent if that name changes.
+function buildAgentIDPythonSnippet(urlEnvVar: string): string {
+  return [
+    "import os",
+    "from typing import Any",
+    "import requests",
+    "from langchain_mcp_adapters.client import MultiServerMCPClient",
+    "",
+    "# 1. Request a token using the injected AgentID credentials.",
+    'client_id = os.environ["AMP_AGENTID_CLIENT_ID"]',
+    'client_secret = os.environ["AMP_AGENTID_CLIENT_SECRET"]',
+    'token_endpoint = os.environ["AMP_AGENTID_TOKEN_ENDPOINT"]',
+    'scopes = os.environ["AMP_AGENTID_SCOPES"]',
+    "",
+    "token_response = requests.post(",
+    "    token_endpoint,",
+    "    auth=(client_id, client_secret),",
+    '    data={"grant_type": "client_credentials", "scope": scopes},',
+    "    timeout=30,",
+    ")",
+    "token_response.raise_for_status()",
+    'access_token = token_response.json()["access_token"]',
+    "",
+    "# 2. Call this tool's URL with the token as a normal Bearer header.",
+    `mcp_server_url = os.environ.get("${urlEnvVar}", "").strip()`,
+    "server_configs: dict[str, dict[str, Any]] = {",
+    '    "mcp_server": {',
+    '        "url": mcp_server_url,',
+    '        "transport": "streamable_http",',
+    '        "headers": {',
+    '            "Authorization": f"Bearer {access_token}",',
+    "        },",
+    "    }",
+    "} if mcp_server_url else {}",
+    "",
+    "mcp_client = MultiServerMCPClient(server_configs)",
+    "tools = await mcp_client.get_tools()",
+  ].join("\n");
+}
 
 export const ViewMCPServerComponent = () => {
   const { orgId, projectId, agentId, proxyId } = useParams<{
@@ -211,10 +282,21 @@ export const ViewMCPServerComponent = () => {
       )?.security
     : undefined;
   const apiKeyHeaderName = getMCPAPIKeyHeaderName(sourceProxySecurity);
+  const usesIdentitySecurity = sourceProxySecurity?.identity?.enabled === true;
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
     [config],
+  );
+
+  // A config may still carry an apikey row from before the proxy's security
+  // was switched to OAuth; hide it rather than show a stale, irrelevant field.
+  const visibleEnvVarRows = useMemo(
+    () =>
+      usesIdentitySecurity
+        ? envVarRows.filter((envVar) => !isAPIKeyEnvVarKey(envVar.key))
+        : envVarRows,
+    [envVarRows, usesIdentitySecurity],
   );
 
   useEffect(() => {
@@ -225,10 +307,10 @@ export const ViewMCPServerComponent = () => {
     setEnvVarNames(nextNames);
   }, [envVarRows]);
 
-  const hasEmptyEnvVarName = envVarRows.some(
+  const hasEmptyEnvVarName = visibleEnvVarRows.some(
     (envVar) => (envVarNames[envVar.key] ?? envVar.name).trim() === "",
   );
-  const isDirty = envVarRows.some(
+  const isDirty = visibleEnvVarRows.some(
     (envVar) => (envVarNames[envVar.key] ?? envVar.name) !== envVar.name,
   );
 
@@ -275,18 +357,25 @@ export const ViewMCPServerComponent = () => {
 
   const envVarReferenceRows = useMemo(
     () =>
-      envVarRows.map((envVar) => ({
+      visibleEnvVarRows.map((envVar) => ({
         key: envVar.key,
         name: envVarNames[envVar.key] ?? envVar.name,
         description: describeMCPEnvVar(envVar.key),
       })),
-    [envVarRows, envVarNames],
+    [visibleEnvVarRows, envVarNames],
   );
 
   const pythonSnippet = useMemo(
     () => buildMCPPythonSnippet(envVarReferenceRows),
     [envVarReferenceRows],
   );
+
+  const agentIDPythonSnippet = useMemo(() => {
+    const urlEnvVar =
+      envVarReferenceRows.find((row) => /url/i.test(row.key))?.name ??
+      "MCP_SERVER_URL";
+    return buildAgentIDPythonSnippet(urlEnvVar);
+  }, [envVarReferenceRows]);
 
   if (isLoading) {
     return (
@@ -325,7 +414,8 @@ export const ViewMCPServerComponent = () => {
   const pageTitle =
     config.name || configProxy?.name || configProxyName || "Tool Configuration";
   const showPanel =
-    (isExternal && !!providerConfig) || (!isExternal && envVarRows.length > 0);
+    (isExternal && !!providerConfig) ||
+    (!isExternal && (envVarRows.length > 0 || usesIdentitySecurity));
 
   const envVarsPanel =
     showPanel &&
@@ -345,7 +435,28 @@ export const ViewMCPServerComponent = () => {
           onClose={() => setPanelOpen(false)}
         />
         <DrawerContent>
-          {(() => {
+          {usesIdentitySecurity ? (
+            <Stack spacing={2}>
+              <Alert severity="info">
+                <Typography variant="body2">
+                  This tool uses OAuth (AgentID) security. Generate a client
+                  ID and secret from Identity, then request a token with this
+                  tool&apos;s scopes, configured on this MCP proxy&apos;s own
+                  security settings.
+                </Typography>
+              </Alert>
+              {Boolean(providerConfig.url) && (
+                <TextInput
+                  label="Endpoint URL"
+                  value={providerConfig.url ?? ""}
+                  copyable
+                  copyTooltipText="Copy Endpoint URL"
+                  slotProps={{ input: { readOnly: true } }}
+                  size="small"
+                />
+              )}
+            </Stack>
+          ) : (() => {
             const authEntry =
               authInfoByEnv?.[selectedEnvName] ?? providerConfig.authInfo;
             const headerName = apiKeyHeaderName || authEntry?.name || "api-key";
@@ -449,22 +560,57 @@ export const ViewMCPServerComponent = () => {
         }
       >
         <Divider sx={{ my: 2 }} />
-        <Stack spacing={1.5}>
-          <Stack spacing={0.5}>
-            <Typography variant="subtitle1" fontWeight={600}>
-              Integration Guide
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Copy this pattern into your agent code to load MCP tools through
-              the injected proxy URL and API key.
-            </Typography>
+        {usesIdentitySecurity ? (
+          <Stack spacing={2}>
+            <Alert severity="info">
+              <Typography variant="body2">
+                This tool uses OAuth (AgentID) security. These values are
+                injected into your agent&apos;s pod at runtime, use them in
+                your code to request a token. Scopes are configured on this
+                MCP proxy&apos;s own security settings.
+              </Typography>
+            </Alert>
+            <EnvironmentVariablesReference
+              variant="plain"
+              title="AgentID Variables"
+              description="These names are fixed, only their values change per environment, and they're injected automatically at runtime alongside the URL above."
+              rows={AGENTID_ENV_VAR_ROWS}
+            />
+            <Stack spacing={1.5}>
+              <Stack spacing={0.5}>
+                <Typography variant="subtitle1" fontWeight={600}>
+                  Integration Guide
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Copy this pattern into your agent code to request a token
+                  and call the tool with it.
+                </Typography>
+              </Stack>
+              <CodeBlock
+                language="python"
+                fieldId="mcp-identity-python-snippet"
+                code={agentIDPythonSnippet}
+              />
+            </Stack>
           </Stack>
-          <CodeBlock
-            language="python"
-            fieldId="mcp-python-snippet"
-            code={pythonSnippet}
-          />
-        </Stack>
+        ) : (
+          <Stack spacing={1.5}>
+            <Stack spacing={0.5}>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Integration Guide
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Copy this pattern into your agent code to load MCP tools
+                through the injected proxy URL and API key.
+              </Typography>
+            </Stack>
+            <CodeBlock
+              language="python"
+              fieldId="mcp-python-snippet"
+              code={pythonSnippet}
+            />
+          </Stack>
+        )}
       </EnvironmentVariablesGuideDrawer>
     ));
 
@@ -600,11 +746,15 @@ function getMCPAPIKeyHeaderName(security?: {
 
 function describeMCPEnvVar(key: string): string {
   if (/url/i.test(key)) return "Base URL of the MCP server endpoint";
-  if (/api[-_]?key/i.test(key))
+  if (isAPIKeyEnvVarKey(key))
     return "API key for authenticating with the MCP server endpoint";
   return key
     .replace(/([A-Z])/g, " $1")
     .replace(/^./, (str) => str.toUpperCase());
+}
+
+function isAPIKeyEnvVarKey(key: string): boolean {
+  return /api[-_]?key/i.test(key);
 }
 
 function buildMCPPythonSnippet(rows: { key: string; name: string }[]): string {

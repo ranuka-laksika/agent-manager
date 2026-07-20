@@ -1260,30 +1260,6 @@ type AgentBuildOptionsResponse struct {
 	Python          AgentBuildOptionsPython          `json:"python"`
 }
 
-// AgentClaimSecretResponse Response for the one-time claim of an external agent's secret. This
-// is the only response that will ever include this secret value.
-type AgentClaimSecretResponse struct {
-	// AgentId Thunder's own ID for this identity, different from `clientId`
-	AgentId  string `json:"agentId"`
-	ClientId string `json:"clientId"`
-
-	// ClientSecret The OAuth2 client secret. Save it now, since it can't be fetched this way again.
-	ClientSecret    string `json:"clientSecret"`
-	EnvironmentName string `json:"environmentName"`
-	Status          string `json:"status"`
-}
-
-// AgentCredentialsResponse A platform-hosted agent's current AgentID credential. Unlike the
-// other identity responses, `clientSecret` is always included here
-// and you can call this endpoint as many times as you like.
-type AgentCredentialsResponse struct {
-	// AgentId Thunder's own ID for this identity, different from `clientId`
-	AgentId         string `json:"agentId"`
-	ClientId        string `json:"clientId"`
-	ClientSecret    string `json:"clientSecret"`
-	EnvironmentName string `json:"environmentName"`
-}
-
 // AgentIdentityActionRequest Request body for regenerating an AgentID secret
 type AgentIdentityActionRequest struct {
 	// Environment Environment name to regenerate the AgentID secret in
@@ -1320,9 +1296,8 @@ type AgentIdentityAssignmentsRequest struct {
 }
 
 // AgentIdentityEnvironmentView One environment's AgentID binding. This is a safe view that never
-// includes a secret, even if one is waiting to be claimed. Check
-// `hasUnclaimedSecret` to see if `DELETE .../identities/secrets` has
-// anything to return.
+// includes a secret. For an externally hosted agent, use
+// `POST .../identities` (regenerate) to obtain one.
 type AgentIdentityEnvironmentView struct {
 	// AgentId Thunder's own ID for this identity. This is different from
 	// `clientId`, which is the OAuth2 client ID. Empty until
@@ -1334,11 +1309,6 @@ type AgentIdentityEnvironmentView struct {
 
 	// EnvironmentName Environment this binding belongs to
 	EnvironmentName string `json:"environmentName"`
-
-	// HasUnclaimedSecret True only when this is a completed external-agent binding whose
-	// secret hasn't been claimed yet. Always false for platform-hosted
-	// agents and already-claimed bindings.
-	HasUnclaimedSecret bool `json:"hasUnclaimedSecret"`
 
 	// LastError Most recent provisioning error, if the last attempt failed
 	LastError *string `json:"lastError,omitempty"`
@@ -5524,18 +5494,6 @@ type GetAgentIdentityParams struct {
 // ProvisionAgentIdentityParams defines parameters for ProvisionAgentIdentity.
 type ProvisionAgentIdentityParams struct {
 	// Environment Environment name to provision the AgentID in
-	Environment string `form:"environment" json:"environment"`
-}
-
-// ClaimAgentIdentitySecretParams defines parameters for ClaimAgentIdentitySecret.
-type ClaimAgentIdentitySecretParams struct {
-	// Environment Environment name to claim the AgentID secret for
-	Environment string `form:"environment" json:"environment"`
-}
-
-// GetAgentCredentialsParams defines parameters for GetAgentCredentials.
-type GetAgentCredentialsParams struct {
-	// Environment Environment name to read the AgentID credential for
 	Environment string `form:"environment" json:"environment"`
 }
 

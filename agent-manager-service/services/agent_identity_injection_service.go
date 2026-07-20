@@ -99,10 +99,10 @@ func withReleaseBindingRetry(ctx context.Context, fn func() error) error {
 // AgentIdentityEnvVarKeys/mergeAgentIdentityEnvVarKeys shares this one map
 // instead of each allocating its own copy.
 var agentIdentityEnvVarKeySet = map[string]bool{
-	client.EnvVarAgentIdentityClientID:      true,
-	client.EnvVarAgentIdentityClientSecret:  true,
-	client.EnvVarAgentIdentityTokenEndpoint: true,
-	client.EnvVarAgentIdentityScopes:        true,
+	client.EnvVarAgentIDClientID:      true,
+	client.EnvVarAgentIDClientSecret:  true,
+	client.EnvVarAgentIDTokenEndpoint: true,
+	client.EnvVarAgentIDScopes:        true,
 }
 
 // AgentIdentityEnvVarKeys returns the set of env var names owned by AgentID
@@ -148,7 +148,7 @@ func mergeAgentIdentityEnvVarKeys(dst map[string]bool) map[string]bool {
 // to ask the other.
 //
 // External agents are never injected — they run outside the platform and
-// retrieve credentials via the one-time claim flow instead. Every method here
+// generate their own credentials on demand instead. Every method here
 // silently no-ops for them.
 type AgentIdentityInjectionService interface {
 	// EnvVarsForEnvironment returns the identity env vars for one internal
@@ -463,9 +463,9 @@ func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, bindin
 		return nil, err
 	}
 	return []client.EnvVar{
-		{Key: client.EnvVarAgentIdentityClientID, Value: binding.ThunderClientID},
+		{Key: client.EnvVarAgentIDClientID, Value: binding.ThunderClientID},
 		{
-			Key: client.EnvVarAgentIdentityClientSecret,
+			Key: client.EnvVarAgentIDClientSecret,
 			ValueFrom: &client.EnvVarValueFrom{
 				SecretKeyRef: &client.SecretKeyRef{
 					Name: secretRefName,
@@ -473,8 +473,8 @@ func (s *agentIdentityInjectionService) buildEnvVars(ctx context.Context, bindin
 				},
 			},
 		},
-		{Key: client.EnvVarAgentIdentityTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), binding.EnvironmentName)},
-		{Key: client.EnvVarAgentIdentityScopes, Value: strings.Join(scopes, " ")},
+		{Key: client.EnvVarAgentIDTokenEndpoint, Value: thundersvc.ThunderTokenURL(ThunderOrgNamespace(), binding.EnvironmentName)},
+		{Key: client.EnvVarAgentIDScopes, Value: strings.Join(scopes, " ")},
 	}, nil
 }
 
@@ -563,7 +563,7 @@ func identityEnvVarsInSync(desired []client.EnvVar, current []models.EnvVars) bo
 		}
 		// The scope list is the only identity var whose value changes in place;
 		// compare it exactly so scope edits re-inject.
-		if want.Key == client.EnvVarAgentIdentityScopes && got.Value != want.Value {
+		if want.Key == client.EnvVarAgentIDScopes && got.Value != want.Value {
 			return false
 		}
 	}

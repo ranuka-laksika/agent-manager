@@ -46,12 +46,15 @@ import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   useCreateAgentMCPConfig,
   useGetAgent,
+  useGetMCPProxy,
   useListAgentMCPConfigs,
   useListMCPProxies,
 } from "@agent-management-platform/api-client";
 import { usePipelineEnvironmentsState } from "@agent-management-platform/shared-component";
 import { ConfigNameSection } from "./ConfigNameSection";
+import { EnvironmentVariablesReference } from "./EnvironmentVariablesReference";
 import { MCPServerDisplay } from "./MCPServerDisplay";
+import { AGENTID_ENV_VAR_ROWS } from "../../ViewMCPServer.Component";
 import {
   ENV_VAR_KEYS,
   generateEnvVarNames,
@@ -137,6 +140,23 @@ export function AddMCPToolConfigPanel({
     [servers, selectedProxyId],
   );
 
+  // The list item has no security info, so fetch the full proxy to get it.
+  const { data: selectedProxyDetails } = useGetMCPProxy({
+    orgName: orgId,
+    proxyId: selectedProxyId ?? "",
+  });
+
+  // No single environment to check security against (this proxy maps to all at once).
+  // Hide apikey only when every endpoint uses OAuth, so mixed security keeps both fields.
+  const proxyEndpoints = selectedProxyDetails?.endpoints ?? [];
+  const usesIdentitySecurity =
+    proxyEndpoints.length > 0 &&
+    proxyEndpoints.every((endpoint) => endpoint.security?.identity?.enabled === true);
+  const relevantEnvVarKeys: EnvVarKey[] = useMemo(
+    () => (usesIdentitySecurity ? ["url"] : [...ENV_VAR_KEYS]),
+    [usesIdentitySecurity],
+  );
+
   const filteredServers = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return servers;
@@ -180,10 +200,12 @@ export function AddMCPToolConfigPanel({
     }
 
     const environmentVariables = !isExternal
-      ? ENV_VAR_KEYS.map((key) => ({
-          key,
-          name: (envVarNames[key] ?? "").trim(),
-        })).filter((envVar) => envVar.name.length > 0)
+      ? relevantEnvVarKeys
+          .map((key) => ({
+            key,
+            name: (envVarNames[key] ?? "").trim(),
+          }))
+          .filter((envVar) => envVar.name.length > 0)
       : [];
 
     const name = configName.trim() || suggestedConfigName;
@@ -242,6 +264,7 @@ export function AddMCPToolConfigPanel({
     selectedProxyId,
     environments,
     isExternal,
+    relevantEnvVarKeys,
     envVarNames,
     configName,
     suggestedConfigName,
@@ -402,10 +425,9 @@ export function AddMCPToolConfigPanel({
                     color="text.secondary"
                     sx={{ mb: 2 }}
                   >
-                    These names are shared across all environments. The platform
-                    injects the MCP server URL and API key values at runtime per
-                    environment (empty in environments the proxy is not configured
-                    for). Edit only if your code uses different names.
+                    {usesIdentitySecurity
+                      ? "Your agent still needs this tool's URL, even with OAuth. Shared across all environments; edit only if your code uses a different name."
+                      : "These names are shared across all environments. The platform injects the MCP server URL and API key values at runtime per environment (empty in environments the proxy is not configured for). Edit only if your code uses different names."}
                   </Typography>
                   <ListingTable.Container>
                     <ListingTable density="compact">
@@ -425,7 +447,7 @@ export function AddMCPToolConfigPanel({
                         </ListingTable.Row>
                       </ListingTable.Head>
                       <ListingTable.Body>
-                        {ENV_VAR_KEYS.map((key) => (
+                        {relevantEnvVarKeys.map((key) => (
                           <ListingTable.Row key={key}>
                             <ListingTable.Cell>
                               <TextInput
@@ -452,6 +474,27 @@ export function AddMCPToolConfigPanel({
                       </ListingTable.Body>
                     </ListingTable>
                   </ListingTable.Container>
+                </Form.Section>
+              ) : null}
+
+              {!isExternal && usesIdentitySecurity ? (
+                <Form.Section>
+                  <Form.Subheader>AgentID Variables</Form.Subheader>
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    <Typography variant="body2">
+                      This tool uses OAuth (AgentID) security. These values
+                      are injected into the agent&apos;s pod at runtime, use
+                      them in your code to request a token. Scopes are
+                      configured on this MCP proxy&apos;s own security
+                      settings.
+                    </Typography>
+                  </Alert>
+                  <EnvironmentVariablesReference
+                    variant="plain"
+                    title="Injected at runtime"
+                    description="These names are fixed, only their values change per environment, and they're injected automatically at runtime alongside the URL above."
+                    rows={AGENTID_ENV_VAR_ROWS}
+                  />
                 </Form.Section>
               ) : null}
             </Stack>
