@@ -226,7 +226,9 @@ export const ViewMCPServerComponent = () => {
   });
   const isExternal = agent?.provisioning?.type === "external";
 
-  const { data: environments = [] } = useListEnvironments({ orgName: orgId });
+  const { data: environments = [], isError: isEnvironmentsError } = useListEnvironments({
+    orgName: orgId,
+  });
   const getEnvDisplayName = (name: string) =>
     environments.find((env) => env.name === name)?.displayName ?? name;
   const { environments: pipelineEnvs } = usePipelineEnvironmentsState(
@@ -291,7 +293,11 @@ export const ViewMCPServerComponent = () => {
 
   const providerConfig = config?.envMappings?.[selectedEnvName]?.configuration;
 
-  const { data: sourceProxyDetails, isLoading: isLoadingProxyDetails } = useGetMCPProxy({
+  const {
+    data: sourceProxyDetails,
+    isLoading: isLoadingProxyDetails,
+    isError: isProxyDetailsError,
+  } = useGetMCPProxy({
     orgName: orgId,
     proxyId: configProxyName ?? "",
   });
@@ -307,7 +313,11 @@ export const ViewMCPServerComponent = () => {
 
   // Scopes are a proxy-level catalog (action -> tools it authorizes), not
   // per-endpoint, so this fetch doesn't depend on the selected environment.
-  const { data: scopesData, isLoading: isLoadingScopes } = useListMCPProxyScopes(
+  const {
+    data: scopesData,
+    isLoading: isLoadingScopes,
+    isError: isScopesError,
+  } = useListMCPProxyScopes(
     { orgName: orgId ?? "", proxyId: configProxyName ?? "" },
     { enabled: !!orgId && !!configProxyName },
   );
@@ -315,6 +325,9 @@ export const ViewMCPServerComponent = () => {
   // compute against stale/empty data and the Tools section would flash "No
   // tools available" before the real list shows up.
   const isLoadingTools = isLoadingProxyDetails || isLoadingScopes;
+  // A failure here would otherwise look identical to "this environment
+  // genuinely has no tools" — surfaced separately in the Tools section below.
+  const isToolsError = isEnvironmentsError || isProxyDetailsError || isScopesError;
 
   // Tools belong to the endpoint bound to the selected environment.
   const toolRows = useMemo<ToolRow[]>(() => {
@@ -754,6 +767,14 @@ export const ViewMCPServerComponent = () => {
           <Form.Subheader>Tools</Form.Subheader>
           {isLoadingTools ? (
             <Skeleton variant="rounded" height={160} />
+          ) : isToolsError ? (
+            <ListingTable.Container>
+              <ListingTable.EmptyState
+                illustration={<AlertTriangle size={56} />}
+                title="Failed to load tools"
+                description="Something went wrong while loading this environment's tools. Please try again."
+              />
+            </ListingTable.Container>
           ) : toolRows.length === 0 ? (
             <ListingTable.Container>
               <ListingTable.EmptyState
@@ -769,7 +790,7 @@ export const ViewMCPServerComponent = () => {
                   <ListingTable.Row>
                     <ListingTable.Cell>Tool</ListingTable.Cell>
                     <ListingTable.Cell width="140px">Status</ListingTable.Cell>
-                    <ListingTable.Cell>Scopes</ListingTable.Cell>
+                    {usesIdentitySecurity && <ListingTable.Cell>Scopes</ListingTable.Cell>}
                   </ListingTable.Row>
                 </ListingTable.Head>
                 <ListingTable.Body>
@@ -788,19 +809,21 @@ export const ViewMCPServerComponent = () => {
                           color={tool.blocked ? "error" : "success"}
                         />
                       </ListingTable.Cell>
-                      <ListingTable.Cell>
-                        {tool.scopes.length > 0 ? (
-                          <Stack direction="row" spacing={0.5} flexWrap="wrap">
-                            {tool.scopes.map((scope) => (
-                              <Chip key={scope} size="small" variant="outlined" label={scope} />
-                            ))}
-                          </Stack>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">
-                            —
-                          </Typography>
-                        )}
-                      </ListingTable.Cell>
+                      {usesIdentitySecurity && (
+                        <ListingTable.Cell>
+                          {tool.scopes.length > 0 ? (
+                            <Stack direction="row" spacing={0.5} flexWrap="wrap">
+                              {tool.scopes.map((scope) => (
+                                <Chip key={scope} size="small" variant="outlined" label={scope} />
+                              ))}
+                            </Stack>
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              —
+                            </Typography>
+                          )}
+                        </ListingTable.Cell>
+                      )}
                     </ListingTable.Row>
                   ))}
                 </ListingTable.Body>

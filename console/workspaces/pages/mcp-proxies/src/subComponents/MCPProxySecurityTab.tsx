@@ -39,7 +39,6 @@ import {
   FormControl,
   FormLabel,
   Grid,
-  IconButton,
   ListingTable,
   MenuItem,
   Select,
@@ -49,7 +48,7 @@ import {
   Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { Info, Plus, Trash, Wrench } from "@wso2/oxygen-ui-icons-react";
+import { Info } from "@wso2/oxygen-ui-icons-react";
 import {
   type AuthenticationType,
   getAuthenticationTypeLabel,
@@ -78,10 +77,10 @@ type ScopeOption = MCPProxyScopeResponse & { isNew?: boolean };
 const filterScopeOptions = createFilterOptions<ScopeOption>();
 
 // A local editable row for the identity-security tool-scope-binding table.
-// Keyed by a local id (not the tool name) since the same tool can appear in
-// more than one binding.
+// One row per tool discovered on this endpoint — every tool always has a
+// row, whether or not it currently has any scopes assigned — so the tool
+// itself doubles as the row's key.
 type ToolScopeRow = {
-  id: number;
   tool: string;
   scopes: MCPProxyScopeResponse[];
 };
@@ -101,7 +100,6 @@ function computeScopeReconciliation(
 ): ScopeReconciliation {
   const desired = new Map<string, Set<string>>();
   for (const row of rows) {
-    if (!row.tool) continue;
     for (const scope of row.scopes) {
       const tools = desired.get(scope.action) ?? new Set<string>();
       tools.add(row.tool);
@@ -231,14 +229,12 @@ export function MCPProxySecurityTab({
   const updateMCPProxyScope = useUpdateMCPProxyScope();
   const deleteMCPProxyScope = useDeleteMCPProxyScope();
 
-  // One row per binding, not one row per tool: the same tool can be bound
-  // more than once, so rows are keyed by a local id rather than the tool
-  // name. Starts empty — rows only come from the fetched scope list or
-  // "Add Tool", never auto-populated from the environment's discovered tools.
+  // One row per known tool, pre-populated from the endpoint's discovered
+  // tool list so scopes can be assigned directly — no separate "add tool"
+  // step. Starts empty and is seeded by the effects below once the tool
+  // list and scope catalog are both available.
   const [toolScopeRows, setToolScopeRows] = useState<ToolScopeRow[]>([]);
   const lastSavedToolScopeRowsRef = useRef<ToolScopeRow[]>([]);
-  const nextRowIdRef = useRef(0);
-  const [toolScopesError, setToolScopesError] = useState<string | undefined>();
 
   const serializeToolScopeRows = (rows: ToolScopeRow[]) =>
     JSON.stringify(
@@ -255,36 +251,35 @@ export function MCPProxySecurityTab({
     );
   }, [toolScopeRows]);
 
-  // Rows are a view derived from the scope list, not a separately-stored
-  // binding: each scope now owns its own tools list directly, so a row is
-  // built per distinct tool referenced by any scope.
-  const buildRowsFromScopes = (scopes: MCPProxyScopeResponse[]): ToolScopeRow[] => {
+  // Rows are a view built from the discovered tool list, not a separately
+  // stored binding: every known tool always has a row, seeded with whichever
+  // scopes already reference it (empty if none). Memoized since both reseed
+  // effects below would otherwise rebuild this from scratch on every render
+  // they fire in, even when neither toolEntries nor catalogScopes changed.
+  const derivedToolScopeRows = useMemo<ToolScopeRow[]>(() => {
     const toolToScopes = new Map<string, MCPProxyScopeResponse[]>();
-    for (const scope of scopes) {
+    for (const scope of catalogScopes) {
       for (const tool of scope.tools) {
         const scopesForTool = toolToScopes.get(tool) ?? [];
         scopesForTool.push(scope);
         toolToScopes.set(tool, scopesForTool);
       }
     }
-    return Array.from(toolToScopes.entries()).map(([tool, rowScopes]) => ({
-      id: nextRowIdRef.current++,
+    return toolEntries.map((tool) => ({
       tool,
-      scopes: rowScopes,
+      scopes: toolToScopes.get(tool) ?? [],
     }));
-  };
+  }, [toolEntries, catalogScopes]);
 
   // Switching endpoint tabs discards unsaved row edits, consistent with the
   // auth-fields effect above — even though scopes are shared across every
   // endpoint of the proxy, this tab's Save/Discard state is still per endpoint.
-  // Reads catalogScopes without depending on it — the effect below owns
-  // reseeding on scope-list changes, so this one only reacts to the tab switch.
+  // Reads derivedToolScopeRows without depending on it — the effect below
+  // owns reseeding on scope-list changes, so this one only reacts to the tab switch.
   useEffect(() => {
     if (!selectedEndpointId) return;
-    const rows = buildRowsFromScopes(catalogScopes);
-    setToolScopeRows(rows);
-    lastSavedToolScopeRowsRef.current = rows;
-    setToolScopesError(undefined);
+    setToolScopeRows(derivedToolScopeRows);
+    lastSavedToolScopeRowsRef.current = derivedToolScopeRows;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handled by the effect below
   }, [selectedEndpointId]);
 
@@ -296,35 +291,14 @@ export function MCPProxySecurityTab({
   // changes catalogScopes.
   useEffect(() => {
     if (!selectedEndpointId || toolScopesDirty) return;
-    const rows = buildRowsFromScopes(catalogScopes);
-    setToolScopeRows(rows);
-    lastSavedToolScopeRowsRef.current = rows;
+    setToolScopeRows(derivedToolScopeRows);
+    lastSavedToolScopeRowsRef.current = derivedToolScopeRows;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- guard, not a trigger dep
   }, [catalogScopes]);
 
-  const handleAddToolScopeRow = useCallback(() => {
-    setToolScopeRows((prev) => [
-      ...prev,
-      { id: nextRowIdRef.current++, tool: "", scopes: [] },
-    ]);
-  }, []);
-
-  const handleRemoveToolScopeRow = useCallback((rowId: number) => {
-    setToolScopeRows((prev) => prev.filter((row) => row.id !== rowId));
-  }, []);
-
-  const handleToolScopeRowToolChange = useCallback(
-    (rowId: number, tool: string) => {
-      setToolScopeRows((prev) =>
-        prev.map((row) => (row.id === rowId ? { ...row, tool } : row)),
-      );
-    },
-    [],
-  );
-
-  const setRowScopes = useCallback((rowId: number, scopes: MCPProxyScopeResponse[]) => {
+  const setRowScopes = useCallback((tool: string, scopes: MCPProxyScopeResponse[]) => {
     setToolScopeRows((prev) =>
-      prev.map((row) => (row.id === rowId ? { ...row, scopes } : row)),
+      prev.map((row) => (row.tool === tool ? { ...row, scopes } : row)),
     );
   }, []);
 
@@ -333,8 +307,8 @@ export function MCPProxySecurityTab({
   // when the final set of tools across every row referencing this action is
   // known (see handleSave's reconciliation against the fetched scope list).
   const handleToolScopeRowScopesChange = useCallback(
-    (rowId: number, options: ScopeOption[]) => {
-      setRowScopes(rowId, options);
+    (tool: string, options: ScopeOption[]) => {
+      setRowScopes(tool, options);
     },
     [setRowScopes],
   );
@@ -376,7 +350,6 @@ export function MCPProxySecurityTab({
     setStatus(null);
 
     setToolScopeRows(lastSavedToolScopeRowsRef.current);
-    setToolScopesError(undefined);
   }, [config]);
 
   const handleSave = useCallback(async () => {
@@ -389,17 +362,6 @@ export function MCPProxySecurityTab({
       return;
     }
     setFieldErrors({});
-
-    if (
-      authenticationType === "identity" &&
-      toolScopeRows.some((row) => !row.tool || row.scopes.length === 0)
-    ) {
-      setToolScopesError(
-        "Every row needs a tool and at least one scope before saving.",
-      );
-      return;
-    }
-    setToolScopesError(undefined);
 
     try {
       await onUpdate({
@@ -554,188 +516,107 @@ export function MCPProxySecurityTab({
             </Stack>
           ) : (
             <ListingTable.Container>
-              <ListingTable.Toolbar
-                actions={
-                  <Button
-                    variant="outlined"
-                    startIcon={<Plus size={16} />}
-                    onClick={handleAddToolScopeRow}
-                  >
-                    Add Tool
-                  </Button>
-                }
-              />
-              {toolScopeRows.length === 0 ? (
-                <ListingTable.EmptyState
-                  illustration={<Wrench size={64} />}
-                  title="No tool scope bindings yet"
-                  description='Click "Add Tool" to gate a tool with scopes.'
-                />
-              ) : (
-                <ListingTable density="compact">
-                  <ListingTable.Head>
-                    <ListingTable.Row>
-                      <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
-                      <ListingTable.Cell>Scopes</ListingTable.Cell>
-                      <ListingTable.Cell align="center" width="60px" />
-                    </ListingTable.Row>
-                  </ListingTable.Head>
-                  <ListingTable.Body>
-                    {toolScopeRows.map((row) => (
-                      <ListingTable.Row key={row.id}>
-                        <ListingTable.Cell>
-                          <Select
-                            size="small"
-                            displayEmpty
-                            fullWidth
-                            value={row.tool}
-                            onChange={(e) =>
-                              handleToolScopeRowToolChange(
-                                row.id,
-                                e.target.value as string,
-                              )
-                            }
-                            renderValue={(value) => {
-                              const identifier = value as string;
-                              if (!identifier) return "Select a tool";
-                              return (
-                                <Stack
-                                  direction="row"
-                                  alignItems="center"
-                                  sx={{ width: "100%" }}
-                                  spacing={1}
-                                >
-                                  <span>{identifier}</span>
-                                  {blockedToolIds.has(identifier) && (
-                                    <Tooltip title="Blocked by Manage Tools">
-                                      <Stack color="warning.main" direction="row" alignItems="center">
-                                        <Info size={14} />
-                                      </Stack>
-                                    </Tooltip>
-                                  )}
-                                </Stack>
-                              );
-                            }}
-                            sx={{ minWidth: 200 }}
+              <ListingTable density="compact">
+                <ListingTable.Head>
+                  <ListingTable.Row>
+                    <ListingTable.Cell width="30%">Tool</ListingTable.Cell>
+                    <ListingTable.Cell>Scopes</ListingTable.Cell>
+                  </ListingTable.Row>
+                </ListingTable.Head>
+                <ListingTable.Body>
+                  {toolScopeRows.map((row) => (
+                    <ListingTable.Row key={row.tool}>
+                      <ListingTable.Cell>
+                        <Stack direction="row" alignItems="center" spacing={1}>
+                          <Typography
+                            component="span"
+                            variant="body2"
+                            sx={{ fontFamily: "monospace" }}
+                            noWrap
                           >
-                            {toolEntries.map((identifier) => (
-                              <MenuItem key={identifier} value={identifier}>
-                                <Stack
-                                  direction="row"
-                                  alignItems="center"
-                                  spacing={1}
-                                  sx={{ width: "100%" }}
-                                >
-                                  <Typography component="span" variant="body2" noWrap>
-                                    {identifier}
-                                  </Typography>
-                                  {blockedToolIds.has(identifier) && (
-                                    <Tooltip title="Blocked by Manage Tools">
-                                      <Stack color="warning.main" direction="row" alignItems="center">
-                                        <Info size={14} />
-                                      </Stack>
-                                    </Tooltip>
-                                  )}
-
-                                </Stack>
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </ListingTable.Cell>
-                        <ListingTable.Cell>
-                          <Autocomplete
-                            multiple
-                            size="small"
-                            disableCloseOnSelect
-                            options={catalogScopes}
-                            value={row.scopes}
-                            onChange={(_e, value) =>
-                              handleToolScopeRowScopesChange(
-                                row.id,
-                                value as ScopeOption[],
-                              )
+                            {row.tool}
+                          </Typography>
+                          {blockedToolIds.has(row.tool) && (
+                            <Tooltip title="Blocked by Manage Tools">
+                              <Stack color="warning.main" direction="row" alignItems="center">
+                                <Info size={14} />
+                              </Stack>
+                            </Tooltip>
+                          )}
+                        </Stack>
+                      </ListingTable.Cell>
+                      <ListingTable.Cell>
+                        <Autocomplete
+                          multiple
+                          size="small"
+                          disableCloseOnSelect
+                          options={catalogScopes}
+                          value={row.scopes}
+                          onChange={(_e, value) =>
+                            handleToolScopeRowScopesChange(
+                              row.tool,
+                              value as ScopeOption[],
+                            )
+                          }
+                          filterOptions={(options, params) => {
+                            const filtered = filterScopeOptions(
+                              options as ScopeOption[],
+                              params,
+                            );
+                            const inputValue = params.inputValue.trim();
+                            const exists = options.some(
+                              (option) => option.action === inputValue,
+                            );
+                            if (inputValue.length > 0 && !exists) {
+                              filtered.push({
+                                action: inputValue,
+                                scope: inputValue,
+                                tools: [],
+                                isNew: true,
+                              });
                             }
-                            filterOptions={(options, params) => {
-                              const filtered = filterScopeOptions(
-                                options as ScopeOption[],
-                                params,
-                              );
-                              const inputValue = params.inputValue.trim();
-                              const exists = options.some(
-                                (option) => option.action === inputValue,
-                              );
-                              if (inputValue.length > 0 && !exists) {
-                                filtered.push({
-                                  action: inputValue,
-                                  scope: inputValue,
-                                  tools: [],
-                                  isNew: true,
-                                });
-                              }
-                              return filtered;
-                            }}
-                            getOptionLabel={(option) =>
-                              (option as ScopeOption).action
-                            }
-                            isOptionEqualToValue={(option, value) =>
-                              (option as ScopeOption).action ===
-                              (value as ScopeOption).action
-                            }
-                            renderOption={(props, option) => {
-                              const scopeOption = option as ScopeOption;
-                              return (
-                                <li {...props} key={scopeOption.action}>
-                                  {scopeOption.isNew
-                                    ? `+ Add Scope "${scopeOption.action}"`
-                                    : scopeOption.action}
-                                </li>
-                              );
-                            }}
-                            renderTags={(value, getTagProps) =>
-                              value.map((option, index) => (
-                                <Chip
-                                  {...getTagProps({ index })}
-                                  key={option.action}
-                                  label={option.action}
-                                  size="small"
-                                />
-                              ))
-                            }
-                            renderInput={(params) => (
-                              <TextField {...params} placeholder="Add scopes..." />
-                            )}
-                            noOptionsText="No scopes in the catalog"
-                            sx={{ minWidth: 280 }}
-                          />
-                        </ListingTable.Cell>
-                        <ListingTable.Cell align="center">
-                          <Tooltip title="Remove binding">
-                            <IconButton
-                              size="small"
-                              onClick={() => handleRemoveToolScopeRow(row.id)}
-                            >
-                              <Trash size={16} />
-                            </IconButton>
-                          </Tooltip>
-                        </ListingTable.Cell>
-                      </ListingTable.Row>
-                    ))}
-                  </ListingTable.Body>
-                </ListingTable>
-              )}
+                            return filtered;
+                          }}
+                          getOptionLabel={(option) =>
+                            (option as ScopeOption).action
+                          }
+                          isOptionEqualToValue={(option, value) =>
+                            (option as ScopeOption).action ===
+                            (value as ScopeOption).action
+                          }
+                          renderOption={(props, option) => {
+                            const scopeOption = option as ScopeOption;
+                            return (
+                              <li {...props} key={scopeOption.action}>
+                                {scopeOption.isNew
+                                  ? `+ Add Scope "${scopeOption.action}"`
+                                  : scopeOption.action}
+                              </li>
+                            );
+                          }}
+                          renderTags={(value, getTagProps) =>
+                            value.map((option, index) => (
+                              <Chip
+                                {...getTagProps({ index })}
+                                key={option.action}
+                                label={option.action}
+                                size="small"
+                              />
+                            ))
+                          }
+                          renderInput={(params) => (
+                            <TextField {...params} placeholder="Add scopes..." />
+                          )}
+                          noOptionsText="No scopes in the catalog"
+                          sx={{ minWidth: 280 }}
+                        />
+                      </ListingTable.Cell>
+                    </ListingTable.Row>
+                  ))}
+                </ListingTable.Body>
+              </ListingTable>
             </ListingTable.Container>
           )}
-          <Collapse in={!!toolScopesError} timeout={300}>
-            {toolScopesError && (
-              <Alert
-                severity="error"
-                onClose={() => setToolScopesError(undefined)}
-                sx={{ width: "100%", maxWidth: 480 }}
-              >
-                {toolScopesError}
-              </Alert>
-            )}
-          </Collapse>
         </Stack>
       )}
 

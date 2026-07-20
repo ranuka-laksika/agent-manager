@@ -156,7 +156,11 @@ export const ConfigureComponent: React.FC = () => {
     );
   };
 
-  const { environments: pipelineEnvs } = usePipelineEnvironmentsState(orgId, projectId);
+  const {
+    environments: pipelineEnvs,
+    isLoading: isPipelineEnvsLoading,
+    isError: isPipelineEnvsError,
+  } = usePipelineEnvironmentsState(orgId, projectId);
   const envNames = useMemo(() => pipelineEnvs.map((env) => env.name), [pipelineEnvs]);
   const { data: environmentsList = [] } = useListEnvironments({ orgName: orgId });
   const getEnvDisplayName = (name: string) =>
@@ -300,6 +304,8 @@ export const ConfigureComponent: React.FC = () => {
         projectId={projectId ?? ""}
         agentId={agentId ?? ""}
         envNames={envNames}
+        isEnvironmentsLoading={isPipelineEnvsLoading}
+        isEnvironmentsError={isPipelineEnvsError}
         getEnvDisplayName={getEnvDisplayName}
         selectedEnvName={selectedIdentityEnv}
         onSelectedEnvNameChange={setSelectedIdentityEnv}

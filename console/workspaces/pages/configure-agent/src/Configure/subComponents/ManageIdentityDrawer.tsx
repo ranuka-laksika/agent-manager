@@ -61,6 +61,54 @@ import {
 // visually scan and copy correctly.
 const monospaceInputSx = { "& .MuiInputBase-input": { fontFamily: "monospace" } };
 
+/**
+ * Shared loading/error/empty fallback for this drawer's several independent
+ * queries (identity binding, Thunder instance, environment list) — each
+ * needs the same three-way triage, just with different icons/copy.
+ */
+const QueryStateFallback: React.FC<{
+  isLoading: boolean;
+  isError: boolean;
+  errorTitle: string;
+  errorDescription: string;
+  isEmptyValue: boolean;
+  emptyIcon: React.ReactNode;
+  emptyTitle: string;
+  emptyDescription: string;
+}> = ({
+  isLoading, isError, errorTitle, errorDescription,
+  isEmptyValue, emptyIcon, emptyTitle, emptyDescription,
+}) => {
+  if (isLoading) {
+    return <Skeleton variant="rounded" height={120} />;
+  }
+  if (isError) {
+    return (
+      <ListingTable.Container>
+        <ListingTable.EmptyState
+          illustration={<AlertTriangle size={56} />}
+          title={errorTitle}
+          description={errorDescription}
+          minHeight={160}
+        />
+      </ListingTable.Container>
+    );
+  }
+  if (isEmptyValue) {
+    return (
+      <ListingTable.Container>
+        <ListingTable.EmptyState
+          illustration={emptyIcon}
+          title={emptyTitle}
+          description={emptyDescription}
+          minHeight={160}
+        />
+      </ListingTable.Container>
+    );
+  }
+  return null;
+};
+
 type Secret = { clientId: string; clientSecret: string };
 
 interface AgentIdentitySectionProps {
@@ -114,33 +162,18 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
     }
   };
 
-  if (isLoading) {
-    return <Skeleton variant="rounded" height={120} />;
-  }
-
-  if (isError) {
+  if (isLoading || isError || !binding) {
     return (
-      <ListingTable.Container>
-        <ListingTable.EmptyState
-          illustration={<AlertTriangle size={56} />}
-          title="Failed to load agent identity"
-          description={getErrorMessage(error)}
-          minHeight={160}
-        />
-      </ListingTable.Container>
-    );
-  }
-
-  if (!binding) {
-    return (
-      <ListingTable.Container>
-        <ListingTable.EmptyState
-          illustration={<ShieldOff size={56} />}
-          title="No agent identity"
-          description="This environment doesn't have an agent identity yet."
-          minHeight={160}
-        />
-      </ListingTable.Container>
+      <QueryStateFallback
+        isLoading={isLoading}
+        isError={isError}
+        errorTitle="Failed to load agent identity"
+        errorDescription={getErrorMessage(error)}
+        isEmptyValue={!binding}
+        emptyIcon={<ShieldOff size={56} />}
+        emptyTitle="No agent identity"
+        emptyDescription="This environment doesn't have an agent identity yet."
+      />
     );
   }
 
@@ -278,26 +311,17 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
       <Form.Section>
         <Form.Subheader>OAuth2 Endpoints</Form.Subheader>
 
-        {isLoadingThunderInstance ? (
-          <Skeleton variant="rounded" height={120} />
-        ) : isThunderInstanceError ? (
-          <ListingTable.Container>
-            <ListingTable.EmptyState
-              illustration={<AlertTriangle size={56} />}
-              title="Failed to load identity provider"
-              description={getErrorMessage(thunderInstanceError)}
-              minHeight={160}
-            />
-          </ListingTable.Container>
-        ) : !thunderInstance ? (
-          <ListingTable.Container>
-            <ListingTable.EmptyState
-              illustration={<ShieldAlert size={56} />}
-              title="No identity provider"
-              description="No identity provider found for this environment."
-              minHeight={160}
-            />
-          </ListingTable.Container>
+        {isLoadingThunderInstance || isThunderInstanceError || !thunderInstance ? (
+          <QueryStateFallback
+            isLoading={isLoadingThunderInstance}
+            isError={isThunderInstanceError}
+            errorTitle="Failed to load identity provider"
+            errorDescription={getErrorMessage(thunderInstanceError)}
+            isEmptyValue={!thunderInstance}
+            emptyIcon={<ShieldAlert size={56} />}
+            emptyTitle="No identity provider"
+            emptyDescription="No identity provider found for this environment."
+          />
         ) : (
           <Stack spacing={1.5}>
             <TextInput
@@ -351,6 +375,11 @@ export interface ManageIdentityDrawerProps {
   projectId: string;
   agentId: string;
   envNames: string[];
+  /** Loading/error state of the query that produced `envNames`, so the
+   * drawer can tell "still fetching" or "failed to fetch" apart from a
+   * genuinely empty environment list. */
+  isEnvironmentsLoading: boolean;
+  isEnvironmentsError: boolean;
   getEnvDisplayName: (name: string) => string;
   /** Controlled by the caller (URL search param) so a deep link from an
    * EnvironmentCard's "Manage AgentID" button can pre-select the environment
@@ -367,46 +396,65 @@ export interface ManageIdentityDrawerProps {
  * (EnvAgentRolesGroupsSection); this is the fuller picture for one env.
  */
 export const ManageIdentityDrawer: React.FC<ManageIdentityDrawerProps> = ({
-  open, onClose, orgId, projectId, agentId, envNames, getEnvDisplayName,
+  open, onClose, orgId, projectId, agentId, envNames,
+  isEnvironmentsLoading, isEnvironmentsError, getEnvDisplayName,
   selectedEnvName, onSelectedEnvNameChange,
 }) => {
   const envSelectLabelId = useId();
   const envName = envNames.includes(selectedEnvName) ? selectedEnvName : (envNames[0] ?? "");
 
+  let content: React.ReactNode;
+  if (isEnvironmentsLoading || isEnvironmentsError || !envName) {
+    content = (
+      <QueryStateFallback
+        isLoading={isEnvironmentsLoading}
+        isError={isEnvironmentsError}
+        errorTitle="Failed to load environments"
+        errorDescription="Something went wrong while loading this agent's environments. Please try again."
+        isEmptyValue={!envName}
+        emptyIcon={<ShieldOff size={56} />}
+        emptyTitle="No environments"
+        emptyDescription="This agent isn't deployed to any environment yet."
+      />
+    );
+  } else {
+    content = (
+      <>
+        <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
+          <Typography id={envSelectLabelId} variant="body2" color="text.secondary">
+            Environment
+          </Typography>
+          <FormControl size="small" sx={{ minWidth: 260 }}>
+            <Select
+              labelId={envSelectLabelId}
+              value={envName}
+              onChange={(event) => onSelectedEnvNameChange(event.target.value as string)}
+            >
+              {envNames.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {getEnvDisplayName(name)}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </Stack>
+
+        <AgentIdentitySection
+          key={envName}
+          orgId={orgId}
+          projectId={projectId}
+          agentId={agentId}
+          envId={envName}
+        />
+      </>
+    );
+  }
+
   return (
     <DrawerWrapper open={open} onClose={onClose} maxWidth={640}>
       <DrawerHeader icon={<ShieldCheck size={24} />} title="Manage AgentID" onClose={onClose} />
       <DrawerContent>
-        <Stack spacing={2}>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
-            <Typography id={envSelectLabelId} variant="body2" color="text.secondary">
-              Environment
-            </Typography>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <Select
-                labelId={envSelectLabelId}
-                value={envName}
-                onChange={(event) => onSelectedEnvNameChange(event.target.value as string)}
-              >
-                {envNames.map((name) => (
-                  <MenuItem key={name} value={name}>
-                    {getEnvDisplayName(name)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Stack>
-
-          {envName && (
-            <AgentIdentitySection
-              key={envName}
-              orgId={orgId}
-              projectId={projectId}
-              agentId={agentId}
-              envId={envName}
-            />
-          )}
-        </Stack>
+        <Stack spacing={2}>{content}</Stack>
       </DrawerContent>
     </DrawerWrapper>
   );
