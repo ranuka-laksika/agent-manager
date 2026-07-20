@@ -20,7 +20,7 @@ import type { AgentIdentityAgentResponse } from "@agent-management-platform/type
 
 /**
  * Agents without a Thunder binding yet can't be added as a group member or
- * role assignee, and can't be looked up by Thunder agent ID, so both the
+ * role assignee, and can't be looked up by agent ID, so both the
  * picker options and the lookup map are restricted to bound agents.
  */
 export function useAgentLookup(agents: AgentIdentityAgentResponse[]) {

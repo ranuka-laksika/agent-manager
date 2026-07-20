@@ -134,9 +134,13 @@ export const RoleEditPage: React.FC = () => {
   const [selectedScopes, setSelectedScopes] = useState<ScopeChoice[]>([]);
   const hasEditedScopes = useRef(false);
 
+  const catalogByScope = useMemo(
+    () => new Map(catalogScopes.map((s) => [s.scope, s])),
+    [catalogScopes],
+  );
+
   useEffect(() => {
     if (!hasEditedScopes.current && catalogScopes.length > 0) {
-      const catalogByScope = new Map(catalogScopes.map((s) => [s.scope, s]));
       // A scope assigned to this role may no longer be in the environment's
       // aggregate (its owning proxy may no longer be deployed here) — keep it
       // as a placeholder so it isn't silently dropped (and dirtied) on load,
@@ -145,7 +149,7 @@ export const RoleEditPage: React.FC = () => {
         initialScopeNames.map((name) => catalogByScope.get(name) ?? { scope: name }),
       );
     }
-  }, [initialScopeNames, catalogScopes]);
+  }, [initialScopeNames, catalogScopes, catalogByScope]);
 
   const rolesNode =
     absoluteRouteMap.children.org.children.thunderInstances.children.view.children.roles;
@@ -173,11 +177,6 @@ export const RoleEditPage: React.FC = () => {
   const availableGroups = useMemo(
     () => allGroups.filter((g) => !groupDelta.excludedIds.has(g.id)),
     [allGroups, groupDelta.excludedIds],
-  );
-
-  const selectedScopeNames = useMemo(
-    () => new Set(selectedScopes.map((s) => s.scope)),
-    [selectedScopes],
   );
 
   const handleAddAgent = agentDelta.handleAdd;
@@ -364,22 +363,42 @@ export const RoleEditPage: React.FC = () => {
                     No scopes assigned yet.
                   </Typography>
                 ) : (
-                  <Stack direction="row" flexWrap="wrap" gap={1}>
-                    {catalogScopes
-                      .filter((s) => selectedScopeNames.has(s.scope))
-                      .map((s) => (
-                        <Chip
-                          key={s.scope}
-                          label={s.scope}
-                          size="small"
-                          onDelete={
-                            !isPermissionsReadOnly
-                              ? () => handleRemoveScope(s.scope)
-                              : undefined
-                          }
-                        />
-                      ))}
-                  </Stack>
+                  <ListingTable.Container>
+                    <ListingTable>
+                      <ListingTable.Head>
+                        <ListingTable.Row>
+                          <ListingTable.Cell>Scope</ListingTable.Cell>
+                          <ListingTable.Cell>Description</ListingTable.Cell>
+                          {!isPermissionsReadOnly && <ListingTable.Cell />}
+                        </ListingTable.Row>
+                      </ListingTable.Head>
+                      <ListingTable.Body>
+                        {selectedScopes.map((sel) => {
+                          const s = catalogByScope.get(sel.scope) ?? sel;
+                          return (
+                            <ListingTable.Row key={s.scope}>
+                              <ListingTable.Cell>{s.scope}</ListingTable.Cell>
+                              <ListingTable.Cell>
+                                {s.description ?? "-"}
+                              </ListingTable.Cell>
+                              {!isPermissionsReadOnly && (
+                                <ListingTable.Cell align="right">
+                                  <Tooltip title="Remove scope">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleRemoveScope(s.scope)}
+                                    >
+                                      <Trash size={16} />
+                                    </IconButton>
+                                  </Tooltip>
+                                </ListingTable.Cell>
+                              )}
+                            </ListingTable.Row>
+                          );
+                        })}
+                      </ListingTable.Body>
+                    </ListingTable>
+                  </ListingTable.Container>
                 )}
               </Box>
             </>
@@ -425,7 +444,7 @@ export const RoleEditPage: React.FC = () => {
                         <ListingTable.Head>
                           <ListingTable.Row>
                             <ListingTable.Cell>Agent</ListingTable.Cell>
-                            <ListingTable.Cell>Thunder Agent ID</ListingTable.Cell>
+                            <ListingTable.Cell>Agent ID</ListingTable.Cell>
                             <ListingTable.Cell />
                           </ListingTable.Row>
                         </ListingTable.Head>

@@ -108,7 +108,7 @@ export const AgentsTab: React.FC = () => {
                 <ListingTable.Cell>Agent</ListingTable.Cell>
                 <ListingTable.Cell>Project</ListingTable.Cell>
                 <ListingTable.Cell>Status</ListingTable.Cell>
-                <ListingTable.Cell>Thunder Agent ID</ListingTable.Cell>
+                <ListingTable.Cell>Agent ID</ListingTable.Cell>
               </ListingTable.Row>
             </ListingTable.Head>
             <ListingTable.Body>

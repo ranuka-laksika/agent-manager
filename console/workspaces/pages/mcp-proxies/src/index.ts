@@ -10,6 +10,11 @@ import { AddMCPProxyOrganization } from "./AddMCPProxy.Organization";
 import { MCPLogo } from "./components/MCPLogo";
 import { MCPProxiesOrganization } from "./MCPProxies.Organization";
 import { ViewMCPProxy } from "./subComponents/ViewMCPProxy";
+import {
+  getCapabilityId,
+  isToolBlockedByAcl,
+  type CapabilityKind,
+} from "./subComponents/mcpEndpoints";
 import type { PageMetadata } from "@agent-management-platform/types";
 
 export const metaData: PageMetadata = {
@@ -30,6 +35,9 @@ export {
   MCPLogo,
   MCPProxiesOrganization,
   ViewMCPProxy,
+  getCapabilityId,
+  isToolBlockedByAcl,
+  type CapabilityKind,
 };
 
 export default MCPProxiesOrganization;

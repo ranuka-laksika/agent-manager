@@ -19,7 +19,6 @@
 import React, { useMemo } from "react";
 import {
     Box,
-    Button,
     Card,
     CardContent,
     Divider,
@@ -30,7 +29,7 @@ import {
     useTheme,
 } from "@wso2/oxygen-ui";
 import { AreaChart } from "@wso2/oxygen-ui-charts-react";
-import { ChevronRight, PauseCircle } from "@wso2/oxygen-ui-icons-react";
+import { PauseCircle } from "@wso2/oxygen-ui-icons-react";
 import {
     useGetAgentMetrics,
     useListAgentDeployments,
@@ -42,8 +41,9 @@ import {
     TraceListTimeRange,
 } from "@agent-management-platform/types";
 import { format } from "date-fns";
-import { generatePath, Link } from "react-router-dom";
+import { generatePath } from "react-router-dom";
 import { DonutIcon, DonutColor } from "./DonutIcon";
+import { SectionHeader } from "./SectionHeader";
 
 interface EnvObservabilitySectionProps {
     orgId: string;
@@ -342,22 +342,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
     return (
         <>
             <Divider sx={{ mt: 2, mb: 1 }} />
-            <Box display="flex" justifyContent="space-between" alignItems="center" mb={0.5}>
-                <Typography variant="caption" color="text.secondary" fontWeight={600}
-                    sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                    Recent Traces
-                </Typography>
-                <Button
-                    size="small"
-                    variant="text"
-                    endIcon={<ChevronRight size={14} />}
-                    component={Link}
-                    to={tracesHref}
-                    sx={{ minWidth: 0, fontSize: "0.75rem" }}
-                >
-                    View all
-                </Button>
-            </Box>
+            <SectionHeader title="Recent Traces" viewAllHref={tracesHref} />
             <Grid container spacing={1.5}>
                 <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
                     <MetricCard
@@ -408,22 +393,7 @@ export const EnvObservabilitySection: React.FC<EnvObservabilitySectionProps> = (
             ) : (
                 <>
                     <Divider sx={{ mt: 1.5, mb: 1 }} />
-                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                        <Typography variant="caption" color="text.secondary" fontWeight={600}
-                            sx={{ textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                            System Metrics
-                        </Typography>
-                        <Button
-                            size="small"
-                            variant="text"
-                            endIcon={<ChevronRight size={14} />}
-                            component={Link}
-                            to={metricsHref}
-                            sx={{ minWidth: 0, fontSize: "0.75rem" }}
-                        >
-                            View all
-                        </Button>
-                    </Box>
+                    <SectionHeader title="System Metrics" viewAllHref={metricsHref} mb={1} />
                     <Stack direction="row" spacing={0.75} sx={{ maxWidth: 400 }}>
                         <SimpleMetricCard
                             label="CPU"

@@ -88,7 +88,7 @@ export const InstrumentationDrawer = ({
           sx={{
             display: "flex",
             flexDirection: "column",
-            gap: 2,
+            gap: 3,
             pt: 1,
             width: "100%",
           }}

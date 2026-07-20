@@ -57,6 +57,10 @@ export {
   type AccessControlStatus,
 } from "./AccessControlPanel/AccessControlPanel";
 export {
+  RolesGroupsChips,
+  useAgentRolesAndGroups,
+} from "./AgentRolesGroups/AgentRolesGroups";
+export {
   ResourceListShell,
   type ResourceListShellProps,
   type ResourceListEmptyState,

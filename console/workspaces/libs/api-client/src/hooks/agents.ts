@@ -213,6 +213,39 @@ export function useGetAgentIdentity(
   });
 }
 
+interface AgentIdentityBindingParams {
+  orgId: string;
+  projectId: string;
+  agentId: string;
+  envId: string;
+}
+
+/**
+ * Shared "is this environment's AgentID binding usable" read. Several
+ * consumers across pages (the overview's roles/groups list, the identity
+ * regenerate button, the identity claim/reveal UI) each need to know whether
+ * provisioning has completed — this centralizes that definition instead of
+ * every consumer re-deriving `status === "completed"` from its own copy of
+ * the binding.
+ */
+export function useAgentIdentityBinding({
+  orgId, projectId, agentId, envId,
+}: AgentIdentityBindingParams) {
+  const { data: identityViews, isLoading, isError, error } = useGetAgentIdentity(
+    { orgName: orgId, projName: projectId, agentName: agentId },
+    { environment: envId },
+  );
+  const binding = identityViews?.[0];
+
+  return {
+    binding,
+    provisioned: binding?.status === "completed",
+    isLoading,
+    isError,
+    error,
+  };
+}
+
 export function useProvisionAgentIdentity() {
   const { getToken } = useAuthHooks();
   const queryClient = useQueryClient();

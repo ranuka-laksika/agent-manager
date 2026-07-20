@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2025, WSO2 LLC. (https://www.wso2.com).
+ * Copyright (c) 2026, WSO2 LLC. (https://www.wso2.com).
  *
  * WSO2 LLC. licenses this file to you under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
@@ -16,9 +16,11 @@
  * under the License.
  */
 
-import { rootRouteMap as relativeRouteMap } from './routes.map';
-import { generatedRouteMap as absoluteRouteMap } from './generated-route.map';
-export { type AppRoute, type GeneratedRoute } from './types';
-export { MANAGE_IDENTITY_PARAM, IDENTITY_ENV_PARAM } from './manageIdentityParams';
-
-export { relativeRouteMap, absoluteRouteMap };
+// Query params read by the Configure Agent page's "Manage AgentID" drawer
+// (ManageIdentityDrawer, in @agent-management-platform/configure-agent) and
+// written by the deep link an EnvironmentCard's "Manage AgentID" button
+// builds (@agent-management-platform/overview). Shared here — both packages
+// already depend on @agent-management-platform/types for absoluteRouteMap —
+// so a rename can't desync the two sides.
+export const MANAGE_IDENTITY_PARAM = "manageIdentity";
+export const IDENTITY_ENV_PARAM = "identityEnv";

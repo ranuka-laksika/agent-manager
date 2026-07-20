@@ -18,6 +18,7 @@
 
 import { useState, useEffect } from "react";
 import { Box, Typography, Button, Select, MenuItem, CircularProgress } from "@wso2/oxygen-ui";
+import { KeyRound } from "@wso2/oxygen-ui-icons-react";
 import { CodeBlock } from "@agent-management-platform/shared-component";
 import { useGenerateAgentToken } from "@agent-management-platform/api-client";
 
@@ -114,10 +115,10 @@ export const TokenGenerationStep = ({
           </Select>
 
           <Button
-            variant="contained"
+            variant="text"
             onClick={()=>refetch()}
             disabled={ isFetching}
-            startIcon={isFetching ? <CircularProgress size={16} /> : undefined}
+            startIcon={isFetching ? <CircularProgress size={16} /> : <KeyRound size={16} />}
             size="small"
           >
             {isFetching ? "Generating..." : data?.token ? "Generated" : "Generate"}
