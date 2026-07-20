@@ -74,28 +74,32 @@ func TestBuildProxyURLSelectsReachableGateway(t *testing.T) {
 		Vhost: "https://dev-acme.gateway.example.com",
 	}
 
-	require.Equal(t,
+	require.Equal(
+		t,
 		"http://api-platform-acme-dev-gateway-gateway-runtime.acme-dev:22893/llm/proxy",
 		buildProxyURL(gateway, &contextPath, true),
 	)
-	require.Equal(t,
+	require.Equal(
+		t,
 		"https://dev-acme.gateway.example.com/llm/proxy",
 		buildProxyURL(gateway, &contextPath, false),
 	)
 }
 
 func TestBuildMCPProxyURLSelectsReachableGateway(t *testing.T) {
-	contextPath := "/tools/"
+	contextPath := "  /tools/  "
 	gateway := &models.Gateway{
 		Name:  "api-platform-acme-dev",
 		Vhost: "https://dev-acme.gateway.example.com/",
 	}
 
-	require.Equal(t,
+	require.Equal(
+		t,
 		"http://api-platform-acme-dev-gateway-gateway-runtime.acme-dev:22893/tools/mcp",
 		buildMCPProxyURL(gateway, &contextPath, true),
 	)
-	require.Equal(t,
+	require.Equal(
+		t,
 		"https://dev-acme.gateway.example.com/tools/mcp",
 		buildMCPProxyURL(gateway, &contextPath, false),
 	)

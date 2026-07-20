@@ -365,8 +365,10 @@ func buildMCPProxyURL(gateway *models.Gateway, contextPath *string, isInternal b
 	}
 	base = strings.TrimRight(strings.TrimSpace(base), "/")
 	path := "/mcp"
-	if contextPath != nil && strings.TrimSpace(*contextPath) != "" {
-		path = strings.TrimRight(*contextPath, "/") + "/mcp"
+	if contextPath != nil {
+		if trimmedContextPath := strings.TrimSpace(*contextPath); trimmedContextPath != "" {
+			path = strings.TrimRight(trimmedContextPath, "/") + "/mcp"
+		}
 	}
 	return base + path
 }
