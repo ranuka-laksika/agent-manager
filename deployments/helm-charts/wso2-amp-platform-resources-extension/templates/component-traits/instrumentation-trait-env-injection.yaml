@@ -91,16 +91,21 @@ spec:
           path: /spec/podTemplate/spec/containers/0/env/-
           value:
             name: ${parameters.otelEndpointEnvName}
-            # kgateway-routed vhost ("<env>-<org>.<domain>"): traces flow through
-            # kgateway -> api-platform gateway runtime -> /otel RestApi, the same
-            # path external agents use. Routing by hostname keeps this URL
-            # independent of the namespace the gateway runtime is deployed in.
+            # In-cluster gateway runtime Service (per-org-env namespace): the
+            # sandboxed agent reaches the runtime directly at
+            # "api-platform-<org>-<env>-gateway-gateway-runtime.<org>-<env>:22893/otel".
+            # Derived from the apiGatewayName convention ("api-platform-<org>-<env>")
+            # + the per-env gateway namespace ("<org>-<env>"), matching the
+            # API-management trait's runtime backend. This in-cluster path is what
+            # the sandbox NetworkPolicy egress allows (namespace label
+            # amp.wso2.com/api-platform-gateway=true, port 22893) and avoids the
+            # host-hairpin vhost, which a sandboxed pod cannot reach.
             #
             # otelEndpointOverride replaces the whole URL when set (e.g. a VM
             # install fronts a single public gateway host on :443, where the
-            # per-env "<env>-<org>.<host>:<port>" template does not fit). Leave
-            # empty for the default kgateway-routed vhost.
-            value: {{ if .Values.apiPlatformGatewayVhost.otelEndpointOverride }}{{ .Values.apiPlatformGatewayVhost.otelEndpointOverride | quote }}{{ else }}"http://${metadata.environmentName}-${metadata.componentNamespace}.{{ .Values.apiPlatformGatewayVhost.host }}:{{ .Values.apiPlatformGatewayVhost.port }}/otel"{{ end }}
+            # per-env in-cluster Service does not apply). Leave empty for the
+            # default in-cluster runtime endpoint.
+            value: {{ if .Values.apiPlatformGatewayVhost.otelEndpointOverride }}{{ .Values.apiPlatformGatewayVhost.otelEndpointOverride | quote }}{{ else }}"http://api-platform-${metadata.componentNamespace}-${metadata.environmentName}-gateway-gateway-runtime.${metadata.componentNamespace}-${metadata.environmentName}:22893/otel"{{ end }}
         - op: add
           path: /spec/podTemplate/spec/containers/0/env/-
           value:
