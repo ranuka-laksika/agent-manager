@@ -32,9 +32,7 @@ import {
 } from "@wso2/oxygen-ui";
 import {
   AlertTriangle,
-  Eye,
   ExternalLink,
-  Fingerprint,
   RotateCcwKey,
   ShieldAlert,
   ShieldCheck,
@@ -43,7 +41,6 @@ import {
 import { generatePath } from "react-router-dom";
 import {
   useAgentIdentityBinding,
-  useClaimAgentIdentitySecret,
   useListThunderInstances,
   useRegenerateAgentIdentitySecret,
 } from "@agent-management-platform/api-client";
@@ -64,7 +61,7 @@ import {
 // visually scan and copy correctly.
 const monospaceInputSx = { "& .MuiInputBase-input": { fontFamily: "monospace" } };
 
-type Secret = { clientId: string; clientSecret: string; isRegenerated: boolean };
+type Secret = { clientId: string; clientSecret: string };
 
 interface AgentIdentitySectionProps {
   orgId: string;
@@ -74,10 +71,11 @@ interface AgentIdentitySectionProps {
 }
 
 /**
- * Client ID/secret claim + regenerate UI for one environment. Internal agents
- * never get a claim flow (the secret is injected straight into the workload,
- * never surfaced here) so they only see the regenerate action; external
- * agents additionally get to reveal/claim and see the client ID/secret.
+ * Client ID/secret regenerate UI for one environment. The client secret is
+ * never stored server-side, so the only way to see one is right after a
+ * regenerate call — internal agents get it injected straight into the
+ * workload instead, but the same regenerate action and client ID display
+ * apply to both.
  */
 const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
   orgId, projectId, agentId, envId,
@@ -86,7 +84,6 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
     orgId, projectId, agentId, envId,
   });
 
-  const { mutateAsync: claimSecret, isPending: isClaiming } = useClaimAgentIdentitySecret();
   const { mutateAsync: regenerateSecret, isPending: isRegenerating } =
     useRegenerateAgentIdentitySecret();
   const [revealed, setRevealed] = useState<Secret | null>(null);
@@ -105,29 +102,13 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
     orgId, projectId, agentId, envId, enabled: provisioned,
   });
 
-  const handleClaim = async () => {
-    try {
-      const resp = await claimSecret({
-        params: { orgName: orgId, projName: projectId, agentName: agentId },
-        query: { environment: envId },
-      });
-      setRevealed({
-        clientId: resp.clientId, clientSecret: resp.clientSecret, isRegenerated: false,
-      });
-    } catch {
-      // Error already surfaced via useClaimAgentIdentitySecret's snackbar.
-    }
-  };
-
   const handleRegenerate = async () => {
     try {
       const resp = await regenerateSecret({
         params: { orgName: orgId, projName: projectId, agentName: agentId },
         body: { environment: envId },
       });
-      setRevealed({
-        clientId: resp.clientId, clientSecret: resp.clientSecret, isRegenerated: true,
-      });
+      setRevealed({ clientId: resp.clientId, clientSecret: resp.clientSecret });
     } catch {
       // Error already surfaced via useRegenerateAgentIdentitySecret's snackbar.
     }
@@ -164,7 +145,6 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
   }
 
   const isExternal = binding.provisioningType === "external";
-  const alreadyClaimed = provisioned && !binding.hasUnclaimedSecret;
 
   const idpHref = generatePath(
     absoluteRouteMap.children.org.children.thunderInstances.children.view.path,
@@ -173,9 +153,8 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
 
   let body: React.ReactNode;
   if (revealed) {
-    // Only shown once, right after claiming/regenerating — the backend
-    // deletes its stored copy the moment it's returned, so this is the only
-    // chance to see the secret.
+    // Only shown once, right after regenerating — the backend never stores
+    // the secret, so this is the only chance to see it.
     body = (
       <Stack spacing={1.5}>
         <TextInput
@@ -198,9 +177,7 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
           sx={monospaceInputSx}
         />
         <Typography variant="body2" color="text.secondary">
-          {revealed.isRegenerated
-            ? "This is the new secret after regenerating — copy it now, it won't be shown again."
-            : "This secret will not be shown again — copy it now."}
+          This secret will not be shown again — copy it now.
         </Typography>
       </Stack>
     );
@@ -215,7 +192,7 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
     // safe to show. The secret field is a static placeholder here — it's not
     // a real masked value the user could reveal, just an indicator that a
     // secret exists; the real value only ever shows up above, right after a
-    // reveal/regenerate.
+    // regenerate.
     body = (
       <Stack spacing={1.5}>
         <TextInput
@@ -227,35 +204,19 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
           size="small"
           sx={monospaceInputSx}
         />
-        {alreadyClaimed && (
-          <TextInput
-            slotProps={{ input: { readOnly: true } }}
-            label="Client Secret"
-            value="••••••••"
-            fullWidth
-            size="small"
-            sx={monospaceInputSx}
-          />
-        )}
+        <TextInput
+          slotProps={{ input: { readOnly: true } }}
+          label="Client Secret"
+          value="••••••••"
+          fullWidth
+          size="small"
+          sx={monospaceInputSx}
+        />
         <Typography variant="body2" color="text.secondary">
-          {binding.hasUnclaimedSecret
-            ? "This agent's identity secret hasn't been claimed yet. Reveal it to view the value."
-            : "This secret was already claimed and can't be shown again — regenerate to get a new one."}
+          This secret was already generated and can&apos;t be shown again — regenerate to get a
+          new one.
         </Typography>
       </Stack>
-    );
-  } else if (alreadyClaimed) {
-    // binding.clientId is guaranteed falsy here — the "binding.clientId"
-    // branch above already claimed the truthy case.
-    body = (
-      <ListingTable.Container>
-        <ListingTable.EmptyState
-          illustration={<Fingerprint size={56} />}
-          title="No credentials to show"
-          description="No identity credentials to show for this environment."
-          minHeight={160}
-        />
-      </ListingTable.Container>
     );
   } else {
     body = (
@@ -270,32 +231,19 @@ const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
       <Form.Section>
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Form.Subheader>Client Credentials</Form.Subheader>
-          <Stack direction="row" spacing={1}>
-            {!revealed && isExternal && binding.hasUnclaimedSecret && (
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => void handleClaim()}
-                disabled={isClaiming || isRegenerating}
-                startIcon={isClaiming ? <CircularProgress size={16} /> : <Eye size={16} />}
-              >
-                {isClaiming ? "Claiming..." : "Reveal Secret"}
-              </Button>
-            )}
-            {provisioned && (
-              <Button
-                variant="text"
-                size="small"
-                onClick={() => void handleRegenerate()}
-                disabled={isClaiming || isRegenerating}
-                startIcon={
-                  isRegenerating ? <CircularProgress size={16} /> : <RotateCcwKey size={16} />
-                }
-              >
-                {isRegenerating ? "Regenerating..." : "Regenerate Secret"}
-              </Button>
-            )}
-          </Stack>
+          {provisioned && (
+            <Button
+              variant="text"
+              size="small"
+              onClick={() => void handleRegenerate()}
+              disabled={isRegenerating}
+              startIcon={
+                isRegenerating ? <CircularProgress size={16} /> : <RotateCcwKey size={16} />
+              }
+            >
+              {isRegenerating ? "Regenerating..." : "Regenerate Secret"}
+            </Button>
+          )}
         </Box>
 
         {body}

@@ -162,11 +162,10 @@ function buildAgentIDPythonSnippet(urlEnvVar: string): string {
 }
 
 type ToolRow = { id: string; blocked: boolean; scopes: string[] };
-type ToolGroup = { key: string; envNames: string[]; rows: ToolRow[] };
 
 // The endpoint bound to a given environment (matched by UUID; at most one per
-// environment) — shared by the security/API-key lookup and the per-environment
-// tool grouping below, which otherwise each re-derived this same lookup.
+// environment) — shared by the security/API-key lookup and the tools lookup
+// below, which otherwise would each re-derive this same lookup.
 function findEndpointForEnvUuid(
   endpoints: MCPProxyEndpoint[] | undefined,
   envUuid: string | undefined,
@@ -175,23 +174,6 @@ function findEndpointForEnvUuid(
   return endpoints?.find((endpoint) =>
     endpoint.environments?.some((binding) => binding.environmentUuid === envUuid),
   );
-}
-
-// Defaults `selected` to the first item once `items` resolves, and re-snaps it
-// if the current selection stops being valid (e.g. the underlying data
-// changes) — shared by the environment selector and the tool-group selector,
-// which otherwise each implemented the identical effect.
-function useDefaultSelection<T extends string>(
-  items: T[],
-  selected: T,
-  setSelected: (value: T) => void,
-) {
-  useEffect(() => {
-    if (items.length === 0) return;
-    if (!items.includes(selected)) {
-      setSelected(items[0]);
-    }
-  }, [items, selected, setSelected]);
 }
 
 export const ViewMCPServerComponent = () => {
@@ -204,8 +186,6 @@ export const ViewMCPServerComponent = () => {
   const decodedConfigId = useMemo(() => decodeRouteParam(proxyId), [proxyId]);
   const environmentSelectId = useId();
   const environmentSelectLabelId = useId();
-  const toolGroupSelectId = useId();
-  const toolGroupSelectLabelId = useId();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -302,7 +282,12 @@ export const ViewMCPServerComponent = () => {
 
   // Default the selected environment (external connect / API-key panels) to the
   // first environment once names resolve, and keep it valid.
-  useDefaultSelection(envNames, selectedEnvName, setSelectedEnvName);
+  useEffect(() => {
+    if (envNames.length === 0) return;
+    if (!envNames.includes(selectedEnvName)) {
+      setSelectedEnvName(envNames[0]);
+    }
+  }, [envNames, selectedEnvName]);
 
   const providerConfig = config?.envMappings?.[selectedEnvName]?.configuration;
 
@@ -326,18 +311,13 @@ export const ViewMCPServerComponent = () => {
     { orgName: orgId ?? "", proxyId: configProxyName ?? "" },
     { enabled: !!orgId && !!configProxyName },
   );
-  // Both feed toolGroups below — while either is still in flight, the group
-  // computation would run against stale/empty data and the Tools section
-  // would flash "No tools available" before the real list shows up.
+  // Both feed toolRows below — while either is still in flight, it would
+  // compute against stale/empty data and the Tools section would flash "No
+  // tools available" before the real list shows up.
   const isLoadingTools = isLoadingProxyDetails || isLoadingScopes;
 
-  // Tools belong to an endpoint, and each endpoint is bound to one or more of
-  // the agent's environments, so two environments can expose different tools
-  // if they're bound to different endpoints. Environments that share the same
-  // endpoint (the common case) are grouped into one option instead of
-  // repeating an identical entry per environment — picked via the selector
-  // below, the same way the existing "Environment" selector works.
-  const toolGroups = useMemo(() => {
+  // Tools belong to the endpoint bound to the selected environment.
+  const toolRows = useMemo<ToolRow[]>(() => {
     const scopesByTool: Record<string, string[]> = {};
     for (const scope of scopesData?.scopes ?? []) {
       for (const toolId of scope.tools) {
@@ -345,58 +325,18 @@ export const ViewMCPServerComponent = () => {
       }
     }
 
-    const groupsByKey = new Map<string, ToolGroup>();
-
-    for (const envName of envNames) {
-      const envUuid = environments.find((env) => env.name === envName)?.id;
-      const endpoint = findEndpointForEnvUuid(sourceProxyDetails?.endpoints, envUuid);
-
-      // Environments with no matching endpoint each get their own (empty) group
-      // rather than being merged together under a made-up shared key.
-      const groupKey = endpoint?.id ?? `__unbound__:${envName}`;
-      const existing = groupsByKey.get(groupKey);
-      if (existing) {
-        existing.envNames.push(envName);
-        continue;
-      }
-
-      const rows = (endpoint?.capabilities?.tools ?? [])
-        .map((raw) => {
-          const id = getCapabilityId("tool", raw);
-          if (!id) return null;
-          return {
-            id,
-            blocked: isToolBlockedByAcl(endpoint, id),
-            scopes: scopesByTool[id] ?? [],
-          };
-        })
-        .filter((row): row is ToolRow => row !== null);
-
-      groupsByKey.set(groupKey, { key: groupKey, envNames: [envName], rows });
-    }
-
-    return [...groupsByKey.values()];
-  }, [envNames, environments, sourceProxyDetails, scopesData]);
-
-  const [selectedToolGroupKey, setSelectedToolGroupKey] = useState("");
-  useDefaultSelection(
-    toolGroups.map((group) => group.key),
-    selectedToolGroupKey,
-    setSelectedToolGroupKey,
-  );
-
-  // Falls back to the first group synchronously instead of waiting for the
-  // effect above to run — otherwise the Tools section (and the Select's own
-  // value) briefly shows no selection at all once toolGroups first resolves.
-  const effectiveToolGroupKey = toolGroups.some(
-    (group) => group.key === selectedToolGroupKey,
-  )
-    ? selectedToolGroupKey
-    : (toolGroups[0]?.key ?? "");
-
-  const selectedToolGroup = toolGroups.find(
-    (group) => group.key === effectiveToolGroupKey,
-  );
+    return (sourceProxyEndpoint?.capabilities?.tools ?? [])
+      .map((raw) => {
+        const id = getCapabilityId("tool", raw);
+        if (!id) return null;
+        return {
+          id,
+          blocked: isToolBlockedByAcl(sourceProxyEndpoint, id),
+          scopes: scopesByTool[id] ?? [],
+        };
+      })
+      .filter((row): row is ToolRow => row !== null);
+  }, [sourceProxyEndpoint, scopesData]);
 
   const envVarRows = useMemo<EnvironmentVariableConfig[]>(
     () => config?.environmentVariables ?? [],
@@ -782,40 +722,39 @@ export const ViewMCPServerComponent = () => {
           )}
         </Form.Section>
 
-        <Form.Section>
-          <Stack direction="row" spacing={2} alignItems="center" justifyContent="space-between">
-            <Form.Subheader>Tools</Form.Subheader>
-            {toolGroups.length > 1 && (
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Typography
-                  id={toolGroupSelectLabelId}
-                  variant="body2"
-                  color="text.secondary"
-                >
-                  Environment
-                </Typography>
-                <FormControl size="small" sx={{ minWidth: 260 }}>
-                  <Select
-                    id={toolGroupSelectId}
-                    labelId={toolGroupSelectLabelId}
-                    value={effectiveToolGroupKey}
-                    onChange={(event) =>
-                      setSelectedToolGroupKey(event.target.value as string)
-                    }
-                  >
-                    {toolGroups.map((group) => (
-                      <MenuItem key={group.key} value={group.key}>
-                        {group.envNames.map(getEnvDisplayName).join(", ")}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Stack>
-            )}
+        {envNames.length > 1 && (
+          <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
+            <Typography
+              id={environmentSelectLabelId}
+              variant="body2"
+              color="text.secondary"
+            >
+              Environment
+            </Typography>
+            <FormControl size="small" sx={{ minWidth: 260 }}>
+              <Select
+                id={environmentSelectId}
+                labelId={environmentSelectLabelId}
+                value={selectedEnvName}
+                onChange={(event) =>
+                  setSelectedEnvName(event.target.value as string)
+                }
+              >
+                {envNames.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    {getEnvDisplayName(name)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Stack>
+        )}
+
+        <Form.Section>
+          <Form.Subheader>Tools</Form.Subheader>
           {isLoadingTools ? (
             <Skeleton variant="rounded" height={160} />
-          ) : !selectedToolGroup || selectedToolGroup.rows.length === 0 ? (
+          ) : toolRows.length === 0 ? (
             <ListingTable.Container>
               <ListingTable.EmptyState
                 illustration={<Wrench size={56} />}
@@ -834,7 +773,7 @@ export const ViewMCPServerComponent = () => {
                   </ListingTable.Row>
                 </ListingTable.Head>
                 <ListingTable.Body>
-                  {selectedToolGroup.rows.map((tool) => (
+                  {toolRows.map((tool) => (
                     <ListingTable.Row key={tool.id} variant="table">
                       <ListingTable.Cell>
                         <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
@@ -871,40 +810,13 @@ export const ViewMCPServerComponent = () => {
         </Form.Section>
 
         {isExternal && providerConfig && (
-          <Stack spacing={2}>
-            <Stack direction="row" spacing={2} alignItems="center">
-              <Typography
-                id={environmentSelectLabelId}
-                variant="body2"
-                color="text.secondary"
-              >
-                Environment
-              </Typography>
-              <FormControl size="small" sx={{ minWidth: 260 }}>
-                <Select
-                  id={environmentSelectId}
-                  labelId={environmentSelectLabelId}
-                  value={selectedEnvName}
-                  onChange={(event) =>
-                    setSelectedEnvName(event.target.value as string)
-                  }
-                >
-                  {envNames.map((name) => (
-                    <MenuItem key={name} value={name}>
-                      {getEnvDisplayName(name)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Stack>
-            <MCPProxyAPIKeysSection
-              orgName={orgId}
-              projName={projectId}
-              agentName={agentId}
-              configId={decodedConfigId}
-              envName={selectedEnvName}
-            />
-          </Stack>
+          <MCPProxyAPIKeysSection
+            orgName={orgId}
+            projName={projectId}
+            agentName={agentId}
+            configId={decodedConfigId}
+            envName={selectedEnvName}
+          />
         )}
       </Stack>
 
