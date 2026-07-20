@@ -244,16 +244,51 @@ func (s *agentConfigurationService) ensureExternalAgentForAPIKey(ctx context.Con
 	return nil
 }
 
+const (
+	// gatewayNamePrefix prefixes every registered gateway name
+	// ("api-platform-<org>-<env>", from the apiGatewayName Helm helper). The per-env
+	// gateway namespace is the name with this prefix stripped ("<org>-<env>", the
+	// GATEWAY_NAMESPACE set by setup-gateway.sh / add-environment.sh).
+	gatewayNamePrefix = "api-platform-"
+	// gatewayRuntimeServiceSuffix is appended to the gateway name to form the
+	// in-cluster gateway runtime Service name.
+	gatewayRuntimeServiceSuffix = "-gateway-gateway-runtime"
+	// gatewayRuntimePort is the HTTP listener the gateway runtime Service exposes
+	// in-cluster (the /otel RestApi and the LLM/MCP proxy routes).
+	gatewayRuntimePort = 22893
+)
+
 // buildProxyURL constructs the proxy base URL from a gateway and an optional context path.
-// For internal agents, it uses the in-cluster gateway runtime service name (ClusterIP)
-// so pods can reach the gateway without depending on external DNS.
-// For external agents, it uses the gateway's vhost (reachable from outside the cluster).
+// For internal (platform-hosted, sandboxed) agents it targets the in-cluster gateway runtime
+// Service directly, so pods reach the gateway via cluster DNS — which the sandbox
+// NetworkPolicy egress allows — instead of the external vhost, which a sandboxed pod cannot
+// route to. For external agents it uses the gateway's vhost (reachable from outside the cluster).
 func buildProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool) string {
 	base := gateway.Vhost
+	if isInternal {
+		if inCluster := gatewayRuntimeInClusterURL(gateway); inCluster != "" {
+			base = inCluster
+		}
+	}
 	if contextPath != nil {
 		return fmt.Sprintf("%s%s", base, *contextPath)
 	}
 	return base
+}
+
+// gatewayRuntimeInClusterURL derives the in-cluster gateway runtime base URL from the
+// registered gateway name ("api-platform-<org>-<env>"): the runtime Service is
+// "<name>-gateway-gateway-runtime" in the per-env namespace "<org>-<env>" (the name with the
+// "api-platform-" prefix stripped), on port 22893 — matching the API-management trait's
+// runtime backend and the injected AMP_OTEL_ENDPOINT. Returns "" when the name doesn't follow
+// that convention (e.g. a custom gateway.name), so the caller safely falls back to the vhost.
+func gatewayRuntimeInClusterURL(gateway *models.Gateway) string {
+	name := strings.TrimSpace(gateway.Name)
+	namespace := strings.TrimPrefix(name, gatewayNamePrefix)
+	if name == "" || namespace == "" || namespace == name {
+		return ""
+	}
+	return fmt.Sprintf("http://%s%s.%s:%d", name, gatewayRuntimeServiceSuffix, namespace, gatewayRuntimePort)
 }
 
 // buildLLMEnvVars constructs the two env vars (URL and API key) from the env config templates.
@@ -316,8 +351,19 @@ func buildEmptyMCPEnvVars(templates []EnvConfigTemplate) []client.EnvVar {
 	return envVars
 }
 
-func buildMCPProxyURL(vhost string, contextPath *string) string {
-	base := strings.TrimRight(strings.TrimSpace(vhost), "/")
+// buildMCPProxyURL constructs the MCP proxy URL from a gateway and the proxy's optional
+// context path, appending the "/mcp" route. Like buildProxyURL: for internal (platform-hosted,
+// sandboxed) agents it targets the in-cluster gateway runtime Service (reachable under the
+// sandbox NetworkPolicy egress); for external agents — and for user-facing invoke URLs in API
+// responses — it uses the gateway's externally-reachable vhost.
+func buildMCPProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool) string {
+	base := gateway.Vhost
+	if isInternal {
+		if inCluster := gatewayRuntimeInClusterURL(gateway); inCluster != "" {
+			base = inCluster
+		}
+	}
+	base = strings.TrimRight(strings.TrimSpace(base), "/")
 	path := "/mcp"
 	if contextPath != nil && strings.TrimSpace(*contextPath) != "" {
 		path = strings.TrimRight(*contextPath, "/") + "/mcp"
@@ -1425,7 +1471,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 			return nil, fmt.Errorf("failed to create MCP environment variables for %s: %w", envName, err)
 		}
 
-		proxyURL := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
+		proxyURL := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, !isExternalAgent)
 		if isExternalAgent {
 			apiKey := ""
 			if proxyAPIKey != nil {
@@ -2539,7 +2585,7 @@ func (s *agentConfigurationService) updateMCPConfigEnvironmentVariableNames(
 			s.logger.Warn("failed to load MCP SecretReference for env var rename", "environment", envName, "err", refErr)
 			continue
 		}
-		envVarsToInject := buildMCPEnvVars(newTemplates, buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), secretRefName)
+		envVarsToInject := buildMCPEnvVars(newTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
 		if err := s.ocClient.ReplaceReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, changedOldKeys, envVarsToInject); err != nil {
 			s.logger.Warn("failed to replace MCP env vars in ReleaseBinding", "environment", envName, "err", err)
 		}
@@ -2649,7 +2695,7 @@ func (s *agentConfigurationService) injectMCPMappingEnvVars(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	envVarsToInject := buildMCPEnvVars(envTemplates, buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), secretRefName)
+	envVarsToInject := buildMCPEnvVars(envTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
 	if err := s.ocClient.UpdateReleaseBindingEnvVars(ctx, ouID, config.ProjectName, config.AgentID, envName, envVarsToInject); err != nil {
 		return err
 	}
@@ -3057,7 +3103,7 @@ func (s *agentConfigurationService) Update(ctx context.Context, configUUID uuid.
 								s.logger.Warn("Phase 1b: failed to load MCP SecretReference for re-injection", "environment", envName, "err", refErr)
 								continue
 							}
-							envVarsToInject := buildMCPEnvVars(newEnvConfigTemplates, buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), secretRefName)
+							envVarsToInject := buildMCPEnvVars(newEnvConfigTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
 							s.logger.Info("Phase 1b: atomically replacing MCP env vars in ReleaseBinding",
 								"environment", envName, "keysToRemove", changedOldKeys, "envVarsToAdd", len(envVarsToInject))
 							if rbErr := s.ocClient.ReplaceReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, changedOldKeys, envVarsToInject); rbErr != nil {
@@ -4985,7 +5031,8 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 			if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OUID, mapping.EnvironmentUUID); err == nil {
 				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
-				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
+				// User-facing invoke URL in the config response: externally-reachable vhost.
+				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false)
 				proxyInfo.URL = &url
 			}
 		}
@@ -5130,7 +5177,8 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 			} else if gateway, err := s.resolveGatewayForMCPArtifact(ctx, mapping.ArtifactUUID, config.OUID, mapping.EnvironmentUUID); err == nil {
 				deployedProxy := buildAgentMCPConfigProxy(reloadedConfig, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
-				url := buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context)
+				// External agent's invoke URL: externally-reachable vhost.
+				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false)
 				proxyInfo.URL = &url
 			} else {
 				s.logger.Warn(
@@ -5377,7 +5425,7 @@ func (s *agentConfigurationService) systemManagedMCPURL(
 		}
 		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, environmentName)
 		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, environmentName, ouID, handle)
-		return buildMCPProxyURL(gateway.Vhost, deployedProxy.Configuration.Context), nil
+		return buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), nil
 	}
 	return "", nil
 }
