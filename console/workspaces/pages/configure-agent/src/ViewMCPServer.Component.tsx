@@ -700,6 +700,7 @@ export const ViewMCPServerComponent = () => {
               <Form.Section>
                 <Form.Subheader>Client Credentials</Form.Subheader>
                 <ConnectIdentityCredentials
+                  key={selectedEnvName}
                   orgId={orgId ?? ""}
                   projectId={projectId ?? ""}
                   agentId={agentId ?? ""}
@@ -1048,7 +1049,7 @@ export const ViewMCPServerComponent = () => {
           )}
         </Form.Section>
 
-        {isExternal && providerConfig && (
+        {isExternal && providerConfig && !usesIdentitySecurity && (
           <MCPProxyAPIKeysSection
             orgName={orgId}
             projName={projectId}
