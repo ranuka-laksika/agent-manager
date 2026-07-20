@@ -32,6 +32,7 @@ LLM-as-judge evaluators use build_prompt() instead of evaluate():
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import os
 from typing import List, Optional, Callable, TYPE_CHECKING, Any, Dict, Tuple
 import logging
 import inspect
@@ -690,7 +691,8 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
             client_args = {"async_client": httpx.AsyncClient(headers=header)}
         elif provider == "groq":
             # any-llm's Groq provider ignores api_base; route via base_url instead.
-            return {"api_key": "gateway", "client_args": {"base_url": cfg.api_base, "default_headers": header}}
+            groq_key = os.getenv("GROQ_API_KEY") or getattr(cfg, "api_key", None) or "gateway"
+            return {"api_key": groq_key, "client_args": {"base_url": cfg.api_base, "default_headers": header}}
         elif provider == "bedrock":
             # boto3 has no default_headers hook. Build a client pointed at the
             # gateway and inject the gateway api-key via a botocore before-send
@@ -722,7 +724,8 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
             # openai, anthropic, and other OpenAI-style clients accept default_headers.
             client_args = {"default_headers": header}
 
-        return {"api_base": cfg.api_base, "api_key": "gateway", "client_args": client_args}
+        gateway_key = os.getenv("GATEWAY_API_KEY") or "gateway"
+        return {"api_base": cfg.api_base, "api_key": gateway_key, "client_args": client_args}
 
     def _call_llm_with_retry(self, prompt: str) -> EvalResult:
         """Call the LLM client, validate with Pydantic, retry on failure."""

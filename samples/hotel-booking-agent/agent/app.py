@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import html
 import json
 import logging
 from typing import Any
@@ -73,10 +74,12 @@ def chat(request: ChatRequest) -> ChatResponse:
             },
         )
     except Exception:
+        thread_id = html.escape(thread_id)
+        session_id = html.escape(request.session_id)
         logging.exception(
             "chat invoke failed: thread_id=%s session_id=%s",
             thread_id,
-            request.session_id,
+            session_id,
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
