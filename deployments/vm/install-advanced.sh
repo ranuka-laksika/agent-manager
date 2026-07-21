@@ -218,11 +218,13 @@ run_advanced_install() {
   export PLATFORM_THUNDER_JWKS_URL="https://${AMP_HOST_THUNDER}/oauth2/jwks"
 
   # k3d: publish :443 (the consolidated gateway) to the host; keep the plane ports
-  # loopback-bound (only :443 faces the network).
-  render_k3d_advanced_config <"${QS_DIR}/k3d-config.yaml" >/tmp/k3d-config-vm.yaml
-  export K3D_CONFIG=/tmp/k3d-config-vm.yaml
-  render_coredns_vm_config "k3d-amp-local-server-0" >/tmp/coredns-amp-vm.yaml
-  export COREDNS_FILE=/tmp/coredns-amp-vm.yaml
+  # loopback-bound (only :443 faces the network). Render to mktemp files, not fixed
+  # /tmp paths: the installer runs as root, so a fixed path a local user pre-created
+  # as a symlink could redirect a root-owned write (symlink/TOCTOU).
+  K3D_CONFIG="$(mktemp)"; export K3D_CONFIG
+  render_k3d_advanced_config <"${QS_DIR}/k3d-config.yaml" >"$K3D_CONFIG"
+  COREDNS_FILE="$(mktemp)"; export COREDNS_FILE
+  render_coredns_vm_config "k3d-amp-local-server-0" >"$COREDNS_FILE"
 
   log "Running base installer with custom-domain overrides (DNS-01)"
   local rc=0
