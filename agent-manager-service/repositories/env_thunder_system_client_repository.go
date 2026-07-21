@@ -31,14 +31,14 @@ import (
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg repomocks -out repomocks/env_thunder_system_client_repository_mock.go . EnvThunderSystemClientRepository:EnvThunderSystemClientRepositoryMock
 type EnvThunderSystemClientRepository interface {
-	// Get returns the credential for (orgName, envName), or
+	// Get returns the credential for (ouID, envName), or
 	// (nil, gorm.ErrRecordNotFound) if none exists.
-	Get(ctx context.Context, orgName, envName string) (*models.EnvThunderSystemClient, error)
-	// Upsert atomically creates or updates the credential for its (orgName, envName).
+	Get(ctx context.Context, ouID, envName string) (*models.EnvThunderSystemClient, error)
+	// Upsert atomically creates or updates the credential for its (OUID, EnvName).
 	Upsert(ctx context.Context, cred *models.EnvThunderSystemClient) error
-	// Delete removes the credential for (orgName, envName). Deleting a
+	// Delete removes the credential for (ouID, envName). Deleting a
 	// non-existent row is not an error.
-	Delete(ctx context.Context, orgName, envName string) error
+	Delete(ctx context.Context, ouID, envName string) error
 }
 
 type envThunderSystemClientRepo struct {
@@ -50,9 +50,9 @@ func NewEnvThunderSystemClientRepo(db *gorm.DB) EnvThunderSystemClientRepository
 	return &envThunderSystemClientRepo{db: db}
 }
 
-func (r *envThunderSystemClientRepo) Get(ctx context.Context, orgName, envName string) (*models.EnvThunderSystemClient, error) {
+func (r *envThunderSystemClientRepo) Get(ctx context.Context, ouID, envName string) (*models.EnvThunderSystemClient, error) {
 	var cred models.EnvThunderSystemClient
-	result := r.db.WithContext(ctx).Where("org_name = ? AND env_name = ?", orgName, envName).First(&cred)
+	result := r.db.WithContext(ctx).Where("ou_id = ? AND env_name = ?", ouID, envName).First(&cred)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, gorm.ErrRecordNotFound
@@ -64,12 +64,12 @@ func (r *envThunderSystemClientRepo) Get(ctx context.Context, orgName, envName s
 
 func (r *envThunderSystemClientRepo) Upsert(ctx context.Context, cred *models.EnvThunderSystemClient) error {
 	return r.db.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "org_name"}, {Name: "env_name"}},
+		Columns:   []clause.Column{{Name: "ou_id"}, {Name: "env_name"}},
 		DoUpdates: clause.AssignmentColumns([]string{"client_id", "client_secret_encrypted", "updated_at"}),
 	}).Create(cred).Error
 }
 
-func (r *envThunderSystemClientRepo) Delete(ctx context.Context, orgName, envName string) error {
-	return r.db.WithContext(ctx).Where("org_name = ? AND env_name = ?", orgName, envName).
+func (r *envThunderSystemClientRepo) Delete(ctx context.Context, ouID, envName string) error {
+	return r.db.WithContext(ctx).Where("ou_id = ? AND env_name = ?", ouID, envName).
 		Delete(&models.EnvThunderSystemClient{}).Error
 }

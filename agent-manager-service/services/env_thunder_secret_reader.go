@@ -31,17 +31,17 @@ import (
 // NewEnvThunderSecretReader builds the resolver's DB-backed credential reader.
 // Lives in services (not wiring) so app.Run's provisioning factory can share it without a cycle.
 func NewEnvThunderSecretReader(repo repositories.EnvThunderSystemClientRepository, encryptionKey []byte) thundersvc.ReadSystemClientFunc {
-	return func(ctx context.Context, orgName, envName string) (string, string, error) {
-		row, err := repo.Get(ctx, orgName, envName)
+	return func(ctx context.Context, ouID, envName string) (string, string, error) {
+		row, err := repo.Get(ctx, ouID, envName)
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", "", thundersvc.ErrThunderNotProvisioned
 		}
 		if err != nil {
-			return "", "", fmt.Errorf("read env-thunder system-client for %s/%s: %w", orgName, envName, err)
+			return "", "", fmt.Errorf("read env-thunder system-client for %s/%s: %w", ouID, envName, err)
 		}
 		secret, err := utils.DecryptBytes(row.ClientSecretEncrypted, encryptionKey)
 		if err != nil {
-			return "", "", fmt.Errorf("decrypt env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+			return "", "", fmt.Errorf("decrypt env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
 		}
 		return row.ClientID, string(secret), nil
 	}

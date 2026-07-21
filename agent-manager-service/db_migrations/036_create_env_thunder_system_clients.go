@@ -22,6 +22,12 @@ import (
 
 // env_thunder_system_clients stores each environment's env-Thunder system-client
 // secret encrypted, so AMS decrypts from Postgres instead of a key vault.
+//
+// Keyed by (ou_id, env_name), not org_name: ou_id is the stable, multi-tenant-safe
+// identity (org_name/handles aren't guaranteed unique once real multi-tenant SaaS
+// arrives). No org_name column: Thunder namespace/URL building deliberately
+// stays pinned to ThunderOrgNamespace() (config, not this table — see its own
+// doc comment), so org_name would just be write-only data with no reader.
 var migration036 = migration{
 	ID: 36,
 	Migrate: func(db *gorm.DB) error {
@@ -29,17 +35,17 @@ var migration036 = migration{
 			createTable := `
 			CREATE TABLE IF NOT EXISTS env_thunder_system_clients (
 				id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-				org_name                VARCHAR(255) NOT NULL,
+				ou_id                   VARCHAR(255) NOT NULL,
 				env_name                VARCHAR(255) NOT NULL,
 				client_id               VARCHAR(255) NOT NULL DEFAULT 'amp-system-client',
 				client_secret_encrypted BYTEA NOT NULL,
 				created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-				CONSTRAINT uq_env_thunder_system_clients UNIQUE (org_name, env_name)
+				CONSTRAINT uq_env_thunder_system_clients UNIQUE (ou_id, env_name)
 			)`
 
-			// No separate index on (org_name, env_name): the UNIQUE constraint
+			// No separate index on (ou_id, env_name): the UNIQUE constraint
 			return runSQL(tx, createTable)
 		})
 	},

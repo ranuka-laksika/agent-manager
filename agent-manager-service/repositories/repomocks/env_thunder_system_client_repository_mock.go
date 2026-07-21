@@ -16,10 +16,10 @@ import (
 //
 //		// make and configure a mocked repositories.EnvThunderSystemClientRepository
 //		mockedEnvThunderSystemClientRepository := &EnvThunderSystemClientRepositoryMock{
-//			DeleteFunc: func(ctx context.Context, orgName string, envName string) error {
+//			DeleteFunc: func(ctx context.Context, ouID string, envName string) error {
 //				panic("mock out the Delete method")
 //			},
-//			GetFunc: func(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error) {
+//			GetFunc: func(ctx context.Context, ouID string, envName string) (*models.EnvThunderSystemClient, error) {
 //				panic("mock out the Get method")
 //			},
 //			UpsertFunc: func(ctx context.Context, cred *models.EnvThunderSystemClient) error {
@@ -33,10 +33,10 @@ import (
 //	}
 type EnvThunderSystemClientRepositoryMock struct {
 	// DeleteFunc mocks the Delete method.
-	DeleteFunc func(ctx context.Context, orgName string, envName string) error
+	DeleteFunc func(ctx context.Context, ouID string, envName string) error
 
 	// GetFunc mocks the Get method.
-	GetFunc func(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error)
+	GetFunc func(ctx context.Context, ouID string, envName string) (*models.EnvThunderSystemClient, error)
 
 	// UpsertFunc mocks the Upsert method.
 	UpsertFunc func(ctx context.Context, cred *models.EnvThunderSystemClient) error
@@ -47,8 +47,8 @@ type EnvThunderSystemClientRepositoryMock struct {
 		Delete []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// EnvName is the envName argument value.
 			EnvName string
 		}
@@ -56,8 +56,8 @@ type EnvThunderSystemClientRepositoryMock struct {
 		Get []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
 			// EnvName is the envName argument value.
 			EnvName string
 		}
@@ -75,23 +75,23 @@ type EnvThunderSystemClientRepositoryMock struct {
 }
 
 // Delete calls DeleteFunc.
-func (mock *EnvThunderSystemClientRepositoryMock) Delete(ctx context.Context, orgName string, envName string) error {
+func (mock *EnvThunderSystemClientRepositoryMock) Delete(ctx context.Context, ouID string, envName string) error {
 	if mock.DeleteFunc == nil {
 		panic("EnvThunderSystemClientRepositoryMock.DeleteFunc: method is nil but EnvThunderSystemClientRepository.Delete was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		EnvName string
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OuID:    ouID,
 		EnvName: envName,
 	}
 	mock.lockDelete.Lock()
 	mock.calls.Delete = append(mock.calls.Delete, callInfo)
 	mock.lockDelete.Unlock()
-	return mock.DeleteFunc(ctx, orgName, envName)
+	return mock.DeleteFunc(ctx, ouID, envName)
 }
 
 // DeleteCalls gets all the calls that were made to Delete.
@@ -100,12 +100,12 @@ func (mock *EnvThunderSystemClientRepositoryMock) Delete(ctx context.Context, or
 //	len(mockedEnvThunderSystemClientRepository.DeleteCalls())
 func (mock *EnvThunderSystemClientRepositoryMock) DeleteCalls() []struct {
 	Ctx     context.Context
-	OrgName string
+	OuID    string
 	EnvName string
 } {
 	var calls []struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		EnvName string
 	}
 	mock.lockDelete.RLock()
@@ -115,23 +115,23 @@ func (mock *EnvThunderSystemClientRepositoryMock) DeleteCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *EnvThunderSystemClientRepositoryMock) Get(ctx context.Context, orgName string, envName string) (*models.EnvThunderSystemClient, error) {
+func (mock *EnvThunderSystemClientRepositoryMock) Get(ctx context.Context, ouID string, envName string) (*models.EnvThunderSystemClient, error) {
 	if mock.GetFunc == nil {
 		panic("EnvThunderSystemClientRepositoryMock.GetFunc: method is nil but EnvThunderSystemClientRepository.Get was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		EnvName string
 	}{
 		Ctx:     ctx,
-		OrgName: orgName,
+		OuID:    ouID,
 		EnvName: envName,
 	}
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(ctx, orgName, envName)
+	return mock.GetFunc(ctx, ouID, envName)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -140,12 +140,12 @@ func (mock *EnvThunderSystemClientRepositoryMock) Get(ctx context.Context, orgNa
 //	len(mockedEnvThunderSystemClientRepository.GetCalls())
 func (mock *EnvThunderSystemClientRepositoryMock) GetCalls() []struct {
 	Ctx     context.Context
-	OrgName string
+	OuID    string
 	EnvName string
 } {
 	var calls []struct {
 		Ctx     context.Context
-		OrgName string
+		OuID    string
 		EnvName string
 	}
 	mock.lockGet.RLock()

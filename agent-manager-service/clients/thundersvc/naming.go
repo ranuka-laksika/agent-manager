@@ -30,12 +30,6 @@ import (
 )
 
 const (
-	// thunderSystemClientID is the OAuth2 client ID created by the Thunder bootstrap job.
-	// Every env-Thunder uses this same ID — each instance has its own isolated DB.
-	// Used as the fallback client ID in the env-Thunder resolver for stored rows
-	// that predate the client_id column.
-	thunderSystemClientID = "amp-system-client"
-
 	thunderInternalPort = 8090
 	maxReleaseNameLen   = 53
 	truncatePrefixLen   = 46

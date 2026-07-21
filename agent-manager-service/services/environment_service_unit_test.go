@@ -863,10 +863,10 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
-		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "s3cr3t")
+		err := svc.SetThunderSystemClientSecret(context.Background(), "ou-123", "staging", "amp-system-client", "s3cr3t")
 		require.NoError(t, err)
 		require.NotNil(t, stored)
-		assert.Equal(t, "default", stored.OrgName)
+		assert.Equal(t, "ou-123", stored.OUID)
 		assert.Equal(t, "staging", stored.EnvName)
 		assert.Equal(t, "amp-system-client", stored.ClientID)
 		// Ciphertext must not equal the plaintext, and must decrypt back to it.
@@ -885,7 +885,21 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
-		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "")
+		err := svc.SetThunderSystemClientSecret(context.Background(), "ou-123", "staging", "amp-system-client", "")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, utils.ErrInvalidInput)
+	})
+
+	t.Run("rejects an empty ouID", func(t *testing.T) {
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			UpsertFunc: func(context.Context, *models.EnvThunderSystemClient) error {
+				t.Fatal("must not upsert when ouID is empty — ouID is the multi-tenant-safe lookup key")
+				return nil
+			},
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.SetThunderSystemClientSecret(context.Background(), "", "staging", "amp-system-client", "s3cr3t")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, utils.ErrInvalidInput)
 	})
@@ -897,27 +911,41 @@ func TestEnvironmentService_SetThunderSystemClientSecret(t *testing.T) {
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
-		err := svc.SetThunderSystemClientSecret(context.Background(), "default", "staging", "amp-system-client", "s3cr3t")
+		err := svc.SetThunderSystemClientSecret(context.Background(), "ou-123", "staging", "amp-system-client", "s3cr3t")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, boom)
 	})
 }
 
 func TestEnvironmentService_DeleteThunderSystemClientSecret(t *testing.T) {
-	t.Run("delegates to the repo", func(t *testing.T) {
-		var gotOrg, gotEnv string
+	t.Run("delegates to the repo, keyed by ouID", func(t *testing.T) {
+		var gotOUID, gotEnv string
 		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
-			DeleteFunc: func(_ context.Context, orgName, envName string) error {
-				gotOrg, gotEnv = orgName, envName
+			DeleteFunc: func(_ context.Context, ouID, envName string) error {
+				gotOUID, gotEnv = ouID, envName
 				return nil
 			},
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
-		err := svc.DeleteThunderSystemClientSecret(context.Background(), "default", "staging")
+		err := svc.DeleteThunderSystemClientSecret(context.Background(), "ou-123", "staging")
 		require.NoError(t, err)
-		assert.Equal(t, "default", gotOrg)
+		assert.Equal(t, "ou-123", gotOUID)
 		assert.Equal(t, "staging", gotEnv)
+	})
+
+	t.Run("rejects an empty ouID", func(t *testing.T) {
+		repo := &repomocks.EnvThunderSystemClientRepositoryMock{
+			DeleteFunc: func(context.Context, string, string) error {
+				t.Fatal("must not delete when ouID is empty")
+				return nil
+			},
+		}
+		svc := newEnvServiceWithThunderRepo(repo)
+
+		err := svc.DeleteThunderSystemClientSecret(context.Background(), "", "staging")
+		require.Error(t, err)
+		assert.ErrorIs(t, err, utils.ErrInvalidInput)
 	})
 
 	t.Run("wraps a repo error", func(t *testing.T) {
@@ -927,7 +955,7 @@ func TestEnvironmentService_DeleteThunderSystemClientSecret(t *testing.T) {
 		}
 		svc := newEnvServiceWithThunderRepo(repo)
 
-		err := svc.DeleteThunderSystemClientSecret(context.Background(), "default", "staging")
+		err := svc.DeleteThunderSystemClientSecret(context.Background(), "ou-123", "staging")
 		require.Error(t, err)
 		assert.ErrorIs(t, err, boom)
 	})

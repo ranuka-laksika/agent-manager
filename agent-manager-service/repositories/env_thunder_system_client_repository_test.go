@@ -31,61 +31,91 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
 
-func cleanupEnvThunderSystemClient(t *testing.T, repo EnvThunderSystemClientRepository, org, env string) {
+func cleanupEnvThunderSystemClient(t *testing.T, repo EnvThunderSystemClientRepository, ouID, env string) {
 	t.Helper()
 	t.Cleanup(func() {
-		_ = repo.Delete(context.Background(), org, env)
+		_ = repo.Delete(context.Background(), ouID, env)
 	})
 }
 
 // TestEnvThunderSystemClientRepo_UpsertIsIdempotentOnRetry is the critical
 // correctness property add-environment-thunder.sh's retry-on-failure story
 // depends on: re-running the provisioning script (e.g. after a transient AMS
-// failure) re-PUTs the same (org, env) with a possibly-different secret value
-// (a fresh mint if the K8s Secret itself also had to be regenerated). That
+// failure) re-PUTs the same (ouID, env), possibly with a different secret (a
+// fresh mint if the K8s Secret itself also had to be regenerated). That
 // second write must overwrite in place — never fail with a duplicate-key
 // error, never create a second row.
 func TestEnvThunderSystemClientRepo_UpsertIsIdempotentOnRetry(t *testing.T) {
 	repo := NewEnvThunderSystemClientRepo(db.GetDB())
-	const org, env = "test-org", "env-thunder-upsert-retry"
-	cleanupEnvThunderSystemClient(t, repo, org, env)
+	const ouID, env = "ou-test-retry", "env-thunder-upsert-retry"
+	cleanupEnvThunderSystemClient(t, repo, ouID, env)
 
 	first := &models.EnvThunderSystemClient{
-		OrgName:               org,
+		OUID:                  ouID,
 		EnvName:               env,
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext-v1"),
 	}
 	require.NoError(t, repo.Upsert(context.Background(), first))
 
-	got, err := repo.Get(context.Background(), org, env)
+	got, err := repo.Get(context.Background(), ouID, env)
 	require.NoError(t, err)
 	assert.Equal(t, []byte("ciphertext-v1"), got.ClientSecretEncrypted)
 
-	// Simulate the retry: same (org, env), different ciphertext (a fresh mint).
-	// Must overwrite, not error or duplicate.
+	// Simulate the retry: same (ouID, env) — the lookup key — but a different
+	// ciphertext (a fresh mint). Must overwrite, not error or duplicate.
 	second := &models.EnvThunderSystemClient{
-		OrgName:               org,
+		OUID:                  ouID,
 		EnvName:               env,
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext-v2-after-retry"),
 	}
 	require.NoError(t, repo.Upsert(context.Background(), second), "a retry must overwrite the existing row via ON CONFLICT, not fail with a duplicate-key error")
 
-	got, err = repo.Get(context.Background(), org, env)
+	got, err = repo.Get(context.Background(), ouID, env)
 	require.NoError(t, err)
 	assert.Equal(t, []byte("ciphertext-v2-after-retry"), got.ClientSecretEncrypted, "the retry's value must win")
 
 	var count int64
 	require.NoError(t, db.GetDB().Model(&models.EnvThunderSystemClient{}).
-		Where("org_name = ? AND env_name = ?", org, env).Count(&count).Error)
-	assert.Equal(t, int64(1), count, "a retried Upsert must never create a second row for the same (org, env)")
+		Where("ou_id = ? AND env_name = ?", ouID, env).Count(&count).Error)
+	assert.Equal(t, int64(1), count, "a retried Upsert must never create a second row for the same (ouID, env)")
+}
+
+// TestEnvThunderSystemClientRepo_DifferentOUIDsAreDistinctRows is the
+// multi-tenant-safety property migration 036 exists for: the same env_name
+// under two different OU IDs must never collide on the same credential row
+// (unlike the old org_name-keyed shape, where two tenants sharing a handle
+// once real multi-tenant SaaS arrives would have collided).
+func TestEnvThunderSystemClientRepo_DifferentOUIDsAreDistinctRows(t *testing.T) {
+	repo := NewEnvThunderSystemClientRepo(db.GetDB())
+	const env = "env-thunder-multi-tenant"
+	const ouA, ouB = "ou-tenant-a", "ou-tenant-b"
+	cleanupEnvThunderSystemClient(t, repo, ouA, env)
+	cleanupEnvThunderSystemClient(t, repo, ouB, env)
+
+	require.NoError(t, repo.Upsert(context.Background(), &models.EnvThunderSystemClient{
+		OUID: ouA, EnvName: env,
+		ClientID: "amp-system-client", ClientSecretEncrypted: []byte("secret-a"),
+	}))
+	require.NoError(t, repo.Upsert(context.Background(), &models.EnvThunderSystemClient{
+		OUID: ouB, EnvName: env,
+		ClientID: "amp-system-client", ClientSecretEncrypted: []byte("secret-b"),
+	}))
+
+	gotA, err := repo.Get(context.Background(), ouA, env)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("secret-a"), gotA.ClientSecretEncrypted)
+
+	gotB, err := repo.Get(context.Background(), ouB, env)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("secret-b"), gotB.ClientSecretEncrypted, "a second tenant with the same env_name must get its own row, not overwrite the first")
 }
 
 func TestEnvThunderSystemClientRepo_GetNotFound(t *testing.T) {
 	repo := NewEnvThunderSystemClientRepo(db.GetDB())
 
-	_, err := repo.Get(context.Background(), "no-such-org", "no-such-env")
+	_, err := repo.Get(context.Background(), "no-such-ou", "no-such-env")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 }
@@ -96,20 +126,20 @@ func TestEnvThunderSystemClientRepo_GetNotFound(t *testing.T) {
 // must succeed even on a retry.
 func TestEnvThunderSystemClientRepo_DeleteIsIdempotent(t *testing.T) {
 	repo := NewEnvThunderSystemClientRepo(db.GetDB())
-	const org, env = "test-org", "env-thunder-delete-idempotent"
+	const ouID, env = "ou-test-delete-idempotent", "env-thunder-delete-idempotent"
 
-	require.NoError(t, repo.Delete(context.Background(), org, env), "deleting a non-existent row must not be an error")
+	require.NoError(t, repo.Delete(context.Background(), ouID, env), "deleting a non-existent row must not be an error")
 
 	require.NoError(t, repo.Upsert(context.Background(), &models.EnvThunderSystemClient{
-		OrgName:               org,
+		OUID:                  ouID,
 		EnvName:               env,
 		ClientID:              "amp-system-client",
 		ClientSecretEncrypted: []byte("ciphertext"),
 	}))
-	require.NoError(t, repo.Delete(context.Background(), org, env))
-	_, err := repo.Get(context.Background(), org, env)
+	require.NoError(t, repo.Delete(context.Background(), ouID, env))
+	_, err := repo.Get(context.Background(), ouID, env)
 	assert.True(t, errors.Is(err, gorm.ErrRecordNotFound))
 
 	// Deleting again (simulating a retried teardown) must still succeed.
-	require.NoError(t, repo.Delete(context.Background(), org, env))
+	require.NoError(t, repo.Delete(context.Background(), ouID, env))
 }

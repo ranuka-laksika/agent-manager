@@ -309,7 +309,7 @@ func TestMCPProxyScopeDelete_CleansThunderBestEffort(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(ctx context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(ctx context.Context, ouID, orgNamespace, envName string) (thundersvc.EnvIdentityClient, error) {
 			if envName == "env-a" {
 				return envAClient, nil
 			}
@@ -353,7 +353,7 @@ func TestMCPProxyScopeDelete_BestEffortSurvivesResolverError(t *testing.T) {
 		return []*models.EnvironmentResponse{{Name: "env-a", UUID: envA.String()}}, nil
 	}}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(ctx context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(ctx context.Context, ouID, orgNamespace, envName string) (thundersvc.EnvIdentityClient, error) {
 			return nil, errors.New("env-thunder unreachable")
 		},
 	}

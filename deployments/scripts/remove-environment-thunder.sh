@@ -23,8 +23,11 @@ set -euo pipefail
 #   (AMS) stores in its own database (see add-environment-thunder.sh's
 #   store_via_ams) — failure here does NOT abort this script, since environment
 #   teardown must succeed even if AMS is unreachable; an orphaned row is
-#   harmless (it's only ever read by org+env, and a deleted environment's name
+#   harmless (it's only ever read by ouId+env, and a deleted environment's name
 #   is not expected to be reused for a Thunder instance with different secrets).
+#   AMS looks the row up by this token's own OU ID (never client-supplied), so
+#   the DELETE only removes the right row when this token belongs to the same
+#   OU add-environment-thunder.sh ran as for this environment.
 #   - AMP_API_URL (default: http://localhost:9000/api/v1)
 #   - AGENT_MANAGER_TOKEN (default: unset) — if unset, obtains one via
 #     client_credentials against IDP_TOKEN_URL/IDP_CLIENT_ID/IDP_CLIENT_SECRET
@@ -153,6 +156,11 @@ main() {
   local amp_api_url="${AMP_API_URL:-http://localhost:9000/api/v1}"
   local access_token
   if access_token="$(get_ams_token 3)"; then
+    # AMS looks the credential up by this token's own OU ID (not org_name, and
+    # never overridable) — see add-environment-thunder.sh's store_via_ams. The
+    # DELETE only targets the right row if this token belongs to the same OU
+    # the PUT ran as (true whenever AGENT_MANAGER_TOKEN/IDP_* here match what
+    # add-environment-thunder.sh was given for this environment).
     local http_code
     http_code="$(curl -s -o /dev/null -w "%{http_code}" \
       --max-time 30 --retry 3 --retry-delay 5 \

@@ -354,6 +354,8 @@ DeleteEnvironmentThunderSystemClient Delete an environment's env-Thunder system-
 Removes the stored system-client credential for an environment. Called
 by remove-environment-thunder.sh when an environment's Thunder instance
 is torn down. Deleting a non-existent credential succeeds (idempotent).
+The credential is looked up by OU ID, always taken from the caller's
+own token (never client-supplied), not orgName.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle
@@ -980,9 +982,13 @@ API. The secret is encrypted at rest with the platform encryption key
 (the same mechanism org-publisher credentials use) and decrypted
 in-process when needed — it is never read back out of a key vault.
 
-Idempotent: re-storing overwrites the existing credential. The path
-`orgName` must be the org namespace the env-Thunder instance was
-provisioned under (matches ThunderOrgNamespace on the read side).
+Idempotent: re-storing overwrites the existing credential. The
+credential is keyed by OU ID, always taken from the caller's own
+token (never client-supplied) — stable and multi-tenant-safe, unlike
+orgName. The path `orgName` is not persisted by this endpoint at all
+(routing/authorization only); Thunder namespace/URL building stays
+pinned to the server's own ThunderOrgNamespace config, independent of
+this credential.
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
 	@param orgName Organization name/handle

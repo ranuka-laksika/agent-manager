@@ -400,7 +400,7 @@ func (c *environmentController) SetThunderSystemClient(w http.ResponseWriter, r 
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envName := r.PathValue("envID")
 
 	var req spec.ThunderSystemClientRequest
@@ -414,8 +414,8 @@ func (c *environmentController) SetThunderSystemClient(w http.ResponseWriter, r 
 		return
 	}
 
-	if err := c.environmentService.SetThunderSystemClientSecret(ctx, orgName, envName, req.ClientId, req.ClientSecret); err != nil {
-		log.Error("SetThunderSystemClient: failed to store credential", "orgName", orgName, "envName", envName, "error", err)
+	if err := c.environmentService.SetThunderSystemClientSecret(ctx, ouID, envName, req.ClientId, req.ClientSecret); err != nil {
+		log.Error("SetThunderSystemClient: failed to store credential", "ouID", ouID, "envName", envName, "error", err)
 		if errors.Is(err, utils.ErrInvalidInput) {
 			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid input")
 			return
@@ -433,11 +433,15 @@ func (c *environmentController) DeleteThunderSystemClient(w http.ResponseWriter,
 	ctx := r.Context()
 	log := logger.GetLogger(ctx)
 
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envName := r.PathValue("envID")
 
-	if err := c.environmentService.DeleteThunderSystemClientSecret(ctx, orgName, envName); err != nil {
-		log.Error("DeleteThunderSystemClient: failed to delete credential", "orgName", orgName, "envName", envName, "error", err)
+	if err := c.environmentService.DeleteThunderSystemClientSecret(ctx, ouID, envName); err != nil {
+		log.Error("DeleteThunderSystemClient: failed to delete credential", "ouID", ouID, "envName", envName, "error", err)
+		if errors.Is(err, utils.ErrInvalidInput) {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid input")
+			return
+		}
 		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete system-client credential")
 		return
 	}

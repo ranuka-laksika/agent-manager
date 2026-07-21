@@ -62,6 +62,9 @@ set -euo pipefail
 #     platform Thunder token endpoint (used only when AGENT_MANAGER_TOKEN is unset).
 #   - IDP_CLIENT_ID (default: amp-api-client), IDP_CLIENT_SECRET
 #     (default: amp-api-client-secret) — the platform system client to grant as.
+#     AMS derives the stored credential's OU ID from this token itself (never
+#     from a client-supplied value — see models.EnvThunderSystemClient's doc
+#     comment; org_name is not persisted for this credential at all).
 #   Platform Thunder trusted-issuer (env-Thunder accepts platform Thunder tokens):
 #   - PLATFORM_THUNDER_ISSUER   (default: http://thunder.amp.localhost:8080)
 #   - PLATFORM_THUNDER_JWKS_URL (default: HTTPS JWKS endpoint of platform Thunder)
@@ -240,6 +243,9 @@ store_via_ams() {
     return 1
   fi
 
+  # AMS derives the credential's OU ID from this token itself (never from a
+  # client-supplied value, to prevent one org's token from writing another
+  # org's credential) — nothing to resolve or send here beyond the token.
   # json_escape guards against a custom SYSTEM_CLIENT_SECRET breaking the JSON body.
   local body
   body="$(printf '{"clientId":"%s","clientSecret":"%s"}' "$(json_escape "$client_id")" "$(json_escape "$secret_val")")"

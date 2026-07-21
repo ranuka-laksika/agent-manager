@@ -43,17 +43,19 @@ var ErrThunderNotProvisioned = errors.New("env-thunder not provisioned for this 
 var ErrThunderUnreachable = errors.New("env-thunder is provisioned but not reachable")
 
 // EnvThunderResolver resolves a ready-to-use ThunderClient for a specific
-// environment's Thunder instance, given only an organization and environment name.
-// Used by both agent ownership models identically — every AgentID is provisioned
-// against a specific environment's Thunder instance (see the AgentID architecture
-// doc, Section 3).
+// environment's Thunder instance. ouID scopes the credential lookup (a
+// per-tenant identity, multi-tenant-safe); orgNamespace addresses the Thunder
+// instance itself (namespace/hostname) and is deliberately NOT per-tenant —
+// see services.ThunderOrgNamespace's doc comment for why. Callers should go
+// through services.ResolveEnvThunderClient/Identity rather than pairing these
+// two arguments themselves, so the pairing can't drift between call sites.
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg clientmocks -out ../clientmocks/env_thunder_resolver_fake.go . EnvThunderResolver:EnvThunderResolverMock
 type EnvThunderResolver interface {
-	Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error)
+	Resolve(ctx context.Context, ouID, orgNamespace, envName string) (ThunderClient, error)
 	// ResolveIdentity returns the same resolved client widened to identity
 	// operations (the concrete client implements both interfaces).
-	ResolveIdentity(ctx context.Context, orgName, envName string) (EnvIdentityClient, error)
+	ResolveIdentity(ctx context.Context, ouID, orgNamespace, envName string) (EnvIdentityClient, error)
 }
 
 // EnvIdentityClient is the env-Thunder surface the agent-identity passthrough
@@ -67,8 +69,9 @@ type EnvIdentityClient interface {
 
 type (
 	// ReadSystemClientFunc reads an env-Thunder's (clientID, clientSecret) by
-	// decrypting it from AMS's own Postgres. Returns ErrThunderNotProvisioned for a missing row.
-	ReadSystemClientFunc func(ctx context.Context, orgName, envName string) (clientID, clientSecret string, err error)
+	// decrypting it from AMS's own Postgres, keyed by (ouID, envName). Returns
+	// ErrThunderNotProvisioned for a missing row.
+	ReadSystemClientFunc func(ctx context.Context, ouID, envName string) (clientID, clientSecret string, err error)
 
 	// resolveBaseURLFunc picks a reachable base URL for an env-Thunder instance —
 	// injectable so tests don't depend on real network probing.
@@ -112,17 +115,18 @@ func newEnvThunderResolverWithReader(readSystemClient ReadSystemClientFunc, reso
 }
 
 // Resolve returns a ThunderClient for the given environment, caching it per
-// (org, env) for envThunderClientCacheTTL to avoid re-reading the credential every call.
-func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error) {
+// (ouID, orgNamespace, env) for envThunderClientCacheTTL to avoid re-reading
+// the credential every call.
+func (r *envThunderResolver) Resolve(ctx context.Context, ouID, orgNamespace, envName string) (ThunderClient, error) {
 	// Fail fast on obviously invalid segments before they reach a DB query or
 	// the cache key — cheap defence, keeps the cache key unambiguous.
-	for _, seg := range []string{orgName, envName} {
+	for _, seg := range []string{ouID, orgNamespace, envName} {
 		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "/") {
 			return nil, fmt.Errorf("invalid org or environment name segment %q", seg)
 		}
 	}
 
-	cacheKey := orgName + "/" + envName
+	cacheKey := ouID + "/" + orgNamespace + "/" + envName
 
 	r.mu.RLock()
 	if entry, ok := r.cache[cacheKey]; ok && r.now().Sub(entry.cachedAt) < r.ttl {
@@ -141,25 +145,20 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 		}
 		r.mu.RUnlock()
 
-		clientID, clientSecret, err := r.readSystemClient(ctx, orgName, envName)
+		clientID, clientSecret, err := r.readSystemClient(ctx, ouID, envName)
 		if errors.Is(err, ErrThunderNotProvisioned) {
 			return nil, ErrThunderNotProvisioned
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
 		}
 		if clientSecret == "" {
 			return nil, ErrThunderNotProvisioned
 		}
-		if clientID == "" {
-			// Row predates the client_id column: fall back to the well-known
-			// system client ID every env-Thunder is bootstrapped with.
-			clientID = thunderSystemClientID
-		}
 
-		baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgName, envName)
+		baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgNamespace, envName)
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgName, envName)
+			return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgNamespace, envName)
 		}
 		client := newThunderClientWithDialOverride(baseURL, clientID, clientSecret, resolveToHost)
 
@@ -177,14 +176,14 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 
 // ResolveIdentity resolves the env-Thunder client and widens it to the identity
 // surface. The concrete client returned by Resolve implements both interfaces.
-func (r *envThunderResolver) ResolveIdentity(ctx context.Context, orgName, envName string) (EnvIdentityClient, error) {
-	c, err := r.Resolve(ctx, orgName, envName)
+func (r *envThunderResolver) ResolveIdentity(ctx context.Context, ouID, orgNamespace, envName string) (EnvIdentityClient, error) {
+	c, err := r.Resolve(ctx, ouID, orgNamespace, envName)
 	if err != nil {
 		return nil, err
 	}
 	ic, ok := c.(EnvIdentityClient)
 	if !ok {
-		return nil, fmt.Errorf("resolved thunder client for %s/%s does not support identity operations", orgName, envName)
+		return nil, fmt.Errorf("resolved thunder client for %s/%s does not support identity operations", orgNamespace, envName)
 	}
 	return ic, nil
 }

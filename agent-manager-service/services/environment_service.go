@@ -42,10 +42,11 @@ type EnvironmentService interface {
 	GetEnvironmentGateways(ctx context.Context, ouID string, envID string) ([]models.GatewayResponse, error)
 	ListThunderInstances(ctx context.Context, ouID string) (*models.ThunderInstanceListResponse, error)
 	// SetThunderSystemClientSecret stores (encrypted) the env-Thunder
-	// system-client credential used to reach an environment's Thunder admin API.
-	SetThunderSystemClientSecret(ctx context.Context, orgName, envName, clientID, clientSecret string) error
-	// DeleteThunderSystemClientSecret removes that credential (idempotent).
-	DeleteThunderSystemClientSecret(ctx context.Context, orgName, envName string) error
+	// system-client credential used to reach an environment's Thunder admin API,
+	// keyed by ouID (stable, multi-tenant-safe).
+	SetThunderSystemClientSecret(ctx context.Context, ouID, envName, clientID, clientSecret string) error
+	// DeleteThunderSystemClientSecret removes that credential (idempotent), looked up by ouID.
+	DeleteThunderSystemClientSecret(ctx context.Context, ouID, envName string) error
 }
 
 type environmentService struct {
@@ -527,34 +528,40 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 }
 
 // SetThunderSystemClientSecret encrypts and upserts the env-Thunder system-client
-// credential. orgName must match what the resolver reads with (ThunderOrgNamespace()).
-func (s *environmentService) SetThunderSystemClientSecret(ctx context.Context, orgName, envName, clientID, clientSecret string) error {
+// credential, keyed by ouID.
+func (s *environmentService) SetThunderSystemClientSecret(ctx context.Context, ouID, envName, clientID, clientSecret string) error {
 	if clientSecret == "" {
 		return fmt.Errorf("%w: clientSecret is required", utils.ErrInvalidInput)
 	}
+	if ouID == "" {
+		return fmt.Errorf("%w: ouID is required", utils.ErrInvalidInput)
+	}
 	encrypted, err := utils.EncryptBytes([]byte(clientSecret), s.encryptionKey)
 	if err != nil {
-		return fmt.Errorf("failed to encrypt env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+		return fmt.Errorf("failed to encrypt env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
 	}
 	cred := &models.EnvThunderSystemClient{
-		OrgName:               orgName,
+		OUID:                  ouID,
 		EnvName:               envName,
 		ClientID:              clientID,
 		ClientSecretEncrypted: encrypted,
 	}
 	if err := s.envThunderRepo.Upsert(ctx, cred); err != nil {
-		return fmt.Errorf("failed to store env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+		return fmt.Errorf("failed to store env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
 	}
-	s.logger.Info("Stored env-thunder system-client secret", "orgName", orgName, "envName", envName)
+	s.logger.Info("Stored env-thunder system-client secret", "ouID", ouID, "envName", envName)
 	return nil
 }
 
-// DeleteThunderSystemClientSecret removes the credential for (orgName, envName).
+// DeleteThunderSystemClientSecret removes the credential for (ouID, envName).
 // Idempotent — deleting a non-existent row is not an error.
-func (s *environmentService) DeleteThunderSystemClientSecret(ctx context.Context, orgName, envName string) error {
-	if err := s.envThunderRepo.Delete(ctx, orgName, envName); err != nil {
-		return fmt.Errorf("failed to delete env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+func (s *environmentService) DeleteThunderSystemClientSecret(ctx context.Context, ouID, envName string) error {
+	if ouID == "" {
+		return fmt.Errorf("%w: ouID is required", utils.ErrInvalidInput)
 	}
-	s.logger.Info("Deleted env-thunder system-client secret", "orgName", orgName, "envName", envName)
+	if err := s.envThunderRepo.Delete(ctx, ouID, envName); err != nil {
+		return fmt.Errorf("failed to delete env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
+	}
+	s.logger.Info("Deleted env-thunder system-client secret", "ouID", ouID, "envName", envName)
 	return nil
 }
