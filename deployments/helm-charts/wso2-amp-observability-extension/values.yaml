@@ -68,6 +68,11 @@ amObserver:
 
 # OpenTelemetry collector extras
 otelCollector:
+  # Collector container ports. Must match the receiver/extension endpoints in
+  # deployments/values/oc-collector-configmap.yaml, which is applied separately
+  # (not templated by this chart) — update both if either changes.
+  otlpHttpPort: 4318
+  healthCheckPort: 13133
   # Optional dedicated external Service for direct OTLP/HTTP pushes to the
   # collector. Disabled by default: shipped clients send traces through the
   # data-plane gateway's /otel route.
@@ -75,3 +80,8 @@ otelCollector:
     enabled: false
     type: LoadBalancer
     port: 21893
+
+networkPolicy:
+  otelCollector:
+    # No-op on clusters whose CNI doesn't enforce NetworkPolicy.
+    enabled: true
