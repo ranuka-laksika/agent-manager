@@ -30,14 +30,6 @@ import (
 )
 
 const (
-	// thunderSystemClientID is the OAuth2 client ID created by the Thunder bootstrap job.
-	// Every env-Thunder uses this same ID — each instance has its own isolated DB.
-	thunderSystemClientID = "amp-system-client"
-
-	// thunderSystemClientSecretKey is the key within the K8s Secret that holds the
-	// system client's OAuth2 secret.
-	thunderSystemClientSecretKey = "client-secret"
-
 	thunderInternalPort = 8090
 	maxReleaseNameLen   = 53
 	truncatePrefixLen   = 46

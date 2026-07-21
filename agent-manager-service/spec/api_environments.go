@@ -337,6 +337,144 @@ func (a *EnvironmentsAPIService) DeleteEnvironmentExecute(r ApiDeleteEnvironment
 	return localVarHTTPResponse, nil
 }
 
+type ApiDeleteEnvironmentThunderSystemClientRequest struct {
+	ctx        context.Context
+	ApiService *EnvironmentsAPIService
+	orgName    string
+	envID      string
+}
+
+func (r ApiDeleteEnvironmentThunderSystemClientRequest) Execute() (*http.Response, error) {
+	return r.ApiService.DeleteEnvironmentThunderSystemClientExecute(r)
+}
+
+/*
+DeleteEnvironmentThunderSystemClient Delete an environment's env-Thunder system-client credential
+
+Removes the stored system-client credential for an environment. Called
+by remove-environment-thunder.sh when an environment's Thunder instance
+is torn down. Deleting a non-existent credential succeeds (idempotent).
+The credential is looked up by OU ID, always taken from the caller's
+own token (never client-supplied), not orgName.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@param envID Environment name
+	@return ApiDeleteEnvironmentThunderSystemClientRequest
+*/
+func (a *EnvironmentsAPIService) DeleteEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string) ApiDeleteEnvironmentThunderSystemClientRequest {
+	return ApiDeleteEnvironmentThunderSystemClientRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		envID:      envID,
+	}
+}
+
+// Execute executes the request
+func (a *EnvironmentsAPIService) DeleteEnvironmentThunderSystemClientExecute(r ApiDeleteEnvironmentThunderSystemClientRequest) (*http.Response, error) {
+	var (
+		localVarHTTPMethod = http.MethodDelete
+		localVarPostBody   interface{}
+		formFiles          []formFile
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EnvironmentsAPIService.DeleteEnvironmentThunderSystemClient")
+	if err != nil {
+		return nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/environments/{envID}/thunder-system-client"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envID"+"}", url.PathEscape(parameterValueToString(r.envID, "envID")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if strlen(r.orgName) < 1 {
+		return nil, reportError("orgName must have at least 1 elements")
+	}
+	if strlen(r.orgName) > 64 {
+		return nil, reportError("orgName must have less than 64 elements")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarHTTPResponse, newErr
+	}
+
+	return localVarHTTPResponse, nil
+}
+
 type ApiGetEnvironmentRequest struct {
 	ctx        context.Context
 	ApiService *EnvironmentsAPIService
@@ -814,6 +952,176 @@ func (a *EnvironmentsAPIService) ListEnvironmentsExecute(r ApiListEnvironmentsRe
 	}
 
 	return localVarReturnValue, localVarHTTPResponse, nil
+}
+
+type ApiSetEnvironmentThunderSystemClientRequest struct {
+	ctx                        context.Context
+	ApiService                 *EnvironmentsAPIService
+	orgName                    string
+	envID                      string
+	thunderSystemClientRequest *ThunderSystemClientRequest
+}
+
+func (r ApiSetEnvironmentThunderSystemClientRequest) ThunderSystemClientRequest(thunderSystemClientRequest ThunderSystemClientRequest) ApiSetEnvironmentThunderSystemClientRequest {
+	r.thunderSystemClientRequest = &thunderSystemClientRequest
+	return r
+}
+
+func (r ApiSetEnvironmentThunderSystemClientRequest) Execute() (*http.Response, error) {
+	return r.ApiService.SetEnvironmentThunderSystemClientExecute(r)
+}
+
+/*
+SetEnvironmentThunderSystemClient Store an environment's env-Thunder system-client credential
+
+Bootstrap-only endpoint used by add-environment-thunder.sh after it
+provisions an environment's dedicated Thunder instance. Stores the
+system-client OAuth2 credential (client id + secret) that
+agent-manager-service uses to authenticate to that env-Thunder's admin
+API. The secret is encrypted at rest with the platform encryption key
+(the same mechanism org-publisher credentials use) and decrypted
+in-process when needed — it is never read back out of a key vault.
+
+Idempotent: re-storing overwrites the existing credential. The
+credential is keyed by OU ID, always taken from the caller's own
+token (never client-supplied) — stable and multi-tenant-safe, unlike
+orgName. The path `orgName` is not persisted by this endpoint at all
+(routing/authorization only); Thunder namespace/URL building stays
+pinned to the server's own ThunderOrgNamespace config, independent of
+this credential.
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param orgName Organization name/handle
+	@param envID Environment name
+	@return ApiSetEnvironmentThunderSystemClientRequest
+*/
+func (a *EnvironmentsAPIService) SetEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string) ApiSetEnvironmentThunderSystemClientRequest {
+	return ApiSetEnvironmentThunderSystemClientRequest{
+		ApiService: a,
+		ctx:        ctx,
+		orgName:    orgName,
+		envID:      envID,
+	}
+}
+
+// Execute executes the request
+func (a *EnvironmentsAPIService) SetEnvironmentThunderSystemClientExecute(r ApiSetEnvironmentThunderSystemClientRequest) (*http.Response, error) {
+	var (
+		localVarHTTPMethod = http.MethodPut
+		localVarPostBody   interface{}
+		formFiles          []formFile
+	)
+
+	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "EnvironmentsAPIService.SetEnvironmentThunderSystemClient")
+	if err != nil {
+		return nil, &GenericOpenAPIError{error: err.Error()}
+	}
+
+	localVarPath := localBasePath + "/orgs/{orgName}/environments/{envID}/thunder-system-client"
+	localVarPath = strings.Replace(localVarPath, "{"+"orgName"+"}", url.PathEscape(parameterValueToString(r.orgName, "orgName")), -1)
+	localVarPath = strings.Replace(localVarPath, "{"+"envID"+"}", url.PathEscape(parameterValueToString(r.envID, "envID")), -1)
+
+	localVarHeaderParams := make(map[string]string)
+	localVarQueryParams := url.Values{}
+	localVarFormParams := url.Values{}
+	if strlen(r.orgName) < 1 {
+		return nil, reportError("orgName must have at least 1 elements")
+	}
+	if strlen(r.orgName) > 64 {
+		return nil, reportError("orgName must have less than 64 elements")
+	}
+	if r.thunderSystemClientRequest == nil {
+		return nil, reportError("thunderSystemClientRequest is required and must be specified")
+	}
+
+	// to determine the Content-Type header
+	localVarHTTPContentTypes := []string{"application/json"}
+
+	// set Content-Type header
+	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
+	if localVarHTTPContentType != "" {
+		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
+	}
+
+	// to determine the Accept header
+	localVarHTTPHeaderAccepts := []string{"application/json"}
+
+	// set Accept header
+	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
+	if localVarHTTPHeaderAccept != "" {
+		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
+	}
+	// body params
+	localVarPostBody = r.thunderSystemClientRequest
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+	if err != nil {
+		return nil, err
+	}
+
+	localVarHTTPResponse, err := a.client.callAPI(req)
+	if err != nil || localVarHTTPResponse == nil {
+		return localVarHTTPResponse, err
+	}
+
+	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
+	localVarHTTPResponse.Body.Close()
+	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
+	if err != nil {
+		return localVarHTTPResponse, err
+	}
+
+	if localVarHTTPResponse.StatusCode >= 300 {
+		newErr := &GenericOpenAPIError{
+			body:  localVarBody,
+			error: localVarHTTPResponse.Status,
+		}
+		if localVarHTTPResponse.StatusCode == 400 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 401 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 403 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+			return localVarHTTPResponse, newErr
+		}
+		if localVarHTTPResponse.StatusCode == 500 {
+			var v ErrorResponse
+			err = a.client.decode(&v, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+			if err != nil {
+				newErr.error = err.Error()
+				return localVarHTTPResponse, newErr
+			}
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
+		}
+		return localVarHTTPResponse, newErr
+	}
+
+	return localVarHTTPResponse, nil
 }
 
 type ApiUpdateEnvironmentRequest struct {

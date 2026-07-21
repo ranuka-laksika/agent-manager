@@ -69,7 +69,7 @@ func TestAgentIdentityCreateRole_EnsuresPerProxyRSBeforePermissionWrite(t *testi
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -226,7 +226,7 @@ func TestAgentIdentityUpdateRole_ReconcilesAcrossResourceServers(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -281,7 +281,7 @@ func TestAgentIdentityUpdateRole_PreservesNameWhenOmitted(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -327,7 +327,7 @@ func TestAgentIdentityUpdateRole_OmittedScopesPreservesPermissions(t *testing.T)
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -370,7 +370,7 @@ func TestAgentIdentityUpdateRole_ExplicitEmptyScopesClearsPermissions(t *testing
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -408,7 +408,7 @@ func TestAgentIdentityUpdateGroup_PreservesNameWhenOmitted(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -434,7 +434,7 @@ func TestAgentIdentityUpdateGroup_PreservesNameWhenOmitted(t *testing.T) {
 // callers know to retry once the environment is provisioned.
 func TestAgentIdentityRoutes_EnvThunderUnavailable(t *testing.T) {
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return nil, thundersvc.ErrThunderNotProvisioned
 		},
 	}
@@ -514,7 +514,7 @@ func TestAgentIdentityGetRoleAssignments_UsesAgentSemantics(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}
@@ -560,7 +560,7 @@ func adminRoleEnvClient() *clientmocks.EnvIdentityClientMock {
 
 func adminRoleController(envClient *clientmocks.EnvIdentityClientMock) AgentIdentityController {
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return envClient, nil
 		},
 	}

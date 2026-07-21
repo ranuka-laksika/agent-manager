@@ -1559,6 +1559,7 @@ if ! install_default_env_thunder; then
     log_warning "Default environment Thunder provisioning failed (non-fatal)"
     echo "Re-run manually once the platform is ready:"
     echo "  ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
+    echo "  AMP_API_URL=http://api.amp.localhost:8080/api/v1 \\"
     echo "  bash ${DEPLOYMENTS_DIR}/scripts/add-environment-thunder.sh"
 else
     log_success "Default environment Thunder identity provider provisioned"

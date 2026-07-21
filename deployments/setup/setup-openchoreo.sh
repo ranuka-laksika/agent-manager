@@ -463,20 +463,6 @@ install_platform_resources() {
     echo "✅ Default Platform Resources installed/upgraded successfully"
 }
 
-install_default_env_thunder() {
-    echo "📦 Provisioning Thunder ID instance for the default environment..."
-    # The default environment (created by Platform Resources above) is the birthplace
-    # of agent identities, so it gets its own Thunder instance — separate from the
-    # platform Thunder (amp-thunder) used for console login. Installs the upstream
-    # ThunderID release chart directly (add-environment-thunder.sh's own default),
-    # NOT the wso2-amp-thunder-extension chart platform Thunder uses above — this
-    # keeps env-Thunder's version independent of whatever platform Thunder runs.
-    ENV_NAME=default DISPLAY_NAME="Default" ORG_NAME=default \
-        WAIT_TIMEOUT=300s \
-        bash "${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
-    echo "✅ Default environment Thunder ID instance provisioned"
-}
-
 echo "🚀 Starting PARALLEL installation of AMP extensions..."
 echo ""
 
@@ -489,17 +475,8 @@ run_parallel_tasks \
 echo "✅ All AMP extensions installed successfully"
 echo ""
 
-# Provision default env-Thunder after parallel extensions to avoid racing default env creation.
-# The wait for the platform Thunder TLS cert is handled internally by add-environment-thunder.sh.
-
-if install_default_env_thunder; then
-    echo ""
-else
-    echo "⚠️  Default-env Thunder provisioning failed — continuing with remaining setup steps."
-    echo "    Re-run manually: ENV_NAME=default DISPLAY_NAME=Default ORG_NAME=default \\"
-    echo "      bash ${SCRIPT_DIR}/../scripts/add-environment-thunder.sh"
-    echo ""
-fi
+# Default-env Thunder provisioning moved to the Makefile's setup-default-env-thunder
+# target: it now needs AMS up (store_via_ams), which this script runs before.
 
 # ============================================================================
 # Step 6: Install Observability Extension (Agent Manager Observer)

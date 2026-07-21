@@ -60,8 +60,8 @@ var clientProviderSet = wire.NewSet(
 	thundersvc.NewProber,
 	// EnvThunderResolver is wired for AgentIdentityController's passthrough
 	// endpoints. AgentID provisioning itself is injected via
-	// app.Options.AgentThunderProvisioning, built with its own
-	// secretmanagersvc.SecretManagementClient instance — see app.Run.
+	// app.Options.AgentThunderProvisioning, built with its own reader — see app.Run.
+	ProvideEnvThunderSecretReader,
 	ProvideEnvThunderResolver,
 )
 
@@ -150,6 +150,7 @@ var testClientProviderSet = wire.NewSet(
 	ProvideIdentityClient,
 	ProvideOrgResolver,
 	thundersvc.NewProber,
+	ProvideEnvThunderSecretReader,
 	ProvideEnvThunderResolver,
 )
 
@@ -342,6 +343,7 @@ var repositoryProviderSet = wire.NewSet(
 	ProvideOrgPublisherCredentialRepository,
 	ProvideAIApplicationRepository,
 	ProvideAgentThunderClientRepository,
+	ProvideEnvThunderSystemClientRepository,
 	repositories.NewMCPProxyScopeRepository,
 )
 
@@ -481,13 +483,22 @@ func ProvideAgentThunderClientRepository(db *gorm.DB) repositories.AgentThunderC
 	return repositories.NewAgentThunderClientRepo(db)
 }
 
-// ProvideEnvThunderResolver creates the resolver that maps (org, environment) to an
-// authenticated ThunderClient for that environment's Thunder instance, reading the
-// system-client secret that add-environment-thunder.sh already wrote, via the
-// same shared secretmanagersvc.SecretManagementClient every other secret-backed
-// service in this graph uses.
-func ProvideEnvThunderResolver(secretMgmtClient secretmanagersvc.SecretManagementClient) thundersvc.EnvThunderResolver {
-	return thundersvc.NewEnvThunderResolver(secretMgmtClient)
+// ProvideEnvThunderSystemClientRepository provides the repository for
+// per-environment env-Thunder system-client credentials.
+func ProvideEnvThunderSystemClientRepository(db *gorm.DB) repositories.EnvThunderSystemClientRepository {
+	return repositories.NewEnvThunderSystemClientRepo(db)
+}
+
+// ProvideEnvThunderSecretReader decrypts the env-Thunder system-client
+// credential from AMS's own Postgres — no key-vault read-back.
+func ProvideEnvThunderSecretReader(repo repositories.EnvThunderSystemClientRepository, encryptionKey []byte) thundersvc.ReadSystemClientFunc {
+	return services.NewEnvThunderSecretReader(repo, encryptionKey)
+}
+
+// ProvideEnvThunderResolver maps (org, environment) to an authenticated
+// ThunderClient, reading the system-client credential via the injected reader.
+func ProvideEnvThunderResolver(readSystemClient thundersvc.ReadSystemClientFunc) thundersvc.EnvThunderResolver {
+	return thundersvc.NewEnvThunderResolver(readSystemClient)
 }
 
 // ProvideAgentIdentityInjectionService creates the Gateway Binding service that

@@ -39,6 +39,8 @@ type EnvironmentController interface {
 	DeleteEnvironment(w http.ResponseWriter, r *http.Request)
 	GetEnvironmentGateways(w http.ResponseWriter, r *http.Request)
 	ListThunderInstances(w http.ResponseWriter, r *http.Request)
+	SetThunderSystemClient(w http.ResponseWriter, r *http.Request)
+	DeleteThunderSystemClient(w http.ResponseWriter, r *http.Request)
 }
 
 type environmentController struct {
@@ -390,4 +392,59 @@ func (c *environmentController) ListThunderInstances(w http.ResponseWriter, r *h
 	}
 
 	utils.WriteSuccessResponse(w, http.StatusOK, result)
+}
+
+// SetThunderSystemClient stores an environment's env-Thunder system-client
+// credential (bootstrap-only; called by add-environment-thunder.sh).
+func (c *environmentController) SetThunderSystemClient(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	ouID := middleware.OUIDFromRequest(r)
+	envName := r.PathValue("envID")
+
+	var req spec.ThunderSystemClientRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Error("SetThunderSystemClient: failed to decode request", "error", err)
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if req.ClientId == "" || req.ClientSecret == "" {
+		utils.WriteErrorResponse(w, http.StatusBadRequest, "clientId and clientSecret are required")
+		return
+	}
+
+	if err := c.environmentService.SetThunderSystemClientSecret(ctx, ouID, envName, req.ClientId, req.ClientSecret); err != nil {
+		log.Error("SetThunderSystemClient: failed to store credential", "ouID", ouID, "envName", envName, "error", err)
+		if errors.Is(err, utils.ErrInvalidInput) {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid input")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to store system-client credential")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusNoContent, "")
+}
+
+// DeleteThunderSystemClient removes an environment's env-Thunder system-client
+// credential (idempotent; called by remove-environment-thunder.sh).
+func (c *environmentController) DeleteThunderSystemClient(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+
+	ouID := middleware.OUIDFromRequest(r)
+	envName := r.PathValue("envID")
+
+	if err := c.environmentService.DeleteThunderSystemClientSecret(ctx, ouID, envName); err != nil {
+		log.Error("DeleteThunderSystemClient: failed to delete credential", "ouID", ouID, "envName", envName, "error", err)
+		if errors.Is(err, utils.ErrInvalidInput) {
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid input")
+			return
+		}
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to delete system-client credential")
+		return
+	}
+
+	utils.WriteSuccessResponse(w, http.StatusNoContent, "")
 }

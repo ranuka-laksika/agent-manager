@@ -66,8 +66,11 @@ type Options struct {
 	// DB is initialized inside Run. nil disables provisioning (identity endpoints
 	// report it unavailable, reconciler not started, no secret backend required).
 	// secretMgmtClient is built by Run itself (see the call site) and handed in —
-	// the same secret backend seam LLM/MCP/publisher secrets use.
-	AgentThunderProvisioning func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient) services.AgentThunderProvisioningService
+	// the same secret backend seam LLM/MCP/publisher secrets use (for per-agent
+	// credentials). encryptionKey is the platform ENCRYPTION_KEY, used to decrypt
+	// the env-Thunder system-client credential from AMS's own Postgres — that one
+	// is not read back from a key vault.
+	AgentThunderProvisioning func(db *gorm.DB, secretMgmtClient secretmanagersvc.SecretManagementClient, encryptionKey []byte) services.AgentThunderProvisioningService
 }
 
 // Run starts the application with the provided providers and options.
@@ -125,7 +128,12 @@ func Run(authProvider occlient.AuthProvider, secretProvider secretmanagersvc.Pro
 			slog.Error("failed to create secret management client for AgentID provisioning", "error", err)
 			os.Exit(1)
 		}
-		agentThunderProvisioning = opts.AgentThunderProvisioning(database, secretMgmtClientForProvisioning)
+		encryptionKey, err := wiring.ProvideEncryptionKey(*cfg)
+		if err != nil {
+			slog.Error("failed to load encryption key for AgentID provisioning", "error", err)
+			os.Exit(1)
+		}
+		agentThunderProvisioning = opts.AgentThunderProvisioning(database, secretMgmtClientForProvisioning, encryptionKey)
 	}
 
 	dependencies, err := wiring.InitializeAppParams(cfg, database, authProvider, secretProvider, opts.GatewayConfigApplier, agentThunderProvisioning)

@@ -4685,6 +4685,15 @@ type TargetEnvironmentRef struct {
 	Name string `json:"name"`
 }
 
+// ThunderSystemClientRequest The env-Thunder system-client OAuth2 credential to store for an environment.
+type ThunderSystemClientRequest struct {
+	// ClientId OAuth2 client ID of the env-Thunder system-client app.
+	ClientId string `json:"clientId"`
+
+	// ClientSecret OAuth2 client secret (stored encrypted at rest).
+	ClientSecret string `json:"clientSecret"`
+}
+
 // TimeRange defines model for TimeRange.
 type TimeRange struct {
 	// End End time of the range
@@ -5670,6 +5679,9 @@ type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest
 
 // UpdateEnvironmentJSONRequestBody defines body for UpdateEnvironment for application/json ContentType.
 type UpdateEnvironmentJSONRequestBody = UpdateEnvironmentRequest
+
+// SetEnvironmentThunderSystemClientJSONRequestBody defines body for SetEnvironmentThunderSystemClient for application/json ContentType.
+type SetEnvironmentThunderSystemClientJSONRequestBody = ThunderSystemClientRequest
 
 // CreateAgentIdentityGroupJSONRequestBody defines body for CreateAgentIdentityGroup for application/json ContentType.
 type CreateAgentIdentityGroupJSONRequestBody = AgentIdentityGroupRequest

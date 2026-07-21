@@ -32,6 +32,7 @@ import (
 	"github.com/wso2/agent-manager/agent-manager-service/middleware/logger"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
+	"github.com/wso2/agent-manager/agent-manager-service/services"
 	"github.com/wso2/agent-manager/agent-manager-service/spec"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
 )
@@ -88,11 +89,11 @@ func NewAgentIdentityController(
 // An unprovisioned or unreachable environment surfaces 503 so callers know to
 // retry once the environment's Thunder is available, rather than a generic 500.
 func (c *agentIdentityController) envClient(w http.ResponseWriter, r *http.Request) (thundersvc.EnvIdentityClient, bool) {
-	orgName := r.PathValue(utils.PathParamOrgName)
+	ouID := middleware.OUIDFromRequest(r)
 	envName := r.PathValue("envName")
-	client, err := c.resolver.ResolveIdentity(r.Context(), orgName, envName)
+	client, err := services.ResolveEnvThunderIdentity(r.Context(), c.resolver, ouID, envName)
 	if err != nil {
-		logger.GetLogger(r.Context()).Error("agent-identity: env-thunder resolve failed", "org", orgName, "env", envName, "error", err)
+		logger.GetLogger(r.Context()).Error("agent-identity: env-thunder resolve failed", "ouID", ouID, "env", envName, "error", err)
 		utils.WriteErrorResponse(w, http.StatusServiceUnavailable,
 			"The environment's identity provider is not available; retry after it is provisioned")
 		return nil, false

@@ -16,10 +16,10 @@ import (
 //
 //		// make and configure a mocked thundersvc.EnvThunderResolver
 //		mockedEnvThunderResolver := &EnvThunderResolverMock{
-//			ResolveFunc: func(ctx context.Context, orgName string, envName string) (thundersvc.ThunderClient, error) {
+//			ResolveFunc: func(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.ThunderClient, error) {
 //				panic("mock out the Resolve method")
 //			},
-//			ResolveIdentityFunc: func(ctx context.Context, orgName string, envName string) (thundersvc.EnvIdentityClient, error) {
+//			ResolveIdentityFunc: func(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.EnvIdentityClient, error) {
 //				panic("mock out the ResolveIdentity method")
 //			},
 //		}
@@ -30,10 +30,10 @@ import (
 //	}
 type EnvThunderResolverMock struct {
 	// ResolveFunc mocks the Resolve method.
-	ResolveFunc func(ctx context.Context, orgName string, envName string) (thundersvc.ThunderClient, error)
+	ResolveFunc func(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.ThunderClient, error)
 
 	// ResolveIdentityFunc mocks the ResolveIdentity method.
-	ResolveIdentityFunc func(ctx context.Context, orgName string, envName string) (thundersvc.EnvIdentityClient, error)
+	ResolveIdentityFunc func(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.EnvIdentityClient, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -41,8 +41,10 @@ type EnvThunderResolverMock struct {
 		Resolve []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
+			// OrgNamespace is the orgNamespace argument value.
+			OrgNamespace string
 			// EnvName is the envName argument value.
 			EnvName string
 		}
@@ -50,8 +52,10 @@ type EnvThunderResolverMock struct {
 		ResolveIdentity []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OrgName is the orgName argument value.
-			OrgName string
+			// OuID is the ouID argument value.
+			OuID string
+			// OrgNamespace is the orgNamespace argument value.
+			OrgNamespace string
 			// EnvName is the envName argument value.
 			EnvName string
 		}
@@ -61,23 +65,25 @@ type EnvThunderResolverMock struct {
 }
 
 // Resolve calls ResolveFunc.
-func (mock *EnvThunderResolverMock) Resolve(ctx context.Context, orgName string, envName string) (thundersvc.ThunderClient, error) {
+func (mock *EnvThunderResolverMock) Resolve(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.ThunderClient, error) {
 	if mock.ResolveFunc == nil {
 		panic("EnvThunderResolverMock.ResolveFunc: method is nil but EnvThunderResolver.Resolve was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
-		EnvName string
+		Ctx          context.Context
+		OuID         string
+		OrgNamespace string
+		EnvName      string
 	}{
-		Ctx:     ctx,
-		OrgName: orgName,
-		EnvName: envName,
+		Ctx:          ctx,
+		OuID:         ouID,
+		OrgNamespace: orgNamespace,
+		EnvName:      envName,
 	}
 	mock.lockResolve.Lock()
 	mock.calls.Resolve = append(mock.calls.Resolve, callInfo)
 	mock.lockResolve.Unlock()
-	return mock.ResolveFunc(ctx, orgName, envName)
+	return mock.ResolveFunc(ctx, ouID, orgNamespace, envName)
 }
 
 // ResolveCalls gets all the calls that were made to Resolve.
@@ -85,14 +91,16 @@ func (mock *EnvThunderResolverMock) Resolve(ctx context.Context, orgName string,
 //
 //	len(mockedEnvThunderResolver.ResolveCalls())
 func (mock *EnvThunderResolverMock) ResolveCalls() []struct {
-	Ctx     context.Context
-	OrgName string
-	EnvName string
+	Ctx          context.Context
+	OuID         string
+	OrgNamespace string
+	EnvName      string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
-		EnvName string
+		Ctx          context.Context
+		OuID         string
+		OrgNamespace string
+		EnvName      string
 	}
 	mock.lockResolve.RLock()
 	calls = mock.calls.Resolve
@@ -101,23 +109,25 @@ func (mock *EnvThunderResolverMock) ResolveCalls() []struct {
 }
 
 // ResolveIdentity calls ResolveIdentityFunc.
-func (mock *EnvThunderResolverMock) ResolveIdentity(ctx context.Context, orgName string, envName string) (thundersvc.EnvIdentityClient, error) {
+func (mock *EnvThunderResolverMock) ResolveIdentity(ctx context.Context, ouID string, orgNamespace string, envName string) (thundersvc.EnvIdentityClient, error) {
 	if mock.ResolveIdentityFunc == nil {
 		panic("EnvThunderResolverMock.ResolveIdentityFunc: method is nil but EnvThunderResolver.ResolveIdentity was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		OrgName string
-		EnvName string
+		Ctx          context.Context
+		OuID         string
+		OrgNamespace string
+		EnvName      string
 	}{
-		Ctx:     ctx,
-		OrgName: orgName,
-		EnvName: envName,
+		Ctx:          ctx,
+		OuID:         ouID,
+		OrgNamespace: orgNamespace,
+		EnvName:      envName,
 	}
 	mock.lockResolveIdentity.Lock()
 	mock.calls.ResolveIdentity = append(mock.calls.ResolveIdentity, callInfo)
 	mock.lockResolveIdentity.Unlock()
-	return mock.ResolveIdentityFunc(ctx, orgName, envName)
+	return mock.ResolveIdentityFunc(ctx, ouID, orgNamespace, envName)
 }
 
 // ResolveIdentityCalls gets all the calls that were made to ResolveIdentity.
@@ -125,14 +135,16 @@ func (mock *EnvThunderResolverMock) ResolveIdentity(ctx context.Context, orgName
 //
 //	len(mockedEnvThunderResolver.ResolveIdentityCalls())
 func (mock *EnvThunderResolverMock) ResolveIdentityCalls() []struct {
-	Ctx     context.Context
-	OrgName string
-	EnvName string
+	Ctx          context.Context
+	OuID         string
+	OrgNamespace string
+	EnvName      string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		OrgName string
-		EnvName string
+		Ctx          context.Context
+		OuID         string
+		OrgNamespace string
+		EnvName      string
 	}
 	mock.lockResolveIdentity.RLock()
 	calls = mock.calls.ResolveIdentity

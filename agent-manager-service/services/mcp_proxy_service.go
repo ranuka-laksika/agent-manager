@@ -557,6 +557,8 @@ func (s *MCPProxyService) refreshAgentsBoundToProxy(ctx context.Context, proxy *
 // Delete removes an MCP proxy by handle. MCP proxy mappings are deployable artifacts
 // derived from an MCP proxy, so the source proxy cannot be deleted while mappings exist.
 func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID string) error {
+	_ = orgName // unused: cleanup now resolves env-Thunder by orgUUID (ouID), not orgName
+
 	handle := strings.TrimSpace(proxyID)
 	if handle == "" {
 		return utils.ErrInvalidInput
@@ -610,7 +612,7 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID 
 		return fmt.Errorf("failed to delete MCP proxy: %w", err)
 	}
 
-	s.cleanupProxyResourceServers(ctx, orgUUID, orgName, proxy, scopes)
+	s.cleanupProxyResourceServers(ctx, orgUUID, proxy, scopes)
 
 	return nil
 }
@@ -622,7 +624,7 @@ func (s *MCPProxyService) Delete(ctx context.Context, orgUUID, orgName, proxyID 
 // the endpoint's identity-security flag — see cleanupDeletedScope for why: RS ensure at
 // role-write time doesn't check it either, so skipping cleanup here leaks the RS whenever
 // security was disabled.
-func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, scopes []models.MCPProxyScope) {
+func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID string, proxy *models.MCPProxy, scopes []models.MCPProxyScope) {
 	handle := proxyHandleOf(proxy)
 	scopeStrs := make([]string, len(scopes))
 	for i, scope := range scopes {
@@ -646,7 +648,7 @@ func (s *MCPProxyService) cleanupProxyResourceServers(ctx context.Context, ouID,
 			if !ok {
 				continue // environment no longer exists — nothing to clean
 			}
-			client, err := s.resolver.ResolveIdentity(ctx, orgName, name)
+			client, err := ResolveEnvThunderIdentity(ctx, s.resolver, ouID, name)
 			if err != nil {
 				s.logger.Warn("proxy delete: env-Thunder unavailable", "env", name, "proxy", handle, "error", err)
 				continue
