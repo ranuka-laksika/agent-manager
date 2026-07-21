@@ -75,3 +75,8 @@ otelCollector:
     enabled: false
     type: LoadBalancer
     port: 21893
+
+networkPolicy:
+  otelCollector:
+    # No-op on clusters whose CNI doesn't enforce NetworkPolicy.
+    enabled: true
