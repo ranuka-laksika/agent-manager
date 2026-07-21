@@ -33,6 +33,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
 	"github.com/wso2/agent-manager/agent-manager-service/utils"
@@ -129,6 +130,7 @@ type agentConfigurationService struct {
 	logger                    *slog.Logger
 	secretClient              secretmanagersvc.SecretManagementClient
 	encryptionKey             []byte
+	gatewayRuntimeConfig      config.GatewayRuntimeConfig
 }
 
 // rollbackResource tracks a proxy, its deployment, and API keys for cleanup
@@ -244,29 +246,15 @@ func (s *agentConfigurationService) ensureExternalAgentForAPIKey(ctx context.Con
 	return nil
 }
 
-const (
-	// gatewayNamePrefix prefixes every registered gateway name
-	// ("api-platform-<org>-<env>", from the apiGatewayName Helm helper). The per-env
-	// gateway namespace is the name with this prefix stripped ("<org>-<env>", the
-	// GATEWAY_NAMESPACE set by setup-gateway.sh / add-environment.sh).
-	gatewayNamePrefix = "api-platform-"
-	// gatewayRuntimeServiceSuffix is appended to the gateway name to form the
-	// in-cluster gateway runtime Service name.
-	gatewayRuntimeServiceSuffix = "-gateway-gateway-runtime"
-	// gatewayRuntimePort is the HTTP listener the gateway runtime Service exposes
-	// in-cluster (the /otel RestApi and the LLM/MCP proxy routes).
-	gatewayRuntimePort = 22893
-)
-
 // buildProxyURL constructs the proxy base URL from a gateway and an optional context path.
 // For internal (platform-hosted, sandboxed) agents it targets the in-cluster gateway runtime
 // Service directly, so pods reach the gateway via cluster DNS — which the sandbox
 // NetworkPolicy egress allows — instead of the external vhost, which a sandboxed pod cannot
 // route to. For external agents it uses the gateway's vhost (reachable from outside the cluster).
-func buildProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool) string {
+func buildProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool, runtimeConfig config.GatewayRuntimeConfig) string {
 	base := gateway.Vhost
 	if isInternal {
-		if inCluster := gatewayRuntimeInClusterURL(gateway); inCluster != "" {
+		if inCluster := gatewayRuntimeInClusterURL(gateway, runtimeConfig); inCluster != "" {
 			base = inCluster
 		}
 	}
@@ -277,18 +265,18 @@ func buildProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool
 }
 
 // gatewayRuntimeInClusterURL derives the in-cluster gateway runtime base URL from the
-// registered gateway name ("api-platform-<org>-<env>"): the runtime Service is
-// "<name>-gateway-gateway-runtime" in the per-env namespace "<org>-<env>" (the name with the
-// "api-platform-" prefix stripped), on port 22893 — matching the API-management trait's
-// runtime backend and the injected AMP_OTEL_ENDPOINT. Returns "" when the name doesn't follow
-// that convention (e.g. a custom gateway.name), so the caller safely falls back to the vhost.
-func gatewayRuntimeInClusterURL(gateway *models.Gateway) string {
+// registered gateway name. The configurable name prefix is removed to derive the namespace;
+// the configured Service suffix and port then form the runtime address. Returns "" when the
+// gateway name doesn't follow the configured convention, so the caller falls back to the vhost.
+func gatewayRuntimeInClusterURL(gateway *models.Gateway, runtimeConfig config.GatewayRuntimeConfig) string {
 	name := strings.TrimSpace(gateway.Name)
-	namespace := strings.TrimPrefix(name, gatewayNamePrefix)
+	namePrefix := strings.TrimSpace(runtimeConfig.NamePrefix)
+	serviceSuffix := strings.TrimSpace(runtimeConfig.ServiceSuffix)
+	namespace := strings.TrimPrefix(name, namePrefix)
 	if name == "" || namespace == "" || namespace == name {
 		return ""
 	}
-	return fmt.Sprintf("http://%s%s.%s:%d", name, gatewayRuntimeServiceSuffix, namespace, gatewayRuntimePort)
+	return fmt.Sprintf("http://%s%s.%s:%d", name, serviceSuffix, namespace, runtimeConfig.Port)
 }
 
 // buildLLMEnvVars constructs the two env vars (URL and API key) from the env config templates.
@@ -356,10 +344,10 @@ func buildEmptyMCPEnvVars(templates []EnvConfigTemplate) []client.EnvVar {
 // sandboxed) agents it targets the in-cluster gateway runtime Service (reachable under the
 // sandbox NetworkPolicy egress); for external agents — and for user-facing invoke URLs in API
 // responses — it uses the gateway's externally-reachable vhost.
-func buildMCPProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool) string {
+func buildMCPProxyURL(gateway *models.Gateway, contextPath *string, isInternal bool, runtimeConfig config.GatewayRuntimeConfig) string {
 	base := gateway.Vhost
 	if isInternal {
-		if inCluster := gatewayRuntimeInClusterURL(gateway); inCluster != "" {
+		if inCluster := gatewayRuntimeInClusterURL(gateway, runtimeConfig); inCluster != "" {
 			base = inCluster
 		}
 	}
@@ -793,6 +781,7 @@ func NewAgentConfigurationService(
 	logger *slog.Logger,
 	secretClient secretmanagersvc.SecretManagementClient,
 	encryptionKey []byte,
+	gatewayRuntimeConfig config.GatewayRuntimeConfig,
 ) AgentConfigurationService {
 	svc := &agentConfigurationService{
 		db:                        db,
@@ -820,6 +809,7 @@ func NewAgentConfigurationService(
 		logger:                   logger,
 		secretClient:             secretClient,
 		encryptionKey:            encryptionKey,
+		gatewayRuntimeConfig:     gatewayRuntimeConfig,
 	}
 	// Register the deletion reconciler now that this service exists; MCPProxyService is
 	// constructed first and calls back into here when a proxy is deleted to strip the
@@ -1144,7 +1134,7 @@ func (s *agentConfigurationService) createLLMConfig(ctx context.Context, ouID, p
 		if proxy != nil {
 			proxyContext = proxy.Configuration.Context
 		}
-		proxyURL := buildProxyURL(gateway, proxyContext, !isExternalAgent)
+		proxyURL := buildProxyURL(gateway, proxyContext, !isExternalAgent, s.gatewayRuntimeConfig)
 
 		// Capture credentials for external agents.
 		if isExternalAgent {
@@ -1473,7 +1463,7 @@ func (s *agentConfigurationService) createMCPConfig(ctx context.Context, ouID, p
 			return nil, fmt.Errorf("failed to create MCP environment variables for %s: %w", envName, err)
 		}
 
-		proxyURL := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, !isExternalAgent)
+		proxyURL := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, !isExternalAgent, s.gatewayRuntimeConfig)
 		if isExternalAgent {
 			apiKey := ""
 			if proxyAPIKey != nil {
@@ -1801,7 +1791,7 @@ func (s *agentConfigurationService) processEnvProviderChange(
 	// Internal-agent only: inject env vars into Component/ReleaseBinding.
 	// SecretReference is already created/updated by secretClient.CreateSecret above.
 	if !isExternalAgent {
-		proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true)
+		proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true, s.gatewayRuntimeConfig)
 		envVarsToInject := buildLLMEnvVars(envConfigTemplates, proxyURL, secretRefName)
 		if uvErr := s.ocClient.UpdateComponentEnvVars(ctx, ouID, config.ProjectName, config.AgentID, envVarsToInject); uvErr != nil {
 			s.logger.Error("failed to update Component CR env vars in Scenario A — Component CR in inconsistent state", "env", envName, "err", uvErr)
@@ -2057,7 +2047,7 @@ func (s *agentConfigurationService) processNewEnv(
 	// last-write-wins clobbering across multiple environments (HIGH-3).
 	if !isExternalAgent {
 		// Reuse the gateway already resolved for deployment (resolveGatewayForProvider)
-		proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true)
+		proxyURL := buildProxyURL(gateway, proxy.Configuration.Context, true, s.gatewayRuntimeConfig)
 
 		envVarsToInject := buildLLMEnvVars(envConfigTemplates, proxyURL, secretRefName)
 		// Inject per-env URL into the ReleaseBinding for this specific environment.
@@ -2587,7 +2577,7 @@ func (s *agentConfigurationService) updateMCPConfigEnvironmentVariableNames(
 			s.logger.Warn("failed to load MCP SecretReference for env var rename", "environment", envName, "err", refErr)
 			continue
 		}
-		envVarsToInject := buildMCPEnvVars(newTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
+		envVarsToInject := buildMCPEnvVars(newTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true, s.gatewayRuntimeConfig), secretRefName)
 		if err := s.ocClient.ReplaceReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, changedOldKeys, envVarsToInject); err != nil {
 			s.logger.Warn("failed to replace MCP env vars in ReleaseBinding", "environment", envName, "err", err)
 		}
@@ -2697,7 +2687,7 @@ func (s *agentConfigurationService) injectMCPMappingEnvVars(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	envVarsToInject := buildMCPEnvVars(envTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
+	envVarsToInject := buildMCPEnvVars(envTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true, s.gatewayRuntimeConfig), secretRefName)
 	if err := s.ocClient.UpdateReleaseBindingEnvVars(ctx, ouID, config.ProjectName, config.AgentID, envName, envVarsToInject); err != nil {
 		return err
 	}
@@ -3105,7 +3095,7 @@ func (s *agentConfigurationService) Update(ctx context.Context, configUUID uuid.
 								s.logger.Warn("Phase 1b: failed to load MCP SecretReference for re-injection", "environment", envName, "err", refErr)
 								continue
 							}
-							envVarsToInject := buildMCPEnvVars(newEnvConfigTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), secretRefName)
+							envVarsToInject := buildMCPEnvVars(newEnvConfigTemplates, buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true, s.gatewayRuntimeConfig), secretRefName)
 							s.logger.Info("Phase 1b: atomically replacing MCP env vars in ReleaseBinding",
 								"environment", envName, "keysToRemove", changedOldKeys, "envVarsToAdd", len(envVarsToInject))
 							if rbErr := s.ocClient.ReplaceReleaseBindingEnvVars(ctx, ouID, projectName, agentName, envName, changedOldKeys, envVarsToInject); rbErr != nil {
@@ -3134,7 +3124,7 @@ func (s *agentConfigurationService) Update(ctx context.Context, configUUID uuid.
 								s.logger.Warn("Phase 1b: failed to resolve gateway for re-injection", "environment", envName, "err", gwErr)
 								continue
 							}
-							proxyURL := buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true)
+							proxyURL := buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true, s.gatewayRuntimeConfig)
 							// Use persisted SecretReference from DB rather than deriving from mutable config name.
 							envVars1b, varErr1b := s.envVariableRepo.ListByConfigAndEnv(ctx, existingConfig.UUID, mapping.EnvironmentUUID)
 							secretRefName := ""
@@ -5034,7 +5024,7 @@ func (s *agentConfigurationService) buildConfigResponse(ctx context.Context, con
 				deployedProxy := buildAgentMCPConfigProxy(config, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				// User-facing invoke URL in the config response: externally-reachable vhost.
-				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false)
+				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false, s.gatewayRuntimeConfig)
 				proxyInfo.URL = &url
 			}
 		}
@@ -5180,7 +5170,7 @@ func (s *agentConfigurationService) buildExternalAgentConfigResponse(
 				deployedProxy := buildAgentMCPConfigProxy(reloadedConfig, &mapping, mapping.MCPProxy, envName, config.OUID,
 					mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, envName))
 				// External agent's invoke URL: externally-reachable vhost.
-				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false)
+				url := buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, false, s.gatewayRuntimeConfig)
 				proxyInfo.URL = &url
 			} else {
 				s.logger.Warn(
@@ -5399,7 +5389,7 @@ func (s *agentConfigurationService) systemManagedLLMURL(
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve gateway for LLM proxy in %s: %w", environmentName, err)
 	}
-	return buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true), nil
+	return buildProxyURL(gateway, mapping.LLMProxy.Configuration.Context, true, s.gatewayRuntimeConfig), nil
 }
 
 func (s *agentConfigurationService) systemManagedMCPURL(
@@ -5427,7 +5417,7 @@ func (s *agentConfigurationService) systemManagedMCPURL(
 		}
 		handle := mcpMappingProxyName(config.ProjectName, config.AgentID, config.Name, environmentName)
 		deployedProxy := buildAgentMCPConfigProxy(config, mapping, mapping.MCPProxy, environmentName, ouID, handle)
-		return buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true), nil
+		return buildMCPProxyURL(gateway, deployedProxy.Configuration.Context, true, s.gatewayRuntimeConfig), nil
 	}
 	return "", nil
 }

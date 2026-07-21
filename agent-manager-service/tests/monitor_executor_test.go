@@ -33,6 +33,7 @@ import (
 
 	"github.com/wso2/agent-manager/agent-manager-service/clients/clientmocks"
 	"github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/db"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 	"github.com/wso2/agent-manager/agent-manager-service/repositories"
@@ -114,7 +115,7 @@ func TestExecuteMonitorRun_CRStructure(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	startTime := time.Date(2026, 1, 15, 10, 0, 0, 0, time.UTC)
 	endTime := time.Date(2026, 1, 15, 11, 0, 0, 0, time.UTC)
@@ -188,7 +189,7 @@ func TestExecuteMonitorRun_EvaluatorsJSON(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	result, err := executor.ExecuteMonitorRun(context.Background(), services.ExecuteMonitorRunParams{
 		OUID:       monitor.OUID,
@@ -283,7 +284,7 @@ func TestExecuteMonitorRun_DBRecordCreated(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	startTime := time.Now().Add(-2 * time.Hour).Truncate(time.Millisecond)
 	endTime := time.Now().Add(-1 * time.Hour).Truncate(time.Millisecond)
@@ -394,7 +395,7 @@ func TestExecuteMonitorRun_LLMCredentials(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	_, err = executor.ExecuteMonitorRun(context.Background(), services.ExecuteMonitorRunParams{
 		OUID:       monitor.OUID,
@@ -433,7 +434,7 @@ func TestExecuteMonitorRun_NilEvaluatorsReturnsError(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	_, err := executor.ExecuteMonitorRun(context.Background(), services.ExecuteMonitorRunParams{
 		OUID:       monitor.OUID,
@@ -481,7 +482,7 @@ func TestExecuteMonitorRun_PerOrgPublisherCredentials(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	result, err := executor.ExecuteMonitorRun(context.Background(), services.ExecuteMonitorRunParams{
 		OUID:       monitor.OUID,
@@ -520,7 +521,7 @@ func TestExecuteMonitorRun_FallbackPublisherCredentials(t *testing.T) {
 		},
 	}
 
-	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()))
+	executor := services.NewMonitorExecutor(mockClient, slog.Default(), repositories.NewMonitorRepo(db.GetDB()), repositories.NewCustomEvaluatorRepo(db.GetDB()), repositories.NewOrgPublisherCredentialRepo(db.GetDB()), repositories.NewMonitorLLMMappingRepository(db.GetDB()), repositories.NewGatewayRepo(db.GetDB()), repositories.NewLLMProviderRepo(db.GetDB()), config.GatewayRuntimeConfig{})
 
 	result, err := executor.ExecuteMonitorRun(context.Background(), services.ExecuteMonitorRunParams{
 		OUID:       monitor.OUID,

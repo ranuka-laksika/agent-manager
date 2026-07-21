@@ -11,6 +11,9 @@ data:
   # (console bootstrap, CLI) via /api/v1/config. No internal fallback:
   # unset means clients surface "observer not configured".
   AM_OBSERVER_PUBLIC_URL: {{ .Values.agentManagerService.config.amObserverPublicURL | default "" | quote }}
+  GATEWAY_RUNTIME_NAME_PREFIX: {{ .Values.agentManagerService.config.gatewayRuntime.namePrefix | default "api-platform-" | quote }}
+  GATEWAY_RUNTIME_SERVICE_SUFFIX: {{ .Values.agentManagerService.config.gatewayRuntime.serviceSuffix | default "-gateway-gateway-runtime" | quote }}
+  GATEWAY_RUNTIME_PORT: {{ .Values.agentManagerService.config.gatewayRuntime.port | default 22893 | quote }}
   SERVER_HOST: {{ .Values.agentManagerService.config.serverHost | quote }}
   SERVER_PORT: {{ .Values.agentManagerService.service.targetPort | quote }}
   LOG_LEVEL: {{ .Values.agentManagerService.config.logLevel | quote }}

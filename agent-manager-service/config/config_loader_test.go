@@ -99,6 +99,69 @@ func TestValidateOAuthAuthorizationServers(t *testing.T) {
 	}
 }
 
+func TestValidateGatewayRuntimeConfig(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      GatewayRuntimeConfig
+		wantErrors  int
+		errContains string
+	}{
+		{
+			name: "valid configuration",
+			config: GatewayRuntimeConfig{
+				NamePrefix:    "api-platform-",
+				ServiceSuffix: "-gateway-gateway-runtime",
+				Port:          22893,
+			},
+		},
+		{
+			name: "empty prefix",
+			config: GatewayRuntimeConfig{
+				NamePrefix:    " ",
+				ServiceSuffix: "-runtime",
+				Port:          22893,
+			},
+			wantErrors:  1,
+			errContains: "GATEWAY_RUNTIME_NAME_PREFIX",
+		},
+		{
+			name: "empty suffix",
+			config: GatewayRuntimeConfig{
+				NamePrefix:    "gateway-",
+				ServiceSuffix: " ",
+				Port:          22893,
+			},
+			wantErrors:  1,
+			errContains: "GATEWAY_RUNTIME_SERVICE_SUFFIX",
+		},
+		{
+			name: "invalid port",
+			config: GatewayRuntimeConfig{
+				NamePrefix:    "gateway-",
+				ServiceSuffix: "-runtime",
+				Port:          70000,
+			},
+			wantErrors:  1,
+			errContains: "GATEWAY_RUNTIME_PORT",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &Config{GatewayRuntime: tc.config}
+			r := &configReader{}
+			validateGatewayRuntimeConfig(cfg, r)
+
+			if len(r.errors) != tc.wantErrors {
+				t.Fatalf("expected %d errors, got %d: %v", tc.wantErrors, len(r.errors), r.errors)
+			}
+			if tc.errContains != "" && !strings.Contains(r.errors[0].Error(), tc.errContains) {
+				t.Errorf("expected an error containing %q, got %v", tc.errContains, r.errors)
+			}
+		})
+	}
+}
+
 func TestValidateServerPublicURL(t *testing.T) {
 	tests := []struct {
 		name        string

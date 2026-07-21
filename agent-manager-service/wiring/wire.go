@@ -46,6 +46,7 @@ import (
 // Provider sets
 var configProviderSet = wire.NewSet(
 	ProvideConfigFromPtr,
+	ProvideGatewayRuntimeConfig,
 	ProvideEncryptionKey,
 )
 

@@ -21,8 +21,17 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/wso2/agent-manager/agent-manager-service/config"
 	"github.com/wso2/agent-manager/agent-manager-service/models"
 )
+
+func gatewayRuntimeTestConfig() config.GatewayRuntimeConfig {
+	return config.GatewayRuntimeConfig{
+		NamePrefix:    "api-platform-",
+		ServiceSuffix: "-gateway-gateway-runtime",
+		Port:          22893,
+	}
+}
 
 func TestGatewayRuntimeInClusterURL(t *testing.T) {
 	tests := []struct {
@@ -54,7 +63,7 @@ func TestGatewayRuntimeInClusterURL(t *testing.T) {
 		{
 			name: "empty derived namespace falls back to vhost",
 			gateway: &models.Gateway{
-				Name: gatewayNamePrefix,
+				Name: gatewayRuntimeTestConfig().NamePrefix,
 			},
 			expected: "",
 		},
@@ -62,9 +71,20 @@ func TestGatewayRuntimeInClusterURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.expected, gatewayRuntimeInClusterURL(tt.gateway))
+			require.Equal(t, tt.expected, gatewayRuntimeInClusterURL(tt.gateway, gatewayRuntimeTestConfig()))
 		})
 	}
+}
+
+func TestGatewayRuntimeInClusterURLUsesConfiguredValues(t *testing.T) {
+	gateway := &models.Gateway{Name: "custom-acme-dev"}
+	runtimeConfig := config.GatewayRuntimeConfig{
+		NamePrefix:    "custom-",
+		ServiceSuffix: "-runtime",
+		Port:          9443,
+	}
+
+	require.Equal(t, "http://custom-acme-dev-runtime.acme-dev:9443", gatewayRuntimeInClusterURL(gateway, runtimeConfig))
 }
 
 func TestBuildProxyURLSelectsReachableGateway(t *testing.T) {
@@ -77,12 +97,12 @@ func TestBuildProxyURLSelectsReachableGateway(t *testing.T) {
 	require.Equal(
 		t,
 		"http://api-platform-acme-dev-gateway-gateway-runtime.acme-dev:22893/llm/proxy",
-		buildProxyURL(gateway, &contextPath, true),
+		buildProxyURL(gateway, &contextPath, true, gatewayRuntimeTestConfig()),
 	)
 	require.Equal(
 		t,
 		"https://dev-acme.gateway.example.com/llm/proxy",
-		buildProxyURL(gateway, &contextPath, false),
+		buildProxyURL(gateway, &contextPath, false, gatewayRuntimeTestConfig()),
 	)
 }
 
@@ -96,12 +116,12 @@ func TestBuildMCPProxyURLSelectsReachableGateway(t *testing.T) {
 	require.Equal(
 		t,
 		"http://api-platform-acme-dev-gateway-gateway-runtime.acme-dev:22893/tools/mcp",
-		buildMCPProxyURL(gateway, &contextPath, true),
+		buildMCPProxyURL(gateway, &contextPath, true, gatewayRuntimeTestConfig()),
 	)
 	require.Equal(
 		t,
 		"https://dev-acme.gateway.example.com/tools/mcp",
-		buildMCPProxyURL(gateway, &contextPath, false),
+		buildMCPProxyURL(gateway, &contextPath, false, gatewayRuntimeTestConfig()),
 	)
 }
 
@@ -111,5 +131,5 @@ func TestBuildMCPProxyURLFallsBackToVhostForCustomGatewayName(t *testing.T) {
 		Vhost: "https://gateway.example.com/",
 	}
 
-	require.Equal(t, "https://gateway.example.com/mcp", buildMCPProxyURL(gateway, nil, true))
+	require.Equal(t, "https://gateway.example.com/mcp", buildMCPProxyURL(gateway, nil, true, gatewayRuntimeTestConfig()))
 }

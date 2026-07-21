@@ -139,6 +139,13 @@ agentManagerService:
     # clients surface "observer not configured".
     amObserverPublicURL: ""
 
+    # In-cluster API Platform gateway runtime Service URL convention used for
+    # sandboxed agents' OTEL and managed LLM/MCP traffic.
+    gatewayRuntime:
+      namePrefix: "api-platform-"
+      serviceSuffix: "-gateway-gateway-runtime"
+      port: 22893
+
 
     # TLS Configuration
     tlsEnabled: false
