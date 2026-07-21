@@ -180,6 +180,9 @@ func loadEnvs() {
 	config.OpenChoreo = OpenChoreoConfig{
 		BaseURL:          r.readRequiredString("OPEN_CHOREO_BASE_URL"),
 		DefaultNamespace: r.readOptionalString("OPEN_CHOREO_DEFAULT_NAMESPACE", "default"),
+		SystemLabelKeyPrefixes: r.readOptionalStringList(
+			"OPEN_CHOREO_SYSTEM_LABEL_KEY_PREFIXES", "openchoreo.dev/",
+		),
 	}
 
 	// Internal Server configuration (for WebSocket and gateway internal APIs)
