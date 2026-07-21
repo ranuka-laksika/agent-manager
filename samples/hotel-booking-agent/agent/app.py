@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-import html
 import json
 import logging
 from typing import Any
@@ -51,6 +50,16 @@ def _wrap_user_message(user_message: str, context: dict[str, Any]) -> str:
         f"User Query:\n{user_message}"
     )
 
+def _sanitize_for_log(value: str) -> str:
+    """Escape CR/LF so untrusted input can't forge extra log lines or fields.
+
+    html.escape() is the wrong tool here: it guards against HTML/XSS when a
+    value is rendered in a browser, not against log injection, and leaves
+    \\r/\\n untouched.
+    """
+    return value.replace("\r", "\\r").replace("\n", "\\n")
+
+
 def _resolve_thread_id(session_id: str, context: dict[str, Any]) -> str:
     session_id = session_id.strip()
     if not session_id:
@@ -74,12 +83,10 @@ def chat(request: ChatRequest) -> ChatResponse:
             },
         )
     except Exception:
-        thread_id = html.escape(thread_id)
-        session_id = html.escape(request.session_id)
         logging.exception(
             "chat invoke failed: thread_id=%s session_id=%s",
-            thread_id,
-            session_id,
+            _sanitize_for_log(thread_id),
+            _sanitize_for_log(request.session_id),
         )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -691,7 +691,12 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
             client_args = {"async_client": httpx.AsyncClient(headers=header)}
         elif provider == "groq":
             # any-llm's Groq provider ignores api_base; route via base_url instead.
-            groq_key = os.getenv("GROQ_API_KEY") or getattr(cfg, "api_key", None) or "gateway"
+            # The gateway credential must only travel via default_headers (the
+            # "api-key" header, below) — falling back to cfg.api_key here would
+            # also send the real gateway secret as the SDK's own api_key
+            # (i.e. a bearer token). GROQ_API_KEY is the one case where the SDK
+            # should get a real key: it means direct, non-gateway Groq access.
+            groq_key = os.getenv("GROQ_API_KEY") or "gateway"
             return {"api_key": groq_key, "client_args": {"base_url": cfg.api_base, "default_headers": header}}
         elif provider == "bedrock":
             # boto3 has no default_headers hook. Build a client pointed at the
@@ -701,8 +706,6 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
             # the upstream AWS call with its own stored credentials. (A dummy
             # SigV4 signature would be passed through to AWS and rejected with
             # UnrecognizedClientException.)
-            import os
-
             import boto3
             from botocore import UNSIGNED
             from botocore.config import Config

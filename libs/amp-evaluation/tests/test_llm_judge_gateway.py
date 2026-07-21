@@ -158,6 +158,20 @@ def test_gateway_kwargs_openai_uses_default_headers():
     assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
 
 
+def test_gateway_kwargs_generic_uses_env_placeholder_as_sdk_api_key():
+    # GATEWAY_API_KEY (if set) becomes the SDK's own placeholder api_key —
+    # still not the real gateway secret, which stays confined to the
+    # default_headers "api-key" header.
+    _set_gateway()
+    os.environ["GATEWAY_API_KEY"] = "generic-placeholder"
+    try:
+        kw = LLMAsJudgeEvaluator._gateway_kwargs("openai/gpt-4o-mini")
+        assert kw["api_key"] == "generic-placeholder"
+        assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
+    finally:
+        os.environ.pop("GATEWAY_API_KEY", None)
+
+
 def test_gateway_kwargs_anthropic_uses_default_headers():
     _set_gateway()
     kw = LLMAsJudgeEvaluator._gateway_kwargs("anthropic/claude-haiku-4-5")
@@ -186,6 +200,24 @@ def test_gateway_kwargs_groq_routes_via_base_url():
     kw = LLMAsJudgeEvaluator._gateway_kwargs("groq/llama-3.3-70b-versatile")
     assert kw["client_args"]["base_url"] == "https://gw.example/v1"
     assert kw["client_args"]["default_headers"] == {"api-key": "secret-key"}
+    # The real gateway secret must travel only via default_headers above — the
+    # SDK's own api_key is a placeholder, never the gateway key (it would
+    # otherwise also be sent as a bearer token).
+    assert kw["api_key"] == "gateway"
+    assert kw["api_key"] != "secret-key"
+
+
+def test_gateway_kwargs_groq_direct_env_key_used_as_sdk_api_key():
+    # GROQ_API_KEY means direct, non-gateway Groq access: the SDK should get
+    # that real key, separate from whatever gateway credential is configured.
+    _set_gateway()
+    os.environ["GROQ_API_KEY"] = "groq-direct-key"
+    try:
+        kw = LLMAsJudgeEvaluator._gateway_kwargs("groq/llama-3.3-70b-versatile")
+        assert kw["api_key"] == "groq-direct-key"
+        assert kw["client_args"]["default_headers"] == {"api-key": "secret-key"}
+    finally:
+        os.environ.pop("GROQ_API_KEY", None)
 
 
 def test_gateway_kwargs_azureopenai_passes_real_key_and_pinned_api_version():
