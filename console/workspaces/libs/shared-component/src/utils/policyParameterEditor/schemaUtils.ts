@@ -18,6 +18,84 @@
 
 import { ParameterSchema, SchemaTreeNode, ParameterValues } from "./types";
 
+const PARAMETER_SCHEMA_TYPES = new Set<string>([
+  "object",
+  "array",
+  "string",
+  "boolean",
+  "number",
+  "integer",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function createEmptyParameterSchema(): ParameterSchema {
+  return {
+    type: "object",
+    properties: {},
+  };
+}
+
+function normalizeSchema(value: unknown): ParameterSchema | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (
+    typeof value.type !== "string" ||
+    !PARAMETER_SCHEMA_TYPES.has(value.type)
+  ) {
+    return undefined;
+  }
+
+  const schema = { ...value, type: value.type } as ParameterSchema;
+
+  if (value.properties !== undefined || value.type === "object") {
+    schema.properties = normalizeProperties(value.properties);
+  } else {
+    delete schema.properties;
+  }
+
+  if (value.items !== undefined) {
+    const items = normalizeSchema(value.items);
+    if (items) {
+      schema.items = items;
+    } else {
+      delete schema.items;
+    }
+  }
+
+  return schema;
+}
+
+function normalizeProperties(value: unknown): Record<string, ParameterSchema> {
+  if (!isRecord(value)) {
+    return {};
+  }
+
+  return Object.entries(value).reduce<Record<string, ParameterSchema>>(
+    (properties, [key, schema]) => {
+      const normalizedSchema = normalizeSchema(schema);
+      if (normalizedSchema) {
+        properties[key] = normalizedSchema;
+      }
+      return properties;
+    },
+    {},
+  );
+}
+
+/**
+ * Normalizes an arbitrary parsed value (from YAML or already-JSON, e.g. a gateway
+ * manifest's inline `parameters`/`systemParameters`) into a well-formed ParameterSchema,
+ * falling back to an empty object schema when the input isn't schema-shaped.
+ */
+export function normalizeRootSchema(value: unknown): ParameterSchema {
+  return normalizeSchema(value) ?? createEmptyParameterSchema();
+}
+
 let nodeIdCounter = 0;
 export const generateNodeId = (): string => {
   nodeIdCounter += 1;

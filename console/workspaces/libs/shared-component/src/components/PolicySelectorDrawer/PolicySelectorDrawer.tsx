@@ -17,6 +17,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -46,7 +47,7 @@ import {
   DrawerContent,
 } from "@agent-management-platform/views";
 import {
-  useGuardrailsCatalog,
+  useLLMPoliciesCatalog,
   useGuardrailPolicyDefinition,
   filterGuardrailPolicies,
   type GuardrailDefinition,
@@ -54,11 +55,11 @@ import {
 } from "@agent-management-platform/api-client";
 import { globalConfig } from "@agent-management-platform/types";
 import PolicyParameterEditor from "../PolicyParameterEditor/PolicyParameterEditor";
+import type { ParameterValues } from "../../utils/policyParameterEditor";
 import {
-  parsePolicyYaml,
-  type PolicyDefinition,
-  type ParameterValues,
-} from "../../utils/policyParameterEditor";
+  hasInlinePolicyDefinition,
+  resolvePolicyDetail,
+} from "./resolvePolicyDetail";
 
 const PolicyDetailView: React.FC<{
   policy: GuardrailDefinition;
@@ -75,30 +76,25 @@ const PolicyDetailView: React.FC<{
   onBack,
   onSubmit,
 }) => {
+  const hasInlineDefinition = hasInlinePolicyDefinition(policy);
+
   const {
     data: yamlText,
     isLoading,
     error,
   } = useGuardrailPolicyDefinition(
-    policy.name,
-    getPolicyDefinitionVersion?.(policy) ?? policy.version,
+    hasInlineDefinition ? undefined : policy.name,
+    hasInlineDefinition
+      ? undefined
+      : (getPolicyDefinitionVersion?.(policy) ?? policy.version),
   );
 
-  const [policyDefinition, setPolicyDefinition] =
-    useState<PolicyDefinition | null>(null);
-  const [parseError, setParseError] = useState<string | null>(null);
+  const { policyDefinition, parseError } = useMemo(
+    () => resolvePolicyDetail(policy, yamlText),
+    [policy, yamlText],
+  );
 
-  useEffect(() => {
-    if (!yamlText) return;
-    try {
-      setPolicyDefinition(parsePolicyYaml(yamlText));
-      setParseError(null);
-    } catch {
-      setParseError("Failed to parse policy definition.");
-    }
-  }, [yamlText]);
-
-  if (isLoading) {
+  if (!hasInlineDefinition && isLoading) {
     return (
       <Stack spacing={2} sx={{ mt: 1 }}>
         <Typography variant="body2" color="text.secondary">
@@ -233,11 +229,13 @@ export function PolicySelectorDrawer({
   minWidth = 600,
   maxWidth = 800,
 }: PolicySelectorDrawerProps) {
+  const { orgId } = useParams<{ orgId: string }>();
   const {
     data: defaultCatalogData,
     isLoading: defaultIsLoadingCatalog,
     error: defaultCatalogError,
-  } = useGuardrailsCatalog(
+  } = useLLMPoliciesCatalog(
+    orgId,
     !catalogData &&
       controlledIsLoadingCatalog === undefined &&
       controlledCatalogError === undefined &&
