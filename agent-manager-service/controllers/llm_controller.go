@@ -45,6 +45,7 @@ type LLMController interface {
 	// Provider handlers
 	CreateLLMProvider(w http.ResponseWriter, r *http.Request)
 	ListLLMProviders(w http.ResponseWriter, r *http.Request)
+	ListAvailableLLMPolicies(w http.ResponseWriter, r *http.Request)
 	GetLLMProvider(w http.ResponseWriter, r *http.Request)
 	UpdateLLMProvider(w http.ResponseWriter, r *http.Request)
 	UpdateLLMProviderCatalogStatus(w http.ResponseWriter, r *http.Request)
@@ -381,6 +382,25 @@ func (c *llmController) CreateLLMProvider(w http.ResponseWriter, r *http.Request
 	// Convert model to spec response
 	response := utils.ConvertModelToSpecLLMProviderResponse(created)
 	utils.WriteSuccessResponse(w, http.StatusCreated, response)
+}
+
+// ListAvailableLLMPolicies handles GET /orgs/{orgName}/llm-providers/policies.
+func (c *llmController) ListAvailableLLMPolicies(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	log := logger.GetLogger(ctx)
+	ouID := middleware.OUIDFromRequest(r)
+
+	log.Info("ListAvailableLLMPolicies: starting", "ouID", ouID)
+
+	resp, err := c.providerService.ListAvailableLLMPolicies(ctx, ouID)
+	if err != nil {
+		log.Error("ListAvailableLLMPolicies: failed", "ouID", ouID, "error", err)
+		utils.WriteErrorResponse(w, http.StatusInternalServerError, "Failed to list available LLM policies")
+		return
+	}
+
+	log.Info("ListAvailableLLMPolicies: completed", "ouID", ouID, "count", resp.Count)
+	utils.WriteSuccessResponse(w, http.StatusOK, resp)
 }
 
 func (c *llmController) ListLLMProviders(w http.ResponseWriter, r *http.Request) {

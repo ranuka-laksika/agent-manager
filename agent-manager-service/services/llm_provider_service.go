@@ -287,6 +287,35 @@ func (s *LLMProviderService) List(ouID string, limit, offset int) ([]*models.LLM
 	return providers, totalCount, nil
 }
 
+// ListAvailableLLMPolicies returns full guardrail policy definitions reported by active
+// gateways in the organization, so the console can list and configure them directly
+// without depending on the external policy hub.
+func (s *LLMProviderService) ListAvailableLLMPolicies(ctx context.Context, ouID string) (*models.LLMPolicyAvailabilityResponse, error) {
+	_ = ctx
+	available, err := intersectActiveGatewayLLMPolicies(s.gatewayRepo, ouID)
+	if err != nil {
+		return nil, err
+	}
+
+	sorted := sortedLLMPolicyManifestItems(available)
+	items := make([]models.LLMPolicyDefinition, 0, len(sorted))
+	for _, item := range sorted {
+		items = append(items, models.LLMPolicyDefinition{
+			Name:             item.Name,
+			Version:          item.Version,
+			DisplayName:      item.DisplayName,
+			Description:      item.Description,
+			Parameters:       item.Parameters,
+			SystemParameters: item.SystemParameters,
+		})
+	}
+
+	return &models.LLMPolicyAvailabilityResponse{
+		Count: int32(len(items)),
+		List:  items,
+	}, nil
+}
+
 // Get retrieves an LLM provider by ID
 func (s *LLMProviderService) Get(providerID, ouID string) (*models.LLMProvider, error) {
 	slog.Info("LLMProviderService.Get: starting", "ouID", ouID, "providerID", providerID)

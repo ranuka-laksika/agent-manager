@@ -5008,6 +5008,41 @@ paths:
   # LLM PROVIDER ENDPOINTS
   # ============================================
 
+  /orgs/{orgName}/llm-providers/policies:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+
+    get:
+      tags:
+        - LLM Providers
+      summary: List available LLM guardrail policies
+      description: Returns full guardrail policy definitions (including parameter schemas) reported by active gateways in the organization.
+      operationId: listAvailableLLMPolicies
+      responses:
+        "200":
+          description: Available LLM guardrail policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LLMPolicyAvailabilityResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /orgs/{orgName}/llm-providers:
     parameters:
       - name: orgName
@@ -15379,6 +15414,50 @@ components:
           type: object
           additionalProperties: true
           description: Policy parameters
+
+    LLMPolicyAvailabilityResponse:
+      type: object
+      required:
+        - count
+        - list
+      properties:
+        count:
+          type: integer
+          format: int32
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/LLMPolicyDefinition"
+
+    LLMPolicyDefinition:
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+          description: Policy name
+          example: word-count-guardrail
+        version:
+          type: string
+          description: Policy version
+          example: v1
+        displayName:
+          type: string
+          description: Human-readable policy name
+          example: Word Count Guardrail
+        description:
+          type: string
+          description: Policy description
+        parameters:
+          type: object
+          additionalProperties: true
+          description: JSON-Schema describing the user-configurable parameters
+        systemParameters:
+          type: object
+          additionalProperties: true
+          description: JSON-Schema describing operator-level (gateway config) parameters
 
     LLMRateLimitingConfig:
       type: object
