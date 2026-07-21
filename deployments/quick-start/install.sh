@@ -1613,23 +1613,6 @@ else
 fi
 echo ""
 
-# Apply RestApi for OTEL trace collection
-RESTAPI_FILE="${DEPLOYMENTS_DIR}/values/otel-collector-rest-api.yaml"
-log_info "Applying OTEL RestApi resource..."
-if kubectl apply -f "${RESTAPI_FILE}" &>/dev/null; then
-    log_info "Waiting for RestApi to be programmed..."
-    if kubectl wait --for=condition=Programmed restapi/amp-otel-collector-tracing-rest-api \
-            -n default-default --timeout=120s &>/dev/null; then
-        log_success "RestApi resource applied and programmed"
-    else
-        log_warning "RestApi applied but did not reach Programmed condition within 120s"
-    fi
-else
-    log_warning "Failed to apply RestApi resource (non-fatal)"
-fi
-echo ""
-
-
 # ============================================================================
 # VERIFICATION
 # ============================================================================
@@ -1692,4 +1675,3 @@ log_info "Uninstall platform (keep cluster):       ./uninstall.sh"
 log_info "Uninstall and delete k3d cluster:        ./uninstall.sh --delete-cluster"
 log_info "Full cleanup (including Colima profile):  ./uninstall.sh --delete-cluster --delete-colima"
 echo ""
-
