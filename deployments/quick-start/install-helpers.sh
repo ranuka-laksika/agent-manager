@@ -406,6 +406,21 @@ install_gateway_extension() {
     # Per-org-env namespace isolation: the default env's gateway stack lives in
     # its own "<org>-<env>" namespace, mirroring add-environment.sh.
     local gateway_namespace="default-default"
+    local otel_restapi="${release_name}-otel-restapi"
+    local gateway_runtime_deployment="${release_name}-gateway-gateway-runtime"
+
+    # Sandboxed agents can egress only to namespaces carrying this label. Create
+    # and label the namespace before Helm so the policy is effective as soon as
+    # the gateway runtime starts.
+    if ! kubectl create namespace "${gateway_namespace}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null; then
+        log_error "Failed to create gateway namespace ${gateway_namespace}"
+        return 1
+    fi
+    if ! kubectl label namespace "${gateway_namespace}" \
+        "amp.wso2.com/api-platform-gateway=true" --overwrite >/dev/null; then
+        log_error "Failed to label gateway namespace ${gateway_namespace}"
+        return 1
+    fi
 
     # Wire the gateway's ThunderKeyManager to the default environment's own Thunder
     # instance when it exists, mirroring the THUNDER_PROVISIONED logic in
@@ -458,6 +473,30 @@ install_gateway_extension() {
         return 1
     fi
 
+    # Registration completing does not mean the generated runtime is accepting
+    # traffic yet. Wait for the operator, runtime deployment, and chart-managed
+    # OTEL route before reporting the quick-start installation as ready.
+    log_info "Waiting for API Platform Gateway to be programmed..."
+    if ! kubectl wait --for=condition=Programmed "apigateway/${release_name}" \
+        -n "${gateway_namespace}" --timeout=300s; then
+        log_error "API Platform Gateway did not become Programmed within 300s"
+        return 1
+    fi
+
+    log_info "Waiting for gateway runtime to become available..."
+    if ! kubectl wait --for=condition=Available "deployment/${gateway_runtime_deployment}" \
+        -n "${gateway_namespace}" --timeout=300s; then
+        log_error "Gateway runtime did not become available within 300s"
+        return 1
+    fi
+
+    log_info "Waiting for OTEL ingest RestApi to be programmed..."
+    if ! kubectl wait --for=condition=Programmed "restapi/${otel_restapi}" \
+        -n "${gateway_namespace}" --timeout=300s; then
+        log_error "OTEL ingest RestApi did not become Programmed within 300s"
+        return 1
+    fi
+
     return 0
 }
 
@@ -474,4 +513,3 @@ install_gateway_extension() {
 # it here too instead of hardcoding a checkout-only relative path.
 # ---------------------------------------------------------------------------
 source "${DEPLOYMENTS_DIR}/scripts/thunder-naming.sh"
-
