@@ -347,7 +347,8 @@ export const ViewLLMProviderComponent: React.FC = () => {
         // Resolve the label at render time (never persisted): guardrails added
         // this session already carry the drawer's displayName; ones loaded from
         // the saved config don't, so fall back to the catalog lookup, then name.
-        displayName: g.displayName ?? guardrailDisplayNames.get(g.name),
+        displayName:
+          g.displayName ?? guardrailDisplayNames.get(g.name) ?? g.name,
       })),
     [guardrailsByEnv, selectedEnvName, guardrailDisplayNames],
   );

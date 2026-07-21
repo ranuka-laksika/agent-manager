@@ -115,6 +115,41 @@ func TestExtractLLMPolicyManifestItems_ExpandsVersionsArray(t *testing.T) {
 	assert.ElementsMatch(t, []string{"v1", "v2"}, versions)
 }
 
+func TestExtractLLMPolicyManifestItems_IgnoresCoincidentalNameVersionInSchema(t *testing.T) {
+	// A real policy whose parameter/system schemas embed nested objects that happen
+	// to carry their own name+version string pairs (e.g. a default/example model).
+	// Only the top-level policy must surface — the schema leaves must not.
+	manifest := map[string]interface{}{
+		"policies": []interface{}{
+			map[string]interface{}{
+				"name":    "model-round-robin",
+				"version": "v1.0.2",
+				"parameters": map[string]interface{}{
+					"type": "object",
+					"properties": map[string]interface{}{
+						"defaultModel": map[string]interface{}{
+							"name":    "gpt-4",
+							"version": "1.0",
+						},
+					},
+				},
+				"systemParameters": map[string]interface{}{
+					"example": map[string]interface{}{
+						"name":    "nested-example",
+						"version": "9.9",
+					},
+				},
+			},
+		},
+	}
+
+	items := extractLLMPolicyManifestItems(manifest)
+
+	require.Len(t, items, 1)
+	assert.Equal(t, "model-round-robin", items[0].Name)
+	assert.Equal(t, "v1.0.2", items[0].Version)
+}
+
 func TestExtractLLMPolicyManifestItems_EmptyOrMalformedManifest(t *testing.T) {
 	assert.Empty(t, extractLLMPolicyManifestItems(nil))
 	assert.Empty(t, extractLLMPolicyManifestItems(map[string]interface{}{}))

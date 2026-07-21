@@ -157,6 +157,18 @@ func extractLLMPolicyManifestItems(value interface{}) []llmPolicyManifestItem {
 		})
 	}
 
+	// consumedKeys are a policy's own metadata / JSON-Schema leaves — never
+	// containers of OTHER policies. They're skipped during the generic recursive
+	// descent so a nested schema object carrying coincidental name+version keys
+	// (e.g. a default example {"name":"gpt-4","version":"1.0"} inside a parameter
+	// schema) isn't surfaced as a bogus, unrelated policy.
+	consumedKeys := map[string]struct{}{
+		"parameters":       {},
+		"systemParameters": {},
+		"displayName":      {},
+		"description":      {},
+	}
+
 	walk = func(current interface{}) {
 		switch typed := current.(type) {
 		case []interface{}:
@@ -185,7 +197,10 @@ func extractLLMPolicyManifestItems(value interface{}) []llmPolicyManifestItem {
 					}
 				}
 			}
-			for _, nested := range typed {
+			for key, nested := range typed {
+				if _, skip := consumedKeys[key]; skip {
+					continue
+				}
 				walk(nested)
 			}
 		}

@@ -216,16 +216,28 @@ export function useGuardrailPolicyDefinition(
  * map so the picker degrades to the raw kebab-case name instead of erroring. Keyed
  * by name only: display names are stable across patch versions, and the hub's coarse
  * `major.minor` version wouldn't match the gateway's exact build version anyway.
+ *
+ * Bounded by an AbortController timeout: a hub that hangs (unreachable host, stalled
+ * TLS) rather than failing fast must NOT block the authoritative gateway list this
+ * runs in parallel with — on timeout the abort rejects the fetch and we fall back.
  */
+const HUB_DISPLAY_NAME_TIMEOUT_MS = 3000;
+
 async function fetchHubPolicyDisplayNames(
   token: string | undefined,
 ): Promise<Map<string, string>> {
   const displayNames = new Map<string, string>();
   const url = globalConfig.guardrailsCatalogUrl;
   if (!url) return displayNames;
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    HUB_DISPLAY_NAME_TIMEOUT_MS,
+  );
   try {
     const res = await fetch(url, {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      signal: controller.signal,
     });
     if (!res.ok) return displayNames;
     const catalog = (await res.json()) as GuardrailsCatalogResponse;
@@ -233,7 +245,10 @@ async function fetchHubPolicyDisplayNames(
       if (policy.displayName) displayNames.set(policy.name, policy.displayName);
     }
   } catch {
-    // Hub is a best-effort name source only; ignore and fall back to kebab names.
+    // Hub is a best-effort name source only (includes AbortError on timeout);
+    // ignore and fall back to kebab names.
+  } finally {
+    clearTimeout(timer);
   }
   return displayNames;
 }
