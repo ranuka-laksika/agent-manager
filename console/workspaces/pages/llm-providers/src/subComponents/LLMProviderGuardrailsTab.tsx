@@ -17,8 +17,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
 import {
-  useGuardrailsCatalog,
+  useLLMPoliciesCatalog,
   type GuardrailDefinition,
 } from "@agent-management-platform/api-client";
 import type {
@@ -57,6 +58,7 @@ import {
   parseOpenApiSpec,
   type ResourceItem,
 } from "../utils/openapiResources";
+import { formatPolicyVersion } from "../utils/formatPolicyVersion";
 import { z } from "zod";
 
 const PolicyPathSchema = z.object({
@@ -135,7 +137,8 @@ export function LLMProviderGuardrailsTab({
   onUpdate,
   isUpdating,
 }: LLMProviderGuardrailsTabProps) {
-  const { data: catalogData } = useGuardrailsCatalog();
+  const { orgId } = useParams<{ orgId: string }>();
+  const { data: catalogData } = useLLMPoliciesCatalog(orgId);
 
   const availableGuardrails = useMemo(
     () => catalogData?.data ?? [],
@@ -492,7 +495,7 @@ export function LLMProviderGuardrailsTab({
                 {globalEntries.map((entry) => (
                   <Chip
                     key={`${entry.policyIndex}-${entry.pathIndex}`}
-                    label={`${getDisplayName(entry.policy)} (v${entry.policy.version})`}
+                    label={`${getDisplayName(entry.policy)} (${formatPolicyVersion(entry.policy.version)})`}
                     color="warning"
                     variant="outlined"
                     onClick={() => handleOpenEditDrawer(entry)}
@@ -605,7 +608,7 @@ export function LLMProviderGuardrailsTab({
                                 resourceGuardrails.map((entry) => (
                                   <Chip
                                     key={`${resource.path}-${entry.policyIndex}-${entry.pathIndex}`}
-                                    label={`${getDisplayName(entry.policy)} (v${entry.policy.version})`}
+                                    label={`${getDisplayName(entry.policy)} (${formatPolicyVersion(entry.policy.version)})`}
                                     color="warning"
                                     variant="outlined"
                                     onClick={() => handleOpenEditDrawer(entry)}
