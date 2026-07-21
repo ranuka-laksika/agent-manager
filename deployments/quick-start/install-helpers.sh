@@ -463,11 +463,15 @@ install_gateway_extension() {
 
 # ---------------------------------------------------------------------------
 # Load the shared Thunder naming helpers (thunder_release_name/etc.) — the
-# single source of truth for this derivation, see
-# deployments/scripts/thunder-naming.sh. Always run from a checked-out repo
-# (install.sh sources this file locally, never via curl | bash), so a plain
-# relative source is enough — no network-fetch fallback needed here.
+# single source of truth for this derivation, see deployments/scripts/
+# thunder-naming.sh. install.sh sources this file locally (never via
+# curl | bash), so no network-fetch fallback is needed here — but the layout
+# on disk differs between a repo checkout (scripts/ one level up from
+# quick-start/) and the packaged quick-start image (scripts/ copied flat
+# alongside install.sh — see the Dockerfile). DEPLOYMENTS_DIR is computed by
+# install.sh to account for exactly this, and is already used the same way
+# elsewhere in this file (install_default_env_thunder's bundled_script) — reuse
+# it here too instead of hardcoding a checkout-only relative path.
 # ---------------------------------------------------------------------------
-# shellcheck source=../scripts/thunder-naming.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/thunder-naming.sh"
+source "${DEPLOYMENTS_DIR}/scripts/thunder-naming.sh"
 
