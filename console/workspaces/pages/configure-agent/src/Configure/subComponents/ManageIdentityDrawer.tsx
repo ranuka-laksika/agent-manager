@@ -15,7 +15,7 @@
  * under the License.
  */
 
-import { useId, useState } from "react";
+import { useId } from "react";
 import {
   Alert,
   Box,
@@ -39,11 +39,6 @@ import {
   ShieldOff,
 } from "@wso2/oxygen-ui-icons-react";
 import { generatePath } from "react-router-dom";
-import {
-  useAgentIdentityBinding,
-  useListThunderInstances,
-  useRegenerateAgentIdentitySecret,
-} from "@agent-management-platform/api-client";
 import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   DrawerContent,
@@ -53,13 +48,12 @@ import {
 } from "@agent-management-platform/views";
 import {
   getErrorMessage,
+  monospaceInputSx,
   RolesGroupsChips,
+  useAgentIdentityCredentials,
   useAgentRolesAndGroups,
+  useThunderInstanceForEnv,
 } from "@agent-management-platform/shared-component";
-
-// Client IDs/secrets are opaque tokens — monospace makes them easier to
-// visually scan and copy correctly.
-const monospaceInputSx = { "& .MuiInputBase-input": { fontFamily: "monospace" } };
 
 /**
  * Shared loading/error/empty fallback for this drawer's several independent
@@ -109,8 +103,6 @@ const QueryStateFallback: React.FC<{
   return null;
 };
 
-type Secret = { clientId: string; clientSecret: string };
-
 interface AgentIdentitySectionProps {
   orgId: string;
   projectId: string;
@@ -128,39 +120,21 @@ interface AgentIdentitySectionProps {
 const AgentIdentitySection: React.FC<AgentIdentitySectionProps> = ({
   orgId, projectId, agentId, envId,
 }) => {
-  const { binding, provisioned, isLoading, isError, error } = useAgentIdentityBinding({
-    orgId, projectId, agentId, envId,
-  });
-
-  const { mutateAsync: regenerateSecret, isPending: isRegenerating } =
-    useRegenerateAgentIdentitySecret();
-  const [revealed, setRevealed] = useState<Secret | null>(null);
+  const {
+    binding, provisioned, isLoading, isError, error,
+    revealed, isRegenerating, regenerate: handleRegenerate,
+  } = useAgentIdentityCredentials({ orgId, projectId, agentId, envId });
 
   const {
-    data: thunderInstancesData,
+    thunderInstance,
     isLoading: isLoadingThunderInstance,
     isError: isThunderInstanceError,
     error: thunderInstanceError,
-  } = useListThunderInstances({ orgName: orgId });
-  const thunderInstance = thunderInstancesData?.thunderInstances.find(
-    (instance) => instance.envName === envId,
-  );
+  } = useThunderInstanceForEnv({ orgId, envId });
 
   const { roles, groups, isLoading: isLoadingRolesAndGroups } = useAgentRolesAndGroups({
     orgId, projectId, agentId, envId, enabled: provisioned,
   });
-
-  const handleRegenerate = async () => {
-    try {
-      const resp = await regenerateSecret({
-        params: { orgName: orgId, projName: projectId, agentName: agentId },
-        body: { environment: envId },
-      });
-      setRevealed({ clientId: resp.clientId, clientSecret: resp.clientSecret });
-    } catch {
-      // Error already surfaced via useRegenerateAgentIdentitySecret's snackbar.
-    }
-  };
 
   if (isLoading || isError || !binding) {
     return (

@@ -215,8 +215,8 @@ func TestMCPProxyDelete_CleansThunderResourceServers(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, orgName, envName string) (thundersvc.EnvIdentityClient, error) {
-			assert.Equal(t, "org", orgName)
+		ResolveIdentityFunc: func(_ context.Context, ouID, _, envName string) (thundersvc.EnvIdentityClient, error) {
+			assert.Equal(t, "org-uuid", ouID, "cleanup must resolve by ouID (orgUUID), not orgName")
 			assert.Equal(t, "env-a", envName)
 			return envClient, nil
 		},
@@ -263,7 +263,7 @@ func TestMCPProxyDelete_CleanupSurvivesResolverError(t *testing.T) {
 		return []*models.EnvironmentResponse{{Name: "env-a", UUID: envUUID.String()}}, nil
 	}}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) {
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
 			return nil, assert.AnError
 		},
 	}

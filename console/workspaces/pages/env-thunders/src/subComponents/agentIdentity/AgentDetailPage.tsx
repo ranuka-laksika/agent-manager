@@ -18,48 +18,89 @@
 import React, { useMemo, useState } from "react";
 import {
   Alert,
+  Autocomplete,
   Box,
+  Button,
+  CircularProgress,
   Form,
+  IconButton,
   ListingTable,
   Stack,
   Tab,
   Tabs,
+  TextField,
+  Tooltip,
   Typography,
 } from "@wso2/oxygen-ui";
-import { generatePath, useParams } from "react-router-dom";
+import { Trash } from "@wso2/oxygen-ui-icons-react";
+import { generatePath, useNavigate, useParams } from "react-router-dom";
 import {
+  useAddAgentIdentityGroupMembers,
+  useAddAgentIdentityRoleAssignees,
   useGetAgent,
   useGetAgentGroups,
   useGetAgentRoles,
   useGetProject,
+  useListAgentIdentityAgents,
+  useListAgentIdentityGroups,
+  useListAgentIdentityRoles,
+  useRemoveAgentIdentityGroupMembers,
+  useRemoveAgentIdentityRoleAssignees,
 } from "@agent-management-platform/api-client";
-import { absoluteRouteMap } from "@agent-management-platform/types";
+import {
+  absoluteRouteMap,
+  type ThunderGroup,
+  type ThunderRole,
+} from "@agent-management-platform/types";
 import {
   BackButton,
   EditFormSkeleton,
   EntityHeader,
 } from "@agent-management-platform/shared-component";
+import { useAssignmentDelta } from "./useAssignmentDelta";
 
 type TabId = "roles" | "groups";
 
-type TableItem = { id: string; name: string; description?: string };
+type AssignableItem = { id: string; name: string; description?: string };
 
-// Shared shape for the three read-only tabs below: a header, description, and
-// a table of assignments (or an empty-state message).
-function ReadOnlyItemsTable({
+// Role/group catalogs are picked from one generous page rather than a
+// dedicated "fetch all" hook — mirrors the convention used in
+// GroupEditPage/RoleEditPage.
+const CATALOG_PAGE_SIZE = 100;
+
+// Shared shape for the two editable tabs below: a header/description, an
+// optional add-picker (hidden until the catalog loads or when this agent
+// can't be edited), and a table of assignments with a per-row remove button.
+function AssignmentTab<T extends AssignableItem>({
   header,
   description,
-  items,
+  addLabel,
+  addPlaceholder,
+  noOptionsText,
+  removeTooltip,
   emptyText,
-  nameHeader,
-  showDescriptionColumn = true,
+  canEdit,
+  isLoadingCatalog,
+  availableItems,
+  displayedItems,
+  catalogTotal,
+  onAdd,
+  onRemove,
 }: {
   header: string;
   description: React.ReactNode;
-  items: TableItem[];
+  addLabel: string;
+  addPlaceholder: string;
+  noOptionsText: string;
+  removeTooltip: string;
   emptyText: string;
-  nameHeader: string;
-  showDescriptionColumn?: boolean;
+  canEdit: boolean;
+  isLoadingCatalog: boolean;
+  availableItems: T[];
+  displayedItems: T[];
+  catalogTotal: number;
+  onAdd: (e: React.SyntheticEvent, value: T | null) => void;
+  onRemove: (id: string) => void;
 }) {
   return (
     <>
@@ -67,45 +108,73 @@ function ReadOnlyItemsTable({
       <Typography variant="body2" color="text.secondary">
         {description}
       </Typography>
+      {catalogTotal > CATALOG_PAGE_SIZE && (
+        <Alert severity="warning" sx={{ mt: 1 }}>
+          Showing the first {CATALOG_PAGE_SIZE} of {catalogTotal} in this
+          environment. The add picker below only excludes items already
+          listed here.
+        </Alert>
+      )}
 
-      <Box sx={{ mt: 1 }}>
-        {items.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            {emptyText}
-          </Typography>
-        ) : (
-          <ListingTable.Container>
-            <ListingTable>
-              <ListingTable.Head>
-                <ListingTable.Row>
-                  <ListingTable.Cell>{nameHeader}</ListingTable.Cell>
-                  {showDescriptionColumn && (
-                    <ListingTable.Cell>Description</ListingTable.Cell>
+      {canEdit && (
+        <Box sx={{ mt: 1, mb: 2 }}>
+          {isLoadingCatalog ? (
+            <CircularProgress size={20} />
+          ) : (
+            <Form.ElementWrapper label={addLabel} name={addLabel}>
+              <Autocomplete
+                options={availableItems}
+                getOptionLabel={(option) => option.name}
+                onChange={onAdd}
+                value={null}
+                renderInput={(autocompleteParams) => (
+                  <TextField {...autocompleteParams} placeholder={addPlaceholder} />
+                )}
+                noOptionsText={noOptionsText}
+              />
+            </Form.ElementWrapper>
+          )}
+        </Box>
+      )}
+
+      {displayedItems.length === 0 ? (
+        <Typography variant="body2" color="text.secondary">
+          {emptyText}
+        </Typography>
+      ) : (
+        <ListingTable.Container>
+          <ListingTable>
+            <ListingTable.Head>
+              <ListingTable.Row>
+                <ListingTable.Cell>Name</ListingTable.Cell>
+                <ListingTable.Cell>Description</ListingTable.Cell>
+                {canEdit && <ListingTable.Cell />}
+              </ListingTable.Row>
+            </ListingTable.Head>
+            <ListingTable.Body>
+              {displayedItems.map((item) => (
+                <ListingTable.Row key={item.id}>
+                  <ListingTable.Cell>{item.name}</ListingTable.Cell>
+                  <ListingTable.Cell>{item.description ?? "-"}</ListingTable.Cell>
+                  {canEdit && (
+                    <ListingTable.Cell align="right">
+                      <Tooltip title={removeTooltip}>
+                        <IconButton size="small" onClick={() => onRemove(item.id)}>
+                          <Trash size={16} />
+                        </IconButton>
+                      </Tooltip>
+                    </ListingTable.Cell>
                   )}
                 </ListingTable.Row>
-              </ListingTable.Head>
-              <ListingTable.Body>
-                {items.map((item) => (
-                  <ListingTable.Row key={item.id}>
-                    <ListingTable.Cell>{item.name}</ListingTable.Cell>
-                    {showDescriptionColumn && (
-                      <ListingTable.Cell>{item.description ?? "-"}</ListingTable.Cell>
-                    )}
-                  </ListingTable.Row>
-                ))}
-              </ListingTable.Body>
-            </ListingTable>
-          </ListingTable.Container>
-        )}
-      </Box>
+              ))}
+            </ListingTable.Body>
+          </ListingTable>
+        </ListingTable.Container>
+      )}
     </>
   );
 }
 
-// Read-only: this page just shows the agent's effective roles/groups in this
-// environment. Assignment happens from the Roles/Groups pages, same as how
-// UserEditPage's Roles tab (settings/idp) points users there instead of
-// editing assignments in place.
 export const AgentDetailPage: React.FC = () => {
   const { orgId, envName, projectName, agentName } = useParams<{
     orgId: string;
@@ -113,7 +182,11 @@ export const AgentDetailPage: React.FC = () => {
     projectName: string;
     agentName: string;
   }>();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabId>("roles");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>();
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const { data: rolesData, isLoading: isLoadingRoles, error: rolesError } =
     useGetAgentRoles(
@@ -134,17 +207,136 @@ export const AgentDetailPage: React.FC = () => {
     orgName: orgId,
     projName: projectName,
   });
+  const { data: identityAgentsData, isLoading: isLoadingIdentityAgents } =
+    useListAgentIdentityAgents({ orgName: orgId, envName: envName ?? "" });
+  const { data: allRolesData, isLoading: isLoadingAllRoles } =
+    useListAgentIdentityRoles(
+      { orgName: orgId, envName: envName ?? "" },
+      { offset: 0, limit: CATALOG_PAGE_SIZE },
+    );
+  const { data: allGroupsData, isLoading: isLoadingAllGroups } =
+    useListAgentIdentityGroups(
+      { orgName: orgId, envName: envName ?? "" },
+      { offset: 0, limit: CATALOG_PAGE_SIZE },
+    );
 
-  const roles = useMemo(() => rolesData?.roles ?? [], [rolesData]);
-  const groups = useMemo(() => groupsData?.groups ?? [], [groupsData]);
+  const { mutateAsync: addRoleAssignees } = useAddAgentIdentityRoleAssignees();
+  const { mutateAsync: removeRoleAssignees } = useRemoveAgentIdentityRoleAssignees();
+  const { mutateAsync: addGroupMembers } = useAddAgentIdentityGroupMembers();
+  const { mutateAsync: removeGroupMembers } = useRemoveAgentIdentityGroupMembers();
+
+  // The env-scoped assignment APIs identify an agent by its Thunder-bound ID,
+  // not by project/agent name, so it has to be looked up from the identities
+  // agents list. Agents that haven't bound to Thunder yet can't be assigned
+  // roles/groups (mirrors useAgentLookup's restriction on other pages).
+  const thunderAgentId = useMemo(
+    () =>
+      identityAgentsData?.agents.find(
+        (a) => a.agentName === agentName && a.projectName === projectName,
+      )?.thunderAgentId,
+    [identityAgentsData, agentName, projectName],
+  );
+
+  const roles: ThunderRole[] = useMemo(() => rolesData?.roles ?? [], [rolesData]);
+  const groups: ThunderGroup[] = useMemo(() => groupsData?.groups ?? [], [groupsData]);
+  const allRoles: ThunderRole[] = useMemo(() => allRolesData?.roles ?? [], [allRolesData]);
+  const allGroups: ThunderGroup[] = useMemo(() => allGroupsData?.groups ?? [], [allGroupsData]);
+
+  const initialRoleIds = useMemo(() => roles.map((r) => r.id), [roles]);
+  const initialGroupIds = useMemo(() => groups.map((g) => g.id), [groups]);
+
+  const roleDelta = useAssignmentDelta<ThunderRole>(initialRoleIds, (r) => r.id);
+  const groupDelta = useAssignmentDelta<ThunderGroup>(initialGroupIds, (g) => g.id);
+
+  const displayedRoles = useMemo(
+    () => [
+      ...roles.filter((r) => !roleDelta.removedIds.has(r.id)),
+      ...roleDelta.pendingAdds,
+    ],
+    [roles, roleDelta.removedIds, roleDelta.pendingAdds],
+  );
+  const displayedGroups = useMemo(
+    () => [
+      ...groups.filter((g) => !groupDelta.removedIds.has(g.id)),
+      ...groupDelta.pendingAdds,
+    ],
+    [groups, groupDelta.removedIds, groupDelta.pendingAdds],
+  );
+
+  const availableRoles = useMemo(
+    () => allRoles.filter((r) => !roleDelta.excludedIds.has(r.id)),
+    [allRoles, roleDelta.excludedIds],
+  );
+  const availableGroups = useMemo(
+    () => allGroups.filter((g) => !groupDelta.excludedIds.has(g.id)),
+    [allGroups, groupDelta.excludedIds],
+  );
 
   const agentsNode =
     absoluteRouteMap.children.org.children.thunderInstances.children.view.children.agents;
   const agentsPath =
     orgId && envName ? generatePath(agentsNode.path, { orgId, envName }) : "#";
 
+  const handleSave = async () => {
+    if (!orgId || !envName || !thunderAgentId) return;
+    setSaveError(undefined);
+    setSaveSuccess(false);
+    setIsSaving(true);
+    const envParams = { orgName: orgId, envName };
+    try {
+      const addRoleIds = roleDelta.pendingAdds.map((r) => r.id);
+      const removeRoleIds = [...roleDelta.removedIds];
+      const addGroupIds = groupDelta.pendingAdds.map((g) => g.id);
+      const removeGroupIds = [...groupDelta.removedIds];
+
+      // None of these calls depends on another's result, so they run
+      // concurrently rather than paying for round-trips one at a time.
+      await Promise.all([
+        ...addRoleIds.map((roleId) =>
+          addRoleAssignees({
+            params: { ...envParams, roleId },
+            body: { assignments: [{ id: thunderAgentId, type: "agent" as const }] },
+          }),
+        ),
+        ...removeRoleIds.map((roleId) =>
+          removeRoleAssignees({
+            params: { ...envParams, roleId },
+            body: { assignments: [{ id: thunderAgentId, type: "agent" as const }] },
+          }),
+        ),
+        ...addGroupIds.map((groupId) =>
+          addGroupMembers({
+            params: { ...envParams, groupId },
+            body: { agentIds: [thunderAgentId] },
+          }),
+        ),
+        ...removeGroupIds.map((groupId) =>
+          removeGroupMembers({
+            params: { ...envParams, groupId },
+            body: { agentIds: [thunderAgentId] },
+          }),
+        ),
+      ]);
+
+      setSaveSuccess(true);
+      roleDelta.reset();
+      groupDelta.reset();
+    } catch {
+      setSaveError("Failed to update this agent's roles/groups. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // isLoadingAllRoles/isLoadingAllGroups gate only the add-pickers within
+  // each tab (see AssignmentTab's isLoadingCatalog), not the page itself —
+  // the assigned-roles/assigned-groups tables don't need the catalogs.
   const isLoading =
-    isLoadingRoles || isLoadingGroups || isLoadingAgent || isLoadingProject;
+    isLoadingRoles ||
+    isLoadingGroups ||
+    isLoadingAgent ||
+    isLoadingProject ||
+    isLoadingIdentityAgents;
 
   if (isLoading) {
     return (
@@ -154,6 +346,9 @@ export const AgentDetailPage: React.FC = () => {
       </>
     );
   }
+
+  const isDirty = roleDelta.isDirty || groupDelta.isDirty;
+  const canEdit = !!thunderAgentId;
 
   return (
     <>
@@ -171,6 +366,14 @@ export const AgentDetailPage: React.FC = () => {
             Failed to load this agent&apos;s roles/groups. Please try again.
           </Alert>
         )}
+        {!canEdit && (
+          <Alert severity="info">
+            This agent has no active identity binding in {envName}, so roles
+            and groups can&apos;t be assigned yet.
+          </Alert>
+        )}
+        {saveError != null && <Alert severity="error">{saveError}</Alert>}
+        {saveSuccess && <Alert severity="success">Agent updated successfully.</Alert>}
 
         <Form.Section>
           <Tabs
@@ -183,35 +386,62 @@ export const AgentDetailPage: React.FC = () => {
           </Tabs>
 
           {activeTab === "roles" && (
-            <ReadOnlyItemsTable
+            <AssignmentTab
               header="Assigned Roles"
               description={
-                <>
-                  Roles assigned to this agent&apos;s identity in {envName}. To
-                  modify role assignments, use the Roles page.
-                </>
+                <>Roles assigned to this agent&apos;s identity in {envName}.</>
               }
-              items={roles}
-              nameHeader="Name"
+              addLabel="Add Role"
+              addPlaceholder="Search roles..."
+              noOptionsText="No roles available"
+              removeTooltip="Remove role"
               emptyText="No roles assigned to this agent."
+              canEdit={canEdit}
+              isLoadingCatalog={isLoadingAllRoles}
+              availableItems={availableRoles}
+              displayedItems={displayedRoles}
+              catalogTotal={allRolesData?.total ?? 0}
+              onAdd={roleDelta.handleAdd}
+              onRemove={roleDelta.handleRemove}
             />
           )}
 
           {activeTab === "groups" && (
-            <ReadOnlyItemsTable
+            <AssignmentTab
               header="Group Memberships"
               description={
-                <>
-                  Groups this agent&apos;s identity belongs to in {envName}. To
-                  modify group memberships, use the Groups page.
-                </>
+                <>Groups this agent&apos;s identity belongs to in {envName}.</>
               }
-              items={groups}
-              nameHeader="Name"
+              addLabel="Add Group"
+              addPlaceholder="Search groups..."
+              noOptionsText="No groups available"
+              removeTooltip="Remove from group"
               emptyText="This agent is not a member of any groups."
+              canEdit={canEdit}
+              isLoadingCatalog={isLoadingAllGroups}
+              availableItems={availableGroups}
+              displayedItems={displayedGroups}
+              catalogTotal={allGroupsData?.total ?? 0}
+              onAdd={groupDelta.handleAdd}
+              onRemove={groupDelta.handleRemove}
             />
           )}
         </Form.Section>
+
+        {isDirty && (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              onClick={() => navigate(agentsPath)}
+              disabled={isSaving}
+            >
+              Cancel
+            </Button>
+            <Button variant="contained" onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Saving..." : "Save Changes"}
+            </Button>
+          </Stack>
+        )}
       </Stack>
     </>
   );

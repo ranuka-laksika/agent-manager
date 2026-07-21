@@ -249,6 +249,8 @@ func (s *mcpProxyScopeService) Update(ctx context.Context, ouID, orgName, proxyH
 }
 
 func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyHandle, action string) error {
+	_ = orgName // unused: cleanup now resolves env-Thunder by ouID, not orgName
+
 	proxy, err := s.resolveProxy(ctx, ouID, proxyHandle)
 	if err != nil {
 		return err
@@ -261,7 +263,7 @@ func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyH
 		return fmt.Errorf("failed to delete mcp proxy scope: %w", err)
 	}
 
-	s.cleanupDeletedScope(ctx, ouID, orgName, proxy, action)
+	s.cleanupDeletedScope(ctx, ouID, proxy, action)
 
 	if err := s.proxySvc.RedeployMCPProxy(ctx, proxy, ouID); err != nil {
 		return fmt.Errorf("scope deleted but gateway re-emission failed (retry by redeploying the proxy): %w", err)
@@ -276,7 +278,7 @@ func (s *mcpProxyScopeService) Delete(ctx context.Context, ouID, orgName, proxyH
 // a proxy's resource server regardless of that flag (agent_identity_controller.go
 // resolveScopeGroups performs no such check), so cleanup must attempt the same
 // unconditionally or it leaks the resource server whenever security was disabled.
-func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, orgName string, proxy *models.MCPProxy, action string) {
+func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID string, proxy *models.MCPProxy, action string) {
 	handle := proxyHandleOf(proxy)
 	scopeStr := handle + ":" + action
 
@@ -297,7 +299,7 @@ func (s *mcpProxyScopeService) cleanupDeletedScope(ctx context.Context, ouID, or
 			if !ok {
 				continue // environment no longer exists — nothing to clean
 			}
-			client, err := s.resolver.ResolveIdentity(ctx, orgName, name)
+			client, err := ResolveEnvThunderIdentity(ctx, s.resolver, ouID, name)
 			if err != nil {
 				s.logger.Warn("scope cleanup: env-Thunder unavailable", "env", name, "scope", scopeStr, "error", err)
 				continue

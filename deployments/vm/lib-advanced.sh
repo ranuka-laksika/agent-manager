@@ -33,115 +33,17 @@ load_config() {
   set -a; source "$file"; set +a
 }
 
-# validate_config — check required keys and mode-specific requirements. Populates the
-# CONFIG_ERRORS array (reset on each call) and returns 1 if any error was recorded.
+# validate_config — check required keys and the DNS-01 provider/credentials. Populates
+# the CONFIG_ERRORS array (reset on each call) and returns 1 if any error was recorded.
+# TLS is always cert-manager DNS-01 (there is a single mode), so this validates the
+# common keys plus the provider block (validate_dns01_config, from lib-certmanager.sh).
 validate_config() {
   CONFIG_ERRORS=()
-  [[ -n "${AMP_VERSION:-}" ]]  || CONFIG_ERRORS+=("AMP_VERSION is required (an amp/v* release tag, e.g. 0.15.0)")
-  [[ -n "${DOMAIN_BASE:-}" ]]  || CONFIG_ERRORS+=("DOMAIN_BASE is required (e.g. amp.mycompany.com)")
-  case "${TLS_MODE:-}" in
-    letsencrypt)
-      # ACME_EMAIL is recommended but optional (Caddy issues without it; you just
-      # miss expiry notices), so warn rather than fail validation.
-      [[ -n "${ACME_EMAIL:-}" ]] || printf '[config] NOTE: ACME_EMAIL is recommended for letsencrypt mode (ACME contact)\n' >&2
-      ;;
-    byoc)
-      [[ -n "${TLS_CERT_FILE:-}" ]] || CONFIG_ERRORS+=("TLS_CERT_FILE is required for byoc mode")
-      [[ -n "${TLS_KEY_FILE:-}" ]]  || CONFIG_ERRORS+=("TLS_KEY_FILE is required for byoc mode")
-      ;;
-    upstream)
-      # UPSTREAM_LISTEN_PORT defaults to 80; if set, it must be a valid port (so a typo
-      # like "http" fails here, not deep in the Caddy step) and must not collide with a
-      # loopback-bound cluster port — Caddy runs on the host network, so binding one of
-      # those crash-loops it (e.g. 8080 is the in-cluster Thunder/kgateway port).
-      if [[ -n "${UPSTREAM_LISTEN_PORT:-}" ]]; then
-        if [[ "$UPSTREAM_LISTEN_PORT" =~ ^[0-9]+$ ]] && (( UPSTREAM_LISTEN_PORT >= 1 && UPSTREAM_LISTEN_PORT <= 65535 )); then
-          case "$UPSTREAM_LISTEN_PORT" in
-            8080|11080|19080)
-              CONFIG_ERRORS+=("UPSTREAM_LISTEN_PORT=${UPSTREAM_LISTEN_PORT} collides with a loopback-bound cluster port (8080/11080/19080); pick another, e.g. 80") ;;
-          esac
-        else
-          CONFIG_ERRORS+=("UPSTREAM_LISTEN_PORT must be a port number 1-65535 (got '${UPSTREAM_LISTEN_PORT}')")
-        fi
-      fi
-      ;;
-    letsencrypt-dns)
-      # DNS-01: the ACME CA never connects to the VM (reads a TXT record from public
-      # DNS), so this works on a private VM. lego needs a provider to write the TXT
-      # record and an account email to register.
-      [[ -n "${DNS_PROVIDER:-}" ]] || CONFIG_ERRORS+=("DNS_PROVIDER is required for letsencrypt-dns mode (a lego DNS provider, e.g. route53 | cloudflare | gcloud | azuredns)")
-      [[ -n "${ACME_EMAIL:-}" ]]   || CONFIG_ERRORS+=("ACME_EMAIL is required for letsencrypt-dns mode (lego registers an ACME account with it)")
-      ;;
-    selfsigned)
-      # Offline: a local CA + leaf is generated; no public zone, CA, or email needed.
-      :
-      ;;
-    "")
-      CONFIG_ERRORS+=("TLS_MODE is required (letsencrypt | letsencrypt-dns | byoc | selfsigned | upstream)")
-      ;;
-    *)
-      CONFIG_ERRORS+=("TLS_MODE must be one of: letsencrypt | letsencrypt-dns | byoc | selfsigned | upstream (got '${TLS_MODE}')")
-      ;;
-  esac
+  [[ -n "${AMP_VERSION:-}" ]] || CONFIG_ERRORS+=("AMP_VERSION is required (an amp/v* release tag, e.g. 0.15.0)")
+  [[ -n "${DOMAIN_BASE:-}" ]] || CONFIG_ERRORS+=("DOMAIN_BASE is required (e.g. amp.mycompany.com)")
+  [[ -n "${ACME_EMAIL:-}" ]]  || CONFIG_ERRORS+=("ACME_EMAIL is required (cert-manager registers an ACME account with it)")
+  validate_dns01_config   # DNS_PROVIDER + provider-specific credentials (lib-certmanager.sh)
   (( ${#CONFIG_ERRORS[@]} == 0 ))
-}
-
-# validate_cert <cert_file> <key_file> — verify a BYOC cert covers the derived hosts.
-# Reads AMP_HOST_*/AMP_AGENTS_BASE. Populates CERT_ERRORS; returns 1 on any error.
-# Prints a soft note (does not fail) when expiry is under 30 days.
-validate_cert() {
-  local cert="$1" key="$2"
-  CERT_ERRORS=()
-  [[ -r "$cert" ]] || CERT_ERRORS+=("cert file not readable: $cert")
-  [[ -r "$key" ]]  || CERT_ERRORS+=("key file not readable: $key")
-  if (( ${#CERT_ERRORS[@]} )); then return 1; fi
-
-  # 1. Cert and key are a pair — compare public keys. Works for RSA and EC keys
-  #    (the older `openssl rsa -modulus` only handles RSA and errors on EC).
-  local cpub kpub
-  cpub="$(openssl x509 -noout -pubkey -in "$cert" 2>/dev/null | openssl md5)"
-  kpub="$(openssl pkey -pubout -in "$key" 2>/dev/null | openssl md5)"
-  [[ -n "$cpub" && "$cpub" == "$kpub" ]] || CERT_ERRORS+=("cert and key do not match (public key mismatch)")
-
-  # 2. Expiry: hard-fail if already expired; soft-note if < 30 days remain.
-  if ! openssl x509 -checkend 0 -noout -in "$cert" >/dev/null 2>&1; then
-    CERT_ERRORS+=("cert is expired")
-  elif ! openssl x509 -checkend $((30*24*3600)) -noout -in "$cert" >/dev/null 2>&1; then
-    printf '[preflight] NOTE: cert expires in under 30 days\n' >&2
-  fi
-
-  # 3. SAN coverage: every service host + *.<AGENTS_BASE>.
-  local sans want
-  sans="$(openssl x509 -noout -ext subjectAltName -in "$cert" 2>/dev/null | tr ',' '\n' | sed 's/.*DNS://; s/[[:space:]]//g')"
-  _san_covers() {  # _san_covers <hostname>
-    local host="$1" s
-    while IFS= read -r s; do
-      [[ -z "$s" ]] && continue
-      [[ "$s" == "$host" ]] && return 0
-      # wildcard match: *.foo.com covers bar.foo.com (exactly one extra label)
-      if [[ "$s" == \*.* ]]; then
-        local base="${s#\*.}"
-        [[ "$host" == *."$base" && "${host%."$base"}" != *.* ]] && return 0
-      fi
-    done <<<"$sans"
-    return 1
-  }
-  for want in "$AMP_HOST_CONSOLE" "$AMP_HOST_API" "$AMP_HOST_THUNDER" \
-              "$AMP_HOST_OBSERVER" "$AMP_HOST_GATEWAY" "${AMP_HOST_CP:-}"; do
-    [[ -z "$want" ]] && continue
-    _san_covers "$want" || CERT_ERRORS+=("cert SANs do not cover $want")
-  done
-  # The deployed-agent tier needs the *.<AGENTS_BASE> wildcard explicitly.
-  grep -qxF "*.${AMP_AGENTS_BASE}" <<<"$sans" \
-    || CERT_ERRORS+=("cert is missing the deployed-agent wildcard SAN: *.${AMP_AGENTS_BASE}")
-  # Env-Thunder instances (one per org/environment, created dynamically after
-  # initial install) are wildcard-matched under AMP_HOST_THUNDER — see the Caddy
-  # site render_caddyfile/caddyfile adds right after the platform Thunder site.
-  grep -qxF "*.${AMP_HOST_THUNDER}" <<<"$sans" \
-    || CERT_ERRORS+=("cert is missing the env-Thunder wildcard SAN: *.${AMP_HOST_THUNDER}")
-  unset -f _san_covers
-
-  (( ${#CERT_ERRORS[@]} == 0 ))
 }
 
 # _resolve_host <hostname> — print ALL A records (one per line). Overridable in tests.
@@ -211,11 +113,7 @@ validate_dns() {
   done
   if (( ${#DNS_ERRORS[@]} )); then
     printf '[preflight] DNS issue: %s\n' "${DNS_ERRORS[@]}" >&2
-    if [[ "${TLS_MODE:-}" == letsencrypt ]]; then
-      printf '[preflight] In letsencrypt mode every hostname (incl. *.%s) must A-record to this VM before ACME can issue. Create those records and re-run.\n' "$AMP_AGENTS_BASE" >&2
-      return 1
-    fi
-    printf '[preflight] (advisory in %s mode; ensure your DNS or client hosts entries point at this VM)\n' "${TLS_MODE:-?}" >&2
+    printf '[preflight] (advisory: certificate issuance uses DNS-01 and needs no inbound; point your DNS — or client /etc/hosts entries — at this VM so clients can reach the services)\n' >&2
   fi
   return 0
 }

@@ -83,7 +83,7 @@ func TestAttemptProvision_Success_CreatesIdentityAndStoresSecret(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, orgName, envName string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 
 	var recorded repositories.AgentThunderAttemptUpdate
@@ -129,7 +129,7 @@ func TestAttemptProvision_Success_ExternalAgent_NeverStoresSecret(t *testing.T) 
 		return "thunder-agent-1", "client-abc", "secret-xyz", true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(context.Context, secretmanagersvc.SecretLocation, map[string]string) (string, error) {
@@ -172,7 +172,7 @@ func TestAttemptProvision_AlreadyHasThunderAgentID_SkipsCreate(t *testing.T) {
 		return "recovered-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	var storedSecret string
 	store := &clientmocks.SecretManagementClientMock{
@@ -227,7 +227,7 @@ func TestAttemptProvision_AlreadyHasSecretRef_SkipsRecovery(t *testing.T) {
 		return "", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(context.Context, secretmanagersvc.SecretLocation, map[string]string) (string, error) {
@@ -274,7 +274,7 @@ func TestAttemptProvision_ConflictFallback_RegeneratesSecretToRecover(t *testing
 		return "recovered-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	var storedSecret string
 	store := &clientmocks.SecretManagementClientMock{
@@ -310,7 +310,7 @@ func TestAttemptProvision_TransientFailure_SchedulesRetryWithBackoff(t *testing.
 		return "", "", "", false, boom
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{}
 
@@ -359,7 +359,7 @@ func TestAttemptProvision_FifthFailure_MarksFailedNoMoreRetries(t *testing.T) {
 		return "", "", "", false, boom
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{}
 
@@ -405,7 +405,7 @@ func TestProvisionBackoffSchedule_TotalRetryWindowWithinSLA(t *testing.T) {
 // including FAILED, as already provisioned).
 func TestAttemptProvision_ThunderNotProvisioned_RetriesLikeAnyOtherFailure(t *testing.T) {
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			return nil, thundersvc.ErrThunderNotProvisioned
 		},
 	}
@@ -451,7 +451,7 @@ func TestAttemptProvision_ClaimFails_SkipsWithoutTouchingThunder(t *testing.T) {
 		return "", "", "", false, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			t.Fatal("Resolve must not be called when the claim was not won")
 			return tc, nil
 		},
@@ -481,7 +481,7 @@ func TestAttemptProvision_ClaimFails_SkipsWithoutTouchingThunder(t *testing.T) {
 // one binding.
 func TestAttemptProvision_PanicIsRecovered_MarksBindingRetryable(t *testing.T) {
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			panic("simulated panic during provisioning")
 		},
 	}
@@ -518,7 +518,7 @@ func TestProvisionForAgent_WritesAheadPendingForEveryEnvironment(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			// Block forever from the caller's perspective is unnecessary — just
 			// return an error so the background attempt fails harmlessly; this
 			// test only cares about the synchronous write-ahead behavior.
@@ -562,7 +562,7 @@ func TestProvisionForAgent_TransientUpsertBlip_RecoveredOnRetry(t *testing.T) {
 		UpdateAfterAttemptFunc: func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error { return nil },
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			return nil, errors.New("unused in this test")
 		},
 	}
@@ -585,7 +585,7 @@ func TestRegenerateSecret_Internal_StoresSecret(t *testing.T) {
 		return "new-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	var storedSecret string
 	store := &clientmocks.SecretManagementClientMock{
@@ -632,7 +632,7 @@ func TestRegenerateSecret_External_NeverStoresSecret(t *testing.T) {
 		return "new-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(context.Context, secretmanagersvc.SecretLocation, map[string]string) (string, error) {
@@ -684,7 +684,7 @@ func TestRegenerateSecret_ConcurrentCallsForSameBinding_Serialized(t *testing.T)
 		return "rotated-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ map[string]string) (string, error) {
@@ -763,7 +763,7 @@ func TestRevokeSecret_RotatesAndClearsStoredCopy(t *testing.T) {
 		return "unused-new-secret", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	deleteCalled := false
 	store := &clientmocks.SecretManagementClientMock{
@@ -809,7 +809,7 @@ func TestRevokeSecret_StoredSecretDeleteFails_LeavesSecretRefPathSetForRetry(t *
 	tc := fakeThunderClientMock()
 	tc.RegenerateAgentSecretFunc = func(_ context.Context, _ string) (string, error) { return "unused-new-secret", nil }
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		DeleteSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ string) error {
@@ -888,7 +888,9 @@ func TestGetAgentRoles_Success(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) { return identityClient, nil },
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return identityClient, nil
+		},
 	}
 	store := &clientmocks.SecretManagementClientMock{}
 
@@ -949,7 +951,9 @@ func TestGetAgentGroups_Success(t *testing.T) {
 		},
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveIdentityFunc: func(_ context.Context, _, _ string) (thundersvc.EnvIdentityClient, error) { return identityClient, nil },
+		ResolveIdentityFunc: func(_ context.Context, _, _, _ string) (thundersvc.EnvIdentityClient, error) {
+			return identityClient, nil
+		},
 	}
 	store := &clientmocks.SecretManagementClientMock{}
 
@@ -1081,7 +1085,7 @@ func TestDeleteAllBindings_DeletesThunderIdentitiesSecretsAndRows(t *testing.T) 
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	var deletedSecretEnvs []string
 	store := &clientmocks.SecretManagementClientMock{
@@ -1142,7 +1146,7 @@ func TestDeleteAllBindings_DeletesRowsBeforeSlowThunderCleanup(t *testing.T) {
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{}
 	seed := models.AgentThunderClient{ID: uuid.New(), ThunderAgentID: "agent-1", EnvironmentName: "dev"}
@@ -1189,7 +1193,7 @@ func TestDeleteAllBindings_ContinuesExternalCleanupOnDeleteByIDsFailure(t *testi
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	secretDeleted := false
 	store := &clientmocks.SecretManagementClientMock{
@@ -1267,7 +1271,7 @@ func TestDeleteAllBindings_WaitsForInFlightAttemptProvision_NoOrphanedThunderIde
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	var deletedSecretEnvs []string
 	store := &clientmocks.SecretManagementClientMock{
@@ -1388,7 +1392,7 @@ func TestDeleteAllBindings_ReleasesEachBindingsLockAfterItsOwnCleanup_NotAfterAl
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		DeleteSecretFunc: func(context.Context, secretmanagersvc.SecretLocation, string) error { return nil },
@@ -1499,7 +1503,7 @@ func TestProvisionForEnvironmentIfMissing_Missing_WritesAheadAndAttempts(t *test
 	repo.ClaimForAttemptFunc = func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil }
 	repo.UpdateAfterAttemptFunc = func(_ context.Context, _ uuid.UUID, _ repositories.AgentThunderAttemptUpdate) error { return nil }
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) {
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) {
 			return nil, thundersvc.ErrThunderNotProvisioned // attempt fails fast; not under test here
 		},
 	}
@@ -1774,7 +1778,7 @@ func successfulProvisionMocks(recorded *repositories.AgentThunderAttemptUpdate) 
 		return "thunder-agent-1", "client-abc", "secret-xyz", true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ map[string]string) (string, error) {
@@ -1886,7 +1890,7 @@ func TestSetWorkloadInjector_ConcurrentWithAttemptProvision_NoRace(t *testing.T)
 		return "thunder-agent-1", "client-abc", "secret-xyz", true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ map[string]string) (string, error) {
@@ -1996,7 +2000,7 @@ func TestAttemptProvision_RecordFailure_SkipsInjection(t *testing.T) {
 		return "", "", "", false, errors.New("thunder down")
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	repo := &repomocks.AgentThunderClientRepositoryMock{
 		ClaimForAttemptFunc: func(_ context.Context, _ uuid.UUID) (bool, error) { return true, nil },
@@ -2028,7 +2032,7 @@ func TestDeleteAllBindings_CleansUpIdentitySecretReferences(t *testing.T) {
 	tc := fakeThunderClientMock()
 	tc.DeleteAgentIdentityFunc = func(_ context.Context, _ string) (bool, error) { return true, nil }
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		DeleteSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ string) error { return nil },
@@ -2080,7 +2084,7 @@ func TestDeleteAllBindings_ContinuesExternalCleanupWhenDBRowDeleteFails(t *testi
 		return true, nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	secretDeleted := false
 	store := &clientmocks.SecretManagementClientMock{
@@ -2144,7 +2148,7 @@ func TestAttemptProvision_SerializesWithRegenerateSecret(t *testing.T) {
 		return "regenerated-by-user", nil
 	}
 	resolver := &clientmocks.EnvThunderResolverMock{
-		ResolveFunc: func(_ context.Context, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
+		ResolveFunc: func(_ context.Context, _, _, _ string) (thundersvc.ThunderClient, error) { return tc, nil },
 	}
 	store := &clientmocks.SecretManagementClientMock{
 		CreateSecretFunc: func(_ context.Context, _ secretmanagersvc.SecretLocation, _ map[string]string) (string, error) {

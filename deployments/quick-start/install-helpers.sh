@@ -256,7 +256,7 @@ install_default_env_thunder() {
     # standalone use; GitHub rate-limits unauthenticated per-IP requests (429),
     # so avoid the network whenever the bundled script is present.
     local bundled_script="${DEPLOYMENTS_DIR:-}/scripts/add-environment-thunder.sh"
-    local script_path tmp_script=""
+    local script_path tmp_script="" script_base_url=""
 
     if [[ -n "${DEPLOYMENTS_DIR:-}" && -f "${bundled_script}" ]]; then
         script_path="${bundled_script}"
@@ -269,11 +269,19 @@ install_default_env_thunder() {
             return 1
         fi
         script_path="${tmp_script}"
+        # Not bundled, so it runs from a temp file with no local siblings — pass
+        # SCRIPT_BASE_URL (derived from script_url) so its own thunder-naming.sh/
+        # ams-auth.sh fetches use this SAME release ref instead of defaulting to main.
+        script_base_url="$(dirname "$script_url")"
     fi
 
+    # AMP_API_URL uses the host-facing ingress (this runs off-cluster, not the
+    # gateway Job's in-cluster DNS); AMS is confirmed healthy before this runs.
     ENV_NAME=default \
         DISPLAY_NAME="Default" \
         ORG_NAME=default \
+        AMP_API_URL="http://api.amp.localhost:8080/api/v1" \
+        SCRIPT_BASE_URL="${script_base_url}" \
         bash "${script_path}"
     local status=$?
     [[ -n "${tmp_script}" ]] && rm -f "${tmp_script}"
@@ -494,10 +502,14 @@ install_gateway_extension() {
 
 # ---------------------------------------------------------------------------
 # Load the shared Thunder naming helpers (thunder_release_name/etc.) — the
-# single source of truth for this derivation, see
-# deployments/scripts/thunder-naming.sh. Always run from a checked-out repo
-# (install.sh sources this file locally, never via curl | bash), so a plain
-# relative source is enough — no network-fetch fallback needed here.
+# single source of truth for this derivation, see deployments/scripts/
+# thunder-naming.sh. install.sh sources this file locally (never via
+# curl | bash), so no network-fetch fallback is needed here — but the layout
+# on disk differs between a repo checkout (scripts/ one level up from
+# quick-start/) and the packaged quick-start image (scripts/ copied flat
+# alongside install.sh — see the Dockerfile). DEPLOYMENTS_DIR is computed by
+# install.sh to account for exactly this, and is already used the same way
+# elsewhere in this file (install_default_env_thunder's bundled_script) — reuse
+# it here too instead of hardcoding a checkout-only relative path.
 # ---------------------------------------------------------------------------
-# shellcheck source=../scripts/thunder-naming.sh
-source "$(dirname "${BASH_SOURCE[0]}")/../scripts/thunder-naming.sh"
+source "${DEPLOYMENTS_DIR}/scripts/thunder-naming.sh"

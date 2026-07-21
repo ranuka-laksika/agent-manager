@@ -165,6 +165,10 @@ type OpenChoreoConfig struct {
 	// DefaultNamespace is the OpenChoreo namespace (organization) all API
 	// calls are scoped to. The deployment runs single-namespace.
 	DefaultNamespace string
+	// SystemLabelKeyPrefixes lists component label-key prefixes that are
+	// reserved for internal use and never surfaced as user labels in agent
+	// API responses.
+	SystemLabelKeyPrefixes []string
 }
 
 // GitHubConfig holds GitHub API configuration

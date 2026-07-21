@@ -21,6 +21,7 @@ import {
   globalConfig,
   type GuardrailCapabilities,
 } from "@agent-management-platform/types";
+import { listAvailableLLMPolicies } from "../apis";
 import { useApiQuery } from "./react-query-notifications";
 
 export interface GuardrailDefinition {
@@ -31,6 +32,13 @@ export interface GuardrailDefinition {
   provider: string;
   categories: string[];
   isLatest: boolean;
+  /**
+   * Present only for gateway-manifest-sourced policies (see useLLMPoliciesCatalog).
+   * When set, PolicySelectorDrawer renders the parameter form directly from these
+   * instead of fetching+parsing a YAML definition from the policy hub.
+   */
+  parameters?: Record<string, unknown>;
+  systemParameters?: Record<string, unknown>;
 }
 
 // Tier 1: Always hidden — infra/auth/MCP policies irrelevant to LLM governance,
@@ -54,6 +62,22 @@ const NON_GUARDRAIL_POLICY_EXCLUDELIST = new Set([
   "semantic-tool-filtering",
   // Not available in gateway v1.0.0
   "prompt-compressor",
+  // Infra/mediation policies that only become visible once the picker reads the
+  // full, unfiltered gateway manifest instead of the hub's categories=Guardrails,AI
+  // filter (useLLMPoliciesCatalog) — none of these are LLM guardrails.
+  "analytics-header-filter",
+  "backend-jwt",
+  "dynamic-endpoint",
+  "host-rewrite",
+  "interceptor-service",
+  "json-xml-mediator",
+  "log-message",
+  // Found live against a real gateway manifest (2026-07-17): more mediation
+  // policies not covered by the upstream build-manifest.yaml audit above.
+  "remove-headers",
+  "request-rewrite",
+  "set-headers",
+  "subscription-validation",
 ]);
 
 // Tier 2: Hidden by default — require external system config.
@@ -178,6 +202,112 @@ export function useGuardrailPolicyDefinition(
         );
       }
       return res.text();
+    },
+  });
+}
+
+/**
+ * Best-effort lookup of {policyName → displayName} from the public policy hub.
+ *
+ * Used purely to give WSO2's built-in policies a friendly name when the gateway's
+ * own manifest omits `displayName` (which, today, it does for all but one). The hub
+ * is NEVER consulted for availability or version — only for a nicer label. Any
+ * failure (hub unconfigured, unreachable, or a bad response) resolves to an empty
+ * map so the picker degrades to the raw kebab-case name instead of erroring. Keyed
+ * by name only: display names are stable across patch versions, and the hub's coarse
+ * `major.minor` version wouldn't match the gateway's exact build version anyway.
+ *
+ * Bounded by an AbortController timeout: a hub that hangs (unreachable host, stalled
+ * TLS) rather than failing fast must NOT block the authoritative gateway list this
+ * runs in parallel with — on timeout the abort rejects the fetch and we fall back.
+ */
+const HUB_DISPLAY_NAME_TIMEOUT_MS = 3000;
+
+async function fetchHubPolicyDisplayNames(
+  token: string | undefined,
+): Promise<Map<string, string>> {
+  const displayNames = new Map<string, string>();
+  const url = globalConfig.guardrailsCatalogUrl;
+  if (!url) return displayNames;
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    HUB_DISPLAY_NAME_TIMEOUT_MS,
+  );
+  try {
+    const res = await fetch(url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      signal: controller.signal,
+    });
+    if (!res.ok) return displayNames;
+    const catalog = (await res.json()) as GuardrailsCatalogResponse;
+    for (const policy of catalog.data ?? []) {
+      if (policy.displayName) displayNames.set(policy.name, policy.displayName);
+    }
+  } catch {
+    // Hub is a best-effort name source only (includes AbortError on timeout);
+    // ignore and fall back to kebab names.
+  } finally {
+    clearTimeout(timer);
+  }
+  return displayNames;
+}
+
+/**
+ * Fetches available LLM guardrail policies from the gateway's own reported manifest
+ * (via agent-manager-service), instead of the external policy hub. Every policy
+ * carries its full JSON-Schema `parameters`/`systemParameters` inline, so the picker
+ * never needs a second round-trip to fetch a YAML definition, and a custom policy
+ * appears the moment its gateway redeploys — no policy-hub publishing step involved.
+ *
+ * The gateway is the sole source of truth for which policies exist and at which
+ * version. The policy hub is consulted only as a best-effort source of friendly
+ * display names for policies whose gateway manifest left `displayName` empty (see
+ * fetchHubPolicyDisplayNames) — a hybrid that keeps user-authored custom policies
+ * working (they fall through to their own name) without depending on the hub for
+ * availability.
+ */
+export function useLLMPoliciesCatalog(orgName?: string, enabled = true) {
+  const { getToken } = useAuthHooks();
+
+  return useApiQuery<GuardrailsCatalogResponse>({
+    queryKey: [
+      "LLM gateway policies catalog",
+      orgName,
+      globalConfig.guardrailsCatalogUrl,
+    ],
+    enabled: enabled && Boolean(orgName),
+    queryFn: async () => {
+      if (!orgName) {
+        throw new Error("Organization name is required to list LLM policies.");
+      }
+
+      const token = await getToken();
+      // Run both in parallel: the hub lookup adds no latency beyond the slower call,
+      // and a hub failure never blocks the (authoritative) gateway list.
+      const [available, hubDisplayNames] = await Promise.all([
+        listAvailableLLMPolicies({ orgName }, async () => token),
+        fetchHubPolicyDisplayNames(token),
+      ]);
+      const data: GuardrailDefinition[] = (available.list ?? []).map((p) => ({
+        name: p.name,
+        // Always the gateway's exact build version — never the hub's coarser one.
+        version: p.version,
+        // Priority: the gateway's own displayName (authoritative; the only source
+        // for a user-authored custom policy) → the policy hub's friendly name (for
+        // WSO2 built-ins the gateway left blank) → the raw kebab-case name.
+        displayName: p.displayName || hubDisplayNames.get(p.name) || p.name,
+        description: p.description ?? "",
+        provider: "gateway",
+        categories: [],
+        isLatest: true,
+        // Never undefined: an inline (possibly empty) object is what signals to
+        // PolicySelectorDrawer that this policy's schema is already known, so it
+        // can skip the hub YAML-definition fetch entirely.
+        parameters: p.parameters ?? {},
+        systemParameters: p.systemParameters ?? {},
+      }));
+      return { count: data.length, data };
     },
   });
 }

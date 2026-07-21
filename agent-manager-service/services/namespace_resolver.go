@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	occlient "github.com/wso2/agent-manager/agent-manager-service/clients/openchoreosvc/client"
+	"github.com/wso2/agent-manager/agent-manager-service/clients/thundersvc"
 	"github.com/wso2/agent-manager/agent-manager-service/config"
 )
 
@@ -51,4 +52,17 @@ func ResolveNamespace(ctx context.Context, ocClient occlient.OpenChoreoClient) (
 // Both the provisioning and injection services call this so they can't disagree.
 func ThunderOrgNamespace() string {
 	return config.GetConfig().OpenChoreo.DefaultNamespace
+}
+
+// ResolveEnvThunderClient is the single place every caller resolves a
+// ThunderClient: credential lookup is scoped by ouID (multi-tenant-safe),
+// while addressing stays pinned to ThunderOrgNamespace(). Call this instead of
+// resolver.Resolve directly, so the pairing can't drift between call sites.
+func ResolveEnvThunderClient(ctx context.Context, resolver thundersvc.EnvThunderResolver, ouID, envName string) (thundersvc.ThunderClient, error) {
+	return resolver.Resolve(ctx, ouID, ThunderOrgNamespace(), envName)
+}
+
+// ResolveEnvThunderIdentity is ResolveEnvThunderClient widened to the identity surface.
+func ResolveEnvThunderIdentity(ctx context.Context, resolver thundersvc.EnvThunderResolver, ouID, envName string) (thundersvc.EnvIdentityClient, error) {
+	return resolver.ResolveIdentity(ctx, ouID, ThunderOrgNamespace(), envName)
 }

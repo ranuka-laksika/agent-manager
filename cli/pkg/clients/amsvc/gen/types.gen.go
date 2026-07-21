@@ -3309,6 +3309,33 @@ type LLMPolicy struct {
 	Version string `json:"version"`
 }
 
+// LLMPolicyAvailabilityResponse defines model for LLMPolicyAvailabilityResponse.
+type LLMPolicyAvailabilityResponse struct {
+	Count int32                 `json:"count"`
+	List  []LLMPolicyDefinition `json:"list"`
+}
+
+// LLMPolicyDefinition defines model for LLMPolicyDefinition.
+type LLMPolicyDefinition struct {
+	// Description Policy description
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable policy name
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// Name Policy name
+	Name string `json:"name"`
+
+	// Parameters JSON-Schema describing the user-configurable parameters
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+
+	// SystemParameters JSON-Schema describing operator-level (gateway config) parameters
+	SystemParameters *map[string]interface{} `json:"systemParameters,omitempty"`
+
+	// Version Policy version
+	Version string `json:"version"`
+}
+
 // LLMPolicyPath defines model for LLMPolicyPath.
 type LLMPolicyPath struct {
 	Methods []string `json:"methods"`
@@ -4685,6 +4712,15 @@ type TargetEnvironmentRef struct {
 	Name string `json:"name"`
 }
 
+// ThunderSystemClientRequest The env-Thunder system-client OAuth2 credential to store for an environment.
+type ThunderSystemClientRequest struct {
+	// ClientId OAuth2 client ID of the env-Thunder system-client app.
+	ClientId string `json:"clientId"`
+
+	// ClientSecret OAuth2 client secret (stored encrypted at rest).
+	ClientSecret string `json:"clientSecret"`
+}
+
 // TimeRange defines model for TimeRange.
 type TimeRange struct {
 	// End End time of the range
@@ -5670,6 +5706,9 @@ type CreateEnvironmentJSONRequestBody = CreateEnvironmentRequest
 
 // UpdateEnvironmentJSONRequestBody defines body for UpdateEnvironment for application/json ContentType.
 type UpdateEnvironmentJSONRequestBody = UpdateEnvironmentRequest
+
+// SetEnvironmentThunderSystemClientJSONRequestBody defines body for SetEnvironmentThunderSystemClient for application/json ContentType.
+type SetEnvironmentThunderSystemClientJSONRequestBody = ThunderSystemClientRequest
 
 // CreateAgentIdentityGroupJSONRequestBody defines body for CreateAgentIdentityGroup for application/json ContentType.
 type CreateAgentIdentityGroupJSONRequestBody = AgentIdentityGroupRequest

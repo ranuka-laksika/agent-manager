@@ -25,19 +25,14 @@ import (
 	"time"
 
 	"golang.org/x/sync/singleflight"
-
-	"github.com/wso2/agent-manager/agent-manager-service/clients/secretmanagersvc"
 )
 
 // envThunderClientCacheTTL bounds how long a resolved ThunderClient is reused
-// before its system-client secret is re-read from the secret store. Without
-// this, a rotated env-Thunder secret (e.g. a re-bootstrap) would break
-// provisioning for that environment until the AMS process restarts.
+// before its secret is re-read — otherwise a rotated secret needs a restart to take effect.
 const envThunderClientCacheTTL = 15 * time.Minute
 
-// ErrThunderNotProvisioned is returned when no env-Thunder system-client secret
-// exists for the given organization/environment — i.e. add-environment-thunder.sh
-// has not been run for it yet.
+// ErrThunderNotProvisioned means add-environment-thunder.sh hasn't been run
+// for this org/environment yet — the reader returns it (wrapped) for a missing row.
 var ErrThunderNotProvisioned = errors.New("env-thunder not provisioned for this environment")
 
 // ErrThunderUnreachable is returned when an env-Thunder's system-client secret
@@ -48,17 +43,19 @@ var ErrThunderNotProvisioned = errors.New("env-thunder not provisioned for this 
 var ErrThunderUnreachable = errors.New("env-thunder is provisioned but not reachable")
 
 // EnvThunderResolver resolves a ready-to-use ThunderClient for a specific
-// environment's Thunder instance, given only an organization and environment name.
-// Used by both agent ownership models identically — every AgentID is provisioned
-// against a specific environment's Thunder instance (see the AgentID architecture
-// doc, Section 3).
+// environment's Thunder instance. ouID scopes the credential lookup (a
+// per-tenant identity, multi-tenant-safe); orgNamespace addresses the Thunder
+// instance itself (namespace/hostname) and is deliberately NOT per-tenant —
+// see services.ThunderOrgNamespace's doc comment for why. Callers should go
+// through services.ResolveEnvThunderClient/Identity rather than pairing these
+// two arguments themselves, so the pairing can't drift between call sites.
 //
 //go:generate moq -rm -fmt goimports -skip-ensure -pkg clientmocks -out ../clientmocks/env_thunder_resolver_fake.go . EnvThunderResolver:EnvThunderResolverMock
 type EnvThunderResolver interface {
-	Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error)
+	Resolve(ctx context.Context, ouID, orgNamespace, envName string) (ThunderClient, error)
 	// ResolveIdentity returns the same resolved client widened to identity
 	// operations (the concrete client implements both interfaces).
-	ResolveIdentity(ctx context.Context, orgName, envName string) (EnvIdentityClient, error)
+	ResolveIdentity(ctx context.Context, ouID, orgNamespace, envName string) (EnvIdentityClient, error)
 }
 
 // EnvIdentityClient is the env-Thunder surface the agent-identity passthrough
@@ -70,35 +67,21 @@ type EnvIdentityClient interface {
 	GetDefaultOUID(ctx context.Context) (string, error)
 }
 
-// envThunderSecretLocation returns the deterministic, backend-agnostic
-// location of one environment's env-Thunder system-client secret: an
-// org-level secret (no project/agent) keyed by a composite entity name so it
-// round-trips unambiguously through SecretLocation.KVPath()/ParseKVPath() —
-// unlike a bare {org, env, entity} triple, which would collide in shape with
-// the {org, entity, key} triple already used elsewhere (e.g.
-// monitorCompositeSecretLocation). add-environment-thunder.sh's
-// write_to_openbao() writes to this exact path.
-func envThunderSecretLocation(orgName, envName string) secretmanagersvc.SecretLocation {
-	return secretmanagersvc.SecretLocation{
-		OrgName:    orgName,
-		EntityName: "thunder-system-client-" + envName,
-	}
-}
+type (
+	// ReadSystemClientFunc reads an env-Thunder's (clientID, clientSecret) by
+	// decrypting it from AMS's own Postgres, keyed by (ouID, envName). Returns
+	// ErrThunderNotProvisioned for a missing row.
+	ReadSystemClientFunc func(ctx context.Context, ouID, envName string) (clientID, clientSecret string, err error)
 
-// envThunderResolver reads the env-Thunder system-client secret written by
-// add-environment-thunder.sh's write_to_openbao(), via the same pluggable
-// secretmanagersvc.SecretManagementClient every other secret-backed service in
-// this codebase uses — this is infrastructure bootstrap state, not a
-// user-facing org/project secret, but it lives in the same swappable backend.
-// The client ID is not stored there: every env-Thunder uses the same well-known
-// system client ID created by the Thunder bootstrap job (thunderSystemClientID).
-// resolveBaseURLFunc picks a reachable base URL (and, if needed, a dial-override
-// address) for an env-Thunder instance. Matches ResolveThunderBaseURL's signature —
-// injectable so tests don't depend on real network probing.
-type resolveBaseURLFunc func(ctx context.Context, org, env string) (baseURL, resolveToHost string, ok bool)
+	// resolveBaseURLFunc picks a reachable base URL for an env-Thunder instance —
+	// injectable so tests don't depend on real network probing.
+	resolveBaseURLFunc func(ctx context.Context, org, env string) (baseURL, resolveToHost string, ok bool)
+)
 
+// envThunderResolver reads the system-client credential via the injected
+// ReadSystemClientFunc (AMS's Postgres, not a key vault — cloud vaults are reveal-once).
 type envThunderResolver struct {
-	secretMgmtClient secretmanagersvc.SecretManagementClient
+	readSystemClient ReadSystemClientFunc
 	resolveBaseURL   resolveBaseURLFunc
 	ttl              time.Duration
 	now              func() time.Time
@@ -114,19 +97,16 @@ type cachedThunderClient struct {
 }
 
 // NewEnvThunderResolver creates an EnvThunderResolver backed by the given
-// secret management client — the same shared, deployment-pluggable client
-// used for AgentID/LLM/MCP/publisher secrets, so swapping the backend (e.g.
-// away from OpenBao) needs no change here.
-func NewEnvThunderResolver(secretMgmtClient secretmanagersvc.SecretManagementClient) EnvThunderResolver {
-	return newEnvThunderResolverWithSecretClient(secretMgmtClient, ResolveThunderBaseURL)
+// system-client reader (which decrypts the credential from AMS's Postgres).
+func NewEnvThunderResolver(readSystemClient ReadSystemClientFunc) EnvThunderResolver {
+	return newEnvThunderResolverWithReader(readSystemClient, ResolveThunderBaseURL)
 }
 
-// newEnvThunderResolverWithSecretClient builds a resolver against an injected
-// secret client — the real shared one, or a fake in tests — and an injected
-// base-URL resolver, the real network-probing ResolveThunderBaseURL, or a fake.
-func newEnvThunderResolverWithSecretClient(secretMgmtClient secretmanagersvc.SecretManagementClient, resolveBaseURL resolveBaseURLFunc) *envThunderResolver {
+// newEnvThunderResolverWithReader builds a resolver from an injected reader and
+// base-URL resolver — real implementations in production, fakes in tests.
+func newEnvThunderResolverWithReader(readSystemClient ReadSystemClientFunc, resolveBaseURL resolveBaseURLFunc) *envThunderResolver {
 	return &envThunderResolver{
-		secretMgmtClient: secretMgmtClient,
+		readSystemClient: readSystemClient,
 		resolveBaseURL:   resolveBaseURL,
 		ttl:              envThunderClientCacheTTL,
 		now:              time.Now,
@@ -134,25 +114,19 @@ func newEnvThunderResolverWithSecretClient(secretMgmtClient secretmanagersvc.Sec
 	}
 }
 
-// Resolve returns a ThunderClient authenticated against the given environment's
-// Thunder instance. Resolved clients are cached per (org, env) for
-// envThunderClientCacheTTL: the underlying ThunderClient already caches its
-// own system token, so caching the client itself avoids re-reading the secret
-// store on every call, while the TTL still picks up a rotated system-client
-// secret without requiring a process restart.
-func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName string) (ThunderClient, error) {
-	// Reject path-breaking segments before they ever reach SecretLocation.KVPath().
-	// envName is embedded inside a composite entity name (never a bare path
-	// segment on its own), but orgName is always the KV path's first segment,
-	// so it's still worth failing fast and explicitly here rather than relying
-	// on the secret backend to reject it.
-	for _, seg := range []string{orgName, envName} {
+// Resolve returns a ThunderClient for the given environment, caching it per
+// (ouID, orgNamespace, env) for envThunderClientCacheTTL to avoid re-reading
+// the credential every call.
+func (r *envThunderResolver) Resolve(ctx context.Context, ouID, orgNamespace, envName string) (ThunderClient, error) {
+	// Fail fast on obviously invalid segments before they reach a DB query or
+	// the cache key — cheap defence, keeps the cache key unambiguous.
+	for _, seg := range []string{ouID, orgNamespace, envName} {
 		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, "/") {
 			return nil, fmt.Errorf("invalid org or environment name segment %q", seg)
 		}
 	}
 
-	cacheKey := orgName + "/" + envName
+	cacheKey := ouID + "/" + orgNamespace + "/" + envName
 
 	r.mu.RLock()
 	if entry, ok := r.cache[cacheKey]; ok && r.now().Sub(entry.cachedAt) < r.ttl {
@@ -162,7 +136,7 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 	r.mu.RUnlock()
 
 	// Singleflight so concurrent first-time resolves for the same key share one
-	// secret-store read and base-URL probe instead of each paying the cost independently.
+	// credential read and base-URL probe instead of each paying the cost independently.
 	result, err, _ := r.sfg.Do(cacheKey, func() (any, error) {
 		r.mu.RLock()
 		if entry, ok := r.cache[cacheKey]; ok && r.now().Sub(entry.cachedAt) < r.ttl {
@@ -171,27 +145,22 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 		}
 		r.mu.RUnlock()
 
-		kvPath, err := envThunderSecretLocation(orgName, envName).KVPath()
-		if err != nil {
-			return nil, fmt.Errorf("build env-thunder secret location for %s/%s: %w", orgName, envName, err)
-		}
-		data, err := r.secretMgmtClient.GetSecretWithValue(ctx, kvPath)
-		if errors.Is(err, secretmanagersvc.ErrSecretNotFound) {
+		clientID, clientSecret, err := r.readSystemClient(ctx, ouID, envName)
+		if errors.Is(err, ErrThunderNotProvisioned) {
 			return nil, ErrThunderNotProvisioned
 		}
 		if err != nil {
-			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", orgName, envName, err)
+			return nil, fmt.Errorf("failed to read env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
 		}
-		clientSecret := data[thunderSystemClientSecretKey]
 		if clientSecret == "" {
 			return nil, ErrThunderNotProvisioned
 		}
 
-		baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgName, envName)
+		baseURL, resolveToHost, ok := r.resolveBaseURL(ctx, orgNamespace, envName)
 		if !ok {
-			return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgName, envName)
+			return nil, fmt.Errorf("%w: %s/%s", ErrThunderUnreachable, orgNamespace, envName)
 		}
-		client := newThunderClientWithDialOverride(baseURL, thunderSystemClientID, clientSecret, resolveToHost)
+		client := newThunderClientWithDialOverride(baseURL, clientID, clientSecret, resolveToHost)
 
 		r.mu.Lock()
 		r.cache[cacheKey] = cachedThunderClient{client: client, cachedAt: r.now()}
@@ -207,14 +176,14 @@ func (r *envThunderResolver) Resolve(ctx context.Context, orgName, envName strin
 
 // ResolveIdentity resolves the env-Thunder client and widens it to the identity
 // surface. The concrete client returned by Resolve implements both interfaces.
-func (r *envThunderResolver) ResolveIdentity(ctx context.Context, orgName, envName string) (EnvIdentityClient, error) {
-	c, err := r.Resolve(ctx, orgName, envName)
+func (r *envThunderResolver) ResolveIdentity(ctx context.Context, ouID, orgNamespace, envName string) (EnvIdentityClient, error) {
+	c, err := r.Resolve(ctx, ouID, orgNamespace, envName)
 	if err != nil {
 		return nil, err
 	}
 	ic, ok := c.(EnvIdentityClient)
 	if !ok {
-		return nil, fmt.Errorf("resolved thunder client for %s/%s does not support identity operations", orgName, envName)
+		return nil, fmt.Errorf("resolved thunder client for %s/%s does not support identity operations", orgNamespace, envName)
 	}
 	return ic, nil
 }

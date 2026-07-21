@@ -1863,6 +1863,112 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /orgs/{orgName}/environments/{envID}/thunder-system-client:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+          minLength: 1
+          maxLength: 64
+      - name: envID
+        in: path
+        required: true
+        description: Environment name
+        schema:
+          type: string
+
+    put:
+      tags:
+        - Environments
+      summary: Store an environment's env-Thunder system-client credential
+      description: |
+        Bootstrap-only endpoint used by add-environment-thunder.sh after it
+        provisions an environment's dedicated Thunder instance. Stores the
+        system-client OAuth2 credential (client id + secret) that
+        agent-manager-service uses to authenticate to that env-Thunder's admin
+        API. The secret is encrypted at rest with the platform encryption key
+        (the same mechanism org-publisher credentials use) and decrypted
+        in-process when needed — it is never read back out of a key vault.
+
+        Idempotent: re-storing overwrites the existing credential. The
+        credential is keyed by OU ID, always taken from the caller's own
+        token (never client-supplied) — stable and multi-tenant-safe, unlike
+        orgName. The path `orgName` is not persisted by this endpoint at all
+        (routing/authorization only); Thunder namespace/URL building stays
+        pinned to the server's own ThunderOrgNamespace config, independent of
+        this credential.
+      operationId: setEnvironmentThunderSystemClient
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ThunderSystemClientRequest"
+      responses:
+        "204":
+          description: Credential stored successfully
+        "400":
+          description: Bad request - invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      tags:
+        - Environments
+      summary: Delete an environment's env-Thunder system-client credential
+      description: |
+        Removes the stored system-client credential for an environment. Called
+        by remove-environment-thunder.sh when an environment's Thunder instance
+        is torn down. Deleting a non-existent credential succeeds (idempotent).
+        The credential is looked up by OU ID, always taken from the caller's
+        own token (never client-supplied), not orgName.
+      operationId: deleteEnvironmentThunderSystemClient
+      responses:
+        "204":
+          description: Credential deleted (or already absent)
+        "401":
+          description: Unauthorized - invalid or missing authentication
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   # ============================================
   # AI GATEWAY ENDPOINTS
   # ============================================
@@ -5007,6 +5113,41 @@ paths:
   # ============================================
   # LLM PROVIDER ENDPOINTS
   # ============================================
+
+  /orgs/{orgName}/llm-providers/policies:
+    parameters:
+      - name: orgName
+        in: path
+        required: true
+        description: Organization name/handle
+        schema:
+          type: string
+
+    get:
+      tags:
+        - LLM Providers
+      summary: List available LLM guardrail policies
+      description: Returns full guardrail policy definitions (including parameter schemas) reported by active gateways in the organization.
+      operationId: listAvailableLLMPolicies
+      responses:
+        "200":
+          description: Available LLM guardrail policies
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LLMPolicyAvailabilityResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /orgs/{orgName}/llm-providers:
     parameters:
@@ -13689,6 +13830,23 @@ components:
           description: Updated gateway configuration with ingress and egress network specs. Omit to keep the current value.
           $ref: "#/components/schemas/GatewaySpec"
 
+    ThunderSystemClientRequest:
+      type: object
+      description: The env-Thunder system-client OAuth2 credential to store for an environment.
+      required:
+        - clientId
+        - clientSecret
+      properties:
+        clientId:
+          type: string
+          description: OAuth2 client ID of the env-Thunder system-client app.
+          minLength: 1
+          example: amp-system-client
+        clientSecret:
+          type: string
+          description: OAuth2 client secret (stored encrypted at rest).
+          minLength: 1
+
     GatewaySpec:
       type: object
       description: Gateway configuration with ingress and egress network specs
@@ -15379,6 +15537,50 @@ components:
           type: object
           additionalProperties: true
           description: Policy parameters
+
+    LLMPolicyAvailabilityResponse:
+      type: object
+      required:
+        - count
+        - list
+      properties:
+        count:
+          type: integer
+          format: int32
+        list:
+          type: array
+          items:
+            $ref: "#/components/schemas/LLMPolicyDefinition"
+
+    LLMPolicyDefinition:
+      type: object
+      required:
+        - name
+        - version
+      properties:
+        name:
+          type: string
+          description: Policy name
+          example: word-count-guardrail
+        version:
+          type: string
+          description: Policy version
+          example: v1
+        displayName:
+          type: string
+          description: Human-readable policy name
+          example: Word Count Guardrail
+        description:
+          type: string
+          description: Policy description
+        parameters:
+          type: object
+          additionalProperties: true
+          description: JSON-Schema describing the user-configurable parameters
+        systemParameters:
+          type: object
+          additionalProperties: true
+          description: JSON-Schema describing operator-level (gateway config) parameters
 
     LLMRateLimitingConfig:
       type: object

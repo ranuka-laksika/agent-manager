@@ -41,6 +41,12 @@ type EnvironmentService interface {
 	DeleteEnvironment(ctx context.Context, ouID string, envID string) error
 	GetEnvironmentGateways(ctx context.Context, ouID string, envID string) ([]models.GatewayResponse, error)
 	ListThunderInstances(ctx context.Context, ouID string) (*models.ThunderInstanceListResponse, error)
+	// SetThunderSystemClientSecret stores (encrypted) the env-Thunder
+	// system-client credential used to reach an environment's Thunder admin API,
+	// keyed by ouID (stable, multi-tenant-safe).
+	SetThunderSystemClientSecret(ctx context.Context, ouID, envName, clientID, clientSecret string) error
+	// DeleteThunderSystemClientSecret removes that credential (idempotent), looked up by ouID.
+	DeleteThunderSystemClientSecret(ctx context.Context, ouID, envName string) error
 }
 
 type environmentService struct {
@@ -49,16 +55,20 @@ type environmentService struct {
 	gatewayRepo        repositories.GatewayRepository
 	thunderProber      thundersvc.Prober
 	agentConfigService AgentConfigurationService
+	envThunderRepo     repositories.EnvThunderSystemClientRepository
+	encryptionKey      []byte
 }
 
 // NewEnvironmentService creates a new environment service
-func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober, agentConfigService AgentConfigurationService) EnvironmentService {
+func NewEnvironmentService(logger *slog.Logger, gatewayRepo repositories.GatewayRepository, ocClient occlient.OpenChoreoClient, thunderProber thundersvc.Prober, agentConfigService AgentConfigurationService, envThunderRepo repositories.EnvThunderSystemClientRepository, encryptionKey []byte) EnvironmentService {
 	return &environmentService{
 		logger:             logger,
 		gatewayRepo:        gatewayRepo,
 		ocClient:           ocClient,
 		thunderProber:      thunderProber,
 		agentConfigService: agentConfigService,
+		envThunderRepo:     envThunderRepo,
+		encryptionKey:      encryptionKey,
 	}
 }
 
@@ -515,4 +525,43 @@ func (s *environmentService) ListThunderInstances(ctx context.Context, ouID stri
 		})
 	}
 	return &models.ThunderInstanceListResponse{ThunderInstances: instances}, nil
+}
+
+// SetThunderSystemClientSecret encrypts and upserts the env-Thunder system-client
+// credential, keyed by ouID.
+func (s *environmentService) SetThunderSystemClientSecret(ctx context.Context, ouID, envName, clientID, clientSecret string) error {
+	if clientSecret == "" {
+		return fmt.Errorf("%w: clientSecret is required", utils.ErrInvalidInput)
+	}
+	if ouID == "" {
+		return fmt.Errorf("%w: ouID is required", utils.ErrInvalidInput)
+	}
+	encrypted, err := utils.EncryptBytes([]byte(clientSecret), s.encryptionKey)
+	if err != nil {
+		return fmt.Errorf("failed to encrypt env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
+	}
+	cred := &models.EnvThunderSystemClient{
+		OUID:                  ouID,
+		EnvName:               envName,
+		ClientID:              clientID,
+		ClientSecretEncrypted: encrypted,
+	}
+	if err := s.envThunderRepo.Upsert(ctx, cred); err != nil {
+		return fmt.Errorf("failed to store env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
+	}
+	s.logger.Info("Stored env-thunder system-client secret", "ouID", ouID, "envName", envName)
+	return nil
+}
+
+// DeleteThunderSystemClientSecret removes the credential for (ouID, envName).
+// Idempotent — deleting a non-existent row is not an error.
+func (s *environmentService) DeleteThunderSystemClientSecret(ctx context.Context, ouID, envName string) error {
+	if ouID == "" {
+		return fmt.Errorf("%w: ouID is required", utils.ErrInvalidInput)
+	}
+	if err := s.envThunderRepo.Delete(ctx, ouID, envName); err != nil {
+		return fmt.Errorf("failed to delete env-thunder system-client secret for %s/%s: %w", ouID, envName, err)
+	}
+	s.logger.Info("Deleted env-thunder system-client secret", "ouID", ouID, "envName", envName)
+	return nil
 }

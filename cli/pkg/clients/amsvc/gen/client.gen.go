@@ -182,6 +182,14 @@ type ClientInterface interface {
 	// GetEnvironmentGateways request
 	GetEnvironmentGateways(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteEnvironmentThunderSystemClient request
+	DeleteEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// SetEnvironmentThunderSystemClientWithBody request with any body
+	SetEnvironmentThunderSystemClientWithBody(ctx context.Context, orgName string, envID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	SetEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string, body SetEnvironmentThunderSystemClientJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListAgentIdentityAgents request
 	ListAgentIdentityAgents(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -439,6 +447,9 @@ type ClientInterface interface {
 	CreateLLMProviderWithBody(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	CreateLLMProvider(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ListAvailableLLMPolicies request
+	ListAvailableLLMPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// DeleteLLMProvider request
 	DeleteLLMProvider(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1246,6 +1257,42 @@ func (c *Client) UpdateEnvironment(ctx context.Context, orgName string, envID st
 
 func (c *Client) GetEnvironmentGateways(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEnvironmentGatewaysRequest(c.Server, orgName, envID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) DeleteEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteEnvironmentThunderSystemClientRequest(c.Server, orgName, envID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetEnvironmentThunderSystemClientWithBody(ctx context.Context, orgName string, envID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetEnvironmentThunderSystemClientRequestWithBody(c.Server, orgName, envID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) SetEnvironmentThunderSystemClient(ctx context.Context, orgName string, envID string, body SetEnvironmentThunderSystemClientJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewSetEnvironmentThunderSystemClientRequest(c.Server, orgName, envID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2374,6 +2421,18 @@ func (c *Client) CreateLLMProviderWithBody(ctx context.Context, orgName string, 
 
 func (c *Client) CreateLLMProvider(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateLLMProviderRequest(c.Server, orgName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAvailableLLMPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAvailableLLMPoliciesRequest(c.Server, orgName)
 	if err != nil {
 		return nil, err
 	}
@@ -5518,6 +5577,101 @@ func NewGetEnvironmentGatewaysRequest(server string, orgName string, envID strin
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewDeleteEnvironmentThunderSystemClientRequest generates requests for DeleteEnvironmentThunderSystemClient
+func NewDeleteEnvironmentThunderSystemClientRequest(server string, orgName string, envID string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "envID", envID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/environments/%s/thunder-system-client", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewSetEnvironmentThunderSystemClientRequest calls the generic SetEnvironmentThunderSystemClient builder with application/json body
+func NewSetEnvironmentThunderSystemClientRequest(server string, orgName string, envID string, body SetEnvironmentThunderSystemClientJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewSetEnvironmentThunderSystemClientRequestWithBody(server, orgName, envID, "application/json", bodyReader)
+}
+
+// NewSetEnvironmentThunderSystemClientRequestWithBody generates requests for SetEnvironmentThunderSystemClient with any type of body
+func NewSetEnvironmentThunderSystemClientRequestWithBody(server string, orgName string, envID string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "envID", envID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/environments/%s/thunder-system-client", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("PUT", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -9146,6 +9300,40 @@ func NewCreateLLMProviderRequestWithBody(server string, orgName string, contentT
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAvailableLLMPoliciesRequest generates requests for ListAvailableLLMPolicies
+func NewListAvailableLLMPoliciesRequest(server string, orgName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/llm-providers/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -16233,6 +16421,14 @@ type ClientWithResponsesInterface interface {
 	// GetEnvironmentGatewaysWithResponse request
 	GetEnvironmentGatewaysWithResponse(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*GetEnvironmentGatewaysResp, error)
 
+	// DeleteEnvironmentThunderSystemClientWithResponse request
+	DeleteEnvironmentThunderSystemClientWithResponse(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentThunderSystemClientResp, error)
+
+	// SetEnvironmentThunderSystemClientWithBodyWithResponse request with any body
+	SetEnvironmentThunderSystemClientWithBodyWithResponse(ctx context.Context, orgName string, envID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEnvironmentThunderSystemClientResp, error)
+
+	SetEnvironmentThunderSystemClientWithResponse(ctx context.Context, orgName string, envID string, body SetEnvironmentThunderSystemClientJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEnvironmentThunderSystemClientResp, error)
+
 	// ListAgentIdentityAgentsWithResponse request
 	ListAgentIdentityAgentsWithResponse(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, reqEditors ...RequestEditorFn) (*ListAgentIdentityAgentsResp, error)
 
@@ -16490,6 +16686,9 @@ type ClientWithResponsesInterface interface {
 	CreateLLMProviderWithBodyWithResponse(ctx context.Context, orgName string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateLLMProviderResp, error)
 
 	CreateLLMProviderWithResponse(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLLMProviderResp, error)
+
+	// ListAvailableLLMPoliciesWithResponse request
+	ListAvailableLLMPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableLLMPoliciesResp, error)
 
 	// DeleteLLMProviderWithResponse request
 	DeleteLLMProviderWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*DeleteLLMProviderResp, error)
@@ -17543,6 +17742,55 @@ func (r GetEnvironmentGatewaysResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetEnvironmentGatewaysResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type DeleteEnvironmentThunderSystemClientResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON401      *ErrorResponse
+	JSON403      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteEnvironmentThunderSystemClientResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteEnvironmentThunderSystemClientResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type SetEnvironmentThunderSystemClientResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON400      *ErrorResponse
+	JSON401      *ErrorResponse
+	JSON403      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r SetEnvironmentThunderSystemClientResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r SetEnvironmentThunderSystemClientResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -19276,6 +19524,30 @@ func (r CreateLLMProviderResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateLLMProviderResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAvailableLLMPoliciesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *LLMPolicyAvailabilityResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAvailableLLMPoliciesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAvailableLLMPoliciesResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -22361,6 +22633,32 @@ func (c *ClientWithResponses) GetEnvironmentGatewaysWithResponse(ctx context.Con
 	return ParseGetEnvironmentGatewaysResp(rsp)
 }
 
+// DeleteEnvironmentThunderSystemClientWithResponse request returning *DeleteEnvironmentThunderSystemClientResp
+func (c *ClientWithResponses) DeleteEnvironmentThunderSystemClientWithResponse(ctx context.Context, orgName string, envID string, reqEditors ...RequestEditorFn) (*DeleteEnvironmentThunderSystemClientResp, error) {
+	rsp, err := c.DeleteEnvironmentThunderSystemClient(ctx, orgName, envID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteEnvironmentThunderSystemClientResp(rsp)
+}
+
+// SetEnvironmentThunderSystemClientWithBodyWithResponse request with arbitrary body returning *SetEnvironmentThunderSystemClientResp
+func (c *ClientWithResponses) SetEnvironmentThunderSystemClientWithBodyWithResponse(ctx context.Context, orgName string, envID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*SetEnvironmentThunderSystemClientResp, error) {
+	rsp, err := c.SetEnvironmentThunderSystemClientWithBody(ctx, orgName, envID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetEnvironmentThunderSystemClientResp(rsp)
+}
+
+func (c *ClientWithResponses) SetEnvironmentThunderSystemClientWithResponse(ctx context.Context, orgName string, envID string, body SetEnvironmentThunderSystemClientJSONRequestBody, reqEditors ...RequestEditorFn) (*SetEnvironmentThunderSystemClientResp, error) {
+	rsp, err := c.SetEnvironmentThunderSystemClient(ctx, orgName, envID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseSetEnvironmentThunderSystemClientResp(rsp)
+}
+
 // ListAgentIdentityAgentsWithResponse request returning *ListAgentIdentityAgentsResp
 func (c *ClientWithResponses) ListAgentIdentityAgentsWithResponse(ctx context.Context, orgName AgentIdentityOrgName, envName AgentIdentityEnvName, reqEditors ...RequestEditorFn) (*ListAgentIdentityAgentsResp, error) {
 	rsp, err := c.ListAgentIdentityAgents(ctx, orgName, envName, reqEditors...)
@@ -23181,6 +23479,15 @@ func (c *ClientWithResponses) CreateLLMProviderWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCreateLLMProviderResp(rsp)
+}
+
+// ListAvailableLLMPoliciesWithResponse request returning *ListAvailableLLMPoliciesResp
+func (c *ClientWithResponses) ListAvailableLLMPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableLLMPoliciesResp, error) {
+	rsp, err := c.ListAvailableLLMPolicies(ctx, orgName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAvailableLLMPoliciesResp(rsp)
 }
 
 // DeleteLLMProviderWithResponse request returning *DeleteLLMProviderResp
@@ -25639,6 +25946,93 @@ func ParseGetEnvironmentGatewaysResp(rsp *http.Response) (*GetEnvironmentGateway
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteEnvironmentThunderSystemClientResp parses an HTTP response from a DeleteEnvironmentThunderSystemClientWithResponse call
+func ParseDeleteEnvironmentThunderSystemClientResp(rsp *http.Response) (*DeleteEnvironmentThunderSystemClientResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteEnvironmentThunderSystemClientResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseSetEnvironmentThunderSystemClientResp parses an HTTP response from a SetEnvironmentThunderSystemClientWithResponse call
+func ParseSetEnvironmentThunderSystemClientResp(rsp *http.Response) (*SetEnvironmentThunderSystemClientResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &SetEnvironmentThunderSystemClientResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse
@@ -28798,6 +29192,46 @@ func ParseCreateLLMProviderResp(rsp *http.Response) (*CreateLLMProviderResp, err
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAvailableLLMPoliciesResp parses an HTTP response from a ListAvailableLLMPoliciesWithResponse call
+func ParseListAvailableLLMPoliciesResp(rsp *http.Response) (*ListAvailableLLMPoliciesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAvailableLLMPoliciesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LLMPolicyAvailabilityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse
