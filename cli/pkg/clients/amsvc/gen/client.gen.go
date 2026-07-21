@@ -440,6 +440,9 @@ type ClientInterface interface {
 
 	CreateLLMProvider(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListAvailableLLMPolicies request
+	ListAvailableLLMPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// DeleteLLMProvider request
 	DeleteLLMProvider(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -2374,6 +2377,18 @@ func (c *Client) CreateLLMProviderWithBody(ctx context.Context, orgName string, 
 
 func (c *Client) CreateLLMProvider(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewCreateLLMProviderRequest(c.Server, orgName, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListAvailableLLMPolicies(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListAvailableLLMPoliciesRequest(c.Server, orgName)
 	if err != nil {
 		return nil, err
 	}
@@ -9146,6 +9161,40 @@ func NewCreateLLMProviderRequestWithBody(server string, orgName string, contentT
 	}
 
 	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewListAvailableLLMPoliciesRequest generates requests for ListAvailableLLMPolicies
+func NewListAvailableLLMPoliciesRequest(server string, orgName string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "orgName", orgName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/llm-providers/policies", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -16491,6 +16540,9 @@ type ClientWithResponsesInterface interface {
 
 	CreateLLMProviderWithResponse(ctx context.Context, orgName string, body CreateLLMProviderJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateLLMProviderResp, error)
 
+	// ListAvailableLLMPoliciesWithResponse request
+	ListAvailableLLMPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableLLMPoliciesResp, error)
+
 	// DeleteLLMProviderWithResponse request
 	DeleteLLMProviderWithResponse(ctx context.Context, orgName string, id string, reqEditors ...RequestEditorFn) (*DeleteLLMProviderResp, error)
 
@@ -19276,6 +19328,30 @@ func (r CreateLLMProviderResp) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r CreateLLMProviderResp) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListAvailableLLMPoliciesResp struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *LLMPolicyAvailabilityResponse
+	JSON401      *ErrorResponse
+	JSON500      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListAvailableLLMPoliciesResp) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListAvailableLLMPoliciesResp) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -23181,6 +23257,15 @@ func (c *ClientWithResponses) CreateLLMProviderWithResponse(ctx context.Context,
 		return nil, err
 	}
 	return ParseCreateLLMProviderResp(rsp)
+}
+
+// ListAvailableLLMPoliciesWithResponse request returning *ListAvailableLLMPoliciesResp
+func (c *ClientWithResponses) ListAvailableLLMPoliciesWithResponse(ctx context.Context, orgName string, reqEditors ...RequestEditorFn) (*ListAvailableLLMPoliciesResp, error) {
+	rsp, err := c.ListAvailableLLMPolicies(ctx, orgName, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListAvailableLLMPoliciesResp(rsp)
 }
 
 // DeleteLLMProviderWithResponse request returning *DeleteLLMProviderResp
@@ -28798,6 +28883,46 @@ func ParseCreateLLMProviderResp(rsp *http.Response) (*CreateLLMProviderResp, err
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListAvailableLLMPoliciesResp parses an HTTP response from a ListAvailableLLMPoliciesWithResponse call
+func ParseListAvailableLLMPoliciesResp(rsp *http.Response) (*ListAvailableLLMPoliciesResp, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListAvailableLLMPoliciesResp{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest LLMPolicyAvailabilityResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest ErrorResponse
