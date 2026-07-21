@@ -214,10 +214,10 @@ export async function listAvailableLLMPolicies(
   const org = encodeRequired(params.orgName, "orgName");
   const token = getToken ? await getToken() : undefined;
 
+  // httpGET already throws on a non-OK response, so no !res.ok branch is needed.
   const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/llm-providers/policies`, {
     token,
   });
-  if (!res.ok) throw await res.json();
   return res.json();
 }
 
