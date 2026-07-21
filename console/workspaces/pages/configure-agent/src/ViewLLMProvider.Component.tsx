@@ -54,6 +54,7 @@ import { absoluteRouteMap } from "@agent-management-platform/types";
 import {
   useGetAgent,
   useGetAgentModelConfig,
+  useLLMPoliciesCatalog,
   useListCatalogLLMProviders,
   useListLLMProviderTemplates,
   useUpdateAgentModelConfig,
@@ -231,6 +232,19 @@ export const ViewLLMProviderComponent: React.FC = () => {
     orgName: orgId,
   });
 
+  // Friendly-name lookup for guardrails. Same gateway-manifest + hub-enriched
+  // catalog the picker uses (react-query dedupes this with the drawer's own
+  // fetch), consulted only to label already-saved guardrails — which persist as
+  // name/version/params and so carry no displayName of their own.
+  const { data: guardrailCatalog } = useLLMPoliciesCatalog(orgId);
+  const guardrailDisplayNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const policy of guardrailCatalog?.data ?? []) {
+      if (policy.displayName) names.set(policy.name, policy.displayName);
+    }
+    return names;
+  }, [guardrailCatalog]);
+
   const updateConfig = useUpdateAgentModelConfig();
 
   const templateMap = useMemo(() => {
@@ -327,8 +341,15 @@ export const ViewLLMProviderComponent: React.FC = () => {
   }, [catalogProvider, templatesData]);
 
   const guardrails = useMemo(
-    () => guardrailsByEnv[selectedEnvName] ?? [],
-    [guardrailsByEnv, selectedEnvName],
+    () =>
+      (guardrailsByEnv[selectedEnvName] ?? []).map((g) => ({
+        ...g,
+        // Resolve the label at render time (never persisted): guardrails added
+        // this session already carry the drawer's displayName; ones loaded from
+        // the saved config don't, so fall back to the catalog lookup, then name.
+        displayName: g.displayName ?? guardrailDisplayNames.get(g.name),
+      })),
+    [guardrailsByEnv, selectedEnvName, guardrailDisplayNames],
   );
 
   const isDirty = useMemo(() => {
@@ -941,7 +962,9 @@ export const ViewLLMProviderComponent: React.FC = () => {
                             deployments: displayCatalog.deployments,
                             security: displayCatalog.security,
                             rateLimiting: displayCatalog.rateLimiting,
-                            policies: displayCatalog.policies,
+                            policies: displayCatalog.policies?.map(
+                              (name) => guardrailDisplayNames.get(name) ?? name,
+                            ),
                           }
                           : { name: providerConfig?.providerName ?? "" }
                       }
