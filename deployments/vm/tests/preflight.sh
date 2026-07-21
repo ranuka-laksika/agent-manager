@@ -68,11 +68,11 @@ cert="$(render_wildcard_certificate amp-tls amp-tls amp-acme)"
 assert_eq "cert manifest lists agents wildcard" "yes" "$(grep -q '\*.agents.amp.mycompany.com' <<<"$cert" && echo yes || echo no)"
 assert_eq "cert manifest references issuer"     "yes" "$(grep -q 'name: amp-acme' <<<"$cert" && echo yes || echo no)"
 
-# --- render_consolidated_gateway: :443 HTTPS Terminate, from All, cert ref ---
+# --- render_consolidated_gateway: :443 HTTPS Terminate, from Same, cert ref ---
 gw="$(render_consolidated_gateway amp-gw amp-tls 443)"
 assert_eq "gateway listens :443"        "yes" "$(grep -q 'port: 443' <<<"$gw" && echo yes || echo no)"
 assert_eq "gateway terminates TLS"      "yes" "$(grep -q 'mode: Terminate' <<<"$gw" && echo yes || echo no)"
-assert_eq "gateway allows all routes"   "yes" "$(grep -q 'from: All' <<<"$gw" && echo yes || echo no)"
+assert_eq "gateway allows same-ns routes" "yes" "$(grep -q 'from: Same' <<<"$gw" && echo yes || echo no)"
 assert_eq "gateway references cert sec" "yes" "$(grep -q 'name: amp-tls' <<<"$gw" && echo yes || echo no)"
 
 # --- render_k3d_advanced_config: publishes :443 (public) + loopback-binds plane ports ---

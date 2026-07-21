@@ -130,8 +130,11 @@ render_dns01_credentials_secret() {
     azuredns)   printf '  client-secret: %s\n' "$(_yaml_quote "$AZURE_CLIENT_SECRET")" ;;
     clouddns)
       # The whole service-account JSON is the secret; embed it as a block scalar.
+      # Trailing newline guarantees the block ends cleanly even when the SA JSON file
+      # lacks one, so the caller's "---" document separator stays on its own line.
       printf '  service-account.json: |\n'
       sed 's/^/    /' "$GCP_SERVICE_ACCOUNT_FILE"
+      printf '\n'
       ;;
     *) die "render_dns01_credentials_secret: unsupported DNS_PROVIDER '${DNS_PROVIDER}'" ;;
   esac

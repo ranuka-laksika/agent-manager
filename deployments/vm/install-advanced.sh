@@ -253,7 +253,11 @@ if [[ "$DRY_RUN" == "true" ]]; then
   log "DRY RUN — amp helm args:"; amp_helm_args
   log "DRY RUN — wildcard cert SANs:"; cert_dns_names
   log "DRY RUN — cert-manager + gateway + front-proxy resources:"
-  render_dns01_credentials_secret "$DNS01_SECRET"; echo "---"
+  # Do NOT render the provider-credential Secret here: it holds the live token/key
+  # (Cloudflare token, AWS secret, GCP SA JSON, Azure secret) and dry-run goes to stdout
+  # (terminal scrollback, CI logs). Show a redacted placeholder instead.
+  printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: %s\n  namespace: %s\ntype: Opaque\nstringData:\n  <%s credentials omitted in dry-run>\n---\n' \
+    "$DNS01_SECRET" "$CERT_MANAGER_NS" "$DNS_PROVIDER"
   render_acme_clusterissuer "$ACME_ISSUER" "$DNS01_SECRET"; echo "---"
   render_wildcard_certificate "$WILDCARD_CERT" "$WILDCARD_SECRET" "$ACME_ISSUER"; echo "---"
   render_consolidated_gateway "$CONSOLIDATED_GATEWAY" "$WILDCARD_SECRET" 443; echo "---"
