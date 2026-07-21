@@ -3309,6 +3309,33 @@ type LLMPolicy struct {
 	Version string `json:"version"`
 }
 
+// LLMPolicyAvailabilityResponse defines model for LLMPolicyAvailabilityResponse.
+type LLMPolicyAvailabilityResponse struct {
+	Count int32                 `json:"count"`
+	List  []LLMPolicyDefinition `json:"list"`
+}
+
+// LLMPolicyDefinition defines model for LLMPolicyDefinition.
+type LLMPolicyDefinition struct {
+	// Description Policy description
+	Description *string `json:"description,omitempty"`
+
+	// DisplayName Human-readable policy name
+	DisplayName *string `json:"displayName,omitempty"`
+
+	// Name Policy name
+	Name string `json:"name"`
+
+	// Parameters JSON-Schema describing the user-configurable parameters
+	Parameters *map[string]interface{} `json:"parameters,omitempty"`
+
+	// SystemParameters JSON-Schema describing operator-level (gateway config) parameters
+	SystemParameters *map[string]interface{} `json:"systemParameters,omitempty"`
+
+	// Version Policy version
+	Version string `json:"version"`
+}
+
 // LLMPolicyPath defines model for LLMPolicyPath.
 type LLMPolicyPath struct {
 	Methods []string `json:"methods"`

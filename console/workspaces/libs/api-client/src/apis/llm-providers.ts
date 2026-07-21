@@ -37,6 +37,7 @@ import type {
   GetLLMProviderPathParams,
   GetLLMProviderTemplatePathParams,
   GetLLMProxyPathParams,
+  ListAvailableLLMPoliciesPathParams,
   ListLLMDeploymentsPathParams,
   ListAPIKeysResponse,
   ListLLMProviderAPIKeysPathParams,
@@ -48,6 +49,7 @@ import type {
   ListLLMProxiesPathParams,
   LLMDeploymentListResponse,
   LLMDeploymentResponse,
+  LLMPolicyAvailabilityResponse,
   LLMProviderConsumerListResponse,
   LLMProviderListResponse,
   LLMProviderResponse,
@@ -202,6 +204,20 @@ export async function listLLMProviders(
     searchParams: Object.keys(searchParams).length ? searchParams : undefined,
   });
   if (!res.ok) throw await res.json();
+  return res.json();
+}
+
+export async function listAvailableLLMPolicies(
+  params: ListAvailableLLMPoliciesPathParams,
+  getToken?: () => Promise<string>,
+): Promise<LLMPolicyAvailabilityResponse> {
+  const org = encodeRequired(params.orgName, "orgName");
+  const token = getToken ? await getToken() : undefined;
+
+  // httpGET already throws on a non-OK response, so no !res.ok branch is needed.
+  const res = await httpGET(`${SERVICE_BASE}/orgs/${org}/llm-providers/policies`, {
+    token,
+  });
   return res.json();
 }
 
