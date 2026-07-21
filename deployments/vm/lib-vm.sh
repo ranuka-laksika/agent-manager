@@ -258,6 +258,20 @@ render_k3d_vm_config() {
     -e "s#^([[:space:]]*- )http://host\\.k3d\\.internal:10082#\\1http://${node_host}:10082#"
 }
 
+# render_k3d_advanced_config [node_host]  (reads k3d config on stdin, writes on stdout)
+# Like render_k3d_vm_config (loopback-binds every plane port + rewrites the registry
+# mirror endpoint), but ALSO publishes :443 to the host so the consolidated kgateway
+# Gateway is reachable from the network. The advanced install has no Caddy: kgateway
+# terminates TLS on :443 directly, and only :443 faces the network (every other plane
+# port stays loopback-bound). Injected right after the `ports:` key so k3d's serverlb
+# forwards host :443 to the node, where klipper binds it for the gateway's LoadBalancer.
+render_k3d_advanced_config() {
+  render_k3d_vm_config "$@" | awk '
+    { print }
+    /^ports:/ { print "  - port: 443:443"; print "    nodeFilters:"; print "      - loadbalancer" }
+  '
+}
+
 # render_coredns_vm_config <node_host>
 # Prints a `coredns-custom` ConfigMap that rewrites the in-cluster *.localhost /
 # host.k3d.internal names to the k3d server node (<node_host>, e.g.
