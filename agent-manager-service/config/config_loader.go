@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/joho/godotenv"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -144,6 +145,11 @@ func loadEnvs() {
 
 	config.InstrumentationURL = r.readOptionalString("INSTRUMENTATION_URL", "http://default-default.gateway.localhost:19080/otel")
 	config.DefaultGatewayPort = int(r.readOptionalInt64("DEFAULT_GATEWAY_PORT", 19080))
+	config.GatewayRuntime = GatewayRuntimeConfig{
+		NamePrefix:    r.readOptionalString("GATEWAY_RUNTIME_NAME_PREFIX", "api-platform-"),
+		ServiceSuffix: r.readOptionalString("GATEWAY_RUNTIME_SERVICE_SUFFIX", "-gateway-gateway-runtime"),
+		Port:          int(r.readOptionalInt64("GATEWAY_RUNTIME_PORT", 22893)),
+	}
 	config.KeyManagerConfigurations = KeyManagerConfigurations{
 		// Comma-separated list of allowed issuers and audiences
 		Issuer:   r.readOptionalStringList("KEY_MANAGER_ISSUER", "Agent Management Platform Local"),
@@ -264,12 +270,25 @@ func loadEnvs() {
 	validateServerPublicURL(config, r)
 	validateInstrumentationURL(config, r)
 	validateObserverURLs(config, r)
+	validateGatewayRuntimeConfig(config, r)
 	validateResourceLimitsConfig(config, r)
 	validateAgentWorkloadCORSConfig(agentWorkloadConfig, r)
 
 	r.logAndExitIfErrorsFound()
 
 	slog.Info("configReader: configs loaded")
+}
+
+func validateGatewayRuntimeConfig(cfg *Config, r *configReader) {
+	if strings.TrimSpace(cfg.GatewayRuntime.NamePrefix) == "" {
+		r.errors = append(r.errors, fmt.Errorf("GATEWAY_RUNTIME_NAME_PREFIX must be non-empty"))
+	}
+	if strings.TrimSpace(cfg.GatewayRuntime.ServiceSuffix) == "" {
+		r.errors = append(r.errors, fmt.Errorf("GATEWAY_RUNTIME_SERVICE_SUFFIX must be non-empty"))
+	}
+	if cfg.GatewayRuntime.Port < 1 || cfg.GatewayRuntime.Port > 65535 {
+		r.errors = append(r.errors, fmt.Errorf("GATEWAY_RUNTIME_PORT must be between 1 and 65535, got %d", cfg.GatewayRuntime.Port))
+	}
 }
 
 func validateHTTPServerConfigs(cfg *Config, r *configReader) {

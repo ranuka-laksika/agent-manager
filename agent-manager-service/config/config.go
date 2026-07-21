@@ -52,6 +52,7 @@ type Config struct {
 	// Default Chat API configuration
 	DefaultChatAPI     DefaultChatAPIConfig
 	DefaultGatewayPort int
+	GatewayRuntime     GatewayRuntimeConfig
 
 	// JWT Signing configuration for agent API tokens
 	JWTSigning JWTSigningConfig
@@ -297,6 +298,14 @@ type PublicKeysConfig struct {
 type APIPlatformConfig struct {
 	BaseURL string // Base URL for API Platform
 	Enable  bool
+}
+
+// GatewayRuntimeConfig defines how Agent Manager derives the Kubernetes Service URL
+// used by platform-hosted agents to reach an API Platform gateway runtime.
+type GatewayRuntimeConfig struct {
+	NamePrefix    string
+	ServiceSuffix string
+	Port          int
 }
 
 // InternalServerConfig holds configuration for the internal server

@@ -46,6 +46,7 @@ import (
 // Provider sets
 var configProviderSet = wire.NewSet(
 	ProvideConfigFromPtr,
+	ProvideGatewayRuntimeConfig,
 	ProvideEncryptionKey,
 )
 
@@ -193,7 +194,6 @@ func ProvideInstrumentationCatalog(cfg config.Config) (*instrumentation.Catalog,
 func validateDefaultCoversBuildpackPython(cat *instrumentation.Catalog) error {
 	entry, ok := cat.Get(cat.Default())
 	if !ok {
-		// Already validated by Load, but be defensive.
 		return fmt.Errorf("default instrumentation version %q not in effective set", cat.Default())
 	}
 	bpPython := utils.SupportedPythonVersions()

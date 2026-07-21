@@ -91,6 +91,14 @@ fi
 
 echo ""
 echo "🌐 Installing gateway chart..."
+
+# Ensure the gateway namespace exists and carries the label the sandbox
+# NetworkPolicy (agent-api ComponentType) matches for agent telemetry egress.
+# Without it, agents in this (default) environment cannot reach the gateway's
+# OTEL or managed LLM/MCP endpoints when it runs outside openchoreo-data-plane.
+kubectl create namespace "${GATEWAY_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f - > /dev/null
+kubectl label namespace "${GATEWAY_NAMESPACE}" "amp.wso2.com/api-platform-gateway=true" --overwrite > /dev/null
+
 helm "${HELM_ARGS[@]}"
 
 echo "⏳ Waiting for Gateway to be ready..."
