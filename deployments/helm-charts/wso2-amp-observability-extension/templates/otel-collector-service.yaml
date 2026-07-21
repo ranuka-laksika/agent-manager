@@ -17,6 +17,6 @@ spec:
   ports:
     - name: otlp-http
       port: {{ .Values.otelCollector.externalService.port }}
-      targetPort: 4318
+      targetPort: {{ .Values.otelCollector.otlpHttpPort }}
       protocol: TCP
 {{- end }}

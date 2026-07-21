@@ -20,8 +20,8 @@ spec:
               openchoreo.dev/system-component: gateway-runtime
       ports:
         - protocol: TCP
-          port: 4318
+          port: {{ .Values.otelCollector.otlpHttpPort }}
     - ports:
         - protocol: TCP
-          port: 13133
+          port: {{ .Values.otelCollector.healthCheckPort }}
 {{- end }}
