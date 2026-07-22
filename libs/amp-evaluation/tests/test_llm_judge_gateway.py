@@ -152,10 +152,18 @@ def _set_gateway(base="https://gw.example/v1", key="secret-key"):
 
 def test_gateway_kwargs_openai_uses_default_headers():
     _set_gateway()
-    kw = LLMAsJudgeEvaluator._gateway_kwargs("openai/gpt-4o-mini")
-    assert kw["api_base"] == "https://gw.example/v1"
-    assert kw["api_key"] == "gateway"
-    assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
+    saved = os.environ.get("GATEWAY_API_KEY")
+    os.environ.pop("GATEWAY_API_KEY", None)
+    try:
+        kw = LLMAsJudgeEvaluator._gateway_kwargs("openai/gpt-4o-mini")
+        assert kw["api_base"] == "https://gw.example/v1"
+        assert kw["api_key"] == "gateway"
+        assert kw["client_args"] == {"default_headers": {"api-key": "secret-key"}}
+    finally:
+        if saved is None:
+            os.environ.pop("GATEWAY_API_KEY", None)
+        else:
+            os.environ["GATEWAY_API_KEY"] = saved
 
 
 def test_gateway_kwargs_generic_uses_env_placeholder_as_sdk_api_key():
