@@ -47,7 +47,7 @@ from .trace import Trace, parse_trace_for_evaluation, TraceFetcher, TraceLoader,
 from .trace.fetcher import OTELTrace, _safe_request_error
 from .evaluators.base import BaseEvaluator, validate_unique_evaluator_names
 from .evaluators.params import EvalMode
-from .models import EvaluatorSummary, EvaluatorScore, TaskContext
+from .models import EvaluatorSummary, EvaluatorScore, TaskContext, DataNotAvailableError
 from .dataset.models import Task, Dataset
 from .aggregators.base import normalize_aggregations
 from .config import Config
@@ -797,18 +797,21 @@ class Monitor(BaseRunner):
             for otel_trace in fetched:
                 try:
                     parsed = parse_trace_for_evaluation(otel_trace)
-                except Exception as parse_error:
+                except (ValueError, DataNotAvailableError) as parse_error:
+                    # Malformed/incomplete trace data: skip this trace but keep
+                    # going. Unexpected exceptions (programmer defects) are left to
+                    # propagate so the run is recorded as errored rather than
+                    # silently publishing an incomplete result.
                     parse_failures += 1
-                    logger.error(f"Error parsing trace: {parse_error}")
+                    logger.error("Error parsing trace trace_id=%s: %s", otel_trace.traceId, parse_error)
                     continue
                 selected += 1
                 yield parsed
 
-            sampling_note = f" (sampling_rate={sample_rate:.2f})" if sample_rate is not None else ""
+            sampling_note = f" (sampling_rate={sample_rate:.6g})" if sample_rate is not None else ""
             if parse_failures:
                 logger.info(
-                    "Trace selection%s: %d trace(s) selected for evaluation, "
-                    "%d trace(s) skipped (failed to parse)",
+                    "Trace selection%s: %d trace(s) selected for evaluation, %d trace(s) skipped (failed to parse)",
                     sampling_note,
                     selected,
                     parse_failures,
