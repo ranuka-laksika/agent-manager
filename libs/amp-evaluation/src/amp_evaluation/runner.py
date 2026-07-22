@@ -357,7 +357,7 @@ class BaseRunner(ABC):
 
         scores_by_evaluator: Dict[str, List[EvaluatorScore]] = {e.name: [] for e in self._evaluators}
         evaluator_names = [e.name for e in self._evaluators]
-        logger.info(
+        logger.debug(
             "Starting evaluation: %d evaluator(s) %s",
             len(self._evaluators),
             evaluator_names,
@@ -380,7 +380,7 @@ class BaseRunner(ABC):
             task = tasks.get(trace.trace_id) if tasks else None
             trial_id = trial_info.get(trace.trace_id) if trial_info else None
 
-            logger.info("Evaluating trace %d trace_id=%s", idx, trace.trace_id)
+            logger.debug("Evaluating trace %d trace_id=%s", idx, trace.trace_id)
 
             try:
                 trace_scores = self.evaluate_trace(trace, task, trial_id=trial_id)
@@ -783,17 +783,38 @@ class Monitor(BaseRunner):
         """
 
         def _iter_parsed_traces() -> Iterable[Trace]:
+            # Traces stream lazily from the fetcher, so counts are tallied as we go
+            # and reported once the stream is exhausted rather than up front (which
+            # would force the whole result set into memory).
             fetched = self._fetch_traces(
                 start_time=start_time or "",
                 end_time=end_time or "",
             )
             if sample_rate is not None:
                 fetched = sample_traces(fetched, sample_rate)
+            selected = 0
+            parse_failures = 0
             for otel_trace in fetched:
                 try:
-                    yield parse_trace_for_evaluation(otel_trace)
+                    parsed = parse_trace_for_evaluation(otel_trace)
                 except Exception as parse_error:
+                    parse_failures += 1
                     logger.error(f"Error parsing trace: {parse_error}")
+                    continue
+                selected += 1
+                yield parsed
+
+            sampling_note = f" (sampling_rate={sample_rate:.2f})" if sample_rate is not None else ""
+            if parse_failures:
+                logger.info(
+                    "Trace selection%s: %d trace(s) selected for evaluation, "
+                    "%d trace(s) skipped (failed to parse)",
+                    sampling_note,
+                    selected,
+                    parse_failures,
+                )
+            else:
+                logger.info("Trace selection%s: %d trace(s) selected for evaluation", sampling_note, selected)
 
         eval_traces: Iterable[Trace] = traces if traces else _iter_parsed_traces()
 
