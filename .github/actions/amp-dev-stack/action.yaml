@@ -47,6 +47,13 @@ runs:
         # OpenChoreo + builds & loads amp-observer + instrumentation images
         # from source into k3d.
         make setup-openchoreo
+        # Agent Sandbox module: installs the SandboxTemplate CRDs and the
+        # openchoreo-agent-sandbox-access ClusterRole. Without it the
+        # cluster-agent-dataplane service account cannot patch the
+        # SandboxTemplate every agent deploy now renders, so every deploy
+        # 403s. Part of the local `make setup` chain; must run after
+        # setup-openchoreo (needs the openchoreo-data-plane namespace).
+        make setup-sandbox
         # Build + start the core platform (agent-manager-service via compose).
         # COMPOSE_SERVICES restricts the compose bring-up to the service (+ its
         # postgres dependency), skipping the slow console image the heavy tier
