@@ -2476,6 +2476,12 @@ paths:
         - Token compromise recovery
         - Periodic security maintenance
       operationId: rotateGatewayToken
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RotateGatewayTokenRequest"
       responses:
         "200":
           description: Token rotated successfully
@@ -9327,25 +9333,25 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: User profile retrieved successfully
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
-        '403':
+        "403":
           description: Forbidden - missing authentication context or user does not belong to organization
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        '404':
+        "404":
           description: User not found
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-        '500':
+        "500":
           description: Internal server error
           content:
             application/json:
@@ -14314,6 +14320,15 @@ components:
             OU ID of the organization the gateway belongs to.
           example: 550e8400-e29b-41d4-a716-446655440000
 
+    RotateGatewayTokenRequest:
+      type: object
+      properties:
+        orgId:
+          type: string
+          description: >-
+            OU ID of the organization the gateway belongs to.
+          example: 550e8400-e29b-41d4-a716-446655440000
+
     UpdateGatewayRequest:
       type: object
       minProperties: 1
@@ -14965,7 +14980,7 @@ components:
         id:
           type: string
           description: Unique handle for the MCP proxy
-          pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+          pattern: "^[a-z0-9]+(?:-[a-z0-9]+)*$"
           maxLength: 100
           example: github-mcp
         name:

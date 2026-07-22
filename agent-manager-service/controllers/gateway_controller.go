@@ -507,6 +507,22 @@ func (c *gatewayController) RotateGatewayToken(w http.ResponseWriter, r *http.Re
 	ouID := middleware.OUIDFromRequest(r)
 	gatewayID := strings.TrimSpace(r.PathValue("gatewayID"))
 
+	// The request body is optional; decode it only if one was sent so that
+	// callers can still rotate without providing an explicit org.
+	if r.Body != nil && r.ContentLength != 0 {
+		var req spec.RotateGatewayTokenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			log.Error("RotateGatewayToken: failed to decode request", "error", err)
+			utils.WriteErrorResponse(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		// Use the OU ID from the request body if provided, otherwise fall back to the one from the request context.
+		if req.OrgId != nil && *req.OrgId != "" {
+			ouID = *req.OrgId
+		}
+	}
+
 	// Call service to rotate the token
 	tokenResp, err := c.gatewayService.RotateToken(gatewayID, ouID)
 	if err != nil {

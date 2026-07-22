@@ -4610,6 +4610,12 @@ type RoleResponse struct {
 	} `json:"permissions,omitempty"`
 }
 
+// RotateGatewayTokenRequest defines model for RotateGatewayTokenRequest.
+type RotateGatewayTokenRequest struct {
+	// OrgId OU ID of the organization the gateway belongs to.
+	OrgId *string `json:"orgId,omitempty"`
+}
+
 // RotateLLMAPIKeyRequest defines model for RotateLLMAPIKeyRequest.
 type RotateLLMAPIKeyRequest struct {
 	// DisplayName Updated display name for the API key.
@@ -5751,6 +5757,9 @@ type UpdateGatewayJSONRequestBody = UpdateGatewayRequest
 
 // UpsertGatewayIdentityProviderJSONRequestBody defines body for UpsertGatewayIdentityProvider for application/json ContentType.
 type UpsertGatewayIdentityProviderJSONRequestBody = UpsertIdentityProviderRequest
+
+// RotateGatewayTokenJSONRequestBody defines body for RotateGatewayToken for application/json ContentType.
+type RotateGatewayTokenJSONRequestBody = RotateGatewayTokenRequest
 
 // CreateGitSecretJSONRequestBody defines body for CreateGitSecret for application/json ContentType.
 type CreateGitSecretJSONRequestBody = CreateGitSecretRequest
