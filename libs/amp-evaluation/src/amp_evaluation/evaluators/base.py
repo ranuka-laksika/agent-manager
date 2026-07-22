@@ -691,13 +691,13 @@ The "explanation" field MUST be formatted as valid Markdown. Use headings, bulle
             client_args = {"async_client": httpx.AsyncClient(headers=header)}
         elif provider == "groq":
             # any-llm's Groq provider ignores api_base; route via base_url instead.
-            # The gateway credential must only travel via default_headers (the
-            # "api-key" header, below) — falling back to cfg.api_key here would
-            # also send the real gateway secret as the SDK's own api_key
-            # (i.e. a bearer token). GROQ_API_KEY is the one case where the SDK
-            # should get a real key: it means direct, non-gateway Groq access.
-            groq_key = os.getenv("GROQ_API_KEY") or "gateway"
-            return {"api_key": groq_key, "client_args": {"base_url": cfg.api_base, "default_headers": header}}
+            # This branch only runs once a gateway is configured (see the early
+            # returns above), so base_url always points at the gateway — the
+            # SDK's own api_key must stay a fixed placeholder even if
+            # GROQ_API_KEY is set, or a real Groq credential would be sent to
+            # the gateway as a bearer token. The real gateway secret travels
+            # only via default_headers.
+            return {"api_key": "gateway", "client_args": {"base_url": cfg.api_base, "default_headers": header}}
         elif provider == "bedrock":
             # boto3 has no default_headers hook. Build a client pointed at the
             # gateway and inject the gateway api-key via a botocore before-send
