@@ -9,8 +9,7 @@ require (
 	github.com/spf13/pflag v1.0.9
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.42.0
-	gopkg.in/yaml.v3 v3.0.1
-	github.com/gorilla/mux v1.8.1
+	gopkg.in/yaml.v3 v3.0.2
 )
 
 require (
