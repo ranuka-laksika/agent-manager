@@ -333,8 +333,10 @@ type ClientInterface interface {
 	// ListGatewayTokens request
 	ListGatewayTokens(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// RotateGatewayToken request
-	RotateGatewayToken(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// RotateGatewayTokenWithBody request with any body
+	RotateGatewayTokenWithBody(ctx context.Context, orgName string, gatewayID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	RotateGatewayToken(ctx context.Context, orgName string, gatewayID string, body RotateGatewayTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// RevokeGatewayToken request
 	RevokeGatewayToken(ctx context.Context, orgName string, gatewayID string, tokenID string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1927,8 +1929,20 @@ func (c *Client) ListGatewayTokens(ctx context.Context, orgName string, gatewayI
 	return c.Client.Do(req)
 }
 
-func (c *Client) RotateGatewayToken(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewRotateGatewayTokenRequest(c.Server, orgName, gatewayID)
+func (c *Client) RotateGatewayTokenWithBody(ctx context.Context, orgName string, gatewayID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateGatewayTokenRequestWithBody(c.Server, orgName, gatewayID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) RotateGatewayToken(ctx context.Context, orgName string, gatewayID string, body RotateGatewayTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewRotateGatewayTokenRequest(c.Server, orgName, gatewayID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -7735,8 +7749,19 @@ func NewListGatewayTokensRequest(server string, orgName string, gatewayID string
 	return req, nil
 }
 
-// NewRotateGatewayTokenRequest generates requests for RotateGatewayToken
-func NewRotateGatewayTokenRequest(server string, orgName string, gatewayID string) (*http.Request, error) {
+// NewRotateGatewayTokenRequest calls the generic RotateGatewayToken builder with application/json body
+func NewRotateGatewayTokenRequest(server string, orgName string, gatewayID string, body RotateGatewayTokenJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewRotateGatewayTokenRequestWithBody(server, orgName, gatewayID, "application/json", bodyReader)
+}
+
+// NewRotateGatewayTokenRequestWithBody generates requests for RotateGatewayToken with any type of body
+func NewRotateGatewayTokenRequestWithBody(server string, orgName string, gatewayID string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -7768,10 +7793,12 @@ func NewRotateGatewayTokenRequest(server string, orgName string, gatewayID strin
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -16572,8 +16599,10 @@ type ClientWithResponsesInterface interface {
 	// ListGatewayTokensWithResponse request
 	ListGatewayTokensWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*ListGatewayTokensResp, error)
 
-	// RotateGatewayTokenWithResponse request
-	RotateGatewayTokenWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error)
+	// RotateGatewayTokenWithBodyWithResponse request with any body
+	RotateGatewayTokenWithBodyWithResponse(ctx context.Context, orgName string, gatewayID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error)
+
+	RotateGatewayTokenWithResponse(ctx context.Context, orgName string, gatewayID string, body RotateGatewayTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error)
 
 	// RevokeGatewayTokenWithResponse request
 	RevokeGatewayTokenWithResponse(ctx context.Context, orgName string, gatewayID string, tokenID string, reqEditors ...RequestEditorFn) (*RevokeGatewayTokenResp, error)
@@ -23114,9 +23143,17 @@ func (c *ClientWithResponses) ListGatewayTokensWithResponse(ctx context.Context,
 	return ParseListGatewayTokensResp(rsp)
 }
 
-// RotateGatewayTokenWithResponse request returning *RotateGatewayTokenResp
-func (c *ClientWithResponses) RotateGatewayTokenWithResponse(ctx context.Context, orgName string, gatewayID string, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error) {
-	rsp, err := c.RotateGatewayToken(ctx, orgName, gatewayID, reqEditors...)
+// RotateGatewayTokenWithBodyWithResponse request with arbitrary body returning *RotateGatewayTokenResp
+func (c *ClientWithResponses) RotateGatewayTokenWithBodyWithResponse(ctx context.Context, orgName string, gatewayID string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error) {
+	rsp, err := c.RotateGatewayTokenWithBody(ctx, orgName, gatewayID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseRotateGatewayTokenResp(rsp)
+}
+
+func (c *ClientWithResponses) RotateGatewayTokenWithResponse(ctx context.Context, orgName string, gatewayID string, body RotateGatewayTokenJSONRequestBody, reqEditors ...RequestEditorFn) (*RotateGatewayTokenResp, error) {
+	rsp, err := c.RotateGatewayToken(ctx, orgName, gatewayID, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
