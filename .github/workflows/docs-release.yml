@@ -27,7 +27,7 @@ jobs:
         run: |
           # Validate version format (e.g., v0.8.x, v0.8.0, or v1.0.0-alpha1)
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.(x|[0-9]+(-[a-zA-Z0-9.]+)?)$ ]]; then
-            echo "Error: Invalid version format. Expected: vX.Y.x, vX.Y.Z, or vX.Y.Z-rc.N"
+            echo "Error: Invalid version format. Expected: vX.Y.x, vX.Y.Z, or vX.Y.Z-<pre-release>"
             exit 1
           fi
 
