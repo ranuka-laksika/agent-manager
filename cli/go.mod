@@ -10,6 +10,7 @@ require (
 	golang.org/x/oauth2 v0.36.0
 	golang.org/x/term v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
+	github.com/gorilla/mux v1.8.1
 )
 
 require (
